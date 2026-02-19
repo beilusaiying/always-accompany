@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Preset Engine",
+		"avatar": "https://api.iconify.design/mdi/format-list-bulleted.svg",
+		"description": "SillyTavern-compatible preset management engine for prompt assembly.",
+		"description_markdown": "The **Beilu Preset Engine** provides full SillyTavern preset format compatibility. It manages prompt ordering (system-level `prompt_order` + injection-level `injection_depth`), macro expansion, marker mapping, and preset import/export.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"preset",
+			"prompt",
+			"SillyTavern",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露预设引擎",
+		"avatar": "https://api.iconify.design/mdi/format-list-bulleted.svg",
+		"description": "兼容 SillyTavern 预设格式的提示词组装引擎",
+		"description_markdown": "**贝露预设引擎** 完整兼容 SillyTavern 预设格式。管理提示词排序（系统级 `prompt_order` + 注入式 `injection_depth`）、宏展开、Marker 映射、预设导入导出。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"预设",
+			"提示词",
+			"SillyTavern",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "📋✨",
+		"avatar": "https://api.iconify.design/mdi/format-list-bulleted.svg",
+		"description": "📋➡️🤖 ST📦✅",
+		"description_markdown": "📋 ➡️ 🤖\n🔀 ➕ 📐\n📦 ST ✅",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"📋",
+			"✨",
+			"🤖",
+			"⛲"
+		]
+	}
+}

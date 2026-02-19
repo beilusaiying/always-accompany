@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "Beilu Eye",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "Desktop screenshot capture — inject screenshots into AI context temporarily.",
+		"description_markdown": "**Beilu Eye** receives desktop screenshots from the external Electron client and injects them as one-time temporary context for the AI. Screenshots are not persisted in chat history.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["screenshot", "desktop", "vision", "beilu"]
+	},
+	"zh-CN": {
+		"name": "贝露的眼睛",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "桌面截图捕获 — 将截图临时注入 AI 上下文",
+		"description_markdown": "**贝露的眼睛** 接收来自桌面 Electron 客户端的截图，作为一次性临时上下文注入给 AI。截图不会保存在聊天记录中。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["截图", "桌面", "视觉", "贝露"]
+	},
+	"emoji": {
+		"name": "👁️📸",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "👁️📸➡️🤖",
+		"description_markdown": "👁️ ➡️ 📸\n🖥️ ➡️ 🤖",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["👁️", "📸", "🖥️", "⛲"]
+	}
+}

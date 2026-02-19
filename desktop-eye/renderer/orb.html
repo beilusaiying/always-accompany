@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>贝露的眼睛</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		html, body {
+			width: 48px;
+			height: 48px;
+			overflow: hidden;
+			background: transparent;
+			user-select: none;
+			-webkit-app-region: drag;
+		}
+		.orb {
+			width: 48px;
+			height: 48px;
+			border-radius: 50%;
+			background: radial-gradient(circle at 35% 35%, #f5c542, #d4a017 60%, #8b6914);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			cursor: pointer;
+			position: relative;
+			box-shadow: 0 2px 12px rgba(212, 160, 23, 0.5), inset 0 1px 2px rgba(255,255,255,0.3);
+			transition: transform 0.15s ease, box-shadow 0.15s ease;
+			-webkit-app-region: drag;
+		}
+		.orb:hover {
+			transform: scale(1.08);
+			box-shadow: 0 3px 18px rgba(212, 160, 23, 0.7), inset 0 1px 2px rgba(255,255,255,0.4);
+		}
+		.orb:active {
+			transform: scale(0.95);
+		}
+		.orb-icon {
+			font-size: 22px;
+			color: #fff;
+			text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+			pointer-events: none;
+			-webkit-app-region: no-drag;
+		}
+		/* 呼吸动画 */
+		@keyframes breathe {
+			0%, 100% { box-shadow: 0 2px 12px rgba(212, 160, 23, 0.4), inset 0 1px 2px rgba(255,255,255,0.3); }
+			50% { box-shadow: 0 2px 20px rgba(212, 160, 23, 0.7), inset 0 1px 2px rgba(255,255,255,0.4); }
+		}
+		.orb { animation: breathe 3s ease-in-out infinite; }
+		.orb:hover { animation: none; }
+	</style>
+</head>
+<body>
+	<div class="orb" id="orb">
+		<span class="orb-icon">✦</span>
+	</div>
+	<script>
+		const orb = document.getElementById('orb')
+		// 点击悬浮球 → 触发截图
+		orb.addEventListener('click', (e) => {
+			e.preventDefault()
+			e.stopPropagation()
+			window.desktopEye.startCapture()
+		})
+		// 右键菜单
+		orb.addEventListener('contextmenu', (e) => {
+			e.preventDefault()
+			window.desktopEye.showOrbMenu()
+		})
+	</script>
+</body>
+</html>

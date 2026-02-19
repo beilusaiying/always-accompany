@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Memory",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "Multi-file memory system with transient table and file index.",
+		"description_markdown": "**Beilu Memory** provides a three-layer memory architecture: transient table (injected every turn), file index (AI knows what's available), and detail files (read on demand). Supports ephemeral content.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"memory",
+			"context",
+			"persistent",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露记忆系统",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "多文件分层记忆系统，含瞬时表格和文件索引",
+		"description_markdown": "**贝露记忆系统** 提供三层记忆架构：瞬时表格（每轮注入）、文件索引（AI 知道有哪些文件）、详情文件（按需读取）。支持瞬时内容机制。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"记忆",
+			"上下文",
+			"持久化",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "🧠💾",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "🧠📁➡️🤖 ∞",
+		"description_markdown": "🧠 📋 ➡️ 🤖\n📂 📑 📖\n💾 ∞",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🧠",
+			"💾",
+			"📁",
+			"⛲"
+		]
+	}
+}

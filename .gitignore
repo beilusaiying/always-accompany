@@ -1,0 +1,37 @@
+# 临时文件
+/tmp
+/tmp.txt
+/tmp.md
+/temp
+/temp.txt
+/temp.md
+
+# IDE / 编辑器
+/.idea
+/.vscode
+*.suo
+*.user
+
+# 本地配置标记
+/.noupdate
+/.noerrorreport
+/.noautoinit
+/.nobackground
+/.nojobs
+/.notimers
+/.aiexclude
+
+# 用户数据
+/data
+/.vm_data_*
+
+# 依赖
+/node_modules
+
+# 运行时
+/path/deno
+/path/deno.exe
+
+# Windows 系统文件
+desktop.ini
+Thumbs.db

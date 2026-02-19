@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Home",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "Beilu's homepage shell with tabbed navigation for usage, system settings, and user settings.",
+		"description_markdown": "**Beilu Home** is the main homepage shell for the Beilu project. Provides a tabbed interface for character management, system configuration, and user settings.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"home",
+			"shell",
+			"UI",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露首页",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "贝露的首页 Shell，选项卡式导航：使用、系统设置、用户设置",
+		"description_markdown": "**贝露首页** 是贝露项目的主首页 Shell。提供选项卡式界面，管理角色卡、系统配置和用户设置。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"首页",
+			"Shell",
+			"界面",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "🏠🌟",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "🏠📋⚙️👤",
+		"description_markdown": "🏠 🌟\n📋 ⚙️ 👤",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🏠",
+			"📋",
+			"⚙️",
+			"⛲"
+		]
+	}
+}

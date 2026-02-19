@@ -1,0 +1,27 @@
+<!-- 消息头部：头像 + 名字 + 时间 -->
+<div class="message-header flex items-center gap-2 px-1 mb-1">
+	<div class="message-avatar w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30">
+		<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
+			onerror="this.style.display='none'" />
+	</div>
+	<span class="char-name text-sm font-bold text-primary">${name}</span>
+	<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
+</div>
+<!-- 编辑区域 -->
+<div class="chat-bubble relative p-[15px] ml-10 rounded-lg">
+	<div class="edit-area mt-1 flex gap-2">
+		<textarea id="edit-input-${id}" class="textarea border flex-grow" style="field-sizing: content;" data-i18n="chat.messageEdit.input">${content_for_edit}</textarea>
+		<div class="flex flex-col gap-2">
+			<div class="edit-button-group flex flex-col">
+				<button id="confirm-button-${id}" class="btn btn-sm btn-success" data-i18n="chat.messageEdit.buttons.confirm"><img src="https://api.iconify.design/line-md/confirm.svg" data-i18n="chat.messageEdit.buttons.confirmIcon" /></button>
+				<button id="cancel-button-${id}" class="btn btn-sm btn-error" data-i18n="chat.messageEdit.buttons.cancel"><img src="https://api.iconify.design/line-md/close.svg" data-i18n="chat.messageEdit.buttons.cancelIcon" /></button>
+				<button id="upload-edit-button-${id}" class="btn btn-secondary" data-i18n="chat.messageEdit.buttons.upload"><img src="https://api.iconify.design/line-md/upload.svg" data-i18n="chat.messageEdit.buttons.uploadIcon" /></button>
+			</div>
+		</div>
+	</div>
+	<input type="file" id="file-edit-input-${id}" class="hidden" multiple />
+	<div id="attachment-edit-preview-${id}" class="attachment-edit-preview p-4 flex gap-4 overflow-x-auto">
+		<!-- 附件预览 -->
+	</div>
+	<div class="attachments"></div>
+</div>

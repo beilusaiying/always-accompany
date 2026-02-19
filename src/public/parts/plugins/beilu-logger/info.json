@@ -1,0 +1,13 @@
+{
+	"name": {
+		"en-US": "beilu-logger",
+		"zh-CN": "贝露日志系统"
+	},
+	"description": {
+		"en-US": "Server-side log collection and visualization. Intercepts console.error/warn and provides HTTP API for log viewing.",
+		"zh-CN": "服务器端日志收集与可视化。劫持 console.error/warn，提供 HTTP API 查询后端日志。"
+	},
+	"version": "1.0.0",
+	"author": "beilu",
+	"tags": ["logging", "debug", "diagnostics"]
+}

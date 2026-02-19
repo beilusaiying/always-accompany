@@ -1,0 +1,287 @@
+{
+	"en-UK": {
+		"name": "fount Root",
+		"avatar": "/favicon.svg",
+		"description": "The foundational core of fount.",
+		"description_markdown": "This is the **root component** of the fount system. It serves as the primary engine that initializes and orchestrates all other parts.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"system",
+			"core",
+			"root",
+			"fount"
+		]
+	},
+	"zh-CN": {
+		"name": "fount 根组件",
+		"avatar": "/favicon.svg",
+		"description": "fount 的核心基础组件",
+		"description_markdown": "这是 fount 系统的**根部组件**，负责承载并加载系统中的所有功能部件。",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"系统",
+			"核心",
+			"根节点",
+			"fount"
+		]
+	},
+	"ar-SA": {
+		"name": "جذر ينبوع",
+		"avatar": "/favicon.svg",
+		"description": "النواة الأساسية للينبوع",
+		"description_markdown": "هذا هو الجزء الجذري لنظام fount، وهو المسؤول عن تحميل وتشغيل جميع الأجزاء الأخرى.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"نظام",
+			"أساسي",
+			"جذر",
+			"fount"
+		]
+	},
+	"de-DE": {
+		"name": "fount-Stamm",
+		"avatar": "/favicon.svg",
+		"description": "Die Kernkomponente von fount",
+		"description_markdown": "Dies ist die **Stammkomponente** des fount-Systems, die alle anderen Teile darauf lädt und verwaltet.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"System",
+			"Kern",
+			"Stamm",
+			"fount"
+		]
+	},
+	"emoji": {
+		"name": "🌱",
+		"avatar": "/favicon.svg",
+		"description": "⛲ 🧱 ➡️ 🧩🧩🧩",
+		"description_markdown": "🌱 ➡️ ⛲. \n🏗️ ➕ 🔄 🧩. \n🧱 ➡️ 🚀.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"⚙️",
+			"🌱",
+			"🏗️",
+			"⛲"
+		]
+	},
+	"es-ES": {
+		"name": "Raíz de fount",
+		"avatar": "/favicon.svg",
+		"description": "El núcleo fundamental de fount",
+		"description_markdown": "Esta es la **parte raíz** de fount, encargada de cargar y orquestar todos los demás componentes.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"núcleo",
+			"raíz",
+			"fount"
+		]
+	},
+	"fr-FR": {
+		"name": "Racine de fount",
+		"avatar": "/favicon.svg",
+		"description": "Le noyau fondamental de fount",
+		"description_markdown": "Il s'agit de la **composante racine** de fount, servant à charger toutes les autres parties du système.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"système",
+			"noyau",
+			"racine",
+			"fount"
+		]
+	},
+	"hi-IN": {
+		"name": "fount मूल",
+		"avatar": "/favicon.svg",
+		"description": "फाउंट का मूलभूत कोर",
+		"description_markdown": "यह fount का **मूल भाग** है, जो इस पर अन्य सभी भागों को लोड करने के लिए जिम्मेदार है।",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"प्रणाली",
+			"कोर",
+			"मूल",
+			"fount"
+		]
+	},
+	"is-IS": {
+		"name": "fount Rót",
+		"avatar": "/favicon.svg",
+		"description": "Grunnkjarni fount",
+		"description_markdown": "Þetta er **rótarhluti** fount kerfisins, sem hleður og stýrir öllum öðrum hlutum.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"kerfi",
+			"kjarni",
+			"rót",
+			"fount"
+		]
+	},
+	"it-IT": {
+		"name": "Radice di fount",
+		"avatar": "/favicon.svg",
+		"description": "Il cuore fondamentale di fount",
+		"description_markdown": "Questa è la **componente radice** di fount, che carica tutte le altre parti su di essa.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"nucleo",
+			"radice",
+			"fount"
+		]
+	},
+	"ja-JP": {
+		"name": "fount ルート",
+		"avatar": "/favicon.svg",
+		"description": "fount のコア基礎コンポーネント",
+		"description_markdown": "これは fount システムの**ルート部分**であり、すべてのコンポーネントをロードして管理します。",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"システム",
+			"コア",
+			"ルート",
+			"fount"
+		]
+	},
+	"ko-KR": {
+		"name": "fount 루트",
+		"avatar": "/favicon.svg",
+		"description": "fount의 핵심 기초 구성 요소",
+		"description_markdown": "이것은 fount의 **루트 부분**으로, 모든 구성 요소를 로드하고 관리하는 역할을 합니다.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"시스템",
+			"핵심",
+			"루트",
+			"fount"
+		]
+	},
+	"lzh": {
+		"name": "fount 之根",
+		"avatar": "/favicon.svg",
+		"description": "fount 之根柢",
+		"description_markdown": "此乃 fount 系統之**根柢**。萬部皆由此起，承載群件以運化。\n",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"系統",
+			"根柢",
+			"樞機",
+			"fount"
+		]
+	},
+	"nl-NL": {
+		"name": "fount Wortel",
+		"avatar": "/favicon.svg",
+		"description": "De fundamentele kern van fount",
+		"description_markdown": "Dit is het **hoofdgedeelte** van fount, dat alle andere onderdelen laadt en aanstuurt.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"systeem",
+			"kern",
+			"wortel",
+			"fount"
+		]
+	},
+	"pt-PT": {
+		"name": "Raiz do fount",
+		"avatar": "/favicon.svg",
+		"description": "O núcleo fundamental do fount",
+		"description_markdown": "Esta é a **parte raiz** do fount, responsável por carregar todos os componentes no sistema.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"núcleo",
+			"raiz",
+			"fount"
+		]
+	},
+	"ru-RU": {
+		"name": "Корень fount",
+		"avatar": "/favicon.svg",
+		"description": "Фундаментальное ядро fount",
+		"description_markdown": "Это **корневой компонент** системы fount, отвечающий за загрузку всех остальных частей.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"система",
+			"ядро",
+			"корень",
+			"fount"
+		]
+	},
+	"uk-UA": {
+		"name": "Корінь fount",
+		"avatar": "/favicon.svg",
+		"description": "Фундаментальне ядро fount",
+		"description_markdown": "Це **коренева частина** системи fount, що завантажує всі інші компоненти.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"система",
+			"ядро",
+			"корінь",
+			"fount"
+		]
+	},
+	"vi-VN": {
+		"name": "Gốc của fount",
+		"avatar": "/favicon.svg",
+		"description": "Cốt lõi cơ bản của fount",
+		"description_markdown": "Đây là **phần gốc** của hệ thống fount, chịu trách nhiệm tải tất cả các bộ phận khác lên đó.",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"hệ thống",
+			"cốt lõi",
+			"gốc",
+			"fount"
+		]
+	},
+	"zh-TW": {
+		"name": "fount 根組件",
+		"avatar": "/favicon.svg",
+		"description": "fount 的核心基礎組件",
+		"description_markdown": "這是 fount 系統的**根部組件**，負責承載並加載系統中的所有功能部件。",
+		"version": "0.0.0",
+		"author": "steve02081504",
+		"home_page": "",
+		"tags": [
+			"系統",
+			"核心",
+			"根節點",
+			"fount"
+		]
+	}
+}

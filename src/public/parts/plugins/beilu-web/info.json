@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Web",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "Web fetching capability — AI can access URLs and get page content.",
+		"description_markdown": "**Beilu Web** enables the AI to fetch web content via `<web_fetch>` tags. Results are injected as ephemeral content (one-time, not persisted in context).",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"web",
+			"fetch",
+			"internet",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露联网",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "联网能力 — AI 访问 URL 获取网页内容",
+		"description_markdown": "**贝露联网** 允许 AI 通过 `<web_fetch>` 标签获取网页内容。结果作为瞬时内容注入（一次性，不持久在上下文中）。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"联网",
+			"抓取",
+			"互联网",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "🌐📥",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "🤖🌐➡️📄",
+		"description_markdown": "🤖 ➡️ 🌐\n📥 📄\n⏳ 1️⃣",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🌐",
+			"📥",
+			"📄",
+			"⛲"
+		]
+	}
+}

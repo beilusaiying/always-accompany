@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>贝露的眼睛 — 框选截图</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+	cursor: crosshair;
+	user-select: none;
+	background: #000;
+}
+
+#screenshot-bg {
+	position: absolute;
+	top: 0; left: 0;
+	width: 100%; height: 100%;
+	object-fit: cover;
+}
+
+#overlay {
+	position: absolute;
+	top: 0; left: 0;
+	width: 100%; height: 100%;
+}
+
+#hint {
+	position: fixed;
+	top: 20px;
+	left: 50%;
+	transform: translateX(-50%);
+	color: #fff;
+	font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+	font-size: 14px;
+	background: rgba(212, 160, 23, 0.9);
+	padding: 10px 20px;
+	border-radius: 8px;
+	pointer-events: none;
+	z-index: 100;
+	text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+	box-shadow: 0 4px 12px rgba(212, 160, 23, 0.3);
+}
+
+#size-info {
+	position: fixed;
+	color: #fff;
+	font-family: 'Noto Sans SC', 'Microsoft YaHei', monospace;
+	font-size: 12px;
+	background: rgba(212, 160, 23, 0.85);
+	padding: 2px 8px;
+	border-radius: 4px;
+	pointer-events: none;
+	z-index: 100;
+	display: none;
+	white-space: nowrap;
+}
+</style>
+</head>
+<body>
+<img id="screenshot-bg">
+<canvas id="overlay"></canvas>
+<div id="hint">拖拽框选截图区域 · ESC 取消</div>
+<div id="size-info"></div>
+
+<script>
+(() => {
+	const img = document.getElementById('screenshot-bg')
+	const canvas = document.getElementById('overlay')
+	const ctx = canvas.getContext('2d')
+	const hint = document.getElementById('hint')
+	const sizeInfo = document.getElementById('size-info')
+
+	let screenshotDataUrl = null
+	let isDrawing = false
+	let startX = 0, startY = 0
+	let endX = 0, endY = 0
+
+	// 接收主进程传来的桌面截图
+	window.desktopEye.onSetScreenshot((dataUrl) => {
+		screenshotDataUrl = dataUrl
+		img.src = dataUrl
+		img.onload = () => {
+			canvas.width = window.innerWidth
+			canvas.height = window.innerHeight
+			drawOverlay()
+		}
+	})
+
+	function drawOverlay() {
+		const w = canvas.width
+		const h = canvas.height
+		ctx.clearRect(0, 0, w, h)
+
+		// 半透明遮罩
+		ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'
+		ctx.fillRect(0, 0, w, h)
+
+		if (isDrawing || (endX !== startX && endY !== startY)) {
+			const x = Math.min(startX, endX)
+			const y = Math.min(startY, endY)
+			const rw = Math.abs(endX - startX)
+			const rh = Math.abs(endY - startY)
+
+			if (rw > 0 && rh > 0) {
+				// 清除选区内的遮罩
+				ctx.clearRect(x, y, rw, rh)
+
+				// 选区边框
+				ctx.strokeStyle = '#d4a017'
+				ctx.lineWidth = 2
+				ctx.setLineDash([6, 3])
+				ctx.strokeRect(x, y, rw, rh)
+				ctx.setLineDash([])
+
+				// 角标记
+				const cornerSize = 8
+				ctx.strokeStyle = '#d4a017'
+				ctx.lineWidth = 3
+				drawCorner(ctx, x, y, cornerSize, 'tl')
+				drawCorner(ctx, x + rw, y, cornerSize, 'tr')
+				drawCorner(ctx, x, y + rh, cornerSize, 'bl')
+				drawCorner(ctx, x + rw, y + rh, cornerSize, 'br')
+			}
+		}
+	}
+
+	function drawCorner(ctx, x, y, size, position) {
+		ctx.beginPath()
+		switch (position) {
+			case 'tl':
+				ctx.moveTo(x, y + size); ctx.lineTo(x, y); ctx.lineTo(x + size, y)
+				break
+			case 'tr':
+				ctx.moveTo(x - size, y); ctx.lineTo(x, y); ctx.lineTo(x, y + size)
+				break
+			case 'bl':
+				ctx.moveTo(x, y - size); ctx.lineTo(x, y); ctx.lineTo(x + size, y)
+				break
+			case 'br':
+				ctx.moveTo(x - size, y); ctx.lineTo(x, y); ctx.lineTo(x, y - size)
+				break
+		}
+		ctx.stroke()
+	}
+
+	canvas.addEventListener('mousedown', (e) => {
+		isDrawing = true
+		startX = e.clientX
+		startY = e.clientY
+		endX = startX
+		endY = startY
+		hint.style.display = 'none'
+	})
+
+	canvas.addEventListener('mousemove', (e) => {
+		if (!isDrawing) return
+		endX = e.clientX
+		endY = e.clientY
+		drawOverlay()
+
+		// 显示尺寸
+		const rw = Math.abs(endX - startX)
+		const rh = Math.abs(endY - startY)
+		if (rw > 5 && rh > 5) {
+			sizeInfo.style.display = 'block'
+			sizeInfo.style.left = (Math.min(startX, endX) + rw / 2 - 30) + 'px'
+			sizeInfo.style.top = (Math.max(startY, endY) + 8) + 'px'
+			sizeInfo.textContent = `${rw} × ${rh}`
+		}
+	})
+
+	canvas.addEventListener('mouseup', (e) => {
+		if (!isDrawing) return
+		isDrawing = false
+		endX = e.clientX
+		endY = e.clientY
+
+		const rw = Math.abs(endX - startX)
+		const rh = Math.abs(endY - startY)
+
+		if (rw < 5 || rh < 5) {
+			// 选区太小，重置
+			startX = startY = endX = endY = 0
+			hint.style.display = 'block'
+			sizeInfo.style.display = 'none'
+			drawOverlay()
+			return
+		}
+
+		// 裁剪
+		cropAndSend()
+	})
+
+	function cropAndSend() {
+		const x = Math.min(startX, endX)
+		const y = Math.min(startY, endY)
+		const rw = Math.abs(endX - startX)
+		const rh = Math.abs(endY - startY)
+
+		const tempImg = new Image()
+		tempImg.onload = () => {
+			// 坐标转换：屏幕坐标 → 图片坐标
+			const scaleX = tempImg.naturalWidth / window.innerWidth
+			const scaleY = tempImg.naturalHeight / window.innerHeight
+			const cropCanvas = document.createElement('canvas')
+			cropCanvas.width = Math.round(rw * scaleX)
+			cropCanvas.height = Math.round(rh * scaleY)
+			const cropCtx = cropCanvas.getContext('2d')
+			cropCtx.drawImage(
+				tempImg,
+				Math.round(x * scaleX),
+				Math.round(y * scaleY),
+				cropCanvas.width,
+				cropCanvas.height,
+				0, 0,
+				cropCanvas.width,
+				cropCanvas.height
+			)
+			const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.92)
+			window.desktopEye.cropDone({ dataUrl })
+		}
+		tempImg.src = screenshotDataUrl
+	}
+
+	// ESC 取消
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape') {
+			window.desktopEye.cropCancel()
+		}
+	})
+})()
+</script>
+</body>
+</html>

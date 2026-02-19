@@ -1,0 +1,25 @@
+{
+  "rules": [
+    {
+      "id": "mlstxlom3wufn",
+      "scriptName": "新规则",
+      "findRegex": "",
+      "replaceString": "",
+      "trimStrings": "",
+      "placement": [
+        "ai_output"
+      ],
+      "disabled": false,
+      "runOnEdit": false,
+      "substituteRegex": 0,
+      "minDepth": -1,
+      "maxDepth": 0,
+      "markdownOnly": false,
+      "promptOnly": false,
+      "scope": "scoped",
+      "boundCharName": ""
+    }
+  ],
+  "enabled": true,
+  "renderMode": "sandbox"
+}

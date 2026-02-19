@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="description" content="贝露·与你之诗 — AI 角色交互平台" />
+	<title>贝露 · 与你之诗</title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="manifest" href="/manifest.json" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
+	<script type="module" src="/base.mjs"></script>
+	<link rel="stylesheet" href="./index.css" type="text/css" />
+</head>
+
+<body class="flex flex-col h-screen h-dvh m-0 w-full">
+
+	<!-- ====== 顶部栏 ====== -->
+	<header id="top-bar" class="top-bar flex items-center justify-between py-1 px-4 border-b bg-base-100 shrink-0 z-30">
+		<div class="flex items-center gap-2">
+			<!-- 左栏折叠按钮 -->
+			<button id="left-panel-toggle" class="btn btn-sm btn-ghost btn-square" title="切换左栏">
+				<img src="https://api.iconify.design/mdi/page-layout-sidebar-left.svg" class="w-5 h-5 icon" />
+			</button>
+			<!-- 返回首页 -->
+			<a href="/parts/shells:beilu-home/" class="btn btn-sm btn-ghost btn-square" title="返回首页">
+				<img src="https://api.iconify.design/mdi/home-outline.svg" class="w-5 h-5 icon" />
+			</a>
+			<h2 class="text-lg font-bold beilu-title hidden sm:inline">贝露 · 与你之诗</h2>
+			<span class="text-sm text-amber-600 font-medium hidden lg:inline" id="header-char-name"></span>
+		</div>
+		<!-- 顶部选项卡（从中栏移到这里） -->
+		<div id="top-tabs" class="top-tabs flex items-center gap-1">
+			<button class="top-tab top-tab-active" data-top-tab="chat">💬 聊天</button>
+			<button class="top-tab" data-top-tab="files">📁 文件</button>
+			<button class="top-tab" data-top-tab="memory">🧠 记忆</button>
+			<button class="top-tab" data-top-tab="helper">🛠️ 助手</button>
+		</div>
+		<div class="flex items-center gap-1">
+			<!-- 右栏折叠按钮 -->
+			<button id="right-panel-toggle" class="btn btn-sm btn-ghost btn-square" title="切换右栏">
+				<img src="https://api.iconify.design/mdi/page-layout-sidebar-right.svg" class="w-5 h-5 icon" />
+			</button>
+		</div>
+	</header>
+
+	<!-- ====== 三栏容器 ====== -->
+	<div id="three-column" class="flex flex-1 overflow-hidden">
+
+		<!-- ====== 左栏: 预设 & 设置 ====== -->
+		<aside id="left-panel" class="left-panel border-r border-base-300 bg-base-200 shrink-0 overflow-hidden transition-all duration-300 ease-in-out flex flex-col">
+			<!-- ====== 聊天模式: 预设 & 设置 ====== -->
+			<div id="left-content-chat" class="left-panel-content p-3 space-y-2 overflow-y-auto flex-1">
+				<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
+					<img src="https://api.iconify.design/mdi/tune-variant.svg" class="w-4 h-4 icon" />
+					预设 & 设置
+				</h3>
+	
+					<!-- ====== 角色信息折叠组 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							🎭 角色信息
+						</div>
+						<div class="collapse-content px-2 pb-2">
+							<div class="flex items-start gap-3 mb-2">
+								<div id="char-avatar-display" class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+									🎭
+								</div>
+								<div class="flex-1 min-w-0">
+									<div id="char-name-display" class="font-bold text-sm text-amber-700 truncate">未加载角色</div>
+									<div id="char-desc-short" class="text-xs text-base-content/60 line-clamp-2 mt-0.5"></div>
+								</div>
+							</div>
+							<!-- 开场白 -->
+							<div class="form-control mb-2">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">开场白</span>
+								</label>
+								<textarea id="char-greeting-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="3" readonly placeholder="加载中..."></textarea>
+							</div>
+							<!-- 角色描述 -->
+							<div class="form-control mb-2">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">角色描述</span>
+								</label>
+								<textarea id="char-description-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="4" readonly placeholder="加载中..."></textarea>
+							</div>
+							<!-- 操作按钮 -->
+							<div class="flex justify-end gap-1">
+								<button id="char-info-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
+								<button id="char-info-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden">💾 保存</button>
+								<button id="char-info-cancel-btn" class="btn btn-xs btn-ghost hidden">取消</button>
+							</div>
+						</div>
+					</div>
+	
+					<!-- ====== 预设管理折叠组 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" checked />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						📋 预设管理
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<!-- 预设选择器 -->
+						<div class="flex items-center gap-1 mb-2">
+							<select id="preset-selector" class="select select-xs select-bordered flex-1 font-mono text-xs"></select>
+						</div>
+						<div class="flex flex-wrap gap-1 mb-2">
+							<button id="preset-import-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="导入 ST 预设">
+								📥 导入
+							</button>
+							<button id="preset-export-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="导出">
+								📤 导出
+							</button>
+							<button id="preset-create-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新建空白预设">
+								✨ 新建
+							</button>
+							<button id="preset-delete-btn" class="btn btn-xs btn-outline btn-error" title="删除当前预设">
+								🗑️
+							</button>
+						</div>
+						<input type="file" id="preset-file-input" accept=".json" class="hidden" />
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-base-content/50">当前:</span>
+							<span id="preset-name" class="text-xs font-bold text-amber-700 truncate max-w-[120px]">未加载</span>
+							<button id="preset-refresh-btn" class="btn btn-xs btn-ghost btn-square" title="刷新预设数据">🔄</button>
+						</div>
+						<div id="preset-stats" class="text-xs text-base-content/50 mt-1 hidden">
+							<span id="preset-stat-total">0</span> 条 ·
+							<span id="preset-stat-enabled">0</span> 启用 ·
+							<span id="preset-stat-system">0</span> 系统 ·
+							<span id="preset-stat-inject">0</span> 注入
+						</div>
+					</div>
+				</div>
+
+				<!-- ====== 模型参数折叠组 ====== -->
+				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						⚙️ 模型参数
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<div class="space-y-2">
+							<!-- Temperature -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Temperature</span>
+									<span id="param-temp-value" class="label-text-alt font-mono text-xs">1.00</span>
+								</label>
+								<input type="range" id="param-temp" min="0" max="2" step="0.01" value="1"
+									class="range range-xs range-warning" />
+							</div>
+							<!-- Top P -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Top P</span>
+									<span id="param-top-p-value" class="label-text-alt font-mono text-xs">0.80</span>
+								</label>
+								<input type="range" id="param-top-p" min="0" max="1" step="0.01" value="0.8"
+									class="range range-xs range-warning" />
+							</div>
+							<!-- Top K -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Top K</span>
+									<span id="param-top-k-value" class="label-text-alt font-mono text-xs">64</span>
+								</label>
+								<input type="number" id="param-top-k" min="0" max="500" step="1" value="64"
+									class="input input-xs input-bordered w-full font-mono text-xs" />
+							</div>
+							<!-- Min P -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Min P</span>
+									<span id="param-min-p-value" class="label-text-alt font-mono text-xs">0.05</span>
+								</label>
+								<input type="range" id="param-min-p" min="0" max="1" step="0.01" value="0.05"
+									class="range range-xs range-warning" />
+							</div>
+							<!-- Max Context -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Max Context</span>
+								</label>
+								<input type="number" id="param-max-context" min="1024" max="10000000" step="1024" value="200000"
+									class="input input-xs input-bordered w-full font-mono text-xs" />
+							</div>
+							<!-- Max Tokens -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">Max Tokens</span>
+								</label>
+								<input type="number" id="param-max-tokens" min="256" max="1000000" step="256" value="8192"
+									class="input input-xs input-bordered w-full font-mono text-xs" />
+							</div>
+							<!-- Stream -->
+							<div class="form-control">
+								<label class="label py-0.5 cursor-pointer">
+									<span class="label-text text-xs">流式输出</span>
+									<input type="checkbox" id="param-stream" class="toggle toggle-xs toggle-warning" checked />
+								</label>
+							</div>
+							<button id="model-params-save" class="btn btn-xs btn-block bg-amber-700 hover:bg-amber-800 text-white border-amber-700 mt-1">
+								💾 保存参数
+							</button>
+							<div id="model-params-status" class="text-xs text-center mt-0.5 hidden"></div>
+						</div>
+					</div>
+				</div>
+
+				<!-- ====== 预设条目折叠组 ====== -->
+				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" checked />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						📝 预设条目
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<!-- 搜索 -->
+						<div class="form-control mb-2">
+							<input type="text" id="entry-search" placeholder="搜索条目..."
+								class="input input-xs input-bordered w-full" />
+						</div>
+						<!-- 条目列表 -->
+						<div id="entry-list" class="space-y-0.5 max-h-64 overflow-y-auto preset-entry-list">
+							<p class="text-xs text-base-content/50 text-center py-3">请先导入一个 ST 预设文件</p>
+						</div>
+						<!-- 条目详情 -->
+						<div id="entry-detail" class="mt-2 hidden">
+							<div class="divider text-xs text-amber-700 my-1">条目详情</div>
+							<div class="space-y-1.5">
+								<div class="flex items-center justify-between">
+									<span id="detail-name" class="font-bold text-xs truncate max-w-[150px]"></span>
+									<label class="cursor-pointer label gap-1 p-0">
+										<span class="label-text text-xs">启用</span>
+										<input type="checkbox" id="detail-toggle" class="toggle toggle-xs toggle-warning" />
+									</label>
+								</div>
+								<div class="text-xs space-y-0.5">
+									<div class="flex items-center gap-1"><span class="text-base-content/50">角色:</span>
+										<select id="detail-role" class="select select-xs select-bordered flex-1 font-mono text-xs" disabled>
+											<option value="system">system</option>
+											<option value="user">user</option>
+											<option value="assistant">assistant</option>
+										</select>
+									</div>
+									<div class="flex items-center gap-1"><span class="text-base-content/50">类型:</span>
+										<select id="detail-type" class="select select-xs select-bordered flex-1 text-xs" disabled>
+											<option value="system_prompt">系统级提示词</option>
+											<option value="injection">注入式条目</option>
+										</select>
+									</div>
+									<div id="detail-depth-row" class="flex items-center gap-1"><span class="text-base-content/50">深度:</span>
+										<input type="number" id="detail-depth" min="0" max="999"
+											class="input input-xs input-bordered w-16 font-mono text-xs" value="0" disabled />
+									</div>
+								</div>
+								<textarea id="detail-content"
+									class="textarea textarea-bordered w-full text-xs font-mono"
+									rows="6" readonly></textarea>
+								<div class="flex justify-end gap-1">
+									<button id="detail-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
+									<button id="detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden">💾 保存</button>
+									<button id="detail-cancel-btn" class="btn btn-xs btn-ghost hidden">取消</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="divider my-1 opacity-30"></div>
+
+				<!-- ====== 世界书绑定折叠组 ====== -->
+				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						📖 世界书绑定
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<div class="flex items-center gap-1 mb-1">
+							<select id="left-world-select" class="select select-xs select-bordered flex-1 text-xs"></select>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-base-content/50">当前:</span>
+							<span id="left-world-status" class="text-xs font-bold text-amber-700 truncate max-w-[140px]">未绑定</span>
+						</div>
+					</div>
+				</div>
+	
+				<!-- ====== 用户人设选择折叠组 ====== -->
+				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						👤 用户人设
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<div class="flex items-center gap-1 mb-1">
+							<select id="left-persona-select" class="select select-xs select-bordered flex-1 text-xs"></select>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-base-content/50">当前:</span>
+							<span id="left-persona-status" class="text-xs font-bold text-amber-700 truncate max-w-[140px]">默认</span>
+						</div>
+						<div id="left-persona-desc" class="text-xs text-base-content/40 mt-1 line-clamp-2"></div>
+					</div>
+				</div>
+			</div>
+
+				<!-- ====== 聊天停靠区（文件/记忆模式时聊天移到这里） ====== -->
+			<div id="chat-dock" class="chat-dock border-t border-amber-700/30 hidden">
+				<div class="chat-dock-header flex items-center justify-between px-3 py-1 bg-base-300/50 cursor-pointer" id="chat-dock-toggle">
+					<span class="text-xs font-medium text-amber-700">💬 AI 对话</span>
+					<img src="https://api.iconify.design/mdi/chevron-up.svg" class="w-4 h-4 icon chat-dock-chevron" />
+				</div>
+				<div id="chat-dock-body" class="chat-dock-body">
+					<!-- #chat-container 将被 JS 移动到这里 -->
+				</div>
+			</div>
+		</aside>
+
+		<!-- ====== 中栏: 聊天 + 选项卡 ====== -->
+		<main id="center-panel" class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+			<!-- ====== 聊天选项卡（保留所有现有 DOM 和 ID） ====== -->
+			<div id="center-tab-chat" class="center-tab-content flex-1 flex flex-col overflow-hidden">
+				<!-- 可移动的聊天容器（文件/记忆模式时会移到左栏底部） -->
+				<div id="chat-container" class="flex-1 flex flex-col overflow-hidden">
+					<!-- 消息列表 -->
+						<div class="chat-messages flex-grow overflow-y-auto flex flex-col px-[10px] py-2 lg:px-4 lg:py-3" id="chat-messages">
+						</div>
+	
+						<!-- 记忆AI输出面板（在消息列表和输入区之间，自动清空） -->
+						<div id="memory-ai-output" class="memory-ai-output-panel" style="display:none;">
+							<div class="memory-ai-output-header" id="memory-ai-output-header-toggle" style="cursor:pointer;" title="点击折叠/展开">
+								<span class="memory-ai-output-icon">🧠</span>
+								<span class="memory-ai-output-title">记忆AI</span>
+								<span id="memory-ai-output-status" class="memory-ai-output-status"></span>
+								<span id="memory-ai-output-chevron" class="memory-ai-output-chevron">▼</span>
+								<button id="memory-ai-output-close" class="memory-ai-output-close" title="关闭">×</button>
+							</div>
+							<div id="memory-ai-output-body" class="memory-ai-output-body">
+								<!-- 动态渲染记忆AI输出 -->
+							</div>
+						</div>
+	
+						<!-- 输入状态指示器 -->
+					<div id="typing-indicator" class="items-center gap-2 p-4 py-2 text-sm text-base-content/70 hidden flex">
+					</div>
+	
+					<!-- 输入区域 -->
+					<div class="chat-input join p-4 py-0 max-lg:px-0">
+						<!-- ≡扩展 + 上传 上下排列 -->
+						<div class="flex flex-col join-item">
+							<button id="extend-menu-btn" class="btn btn-secondary flex-1 extend-menu-trigger" title="扩展工具">
+								<img src="https://api.iconify.design/mdi/menu.svg" class="w-5 h-5 icon" />
+							</button>
+							<button id="upload-button" class="btn btn-secondary flex-1" data-i18n="chat.chatArea.uploadButton" title="上传文件">
+								<img src="https://api.iconify.design/line-md/upload.svg" />
+							</button>
+						</div>
+						<div class="flex flex-col">
+							<button id="voice-button" class="btn btn-accent" data-i18n="chat.chatArea.voiceButton"><img src="https://api.iconify.design/material-symbols/mic.svg" /></button>
+							<button id="single-inject-btn" class="btn btn-accent" title="单次注入（临时提示词）">
+								<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" class="w-5 h-5"><path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.17L4 17.17V4h16z"/><path fill="currentColor" d="M12 15l1.57-3.43L17 10l-3.43-1.57L12 5l-1.57 3.43L7 10l3.43 1.57z"/></svg>
+							</button>
+						</div>
+						<textarea id="message-input" class="join-item textarea flex-grow" data-i18n="chat.chatArea.input" placeholder="输入消息..."></textarea>
+						<button id="send-button" class="join-item btn btn-primary h-full" data-i18n="chat.chatArea.sendButton"><img src="https://api.iconify.design/line-md/chat-round-twotone.svg" /></button>
+					</div>
+	
+					<input type="file" id="file-input" class="hidden" multiple />
+					<div id="attachment-preview" class="p-4 flex gap-4 overflow-x-auto">
+					</div>
+				</div>
+			</div>
+	
+			<!-- ====== 文件选项卡（IDE 风格） ====== -->
+			<div id="center-tab-files" class="center-tab-content flex-1 hidden overflow-hidden">
+				<div class="ide-container flex h-full">
+					<!-- 活动栏 -->
+					<div id="ide-activity-bar" class="ide-activity-bar flex flex-col items-center shrink-0">
+						<button class="ide-activity-btn ide-activity-active" data-ide-panel="explorer" title="文件资源管理器">
+							<img src="https://api.iconify.design/mdi/files.svg" class="w-5 h-5 icon" />
+						</button>
+						<button class="ide-activity-btn" data-ide-panel="ai-chat" title="AI 对话">
+							<img src="https://api.iconify.design/mdi/chat-outline.svg" class="w-5 h-5 icon" />
+						</button>
+						<button class="ide-activity-btn" data-ide-panel="extensions" title="扩展">
+							<img src="https://api.iconify.design/mdi/puzzle-outline.svg" class="w-5 h-5 icon" />
+						</button>
+					</div>
+					<!-- 侧边栏 -->
+					<div id="ide-sidebar" class="ide-sidebar flex flex-col overflow-hidden">
+						<!-- 侧边栏面板: 文件资源管理器 -->
+						<div id="ide-panel-explorer" class="ide-sidebar-panel flex-1 overflow-y-auto">
+							<!-- fileExplorer.mjs 的文件树将渲染到这里 -->
+						</div>
+						<!-- 侧边栏面板: AI 对话 -->
+						<div id="ide-panel-ai-chat" class="ide-sidebar-panel flex-1 overflow-hidden hidden">
+							<!-- 迷你聊天容器（#chat-container 将在文件模式下移到这里） -->
+						</div>
+						<!-- 侧边栏面板: 扩展 -->
+						<div id="ide-panel-extensions" class="ide-sidebar-panel flex-1 overflow-y-auto hidden">
+							<div class="p-3 space-y-2">
+								<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
+									<img src="https://api.iconify.design/mdi/puzzle-outline.svg" class="w-4 h-4 icon" />
+									扩展
+								</h3>
+								<p class="text-xs text-base-content/40 text-center py-4">扩展市场功能开发中...</p>
+							</div>
+						</div>
+						<!-- 侧边栏拖拽调宽手柄 -->
+						<div id="ide-sidebar-resize" class="ide-sidebar-resize"></div>
+					</div>
+					<!-- IDE 主区域 -->
+					<div class="ide-main flex-1 flex flex-col min-w-0 overflow-hidden">
+						<!-- 菜单栏 -->
+						<div id="ide-menubar" class="ide-menubar flex items-center shrink-0">
+							<div class="ide-menu-item" data-menu="file">
+								<span class="ide-menu-label">文件</span>
+								<div class="ide-menu-dropdown hidden">
+									<div class="ide-menu-action" data-action="new-file">📄 新建文件</div>
+									<div class="ide-menu-action" data-action="open-folder">📂 打开文件夹</div>
+									<div class="ide-menu-divider"></div>
+									<div class="ide-menu-action" data-action="save" data-shortcut="Ctrl+S">💾 保存</div>
+									<div class="ide-menu-divider"></div>
+									<label class="ide-menu-action ide-menu-toggle">
+										<span>自动保存</span>
+										<input type="checkbox" id="ide-auto-save" />
+									</label>
+								</div>
+							</div>
+							<div class="ide-menu-item" data-menu="edit">
+								<span class="ide-menu-label">编辑</span>
+								<div class="ide-menu-dropdown hidden">
+									<div class="ide-menu-action" data-action="undo" data-shortcut="Ctrl+Z">↩ 撤销</div>
+									<div class="ide-menu-action" data-action="redo" data-shortcut="Ctrl+Y">↪ 恢复</div>
+									<div class="ide-menu-divider"></div>
+									<div class="ide-menu-action" data-action="cut" data-shortcut="Ctrl+X">✂ 剪切</div>
+									<div class="ide-menu-action" data-action="copy" data-shortcut="Ctrl+C">📋 复制</div>
+									<div class="ide-menu-action" data-action="paste" data-shortcut="Ctrl+V">📌 粘贴</div>
+									<div class="ide-menu-divider"></div>
+									<div class="ide-menu-action" data-action="find" data-shortcut="Ctrl+F">🔍 查找</div>
+									<div class="ide-menu-action" data-action="replace" data-shortcut="Ctrl+H">🔄 替换</div>
+								</div>
+							</div>
+						</div>
+						<!-- 编辑器标签栏 -->
+						<div id="ide-editor-tabs" class="ide-editor-tabs flex items-center shrink-0 overflow-x-auto">
+							<!-- 打开的文件标签将由 JS 动态生成 -->
+							<span class="ide-tabs-placeholder text-xs text-base-content/30 px-3">未打开文件</span>
+						</div>
+						<!-- 编辑器内容区 -->
+						<div id="file-editor-area" class="flex-1 overflow-auto">
+							<div class="flex items-center justify-center h-full text-base-content/30">
+								<div class="text-center">
+									<img src="https://api.iconify.design/mdi/folder-open-outline.svg" class="w-16 h-16 mx-auto mb-4 opacity-20 icon" />
+									<p class="text-sm">从左侧文件树选择文件</p>
+									<p class="text-xs mt-1 text-base-content/20">或使用 📂 打开文件夹</p>
+								</div>
+							</div>
+						</div>
+						<!-- 状态栏 -->
+						<div id="ide-statusbar" class="ide-statusbar flex items-center justify-between shrink-0">
+							<div class="flex items-center gap-2">
+								<span id="ide-status-file" class="text-[10px] text-base-content/50 font-mono truncate max-w-[200px]">就绪</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<span id="ide-status-encoding" class="text-[10px] text-base-content/40">UTF-8</span>
+								<span id="ide-status-lang" class="text-[10px] text-base-content/40"></span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+	
+			<!-- ====== 记忆选项卡（IDE 风格） ====== -->
+			<div id="center-tab-memory" class="center-tab-content flex-1 hidden overflow-hidden">
+				<div class="ide-container flex h-full">
+					<!-- 活动栏：P2-P6 预设切换 + 底部文件树 -->
+					<div id="mem-activity-bar" class="ide-activity-bar flex flex-col items-center shrink-0">
+						<!-- P2-P6 预设按钮（由 JS 动态渲染） -->
+						<div id="mem-preset-switcher" class="flex flex-col w-full gap-0.5 pt-1"></div>
+						<div class="mt-auto pb-1 flex flex-col items-center gap-0.5">
+							<button class="ide-activity-btn" id="mem-export-btn" title="导出记忆文件">
+								<img src="https://api.iconify.design/mdi/export.svg" class="w-5 h-5 icon" />
+							</button>
+							<button class="ide-activity-btn" id="mem-import-btn" title="导入记忆文件">
+								<img src="https://api.iconify.design/mdi/import.svg" class="w-5 h-5 icon" />
+							</button>
+							<button class="ide-activity-btn" id="mem-file-tree-btn" title="记忆文件树">
+								<img src="https://api.iconify.design/mdi/folder-outline.svg" class="w-5 h-5 icon" />
+							</button>
+						</div>
+						<input type="file" id="mem-import-file-input" accept=".json,.zip" class="hidden" />
+					</div>
+					<!-- 侧边栏：文件树（默认隐藏，点击文件树按钮时显示） -->
+					<div id="mem-sidebar" class="ide-sidebar flex flex-col overflow-hidden" style="display:none;">
+						<div id="mem-panel-memory-tree" class="ide-sidebar-panel flex-1 overflow-y-auto">
+							<div class="p-3 space-y-1">
+								<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2 mb-2">
+									<img src="https://api.iconify.design/mdi/brain.svg" class="w-4 h-4 icon" />
+									记忆文件
+								</h3>
+								<div id="memory-tree" class="mb-tree-container text-xs">
+									<div class="mb-empty-dir" style="padding:0.5rem;">等待角色卡绑定...</div>
+								</div>
+							</div>
+						</div>
+						<div class="ide-sidebar-resize"></div>
+					</div>
+					<!-- 主区域 -->
+					<div class="ide-main flex-1 flex flex-col min-w-0 overflow-hidden">
+						<!-- 视图1：记忆AI消息流（默认显示） -->
+						<div id="mem-chat-view" class="flex-1 flex flex-col overflow-hidden">
+							<!-- 当前预设标题栏 -->
+							<div class="px-3 py-1.5 bg-base-300/50 text-xs font-medium text-amber-700 flex items-center gap-2 shrink-0">
+								<span>🧠</span>
+								<span id="mem-ai-current-preset">未选择预设</span>
+								<span id="mem-ai-preset-desc" class="text-base-content/40 text-[11px] truncate"></span>
+								<button id="mem-ai-toggle-prompt" class="btn btn-xs btn-ghost ml-auto opacity-60 hover:opacity-100" title="查看提示词">📝</button>
+							</div>
+							<!-- 提示词预览区域（默认折叠） -->
+							<div id="mem-ai-prompt-preview" class="hidden border-b border-base-300 shrink-0">
+								<div class="px-3 py-2 bg-base-200/50 max-h-48 overflow-y-auto">
+									<pre id="mem-ai-prompt-content" class="text-xs font-mono whitespace-pre-wrap break-words text-base-content/70 select-text"></pre>
+								</div>
+							</div>
+							<!-- 消息记录区（chat-messages 风格） -->
+							<div id="mem-ai-messages" class="flex-grow overflow-y-auto flex flex-col px-[10px] py-2 lg:px-4 lg:py-3" style="font-size:1rem;">
+								<p class="text-xs text-base-content/40 text-center py-4">选择一个预设并运行，AI输出将显示在这里</p>
+							</div>
+							<!-- 输入区域 -->
+							<div class="px-3 py-2 border-t border-base-300 shrink-0">
+								<div class="flex gap-1 mb-1">
+									<textarea id="mem-ai-input" class="textarea textarea-bordered textarea-xs flex-1 font-mono" rows="2" placeholder="给记忆AI提要求..."></textarea>
+									<button id="mem-ai-send-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700 self-end" title="发送">
+										<img src="https://api.iconify.design/mdi/send.svg" class="w-3.5 h-3.5 icon" />
+									</button>
+								</div>
+								<div class="flex gap-1">
+									<button id="mem-ai-run-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white flex-1">
+										▶ 运行当前预设
+									</button>
+									<button id="mem-ai-clear-btn" class="btn btn-xs btn-ghost" title="清空记录">
+										🗑️
+									</button>
+								</div>
+							</div>
+						</div>
+						<!-- 视图2：文件浏览器（点击文件树按钮时显示，默认隐藏） -->
+						<div id="mem-file-view" class="flex-1 flex flex-col overflow-hidden" style="display:none;">
+							<div id="memory-file-viewer" class="flex-1 overflow-auto"></div>
+							<div id="memory-datatable-area" class="flex-1 overflow-auto"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- ====== 前端助手选项卡（正则 + 脚本） ====== -->
+			<div id="center-tab-helper" class="center-tab-content flex-1 hidden flex-col overflow-hidden">
+				<!-- 正则编辑器将由 regexEditor.mjs 动态渲染到此容器 -->
+				<div id="regex-editor-container" class="flex-1 flex flex-col overflow-hidden">
+				</div>
+			</div>
+		</main>
+
+		<!-- ====== 右栏: AI 设置 ====== -->
+		<aside id="right-panel" class="right-panel border-l border-base-300 bg-base-200 shrink-0 overflow-hidden transition-all duration-300 ease-in-out">
+			<div class="right-panel-content p-3 space-y-2 overflow-y-auto h-full">
+				<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
+					<img src="https://api.iconify.design/mdi/robot-outline.svg" class="w-4 h-4 icon" />
+					AI 设置
+				</h3>
+
+				<!-- ====== 对话AI设置折叠组 ====== -->
+				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+					<input type="checkbox" checked />
+					<div class="collapse-title font-medium text-sm py-2 min-h-0">
+						🔌 对话AI设置
+					</div>
+					<div class="collapse-content px-2 pb-2">
+						<!-- API 选择 -->
+						<div class="flex items-center gap-1 mb-2">
+							<select id="api-select" class="select select-xs select-bordered flex-1"></select>
+							<button id="api-new-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+								+
+							</button>
+						</div>
+
+						<div class="space-y-2">
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">配置名称</span>
+								</label>
+								<input type="text" id="api-name" class="input input-xs input-bordered w-full" placeholder="my-api" />
+							</div>
+
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">API 类型</span>
+								</label>
+								<select id="api-type" class="select select-xs select-bordered w-full">
+									<option value="proxy">OpenAI 兼容</option>
+									<option value="gemini">Google Gemini</option>
+								</select>
+							</div>
+
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs" id="api-url-label">API URL</span>
+								</label>
+								<input type="text" id="api-url"
+									class="input input-xs input-bordered w-full font-mono text-xs"
+									placeholder="https://api.openai.com/v1/chat/completions" />
+							</div>
+
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">API Key</span>
+								</label>
+								<input type="password" id="api-key"
+									class="input input-xs input-bordered w-full font-mono text-xs"
+									placeholder="sk-..." />
+							</div>
+
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">模型</span>
+								</label>
+								<div class="flex gap-1">
+									<input type="text" id="api-model"
+										class="input input-xs input-bordered flex-grow font-mono text-xs"
+										placeholder="gpt-3.5-turbo" />
+									<button id="api-fetch-models" class="btn btn-xs btn-outline" title="获取模型列表">🔄</button>
+								</div>
+								<select id="api-model-select" class="select select-xs select-bordered w-full mt-1 hidden">
+									<option value="" disabled selected>选择模型...</option>
+								</select>
+							</div>
+						</div>
+
+						<div class="flex gap-1 mt-2">
+							<button id="api-save-btn"
+								class="btn btn-xs flex-grow bg-amber-700 hover:bg-amber-800 text-white border-amber-700">
+								💾 保存
+							</button>
+							<button id="api-delete-btn" class="btn btn-xs btn-outline btn-error" disabled>
+								🗑️
+							</button>
+						</div>
+						<div id="api-status" class="text-xs text-center mt-0.5 hidden"></div>
+
+						<div class="divider my-1 opacity-30"></div>
+
+						<!-- AI 文件处理能力管理 -->
+						<div class="space-y-1">
+							<p class="text-xs font-medium text-base-content/70">AI 文件处理能力</p>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">📖 读取</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked data-permission="file_read" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">✏️ 写入</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" data-permission="file_write" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">🗑️ 删除</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" data-permission="file_delete" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">🔄 重试</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked data-permission="file_retry" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">🔌 MCP</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" data-permission="mcp" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">❓ 问题</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked data-permission="questions" />
+							</label>
+							<label class="flex items-center justify-between cursor-pointer">
+								<span class="text-xs">📋 待办</span>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" data-permission="todo" />
+							</label>
+						</div>
+
+						<div class="divider my-1 opacity-30"></div>
+
+						<!-- 字体比例 -->
+						<div class="form-control">
+							<label class="label py-0.5">
+								<span class="label-text text-xs">字体比例</span>
+								<span id="font-scale-value" class="label-text-alt font-mono text-xs">100%</span>
+							</label>
+							<input type="range" id="font-scale" min="50" max="200" step="5" value="100"
+								class="range range-xs range-warning" />
+							<div class="flex justify-between text-[10px] text-base-content/30 px-0.5 mt-0.5">
+								<span>50%</span>
+								<span>100%</span>
+								<span>200%</span>
+							</div>
+						</div>
+
+						<div class="divider my-1 opacity-30"></div>
+
+						<!-- 单次注入 -->
+						<div class="form-control">
+							<label class="label py-0.5">
+								<span class="label-text text-xs">单次注入（临时提示词）</span>
+							</label>
+							<textarea id="single-inject" class="textarea textarea-bordered textarea-xs w-full font-mono text-xs" rows="2" placeholder="下次发送时附加的临时提示词..."></textarea>
+						</div>
+					</div>
+				</div>
+
+				<!-- ====== 记忆AI操作折叠组 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							🧠 记忆AI操作
+						</div>
+						<div class="collapse-content px-2 pb-2">
+							<div class="space-y-1.5">
+								<button id="mem-op-P2" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P2">
+									📝 总结归档（临时→热层#6）
+								</button>
+								<button id="mem-op-P3" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P3">
+									📅 每日总结AI
+								</button>
+								<button id="mem-op-P4" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P4">
+									🔄 热→温转移AI
+								</button>
+								<button id="mem-op-P5" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P5">
+									📆 月度总结/归档AI
+								</button>
+								<button id="mem-op-P6" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P6">
+									🔧 格式检查/修复AI
+								</button>
+							</div>
+							<div id="mem-op-status" class="text-xs text-center mt-1.5 hidden"></div>
+						</div>
+					</div>
+
+				<div class="divider my-1 opacity-30"></div>
+
+				<!-- ====== 插件管理折叠组 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" checked />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							🧩 功能开关
+						</div>
+						<div class="collapse-content px-2 pb-2">
+							<div class="space-y-1.5">
+								<!-- 悬浮球开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">✦ 悬浮球（截图/上传）</span>
+									<input type="checkbox" id="toggle-floating-orb" class="toggle toggle-xs" checked />
+								</label>
+								<!-- 正则处理器开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">🔤 正则处理器</span>
+									<input type="checkbox" id="toggle-regex" class="toggle toggle-xs" checked />
+								</label>
+								<!-- 思维链折叠开关 + 标签配置 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">💭 思维链折叠</span>
+									<input type="checkbox" id="toggle-thinking-fold" class="toggle toggle-xs" checked />
+								</label>
+								<div class="pl-4 mt-0.5">
+									<input type="text" id="thinking-fold-tags" class="input input-xs input-bordered w-full font-mono text-[10px]"
+										placeholder="thinking,think" value="thinking,think" title="逗号分隔的XML标签名" />
+									<span class="text-[9px] text-base-content/30">自定义折叠标签（逗号分隔）</span>
+								</div>
+								<!-- 角色名显示开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">👤 显示角色名</span>
+									<input type="checkbox" id="toggle-char-names" class="toggle toggle-xs" checked />
+								</label>
+								<!-- 联网搜索开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">🌐 联网搜索</span>
+									<input type="checkbox" id="toggle-web-search" class="toggle toggle-xs" checked />
+								</label>
+								<!-- 系统信息开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">🖥️ 系统信息</span>
+									<input type="checkbox" id="toggle-sysinfo" class="toggle toggle-xs" checked />
+								</label>
+								<!-- 条目控制开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">🔄 条目控制</span>
+									<input type="checkbox" id="toggle-entry-control" class="toggle toggle-xs" />
+								</label>
+	
+								<div class="divider my-1 opacity-30"></div>
+	
+								<!-- 消息加载限制 -->
+								<div class="flex items-center justify-between">
+									<span class="text-xs">📜 消息加载数</span>
+									<input type="number" id="msg-load-limit" class="input input-xs input-bordered w-20 font-mono text-xs"
+										min="0" max="9999" step="50" value="0" title="0=不限制" />
+								</div>
+								<span class="text-[9px] text-base-content/30 pl-4">限制DOM中加载的消息数（0=全部）</span>
+	
+								<!-- 上下文屏蔽 -->
+								<div class="flex items-center justify-between mt-1">
+									<span class="text-xs">🚫 上下文消息数</span>
+									<input type="number" id="context-msg-limit" class="input input-xs input-bordered w-20 font-mono text-xs"
+										min="0" max="9999" step="5" value="0" title="0=不限制" />
+								</div>
+								<span class="text-[9px] text-base-content/30 pl-4">发送给AI的最大消息条数（0=全部，瞬时）</span>
+							</div>
+						</div>
+					</div>
+			</div>
+		</aside>
+	</div>
+
+	<!-- ====== 保留: 左侧边栏 drawer（角色/世界/人设/插件管理） ====== -->
+	<div class="absolute top-0 left-0 z-40" id="left-drawer-container">
+		<div class="drawer h-full">
+			<input id="left-drawer" type="checkbox" class="drawer-toggle" />
+			<div class="drawer-side z-40">
+				<label for="left-drawer" class="drawer-overlay"></label>
+				<div class="w-80 bg-base-200 text-base-content p-4 overflow-y-auto h-screen h-dvh shadow-lg">
+					<ul class="menu w-full">
+						<!-- 世界信息 -->
+						<li id="world-info">
+							<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center">
+									<img src="https://api.iconify.design/line-md/map-marker.svg" class="w-8 h-8 mr-2 icon" />
+									<h3 class="text-lg font-bold" data-i18n="chat.sidebar.world.title">世界</h3>
+								</div>
+							</div>
+							<select class="select border w-full" id="world-select">
+							</select>
+							<div id="world-details" class="sidebar-item-details">
+							</div>
+						</li>
+						<!-- 人设 -->
+						<li id="persona-info">
+							<div class="flex items-center justify-between mt-6 mb-2">
+								<div class="flex items-center">
+									<img src="https://api.iconify.design/line-md/emoji-grin.svg" class="w-8 h-8 mr-2 icon" />
+									<h3 class="text-lg font-bold" data-i18n="chat.sidebar.persona.title">人设</h3>
+								</div>
+							</div>
+							<select class="select border w-full" id="persona-select">
+							</select>
+							<div id="persona-details" class="sidebar-item-details">
+							</div>
+						</li>
+						<!-- 角色列表 -->
+						<li id="char-list">
+							<div class="flex items-center justify-between mt-6 mb-2">
+								<div class="flex items-center">
+									<img src="https://api.iconify.design/line-md/person.svg" class="w-8 h-8 mr-2 icon" />
+									<h3 class="text-lg font-bold" data-i18n="chat.sidebar.charList.title">角色</h3>
+								</div>
+							</div>
+							<div class="flex justify-between">
+								<select class="select border w-full" id="char-select">
+								</select>
+								<div class="join">
+									<button id="add-char-button" class="btn btn-sm btn-primary join-item" data-i18n="chat.sidebar.charList.buttons.addChar">
+										<img src="https://api.iconify.design/line-md:account-add.svg" />
+									</button>
+								</div>
+							</div>
+							<div id="char-details" class="flex flex-col gap-2 sidebar-item-details">
+							</div>
+						</li>
+						<!-- 插件列表 -->
+						<li id="plugin-list">
+							<div class="flex items-center justify-between mt-6 mb-2">
+								<div class="flex items-center">
+									<img src="https://api.iconify.design/mdi/puzzle-outline.svg" class="w-8 h-8 mr-2 icon" />
+									<h3 class="text-lg font-bold" data-i18n="chat.sidebar.pluginList.title">插件</h3>
+								</div>
+							</div>
+							<div class="flex justify-between">
+								<select class="select border w-full" id="plugin-select">
+								</select>
+								<div class="join">
+									<button id="add-plugin-button" class="btn btn-sm btn-primary join-item" data-i18n="chat.sidebar.pluginList.buttons.addPlugin">
+										<img src="https://api.iconify.design/line-md:plus-circle.svg" />
+									</button>
+								</div>
+							</div>
+							<div id="plugin-details" class="flex flex-col gap-2 sidebar-item-details">
+							</div>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ====== 保留: 右侧边栏（Part 描述） ====== -->
+	<div class="fixed top-0 right-0 z-40 w-80 h-full sidebar-hidden" id="right-sidebar-container">
+		<div class="bg-base-300 text-base-content border-l-2 border-base-content h-full" id="right-sidebar">
+			<div class="p-4 h-full overflow-y-auto">
+				<h2 class="text-xl mb-2" data-i18n="chat.rightSidebar.title">描述</h2>
+				<article id="item-description" class="markdown-body"></article>
+			</div>
+		</div>
+	</div>
+
+	<!-- ====== ≡ 扩展工具菜单（fixed 定位，body 级别，不受 overflow 裁切） ====== -->
+	<div id="extend-menu" class="extend-menu hidden">
+		<div class="extend-menu-item" data-action="new-chat">
+			<span class="extend-menu-icon">💬</span>
+			<span>开始新聊天</span>
+		</div>
+		<div class="extend-menu-item" data-action="manage-chats">
+			<span class="extend-menu-icon">📂</span>
+			<span>管理聊天文件</span>
+		</div>
+		<div class="extend-menu-divider"></div>
+		<div class="extend-menu-item" data-action="batch-delete">
+			<span class="extend-menu-icon">🗑️</span>
+			<span>批量删除消息</span>
+		</div>
+		<div class="extend-menu-item" data-action="regenerate">
+			<span class="extend-menu-icon">🔄</span>
+			<span>重新生成</span>
+		</div>
+		<div class="extend-menu-divider"></div>
+		<div class="extend-menu-item" data-action="toggle-inj2">
+			<span class="extend-menu-icon">📁</span>
+			<span>文件层AI提示词</span>
+			<span id="inj2-status" style="margin-left:auto;font-size:0.7rem;opacity:0.5;">OFF</span>
+		</div>
+		<div class="extend-menu-divider"></div>
+		<div class="extend-menu-item" data-action="prompt-viewer">
+			<span class="extend-menu-icon">🔍</span>
+			<span>提示词查看器</span>
+		</div>
+		<div class="extend-menu-item" data-action="token-counter">
+			<span class="extend-menu-icon">1️⃣</span>
+			<span>词符计数器</span>
+		</div>
+		<div class="extend-menu-item" data-action="translate-chat">
+			<span class="extend-menu-icon">🌐</span>
+			<span>翻译聊天</span>
+		</div>
+		<div class="extend-menu-item" data-action="log-viewer">
+			<span class="extend-menu-icon">📋</span>
+			<span>日志查看器</span>
+		</div>
+		<div class="extend-menu-divider"></div>
+		<div class="extend-menu-item" data-action="toggle-memory-ai">
+			<span class="extend-menu-icon">🧠</span>
+			<span>记忆AI输出</span>
+			<span id="memory-ai-toggle-status" class="extend-menu-status"></span>
+		</div>
+	</div>
+
+	<!-- ====== 提示词查看器悬浮窗 ====== -->
+	<div id="prompt-viewer-window" class="floating-window hidden">
+		<!-- 标题栏（可拖动） -->
+		<div class="floating-window-header" id="prompt-viewer-header">
+			<div class="fw-title">
+				<span>🔍 提示词查看器</span>
+				<span id="pv-status" class="fw-status"></span>
+			</div>
+			<div class="fw-controls">
+				<button class="fw-ctrl-btn" id="pv-minimize" title="最小化">─</button>
+				<button class="fw-ctrl-btn" id="pv-maximize" title="最大化">□</button>
+				<button class="fw-ctrl-btn fw-ctrl-close" id="pv-close" title="关闭">×</button>
+			</div>
+		</div>
+		<!-- 工具栏 -->
+		<div class="fw-toolbar">
+			<button id="pv-build-btn" class="dt-btn dt-btn-primary dt-btn-sm">🚀 构建请求</button>
+			<button id="pv-copy-btn" class="dt-btn dt-btn-sm">📋 复制全部</button>
+			<div class="fw-toolbar-spacer"></div>
+			<div class="fw-tab-group">
+				<button class="fw-tab-btn fw-tab-active" data-pv-tab="messages">消息列表</button>
+				<button class="fw-tab-btn" data-pv-tab="context">上下文</button>
+				<button class="fw-tab-btn" data-pv-tab="params">模型参数</button>
+				<button class="fw-tab-btn" data-pv-tab="raw">原始 JSON</button>
+			</div>
+		</div>
+		<!-- 内容区 -->
+		<div class="fw-body">
+			<!-- 统计栏 -->
+			<div id="pv-stats" class="pv-stats hidden">
+				<span id="pv-stat-msgs">0 条消息</span>
+				<span class="pv-stat-sep">·</span>
+				<span id="pv-stat-system">系统 0 字符</span>
+				<span class="pv-stat-sep">·</span>
+				<span id="pv-stat-total">总计 0 字符</span>
+				<span class="pv-stat-sep">·</span>
+				<span id="pv-stat-tokens">≈ 0 tokens</span>
+				<span class="pv-stat-sep">·</span>
+				<span id="pv-stat-model">模型: -</span>
+			</div>
+			<!-- 消息列表 -->
+			<div id="pv-tab-messages" class="pv-tab-content">
+				<div id="pv-messages-output" class="pv-output">
+					<p class="pv-placeholder">点击"🚀 构建请求"生成完整提示词预览</p>
+				</div>
+			</div>
+			<!-- 上下文总览 -->
+			<div id="pv-tab-context" class="pv-tab-content hidden">
+				<div id="pv-context-output" class="pv-output">
+					<p class="pv-placeholder">构建请求后显示上下文总览</p>
+				</div>
+			</div>
+			<!-- 模型参数 -->
+			<div id="pv-tab-params" class="pv-tab-content hidden">
+				<div id="pv-params-output" class="pv-output">
+					<p class="pv-placeholder">构建请求后显示模型参数</p>
+				</div>
+			</div>
+			<!-- 原始 JSON -->
+			<div id="pv-tab-raw" class="pv-tab-content hidden">
+				<div id="pv-raw-output" class="pv-output">
+					<pre class="pv-placeholder">构建请求后显示原始 JSON</pre>
+				</div>
+			</div>
+		</div>
+		<!-- 缩放手柄 -->
+		<div class="fw-resize-handle" id="pv-resize-handle"></div>
+	</div>
+
+	<script type="module" src="./index.mjs"></script>
+</body>
+
+</html>

@@ -1,0 +1,862 @@
+/**
+ * memoryPreset.mjs — 记忆预设管理模块
+ *
+ * 通过 beilu-memory 插件的 config 接口管理6个内置记忆预设。
+ * 每个预设控制记忆系统某个环节（检索/总结/归档/修复）的AI行为。
+ */
+
+// ===== API 通信 =====
+
+const PLUGIN_NAME = 'beilu-memory'
+const SSM_API_BASE = '/api/parts/shells:serviceSourceManage'
+
+async function getPluginData() {
+	try {
+		const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/getdata`)
+		if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+		return await resp.json()
+	} catch (e) {
+		console.error('[memoryPreset] getPluginData 失败:', e)
+		return null
+	}
+}
+
+/** 从 serviceSourceManage 获取已配置的 AI 服务源名称列表 */
+async function fetchAISourceList() {
+	try {
+		// 尝试从 SSM 获取 AI 源列表
+		// 暂时返回空数组，用户可以手动输入。
+		return []
+	} catch (e) {
+		console.error('[memoryPreset] 获取 AI 服务源列表失败:', e)
+		return []
+	}
+}
+
+/**
+ * 加载指定源的模型列表并填充到 datalist
+ * @param {string} sourceName 
+ */
+async function loadModelsForSource(sourceName) {
+	if (!sourceName) return
+	
+	const datalist = document.getElementById('model-list')
+	if (!datalist) return
+
+	try {
+		// 调用 beilu-memory 的 getModels 接口
+		const res = await setPluginData({
+			_action: 'getModels',
+			sourceName: sourceName
+		})
+
+		if (res.success && Array.isArray(res.models)) {
+			datalist.innerHTML = ''
+			res.models.forEach(model => {
+				const option = document.createElement('option')
+				option.value = model
+				datalist.appendChild(option)
+			})
+			console.log(`[memoryPreset] 已加载 ${res.models.length} 个模型`)
+		} else {
+			console.warn('[memoryPreset] 加载模型失败:', res.error)
+		}
+	} catch (e) {
+		console.error('[memoryPreset] 加载模型出错:', e)
+	}
+}
+
+async function setPluginData(payload) {
+	try {
+		const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/setdata`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload),
+		})
+		if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+		return await resp.json() // 修改为返回 json 以便获取 getModels 的结果
+	} catch (e) {
+		console.error('[memoryPreset] setPluginData 失败:', e)
+		return { success: false, error: e.message }
+	}
+}
+
+// ===== DOM 引用 =====
+
+const dom = {}
+
+function cacheDom() {
+	dom.loading = document.getElementById('mp-loading')
+	dom.main = document.getElementById('mp-main')
+	dom.presetList = document.getElementById('mp-preset-list')
+	dom.detail = document.getElementById('mp-detail')
+
+	// 详情区域
+	dom.detailId = document.getElementById('mp-detail-id')
+	dom.detailName = document.getElementById('mp-detail-name')
+	dom.detailToggle = document.getElementById('mp-detail-toggle')
+	dom.detailDesc = document.getElementById('mp-detail-desc')
+	dom.detailTrigger = document.getElementById('mp-detail-trigger')
+
+	// API 配置
+	dom.apiCustom = document.getElementById('mp-api-custom')
+	dom.apiFields = document.getElementById('mp-api-fields')
+	dom.apiSource = document.getElementById('mp-api-source')
+	dom.apiModel = document.getElementById('mp-api-model')
+	dom.apiTemperature = document.getElementById('mp-api-temperature')
+	dom.apiMaxTokens = document.getElementById('mp-api-max-tokens')
+
+	// 提示词
+	dom.promptList = document.getElementById('mp-prompt-list')
+	dom.addPrompt = document.getElementById('mp-add-prompt')
+
+	// 注入提示词 (Injection Prompts)
+	dom.injectionList = document.getElementById('mp-injection-list')
+
+	// 操作
+	dom.previewPresetBtn = document.getElementById('mp-preview-preset-btn')
+	dom.saveBtn = document.getElementById('mp-save-btn')
+	dom.status = document.getElementById('mp-status')
+
+	// 预设预览面板
+	dom.presetPreviewPanel = document.getElementById('mp-preset-preview-panel')
+	dom.presetPreviewStats = document.getElementById('mp-preset-preview-stats')
+	dom.presetPreviewContent = document.getElementById('mp-preset-preview-content')
+	dom.presetPreviewClose = document.getElementById('mp-preset-preview-close')
+	dom.presetPreviewCopy = document.getElementById('mp-preset-preview-copy')
+
+	// 运行测试面板
+	dom.runPanel = document.getElementById('mp-run-panel')
+	dom.runTitle = document.getElementById('mp-run-title')
+	dom.runClose = document.getElementById('mp-run-close')
+	dom.runStartBtn = document.getElementById('mp-run-start-btn')
+	dom.runResultTime = document.getElementById('mp-run-result-time')
+	dom.runThinking = document.getElementById('mp-run-thinking')
+	dom.runThinkingArrow = document.getElementById('mp-run-thinking-arrow')
+	dom.runThinkingContent = document.getElementById('mp-run-thinking-content')
+	dom.runOperations = document.getElementById('mp-run-operations')
+	dom.runOperationsList = document.getElementById('mp-run-operations-list')
+	dom.runReply = document.getElementById('mp-run-reply')
+	dom.runReplyContent = document.getElementById('mp-run-reply-content')
+	dom.runError = document.getElementById('mp-run-error')
+	dom.runErrorContent = document.getElementById('mp-run-error-content')
+
+	// 记忆维护按钮
+	dom.endDayBtn = document.getElementById('mem-end-day-btn')
+	dom.hotToWarmBtn = document.getElementById('mem-hot-warm-btn')
+	dom.warmToColdBtn = document.getElementById('mem-warm-cold-btn')
+	dom.maintenanceStatus = document.getElementById('mem-maintenance-status')
+}
+
+// ===== 状态 =====
+
+let presets = []
+let injectionPrompts = []
+let selectedPresetId = null
+let aiSourceList = []
+
+// ===== 渲染逻辑 =====
+
+async function refreshPresets() {
+	const data = await getPluginData()
+	if (data) {
+		presets = data.memory_presets || []
+		injectionPrompts = data.injection_prompts || []
+	} else {
+		presets = []
+		injectionPrompts = []
+	}
+	renderPresetList()
+	renderInjectionList()
+}
+
+function renderPresetList() {
+	if (!dom.presetList) return
+	dom.presetList.innerHTML = ''
+
+	presets.forEach(preset => {
+		const item = document.createElement('div')
+		item.className = `p-3 rounded-lg border border-base-300 cursor-pointer hover:bg-base-200 transition-colors ${preset.id === selectedPresetId ? 'bg-base-200 border-primary' : ''}`
+		item.onclick = () => selectPreset(preset.id)
+
+		const statusColor = preset.enabled ? 'text-success' : 'text-base-content/30'
+		const statusIcon = preset.enabled ? '●' : '○'
+
+		item.innerHTML = `
+			<div class="flex items-center justify-between mb-1">
+				<div class="font-bold flex items-center gap-2">
+					<span class="${statusColor} text-xs">${statusIcon}</span>
+					<span>${escapeHtml(preset.name)}</span>
+					<span class="text-xs opacity-50 font-mono">${preset.id}</span>
+				</div>
+				${preset.builtin ? '<span class="badge badge-xs badge-ghost">内置</span>' : ''}
+			</div>
+			<div class="text-xs opacity-70 line-clamp-2">${escapeHtml(preset.description)}</div>
+		`
+		dom.presetList.appendChild(item)
+	})
+}
+
+function selectPreset(id) {
+	selectedPresetId = id
+	renderPresetList() // 更新高亮
+
+	const preset = presets.find(p => p.id === id)
+	if (!preset) return
+
+	// 填充详情
+	dom.detail.style.display = 'block'
+	dom.detailId.textContent = preset.id
+	dom.detailName.textContent = preset.name
+	dom.detailToggle.checked = preset.enabled
+	dom.detailDesc.value = preset.description
+	dom.detailTrigger.textContent = preset.trigger === 'auto_on_message' ? '自动(每条消息)' :
+		preset.trigger === 'auto_on_threshold' ? '自动(阈值触发)' :
+		preset.trigger === 'manual_button' ? '手动触发' : preset.trigger
+
+	// API 配置
+	dom.apiSource.value = preset.api_config?.source || ''
+	dom.apiModel.value = preset.api_config?.model || 'gemini-2.0-flash'
+	dom.apiTemperature.value = preset.api_config?.temperature ?? 0.3
+	dom.apiMaxTokens.value = preset.api_config?.max_tokens ?? 2000
+	dom.apiCustom.checked = !!preset.api_config?.use_custom
+
+	updateApiFieldsState()
+
+	// 尝试加载模型列表
+	if (preset.api_config?.use_custom && preset.api_config?.source) {
+		loadModelsForSource(preset.api_config.source)
+	}
+
+	// 渲染提示词列表
+	renderPromptList(preset)
+}
+
+function updateApiFieldsState() {
+	const useCustom = dom.apiCustom.checked
+	dom.apiFields.style.display = useCustom ? 'grid' : 'none'
+	// 如果不使用自定义，清空源选择（视觉上，实际保存时会处理）
+	if (!useCustom) {
+		// dom.apiSource.value = '' 
+	}
+}
+
+function renderPromptList(preset) {
+	dom.promptList.innerHTML = ''
+	preset.prompts.forEach((p, index) => {
+		const item = document.createElement('div')
+		item.className = 'collapse collapse-arrow border border-base-300 bg-base-100 mb-2'
+		
+		const isBuiltin = p.builtin
+		const roleBadge = p.role === 'system' ? 'badge-primary' : p.role === 'user' ? 'badge-secondary' : 'badge-ghost'
+		
+		item.innerHTML = `
+			<input type="checkbox" /> 
+			<div class="collapse-title flex items-center gap-2 min-h-0 py-2">
+				<span class="badge badge-sm ${roleBadge}">${p.role}</span>
+				<span class="text-xs font-mono opacity-50">${p.identifier || 'prompt'}</span>
+				${!p.enabled ? '<span class="text-error text-xs">(已禁用)</span>' : ''}
+				<div class="flex-grow"></div>
+				${isBuiltin ? '<span class="badge badge-xs badge-outline">锁定</span>' : ''}
+			</div>
+			<div class="collapse-content">
+				<div class="form-control w-full mb-2">
+					<label class="label py-1"><span class="label-text text-xs">Role</span></label>
+					<select class="select select-bordered select-xs w-full" ${isBuiltin ? 'disabled' : ''} onchange="updatePromptRole('${preset.id}', ${index}, this.value)">
+						<option value="system" ${p.role === 'system' ? 'selected' : ''}>system</option>
+						<option value="user" ${p.role === 'user' ? 'selected' : ''}>user</option>
+						<option value="assistant" ${p.role === 'assistant' ? 'selected' : ''}>assistant</option>
+					</select>
+				</div>
+				<div class="form-control w-full mb-2">
+					<label class="label py-1"><span class="label-text text-xs">Content (支持宏替换)</span></label>
+					<textarea class="textarea textarea-bordered text-xs font-mono h-32 leading-tight" 
+						${isBuiltin && p.content === '{{chat_history}}' ? 'disabled' : ''}
+						onchange="updatePromptContent('${preset.id}', ${index}, this.value)">${escapeHtml(p.content)}</textarea>
+				</div>
+				<div class="flex justify-between items-center mt-2">
+					<label class="label cursor-pointer gap-2">
+						<span class="label-text text-xs">启用</span> 
+						<input type="checkbox" class="toggle toggle-xs" ${p.enabled ? 'checked' : ''} 
+							onchange="updatePromptEnabled('${preset.id}', ${index}, this.checked)" />
+					</label>
+					${p.deletable ? `<button class="btn btn-xs btn-error btn-outline" onclick="deletePrompt('${preset.id}', ${index})">删除</button>` : ''}
+				</div>
+			</div>
+		`
+		dom.promptList.appendChild(item)
+	})
+}
+
+// ===== 注入提示词渲染 =====
+
+function renderInjectionList() {
+	if (!dom.injectionList) return
+	dom.injectionList.innerHTML = ''
+
+	injectionPrompts.forEach((inj, index) => {
+		const item = document.createElement('div')
+		item.className = 'collapse collapse-arrow border border-base-300 bg-base-100 mb-2'
+		
+		const autoModeBadge = inj.autoMode === 'always' ? 'badge-success' : 
+							  inj.autoMode === 'file' ? 'badge-info' : 'badge-ghost'
+		const autoModeText = inj.autoMode === 'always' ? '常驻' : 
+							 inj.autoMode === 'file' ? '文件模式' : '手动'
+
+		item.innerHTML = `
+			<input type="checkbox" /> 
+			<div class="collapse-title flex items-center gap-2 min-h-0 py-2">
+				<span class="badge badge-sm ${autoModeBadge}">${autoModeText}</span>
+				<span class="font-bold text-sm">${escapeHtml(inj.name)}</span>
+				${!inj.enabled ? '<span class="text-error text-xs">(已禁用)</span>' : ''}
+				<div class="flex-grow"></div>
+				<span class="text-xs opacity-50">Depth: ${inj.depth}</span>
+			</div>
+			<div class="collapse-content">
+				<div class="grid grid-cols-2 gap-2 mb-2">
+					<div class="form-control">
+						<label class="label py-1"><span class="label-text text-xs">名称</span></label>
+						<input type="text" class="input input-bordered input-xs" value="${escapeHtml(inj.name)}" 
+							onchange="updateInjName('${inj.id}', this.value)" />
+					</div>
+					<div class="form-control">
+						<label class="label py-1"><span class="label-text text-xs">触发模式</span></label>
+						<select class="select select-bordered select-xs" onchange="updateInjMode('${inj.id}', this.value)">
+							<option value="always" ${inj.autoMode === 'always' ? 'selected' : ''}>Always (常驻)</option>
+							<option value="file" ${inj.autoMode === 'file' ? 'selected' : ''}>File (文件模式)</option>
+							<option value="manual" ${inj.autoMode === 'manual' ? 'selected' : ''}>Manual (手动)</option>
+						</select>
+					</div>
+				</div>
+				<div class="grid grid-cols-3 gap-2 mb-2">
+					<div class="form-control">
+						<label class="label py-1"><span class="label-text text-xs">Role</span></label>
+						<select class="select select-bordered select-xs" onchange="updateInjRole('${inj.id}', this.value)">
+							<option value="system" ${inj.role === 'system' ? 'selected' : ''}>system</option>
+							<option value="user" ${inj.role === 'user' ? 'selected' : ''}>user</option>
+						</select>
+					</div>
+					<div class="form-control">
+						<label class="label py-1"><span class="label-text text-xs">Depth (0=最底)</span></label>
+						<input type="number" class="input input-bordered input-xs" value="${inj.depth}" 
+							onchange="updateInjDepth('${inj.id}', this.value)" />
+					</div>
+					<div class="form-control">
+						<label class="label py-1"><span class="label-text text-xs">Order</span></label>
+						<input type="number" class="input input-bordered input-xs" value="${inj.order}" 
+							onchange="updateInjOrder('${inj.id}', this.value)" />
+					</div>
+				</div>
+				<div class="form-control w-full mb-2">
+					<label class="label py-1"><span class="label-text text-xs">Content (支持宏替换)</span></label>
+					<textarea class="textarea textarea-bordered text-xs font-mono h-32 leading-tight" 
+						onchange="updateInjContent('${inj.id}', this.value)">${escapeHtml(inj.content)}</textarea>
+				</div>
+				<div class="flex justify-between items-center mt-2">
+					<label class="label cursor-pointer gap-2">
+						<span class="label-text text-xs">启用</span> 
+						<input type="checkbox" class="toggle toggle-xs" ${inj.enabled ? 'checked' : ''} 
+							onchange="updateInjEnabled('${inj.id}', this.checked)" />
+					</label>
+					<button class="btn btn-xs btn-ghost" onclick="previewInj('${inj.id}')">预览</button>
+				</div>
+			</div>
+		`
+		dom.injectionList.appendChild(item)
+	})
+}
+
+// 暴露给 HTML onclick 的辅助函数 (挂载到 window)
+window.updatePromptRole = (presetId, index, role) => {
+	const preset = presets.find(p => p.id === presetId)
+	if (preset && preset.prompts[index]) preset.prompts[index].role = role
+}
+window.updatePromptContent = (presetId, index, content) => {
+	const preset = presets.find(p => p.id === presetId)
+	if (preset && preset.prompts[index]) preset.prompts[index].content = content
+}
+window.updatePromptEnabled = (presetId, index, enabled) => {
+	const preset = presets.find(p => p.id === presetId)
+	if (preset && preset.prompts[index]) preset.prompts[index].enabled = enabled
+}
+window.deletePrompt = async (presetId, index) => {
+	if (!confirm('确定删除此提示词条目吗？')) return
+	const ok = await setPluginData({
+		_action: 'removePresetPrompt',
+		presetId,
+		promptIndex: index
+	})
+	if (ok) refreshPresets()
+}
+
+// 注入提示词更新函数
+window.updateInjName = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, name: val })
+}
+window.updateInjMode = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, autoMode: val })
+	refreshPresets() // 刷新以更新徽章
+}
+window.updateInjRole = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, role: val })
+}
+window.updateInjDepth = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, depth: val })
+}
+window.updateInjOrder = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, order: val })
+}
+window.updateInjContent = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, content: val })
+}
+window.updateInjEnabled = async (id, val) => {
+	await setPluginData({ _action: 'updateInjectionPrompt', injectionId: id, enabled: val })
+	refreshPresets() // 刷新以更新状态
+}
+window.previewInj = async (id) => {
+	const res = await setPluginData({ _action: 'previewInjectionPrompt', injectionId: id })
+	if (res.success) {
+		alert(`预览 (${res.name}):\n\n${res.preview}\n\n(Chars: ${res.charCount}, Tokens: ~${res.estimatedTokens})`)
+	} else {
+		alert('预览失败: ' + res.error)
+	}
+}
+
+function showStatus(msg, duration = 3000) {
+	if (!dom.status) return
+	dom.status.textContent = msg
+	dom.status.style.opacity = '1'
+	setTimeout(() => {
+		dom.status.style.opacity = '0'
+	}, duration)
+}
+
+function showMaintenanceStatus(msg, duration = 3000) {
+	if (!dom.maintenanceStatus) return
+	dom.maintenanceStatus.textContent = msg
+	dom.maintenanceStatus.style.opacity = '1'
+	setTimeout(() => {
+		dom.maintenanceStatus.style.opacity = '0'
+	}, duration)
+}
+
+// ===== 事件绑定 =====
+
+function bindEvents() {
+	// API 自定义开关
+	dom.apiCustom?.addEventListener('change', () => {
+		updateApiFieldsState()
+		const useCustom = dom.apiCustom.checked
+		if (!useCustom) {
+			dom.apiSource.value = ''
+			// 清空模型列表
+			const datalist = document.getElementById('model-list')
+			if (datalist) datalist.innerHTML = ''
+		} else {
+			// 如果选中了源，尝试加载模型
+			if (dom.apiSource.value) {
+				loadModelsForSource(dom.apiSource.value)
+			}
+		}
+	})
+
+	// 源选择变化时加载模型
+	dom.apiSource?.addEventListener('change', () => {
+		if (dom.apiCustom.checked && dom.apiSource.value) {
+			loadModelsForSource(dom.apiSource.value)
+		}
+	})
+
+	// 添加 datalist 用于模型自动补全
+	if (dom.apiModel && !document.getElementById('model-list')) {
+		const datalist = document.createElement('datalist')
+		datalist.id = 'model-list'
+		document.body.appendChild(datalist)
+		dom.apiModel.setAttribute('list', 'model-list')
+	}
+
+	// 添加提示词
+	dom.addPrompt?.addEventListener('click', async () => {
+		if (!selectedPresetId) return
+
+		const ok = await setPluginData({
+			_action: 'addPresetPrompt',
+			presetId: selectedPresetId,
+			role: 'system',
+			content: '',
+		})
+		if (ok) {
+			await refreshPresets()
+			showStatus('✅ 已添加新条目', 2000)
+		} else {
+			showStatus('❌ 添加失败', 3000)
+		}
+	})
+
+	// 保存按钮
+	dom.saveBtn?.addEventListener('click', async () => {
+		if (!selectedPresetId) return
+
+		const preset = presets.find(p => p.id === selectedPresetId)
+		if (!preset) return
+
+		showStatus('保存中...')
+
+		// 1. 保存预设元数据
+		const metaOk = await setPluginData({
+			_action: 'updateMemoryPreset',
+			presetId: selectedPresetId,
+			enabled: dom.detailToggle.checked,
+			description: dom.detailDesc.value,
+			api_config: {
+				use_custom: dom.apiCustom.checked,
+				source: dom.apiSource.value,
+				model: dom.apiModel.value,
+				temperature: parseFloat(dom.apiTemperature.value) || 0.3,
+				max_tokens: parseInt(dom.apiMaxTokens.value, 10) || 2000,
+			},
+		})
+
+		// 2. 保存每个 prompt 的内容
+		let allOk = metaOk && metaOk.success !== false
+		for (let i = 0; i < preset.prompts.length; i++) {
+			const p = preset.prompts[i]
+			// 跳过内置的 {{chat_history}}
+			if (p.builtin && p.content === '{{chat_history}}') continue
+
+			const pOk = await setPluginData({
+				_action: 'updatePresetPrompt',
+				presetId: selectedPresetId,
+				promptIndex: i,
+				content: p.content,
+				enabled: p.enabled,
+			})
+			if (!pOk || pOk.success === false) allOk = false
+		}
+
+		if (allOk) {
+			await refreshPresets()
+			showStatus('✅ 保存成功', 2000)
+		} else {
+			showStatus('⚠️ 部分保存失败', 3000)
+		}
+	})
+
+	// ===== 记忆维护按钮 =====
+
+	// 🌙 结束今天
+	dom.endDayBtn?.addEventListener('click', async () => {
+		if (!confirm('确定要执行日终归档吗？\n\n这将：\n• 将今日事件总结写入温层\n• 归档临时记忆和热记忆\n• 清空当天表格\n\n此操作不可撤销。')) return
+
+		dom.endDayBtn.disabled = true
+		dom.endDayBtn.textContent = '⏳ 归档中...'
+		showMaintenanceStatus('正在执行日终归档...')
+
+		try {
+			const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/setdata`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ _action: 'endDay' }),
+			})
+			if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+			const result = await resp.json()
+
+			// 显示结果
+			let msg = `✅ 日终归档完成 (${result.date})\n`
+			result.steps.forEach(s => {
+				msg += `• Step ${s.step}: ${s.status === 'done' ? '成功' : s.status}\n`
+			})
+			alert(msg)
+			showMaintenanceStatus('✅ 日终归档完成', 5000)
+		} catch (e) {
+			console.error('[memoryPreset] 日终归档失败:', e)
+			showMaintenanceStatus('❌ 日终归档失败: ' + e.message, 5000)
+			alert('归档失败: ' + e.message)
+		} finally {
+			dom.endDayBtn.disabled = false
+			dom.endDayBtn.textContent = '🌙 结束今天 (日终归档)'
+		}
+	})
+
+	// 🔥 热→温
+	dom.hotToWarmBtn?.addEventListener('click', async () => {
+		if (!confirm('确定要手动触发热记忆归档吗？\n(清理过期条目到温层)')) return
+		showMaintenanceStatus('正在归档热记忆...')
+		try {
+			const res = await setPluginData({ _action: 'archiveHotToWarm' })
+			if (res.success) {
+				alert(`✅ 归档完成\n#7 归档: ${res.remember_archived} 条\n#8 归档: ${res.forever_archived} 条`)
+				showMaintenanceStatus('✅ 热记忆归档完成')
+			} else {
+				throw new Error(res.error)
+			}
+		} catch (e) {
+			showMaintenanceStatus('❌ 失败: ' + e.message)
+		}
+	})
+
+	// ❄️ 温→冷
+	dom.warmToColdBtn?.addEventListener('click', async () => {
+		if (!confirm('确定要手动触发冷归档吗？\n(移动30天前的温记忆到冷层)')) return
+		showMaintenanceStatus('正在归档冷记忆...')
+		try {
+			const res = await setPluginData({ _action: 'archiveWarmToCold' })
+			if (res.success) {
+				alert(`✅ 归档完成\n移动了 ${res.moved} 个文件到冷层`)
+				showMaintenanceStatus('✅ 冷记忆归档完成')
+			} else {
+				throw new Error(res.error)
+			}
+		} catch (e) {
+			showMaintenanceStatus('❌ 失败: ' + e.message)
+		}
+	})
+
+	// ===== 预览与测试 =====
+
+	dom.previewPresetBtn?.addEventListener('click', async () => {
+		if (!selectedPresetId) return
+		
+		// 1. 获取预览数据
+		const res = await setPluginData({
+			_action: 'previewMemoryPreset',
+			presetId: selectedPresetId
+		})
+
+		if (res.error) {
+			alert('预览失败: ' + res.error)
+			return
+		}
+
+		// 2. 渲染预览面板
+		renderPresetPreview(res)
+		dom.presetPreviewPanel.style.display = 'flex'
+	})
+
+	dom.presetPreviewClose?.addEventListener('click', () => {
+		dom.presetPreviewPanel.style.display = 'none'
+	})
+
+	dom.presetPreviewCopy?.addEventListener('click', () => {
+		const text = dom.presetPreviewContent.innerText
+		navigator.clipboard.writeText(text).then(() => {
+			const originalText = dom.presetPreviewCopy.textContent
+			dom.presetPreviewCopy.textContent = '已复制!'
+			setTimeout(() => dom.presetPreviewCopy.textContent = originalText, 1500)
+		}).catch(err => {
+			console.error('[memoryPreset] 复制失败:', err)
+		})
+	})
+
+	// 运行测试
+	dom.runStartBtn?.addEventListener('click', async () => {
+		if (!selectedPresetId) return
+		
+		dom.runPanel.style.display = 'flex'
+		dom.runTitle.textContent = `运行测试: ${selectedPresetId}`
+		
+		// 重置 UI
+		dom.runResultTime.textContent = ''
+		dom.runThinking.style.display = 'none'
+		dom.runOperations.style.display = 'none'
+		dom.runReply.style.display = 'none'
+		dom.runError.style.display = 'none'
+		
+		// 显示 loading 状态
+		dom.runReply.style.display = ''
+		dom.runReplyContent.textContent = '⏳ AI 思考中...'
+
+		try {
+			const res = await setPluginData({
+				_action: 'runMemoryPreset',
+				presetId: selectedPresetId,
+				// 可选：传递模拟的 chatHistory
+				chatHistory: 'User: 你好\nChar: 你好呀！今天过得怎么样？' 
+			})
+
+			if (res.success) {
+				renderRunResult(res)
+			} else {
+				renderRunError(res.error || '未知错误')
+			}
+		} catch (err) {
+			console.error('[memoryPreset] 运行记忆AI失败:', err)
+			renderRunError(err.message)
+		}
+	})
+
+	dom.runClose?.addEventListener('click', () => {
+		dom.runPanel.style.display = 'none'
+	})
+
+	// 思维链折叠
+	dom.runThinkingArrow?.parentElement.addEventListener('click', () => {
+		const content = dom.runThinkingContent
+		const arrow = dom.runThinkingArrow
+		if (content.style.display === 'none') {
+			content.style.display = 'block'
+			arrow.textContent = '▼'
+		} else {
+			content.style.display = 'none'
+			arrow.textContent = '▶'
+		}
+	})
+}
+
+// ===== 预览渲染 =====
+
+function renderPresetPreview(data) {
+	if (dom.presetPreviewStats) {
+		dom.presetPreviewStats.innerHTML = `
+			<div class="badge badge-neutral">总字符: ${data.totalChars}</div>
+			<div class="badge badge-neutral">预估 Token: ${data.estimatedTokens}</div>
+		`
+	}
+
+	if (dom.presetPreviewContent) {
+		dom.presetPreviewContent.innerHTML = ''
+		
+		// 展开状态跟踪
+		const expandedPreviewItems = new Set()
+
+		data.prompts.forEach(p => {
+			const card = document.createElement('div')
+			card.className = 'border border-base-300 rounded-lg mb-3 overflow-hidden bg-base-100'
+			
+			const headerDiv = document.createElement('div')
+			headerDiv.className = 'bg-base-200 p-2 text-xs font-bold flex items-center gap-2 cursor-pointer select-none'
+			const roleColor = p.role === 'system' ? 'text-primary' : p.role === 'user' ? 'text-secondary' : 'text-accent'
+			
+			// 预览摘要（取前80字符）
+			const preview = p.preview.replace(/\n/g, ' ').substring(0, 80)
+			
+			headerDiv.innerHTML = `
+				<span class="mp-pp-arrow">▶</span>
+				<span class="${roleColor} uppercase">${p.role}</span>
+				<span class="opacity-50">#${p.index}</span>
+				<span class="flex-grow opacity-60 font-normal truncate ml-2">${escapeHtml(preview)}${p.charCount > 80 ? '...' : ''}</span>
+				<span class="badge badge-xs">${p.charCount} chars</span>
+			`
+
+			const bodyDiv = document.createElement('div')
+			bodyDiv.className = 'p-3 text-xs font-mono whitespace-pre-wrap border-t border-base-300'
+			bodyDiv.style.display = 'none'
+			bodyDiv.textContent = p.preview
+
+			// 点击展开/折叠
+			headerDiv.addEventListener('click', () => {
+				const isExpanded = bodyDiv.style.display !== 'none'
+				if (isExpanded) {
+					expandedPreviewItems.delete(p.identifier)
+					bodyDiv.style.display = 'none'
+					headerDiv.querySelector('.mp-pp-arrow').textContent = '▶'
+					// 恢复预览文字
+					const previewSpan = headerDiv.querySelector('.flex-grow')
+					if (previewSpan) previewSpan.textContent = preview + (p.charCount > 80 ? '...' : '')
+				} else {
+					expandedPreviewItems.add(p.identifier)
+					bodyDiv.style.display = ''
+					headerDiv.querySelector('.mp-pp-arrow').textContent = '▼'
+					// 清除预览文字
+					const previewSpan = headerDiv.querySelector('.flex-grow')
+					if (previewSpan) previewSpan.textContent = ''
+				}
+			})
+
+			card.appendChild(headerDiv)
+			card.appendChild(bodyDiv)
+			dom.presetPreviewContent.appendChild(card)
+		})
+	}
+}
+
+// ===== 运行结果渲染 =====
+
+function renderRunResult(result) {
+	// 时间戳
+	if (dom.runResultTime) {
+		const ts = result.timestamp ? new Date(result.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()
+		dom.runResultTime.textContent = `${result.presetName || result.presetId || ''} · ${ts}`
+	}
+
+	// 思维链
+	if (result.thinking) {
+		if (dom.runThinking) dom.runThinking.style.display = ''
+		if (dom.runThinkingContent) dom.runThinkingContent.textContent = result.thinking
+		if (dom.runThinkingArrow) dom.runThinkingArrow.textContent = '▶'
+		if (dom.runThinkingContent) dom.runThinkingContent.style.display = 'none'
+	} else {
+		if (dom.runThinking) dom.runThinking.style.display = 'none'
+	}
+
+	// 操作列表
+	if (result.operations && result.operations.length > 0) {
+		if (dom.runOperations) dom.runOperations.style.display = ''
+		if (dom.runOperationsList) {
+			dom.runOperationsList.innerHTML = ''
+			for (const op of result.operations) {
+				const opEl = document.createElement('div')
+				opEl.className = 'flex items-center gap-2 text-xs p-1.5 rounded-md'
+				opEl.style.cssText = 'background: oklch(var(--bc) / 0.03);'
+
+				const statusIcon = op.success ? '✅' : '❌'
+				const tagName = op.tag || op.type || 'unknown'
+				const opType = op.opType || op.action || ''
+
+				opEl.innerHTML = `
+					<span>${statusIcon}</span>
+					<span class="badge badge-xs badge-outline font-mono">${escapeHtml(tagName)}</span>
+					<span class="font-mono text-base-content/60">${escapeHtml(opType)}</span>
+					${op.path ? `<span class="text-base-content/40 truncate">${escapeHtml(op.path)}</span>` : ''}
+					${op.error ? `<span class="text-error text-xs">${escapeHtml(op.error)}</span>` : ''}
+				`
+				dom.runOperationsList.appendChild(opEl)
+			}
+		}
+	} else {
+		if (dom.runOperations) dom.runOperations.style.display = 'none'
+	}
+
+	// AI 回复
+	if (dom.runReply) dom.runReply.style.display = ''
+	if (dom.runReplyContent) dom.runReplyContent.textContent = result.reply || '（无回复内容）'
+
+	// 清除错误
+	if (dom.runError) dom.runError.style.display = 'none'
+}
+
+function renderRunError(errorMsg) {
+	if (dom.runError) dom.runError.style.display = ''
+	if (dom.runErrorContent) dom.runErrorContent.textContent = `❌ ${errorMsg}`
+	if (dom.runReply) dom.runReply.style.display = 'none'
+	if (dom.runThinking) dom.runThinking.style.display = 'none'
+	if (dom.runOperations) dom.runOperations.style.display = 'none'
+}
+
+/** HTML 转义 */
+function escapeHtml(str) {
+	const div = document.createElement('div')
+	div.textContent = str
+	return div.innerHTML
+}
+
+// ===== 初始化 =====
+
+export async function init() {
+	console.log('[memoryPreset] 初始化记忆预设管理...')
+
+	cacheDom()
+	bindEvents()
+
+	// 先加载 AI 服务源列表
+	aiSourceList = await fetchAISourceList()
+	console.log(`[memoryPreset] 获取到 ${aiSourceList.length} 个 AI 服务源`)
+
+	await refreshPresets()
+
+	// 隐藏 loading，显示主内容
+	if (dom.loading) dom.loading.style.display = 'none'
+	if (dom.main) dom.main.style.display = ''
+
+	console.log(`[memoryPreset] 加载了 ${presets.length} 个记忆预设`)
+}

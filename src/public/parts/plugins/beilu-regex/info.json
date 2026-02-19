@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Regex",
+		"avatar": "https://api.iconify.design/mdi/regex.svg",
+		"description": "Preset-level regex scripts for input/output processing and rendering.",
+		"description_markdown": "**Beilu Regex** extends the basic Fount regex engine with preset-level regex rules. Supports input preprocessing, output postprocessing, and rendering beautification.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"regex",
+			"formatting",
+			"rendering",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露正则增强",
+		"avatar": "https://api.iconify.design/mdi/regex.svg",
+		"description": "预设级正则脚本，处理输入输出和渲染美化",
+		"description_markdown": "**贝露正则增强** 在 Fount 基础正则引擎上扩展预设级正则规则。支持输入预处理、输出后处理和渲染美化。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"正则",
+			"格式化",
+			"渲染",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "🔤✨",
+		"avatar": "https://api.iconify.design/mdi/regex.svg",
+		"description": "🔤🔀➡️✨",
+		"description_markdown": "🔤 🔀 ➡️ ✨\n📥 📤 🎨",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🔤",
+			"🔀",
+			"✨",
+			"⛲"
+		]
+	}
+}

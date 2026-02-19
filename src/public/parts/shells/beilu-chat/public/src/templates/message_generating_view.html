@@ -1,0 +1,27 @@
+<div class="chat-message mb-3 group" id="${id}" data-template-type="message-generating">
+	<!-- 消息头部：头像 + 名字 + 生成中标识 -->
+	<div class="message-header flex items-center gap-2 px-1 mb-1">
+		<div class="message-avatar w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30">
+			<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
+				onerror="this.style.display='none'" />
+		</div>
+		<span class="char-name text-sm font-bold text-primary">${name}</span>
+		<span class="loading loading-dots loading-xs text-primary"></span>
+	</div>
+	<!-- 消息体 -->
+	<div class="chat-bubble relative p-[15px] ml-10 rounded-lg w-full">
+		<div class="message-content markdown-body">
+		</div>
+		<div class="skeleton-loader hidden flex flex-col gap-2 w-full mt-2">
+			<div class="skeleton h-4 w-28"></div>
+			<div class="skeleton h-4 w-full"></div>
+			<div class="skeleton h-4 w-3/4"></div>
+		</div>
+		<div class="mt-2 flex justify-end">
+			<button class="stop-generating-button btn btn-xs btn-error btn-outline gap-1">
+				<img src="https://api.iconify.design/line-md/close-circle.svg" data-i18n="chat.messageGenerating.stopIcon" />
+				<span data-i18n="chat.messageGenerating.stop"></span>
+			</button>
+		</div>
+	</div>
+</div>

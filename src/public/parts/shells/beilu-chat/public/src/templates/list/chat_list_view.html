@@ -1,0 +1,52 @@
+<div class="chat-list-item rounded-md bg-base-100/40 shadow-md mb-2 p-0">
+	<details class="collapse w-full">
+		<summary class="collapse-title flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm text-base-content opacity-70 hover:opacity-100 cursor-pointer">
+			<div class="flex items-center min-w-0 w-full">
+				<div class="px-2">
+					<input type="checkbox" class="checkbox select-checkbox" data-i18n="chat_history.select_checkbox" />
+				</div>
+
+				<div class="px-2 flex items-center">
+					<div class="avatar-group -space-x-6 rtl:space-x-reverse">
+						${avatars.map(avatar => `<div class="avatar">
+							<div class="w-8"><img src="${avatar.url || 'https://api.iconify.design/line-md/person.svg'}" alt="${avatar.name}" width="100%" height="100%" class="rounded-full mr-[5px]" /></div>
+						</div>`).join('')}
+					</div>
+					<p class="text-sm font-semibold text-base-content ml-2">${chars.join(', ')}</p>
+				</div>
+
+				<div class="flex-1 px-2 multiline-truncate">
+					<span class="font-medium">${lastMessageSender}:</span>
+					${renderMarkdownPreview(lastMessageRowContent, 3)}
+				</div>
+			</div>
+
+			<div class="px-2 flex flex-col items-end flex-shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+				<p class="text-xs text-base-content opacity-50 mb-1 text-right">${lastMessageTime}</p>
+				<div class="join join-horizontal">
+					<a class="btn btn-xs join-item continue-button" href="/parts/shells:chat/#${chatid}" data-i18n="chat_history.chatItemButtons.continue"></a>
+					<button class="btn btn-xs join-item copy-button" data-i18n="chat_history.chatItemButtons.copy"></button>
+					<button class="btn btn-xs join-item export-button" data-i18n="chat_history.chatItemButtons.export"></button>
+					<button class="btn btn-xs join-item btn-error delete-button" data-i18n="chat_history.chatItemButtons.delete"></button>
+				</div>
+			</div>
+		</summary>
+		<div class="collapse-content">
+			<div class="divider"></div>
+			<div class="chat-message mb-3" id="message-${safeTimeStamp}" data-template-type="message">
+				<div class="message-header flex items-center gap-2 px-1 mb-1">
+					<div class="message-avatar w-8 h-8 mask mask-squircle rounded-full flex items-center justify-center bg-amber-900/40 border border-amber-700/50 text-amber-400 text-[10px] font-bold overflow-hidden text-center leading-tight flex-shrink-0">
+						${lastMessageSender}
+					</div>
+					<span class="char-name text-sm font-bold text-primary">${lastMessageSender}</span>
+					<span class="message-timestamp text-xs opacity-40">${lastMessageTime}</span>
+				</div>
+				<div class="chat-bubble relative p-[15px] ml-10 rounded-lg">
+					<div class="message-content markdown-body w-full break-words">
+						${lastMessageContent}
+					</div>
+				</div>
+			</div>
+		</div>
+	</details>
+</div>

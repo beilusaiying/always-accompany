@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="description" content="贝露·与你之诗 — API 配置" />
+	<title>API 配置 — 贝露·与你之诗</title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="manifest" href="/manifest.json" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
+	<script type="module" src="/base.mjs"></script>
+</head>
+
+<body class="bg-base-200 min-h-screen flex items-start justify-center p-4 pt-8">
+	<div class="card bg-base-100 shadow-xl w-full max-w-lg">
+		<div class="card-body">
+			<div class="flex items-center justify-between mb-2">
+				<h2 class="card-title text-amber-700">🔌 API 配置</h2>
+				<a href="/parts/shells:home/" class="btn btn-sm btn-ghost">← 返回首页</a>
+			</div>
+			<p class="text-sm text-base-content/50 mb-4">配置 AI 模型的 API 连接信息</p>
+
+			<!-- API 源选择 -->
+			<div class="flex items-center gap-2 mb-3">
+				<select id="api-select" class="select select-sm select-bordered flex-grow"></select>
+				<button id="api-new-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+					+ 新建
+				</button>
+			</div>
+
+			<!-- 配置表单 -->
+			<div class="space-y-3">
+				<div class="form-control">
+					<label class="label py-1">
+						<span class="label-text text-sm">配置名称</span>
+					</label>
+					<input type="text" id="api-name" class="input input-sm input-bordered w-full" placeholder="my-api" />
+				</div>
+
+				<div class="form-control">
+					<label class="label py-1">
+						<span class="label-text text-sm">API 类型</span>
+					</label>
+					<select id="api-type" class="select select-sm select-bordered w-full">
+						<option value="proxy">OpenAI 兼容</option>
+						<option value="gemini">Google Gemini</option>
+					</select>
+				</div>
+
+				<div class="form-control">
+					<label class="label py-1">
+						<span class="label-text text-sm" id="api-url-label">API URL（完整端点地址）</span>
+					</label>
+					<input type="text" id="api-url"
+						class="input input-sm input-bordered w-full font-mono text-xs"
+						placeholder="https://api.openai.com/v1/chat/completions" />
+				</div>
+
+				<div class="form-control">
+					<label class="label py-1">
+						<span class="label-text text-sm">API Key</span>
+					</label>
+					<input type="password" id="api-key"
+						class="input input-sm input-bordered w-full font-mono text-xs"
+						placeholder="sk-..." />
+				</div>
+
+				<div class="form-control">
+					<label class="label py-1">
+						<span class="label-text text-sm">模型</span>
+					</label>
+					<input type="text" id="api-model"
+						class="input input-sm input-bordered w-full font-mono text-xs"
+						placeholder="gpt-3.5-turbo" />
+				</div>
+			</div>
+
+			<!-- 操作按钮 -->
+			<div class="flex gap-2 mt-4">
+				<button id="api-save-btn"
+					class="btn btn-sm flex-grow bg-amber-700 hover:bg-amber-800 text-white border-amber-700">
+					💾 保存
+				</button>
+				<button id="api-delete-btn" class="btn btn-sm btn-outline btn-error" disabled>
+					🗑️ 删除
+				</button>
+			</div>
+			<div id="api-status" class="text-xs text-center mt-1 hidden"></div>
+		</div>
+	</div>
+
+	<script type="module" src="./index.mjs"></script>
+</body>
+
+</html>

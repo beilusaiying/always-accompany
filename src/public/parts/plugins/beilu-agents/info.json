@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Agents",
+		"avatar": "https://api.iconify.design/mdi/account-group.svg",
+		"description": "Multi-AI collaboration system — memory AI, web AI, and custom agents.",
+		"description_markdown": "**Beilu Agents** manages multiple AI agents with independent AIsources, prompts, and triggers. Built-in templates for memory organizer and web searcher. Runs within Plugin's ReplyHandler.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"agents",
+			"multi-AI",
+			"collaboration",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露多AI协作",
+		"avatar": "https://api.iconify.design/mdi/account-group.svg",
+		"description": "多 AI 协作系统 — 记忆AI、联网AI、自定义 Agent",
+		"description_markdown": "**贝露多AI协作** 管理多个独立 AI Agent，每个有独立的 AIsource、提示词和触发条件。内置记忆整理和联网查询 Agent 模板。在 Plugin 的 ReplyHandler 中运行。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"Agent",
+			"多AI",
+			"协作",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "🤖🤝🤖",
+		"avatar": "https://api.iconify.design/mdi/account-group.svg",
+		"description": "🤖🤝🤖 🧠🌐🔧",
+		"description_markdown": "🤖 🤝 🤖\n🧠 🌐 🔧\n⚡ 📋",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🤖",
+			"🤝",
+			"🧠",
+			"⛲"
+		]
+	}
+}

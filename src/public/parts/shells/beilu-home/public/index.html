@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>贝露 · 与你之诗</title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="manifest" href="/manifest.json" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
+	<script type="module" src="/base.mjs"></script>
+	<link rel="stylesheet" href="./index.css" type="text/css" />
+</head>
+
+<body class="min-h-screen bg-base-200">
+
+	<!-- ===== 顶级选项卡栏 ===== -->
+	<div class="beilu-tab-bar">
+		<div class="beilu-tab-bar-inner">
+			<button class="beilu-tab active" data-tab="usage">
+				<span class="beilu-tab-icon">📋</span>
+				<span class="beilu-tab-label">使用</span>
+			</button>
+			<button class="beilu-tab" data-tab="system">
+				<span class="beilu-tab-icon">⚙️</span>
+				<span class="beilu-tab-label">系统和功能设置</span>
+			</button>
+			<button class="beilu-tab" data-tab="user">
+				<span class="beilu-tab-icon">👤</span>
+				<span class="beilu-tab-label">用户设置</span>
+			</button>
+		</div>
+	</div>
+
+	<!-- ===== 子头部 ===== -->
+	<div class="beilu-subheader">
+		<div class="beilu-subheader-left">
+			<span class="beilu-logo-text">贝露 · 与你之诗</span>
+		</div>
+		<div class="beilu-subheader-center">
+			<h1 id="dynamic-title" class="beilu-dynamic-title">角色卡</h1>
+		</div>
+		<div class="beilu-subheader-right">
+			<p id="dynamic-description" class="beilu-dynamic-desc">管理你的角色、世界和对话</p>
+		</div>
+	</div>
+
+	<!-- ===== 主内容区域 ===== -->
+	<main class="beilu-main">
+
+		<!-- ============================================================ -->
+		<!-- 📋 使用 选项卡内容                                           -->
+		<!-- ============================================================ -->
+		<div id="tab-usage" class="beilu-tab-content active">
+			<div class="beilu-usage-layout">
+				<!-- 左侧导航 -->
+				<nav class="beilu-usage-nav">
+					<button class="beilu-usage-nav-item active" data-section="chars">
+						<span class="beilu-usage-nav-icon">🎭</span>
+						<span class="beilu-usage-nav-label">角色卡</span>
+					</button>
+					<button class="beilu-usage-nav-item" data-section="worlds">
+						<span class="beilu-usage-nav-icon">🌍</span>
+						<span class="beilu-usage-nav-label">世界书</span>
+					</button>
+					<button class="beilu-usage-nav-item" data-section="personas">
+						<span class="beilu-usage-nav-icon">👤</span>
+						<span class="beilu-usage-nav-label">用户人设</span>
+					</button>
+					<button class="beilu-usage-nav-item" data-section="presets">
+						<span class="beilu-usage-nav-icon">📝</span>
+						<span class="beilu-usage-nav-label">聊天预设</span>
+					</button>
+					<button class="beilu-usage-nav-item" data-section="memoryPresets">
+							<span class="beilu-usage-nav-icon">🧠</span>
+							<span class="beilu-usage-nav-label">记忆预设</span>
+						</button>
+						<button class="beilu-usage-nav-item" data-section="memoryManage">
+							<span class="beilu-usage-nav-icon">📊</span>
+							<span class="beilu-usage-nav-label">记忆管理</span>
+						</button>
+						<button class="beilu-usage-nav-item" data-section="sysViewer">
+							<span class="beilu-usage-nav-icon">📖</span>
+							<span class="beilu-usage-nav-label">系统查看器</span>
+						</button>
+						<button class="beilu-usage-nav-item" data-section="aiDiag">
+							<span class="beilu-usage-nav-icon">🔬</span>
+							<span class="beilu-usage-nav-label">AI诊断</span>
+						</button>
+						</nav>
+
+				<!-- 主内容区 -->
+				<div class="beilu-usage-content">
+
+					<!-- ======== 角色卡区域 ======== -->
+					<div id="section-chars" class="beilu-usage-section active">
+						<div class="beilu-section-toolbar">
+							<input type="text" id="chars-search" placeholder="搜索角色..."
+								class="input input-sm input-bordered flex-grow max-w-xs" />
+							<div class="flex gap-2">
+								<button id="chars-import-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+									📥 导入
+								</button>
+								<button id="chars-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+									✨ 新建
+								</button>
+							</div>
+						</div>
+						<div id="chars-loading" class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载角色卡...</p>
+						</div>
+						<div id="chars-grid" class="beilu-chars-grid" style="display:none;"></div>
+						<div id="chars-empty" class="beilu-empty-state" style="display:none;">
+							<p>还没有角色卡，导入一个试试？</p>
+						</div>
+					</div>
+
+					<!-- ======== 世界书区域 ======== -->
+						<div id="section-worlds" class="beilu-usage-section">
+							<div id="wb-loading" class="beilu-loading">
+								<span class="loading loading-spinner loading-lg text-amber-500"></span>
+								<p>加载世界书数据...</p>
+							</div>
+							<div id="wb-main" style="display:none;">
+								<!-- 顶部：世界书选择 + 操作按钮 -->
+								<div class="beilu-preset-header">
+									<div class="beilu-preset-info">
+										<span class="text-sm text-base-content/50">当前世界书</span>
+										<div class="flex items-center gap-2 mt-1">
+											<select id="wb-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
+												<option value="">未加载</option>
+											</select>
+											<button id="wb-delete" class="btn btn-xs btn-outline btn-error" title="删除选中世界书" disabled>🗑️</button>
+										</div>
+									</div>
+									<div class="beilu-preset-actions">
+										<button id="wb-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📥 导入</button>
+										<button id="wb-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📤 导出</button>
+										<button id="wb-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">✨ 新建</button>
+									</div>
+								</div>
+								<!-- 统计 -->
+								<div id="wb-stats" class="beilu-preset-stats" style="display:none;">
+									<span id="wb-stat-total">0</span> 条目 ·
+									<span id="wb-stat-enabled">0</span> 已启用 ·
+									<span id="wb-stat-constant">0</span> 常驻 ·
+									<span id="wb-stat-keyword">0</span> 关键词触发
+								</div>
+								<!-- 双栏布局：条目列表 + 条目详情 -->
+								<div class="beilu-preset-layout">
+									<!-- 左栏：条目列表 -->
+									<div class="beilu-preset-list-col">
+										<div class="flex gap-1 mb-2">
+											<input type="text" id="wb-entry-search" placeholder="搜索条目..."
+												class="input input-sm input-bordered flex-grow" />
+											<button id="wb-add-entry" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目">+</button>
+										</div>
+										<div id="wb-entry-list" class="beilu-preset-entry-list">
+											<p class="text-sm text-base-content/50 text-center py-8">请先导入一个 ST 世界书文件</p>
+										</div>
+									</div>
+									<!-- 右栏：条目详情 -->
+									<div id="wb-entry-detail" class="beilu-preset-detail-col" style="display:none;">
+										<!-- 条目标题 + 启用开关 -->
+										<div class="beilu-preset-detail-head">
+											<input type="text" id="wb-detail-comment" class="input input-sm input-bordered font-bold text-sm flex-grow" placeholder="条目名称/备注" readonly />
+											<label class="cursor-pointer label gap-2 p-0 ml-2">
+												<span class="label-text text-xs">启用</span>
+												<input type="checkbox" id="wb-detail-toggle" class="toggle toggle-sm toggle-warning" />
+											</label>
+										</div>
+
+										<!-- ===== 触发方式 ===== -->
+										<div class="text-xs space-y-2 mb-3">
+											<div class="form-control">
+												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">主要关键字（逗号分隔）</span></label>
+												<input type="text" id="wb-detail-keys" class="input input-xs input-bordered w-full font-mono" placeholder="关键词1, 关键词2" readonly />
+											</div>
+											<div class="form-control">
+												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">辅助关键字（逗号分隔）</span></label>
+												<input type="text" id="wb-detail-keys2" class="input input-xs input-bordered w-full font-mono" placeholder="辅助关键词" readonly />
+											</div>
+											<div class="flex flex-wrap gap-x-4 gap-y-2">
+												<label class="cursor-pointer label gap-1 p-0">
+													<input type="checkbox" id="wb-detail-constant" class="checkbox checkbox-xs checkbox-warning" disabled />
+													<span class="label-text text-xs">必须有（常驻）</span>
+												</label>
+												<div class="flex items-center gap-1">
+													<span class="text-base-content/50 shrink-0">匹配逻辑:</span>
+													<select id="wb-detail-logic" class="select select-xs select-bordered w-24" disabled>
+														<option value="0">与任意 (ANY)</option>
+														<option value="1">与所有 (ALL)</option>
+													</select>
+												</div>
+											</div>
+											<div class="flex flex-wrap gap-x-4 gap-y-2">
+												<label class="cursor-pointer label gap-1 p-0">
+													<input type="checkbox" id="wb-detail-exclude-recursion" class="checkbox checkbox-xs checkbox-warning" disabled />
+													<span class="label-text text-xs">不可递归</span>
+												</label>
+												<label class="cursor-pointer label gap-1 p-0">
+													<input type="checkbox" id="wb-detail-prevent-recursion" class="checkbox checkbox-xs checkbox-warning" disabled />
+													<span class="label-text text-xs">防止进一步递归</span>
+												</label>
+											</div>
+										</div>
+
+										<!-- ===== 插入位置 ===== -->
+										<div class="text-xs space-y-2 mb-3">
+											<div class="flex flex-wrap gap-x-3 gap-y-2">
+												<div class="flex items-center gap-1">
+													<span class="text-base-content/50 shrink-0">插入位置:</span>
+													<select id="wb-detail-position" class="select select-xs select-bordered w-28" disabled>
+														<option value="0">角色之前</option>
+														<option value="1">角色之后</option>
+														<option value="4">@深度</option>
+													</select>
+												</div>
+												<div id="wb-depth-group" class="flex items-center gap-1">
+													<span class="text-base-content/50 shrink-0">深度:</span>
+													<input type="number" id="wb-detail-depth" class="input input-xs input-bordered w-16" min="0" value="4" disabled />
+												</div>
+												<div id="wb-role-group" class="flex items-center gap-1">
+													<span class="text-base-content/50 shrink-0">角色:</span>
+													<select id="wb-detail-role" class="select select-xs select-bordered w-20" disabled>
+														<option value="0">系统</option>
+														<option value="1">人类</option>
+														<option value="2">AI</option>
+													</select>
+												</div>
+												<div class="flex items-center gap-1">
+													<span class="text-base-content/50 shrink-0">顺序:</span>
+													<input type="number" id="wb-detail-order" class="input input-xs input-bordered w-16" min="0" value="100" disabled />
+												</div>
+											</div>
+										</div>
+
+										<!-- 内容 -->
+										<textarea id="wb-detail-content"
+											class="textarea textarea-bordered w-full text-xs font-mono beilu-preset-content-textarea"
+											rows="16" readonly placeholder="条目内容..."></textarea>
+										<!-- 操作按钮 -->
+										<div class="flex justify-between items-center mt-2">
+											<button id="wb-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;">🗑️ 删除条目</button>
+											<div class="flex gap-1 ml-auto">
+												<button id="wb-detail-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
+												<button id="wb-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;">💾 保存</button>
+												<button id="wb-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;">取消</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+					<!-- ======== 用户人设区域 ======== -->
+						<div id="section-personas" class="beilu-usage-section">
+							<div class="beilu-section-toolbar">
+								<input type="text" id="persona-search" placeholder="搜索人设..."
+									class="input input-sm input-bordered flex-grow max-w-xs" />
+								<div class="flex gap-2">
+									<button id="persona-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+										✨ 新建人设
+									</button>
+								</div>
+							</div>
+							<div id="persona-loading" class="beilu-loading">
+								<span class="loading loading-spinner loading-lg text-amber-500"></span>
+								<p>加载用户人设...</p>
+							</div>
+							<div id="persona-list" style="display:none;"></div>
+							<div id="persona-empty" class="beilu-empty-state" style="display:none;">
+								<p>还没有人设，创建一个试试？</p>
+							</div>
+							<!-- 人设编辑/新建对话框 -->
+							<dialog id="persona-edit-dialog" class="modal">
+								<div class="modal-box">
+									<h3 id="persona-dialog-title" class="font-bold text-lg mb-4">新建人设</h3>
+									<div class="form-control mb-3">
+										<label class="label py-1"><span class="label-text text-sm font-medium">人设名称</span></label>
+										<input type="text" id="persona-edit-name" class="input input-sm input-bordered w-full" placeholder="人设名称" />
+									</div>
+									<div class="form-control mb-3">
+										<label class="label py-1"><span class="label-text text-sm font-medium">个人描述</span></label>
+										<textarea id="persona-edit-desc" class="textarea textarea-bordered w-full text-sm" rows="6"
+											placeholder="简要描述这个人设，AI 会参考这段描述来认识你..."></textarea>
+									</div>
+									<div class="modal-action">
+										<button id="persona-dialog-cancel" class="btn btn-ghost btn-sm">取消</button>
+										<button id="persona-dialog-save" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+									</div>
+									<p id="persona-dialog-status" class="text-xs text-center text-base-content/40 mt-2"></p>
+								</div>
+								<form method="dialog" class="modal-backdrop"><button>close</button></form>
+							</dialog>
+						</div>
+
+					<!-- ======== 预设管理区域 ======== -->
+					<div id="section-presets" class="beilu-usage-section">
+						<div id="preset-loading" class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载预设数据...</p>
+						</div>
+						<div id="preset-main" style="display:none;">
+							<!-- 顶部：预设选择 + 操作按钮 -->
+							<div class="beilu-preset-header">
+								<div class="beilu-preset-info">
+									<span class="text-sm text-base-content/50">当前预设</span>
+									<div class="flex items-center gap-2 mt-1">
+										<select id="home-preset-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
+											<option value="">未加载</option>
+										</select>
+										<button id="home-preset-delete" class="btn btn-xs btn-outline btn-error" title="删除选中预设" disabled>🗑️</button>
+									</div>
+								</div>
+								<div class="beilu-preset-actions">
+									<button id="home-preset-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📥 导入</button>
+									<button id="home-preset-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📤 导出</button>
+									<button id="home-preset-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">✨ 新建</button>
+								</div>
+							</div>
+							<!-- 统计 -->
+							<div id="home-preset-stats" class="beilu-preset-stats" style="display:none;">
+								<span id="home-stat-total">0</span> 条目 ·
+								<span id="home-stat-enabled">0</span> 已启用 ·
+								<span id="home-stat-system">0</span> 系统级 ·
+								<span id="home-stat-inject">0</span> 注入式
+							</div>
+							<!-- 双栏布局：条目列表 + 条目详情 -->
+							<div class="beilu-preset-layout">
+								<!-- 左栏：条目列表 -->
+								<div class="beilu-preset-list-col">
+									<div class="flex gap-1 mb-2">
+										<input type="text" id="home-entry-search" placeholder="搜索条目名称..."
+											class="input input-sm input-bordered flex-grow" />
+										<button id="home-entry-add" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目">+</button>
+									</div>
+									<div id="home-entry-list" class="beilu-preset-entry-list">
+										<p class="text-sm text-base-content/50 text-center py-8">请先导入一个 ST 预设文件</p>
+									</div>
+								</div>
+								<!-- 右栏：条目详情 -->
+								<div id="home-entry-detail" class="beilu-preset-detail-col" style="display:none;">
+									<div class="beilu-preset-detail-head">
+										<input type="text" id="home-detail-name" class="input input-sm input-bordered font-bold text-sm flex-grow" readonly />
+										<label class="cursor-pointer label gap-2 p-0 ml-2">
+											<span class="label-text text-xs">启用</span>
+											<input type="checkbox" id="home-detail-toggle" class="toggle toggle-sm toggle-warning" />
+										</label>
+									</div>
+									<div class="text-xs space-y-2 mb-3">
+										<div class="flex items-center gap-2">
+											<span class="text-base-content/50 w-16 shrink-0">角色:</span>
+											<select id="home-detail-role" class="select select-xs select-bordered flex-grow" disabled>
+												<option value="system">system</option>
+												<option value="user">user</option>
+												<option value="assistant">assistant</option>
+											</select>
+										</div>
+										<div class="flex items-center gap-2">
+											<span class="text-base-content/50 w-16 shrink-0">类型:</span>
+											<select id="home-detail-type" class="select select-xs select-bordered flex-grow" disabled>
+												<option value="system_prompt">系统级提示词</option>
+												<option value="injection">注入式条目</option>
+											</select>
+										</div>
+										<div id="home-detail-depth-row" class="flex items-center gap-2">
+											<span class="text-base-content/50 w-16 shrink-0">注入深度:</span>
+											<input type="number" id="home-detail-depth" class="input input-xs input-bordered w-20" min="0" value="0" disabled />
+										</div>
+									</div>
+									<textarea id="home-detail-content"
+										class="textarea textarea-bordered w-full text-xs font-mono"
+										rows="20" readonly></textarea>
+									<div class="flex justify-between items-center mt-2">
+										<button id="home-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;">🗑️ 删除条目</button>
+										<div class="flex gap-1 ml-auto">
+											<button id="home-detail-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
+											<button id="home-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;">💾 保存</button>
+											<button id="home-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;">取消</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+	
+					<!-- ======== 记忆预设区域 ======== -->
+					<div id="section-memoryPresets" class="beilu-usage-section">
+						<div id="mp-loading" class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载记忆预设...</p>
+						</div>
+						<div id="mp-main" style="display:none;">
+							<!-- 顶部说明 -->
+							<!-- 顶部说明 -->
+							<div class="beilu-preset-header">
+								<div class="beilu-preset-info">
+									<span class="text-sm text-base-content/50">记忆系统辅助AI预设</span>
+									<div class="text-xs text-base-content/40 mt-1">
+										配置记忆系统各环节使用的AI模型和提示词。这些预设用于检索、总结、归档等自动化记忆任务。
+									</div>
+								</div>
+								<div class="beilu-preset-actions">
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-base-content/50 shrink-0">角色:</span>
+										<select id="mp-char-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
+											<option value="">选择角色卡查看宏数据...</option>
+										</select>
+									</div>
+									<span id="mp-char-status" class="text-xs text-base-content/40"></span>
+								</div>
+							</div>
+							<div class="beilu-config-section mb-3" id="mp-maintenance-panel">
+								<div class="flex items-center justify-between mb-2">
+									<span class="text-sm font-medium">🔧 记忆维护</span>
+									<span id="mp-maintenance-status" class="text-xs text-base-content/40"></span>
+								</div>
+								<div class="flex flex-wrap gap-2">
+									<button id="mp-end-day-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="执行日终归档流程：汇总今日记忆→写入温层→清空临时表格">🌙 结束今天</button>
+									<button id="mp-archive-temp-btn" class="btn btn-xs btn-outline" title="手动归档#4临时记忆到温层">📦 归档临时记忆</button>
+									<button id="mp-archive-hot-btn" class="btn btn-xs btn-outline" title="手动归档#7/#8到热记忆文件">🔥 归档热记忆</button>
+									<button id="mp-archive-cold-btn" class="btn btn-xs btn-outline" title="将超过30天的温层数据移入冷层">❄️ 温→冷归档</button>
+								</div>
+								<div id="mp-end-day-result" class="text-xs text-base-content/40 mt-2" style="display:none;"></div>
+							</div>
+							<!-- 聊天AI注入提示词面板 -->
+							<div class="beilu-config-section mb-3" id="mp-injection-panel">
+								<div class="flex items-center justify-between mb-2">
+									<span class="text-sm font-medium">📝 聊天AI注入提示词</span>
+									<span class="text-xs text-base-content/40">控制注入到聊天AI对话中的记忆数据格式</span>
+								</div>
+								<div id="mp-injection-list" class="space-y-3">
+									<p class="text-xs text-base-content/40 text-center py-2">加载中...</p>
+								</div>
+							</div>
+							<!-- 记忆检索配置面板 -->
+							<div class="beilu-config-section mb-3" id="mp-retrieval-config-panel">
+								<div class="flex items-center justify-between mb-2">
+									<span class="text-sm font-medium">⚙️ 记忆检索配置</span>
+									<span class="text-xs text-base-content/40">控制记忆检索AI的行为参数</span>
+								</div>
+								<div class="space-y-2">
+									<div class="beilu-config-row">
+										<div>
+											<div class="text-sm">自动触发检索</div>
+											<div class="text-xs text-base-content/40">每次用户发消息时自动运行检索AI</div>
+										</div>
+										<input type="checkbox" id="mp-cfg-auto-trigger" class="toggle toggle-xs toggle-warning" checked />
+									</div>
+									<div class="flex items-center gap-3 flex-wrap">
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-base-content/50 shrink-0">聊天记录条数:</span>
+											<input type="number" id="mp-cfg-chat-history-count" class="input input-xs input-bordered w-20" min="1" max="50" value="5" title="发送给检索AI的最近聊天记录条数" />
+										</div>
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-base-content/50 shrink-0">最大搜索轮数:</span>
+											<input type="number" id="mp-cfg-max-search-rounds" class="input input-xs input-bordered w-20" min="1" max="20" value="5" />
+										</div>
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-base-content/50 shrink-0">超时(ms):</span>
+											<input type="number" id="mp-cfg-timeout" class="input input-xs input-bordered w-24" min="5000" max="300000" step="1000" value="60000" />
+										</div>
+									</div>
+								</div>
+								<div class="flex justify-end mt-2">
+									<button id="mp-cfg-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存配置</button>
+								</div>
+								<p id="mp-cfg-status" class="text-xs text-center text-base-content/40 mt-1"></p>
+							</div>
+							<!-- 可用宏参考面板 -->
+							<div class="beilu-config-section mb-3" id="mp-macro-ref-panel">
+								<div class="flex items-center justify-between mb-2 cursor-pointer" id="mp-macro-ref-header">
+									<span class="text-sm font-medium">📖 可用宏参考</span>
+									<span class="text-xs text-base-content/30" id="mp-macro-ref-arrow">▶</span>
+								</div>
+								<div id="mp-macro-ref-body" style="display:none;">
+									<p class="text-xs text-base-content/40 mb-2">在预设提示词和注入模板中可使用以下宏，运行时会被替换为实际数据：</p>
+									<div class="space-y-1.5 text-xs">
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{tableData}}</code>
+											<span class="text-base-content/60">— 所有表格的CSV数据（包含列名和行内容）</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{hotMemory}}</code>
+											<span class="text-base-content/60">— 热记忆层完整内容（永久记忆、用户画像、物品、约定、月索引等）</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{char}}</code>
+											<span class="text-base-content/60">— 当前角色名</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{user}}</code>
+											<span class="text-base-content/60">— 当前用户名</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{current_date}}</code>
+											<span class="text-base-content/60">— 当前日期时间（格式：YYYY年M月D日 周X HH:mm）</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{chat_history}}</code>
+											<span class="text-base-content/60">— 最近 N 条聊天记录（N = 上方"聊天记录条数"配置值）</span>
+										</div>
+									</div>
+									<div class="mt-2 p-2 rounded text-xs text-base-content/40" style="background: oklch(var(--bc) / 0.02); border: 1px dashed oklch(var(--bc) / 0.1);">
+										💡 <strong>注入提示词专用宏</strong>：注入模板中还可使用 <code class="font-mono text-amber-500 select-all">{{remember_about_user}}</code>、<code class="font-mono text-amber-500 select-all">{{forever}}</code>、<code class="font-mono text-amber-500 select-all">{{appointments}}</code>、<code class="font-mono text-amber-500 select-all">{{user_profile}}</code>、<code class="font-mono text-amber-500 select-all">{{warm_monthly_index}}</code> 等热记忆层子字段宏。
+									</div>
+								</div>
+							</div>
+							<!-- 双栏布局：预设列表 + 预设详情 -->
+							<div class="beilu-preset-layout">
+								<!-- 左栏：预设列表 -->
+								<div class="beilu-preset-list-col">
+									<div id="mp-preset-list" class="beilu-preset-entry-list">
+										<p class="text-sm text-base-content/50 text-center py-8">加载中...</p>
+									</div>
+								</div>
+								<!-- 右栏：预设详情 -->
+								<div id="mp-detail" class="beilu-preset-detail-col" style="display:none;">
+									<!-- 预设标题 + 启用开关 -->
+									<div class="beilu-preset-detail-head">
+										<div class="flex items-center gap-2 flex-grow">
+											<span id="mp-detail-id" class="badge badge-sm badge-outline badge-warning font-mono">P1</span>
+											<span id="mp-detail-name" class="font-bold text-sm">检索AI</span>
+										</div>
+										<label class="cursor-pointer label gap-2 p-0 ml-2">
+											<span class="label-text text-xs">启用</span>
+											<input type="checkbox" id="mp-detail-toggle" class="toggle toggle-sm toggle-warning" />
+										</label>
+									</div>
+	
+									<!-- 描述 -->
+									<div class="form-control mb-3">
+										<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">描述</span></label>
+										<input type="text" id="mp-detail-desc" class="input input-sm input-bordered w-full text-sm" />
+									</div>
+	
+									<!-- 触发方式（只读显示） -->
+									<div class="flex items-center gap-2 mb-3">
+										<span class="text-xs text-base-content/50">触发方式:</span>
+										<span id="mp-detail-trigger" class="badge badge-sm badge-outline">auto_on_message</span>
+									</div>
+	
+									<!-- API 配置 -->
+									<div class="beilu-config-section mb-3">
+										<div class="text-sm font-medium mb-2">API 配置</div>
+										<div class="space-y-2">
+											<div class="beilu-config-row">
+												<div>
+													<div class="text-sm">使用独立API配置</div>
+													<div class="text-xs text-base-content/40">关闭则使用主对话AI的配置</div>
+												</div>
+												<input type="checkbox" id="mp-api-custom" class="toggle toggle-xs toggle-warning" />
+											</div>
+											<div id="mp-api-fields" class="space-y-2" style="display:none;">
+												<div class="flex items-center gap-2">
+													<span class="text-xs text-base-content/50 w-16 shrink-0">服务源:</span>
+													<select id="mp-api-source" class="select select-xs select-bordered flex-grow">
+														<option value="">加载中...</option>
+													</select>
+												</div>
+												<div class="flex items-center gap-2">
+													<span class="text-xs text-base-content/50 w-16 shrink-0">模型:</span>
+													<input type="text" id="mp-api-model" class="input input-xs input-bordered flex-grow font-mono" placeholder="gemini-2.0-flash" />
+												</div>
+												<div class="flex items-center gap-2">
+													<span class="text-xs text-base-content/50 w-16 shrink-0">温度:</span>
+													<input type="number" id="mp-api-temperature" class="input input-xs input-bordered w-20" min="0" max="2" step="0.1" value="0.3" />
+												</div>
+												<div class="flex items-center gap-2">
+													<span class="text-xs text-base-content/50 w-16 shrink-0">最大Token:</span>
+													<input type="number" id="mp-api-max-tokens" class="input input-xs input-bordered w-24" min="100" max="32000" step="100" value="2000" />
+												</div>
+											</div>
+										</div>
+									</div>
+	
+									<!-- 提示词条目列表 -->
+									<div class="beilu-config-section mb-3">
+										<div class="flex items-center justify-between mb-2">
+											<span class="text-sm font-medium">提示词条目</span>
+											<button id="mp-add-prompt" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">+ 添加</button>
+										</div>
+										<div id="mp-prompt-list" class="space-y-2">
+											<p class="text-xs text-base-content/40 text-center py-4">加载中...</p>
+										</div>
+									</div>
+	
+									<!-- 操作按钮 -->
+									<div class="flex justify-between items-center mt-3">
+										<div class="flex items-center gap-2">
+											<button id="mp-preview-preset-btn" class="btn btn-xs btn-outline">👁️ 查看提示词</button>
+											<button id="mp-run-preset-btn" class="btn btn-xs btn-outline border-cyan-600 text-cyan-600 hover:bg-cyan-600 hover:text-white">🚀 运行记忆AI</button>
+										</div>
+										<button id="mp-save-btn" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+									</div>
+									<p id="mp-status" class="text-xs text-center text-base-content/40 mt-2"></p>
+	
+									<!-- 记忆AI运行结果面板 -->
+									<div id="mp-run-result-panel" style="display:none;" class="mt-3">
+										<div class="flex items-center justify-between mb-2">
+											<span class="text-sm font-medium text-cyan-500">🧠 记忆AI运行结果</span>
+											<div class="flex items-center gap-2">
+												<span id="mp-run-result-time" class="text-xs text-base-content/40"></span>
+												<button id="mp-run-result-copy" class="btn btn-xs btn-ghost" title="复制完整结果">📋</button>
+												<button id="mp-run-result-close" class="btn btn-xs btn-ghost" title="关闭">✕</button>
+											</div>
+										</div>
+										<!-- 思维链 -->
+										<div id="mp-run-thinking" class="mb-2" style="display:none;">
+											<div class="flex items-center gap-1 mb-1 cursor-pointer" id="mp-run-thinking-header">
+												<span class="text-xs text-base-content/30" id="mp-run-thinking-arrow">▶</span>
+												<span class="text-xs font-medium text-base-content/50">💭 思维链</span>
+											</div>
+											<pre id="mp-run-thinking-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md max-h-48 overflow-y-auto" style="display:none; background: oklch(var(--bc) / 0.04); border: 1px solid oklch(var(--bc) / 0.08);"></pre>
+										</div>
+										<!-- 操作结果 -->
+										<div id="mp-run-operations" class="mb-2" style="display:none;">
+											<div class="text-xs font-medium text-base-content/50 mb-1">📝 执行的操作</div>
+											<div id="mp-run-operations-list" class="space-y-1"></div>
+										</div>
+										<!-- AI回复 -->
+										<div id="mp-run-reply" class="mb-2">
+											<div class="text-xs font-medium text-base-content/50 mb-1">💬 AI回复</div>
+											<pre id="mp-run-reply-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md max-h-64 overflow-y-auto" style="background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1);"></pre>
+										</div>
+										<!-- 错误 -->
+										<div id="mp-run-error" class="mb-2" style="display:none;">
+											<pre id="mp-run-error-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md text-error" style="background: oklch(var(--er) / 0.05); border: 1px solid oklch(var(--er) / 0.15);"></pre>
+										</div>
+									</div>
+	
+									<!-- 预设提示词预览面板 -->
+									<div id="mp-preset-preview-panel" style="display:none;" class="mt-3">
+										<div class="flex items-center justify-between mb-2">
+											<span class="text-sm font-medium text-amber-600">📝 提示词预览（宏替换后）</span>
+											<div class="flex items-center gap-2">
+												<span id="mp-preset-preview-stats" class="text-xs text-base-content/40"></span>
+												<button id="mp-preset-preview-copy" class="btn btn-xs btn-ghost" title="复制全部预览">📋</button>
+												<button id="mp-preset-preview-close" class="btn btn-xs btn-ghost" title="关闭预览">✕</button>
+											</div>
+										</div>
+										<div id="mp-preset-preview-content" class="space-y-2"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+	
+					<!-- ======== 记忆管理区域 ======== -->
+					<div id="section-memoryManage" class="beilu-usage-section">
+						<div id="mm-loading" class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载记忆管理...</p>
+						</div>
+						<div id="mm-main" style="display:none;">
+							<!-- 顶部：角色卡选择器 -->
+							<div class="beilu-preset-header">
+								<div class="beilu-preset-info">
+									<span class="text-sm text-base-content/50">记忆表格编辑器</span>
+									<div class="flex items-center gap-2 mt-1">
+										<select id="mm-char-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
+											<option value="">选择角色卡...</option>
+										</select>
+										<button id="mm-refresh-btn" class="btn btn-xs btn-outline" title="刷新数据">🔄</button>
+									</div>
+								</div>
+								<div class="beilu-preset-actions">
+									<span id="mm-stats" class="text-xs text-base-content/40"></span>
+								</div>
+							</div>
+
+							<!-- 未选择角色卡时的占位 -->
+							<div id="mm-no-char" class="text-center py-12">
+								<p class="text-base-content/40 text-sm">👆 请先选择一个角色卡</p>
+								<p class="text-base-content/30 text-xs mt-1">记忆表格绑定角色卡，每个角色有独立的记忆空间</p>
+							</div>
+
+							<!-- 表格编辑区域（选择角色卡后显示） -->
+							<div id="mm-editor" style="display:none;">
+								<!-- 表格标签页栏 -->
+								<div id="mm-table-tabs" class="mm-table-tabs"></div>
+
+								<!-- 当前表格信息 -->
+								<div id="mm-table-info" class="mm-table-info">
+									<div class="flex items-center justify-between mb-2">
+										<div class="flex items-center gap-2">
+											<span id="mm-table-id" class="badge badge-sm badge-outline badge-warning font-mono">#0</span>
+											<span id="mm-table-name" class="text-sm font-medium">表格名称</span>
+											<span id="mm-table-dirty" class="badge badge-xs badge-error" style="display:none;">未保存</span>
+										</div>
+										<div class="flex items-center gap-2">
+											<span id="mm-row-count" class="text-xs text-base-content/40">0 行</span>
+											<button id="mm-add-row-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">➕ 添加行</button>
+											<button id="mm-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+										</div>
+									</div>
+									<!-- 规则显示 -->
+									<div id="mm-rules" class="mm-rules">
+										<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/40">
+											<span>📥 插入: <span id="mm-rule-insert" class="text-base-content/60">-</span></span>
+											<span>✏️ 更新: <span id="mm-rule-update" class="text-base-content/60">-</span></span>
+											<span>🗑️ 删除: <span id="mm-rule-delete" class="text-base-content/60">-</span></span>
+										</div>
+									</div>
+								</div>
+
+								<!-- 表格网格 -->
+								<div id="mm-grid-container" class="mm-grid-container">
+									<table id="mm-grid" class="mm-grid-table">
+										<thead id="mm-grid-head"></thead>
+										<tbody id="mm-grid-body"></tbody>
+									</table>
+								</div>
+
+								<!-- 状态栏 -->
+								<div class="flex items-center justify-between mt-2">
+									<span id="mm-status" class="text-xs text-base-content/40"></span>
+								</div>
+							</div>
+						</div>
+					</div>
+	
+					<!-- ======== 系统查看器区域 ======== -->
+					<div id="section-sysViewer" class="beilu-usage-section">
+						<div class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载系统查看器...</p>
+						</div>
+					</div>
+
+					<!-- ======== AI诊断区域 ======== -->
+					<div id="section-aiDiag" class="beilu-usage-section">
+						<div class="beilu-loading">
+							<span class="loading loading-spinner loading-lg text-amber-500"></span>
+							<p>加载AI诊断面板...</p>
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+	
+		<!-- ============================================================ -->
+		<!-- ⚙️ 系统和功能设置 选项卡内容                                  -->
+		<!-- ============================================================ -->
+		<div id="tab-system" class="beilu-tab-content">
+			<div class="beilu-usage-layout">
+				<!-- 左侧导航 -->
+				<nav class="beilu-usage-nav">
+					<button class="beilu-system-nav-item active" data-sys-section="api">
+						<span class="beilu-usage-nav-icon">🔌</span>
+						<span class="beilu-usage-nav-label">AI 服务源</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="search">
+						<span class="beilu-usage-nav-icon">🔍</span>
+						<span class="beilu-usage-nav-label">搜索服务源</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="translate">
+						<span class="beilu-usage-nav-icon">🌐</span>
+						<span class="beilu-usage-nav-label">翻译服务源</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="import">
+						<span class="beilu-usage-nav-icon">📦</span>
+						<span class="beilu-usage-nav-label">导入处理器</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="plugins">
+						<span class="beilu-usage-nav-icon">🧩</span>
+						<span class="beilu-usage-nav-label">功能插件</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="generators">
+						<span class="beilu-usage-nav-icon">⚡</span>
+						<span class="beilu-usage-nav-label">服务生成器</span>
+					</button>
+					<button class="beilu-system-nav-item" data-sys-section="shells">
+						<span class="beilu-usage-nav-icon">🖥️</span>
+						<span class="beilu-usage-nav-label">系统 UI 组件</span>
+					</button>
+				</nav>
+				<!-- 主内容区 -->
+				<div class="beilu-usage-content">
+
+					<!-- AI 服务源配置 -->
+					<div id="sys-section-api" class="beilu-system-section active">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">AI 服务源管理</h3>
+						<p class="text-sm text-base-content/50 mb-4">配置 AI 服务源，用于对话和记忆系统</p>
+						<div class="flex items-center gap-2 mb-4">
+							<select id="home-api-select" class="select select-sm select-bordered flex-grow"></select>
+							<button id="home-api-new-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">+ 新建</button>
+						</div>
+						<div class="beilu-api-form">
+							<div class="form-control mb-3">
+								<label class="label py-1"><span class="label-text text-sm">配置名称</span></label>
+								<input type="text" id="home-api-name" class="input input-sm input-bordered w-full" placeholder="my-api" />
+							</div>
+							<div class="form-control mb-3">
+								<label class="label py-1"><span class="label-text text-sm">API 类型</span></label>
+								<select id="home-api-type" class="select select-sm select-bordered w-full">
+									<option value="proxy">OpenAI 兼容</option>
+									<option value="gemini">Google Gemini</option>
+								</select>
+							</div>
+							<div class="form-control mb-3">
+								<label class="label py-1"><span class="label-text text-sm" id="home-api-url-label">API URL（完整端点地址）</span></label>
+								<input type="text" id="home-api-url" class="input input-sm input-bordered w-full font-mono text-xs" placeholder="https://api.openai.com/v1/chat/completions" />
+							</div>
+							<div class="form-control mb-3">
+								<label class="label py-1"><span class="label-text text-sm">API Key</span></label>
+								<input type="password" id="home-api-key" class="input input-sm input-bordered w-full font-mono text-xs" placeholder="sk-..." />
+							</div>
+							<div class="form-control mb-3">
+								<label class="label py-1"><span class="label-text text-sm">模型</span></label>
+								<div class="flex gap-2">
+									<input type="text" id="home-api-model" class="input input-sm input-bordered flex-grow font-mono text-xs" placeholder="gpt-4o / gemini-2.0-flash" />
+									<button id="home-api-fetch-models" class="btn btn-sm btn-outline" title="获取模型列表">🔄</button>
+								</div>
+								<select id="home-api-model-select" class="select select-sm select-bordered w-full mt-2 hidden">
+									<option value="" disabled selected>选择模型...</option>
+								</select>
+							</div>
+						</div>
+						<div class="flex gap-2 mt-4">
+							<button id="home-api-save-btn" class="btn btn-sm flex-grow bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+							<button id="home-api-delete-btn" class="btn btn-sm btn-outline btn-error" disabled>🗑️ 删除</button>
+						</div>
+						<div id="home-api-status" class="text-xs text-center mt-1 hidden"></div>
+					</div>
+
+					<!-- 搜索服务源 -->
+					<div id="sys-section-search" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">搜索服务源</h3>
+						<p class="text-sm text-base-content/50 mb-4">配置 AI 联网搜索使用的搜索服务</p>
+						<div class="beilu-part-list" id="search-source-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🔍</span>
+									<div>
+										<div class="font-medium text-sm">google-sr</div>
+										<div class="text-xs text-base-content/40">Google 搜索（默认）</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+							</div>
+						</div>
+						<p class="text-xs text-base-content/30 mt-3">搜索服务源由 Fount 管理，可在此查看已安装的搜索服务。</p>
+					</div>
+
+					<!-- 翻译服务源 -->
+					<div id="sys-section-translate" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">翻译服务源</h3>
+						<p class="text-sm text-base-content/50 mb-4">配置翻译服务</p>
+						<div class="beilu-part-list" id="translate-source-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🌐</span>
+									<div>
+										<div class="font-medium text-sm">google-translate</div>
+										<div class="text-xs text-base-content/40">Google 翻译（默认）</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+							</div>
+						</div>
+						<p class="text-xs text-base-content/30 mt-3">翻译服务源由 Fount 管理，可在此查看已安装的翻译服务。</p>
+					</div>
+
+					<!-- 导入处理器 -->
+					<div id="sys-section-import" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">导入处理器</h3>
+						<p class="text-sm text-base-content/50 mb-4">管理角色卡、世界书等文件的导入格式支持</p>
+						<div class="beilu-part-list" id="import-handler-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">📦</span>
+									<div>
+										<div class="font-medium text-sm">ST 角色卡导入</div>
+										<div class="text-xs text-base-content/40">支持 .png / .json / .charx 格式</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🌍</span>
+									<div>
+										<div class="font-medium text-sm">ST 世界书导入</div>
+										<div class="text-xs text-base-content/40">支持 .json 格式</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+							</div>
+						</div>
+						<p class="text-xs text-base-content/30 mt-3">导入处理器由 Fount 核心提供，负责解析各种格式的角色卡和世界书文件。</p>
+					</div>
+
+					<!-- 功能插件 -->
+					<div id="sys-section-plugins" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">功能插件</h3>
+						<p class="text-sm text-base-content/50 mb-4">管理已安装的功能插件</p>
+						<div class="beilu-part-list" id="plugin-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">📝</span>
+									<div>
+										<div class="font-medium text-sm">beilu-preset</div>
+										<div class="text-xs text-base-content/40">ST 预设引擎 — 兼容 SillyTavern 预设格式</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item beilu-expandable" id="plugin-beilu-files">
+								<div class="beilu-part-item-header" data-expand-target="beilu-files-config">
+									<div class="beilu-part-item-info">
+										<span class="beilu-part-item-icon">📁</span>
+										<div>
+											<div class="font-medium text-sm">beilu-files</div>
+											<div class="text-xs text-base-content/40">AI 文件操作 — 让 AI 读写本地文件</div>
+										</div>
+									</div>
+									<div class="flex items-center gap-2">
+										<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+										<span class="beilu-expand-arrow text-base-content/30 text-xs">▶</span>
+									</div>
+								</div>
+								<!-- 可展开配置面板 -->
+								<div class="beilu-expand-content" id="beilu-files-config" style="display:none;">
+									<div class="beilu-expand-inner">
+										<!-- 自动注入开关 -->
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">工具提示词注入</div>
+												<div class="text-xs text-base-content/40">在文件/IDE模式下自动向AI注入文件操作能力说明</div>
+											</div>
+											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-auto-inject" checked disabled />
+										</div>
+										<!-- 自动批准设置 -->
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">自动批准读取</div>
+												<div class="text-xs text-base-content/40">AI的read/list操作无需手动确认</div>
+											</div>
+											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-auto-read" />
+										</div>
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">自动批准所有操作</div>
+												<div class="text-xs text-base-content/40 text-error/60">⚠ 危险：write/delete/exec也将自动执行</div>
+											</div>
+											<input type="checkbox" class="toggle toggle-xs toggle-error" id="bf-auto-all" />
+										</div>
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">允许命令执行</div>
+												<div class="text-xs text-base-content/40">允许AI执行系统命令(exec)</div>
+											</div>
+											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-allow-exec" />
+										</div>
+										<!-- 自定义提示词 -->
+										<div class="beilu-config-section">
+											<div class="flex items-center justify-between mb-1">
+												<span class="text-sm">自定义提示词</span>
+												<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-custom-prompt-toggle" />
+											</div>
+											<textarea id="bf-custom-prompt" class="textarea textarea-bordered w-full text-xs font-mono" rows="4"
+												placeholder="在文件操作场景中追加给AI的额外指令..." disabled></textarea>
+										</div>
+										<!-- 路径安全 -->
+										<div class="beilu-config-section">
+											<div class="text-sm mb-1">路径安全管理</div>
+											<div class="text-xs text-base-content/40 mb-2">控制AI可访问的文件路径范围</div>
+											<div class="flex gap-2 mb-2">
+												<div class="flex-1">
+													<label class="text-xs text-base-content/50">允许路径</label>
+													<div id="bf-allowed-paths" class="beilu-path-list"></div>
+													<div class="flex gap-1 mt-1">
+														<input type="text" id="bf-new-allowed" class="input input-xs input-bordered flex-grow font-mono" placeholder="D:/projects" />
+														<button class="btn btn-xs btn-outline" id="bf-add-allowed">+</button>
+													</div>
+												</div>
+												<div class="flex-1">
+													<label class="text-xs text-base-content/50">禁止路径</label>
+													<div id="bf-blocked-paths" class="beilu-path-list"></div>
+													<div class="flex gap-1 mt-1">
+														<input type="text" id="bf-new-blocked" class="input input-xs input-bordered flex-grow font-mono" placeholder="C:/" />
+														<button class="btn btn-xs btn-outline" id="bf-add-blocked">+</button>
+													</div>
+												</div>
+											</div>
+										</div>
+										<!-- 当前模式显示 -->
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">当前活跃模式</div>
+												<div class="text-xs text-base-content/40">由聊天界面模式切换自动设置</div>
+											</div>
+											<span class="badge badge-sm badge-outline" id="bf-active-mode">chat</span>
+										</div>
+										<!-- 保存按钮 -->
+										<div class="flex justify-end mt-3">
+											<button class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700" id="bf-save-config">💾 保存配置</button>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="beilu-part-item beilu-expandable" id="plugin-beilu-eye">
+								<div class="beilu-part-item-header" data-expand-target="beilu-eye-config">
+									<div class="beilu-part-item-info">
+										<span class="beilu-part-item-icon">👁️</span>
+										<div>
+											<div class="font-medium text-sm">beilu-eye</div>
+											<div class="text-xs text-base-content/40">贝露的眼睛 — 桌面截图临时注入 AI</div>
+										</div>
+									</div>
+									<div class="flex items-center gap-2">
+										<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+										<span class="beilu-expand-arrow text-base-content/30 text-xs">▶</span>
+									</div>
+								</div>
+								<div class="beilu-expand-content" id="beilu-eye-config" style="display:none;">
+									<div class="beilu-expand-inner">
+										<div class="beilu-config-row">
+											<div>
+												<div class="text-sm">桌面截图工具</div>
+												<div class="text-xs text-base-content/40">Electron 桌面悬浮球 + 框选截图</div>
+											</div>
+											<span class="badge badge-sm badge-outline" id="be-electron-status">未知</span>
+										</div>
+										<div class="flex gap-2 mt-2">
+											<button class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" id="be-start-btn">▶ 启动</button>
+											<button class="btn btn-xs btn-outline" id="be-stop-btn">⏹ 停止</button>
+											<button class="btn btn-xs btn-outline" id="be-restart-btn">🔄 重启</button>
+										</div>
+										<div class="text-xs text-base-content/30 mt-3">
+											<p>💡 启动后桌面显示 ✦ 悬浮球，点击可框选截图发送给 AI</p>
+											<p class="mt-1">• 快捷键 Alt+Shift+S 也可触发</p>
+											<p>• 浏览器内 Ctrl+V 粘贴截图始终可用</p>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🌐</span>
+									<div>
+										<div class="font-medium text-sm">beilu-web</div>
+										<div class="text-xs text-base-content/40">AI 联网 — 搜索和浏览网页</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🧠</span>
+									<div>
+										<div class="font-medium text-sm">beilu-memory</div>
+										<div class="text-xs text-base-content/40">记忆系统 — 长期无限记忆（开发中）</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🔧</span>
+									<div>
+										<div class="font-medium text-sm">beilu-regex</div>
+										<div class="text-xs text-base-content/40">正则脚本 — ST 风格正则替换引擎</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">💻</span>
+									<div>
+										<div class="font-medium text-sm">beilu-sysinfo</div>
+										<div class="text-xs text-base-content/40">系统信息 — 向 AI 注入运行环境上下文</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">📋</span>
+									<div>
+										<div class="font-medium text-sm">beilu-logger</div>
+										<div class="text-xs text-base-content/40">日志系统 — 服务器日志收集与可视化</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🔀</span>
+									<div>
+										<div class="font-medium text-sm">beilu-toggle</div>
+										<div class="text-xs text-base-content/40">预设条目开关 — 动态启停预设条目</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🤖</span>
+									<div>
+										<div class="font-medium text-sm">beilu-agents</div>
+										<div class="text-xs text-base-content/40">代理系统 — 多步骤 AI 代理执行</div>
+									</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
+							</div>
+						</div>
+					</div>
+
+					<!-- 服务生成器 -->
+					<div id="sys-section-generators" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">AI 服务生成器</h3>
+						<p class="text-sm text-base-content/50 mb-4">系统底层的 AI 接口适配器，将不同 API 格式转换为统一调用</p>
+						<div class="beilu-part-list" id="generator-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">⚡</span>
+									<div>
+										<div class="font-medium text-sm">proxy</div>
+										<div class="text-xs text-base-content/40">OpenAI 兼容接口（支持大部分第三方API）</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-info">内置</span>
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">⚡</span>
+									<div>
+										<div class="font-medium text-sm">gemini</div>
+										<div class="text-xs text-base-content/40">Google Gemini 原生接口</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-info">内置</span>
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">⚡</span>
+									<div>
+										<div class="font-medium text-sm">claude-api</div>
+										<div class="text-xs text-base-content/40">Anthropic Claude 原生接口</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-info">内置</span>
+							</div>
+						</div>
+						<p class="text-xs text-base-content/30 mt-3">服务生成器通常不需要手动管理，由 AI 服务源自动调用。</p>
+					</div>
+
+					<!-- 系统 UI 组件 -->
+					<div id="sys-section-shells" class="beilu-system-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-2">系统 UI 组件</h3>
+						<p class="text-sm text-base-content/50 mb-4">已安装的交互界面模块</p>
+						<div class="beilu-part-list" id="shell-list">
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">🏠</span>
+									<div>
+										<div class="font-medium text-sm">beilu-home</div>
+										<div class="text-xs text-base-content/40">首页 — 当前页面</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+							</div>
+							<div class="beilu-part-item">
+								<div class="beilu-part-item-info">
+									<span class="beilu-part-item-icon">💬</span>
+									<div>
+										<div class="font-medium text-sm">beilu-chat</div>
+										<div class="text-xs text-base-content/40">聊天界面 — AI 对话交互</div>
+									</div>
+								</div>
+								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+							</div>
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- 👤 用户设置 选项卡内容                                        -->
+		<!-- ============================================================ -->
+		<div id="tab-user" class="beilu-tab-content">
+			<div class="beilu-usage-layout">
+				<!-- 左侧导航 -->
+				<nav class="beilu-usage-nav">
+					<button class="beilu-user-nav-item active" data-user-section="theme">
+						<span class="beilu-usage-nav-icon">🎨</span>
+						<span class="beilu-usage-nav-label">主题和外观</span>
+					</button>
+					<button class="beilu-user-nav-item" data-user-section="language">
+						<span class="beilu-usage-nav-icon">🌍</span>
+						<span class="beilu-usage-nav-label">语言</span>
+					</button>
+					<button class="beilu-user-nav-item" data-user-section="remote">
+						<span class="beilu-usage-nav-icon">📱</span>
+						<span class="beilu-usage-nav-label">远程访问</span>
+					</button>
+					<button class="beilu-user-nav-item" data-user-section="browser">
+						<span class="beilu-usage-nav-icon">🔗</span>
+						<span class="beilu-usage-nav-label">浏览器集成</span>
+					</button>
+					<button class="beilu-user-nav-item" data-user-section="debug">
+						<span class="beilu-usage-nav-icon">🐛</span>
+						<span class="beilu-usage-nav-label">调试面板</span>
+					</button>
+					<button class="beilu-user-nav-item" data-user-section="about">
+						<span class="beilu-usage-nav-icon">ℹ️</span>
+						<span class="beilu-usage-nav-label">关于</span>
+					</button>
+				</nav>
+				<!-- 主内容区 -->
+				<div class="beilu-usage-content">
+
+					<!-- 主题和外观 -->
+					<div id="user-section-theme" class="beilu-user-section active">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">主题和外观</h3>
+						<div class="beilu-settings-group">
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">深色模式</div>
+									<div class="text-xs text-base-content/40">当前使用深色主题</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-sm toggle-warning" checked id="user-dark-mode" />
+							</div>
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">主题色</div>
+									<div class="text-xs text-base-content/40">琥珀色（amber）</div>
+								</div>
+								<div class="w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-600"></div>
+							</div>
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">字体大小</div>
+									<div class="text-xs text-base-content/40">界面字体大小调节</div>
+								</div>
+								<select class="select select-xs select-bordered w-24" id="user-font-size">
+									<option value="small">小</option>
+									<option value="medium" selected>中</option>
+									<option value="large">大</option>
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<!-- 语言 -->
+					<div id="user-section-language" class="beilu-user-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">语言设置</h3>
+						<div class="beilu-settings-group">
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">界面语言</div>
+									<div class="text-xs text-base-content/40">选择界面显示语言</div>
+								</div>
+								<select class="select select-sm select-bordered w-40" id="user-language">
+									<option value="zh-CN" selected>简体中文</option>
+									<option value="en-UK">English</option>
+									<option value="ja-JP">日本語</option>
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<!-- 远程访问 -->
+					<div id="user-section-remote" class="beilu-user-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">远程访问</h3>
+						<p class="text-sm text-base-content/50 mb-4">从其他设备访问贝露</p>
+						<div class="beilu-settings-group">
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">局域网地址</div>
+									<div class="text-xs text-base-content/40 font-mono" id="user-local-url">加载中...</div>
+								</div>
+								<button class="btn btn-xs btn-outline" id="user-copy-url">📋 复制</button>
+							</div>
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">mDNS 发现</div>
+									<div class="text-xs text-base-content/40">允许同一网络内的设备自动发现</div>
+								</div>
+								<input type="checkbox" class="toggle toggle-sm toggle-warning" id="user-mdns" />
+							</div>
+						</div>
+					</div>
+
+					<!-- 浏览器集成 -->
+					<div id="user-section-browser" class="beilu-user-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">浏览器集成</h3>
+						<p class="text-sm text-base-content/50 mb-4">让 AI 能在浏览器中执行操作</p>
+						<div class="beilu-settings-group">
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">浏览器扩展</div>
+									<div class="text-xs text-base-content/40">安装浏览器扩展以启用集成功能</div>
+								</div>
+								<span class="badge badge-sm badge-outline" id="user-browser-ext-status">未检测</span>
+							</div>
+							<div class="beilu-settings-item">
+								<div>
+									<div class="font-medium text-sm">自动运行脚本</div>
+									<div class="text-xs text-base-content/40">页面加载时自动执行的脚本</div>
+								</div>
+								<button class="btn btn-xs btn-outline">管理</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- 调试面板 -->
+						<div id="user-section-debug" class="beilu-user-section">
+							<h3 class="text-lg font-bold text-amber-700 mb-4">调试面板</h3>
+							<p class="text-sm text-base-content/50 mb-4">查看完整的提示词输出和系统日志</p>
+	
+							<!-- ===== 服务器日志面板 ===== -->
+							<div class="beilu-debug-panel mb-4">
+								<div class="flex items-center justify-between mb-3">
+									<span class="text-sm font-medium">📋 服务器日志</span>
+									<div class="flex items-center gap-2">
+										<span id="logger-stats" class="text-xs text-base-content/40"></span>
+										<button class="btn btn-xs btn-outline" id="logger-refresh-btn" title="刷新日志">🔄 刷新</button>
+									</div>
+								</div>
+								<!-- 筛选和控制栏 -->
+								<div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+									<div class="flex gap-1">
+										<button class="btn btn-xs logger-filter-btn active" data-level="all">全部</button>
+										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="warn">⚠️ 警告</button>
+										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="error">❌ 错误</button>
+									</div>
+									<div class="flex items-center gap-2">
+										<label class="cursor-pointer label gap-1 p-0">
+											<span class="label-text text-xs">自动刷新</span>
+											<input type="checkbox" id="logger-auto-refresh" class="checkbox checkbox-xs checkbox-warning" />
+										</label>
+										<button class="btn btn-xs btn-outline btn-ghost" id="logger-copy-btn" title="复制全部日志">📋</button>
+										<button class="btn btn-xs btn-outline btn-error" id="logger-clear-btn" title="清空日志">🗑️</button>
+									</div>
+								</div>
+								<!-- 日志输出区 -->
+								<div id="logger-output" class="beilu-debug-output beilu-logger-output">
+									<p class="text-xs text-base-content/30 text-center py-8">点击"刷新"加载服务器日志</p>
+								</div>
+							</div>
+	
+							<!-- ===== 伪发送面板 ===== -->
+							<div class="beilu-debug-panel mb-4">
+								<div class="flex items-center justify-between mb-3">
+									<span class="text-sm font-medium">🚀 伪发送预览</span>
+									<div class="flex items-center gap-2">
+										<span id="fake-send-status" class="text-xs text-base-content/40"></span>
+										<button class="btn btn-xs btn-outline" id="fake-send-btn">📡 构建请求</button>
+									</div>
+								</div>
+								<p class="text-xs text-base-content/50 mb-3">模拟完整的 AI 调用链路，生成 Chat Completion request 预览。不会实际发送。</p>
+								<!-- 聊天选择 -->
+								<div class="flex items-center gap-2 mb-3">
+									<span class="text-xs text-base-content/50 shrink-0">聊天:</span>
+									<select id="fake-send-chat-select" class="select select-xs select-bordered flex-grow min-w-0">
+										<option value="">选择一个聊天...</option>
+									</select>
+									<button class="btn btn-xs btn-outline" id="fake-send-refresh-chats" title="刷新聊天列表">🔄</button>
+								</div>
+								<!-- 统计信息 -->
+								<div id="fake-send-stats" class="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-3 p-2 rounded-md" style="display:none; background: oklch(var(--bc) / 0.03);">
+									<span>消息数: <strong id="fs-msg-count" class="text-amber-500">0</strong></span>
+									<span>系统提示词: <strong id="fs-sys-chars" class="text-amber-500">0</strong> 字符</span>
+									<span>总字符: <strong id="fs-total-chars" class="text-amber-500">0</strong></span>
+									<span>≈ <strong id="fs-est-tokens" class="text-amber-500">0</strong> tokens</span>
+									<span>模型: <strong id="fs-model" class="text-amber-500">-</strong></span>
+								</div>
+								<!-- 子选项卡 -->
+								<div class="flex gap-1 mb-2">
+									<button class="btn btn-xs fs-sub-tab active" data-fs-tab="messages">消息列表</button>
+									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="params">模型参数</button>
+									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="raw">原始 JSON</button>
+								</div>
+								<!-- 消息列表 -->
+								<div id="fs-tab-messages" class="fs-tab-content active">
+									<div id="fs-messages-output" class="beilu-debug-output beilu-fs-output">
+										<p class="text-xs text-base-content/30 text-center py-8">点击"构建请求"生成完整的 Chat Completion request 预览</p>
+									</div>
+								</div>
+								<!-- 模型参数 -->
+								<div id="fs-tab-params" class="fs-tab-content" style="display:none;">
+									<div id="fs-params-output" class="beilu-debug-output">
+										<p class="text-xs text-base-content/30 text-center py-8">暂无参数数据</p>
+									</div>
+								</div>
+								<!-- 原始 JSON -->
+								<div id="fs-tab-raw" class="fs-tab-content" style="display:none;">
+									<div class="flex justify-end mb-1">
+										<button class="btn btn-xs btn-outline" id="fs-copy-raw" title="复制完整 JSON">📋 复制</button>
+									</div>
+									<div id="fs-raw-output" class="beilu-debug-output beilu-fs-output">
+										<p class="text-xs text-base-content/30 text-center py-8">暂无数据</p>
+									</div>
+								</div>
+							</div>
+	
+							<!-- ===== 提示词预览面板 ===== -->
+							<div class="beilu-debug-panel">
+								<div class="flex items-center justify-between mb-3">
+									<span class="text-sm font-medium">📝 提示词快照</span>
+									<div class="flex items-center gap-2">
+										<span id="debug-snapshot-time" class="text-xs text-base-content/40"></span>
+										<button class="btn btn-xs btn-outline" id="debug-refresh">🔄 刷新</button>
+									</div>
+								</div>
+								<!-- 快照元信息 -->
+								<div id="debug-meta" class="text-xs text-base-content/50 mb-3" style="display:none;">
+									<div class="flex flex-wrap gap-x-4 gap-y-1">
+										<span>预设: <strong id="debug-preset-name" class="text-base-content/70"></strong></span>
+										<span>角色: <strong id="debug-charname" class="text-base-content/70"></strong></span>
+										<span>用户: <strong id="debug-username" class="text-base-content/70"></strong></span>
+									</div>
+								</div>
+								<!-- Token 统计栏 -->
+								<div id="debug-stats" class="flex flex-wrap gap-x-4 gap-y-1 text-xs mb-3 p-2 rounded-md" style="display:none; background: oklch(var(--bc) / 0.03);">
+									<span>系统提示词: <strong id="debug-sys-chars" class="text-amber-500">0</strong> 字符</span>
+									<span>聊天记录: <strong id="debug-chat-chars">0</strong> 字符</span>
+									<span>注入条目: <strong id="debug-inject-chars">0</strong> 字符</span>
+									<span class="border-l border-base-content/10 pl-3">总计: <strong id="debug-total-chars" class="text-amber-500">0</strong> 字符</span>
+									<span>≈ <strong id="debug-est-tokens" class="text-amber-500">0</strong> tokens</span>
+								</div>
+								<!-- 子选项卡 -->
+								<div class="flex gap-1 mb-2">
+									<button class="btn btn-xs debug-sub-tab active" data-debug-tab="system">系统提示词</button>
+									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="chatlog">聊天记录</button>
+									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="modules">各模块详情</button>
+								</div>
+								<!-- 系统提示词内容 -->
+								<div id="debug-tab-system" class="debug-tab-content active">
+									<div id="debug-system-output" class="beilu-debug-output">
+										<p class="text-xs text-base-content/30 text-center py-8">发送一条消息后，这里会显示完整的提示词内容</p>
+									</div>
+								</div>
+								<!-- 聊天记录预览 -->
+								<div id="debug-tab-chatlog" class="debug-tab-content" style="display:none;">
+									<div id="debug-chatlog-output" class="beilu-debug-output">
+										<p class="text-xs text-base-content/30 text-center py-8">暂无聊天记录数据</p>
+									</div>
+								</div>
+								<!-- 各模块详情 -->
+								<div id="debug-tab-modules" class="debug-tab-content" style="display:none;">
+									<div id="debug-modules-output" class="beilu-debug-output">
+										<p class="text-xs text-base-content/30 text-center py-8">暂无模块统计数据</p>
+									</div>
+								</div>
+							</div>
+						</div>
+
+					<!-- 关于 -->
+					<div id="user-section-about" class="beilu-user-section">
+						<h3 class="text-lg font-bold text-amber-700 mb-4">关于</h3>
+						<div class="beilu-about-card">
+							<div class="text-2xl mb-2">贝露 · 与你之诗</div>
+							<div class="text-sm text-base-content/50 mb-4">跨时代的独立 AI 角色交互系统</div>
+							<div class="text-xs text-base-content/40 space-y-1">
+								<div>基于 <span class="font-mono">Fount</span> 核心运行时</div>
+								<div>兼容 SillyTavern 预设和角色卡</div>
+								<div>由凛倾创造 💛</div>
+							</div>
+							<div class="mt-4 pt-4 border-t border-base-content/10">
+								<div class="text-xs text-base-content/30 font-mono" id="about-version">版本信息加载中...</div>
+							</div>
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
+	</main>
+
+	<script type="module" src="./index.mjs"></script>
+
+</body>
+
+</html>

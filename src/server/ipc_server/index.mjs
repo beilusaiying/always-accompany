@@ -1,0 +1,196 @@
+import net from 'node:net'
+import process from 'node:process'
+
+import { VirtualConsole } from 'npm:@steve02081504/virtual-console'
+
+import { console, geti18n } from '../../scripts/i18n.mjs'
+import { getLoadedPartList, getPartDetails, getPartList, loadPart } from '../parts_loader.mjs'
+import { restartor } from '../server.mjs'
+
+const IPC_PORT = 16700 // beilu: 与其他Fount实例隔离
+
+/**
+ * 处理 IPC 命令。
+ * @param {string} command - 命令类型。
+ * @param {object} data - 命令数据。
+ * @returns {Promise<object>} 命令处理的结果。
+ */
+export async function processIPCCommand(command, data) {
+	try {
+		switch (command) {
+			case 'runpart': {
+				const { username, partpath, args } = data
+				console.logI18n('fountConsole.ipc.runPartLog', { partpath, username, args: JSON.stringify(args) })
+				const part = await loadPart(username, partpath)
+				const vc = new VirtualConsole()
+				const result = await vc.hookAsyncContext(async () => await part.interfaces.invokes.ArgumentsHandler(username, args))
+				return { status: 'ok', data: { result, outputs: vc.outputs } }
+			}
+			case 'invokepart': {
+				const { username, partpath, data: invokedata } = data
+				console.logI18n('fountConsole.ipc.invokePartLog', { partpath, username, invokedata: JSON.stringify(invokedata) })
+				const part = await loadPart(username, partpath)
+				const result = await part.interfaces.invokes.IPCInvokeHandler(username, invokedata)
+				return { status: 'ok', data: result }
+			}
+			case 'getlist': {
+				const { username, partpath } = data
+				return { status: 'ok', data: await getPartList(username, partpath) }
+			}
+			case 'getloadedlist': {
+				const { username, partpath } = data
+				return { status: 'ok', data: await getLoadedPartList(username, partpath) }
+			}
+			case 'getdetails': {
+				const { username, partpath } = data
+				return { status: 'ok', data: await getPartDetails(username, partpath) }
+			}
+			case 'shutdown':
+				process.exit()
+				return { status: 'ok' }
+			case 'reboot':
+				restartor()
+				return { status: 'ok' }
+			case 'ping':
+				return { status: 'ok', data: 'pong' }
+			default:
+				return { status: 'error', message: geti18n('fountConsole.ipc.unsupportedCommand') }
+		}
+	}
+	catch (err) {
+		console.errorI18n('fountConsole.ipc.processMessageError', { error: err })
+		if (err.errors) console.dir(err.errors)
+		else if (err.error) console.dir(err.error)
+		return { status: 'error', message: err.message }
+	}
+}
+
+/**
+ * 管理 IPC 服务器和客户端通信。
+ */
+export class IPCManager {
+	/**
+	 * 创建 IPCManager 的实例。
+	 */
+	constructor() {
+		this.serverV6 = null
+		this.serverV4 = null
+	}
+
+	/**
+	 * 启动 IPC 服务器。
+	 * @returns {Promise<boolean>} 如果服务器成功启动，则解析为 true，否则为 false。
+	 */
+	async startServer() {
+		this.serverV6 = net.createServer(socket => {
+			this.handleConnection(socket)
+		})
+
+		this.serverV4 = net.createServer(socket => {
+			this.handleConnection(socket)
+		})
+
+		/**
+		 * 启动一个服务器实例。
+		 * @param {net.Server} server - 要启动的服务器。
+		 * @param {string} address - 要监听的地址。
+		 * @returns {Promise<boolean>} 如果服务器成功启动，则解析为 true，否则为 false。
+		 */
+		const startServer = (server, address) => {
+			return new Promise((resolve, reject) => {
+				server.on('error', async err => {
+					if (err.code === 'EADDRINUSE') resolve(false)
+					else if (['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(err.code)) resolve(true) // 不支持的地址族/地址，视为成功
+					else reject(err)
+				})
+
+				server.listen(IPC_PORT, address, _ => resolve(true))
+			})
+		}
+		// 使用 Promise.all 确保两个侦听器都成功后才返回 true
+		return Promise.all([
+			startServer(this.serverV6, '::1'),
+			startServer(this.serverV4, '127.0.0.1'),
+		]).then(async results => {
+			const result = results.every(result => result === true)
+			if (result) console.freshLineI18n('server start', 'fountConsole.ipc.serverStarted')
+			else console.logI18n('fountConsole.ipc.instanceRunning')
+			return result
+		})
+	}
+
+	/**
+	 * 处理到 IPC 服务器的新连接。
+	 * @param {net.Socket} socket - 连接的套接字。
+	 * @returns {void}
+	 */
+	handleConnection(socket) {
+		let data = ''
+
+		socket.on('data', async chunk => {
+			data += chunk
+			if (data.includes('\n')) {
+				const parts = data.split('\n')
+				const message = parts[0]
+				data = parts.slice(1).join('\n')
+
+				try {
+					const { type, data: commandData } = JSON.parse(message)
+					const result = await processIPCCommand(type, commandData)
+					socket.write(JSON.stringify(result) + '\n')
+				}
+				catch (err) {
+					console.errorI18n('fountConsole.ipc.processMessageError', { error: err })
+					socket.write(JSON.stringify({ status: 'error', message: err instanceof SyntaxError ? geti18n('fountConsole.ipc.invalidCommandFormat') : err.message }) + '\n')
+				}
+			}
+		})
+
+		socket.on('error', async err => {
+			console.errorI18n('fountConsole.ipc.socketError', { error: err })
+		})
+	}
+
+	/**
+	 * 向 IPC 服务器发送命令。
+	 * @param {string} type - 命令类型。
+	 * @param {object} data - 命令数据。
+	 * @returns {Promise<any>} 一个解析为服务器响应的承诺。
+	 */
+	static async sendCommand(type, data) {
+		return new Promise((resolve, reject) => {
+			const client = net.createConnection({ port: IPC_PORT })
+
+			let responseData = ''
+
+			client.on('data', async chunk => {
+				responseData += chunk
+				// 检查消息分隔符（换行符）
+				if (responseData.includes('\n')) try {
+					const parts = responseData.split('\n')
+					const message = parts[0] // 提取完整消息
+					responseData = parts.slice(1).join('\n') // 保留剩余数据
+
+					const response = JSON.parse(message)
+					if (response.status === 'ok') resolve(response.data) // 返回结果
+					else reject(new Error(response.message || geti18n('fountConsole.ipc.unknownError')))
+				} catch (err) {
+					console.errorI18n('fountConsole.ipc.parseResponseFailed', { error: err })
+					reject(new Error(geti18n('fountConsole.ipc.cannotParseResponse')))
+				} finally {
+					client.end() // 处理后关闭连接
+				}
+			})
+
+			client.on('error', err => {
+				client.destroy()
+				reject(err)
+			})
+
+			client.setEncoding('utf8')
+			client.on('connect', () => {
+				client.write(JSON.stringify({ type, data }) + '\n')
+			})
+		})
+	}
+}

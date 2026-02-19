@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Files",
+		"avatar": "https://api.iconify.design/mdi/folder-edit-outline.svg",
+		"description": "Sandboxed file operations for AI — read, write, create, search.",
+		"description_markdown": "**Beilu Files** provides a sandboxed file operation system. The AI can read, write, create, and search files via `<file_op>` XML tags. Whitelist-based security with delete confirmation.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"files",
+			"sandbox",
+			"filesystem",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "贝露文件操作",
+		"avatar": "https://api.iconify.design/mdi/folder-edit-outline.svg",
+		"description": "沙箱化文件操作 — AI 读写、创建、搜索文件",
+		"description_markdown": "**贝露文件操作** 提供沙箱化的文件操作系统。AI 通过 `<file_op>` XML 标签进行文件读写、创建和搜索。基于白名单的安全机制，删除需用户确认。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"文件",
+			"沙箱",
+			"文件系统",
+			"贝露"
+		]
+	},
+	"emoji": {
+		"name": "📁✏️",
+		"avatar": "https://api.iconify.design/mdi/folder-edit-outline.svg",
+		"description": "🤖📁➡️📖✏️🔍",
+		"description_markdown": "🤖 ➡️ 📁\n📖 ✏️ 🔍\n🔒 ✅",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"📁",
+			"✏️",
+			"🔒",
+			"⛲"
+		]
+	}
+}

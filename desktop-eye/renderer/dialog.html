@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>贝露的眼睛 — 发送截图</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+	width: 100%;
+	height: 100%;
+	font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+	background: #fdf8f0;
+	color: #333;
+	overflow: hidden;
+}
+
+.container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 20px;
+}
+
+/* 标题栏（可拖动） */
+.title-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+	-webkit-app-region: drag;
+	cursor: move;
+}
+
+.title-bar h3 {
+	font-size: 18px;
+	font-weight: 600;
+	color: #d4a017;
+	margin: 0;
+}
+
+.close-btn {
+	-webkit-app-region: no-drag;
+	width: 28px;
+	height: 28px;
+	border: none;
+	background: transparent;
+	color: #999;
+	font-size: 18px;
+	cursor: pointer;
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s;
+}
+.close-btn:hover {
+	background: rgba(255,80,80,0.15);
+	color: #e74c3c;
+}
+
+/* 提示文字 */
+.hint {
+	color: #888;
+	font-size: 12px;
+	margin-bottom: 12px;
+}
+
+/* 截图预览区 */
+.preview-area {
+	flex: 1;
+	min-height: 0;
+	background: #f5f0e5;
+	border: 1px solid #e8d5a0;
+	border-radius: 8px;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.preview-area img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+/* 信息区 */
+.info-area {
+	background: #f5f0e5;
+	border: 1px solid #e8d5a0;
+	border-radius: 8px;
+	padding: 8px 12px;
+	margin-top: 10px;
+	font-size: 12px;
+	color: #666;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 消息输入 */
+.message-area {
+	margin-top: 12px;
+}
+
+.message-area textarea {
+	width: 100%;
+	height: 80px;
+	padding: 10px;
+	border: 2px solid #d4a017;
+	border-radius: 8px;
+	font-size: 14px;
+	font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+	background: #fff;
+	color: #333;
+	resize: none;
+	outline: none;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.message-area textarea:focus {
+	border-color: #b8860b;
+	box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.15);
+}
+
+.message-area textarea::placeholder {
+	color: #aaa;
+}
+
+/* 按钮区 — 三按钮 */
+.btn-row {
+	display: flex;
+	gap: 10px;
+	margin-top: 15px;
+}
+
+.btn {
+	flex: 1;
+	padding: 10px 16px;
+	border: none;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: bold;
+	font-family: inherit;
+	cursor: pointer;
+	transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.btn:hover {
+	transform: translateY(-1px);
+}
+.btn:active {
+	transform: translateY(0);
+}
+
+.btn-cancel {
+	background: #eee;
+	color: #999;
+}
+.btn-cancel:hover {
+	background: #e0e0e0;
+	color: #666;
+}
+
+.btn-secondary {
+	background: #e8d5a0;
+	color: #8b7355;
+}
+.btn-secondary:hover {
+	background: #dfc98e;
+	color: #7a6344;
+}
+
+.btn-primary {
+	background: #d4a017;
+	color: #fff;
+}
+.btn-primary:hover {
+	background: #c4920f;
+	box-shadow: 0 2px 8px rgba(212, 160, 23, 0.3);
+}
+
+/* Toast 通知 */
+.toast {
+	position: fixed;
+	bottom: 16px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 8px 18px;
+	background: rgba(212, 160, 23, 0.9);
+	color: #fff;
+	border-radius: 8px;
+	font-size: 13px;
+	opacity: 0;
+	transition: opacity 0.3s ease;
+	pointer-events: none;
+	text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+	box-shadow: 0 4px 12px rgba(212, 160, 23, 0.3);
+	z-index: 100;
+}
+.toast.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+	<!-- 标题栏 -->
+	<div class="title-bar">
+		<h3>✦ 分享给贝露</h3>
+		<button class="close-btn" id="btn-close">×</button>
+	</div>
+
+	<!-- 提示 -->
+	<p class="hint" id="hint-text">已截图。输入文字发送给贝露，或直接分享截图。</p>
+
+	<!-- 截图预览 -->
+	<div class="preview-area">
+		<img id="preview-img" alt="截图预览">
+	</div>
+
+	<!-- 信息区 -->
+	<div class="info-area" id="info-area">📸 桌面截图</div>
+
+	<!-- 输入框 -->
+	<div class="message-area">
+		<textarea id="message-input" placeholder="想对贝露说什么？&#10;（留空则仅分享截图）"></textarea>
+	</div>
+
+	<!-- 三个按钮 -->
+	<div class="btn-row">
+		<button class="btn btn-cancel" id="btn-cancel">取消</button>
+		<button class="btn btn-secondary" id="btn-passive">仅分享</button>
+		<button class="btn btn-primary" id="btn-send">发送 ✦</button>
+	</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+	const previewImg = document.getElementById('preview-img')
+	const messageInput = document.getElementById('message-input')
+	const hintText = document.getElementById('hint-text')
+	const infoArea = document.getElementById('info-area')
+	const btnSend = document.getElementById('btn-send')
+	const btnPassive = document.getElementById('btn-passive')
+	const btnCancel = document.getElementById('btn-cancel')
+	const btnClose = document.getElementById('btn-close')
+	const toastEl = document.getElementById('toast')
+
+	let imageDataUrl = null
+
+	// Toast 通知
+	function showToast(msg, duration = 2000) {
+		toastEl.textContent = msg
+		toastEl.classList.add('visible')
+		clearTimeout(toastEl._timer)
+		toastEl._timer = setTimeout(() => toastEl.classList.remove('visible'), duration)
+	}
+
+	// 接收主进程传来的截图预览
+	window.desktopEye.onSetPreview((dataUrl) => {
+		imageDataUrl = dataUrl
+		previewImg.src = dataUrl
+
+		// 显示截图时间
+		const now = new Date()
+		const timeStr = now.toLocaleString('zh-CN', {
+			year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit'
+		})
+		infoArea.textContent = '📸 桌面截图 · ' + timeStr
+	})
+
+	// 发送（主动模式 — 需要输入消息）
+	btnSend.addEventListener('click', () => {
+		if (!imageDataUrl) return
+		const userMessage = messageInput.value.trim()
+		if (!userMessage) {
+			// 没有输入时提示
+			messageInput.style.borderColor = '#e74c3c'
+			messageInput.placeholder = '请输入要对贝露说的话，\n或者点击"仅分享"'
+			setTimeout(() => { messageInput.style.borderColor = '#d4a017' }, 2000)
+			return
+		}
+		showToast('✦ 已发送给贝露，等她回复...')
+		setTimeout(() => {
+			window.desktopEye.sendScreenshot({
+				imageBase64: imageDataUrl,
+				message: userMessage,
+				mode: 'active',
+			})
+		}, 500)
+	})
+
+	// 仅分享（被动模式 — 不需要输入消息）
+	btnPassive.addEventListener('click', () => {
+		if (!imageDataUrl) return
+		showToast('✦ 截图已分享给贝露')
+		setTimeout(() => {
+			window.desktopEye.sendScreenshot({
+				imageBase64: imageDataUrl,
+				message: '',
+				mode: 'passive',
+			})
+		}, 500)
+	})
+
+	// 取消
+	btnCancel.addEventListener('click', () => {
+		window.desktopEye.sendCancel()
+	})
+
+	btnClose.addEventListener('click', () => {
+		window.desktopEye.sendCancel()
+	})
+
+	// 快捷键
+	document.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape') {
+			window.desktopEye.sendCancel()
+		}
+		// Enter 发送（Shift+Enter 换行）
+		if (e.key === 'Enter' && !e.shiftKey && document.activeElement === messageInput) {
+			e.preventDefault()
+			btnSend.click()
+		}
+		// Ctrl+Enter 也可以发送
+		if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+			e.preventDefault()
+			btnSend.click()
+		}
+	})
+
+	// 自动聚焦输入框
+	setTimeout(() => messageInput.focus(), 100)
+})()
+</script>
+</body>
+</html>

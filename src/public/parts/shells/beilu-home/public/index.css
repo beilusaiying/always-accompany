@@ -1,0 +1,1791 @@
+1/* ===== beilu-home 首页样式 ===== */
+/* 琥珀色主题，与 beilu-chat 保持一致 */
+
+:root {
+	--beilu-amber: #f59e0b;
+	--beilu-amber-light: #fbbf24;
+	--beilu-amber-dark: #d97706;
+	--beilu-amber-glow: rgba(245, 158, 11, 0.15);
+	--beilu-amber-border: rgba(245, 158, 11, 0.3);
+}
+
+/* ===== 顶级选项卡栏 ===== */
+.beilu-tab-bar {
+	position: sticky;
+	top: 0;
+	z-index: 50;
+	background: oklch(var(--b1));
+	border-bottom: 2px solid var(--beilu-amber-border);
+	padding: 0;
+}
+
+.beilu-tab-bar-inner {
+	display: flex;
+	justify-content: space-between;
+	margin: 0 auto;
+	padding: 0 1rem;
+}
+
+.beilu-tab {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.875rem 1.5rem;
+	border: none;
+	background: transparent;
+	color: oklch(var(--bc) / 0.6);
+	font-size: 0.95rem;
+	font-weight: 500;
+	cursor: pointer;
+	border-bottom: 3px solid transparent;
+	transition: all 0.2s ease;
+	white-space: nowrap;
+}
+
+.beilu-tab:hover {
+	color: oklch(var(--bc) / 0.85);
+	background: var(--beilu-amber-glow);
+}
+
+.beilu-tab.active {
+	color: var(--beilu-amber);
+	border-bottom-color: var(--beilu-amber);
+	font-weight: 600;
+}
+
+.beilu-tab-icon {
+	font-size: 1.1rem;
+}
+
+.beilu-tab-label {
+	font-size: 0.95rem;
+}
+
+/* ===== 子头部 ===== */
+.beilu-subheader {
+	display: flex;
+	align-items: center;
+	margin: 0 auto;
+	padding: 1rem 1.5rem;
+	gap: 1.5rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.1);
+}
+
+.beilu-subheader-left {
+	flex-shrink: 0;
+}
+
+.beilu-logo-text {
+	font-size: 1.15rem;
+	font-weight: 700;
+	color: var(--beilu-amber);
+	letter-spacing: 0.05em;
+	white-space: nowrap;
+}
+
+.beilu-subheader-center {
+	flex: 1;
+	text-align: center;
+	min-width: 0;
+}
+
+.beilu-dynamic-title {
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: oklch(var(--bc));
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beilu-subheader-right {
+	flex-shrink: 0;
+	max-width: 300px;
+	text-align: right;
+}
+
+.beilu-dynamic-desc {
+	font-size: 0.85rem;
+	color: oklch(var(--bc) / 0.5);
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ===== 主内容区域 ===== */
+.beilu-main {
+	margin: 0 auto;
+	padding: 1.5rem;
+	min-height: calc(100vh - 120px);
+}
+
+/* ===== 选项卡内容切换 ===== */
+.beilu-tab-content {
+	display: none;
+}
+
+.beilu-tab-content.active {
+	display: block;
+	animation: beilu-fade-in 0.2s ease-out;
+}
+
+@keyframes beilu-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ===== "使用"选项卡布局 ===== */
+.beilu-usage-layout {
+	display: flex;
+	gap: 1.5rem;
+	min-height: calc(100vh - 200px);
+}
+
+/* 左侧导航（通用） */
+.beilu-usage-nav {
+	flex-shrink: 0;
+	width: 160px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.beilu-usage-nav-item,
+.beilu-system-nav-item,
+.beilu-user-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	padding: 0.75rem 1rem;
+	border: none;
+	background: transparent;
+	color: oklch(var(--bc) / 0.6);
+	font-size: 0.9rem;
+	font-weight: 500;
+	cursor: pointer;
+	border-radius: 0.5rem;
+	transition: all 0.15s ease;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.beilu-usage-nav-item:hover:not(:disabled),
+.beilu-system-nav-item:hover:not(:disabled),
+.beilu-user-nav-item:hover:not(:disabled) {
+	color: oklch(var(--bc) / 0.85);
+	background: oklch(var(--bc) / 0.05);
+}
+
+.beilu-usage-nav-item.active,
+.beilu-system-nav-item.active,
+.beilu-user-nav-item.active {
+	color: var(--beilu-amber);
+	background: var(--beilu-amber-glow);
+	font-weight: 600;
+}
+
+.beilu-usage-nav-item:disabled,
+.beilu-system-nav-item:disabled,
+.beilu-user-nav-item:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.beilu-usage-nav-icon {
+	font-size: 1.1rem;
+	flex-shrink: 0;
+}
+
+.beilu-usage-nav-label {
+	font-size: 0.9rem;
+}
+
+/* 主内容区 */
+.beilu-usage-content {
+	flex: 1;
+	min-width: 0;
+}
+
+/* 内容区子页面切换 */
+.beilu-usage-section {
+	display: none;
+}
+
+.beilu-usage-section.active {
+	display: block;
+}
+
+/* 系统设置内容区切换 */
+.beilu-system-section {
+	display: none;
+}
+
+.beilu-system-section.active {
+	display: block;
+}
+
+/* 用户设置内容区切换 */
+.beilu-user-section {
+	display: none;
+}
+
+.beilu-user-section.active {
+	display: block;
+}
+
+/* ===== 区域工具栏 ===== */
+.beilu-section-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.08);
+}
+
+/* ===== 角色卡网格 ===== */
+.beilu-chars-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	gap: 1rem;
+}
+
+/* 单个角色卡 */
+.beilu-char-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 1.25rem 0.75rem;
+	border-radius: 0.75rem;
+	background: oklch(var(--b1));
+	border: 1px solid oklch(var(--bc) / 0.1);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	text-decoration: none;
+	color: inherit;
+}
+
+.beilu-char-card:hover {
+	border-color: var(--beilu-amber-border);
+	background: var(--beilu-amber-glow);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.beilu-char-avatar {
+	width: 80px;
+	height: 80px;
+	border-radius: 50%;
+	object-fit: cover;
+	background: oklch(var(--bc) / 0.1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 2.5rem;
+	color: oklch(var(--bc) / 0.3);
+	overflow: hidden;
+	flex-shrink: 0;
+}
+
+.beilu-char-avatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.beilu-char-name {
+	margin-top: 0.75rem;
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: oklch(var(--bc));
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.beilu-char-last-chat {
+	margin-top: 0.25rem;
+	font-size: 0.75rem;
+	color: oklch(var(--bc) / 0.4);
+	text-align: center;
+}
+
+/* 角色卡需要 relative 定位来放置删除按钮 */
+.beilu-char-card {
+	position: relative;
+}
+
+/* 角色卡删除按钮 */
+.beilu-char-delete-btn {
+	position: absolute;
+	top: 0.375rem;
+	right: 0.375rem;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: none;
+	border-radius: 50%;
+	background: oklch(var(--er) / 0.1);
+	color: oklch(var(--er) / 0.5);
+	font-size: 1rem;
+	line-height: 1;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: all 0.15s ease;
+	padding: 0;
+}
+
+.beilu-char-card:hover .beilu-char-delete-btn {
+	opacity: 1;
+}
+
+.beilu-char-delete-btn:hover {
+	background: oklch(var(--er) / 0.2);
+	color: oklch(var(--er));
+	transform: scale(1.1);
+}
+
+/* 导入按钮卡 */
+.beilu-import-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 1.25rem 0.75rem;
+	border-radius: 0.75rem;
+	background: transparent;
+	border: 2px dashed oklch(var(--bc) / 0.15);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	min-height: 140px;
+}
+
+.beilu-import-card:hover {
+	border-color: var(--beilu-amber-border);
+	background: var(--beilu-amber-glow);
+}
+
+.beilu-import-icon {
+	font-size: 2rem;
+	color: oklch(var(--bc) / 0.3);
+	margin-bottom: 0.5rem;
+}
+
+.beilu-import-label {
+	font-size: 0.85rem;
+	color: oklch(var(--bc) / 0.5);
+	font-weight: 500;
+}
+
+/* ===== 世界书网格 ===== */
+.beilu-worlds-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 1rem;
+}
+
+/* ===== 加载状态 ===== */
+.beilu-loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 4rem 2rem;
+	gap: 1rem;
+	color: oklch(var(--bc) / 0.5);
+}
+
+/* ===== 空状态 ===== */
+.beilu-empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 4rem 2rem;
+	text-align: center;
+	color: oklch(var(--bc) / 0.4);
+	font-size: 0.95rem;
+}
+
+.beilu-empty-icon {
+	font-size: 3rem;
+	margin-bottom: 0.75rem;
+	opacity: 0.4;
+}
+
+/* ===== 用户人设 ===== */
+.beilu-persona-card {
+	display: flex;
+	gap: 2rem;
+	padding: 1.5rem;
+	border: 1px solid oklch(var(--bc) / 0.1);
+	border-radius: 0.75rem;
+	background: oklch(var(--b1));
+	max-width: 600px;
+}
+
+.beilu-persona-avatar-area {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+.beilu-persona-avatar {
+	width: 100px;
+	height: 100px;
+	border-radius: 50%;
+	background: oklch(var(--bc) / 0.08);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	border: 2px solid var(--beilu-amber-border);
+}
+
+.beilu-persona-avatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.beilu-persona-form {
+	flex: 1;
+	min-width: 0;
+}
+
+/* ===== 预设管理 ===== */
+.beilu-preset-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 0.75rem;
+}
+
+.beilu-preset-info {
+	flex-shrink: 0;
+}
+
+.beilu-preset-title {
+	font-size: 1.1rem;
+	font-weight: 700;
+	color: var(--beilu-amber);
+	margin: 0.125rem 0 0 0;
+}
+
+.beilu-preset-actions {
+	display: flex;
+	gap: 0.375rem;
+	flex-shrink: 0;
+}
+
+.beilu-preset-stats {
+	font-size: 0.8rem;
+	color: oklch(var(--bc) / 0.5);
+	margin-bottom: 1rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.1);
+}
+
+/* 预设双栏布局 */
+.beilu-preset-layout {
+	display: flex;
+	gap: 1rem;
+	min-height: 400px;
+}
+
+.beilu-preset-list-col {
+	width: 280px;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.beilu-preset-entry-list {
+	flex: 1;
+	overflow-y: auto;
+	max-height: 500px;
+	space-y: 0.125rem;
+}
+
+.beilu-preset-detail-col {
+	flex: 1;
+	min-width: 0;
+	padding: 0.75rem;
+	border: 1px solid oklch(var(--bc) / 0.1);
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+}
+
+/* 预设内容编辑框 — 可拖拽调节高度 */
+#home-detail-content {
+	resize: vertical;
+	min-height: 300px;
+}
+
+.beilu-preset-detail-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 0.75rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.1);
+}
+
+/* 单个预设条目 */
+.beilu-preset-entry {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.625rem;
+	border-radius: 0.375rem;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	border: 1px solid transparent;
+}
+
+.beilu-preset-entry:hover {
+	background: oklch(var(--bc) / 0.05);
+}
+
+.beilu-preset-entry.selected {
+	border-color: var(--beilu-amber-border);
+	background: var(--beilu-amber-glow);
+}
+
+.beilu-preset-entry.disabled {
+	opacity: 0.5;
+	pointer-events: auto;  /* 覆盖全局 base.css 的 pointer-events: none */
+}
+
+.beilu-preset-entry-role {
+	font-size: 0.8rem;
+	flex-shrink: 0;
+}
+
+.beilu-preset-entry-name {
+	flex: 1;
+	font-size: 0.85rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beilu-preset-entry-type {
+	font-size: 0.7rem;
+	padding: 0.125rem 0.375rem;
+	border-radius: 0.25rem;
+	flex-shrink: 0;
+	background: oklch(var(--bc) / 0.08);
+	color: oklch(var(--bc) / 0.5);
+}
+
+.beilu-preset-entry-type.system {
+	background: oklch(var(--in) / 0.15);
+	color: oklch(var(--in));
+}
+
+.beilu-preset-entry-type.inject {
+	background: oklch(var(--bc) / 0.08);
+	color: oklch(var(--bc) / 0.5);
+}
+
+/* 拖拽手柄 */
+.beilu-preset-entry-drag {
+	flex-shrink: 0;
+	cursor: grab;
+	font-size: 0.85rem;
+	color: oklch(var(--bc) / 0.25);
+	padding: 0 0.125rem;
+	user-select: none;
+	transition: color 0.15s ease;
+}
+
+.beilu-preset-entry-drag:hover {
+	color: oklch(var(--bc) / 0.5);
+}
+
+.beilu-preset-entry-drag:active {
+	cursor: grabbing;
+}
+
+/* 拖拽中状态 */
+.beilu-preset-entry.dragging {
+	opacity: 0.4;
+}
+
+/* 拖拽放置指示器 */
+.beilu-preset-entry.drag-over-top {
+	border-top: 2px solid var(--beilu-amber) !important;
+	padding-top: calc(0.5rem - 1px);
+}
+
+.beilu-preset-entry.drag-over-bottom {
+	border-bottom: 2px solid var(--beilu-amber) !important;
+	padding-bottom: calc(0.5rem - 1px);
+}
+
+/* ===== 世界书条目列表项 ===== */
+.beilu-preset-entry-item {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	padding: 0.5rem 0.625rem;
+	border-radius: 0.375rem;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	border: 1px solid transparent;
+	border-left: 3px solid transparent;
+}
+
+.beilu-preset-entry-item:hover {
+	background: oklch(var(--bc) / 0.05);
+}
+
+.beilu-preset-entry-item.active {
+	border-color: var(--beilu-amber-border);
+	border-left-color: var(--beilu-amber);
+	border-left-width: 3px;
+	background: var(--beilu-amber-glow);
+	box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.1);
+}
+
+/* 选中态（点击选中的条目，与 .active 启用态区分） */
+.beilu-preset-entry-item.selected {
+	border-color: var(--beilu-amber);
+	border-left-color: var(--beilu-amber);
+	border-left-width: 3px;
+	background: var(--beilu-amber-glow);
+	box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25), 0 0 0 1px var(--beilu-amber-border);
+	font-weight: 500;
+}
+
+/* 世界书内容编辑框 — 可拖拽调节高度 */
+#wb-detail-content {
+	resize: vertical;
+	min-height: 200px;
+}
+
+/* 世界书统计栏 */
+.beilu-wb-stats {
+	display: flex;
+	gap: 1rem;
+	font-size: 0.8rem;
+	color: oklch(var(--bc) / 0.5);
+	margin-bottom: 0.75rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.1);
+}
+
+/* ===== Parts 列表（系统设置通用） ===== */
+.beilu-part-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.beilu-part-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.75rem 1rem;
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+	border: 1px solid oklch(var(--bc) / 0.08);
+	transition: all 0.15s ease;
+}
+
+.beilu-part-item:hover {
+	border-color: oklch(var(--bc) / 0.15);
+	background: oklch(var(--bc) / 0.03);
+}
+
+.beilu-part-item-info {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.beilu-part-item-icon {
+	font-size: 1.25rem;
+	flex-shrink: 0;
+}
+
+/* ===== 可展开插件配置面板 ===== */
+.beilu-expandable {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.beilu-part-item-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.beilu-part-item-header:hover {
+	background: oklch(var(--bc) / 0.03);
+}
+
+.beilu-expand-arrow {
+	transition: transform 0.2s ease;
+	display: inline-block;
+}
+
+.beilu-expandable.expanded .beilu-expand-arrow {
+	transform: rotate(90deg);
+}
+
+.beilu-expand-content {
+	border-top: 1px solid oklch(var(--bc) / 0.08);
+	overflow: hidden;
+	animation: beilu-expand-in 0.2s ease-out;
+}
+
+@keyframes beilu-expand-in {
+	from {
+		opacity: 0;
+		max-height: 0;
+	}
+	to {
+		opacity: 1;
+		max-height: 800px;
+	}
+}
+
+.beilu-expand-inner {
+	padding: 0.75rem 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.625rem;
+}
+
+.beilu-config-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.375rem 0;
+	border-bottom: 1px solid oklch(var(--bc) / 0.05);
+}
+
+.beilu-config-row:last-child {
+	border-bottom: none;
+}
+
+.beilu-config-section {
+	padding: 0.5rem 0;
+	border-top: 1px solid oklch(var(--bc) / 0.08);
+}
+
+.beilu-path-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	max-height: 120px;
+	overflow-y: auto;
+	margin-top: 0.25rem;
+}
+
+.beilu-path-tag {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	background: oklch(var(--bc) / 0.06);
+	font-size: 0.75rem;
+	font-family: monospace;
+}
+
+.beilu-path-tag .path-remove {
+	cursor: pointer;
+	color: oklch(var(--er) / 0.5);
+	margin-left: 0.5rem;
+	font-size: 0.8rem;
+}
+
+.beilu-path-tag .path-remove:hover {
+	color: oklch(var(--er));
+}
+
+/* ===== 设置组（用户设置通用） ===== */
+.beilu-settings-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	border: 1px solid oklch(var(--bc) / 0.08);
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+	overflow: hidden;
+}
+
+.beilu-settings-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.875rem 1rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.06);
+	transition: background 0.15s ease;
+}
+
+.beilu-settings-item:last-child {
+	border-bottom: none;
+}
+
+.beilu-settings-item:hover {
+	background: oklch(var(--bc) / 0.02);
+}
+
+/* ===== 调试面板 ===== */
+.beilu-debug-panel {
+	border: 1px solid oklch(var(--bc) / 0.08);
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+	padding: 1rem;
+}
+
+.beilu-debug-output {
+	background: oklch(var(--bc) / 0.03);
+	border: 1px solid oklch(var(--bc) / 0.06);
+	border-radius: 0.375rem;
+	padding: 0.75rem;
+	max-height: 500px;
+	overflow-y: auto;
+	font-family: monospace;
+	font-size: 0.75rem;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+/* ===== 日志面板 ===== */
+.beilu-logger-output {
+	max-height: 450px;
+	min-height: 200px;
+}
+
+.beilu-log-entry {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.25rem 0;
+	border-bottom: 1px solid oklch(var(--bc) / 0.04);
+	align-items: flex-start;
+}
+
+.beilu-log-entry:last-child {
+	border-bottom: none;
+}
+
+.beilu-log-time {
+	color: oklch(var(--bc) / 0.4);
+	font-size: 0.7rem;
+	flex-shrink: 0;
+	font-family: monospace;
+	padding-top: 0.1rem;
+}
+
+.beilu-log-level {
+	flex-shrink: 0;
+	font-size: 0.7rem;
+	width: 1.2rem;
+	text-align: center;
+}
+
+.beilu-log-message {
+	flex: 1;
+	min-width: 0;
+	color: oklch(var(--bc) / 0.8);
+	font-size: 0.75rem;
+	font-family: monospace;
+	white-space: pre-wrap;
+	word-break: break-all;
+	line-height: 1.5;
+}
+
+.beilu-log-entry.error .beilu-log-message {
+	color: oklch(var(--er));
+}
+
+.beilu-log-entry.warn .beilu-log-message {
+	color: oklch(var(--wa));
+}
+
+/* 筛选按钮激活状态 */
+.logger-filter-btn.active {
+	background: var(--beilu-amber);
+	color: oklch(var(--b1));
+	border-color: var(--beilu-amber);
+}
+
+/* ===== 调试面板子选项卡 ===== */
+.debug-sub-tab.active {
+	background: var(--beilu-amber);
+	color: oklch(var(--b1));
+	border-color: var(--beilu-amber);
+}
+
+.debug-tab-content {
+	display: none;
+}
+
+.debug-tab-content.active {
+	display: block;
+}
+
+/* ===== 伪发送子选项卡 ===== */
+.fs-sub-tab.active {
+	background: var(--beilu-amber);
+	color: oklch(var(--b1));
+	border-color: var(--beilu-amber);
+}
+
+.fs-tab-content {
+	display: none;
+}
+
+.fs-tab-content.active {
+	display: block;
+}
+
+/* 伪发送输出区 — 更高一些 */
+.beilu-fs-output {
+	max-height: 600px;
+	min-height: 250px;
+}
+
+/* 伪发送消息条目 */
+.beilu-fs-message {
+	border: 1px solid oklch(var(--bc) / 0.06);
+	border-radius: 0.375rem;
+	margin-bottom: 0.375rem;
+	overflow: hidden;
+}
+
+.beilu-fs-message-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.375rem 0.625rem;
+	cursor: pointer;
+	transition: background 0.15s ease;
+	gap: 0.5rem;
+}
+
+.beilu-fs-message-header:hover {
+	background: oklch(var(--bc) / 0.04);
+}
+
+.beilu-fs-message-header .role-badge {
+	font-size: 0.7rem;
+	padding: 0.1rem 0.375rem;
+	border-radius: 0.25rem;
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
+.beilu-fs-message-header .role-badge.system {
+	background: oklch(var(--wa) / 0.15);
+	color: oklch(var(--wa));
+}
+
+.beilu-fs-message-header .role-badge.user {
+	background: oklch(var(--in) / 0.15);
+	color: oklch(var(--in));
+}
+
+.beilu-fs-message-header .role-badge.assistant {
+	background: oklch(var(--su) / 0.15);
+	color: oklch(var(--su));
+}
+
+.beilu-fs-message-header .msg-preview {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.7rem;
+	color: oklch(var(--bc) / 0.5);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beilu-fs-message-header .msg-chars {
+	font-size: 0.65rem;
+	color: oklch(var(--bc) / 0.35);
+	flex-shrink: 0;
+}
+
+.beilu-fs-message-header .toggle-icon {
+	font-size: 0.7rem;
+	color: oklch(var(--bc) / 0.35);
+	flex-shrink: 0;
+	transition: transform 0.2s ease;
+}
+
+.beilu-fs-message.expanded .toggle-icon {
+	transform: rotate(90deg);
+}
+
+.beilu-fs-message-body {
+	display: none;
+	padding: 0.5rem 0.625rem;
+	background: oklch(var(--bc) / 0.02);
+	border-top: 1px solid oklch(var(--bc) / 0.06);
+	font-family: monospace;
+	font-size: 0.72rem;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.beilu-fs-message.expanded .beilu-fs-message-body {
+	display: block;
+}
+
+/* 模型参数网格 */
+.beilu-fs-params-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	gap: 0.5rem;
+	padding: 0.5rem;
+}
+
+.beilu-fs-param-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.5rem 0.75rem;
+	border-radius: 0.375rem;
+	background: oklch(var(--bc) / 0.03);
+	border: 1px solid oklch(var(--bc) / 0.06);
+}
+
+.beilu-fs-param-item .param-name {
+	font-size: 0.75rem;
+	color: oklch(var(--bc) / 0.6);
+}
+
+.beilu-fs-param-item .param-value {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--beilu-amber);
+	font-family: monospace;
+}
+
+/* 调试面板 — 区域标题 */
+.beilu-debug-section-header {
+	color: var(--beilu-amber);
+	font-weight: 600;
+	margin-top: 0.5rem;
+	padding: 0.25rem 0;
+	font-size: 0.8rem;
+}
+
+/* 调试面板 — 注入条目列表项 */
+.beilu-debug-inject-item {
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.125rem 0;
+	font-size: 0.75rem;
+}
+
+/* 调试面板 — 聊天记录列表项 */
+.beilu-debug-chat-item {
+	display: flex;
+	gap: 0.375rem;
+	padding: 0.25rem 0;
+	font-size: 0.75rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.04);
+}
+
+.beilu-debug-chat-item:last-child {
+	border-bottom: none;
+}
+
+/* ===== 关于卡片 ===== */
+.beilu-about-card {
+	padding: 2rem;
+	border: 1px solid var(--beilu-amber-border);
+	border-radius: 0.75rem;
+	background: var(--beilu-amber-glow);
+	max-width: 400px;
+	text-align: center;
+}
+
+/* API 表单限制宽度 */
+.beilu-api-form {
+	max-width: 500px;
+}
+
+/* ===== 记忆预设提示词条目 ===== */
+/* 继承 .beilu-preset-entry 的基础样式，增加折叠/展开能力 */
+.mp-prompt-entry {
+	flex-wrap: wrap;
+}
+
+.mp-prompt-entry.disabled .beilu-preset-entry-name {
+	text-decoration: line-through;
+	color: oklch(var(--bc) / 0.35);
+}
+
+/* 展开箭头 */
+.mp-prompt-expand-arrow {
+	font-size: 0.7rem;
+	color: oklch(var(--bc) / 0.35);
+	transition: transform 0.2s ease;
+	flex-shrink: 0;
+	transform: rotate(-90deg);
+	cursor: pointer;
+}
+
+.mp-prompt-expand-arrow.expanded {
+	transform: rotate(0deg);
+}
+
+/* 角色徽章 */
+.mp-prompt-role-badge {
+	font-size: 0.65rem;
+	padding: 0.1rem 0.35rem;
+	border-radius: 0.25rem;
+	flex-shrink: 0;
+	font-weight: 500;
+	background: oklch(var(--bc) / 0.08);
+	color: oklch(var(--bc) / 0.5);
+}
+
+.mp-prompt-role-badge.system {
+	background: oklch(var(--wa) / 0.15);
+	color: oklch(var(--wa));
+}
+
+.mp-prompt-role-badge.user {
+	background: oklch(var(--in) / 0.15);
+	color: oklch(var(--in));
+}
+
+.mp-prompt-role-badge.assistant {
+	background: oklch(var(--su) / 0.15);
+	color: oklch(var(--su));
+}
+
+/* 内置标记 */
+.mp-prompt-builtin-badge {
+	font-size: 0.6rem;
+	padding: 0.05rem 0.3rem;
+	border-radius: 0.2rem;
+	background: oklch(var(--bc) / 0.06);
+	color: oklch(var(--bc) / 0.4);
+	flex-shrink: 0;
+}
+
+/* 可折叠内容区域 */
+.mp-prompt-content-area {
+	width: 100%;
+	padding: 0.625rem 0.5rem 0.5rem;
+	border-top: 1px solid oklch(var(--bc) / 0.08);
+	margin-top: 0.375rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	animation: beilu-expand-in 0.2s ease-out;
+}
+
+.mp-prompt-content-area textarea {
+	width: 100%;
+	min-height: 80px;
+	resize: vertical;
+	font-size: 0.8rem;
+	line-height: 1.5;
+	font-family: monospace;
+}
+
+.mp-prompt-content-area .mp-prompt-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.mp-prompt-content-area .mp-prompt-footer select {
+	font-size: 0.8rem;
+	padding: 0.25rem 0.5rem;
+}
+
+/* 条目开关 — 覆盖checkbox-xs大小 */
+.mp-prompt-toggle {
+	flex-shrink: 0;
+}
+
+/* ===== 占位内容（未实现区域通用）===== */
+.beilu-placeholder {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 4rem 2rem;
+	text-align: center;
+	border: 2px dashed var(--beilu-amber-border);
+	border-radius: 1rem;
+	background: var(--beilu-amber-glow);
+	margin-top: 2rem;
+}
+
+.beilu-placeholder-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.beilu-placeholder-title {
+	font-size: 1.5rem;
+	font-weight: 600;
+	color: oklch(var(--bc));
+	margin: 0 0 0.5rem 0;
+}
+
+.beilu-placeholder-desc {
+	font-size: 1rem;
+	color: oklch(var(--bc) / 0.7);
+	margin: 0 0 1rem 0;
+}
+
+.beilu-placeholder-hint {
+	font-size: 0.85rem;
+	color: oklch(var(--bc) / 0.4);
+	font-style: italic;
+	margin: 0;
+}
+
+/* ===== Toggle/Checkbox 开关颜色统一：开=绿 / 关=灰 ===== */
+.toggle,
+input[type="checkbox"].toggle {
+	background-color: #6b7280 !important;
+	border-color: #6b7280 !important;
+	transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.toggle:checked,
+input[type="checkbox"].toggle:checked {
+	background-color: #22c55e !important;
+	border-color: #22c55e !important;
+}
+
+input[type="checkbox"].checkbox {
+	border-color: #6b7280 !important;
+	transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+input[type="checkbox"].checkbox:checked {
+	background-color: #22c55e !important;
+	border-color: #22c55e !important;
+}
+
+/* ===== 记忆管理：表格可视化编辑器 (Phase 4.1) ===== */
+
+/* 表格标签页栏 */
+.mm-table-tabs {
+	display: flex;
+	gap: 0.25rem;
+	padding: 0.5rem 0;
+	margin-bottom: 0.75rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.08);
+	overflow-x: auto;
+	flex-wrap: wrap;
+}
+
+.mm-table-tab {
+	padding: 0.375rem 0.75rem;
+	border: 1px solid oklch(var(--bc) / 0.12);
+	border-radius: 0.375rem;
+	background: transparent;
+	color: oklch(var(--bc) / 0.5);
+	font-size: 0.8rem;
+	font-weight: 500;
+	font-family: monospace;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	white-space: nowrap;
+}
+
+.mm-table-tab:hover {
+	color: oklch(var(--bc) / 0.8);
+	border-color: oklch(var(--bc) / 0.2);
+	background: oklch(var(--bc) / 0.04);
+}
+
+.mm-table-tab.active {
+	color: var(--beilu-amber);
+	border-color: var(--beilu-amber-border);
+	background: var(--beilu-amber-glow);
+	font-weight: 600;
+}
+
+/* 表格信息区 */
+.mm-table-info {
+	padding: 0.5rem 0;
+	margin-bottom: 0.5rem;
+}
+
+.mm-rules {
+	margin-top: 0.375rem;
+	padding: 0.375rem 0.625rem;
+	border-radius: 0.375rem;
+	background: oklch(var(--bc) / 0.03);
+	border: 1px solid oklch(var(--bc) / 0.06);
+}
+
+/* 表格网格容器 */
+.mm-grid-container {
+	overflow-x: auto;
+	overflow-y: auto;
+	max-height: 500px;
+	border: 1px solid oklch(var(--bc) / 0.1);
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+}
+
+/* 表格网格 */
+.mm-grid-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.8rem;
+}
+
+/* 通用单元格 */
+.mm-cell {
+	padding: 0.375rem 0.625rem;
+	border: 1px solid oklch(var(--bc) / 0.06);
+	text-align: left;
+	vertical-align: top;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 240px;
+}
+
+/* 列头 */
+.mm-cell-header {
+	background: oklch(var(--bc) / 0.05);
+	color: oklch(var(--bc) / 0.7);
+	font-weight: 600;
+	font-size: 0.75rem;
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	border-bottom: 2px solid oklch(var(--bc) / 0.1);
+}
+
+/* 行号列 */
+.mm-cell-idx {
+	width: 2.5rem;
+	text-align: center;
+	color: oklch(var(--bc) / 0.3);
+	font-family: monospace;
+	font-size: 0.7rem;
+	flex-shrink: 0;
+}
+
+/* 操作列 */
+.mm-cell-ops {
+	width: 3rem;
+	text-align: center;
+}
+
+/* 数据单元格 */
+.mm-cell-data {
+	cursor: text;
+	min-width: 80px;
+	transition: background 0.1s ease;
+}
+
+.mm-cell-data:hover {
+	background: oklch(var(--bc) / 0.04);
+}
+
+/* 编辑中状态 */
+.mm-cell-editing {
+	padding: 0;
+	background: oklch(var(--b1)) !important;
+}
+
+.mm-cell-input {
+	width: 100%;
+	height: 100%;
+	padding: 0.375rem 0.625rem;
+	border: 2px solid var(--beilu-amber);
+	border-radius: 0;
+	background: oklch(var(--b1));
+	color: oklch(var(--bc));
+	font-size: 0.8rem;
+	font-family: inherit;
+	outline: none;
+	box-sizing: border-box;
+}
+
+/* 数据行 hover */
+.mm-grid-row:hover .mm-cell-data {
+	background: oklch(var(--bc) / 0.03);
+}
+
+.mm-grid-row:hover .mm-cell-idx {
+	color: oklch(var(--bc) / 0.5);
+}
+
+/* 删除行按钮 */
+.mm-row-delete-btn {
+	border: none;
+	background: transparent;
+	cursor: pointer;
+	font-size: 0.85rem;
+	opacity: 0.3;
+	transition: opacity 0.15s ease;
+	padding: 0.125rem 0.25rem;
+	border-radius: 0.25rem;
+}
+
+.mm-grid-row:hover .mm-row-delete-btn {
+	opacity: 0.6;
+}
+
+.mm-row-delete-btn:hover {
+	opacity: 1;
+	background: oklch(var(--er) / 0.1);
+}
+
+/* ===== 系统查看器 ===== */
+
+/* 双栏布局 */
+.sv-layout {
+	display: flex;
+	gap: 1rem;
+	min-height: 400px;
+}
+
+.sv-list-col {
+	width: 260px;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.sv-detail-col {
+	flex: 1;
+	min-width: 0;
+	border: 1px solid oklch(var(--bc) / 0.1);
+	border-radius: 0.5rem;
+	background: oklch(var(--b1));
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+/* 搜索 */
+.sv-search {
+	width: 100%;
+}
+
+/* 分类标题 */
+.sv-category-title {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: oklch(var(--bc) / 0.45);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 0.5rem 0.625rem 0.25rem;
+	margin-top: 0.25rem;
+}
+
+/* 文档列表 */
+.sv-doc-list {
+	flex: 1;
+	overflow-y: auto;
+	max-height: 600px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+}
+
+/* 单个文档条目 */
+.sv-doc-item {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.625rem;
+	border-radius: 0.375rem;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	border: 1px solid transparent;
+	font-size: 0.85rem;
+	color: oklch(var(--bc) / 0.7);
+}
+
+.sv-doc-item:hover {
+	background: oklch(var(--bc) / 0.05);
+	color: oklch(var(--bc) / 0.9);
+}
+
+.sv-doc-item.active {
+	border-color: var(--beilu-amber-border);
+	border-left: 3px solid var(--beilu-amber);
+	background: var(--beilu-amber-glow);
+	color: oklch(var(--bc));
+	font-weight: 500;
+}
+
+.sv-doc-item-icon {
+	font-size: 1rem;
+	flex-shrink: 0;
+}
+
+.sv-doc-item-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 详情区头部 */
+.sv-detail-header {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem 1rem;
+	border-bottom: 1px solid oklch(var(--bc) / 0.08);
+	flex-shrink: 0;
+}
+
+.sv-detail-icon {
+	font-size: 1.5rem;
+}
+
+.sv-detail-title {
+	font-size: 1.1rem;
+	font-weight: 600;
+	color: oklch(var(--bc));
+}
+
+/* 详情区内容 */
+.sv-detail-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 1rem 1.25rem;
+}
+
+/* 文档内容样式 */
+.sv-doc-content-inner h3 {
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--beilu-amber);
+	margin: 1.25rem 0 0.5rem 0;
+	padding-bottom: 0.25rem;
+	border-bottom: 1px solid var(--beilu-amber-border);
+}
+
+.sv-doc-content-inner h3:first-child {
+	margin-top: 0;
+}
+
+.sv-doc-content-inner h4 {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: oklch(var(--bc) / 0.85);
+	margin: 1rem 0 0.375rem 0;
+}
+
+.sv-doc-content-inner p {
+	font-size: 0.85rem;
+	line-height: 1.65;
+	color: oklch(var(--bc) / 0.75);
+	margin: 0.375rem 0;
+}
+
+.sv-doc-content-inner ul {
+	padding-left: 1.25rem;
+	margin: 0.375rem 0;
+}
+
+.sv-doc-content-inner li {
+	font-size: 0.85rem;
+	line-height: 1.6;
+	color: oklch(var(--bc) / 0.75);
+	margin: 0.125rem 0;
+}
+
+.sv-doc-content-inner code {
+	font-family: monospace;
+	font-size: 0.8rem;
+	background: oklch(var(--bc) / 0.06);
+	padding: 0.1rem 0.35rem;
+	border-radius: 0.25rem;
+	color: var(--beilu-amber-dark);
+}
+
+.sv-doc-content-inner pre {
+	background: oklch(var(--bc) / 0.04);
+	border: 1px solid oklch(var(--bc) / 0.08);
+	border-radius: 0.375rem;
+	padding: 0.75rem;
+	margin: 0.5rem 0;
+	overflow-x: auto;
+	font-size: 0.78rem;
+	line-height: 1.5;
+}
+
+.sv-doc-content-inner pre code {
+	background: transparent;
+	padding: 0;
+	color: oklch(var(--bc) / 0.8);
+}
+
+/* 文档表格 */
+.beilu-doc-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.8rem;
+	margin: 0.5rem 0;
+}
+
+.beilu-doc-table th {
+	background: oklch(var(--bc) / 0.06);
+	color: oklch(var(--bc) / 0.7);
+	font-weight: 600;
+	text-align: left;
+	padding: 0.5rem 0.625rem;
+	border: 1px solid oklch(var(--bc) / 0.08);
+	white-space: nowrap;
+}
+
+.beilu-doc-table td {
+	padding: 0.375rem 0.625rem;
+	border: 1px solid oklch(var(--bc) / 0.06);
+	color: oklch(var(--bc) / 0.75);
+	vertical-align: top;
+}
+
+.beilu-doc-table tr:hover td {
+	background: oklch(var(--bc) / 0.03);
+}
+
+.beilu-doc-table code {
+	font-family: monospace;
+	font-size: 0.78rem;
+	background: oklch(var(--bc) / 0.06);
+	padding: 0.1rem 0.3rem;
+	border-radius: 0.2rem;
+	color: var(--beilu-amber-dark);
+}
+
+/* 空状态 */
+.sv-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 4rem 2rem;
+	color: oklch(var(--bc) / 0.35);
+	text-align: center;
+}
+
+.sv-empty-icon {
+	font-size: 2.5rem;
+	margin-bottom: 0.75rem;
+	opacity: 0.5;
+}
+
+/* ===== 响应式：小屏 ===== */
+@media (max-width: 768px) {
+	.beilu-usage-layout {
+		flex-direction: column;
+	}
+
+	.beilu-usage-nav {
+		width: 100%;
+		flex-direction: row;
+		overflow-x: auto;
+		gap: 0.125rem;
+		padding-bottom: 0.5rem;
+		border-bottom: 1px solid oklch(var(--bc) / 0.08);
+	}
+
+	.beilu-usage-nav-item,
+	.beilu-system-nav-item,
+	.beilu-user-nav-item {
+		padding: 0.5rem 0.75rem;
+		font-size: 0.8rem;
+	}
+
+	.beilu-usage-nav-label {
+		font-size: 0.8rem;
+	}
+
+	.beilu-preset-layout {
+		flex-direction: column;
+	}
+
+	.beilu-preset-list-col {
+		width: 100%;
+	}
+
+	.beilu-persona-card {
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.beilu-section-toolbar {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.5rem;
+	}
+
+	.beilu-tab-bar-inner {
+		justify-content: center;
+		gap: 0;
+	}
+
+	.beilu-tab {
+		padding: 0.75rem 0.75rem;
+		font-size: 0.85rem;
+	}
+
+	.beilu-subheader {
+		flex-direction: column;
+		text-align: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+	}
+
+	.beilu-subheader-right {
+		text-align: center;
+	}
+
+	.sv-layout {
+		flex-direction: column;
+	}
+
+	.sv-list-col {
+		width: 100%;
+	}
+
+	.sv-doc-list {
+		max-height: 200px;
+	}
+}

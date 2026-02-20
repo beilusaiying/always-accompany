@@ -733,6 +733,35 @@ export async function addchar(chatid, charname) {
 
 		const greeting_entry = await BuildChatLogEntryFromCharReply(result, timeSlice, char, charname, username)
 		await addChatLogEntry(chatid, greeting_entry)
+
+		// ★ P6-3 修复：预加载所有 alternate_greetings 到 timeLines
+		// 酒馆行为：新建聊天时将 [first_mes, ...alternate_greetings] 全部填入 swipes 数组
+		// fount 行为（修复后）：将所有 greetings 预加载到 timeLines，显示 1/N
+		if (isFirstChar && char.interfaces.chat?.GetGreeting) {
+			let greetingIndex = 1
+			while (true) {
+				try {
+					const altResult = await char.interfaces.chat.GetGreeting(request, greetingIndex)
+					if (!altResult) break
+					const altTimeSlice = timeSlice.copy()
+					altTimeSlice.greeting_type = 'single'
+					altTimeSlice.charname = charname
+					const altEntry = await BuildChatLogEntryFromCharReply(altResult, altTimeSlice, char, charname, username)
+					chatMetadata.timeLines.push(altEntry)
+					greetingIndex++
+				} catch (e) {
+					break
+				}
+			}
+			if (chatMetadata.timeLines.length > 1) {
+				broadcastChatEvent(chatid, {
+					type: 'timeline_info',
+					payload: { timeLineIndex: 0, timeLinesCount: chatMetadata.timeLines.length },
+				})
+				await saveChat(chatid)
+			}
+		}
+
 		return greeting_entry
 	} catch (error) {
 		console.error('addchar greeting error:', error)
@@ -839,7 +868,7 @@ async function BuildChatLogEntryFromCharReply(result, new_timeSlice, char, charn
 	const entry = new chatLogEntry_t()
 	Object.assign(entry, {
 		name: result.name || info?.name || charname || 'Unknown',
-		avatar: result.avatar || info?.avatar,
+		avatar: result.avatar || info?.avatar || `/parts/chars:${encodeURIComponent(charname)}/image.png`,
 		content: result.content,
 		content_for_show: result.content_for_show,
 		content_for_edit: result.content_for_edit,
@@ -927,6 +956,20 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 			return
 		}
 
+		// 调用插件的 ReplyHandler（如 beilu-files 解析 <file_op> 标签）
+		const timeSlice = placeholderEntry.timeSlice
+		if (timeSlice.plugins) {
+			for (const [pluginName, plugin] of Object.entries(timeSlice.plugins)) {
+				if (plugin?.interfaces?.chat?.ReplyHandler) {
+					try {
+						await plugin.interfaces.chat.ReplyHandler(result, request)
+					} catch (err) {
+						console.warn(`[chat] Plugin ${pluginName} ReplyHandler error:`, err.message)
+					}
+				}
+			}
+		}
+
 		const finalEntry = await BuildChatLogEntryFromCharReply(
 			result,
 			placeholderEntry.timeSlice,
@@ -957,11 +1000,17 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 // 时间线切换 / 重新生成（简化 greeting 分支）
 // ============================================================
 
-export async function modifyTimeLine(chatid, delta) {
+export async function modifyTimeLine(chatid, delta, absoluteIndex) {
 	StreamManager.abortAll(chatid)
 
 	const chatMetadata = await loadChat(chatid)
-	let newTimeLineIndex = chatMetadata.timeLineIndex + delta
+	let newTimeLineIndex
+	if (absoluteIndex !== undefined && absoluteIndex !== null) {
+		// 绝对索引模式（用于 iframe 内美化代码的 switchSwipe 调用）
+		newTimeLineIndex = absoluteIndex
+	} else {
+		newTimeLineIndex = chatMetadata.timeLineIndex + delta
+	}
 
 	// 向左循环
 	if (newTimeLineIndex < 0)
@@ -1063,6 +1112,12 @@ export async function modifyTimeLine(chatid, delta) {
 		})
 	}
 
+	// 广播当前 timeline 信息（用于前端 swipe 计数器显示）
+	broadcastChatEvent(chatid, {
+		type: 'timeline_info',
+		payload: { timeLineIndex: chatMetadata.timeLineIndex, timeLinesCount: chatMetadata.timeLines.length },
+	})
+
 	return entry
 }
 
@@ -1092,7 +1147,7 @@ export async function triggerCharReply(chatid, charname) {
 	placeholder.time_stamp = new Date()
 	const { info } = await getPartDetails(chatMetadata.username, `chars/${charname}`) || {}
 	placeholder.name = info?.name || charname
-	placeholder.avatar = info?.avatar
+	placeholder.avatar = info?.avatar || `/parts/chars:${encodeURIComponent(charname)}/image.png`
 	placeholder.timeSlice.charname = charname
 	placeholder.content = ''
 
@@ -1367,6 +1422,8 @@ export async function getInitialData(chatid) {
 		personaname: timeSlice.player_id,
 		logLength: chatMetadata.chatLog.length,
 		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => x.toData(chatMetadata.username))),
+		timeLineIndex: chatMetadata.timeLineIndex,
+		timeLinesCount: chatMetadata.timeLines.length,
 	}
 }
 
@@ -1411,6 +1468,7 @@ export async function buildFakeSendRequest(chatid, charname) {
 
 	// 步骤 1：构建 chatReplyRequest_t
 	const request = await getChatRequest(chatid, charname)
+	request.isFakeSend = true // 标记为伪发送，插件可据此跳过耗时操作（如 P1 检索）
 
 	// 步骤 2：构建 prompt_struct
 	const prompt_struct = await buildPromptStruct(request)

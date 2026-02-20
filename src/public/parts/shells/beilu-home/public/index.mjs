@@ -339,6 +339,30 @@ function initBeiluEyePanel() {
 	restartBtn?.addEventListener('click', () => sendEyeAction('restart-electron'))
 }
 
+// ===== 深色/浅色主题切换 =====
+function initDarkMode() {
+	const toggle = document.getElementById('user-dark-mode')
+	if (!toggle) return
+
+	// preload.mjs 已设置 data-theme，从当前状态同步 toggle
+	const currentTheme = document.documentElement.dataset.theme
+	const isDark = currentTheme !== 'light'
+	toggle.checked = isDark
+
+	// 更新描述文字
+	const desc = toggle.closest('.beilu-settings-item')?.querySelector('.text-xs')
+	if (desc) desc.textContent = isDark ? '当前使用深色主题' : '当前使用浅色主题'
+
+	toggle.addEventListener('change', () => {
+		const theme = toggle.checked ? 'dark' : 'light'
+		localStorage.setItem('theme', theme)
+		document.documentElement.setAttribute('data-theme', theme)
+		if (desc) desc.textContent = toggle.checked ? '当前使用深色主题' : '当前使用浅色主题'
+	})
+}
+
+initDarkMode()
+
 // ===== 字体大小控制 =====
 function initFontSize() {
 	const fontSizeSelect = document.getElementById('user-font-size')
@@ -357,9 +381,9 @@ function initFontSize() {
 }
 
 function applyFontSize(size) {
-	// 移除所有字体大小 class
-	document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large')
-	document.body.classList.add(`font-size-${size}`)
+	// 移除所有字体大小 class（设在 <html> 上，rem 才能生效）
+	document.documentElement.classList.remove('font-size-small', 'font-size-medium', 'font-size-large')
+	document.documentElement.classList.add(`font-size-${size}`)
 }
 
 initFontSize()
@@ -412,3 +436,68 @@ async function initRemoteAccess() {
 }
 
 initRemoteAccess()
+
+// ===== 手机适配（小屏单面板模式） =====
+function initMobileAdaptation() {
+	const MOBILE_BREAKPOINT = 768
+
+	// 为每个 usage-content 区域创建返回按钮
+	const contentAreas = document.querySelectorAll('.beilu-usage-content')
+	contentAreas.forEach(area => {
+		const backBtn = document.createElement('button')
+		backBtn.className = 'beilu-mobile-back-btn'
+		backBtn.innerHTML = '← 返回导航'
+		backBtn.addEventListener('click', () => showMobileNav())
+		area.prepend(backBtn)
+	})
+
+	// 获取所有 layout 容器
+	const layouts = document.querySelectorAll('.beilu-usage-layout')
+
+	// 监听导航项点击 → 小屏时切换到内容模式
+	const allNavItems = document.querySelectorAll('.beilu-usage-nav-item, .beilu-system-nav-item, .beilu-user-nav-item')
+	allNavItems.forEach(btn => {
+		btn.addEventListener('click', () => {
+			if (window.innerWidth <= MOBILE_BREAKPOINT) {
+				showMobileContent()
+			}
+		})
+	})
+
+	function showMobileContent() {
+		layouts.forEach(l => {
+			l.classList.remove('mobile-nav-active')
+			l.classList.add('mobile-content-active')
+		})
+	}
+
+	function showMobileNav() {
+		layouts.forEach(l => {
+			l.classList.remove('mobile-content-active')
+			l.classList.add('mobile-nav-active')
+		})
+	}
+
+	// 响应窗口大小变化
+	function handleResize() {
+		if (window.innerWidth > MOBILE_BREAKPOINT) {
+			// 桌面：移除所有手机模式 class
+			layouts.forEach(l => {
+				l.classList.remove('mobile-content-active', 'mobile-nav-active')
+			})
+		} else {
+			// 手机：默认显示导航
+			const hasActive = [...layouts].some(l =>
+				l.classList.contains('mobile-content-active') || l.classList.contains('mobile-nav-active')
+			)
+			if (!hasActive) {
+				layouts.forEach(l => l.classList.add('mobile-nav-active'))
+			}
+		}
+	}
+
+	window.addEventListener('resize', handleResize)
+	handleResize()
+}
+
+initMobileAdaptation()

@@ -1618,6 +1618,12 @@ async function triggerP2Summary(username, charName) {
 		return
 	}
 
+	// 检查触发方式：manual_button 时不自动触发
+	if (p2Preset.trigger === 'manual_button') {
+		console.log('[beilu-memory] P2 触发方式为手动按钮，跳过自动触发')
+		return
+	}
+
 	const memData = loadMemoryData(username, charName)
 	const displayCharName = charName
 	const displayUserName = username
@@ -2312,30 +2318,35 @@ let p1TriggeredForCurrentReply = false
  */
 async function runMemoryPresetAI(username, charName, preset, memData, displayCharName, displayUserName, chatHistory, options = {}) {
  const apiConfig = preset.api_config || {}
- const sourceName = apiConfig.source || ''
+ const configSourceName = apiConfig.source || ''
 
  // 从 _config.json 获取检索配置
  const retrievalConfig = memData.config?.retrieval || {}
  const maxRounds = options.maxRounds || retrievalConfig.max_search_rounds || 5
  const timeoutMs = retrievalConfig.timeout_ms || 60000
 
- // 1. 加载 AI 服务源 (DryRun 模式下如果不需要实际连接，可以跳过或简化，但为了确保流程一致，还是尝试加载)
+ // 1. 加载 AI 服务源
  let aiSource
+ let actualSourceName = configSourceName || '(系统默认)' // 日志用：显示实际加载的源名
  if (!options.dryRun) {
  	try {
- 		if (apiConfig.use_custom && sourceName) {
- 			aiSource = await loadPart(username, `serviceSources/AI/${sourceName}`)
+ 		if (apiConfig.use_custom && configSourceName) {
+ 			aiSource = await loadPart(username, `serviceSources/AI/${configSourceName}`)
+ 			actualSourceName = configSourceName
  		} else {
  			// 使用系统默认 AI 源（与聊天 AI 一致）
  			aiSource = await loadAnyPreferredDefaultPart(username, 'serviceSources/AI')
+ 			// 尝试从加载结果获取实际源名
+ 			actualSourceName = aiSource?.info?.name || aiSource?.name || '(系统默认)'
  		}
  	} catch (e) {
  		// 回退：如果默认源也加载失败，尝试指定名称
- 		if (sourceName) {
+ 		if (configSourceName) {
  			try {
- 				aiSource = await loadPart(username, `serviceSources/AI/${sourceName}`)
+ 				aiSource = await loadPart(username, `serviceSources/AI/${configSourceName}`)
+ 				actualSourceName = configSourceName
  			} catch (e2) {
- 				throw new Error(`无法加载 AI 服务源 "${sourceName}": ${e2.message}`)
+ 				throw new Error(`无法加载 AI 服务源 "${configSourceName}": ${e2.message}`)
  			}
  		} else {
  			throw new Error(`无法加载默认 AI 服务源: ${e.message}`)
@@ -2401,7 +2412,7 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 		// 热记忆数据已通过 {{hotMemory}} 宏替换注入（L2267），不再硬追加
 
 		messages.push({
-			role: prompt.role === 'user' ? 'user' : prompt.role === 'assistant' ? 'char' : 'system',
+			role: prompt.role === 'user' ? 'user' : prompt.role === 'assistant' ? 'assistant' : 'system',
 			content,
 		})
 	}
@@ -2435,19 +2446,67 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 			break
 		}
 
-		// 构造 promptStruct 并调用 AI
+		// 构造 promptStruct 并调用 AI（司令员模式：精确控制 role 和位置）
+		// 从末尾提取连续的 assistant 消息作为尾部预填充
+		let tailSplit = messages.length
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === 'assistant') tailSplit = i
+			else break
+		}
+		const beforeMessages = messages.slice(0, tailSplit)
+		const afterMessages = messages.slice(tailSplit)
+
 		const promptStruct = {
-			chat_log: [...messages], // 复制当前消息列表
+			chat_log: [], // 司令员模式下 chat_log 为空，全部通过5段结构传递
 			char_prompt: { text: [] },
 			user_prompt: { text: [] },
 			world_prompt: { text: [] },
 			other_chars_prompt: {},
-			plugin_prompts: {},
+			plugin_prompts: {
+				'beilu-preset': {
+					extension: {
+						commander_mode: true,
+						beilu_preset_messages: true,
+						beilu_preset_before: beforeMessages,
+						beilu_preset_after: afterMessages,
+						beilu_injection_above: [],
+						beilu_injection_below: [],
+						beilu_model_params: {},
+					}
+				}
+			},
 		}
 
-		console.log(`[beilu-memory] 调用记忆AI: ${preset.id}(${preset.name}) 第${round}轮, 服务源=${sourceName}, ${messages.length}条消息`)
-
-		const result = await aiSource.StructCall(promptStruct)
+		// 构建 per-call 模型参数覆盖（使用预设中配置的 model/temperature/max_tokens）
+		const modelOverrides = {}
+		if (apiConfig.use_custom) {
+			if (apiConfig.model) modelOverrides.model = apiConfig.model
+			if (apiConfig.temperature !== undefined) modelOverrides.temperature = apiConfig.temperature
+			if (apiConfig.max_tokens !== undefined) modelOverrides.max_tokens = apiConfig.max_tokens
+		}
+		const hasModelOverrides = Object.keys(modelOverrides).length > 0
+	
+		console.log(`[beilu-memory] 调用记忆AI: ${preset.id}(${preset.name}) 第${round}轮, 服务源=${actualSourceName}${apiConfig.use_custom ? '' : '(自动)'}${hasModelOverrides ? `, model=${modelOverrides.model || '(默认)'}` : ''}, ${messages.length}条消息`)
+	
+			// StructCall 带重试（防御 TLS/网络瞬断错误）
+			let result
+			const maxRetries = 2
+			for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+				try {
+					result = await aiSource.StructCall(promptStruct, hasModelOverrides ? { modelOverrides } : {})
+				break // 成功则跳出重试循环
+			} catch (callError) {
+				const isRetryable = /connection error|TLS|close_notify|ECONNRESET|ETIMEDOUT|ECONNREFUSED|fetch failed/i.test(callError.message)
+				if (isRetryable && attempt <= maxRetries) {
+					const delay = attempt * 2000 // 2s, 4s
+					console.warn(`[beilu-memory] 记忆AI(${preset.id}) 第${round}轮第${attempt}次调用失败(${callError.message}), ${delay}ms后重试...`)
+					await new Promise(r => setTimeout(r, delay))
+					continue
+				}
+				// 不可重试 或 已用尽重试次数
+				throw callError
+			}
+		}
 		const replyContent = result?.content || ''
 
 		// 解析回复中的标签
@@ -2509,7 +2568,7 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 
 		// 将 AI 回复添加为 assistant 消息
 		messages.push({
-			role: 'char',
+			role: 'assistant',
 			content: replyContent,
 		})
 
@@ -2851,7 +2910,7 @@ const pluginExport = {
 							break // GetData 已经返回 memory_presets
 						}
 						case 'updateMemoryPreset': {
-							// 更新单个预设的元数据（enabled, description, api_config等）
+							// 更新单个预设的元数据（enabled, description, trigger, api_config等）
 							const presetId = data.presetId
 							if (!presetId) break
 							const preset = presetsData.presets.find(p => p.id === presetId)
@@ -2859,6 +2918,7 @@ const pluginExport = {
 	
 							if (data.enabled !== undefined) preset.enabled = !!data.enabled
 							if (data.description !== undefined) preset.description = String(data.description)
+							if (data.trigger !== undefined) preset.trigger = String(data.trigger)
 							if (data.api_config !== undefined) {
 								preset.api_config = {
 									...preset.api_config,
@@ -3713,9 +3773,10 @@ const pluginExport = {
 	
 						// T6: P1 检索AI — 阻塞式运行（在聊天AI之前完成，结果直接注入当前轮）
 						// 注意：必须在回退判断之前执行，否则 INJ 全部禁用时 P1 不会运行
+						// fake-send 模式下跳过 P1 检索（避免提示词查看器触发真实AI调用）
 						{
 							const retrievalConfig = data.config?.retrieval || {}
-							if (retrievalConfig.auto_trigger) {
+							if (retrievalConfig.auto_trigger && !arg.isFakeSend) {
 								const p1Preset = presetsData.presets.find(p => p.id === 'P1')
 								if (p1Preset && p1Preset.enabled) {
 									// 构建聊天记录

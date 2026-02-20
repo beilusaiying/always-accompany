@@ -27,10 +27,18 @@
 
 # 依赖
 /node_modules
+/desktop-eye/node_modules
 
 # 运行时
 /path/deno
 /path/deno.exe
+
+# 构建产物 / 锁文件
+/desktop-eye/package-lock.json
+
+# 备份文件
+*.bak
+*.import_bak
 
 # Windows 系统文件
 desktop.ini

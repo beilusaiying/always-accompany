@@ -187,6 +187,10 @@ async function handleSave() {
 			// 编辑模式
 			await apiUpdatePersona(editingName, description)
 			dialogStatus.textContent = '✅ 已更新'
+
+			// 直接更新本地数据（避免缓存未刷新导致显示旧值）
+			const p = personas.find(p => p.name === editingName)
+			if (p) p.description = description
 		} else {
 			// 新建模式
 			await apiCreatePersona(name, description)
@@ -196,7 +200,13 @@ async function handleSave() {
 		// 刷新列表
 		setTimeout(() => {
 			dialog.close()
-			loadPersonas()
+			if (editingName) {
+				// 编辑模式直接用本地数据重渲染
+				renderList(searchInput.value)
+			} else {
+				// 新建模式需要重新加载获取新条目
+				loadPersonas()
+			}
 		}, 500)
 	} catch (err) {
 		dialogStatus.textContent = `❌ ${err.message}`

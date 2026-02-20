@@ -68,6 +68,15 @@ async function GetSource(config, { SaveConfig }) {
 		signal, previewUpdater, result
 	}) {
 		let imgIndex = 0
+		const requestBody = JSON.stringify({
+			model: config.model,
+			messages,
+			stream: config.use_stream,
+			...config.model_arguments,
+		})
+		const requestBodySize = new TextEncoder().encode(requestBody).length
+		console.log(`[proxy/fetchChatCompletion] 请求体大小: ${(requestBodySize / 1024 / 1024).toFixed(2)} MB (${requestBodySize} bytes), messages数: ${messages.length}, model: ${config.model}`)
+
 		const response = await fetch(config.url, {
 			method: 'POST',
 			headers: {
@@ -77,14 +86,11 @@ async function GetSource(config, { SaveConfig }) {
 				'X-Title': 'fount',
 				...config?.custom_headers
 			},
-			body: JSON.stringify({
-				model: config.model,
-				messages,
-				stream: config.use_stream,
-				...config.model_arguments,
-			}),
+			body: requestBody,
 			signal
 		})
+
+		console.log(`[proxy/fetchChatCompletion] 请求发送完毕, status: ${response.status}, ok: ${response.ok}`)
 
 		if (!response.ok) try {
 			const text = await response.text()
@@ -145,6 +151,9 @@ async function GetSource(config, { SaveConfig }) {
 			imageProcessingPromises.push(promise)
 		}
 
+		let totalChunks = 0
+		let totalBytes = 0
+
 		try {
 			while (true) {
 				if (signal?.aborted) {
@@ -155,7 +164,16 @@ async function GetSource(config, { SaveConfig }) {
 				const { done, value } = await reader.read()
 				if (done) break
 
-				buffer += decoder.decode(value, { stream: true })
+				totalChunks++
+				totalBytes += value?.length || 0
+				// [诊断] 打印前3个chunk的原始内容
+				if (totalChunks <= 3) {
+					const chunkStr = decoder.decode(value, { stream: true })
+					console.log(`[proxy/stream] chunk #${totalChunks}, size: ${value?.length}, content(前200): ${JSON.stringify(chunkStr.substring(0, 200))}`)
+					buffer += chunkStr
+				} else {
+					buffer += decoder.decode(value, { stream: true })
+				}
 
 				// Detect SSE format
 				if (!isSSE && /^data:/m.test(buffer))
@@ -175,15 +193,40 @@ async function GetSource(config, { SaveConfig }) {
 
 						try {
 							const json = JSON.parse(data)
+	
+							// 检测 SSE 流中的 API 错误（反代返回 HTTP 200 但 body 中含错误）
+							if (json.error) {
+								const errMsg = json.error.message || json.error.status || JSON.stringify(json.error)
+								const errCode = json.error.code || 'UNKNOWN'
+								console.error(`[proxy/fetchChatCompletion] SSE 流中检测到 API 错误: code=${errCode}, message=${errMsg}`)
+								throw new Error(`API Error (${errCode}): ${errMsg}`)
+							}
+	
 							const delta = json.choices?.[0]?.delta
 							const message = json.choices?.[0]?.message // Some non-standard streams might send full message
-
+	
+							// 处理思维链/推理内容（Gemini/DeepSeek 等模型的 thinking 阶段）
+							const reasoning = delta?.reasoning_content || delta?.reasoning || message?.reasoning_content || ''
+							if (reasoning) {
+								if (!result._reasoning_started) {
+									result._reasoning_started = true
+									result.content += '<think>\n'
+								}
+								result.content += reasoning
+								previewUpdater(result)
+							}
+	
 							const content = delta?.content || message?.content || ''
 							if (content) {
+								// 思维链结束，关闭 <think> 标签
+								if (result._reasoning_started && !result._reasoning_ended) {
+									result._reasoning_ended = true
+									result.content += '\n</think>\n'
+								}
 								result.content += content
 								previewUpdater(result)
 							}
-
+	
 							// Handle images if present in delta or message (Custom extension support)
 							const images = delta?.images || message?.images
 							if (images) processImages(images)
@@ -194,17 +237,29 @@ async function GetSource(config, { SaveConfig }) {
 				}
 			}
 
+			// 流结束后关闭未闭合的 <think> 标签
+			if (result._reasoning_started && !result._reasoning_ended) {
+				result.content += '\n</think>\n'
+				result._reasoning_ended = true
+			}
+	
 			// If not SSE, try parsing as standard JSON
 			if (!isSSE && buffer.trim())
 				try {
 					const json = JSON.parse(buffer)
 					const message = json.choices?.[0]?.message
 					if (message) {
-						result.content = message.content || ''
+						let fullContent = ''
+						// 处理思维链内容（非流式响应）
+						if (message.reasoning_content) {
+							fullContent += '<think>\n' + message.reasoning_content + '\n</think>\n'
+						}
+						fullContent += message.content || ''
+						result.content = fullContent
 						if (message.images) processImages(message.images)
 					}
 				} catch (e) {
-					if (!result.content) console.error('Failed to parse response as JSON:', e) // Fix: Use result.content instead of undefined 'text'
+					if (!result.content) console.error('Failed to parse response as JSON:', e)
 				}
 		} catch (e) {
 			if (e.name === 'AbortError') throw e
@@ -217,6 +272,16 @@ async function GetSource(config, { SaveConfig }) {
 		// Wait for all image processing to complete
 		if (imageProcessingPromises.length > 0)
 			await Promise.allSettled(imageProcessingPromises)
+
+		// 清理内部追踪标记
+		delete result._reasoning_started
+		delete result._reasoning_ended
+
+		// [诊断日志] 打印最终结果
+		console.log(`[proxy/fetchChatCompletion] 响应解析完毕, content长度: ${result.content?.length || 0}, files: ${result.files?.length || 0}, 总chunks: ${totalChunks}, 总bytes: ${totalBytes}, isSSE: ${isSSE}`)
+		if (!result.content && result.files?.length === 0) {
+			console.warn(`[proxy/fetchChatCompletion] ⚠️ AI返回空内容！buffer剩余(前200):`, JSON.stringify(buffer?.substring(0, 200)))
+		}
 
 		return result
 	}
@@ -288,7 +353,31 @@ async function GetSource(config, { SaveConfig }) {
 		 * @returns {Promise<{content: string, files: any[]}>} 来自 AI 的结果。
 		 */
 		StructCall: async (prompt_struct, options = {}) => {
-			const { base_result = {}, replyPreviewUpdater, signal } = options
+			const { base_result = {}, replyPreviewUpdater, signal, modelOverrides } = options
+
+			// per-call 参数覆盖（记忆AI等独立调用者使用）
+			// 单线程安全：临时修改 config，调用完成后恢复
+			let _saved_model, _saved_stream, _saved_model_arguments
+			if (modelOverrides) {
+				if (modelOverrides.model) {
+					_saved_model = config.model
+					config.model = modelOverrides.model
+				}
+				if (modelOverrides.stream !== undefined) {
+					_saved_stream = config.use_stream
+					config.use_stream = modelOverrides.stream
+				}
+				const argOverrides = {}
+				if (modelOverrides.temperature !== undefined) argOverrides.temperature = modelOverrides.temperature
+				if (modelOverrides.max_tokens !== undefined) argOverrides.max_tokens = modelOverrides.max_tokens
+				if (modelOverrides.top_p !== undefined) argOverrides.top_p = modelOverrides.top_p
+				if (Object.keys(argOverrides).length > 0) {
+					_saved_model_arguments = config.model_arguments
+					config.model_arguments = { ...(config.model_arguments || {}), ...argOverrides }
+				}
+			}
+
+			try {
 
 			const ignoreFiles = config.convert_config?.ignoreFiles ?? configTemplate.convert_config.ignoreFiles
 
@@ -340,15 +429,24 @@ async function GetSource(config, { SaveConfig }) {
 				if (modelParams.squash_system_messages) {
 					messages = squashSystemMessages(messages)
 				}
-
-				// 步骤 7：处理继续预填充
-				if (modelParams.continue_prefill) {
-					// 如果最后一条消息是 user 发的，尝试找到最近的 assistant 消息作为预填充
-					const lastMsg = messages[messages.length - 1]
-					if (lastMsg && lastMsg.role === 'assistant') {
-						// 最后一条已经是 assistant，作为继续预填充使用
-						// （某些 API 支持 assistant 预填充来引导输出）
-					}
+	
+				// 步骤 6.5：预填充开关处理
+				// 预填充开关控制 afterMsgs 中 assistant 条目的发送方式：
+				// - 开启：保持 assistant 身份（真正的预填充，AI 从此处继续生成）
+				// - 关闭：转为 system 身份 + "assistant:\n" 前缀（伪装模式）
+				const prefillEnabled = !!(modelParams.prefill_enabled || modelParams.claude_prefill_enabled
+					|| config.convert_config?.prefill_enabled)
+	
+				if (!prefillEnabled) {
+					// 预填充关闭：将 afterMsgs 中的 assistant 条目转为 system 角色
+					messages = convertTrailingAssistantToSystem(messages)
+				}
+	
+				// 提示词后处理（替代旧的严格角色模式）
+				const postProcessing = modelParams.prompt_post_processing
+					|| config.convert_config?.prompt_post_processing || 'none'
+				if (postProcessing !== 'none') {
+					messages = postProcessMessages(messages, postProcessing)
 				}
 
 				// 步骤 8：应用预设的模型参数到 config.model_arguments
@@ -373,32 +471,54 @@ async function GetSource(config, { SaveConfig }) {
 
 				// 临时覆盖 model_arguments
 				config.model_arguments = effectiveModelArgs
+
+				// stream 参数：支持前端流式开关通过 beilu_model_params 控制
+				if (modelParams.stream !== undefined) {
+					if (_saved_stream === undefined) _saved_stream = config.use_stream
+					config.use_stream = modelParams.stream
+				}
 			} else {
 				// ============================================================
 				// 兼容模式：原始逻辑（无预设接管）
 				// ============================================================
-				messages = margeStructPromptChatLog(prompt_struct).map(chatLogEntry => {
+				const mergedChatLog = margeStructPromptChatLog(prompt_struct)
+	
+				// 找到最后一条含图片文件的条目索引（只嵌入这一条的图片，避免历史图片累积）
+				let lastImageEntryIdx = -1
+				for (let i = mergedChatLog.length - 1; i >= 0; i--) {
+					if (mergedChatLog[i].files?.some(f => f.mime_type?.startsWith('image/'))) {
+						lastImageEntryIdx = i
+						break
+					}
+				}
+	
+				messages = mergedChatLog.map((chatLogEntry, entryIdx) => {
 					const uid = Math.random().toString(36).slice(2, 10)
 					let textContent = `\
-<message "${uid}">
-<sender>${chatLogEntry.name}</sender>
-<content>
-${chatLogEntry.content}
-</content>
-</message "${uid}">
-`
-
+	<message "${uid}">
+	<sender>${chatLogEntry.name}</sender>
+	<content>
+	${chatLogEntry.content}
+	</content>
+	</message "${uid}">
+	`
+	
 					/** @type {{role: 'user'|'assistant'|'system', content: string | object[]}} */
 					const message = {
 						role: chatLogEntry.role === 'user' ? 'user' : chatLogEntry.role === 'system' ? 'system' : 'assistant',
 						content: textContent,
 					}
-
+	
 					if (chatLogEntry.files?.length) {
-						if (ignoreFiles) {
+						// 只嵌入最后一条含图片消息的图片，历史图片用文字提示替代
+						const shouldEmbedImages = (entryIdx === lastImageEntryIdx) && !ignoreFiles
+	
+						if (ignoreFiles || !shouldEmbedImages) {
 							const notices = chatLogEntry.files.map((file) => {
 								const mime_type = file.mime_type || 'application/octet-stream'
 								const name = file.name ?? 'unknown'
+								if (mime_type.startsWith('image/'))
+									return `[附件: 图片 ${name}（历史图片已省略）]`
 								return `[System Notice: can't show you about file '${name}' because you cant take the file input of type '${mime_type}', but you may be able to access it by using code tools if you have.]`
 							})
 							textContent += '\n' + notices.join('\n')
@@ -406,10 +526,10 @@ ${chatLogEntry.content}
 							return message
 						}
 						const contentParts = [{ type: 'text', text: textContent }]
-
+	
 						for (const file of chatLogEntry.files) {
 							if (!file.mime_type) continue
-
+	
 							// Handle image files
 							if (file.mime_type.startsWith('image/'))
 								contentParts.push({
@@ -420,7 +540,6 @@ ${chatLogEntry.content}
 								})
 							// Handle audio files
 							else if (file.mime_type.startsWith('audio/')) {
-								// Map MIME types to OpenAI audio formats
 								const formatMap = {
 									'audio/wav': 'wav',
 									'audio/wave': 'wav',
@@ -433,7 +552,7 @@ ${chatLogEntry.content}
 									'audio/ogg': 'webm',
 								}
 								const format = formatMap[file.mime_type.toLowerCase()] || 'wav'
-
+	
 								contentParts.push({
 									type: 'input_audio',
 									input_audio: {
@@ -443,11 +562,11 @@ ${chatLogEntry.content}
 								})
 							}
 						}
-
+	
 						if (contentParts.length > 1)
 							message.content = contentParts
 					}
-
+	
 					return message
 				})
 
@@ -470,6 +589,21 @@ ${chatLogEntry.content}
 							role: 'system',
 							content: `现在请以${prompt_struct.Charname}的身份续写对话。`
 						})
+				}
+	
+				// 兼容模式：预填充和后处理
+				// 兼容模式没有 modelParams，只使用 convert_config
+				const compatPrefillEnabled = !!(config.convert_config?.prefill_enabled)
+	
+				if (!compatPrefillEnabled) {
+					// 预填充关闭：将尾部 assistant 转为 system
+					messages = convertTrailingAssistantToSystem(messages)
+				}
+	
+				// 兼容模式后处理
+				const compatPostProcessing = config.convert_config?.prompt_post_processing || 'none'
+				if (compatPostProcessing !== 'none') {
+					messages = postProcessMessages(messages, compatPostProcessing)
 				}
 			}
 
@@ -517,6 +651,16 @@ ${chatLogEntry.content}
 			})
 
 			return Object.assign(base_result, clearFormat(result))
+
+			} finally {
+				// 恢复 config（per-call 覆盖 / 司令员模式清理）
+				if (modelOverrides) {
+					if (_saved_model !== undefined) config.model = _saved_model
+					if (_saved_model_arguments !== undefined) config.model_arguments = _saved_model_arguments
+				}
+				// stream 恢复独立处理（可能来自 modelOverrides 或 司令员模式 beilu_model_params）
+				if (_saved_stream !== undefined) config.use_stream = _saved_stream
+			}
 		},
 		tokenizer: {
 			/**
@@ -569,7 +713,17 @@ function buildChatLogMessages(prompt_struct, ignoreFiles) {
 	const chatLog = prompt_struct.chat_log || []
 	const messages = []
 
-	for (const entry of chatLog) {
+	// 找到最后一条含图片文件的条目索引（只嵌入这一条的图片，避免历史图片累积导致请求体过大）
+	let lastImageEntryIndex = -1
+	for (let i = chatLog.length - 1; i >= 0; i--) {
+		if (chatLog[i].files?.some(f => f.mime_type?.startsWith('image/'))) {
+			lastImageEntryIndex = i
+			break
+		}
+	}
+
+	for (let idx = 0; idx < chatLog.length; idx++) {
+		const entry = chatLog[idx]
 		// 跳过临时注入的条目（由预设在 TweakPrompt Round 3 注入的）
 		if (entry.extension?.ephemeral) continue
 
@@ -581,14 +735,21 @@ function buildChatLogMessages(prompt_struct, ignoreFiles) {
 
 		// 处理附带的文件
 		if (entry.files?.length) {
-			if (ignoreFiles) {
+			// 判断是否应该嵌入此条目的图片（只嵌入最后一条含图片的消息）
+			const shouldEmbedImages = (idx === lastImageEntryIndex) && !ignoreFiles
+
+			if (ignoreFiles || !shouldEmbedImages) {
+				// 不嵌入图片：用文字说明替代
 				const notices = entry.files.map((file) => {
 					const mime_type = file.mime_type || 'application/octet-stream'
 					const name = file.name ?? 'unknown'
+					if (mime_type.startsWith('image/'))
+						return `[附件: 图片 ${name}（历史图片已省略）]`
 					return `[System Notice: can't show you about file '${name}' because you cant take the file input of type '${mime_type}', but you may be able to access it by using code tools if you have.]`
 				})
 				message.content = content + '\n' + notices.join('\n')
 			} else {
+				// 嵌入图片（仅最后一条含图片的消息）
 				const contentParts = [{ type: 'text', text: content }]
 
 				for (const file of entry.files) {
@@ -625,6 +786,190 @@ function buildChatLogMessages(prompt_struct, ignoreFiles) {
 	}
 
 	return messages
+}
+
+/**
+	* 提示词后处理：对消息序列应用不同级别的角色规范化
+	* 参考 SillyTavern prompt-converters.js 的 mergeMessages 实现
+	*
+	* @param {Array<{role: string, content: string|object[]}>} messages
+	* @param {'merge'|'semi'|'strict'} type 后处理类型
+	* @returns {Array<{role: string, content: string|object[]}>}
+	*/
+function postProcessMessages(messages, type) {
+	switch (type) {
+		case 'merge':
+			return mergeConsecutiveRoles(messages)
+		case 'semi':
+			return semiStrictProcess(messages)
+		case 'strict':
+			return strictProcess(messages)
+		default:
+			return messages
+	}
+}
+
+/**
+	* 合并相同角色连续的发言（参考 SillyTavern mergeMessages）
+	* 支持多模态 content（数组类型），将其中的文本部分扁平化后合并
+	*
+	* @param {Array<{role: string, content: string|object[]}>} messages
+	* @returns {Array<{role: string, content: string|object[]}>}
+	*/
+function mergeConsecutiveRoles(messages) {
+	const result = []
+	for (const msg of messages) {
+		// 将数组类型 content 扁平化为字符串（图片/音频等非文本部分先用随机 token 占位）
+		const flatMsg = { ...msg }
+		/** @type {Map<string, object>} */
+		const contentTokens = new Map()
+		if (Array.isArray(flatMsg.content)) {
+			const text = flatMsg.content.map((part) => {
+				if (part.type === 'text') return part.text || ''
+				if (['image_url', 'input_audio'].includes(part.type)) {
+					const token = '@@' + Math.random().toString(36).slice(2, 18) + '@@'
+					contentTokens.set(token, part)
+					return token
+				}
+				return ''
+			}).join('\n\n')
+			flatMsg.content = text
+			flatMsg._contentTokens = contentTokens
+		}
+
+		const last = result[result.length - 1]
+		if (last && last.role === flatMsg.role && flatMsg.content) {
+			// 合并字符串内容
+			if (typeof last.content === 'string' && typeof flatMsg.content === 'string') {
+				last.content += '\n\n' + flatMsg.content
+				// 合并 token 映射
+				if (flatMsg._contentTokens) {
+					last._contentTokens = last._contentTokens || new Map()
+					for (const [k, v] of flatMsg._contentTokens) last._contentTokens.set(k, v)
+				}
+			} else {
+				result.push(flatMsg)
+			}
+		} else {
+			result.push(flatMsg)
+		}
+	}
+
+	// 还原含 token 的消息为多模态数组格式
+	for (const msg of result) {
+		if (msg._contentTokens && msg._contentTokens.size > 0 && typeof msg.content === 'string') {
+			const hasToken = Array.from(msg._contentTokens.keys()).some(t => msg.content.includes(t))
+			if (hasToken) {
+				const parts = msg.content.split('\n\n')
+				const merged = []
+				for (const part of parts) {
+					if (msg._contentTokens.has(part)) {
+						merged.push(msg._contentTokens.get(part))
+					} else if (merged.length > 0 && merged[merged.length - 1].type === 'text') {
+						merged[merged.length - 1].text += '\n\n' + part
+					} else {
+						merged.push({ type: 'text', text: part })
+					}
+				}
+				msg.content = merged
+			}
+		}
+		delete msg._contentTokens
+	}
+
+	// 空消息兜底
+	if (result.length === 0) {
+		result.push({ role: 'user', content: '[Start a new chat]' })
+	}
+
+	return result
+}
+
+/**
+	* 半严格模式（参考 SillyTavern mergeMessages strict=true, placeholders=false）：
+	* 处理顺序（与 SillyTavern 一致）：
+	*   1. 先合并连续同角色消息
+	*   2. 将 i>0 的 system 消息转为 user
+	*   3. 再次合并（因为 system→user 后可能产生新的连续同角色）
+	*
+	* @param {Array<{role: string, content: string|object[]}>} messages
+	* @returns {Array<{role: string, content: string|object[]}>}
+	*/
+function semiStrictProcess(messages) {
+	// 步骤 1：先合并连续同角色
+	let merged = mergeConsecutiveRoles(messages)
+
+	// 步骤 2：i>0 的 system → user
+	for (let i = 1; i < merged.length; i++) {
+		if (merged[i].role === 'system') {
+			merged[i] = { ...merged[i], role: 'user' }
+		}
+	}
+
+	// 步骤 3：再次合并（system→user 后可能产生连续 user）
+	return mergeConsecutiveRoles(merged)
+}
+
+/**
+	* 严格模式（参考 SillyTavern mergeMessages strict=true, placeholders=true）：
+	* 在半严格的基础上：
+	*   - 如果第一条是 system 且后面不是 user，插入占位 user
+	*   - 如果第一条既不是 system 也不是 user，插入占位 user
+	*   - 最终再合并一次
+	*
+	* @param {Array<{role: string, content: string|object[]}>} messages
+	* @returns {Array<{role: string, content: string|object[]}>}
+	*/
+function strictProcess(messages) {
+	// 步骤 1：先合并连续同角色
+	let merged = mergeConsecutiveRoles(messages)
+
+	// 步骤 2：i>0 的 system → user
+	for (let i = 1; i < merged.length; i++) {
+		if (merged[i].role === 'system') {
+			merged[i] = { ...merged[i], role: 'user' }
+		}
+	}
+
+	// 步骤 3：插入占位符确保 user 在前
+	if (merged.length > 0) {
+		if (merged[0].role === 'system') {
+			if (merged.length === 1 || merged[1].role !== 'user') {
+				merged.splice(1, 0, { role: 'user', content: '[Start a new chat]' })
+			}
+		} else if (merged[0].role !== 'user') {
+			merged.unshift({ role: 'user', content: '[Start a new chat]' })
+		}
+	}
+
+	// 步骤 4：最终合并（插入占位后可能产生连续同角色）
+	return mergeConsecutiveRoles(merged)
+}
+
+/**
+	* 将消息序列末尾连续的 assistant 消息转为 system 角色（伪装模式）
+	* 预填充关闭时使用：尾部 assistant 条目以 system 身份发送，内容加 "assistant:\n" 前缀
+	* 这样 AI 不会将其视为自己说过的话，而是作为系统指令
+	*
+	* @param {Array<{role: string, content: string|object[]}>} messages
+	* @returns {Array<{role: string, content: string|object[]}>}
+	*/
+function convertTrailingAssistantToSystem(messages) {
+	// 从末尾向前查找连续的 assistant 消息
+	const result = [...messages]
+	for (let i = result.length - 1; i >= 0; i--) {
+		if (result[i].role === 'assistant') {
+			const content = result[i].content
+			result[i] = {
+				...result[i],
+				role: 'system',
+				content: typeof content === 'string' ? `assistant:\n${content}` : content,
+			}
+		} else {
+			break // 遇到非 assistant 消息就停止
+		}
+	}
+	return result
 }
 
 /**

@@ -10,26 +10,27 @@
  * 3. AI 回复后，注入数据已清除，后续对话不再包含截图
  */
 
-/** @type {{ image: string, message: string, timestamp: number } | null} */
+/** @type {{ image: string, message: string, mode: string, timestamp: number } | null} */
 let _pendingInjection = null
 
 /**
  * 设置待注入的截图数据
- * @param {{ image: string, message: string }} data
+ * @param {{ image: string, message: string, mode?: string }} data
  */
 export function setPendingInjection(data) {
 	_pendingInjection = {
 		image: data.image,
 		message: data.message || '',
+		mode: data.mode || 'passive',
 		timestamp: Date.now(),
 	}
-	console.log('[beilu-eye] 收到截图注入，大小:', Math.round((data.image?.length || 0) / 1024), 'KB')
+	console.log('[beilu-eye] 收到截图注入，大小:', Math.round((data.image?.length || 0) / 1024), 'KB, 模式:', _pendingInjection.mode)
 }
 
 /**
  * 消费（取出并清除）待注入数据
  * 调用后 pendingInjection 变为 null，实现一次性注入
- * @returns {{ image: string, message: string, timestamp: number } | null}
+ * @returns {{ image: string, message: string, mode: string, timestamp: number } | null}
  */
 export function consumePendingInjection() {
 	const data = _pendingInjection
@@ -43,4 +44,17 @@ export function consumePendingInjection() {
  */
 export function hasPendingInjection() {
 	return _pendingInjection !== null
+}
+
+/**
+ * 获取待注入数据的模式（不消费）
+ * @returns {{ hasPending: boolean, mode: string|null, message: string|null }}
+ */
+export function getPendingStatus() {
+	if (!_pendingInjection) return { hasPending: false, mode: null, message: null }
+	return {
+		hasPending: true,
+		mode: _pendingInjection.mode,
+		message: _pendingInjection.message,
+	}
 }

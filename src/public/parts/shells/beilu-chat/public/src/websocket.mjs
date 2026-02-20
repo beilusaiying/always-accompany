@@ -13,7 +13,7 @@ import {
   removePartFromSelect,
 } from './ui/sidebar.mjs'
 import { handleTypingStatus } from './ui/typingIndicator.mjs'
-import { handleMessageAdded, handleMessageDeleted, handleMessageReplaced, handleStreamUpdate } from './ui/virtualQueue.mjs'
+import { handleMessageAdded, handleMessageDeleted, handleMessageReplaced, handleMessagesRangeDeleted, handleStreamUpdate, handleTimelineInfo } from './ui/virtualQueue.mjs'
 
 let ws = null
 
@@ -89,8 +89,14 @@ async function handleBroadcastEvent(event) {
 		case 'message_deleted':
 			await handleMessageDeleted(payload.index)
 			break
+		case 'messages_range_deleted':
+			await handleMessagesRangeDeleted(payload.startIndex, payload.count)
+			break
 		case 'message_edited':
 			await handleMessageReplaced(payload.index, payload.entry)
+			break
+		case 'timeline_info':
+			handleTimelineInfo(payload)
 			break
 		case 'persona_set':
 			await handlePersonaSet(payload.personaname)

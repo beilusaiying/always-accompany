@@ -9,6 +9,7 @@ import { streamRenderer } from './StreamRenderer.mjs'
 const chatMessagesContainer = document.getElementById('chat-messages')
 let virtualList = null
 let currentSwipableElement = null
+let currentTimeLineInfo = { timeLineIndex: 0, timeLinesCount: 1 }
 const deletionListeners = []
 
 // This map holds the full message object for streaming messages,
@@ -35,8 +36,9 @@ function notifyDeletionListeners() {
  * 更新最后一个 'char' 消息的左右箭头和滑动功能。
  */
 function updateLastCharMessageArrows() {
-	// 移除旧箭头和滑动功能
+	// 移除旧箭头、滑动功能和计数器
 	chatMessagesContainer.querySelectorAll('.arrow').forEach(arrow => arrow.remove())
+	chatMessagesContainer.querySelectorAll('.swipe-counter').forEach(c => c.remove())
 	if (currentSwipableElement) {
 		disableSwipe(currentSwipableElement)
 		currentSwipableElement = null
@@ -69,10 +71,17 @@ function updateLastCharMessageArrows() {
 				rightArrow.textContent = '❯'
 				leftArrow.after(rightArrow)
 
+				// Swipe 计数器（显示当前时间线索引 / 总数）
+				const counter = document.createElement('div')
+				counter.classList.add('swipe-counter')
+				counter.textContent = `${currentTimeLineInfo.timeLineIndex + 1}/${currentTimeLineInfo.timeLinesCount}`
+				counter.style.opacity = currentTimeLineInfo.timeLinesCount > 1 ? '1' : '0.3'
+				rightArrow.after(counter)
+
 				/**
-				 * 移除左右箭头
+				 * 移除左右箭头和计数器
 				 */
-				const removeArrows = () => { leftArrow.remove(); rightArrow.remove() }
+				const removeArrows = () => { leftArrow.remove(); rightArrow.remove(); counter.remove() }
 				leftArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(-1) })
 				rightArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(1) })
 			}
@@ -86,6 +95,14 @@ function updateLastCharMessageArrows() {
  * @returns {Promise<void>} - 无返回值。
  */
 export async function initializeVirtualQueue(initialData) {
+	// 初始化 timeline 信息（用于 swipe 计数器显示）
+	if (initialData?.timeLineIndex !== undefined) {
+		currentTimeLineInfo = {
+			timeLineIndex: initialData.timeLineIndex,
+			timeLinesCount: initialData.timeLinesCount || 1,
+		}
+	}
+
 	if (virtualList)
 		virtualList.destroy()
 
@@ -296,6 +313,41 @@ export async function handleMessageDeleted(index) {
 }
 
 /**
+ * 处理批量消息删除事件（文件模式退出时的清理）。
+ * @param {number} startIndex - 起始索引（含）
+ * @param {number} count - 删除数量
+ */
+export async function handleMessagesRangeDeleted(startIndex, count) {
+	if (!virtualList || count <= 0) return
+
+	// 从后往前逐个删除，避免索引移位
+	for (let i = startIndex + count - 1; i >= startIndex; i--) {
+		// 清理可能的流式状态
+		const queue = virtualList.getQueue()
+		for (let j = 0; j < queue.length; j++) {
+			const logIndex = virtualList.getChatLogIndexByQueueIndex(j)
+			if (logIndex === i) {
+				const item = queue[j]
+				if (item && streamingMessages.has(item.id)) {
+					streamRenderer.stop(item.id)
+					streamingMessages.delete(item.id)
+				}
+				break
+			}
+		}
+
+		try {
+			await virtualList.deleteItem(i)
+		} catch (err) {
+			console.warn(`[virtualQueue] 批量删除索引 ${i} 失败:`, err.message)
+		}
+	}
+
+	notifyDeletionListeners()
+	updateLastCharMessageArrows()
+}
+
+/**
  * 获取当前渲染的消息队列。
  * @returns {Array<object>} 当前队列数组。
  */
@@ -359,6 +411,20 @@ async function processMessageEventQueue(messageId) {
  * @param {string} payload.messageId - 消息的唯一ID。
  * @param {Array<object>} payload.slices - 要应用的切片数组。
  */
+/**
+ * 处理 timeline_info 事件（更新 swipe 计数器）。
+ * @param {object} info - { timeLineIndex, timeLinesCount }
+ */
+export function handleTimelineInfo(info) {
+	if (info) {
+		currentTimeLineInfo = {
+			timeLineIndex: info.timeLineIndex ?? 0,
+			timeLinesCount: info.timeLinesCount ?? 1,
+		}
+		updateLastCharMessageArrows()
+	}
+}
+
 export async function handleStreamUpdate({ messageId, slices }) {
 	// 使用事件队列确保顺序处理
 	await enqueueMessageEvent(messageId, 'stream_update', async () => {
@@ -373,6 +439,10 @@ export async function handleStreamUpdate({ messageId, slices }) {
 			itemState.pendingRender = false
 			// 注册到 streamRenderer
 			streamRenderer.register(messageId, itemState.messageData.content)
+		} else if (!streamRenderer.streamingMessages.has(messageId)) {
+			// 500ms 超时已渲染骨架屏，但 streamRenderer 还未注册
+			// 此处补注册，使后续 updateTarget 生效，启动逐字渲染
+			streamRenderer.register(messageId, itemState.messageData.content || '')
 		}
 
 		// Apply patches to the data model

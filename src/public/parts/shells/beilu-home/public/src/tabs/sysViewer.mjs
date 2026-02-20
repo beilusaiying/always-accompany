@@ -88,14 +88,15 @@ const DOCS = [
 		icon: '🧠',
 		title: '记忆系统宏',
 		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">记忆系统专用宏（beilu-memory）</h4>
-<p class="text-xs text-base-content/50 mb-3">以下宏由 beilu-memory 插件在注入提示词（INJ-1/INJ-2）和记忆预设（P1-P6）中替换。</p>
+<p class="text-xs text-base-content/50 mb-3">以下宏由 beilu-memory 插件在注入提示词（INJ-1/INJ-2）和记忆预设（P1-P6）中替换。与预设引擎宏独立运行。</p>
 <table class="beilu-doc-table">
 <thead><tr><th>宏</th><th>说明</th><th>使用位置</th></tr></thead>
 <tbody>
 <tr><td><code>{{tableData}}</code></td><td>所有记忆表格（#0-#9）的纯数据文本，含列头、行数据、操作规则</td><td>INJ-1, P1-P6</td></tr>
 <tr><td><code>{{hotMemory}}</code></td><td>热记忆层全部内容：remember_about_user、forever、appointments、user_profile、温层月索引</td><td>INJ-1, P1-P6</td></tr>
 <tr><td><code>{{chat_history}}</code></td><td>最近 N 条聊天记录文本（N 由 _config.json 的 retrieval.chat_history_count 控制）</td><td>P1-P6</td></tr>
-<tr><td><code>{{current_date}}</code></td><td>当前日期 YYYY-MM-DD</td><td>P3</td></tr>
+<tr><td><code>{{current_date}}</code></td><td>当前日期时间（格式：YYYY年M月D日 周X HH:mm）</td><td>P3, P1-P6</td></tr>
+<tr><td><code>{{lastUserMessage}}</code></td><td>用户最后一条消息的完整内容</td><td>P1-P6</td></tr>
 <tr><td><code>{{char}}</code></td><td>角色显示名（同基础宏）</td><td>全部</td></tr>
 <tr><td><code>{{user}}</code></td><td>用户显示名（同基础宏）</td><td>全部</td></tr>
 </tbody>
@@ -109,6 +110,31 @@ const DOCS = [
 <li>关于{{user}} — hot/user_profile.json</li>
 <li>历史记忆索引 — hot/warm_monthly_index.json</li>
 </ul>
+</div>
+<div class="mt-2 p-2 rounded text-xs border border-warning/30" style="background: oklch(var(--wa) / 0.05);">
+<strong>⚠️ 注意：</strong>记忆系统宏和预设引擎宏是<strong>独立替换</strong>的。记忆系统宏仅在 beilu-memory 的注入提示词和记忆AI预设中生效，不会在聊天预设条目中替换。反之，预设引擎的 env 自定义变量宏也不会在记忆预设中生效。
+</div>`,
+	},
+	{
+		id: 'macros-env',
+		category: '宏',
+		icon: '🔧',
+		title: 'env 自定义变量宏',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">env 自定义变量宏（预设引擎专用）</h4>
+<p class="text-xs text-base-content/50 mb-3">插件可通过 env 对象向预设引擎注入自定义变量，在聊天预设条目中以 <code>{{变量名}}</code> 形式替换。</p>
+<table class="beilu-doc-table">
+<thead><tr><th>来源插件</th><th>变量名</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>beilu-files</td><td><code>{{workspace_root}}</code></td><td>当前工作区根目录路径</td></tr>
+<tr><td>beilu-files</td><td><code>{{workspace_tree}}</code></td><td>工作区目录树（文件列表）</td></tr>
+<tr><td>beilu-sysinfo</td><td><code>{{system_info}}</code></td><td>运行环境信息（OS、内存、CPU等）</td></tr>
+</tbody>
+</table>
+<div class="mt-3 p-2 rounded text-xs" style="background: oklch(var(--bc) / 0.04);">
+<strong>工作原理：</strong>预设引擎的 <code>evaluateMacros(content, env)</code> 函数会遍历 env 对象的所有键，将 <code>{{key}}</code> 替换为 <code>env[key]</code> 的值。插件在 <code>GetPrompt</code> 阶段向 env 注入键值对即可扩展宏。
+</div>
+<div class="mt-2 p-2 rounded text-xs border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 提示：</strong>env 变量宏仅在<strong>预设引擎</strong>处理聊天预设时替换。记忆系统的注入提示词和记忆AI预设使用独立的宏替换逻辑，不会处理 env 变量。
 </div>`,
 	},
 	{
@@ -205,6 +231,9 @@ deleteRow(表格编号, 行编号)
 <li><code>&lt;memoryNote type="todo|issue"&gt;</code> — 备忘</li>
 <li><code>&lt;tableEdit&gt;</code> — 表格操作</li>
 </ul>
+</div>
+<div class="mt-2 p-2 rounded text-xs border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>P2 归档阈值：</strong>P2 的触发条件是 <code>auto_on_threshold</code>，当 #4 临时记忆行数超过 <code>_config.json → archive.temp_memory_threshold</code>（默认 50）时自动触发。可在「记忆管理」页面的归档配置中自定义阈值。
 </div>`,
 	},
 	{
@@ -351,7 +380,12 @@ deleteRow(表格编号, 行编号)
 <div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
 <strong>🔄 自动归档（每轮 AI 回复后）</strong>
 <ul class="list-disc pl-4 mt-1 space-y-0.5">
-<li>#4 超过阈值（默认50条） → 10条/文件归档到温层</li>
+<li>#4 超过阈值 → 触发 P2 归档AI 压缩后，10条/文件归档到温层
+	<ul class="list-disc pl-4 mt-0.5">
+		<li>阈值在「记忆管理 → 归档配置」中设置，默认 50 条</li>
+		<li>配置保存在 <code>_config.json</code> 的 <code>archive.temp_memory_threshold</code></li>
+	</ul>
+</li>
 <li>#7 超过3天 → 归档到 hot/remember_about_user/</li>
 <li>#8 超过200条 → 溢出到 hot/forever.json</li>
 <li>#9 超过2天 → 清理</li>

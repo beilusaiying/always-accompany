@@ -7,8 +7,8 @@
     "start": "electron .",
     "dev": "electron . --dev"
   },
-  "dependencies": {
-    "electron": "^33.0.0"
+  "devDependencies": {
+    "electron": "^28.3.3"
   },
   "author": "凛倾",
   "license": "MIT"

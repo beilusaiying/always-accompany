@@ -8,6 +8,37 @@
  * 4. HTTP POST 发送到 Fount 后端 (localhost:1314)
  */
 
+// ============================================================
+// 安全防护：确保 Electron 内建模块可用
+// ============================================================
+
+// 修复 node_modules/electron/index.js 遮蔽内建模块的问题
+// npm 的 electron 包导出的是路径字符串，不是 API 对象
+// 这里在 require('electron') 之前修复模块解析
+;(() => {
+	const Module = require('module')
+	const origResolve = Module._resolveFilename
+	Module._resolveFilename = function (request, parent, isMain, options) {
+		if (request === 'electron' && process.versions.electron) {
+			// 检查原始解析是否返回 node_modules 路径（npm 包遮蔽）
+			try {
+				const resolved = origResolve.call(this, request, parent, isMain, options)
+				if (typeof resolved === 'string' && resolved.includes('node_modules')) {
+					// npm 包遮蔽了内建模块，抛出错误让 Electron 的内建解析接管
+					const err = new Error('Bypassing npm electron package')
+					err.code = 'MODULE_NOT_FOUND'
+					throw err
+				}
+				return resolved
+			} catch (e) {
+				if (e.code === 'MODULE_NOT_FOUND') throw e
+				throw e
+			}
+		}
+		return origResolve.call(this, request, parent, isMain, options)
+	}
+})()
+
 const {
 	app,
 	BrowserWindow,
@@ -21,6 +52,12 @@ const {
 	desktopCapturer,
 	Notification,
 } = require('electron')
+
+// 禁用 GPU 硬件加速 — 避免某些系统上 Chromium 初始化崩溃
+app.disableHardwareAcceleration()
+// 禁用沙箱 — 按需使用，减少权限限制
+app.commandLine.appendSwitch('no-sandbox')
+app.commandLine.appendSwitch('disable-gpu-sandbox')
 const path = require('path')
 const http = require('http')
 
@@ -30,7 +67,7 @@ const http = require('http')
 
 const FOUNT_PORT = 1314
 const FOUNT_HOST = 'localhost'
-const INJECT_ENDPOINT = '/api/parts/shells:beilu-chat/eye/inject'
+const INJECT_ENDPOINT = '/api/eye/inject'
 
 // ============================================================
 // 全局变量

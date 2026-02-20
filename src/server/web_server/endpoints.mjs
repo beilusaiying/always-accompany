@@ -33,6 +33,9 @@ import { register as registerNotifier } from './event_dispatcher.mjs'
 import { betterSendFile } from './resources.mjs'
 import { watchFrontendChanges } from './watcher.mjs'
 
+// 贝露的眼睛 — 桌面截图注入共享状态
+import { consumePendingInjection, getPendingStatus, setPendingInjection } from '../../public/parts/plugins/beilu-eye/injection_state.mjs'
+
 /**
  * 为应用程序注册所有 API 端点。
  * @param {import('npm:express').Router} router - 要在其上注册端点的 Express 路由器。
@@ -341,5 +344,43 @@ export function registerEndpoints(router) {
 		user[key] = value
 		save_config()
 		res.status(200).json({ message: 'success' })
+	})
+
+	// ---- 贝露的眼睛：桌面截图注入 API（无需认证，仅 localhost） ----
+	router.post('/api/eye/inject', async (req, res) => {
+		try {
+			// 仅允许 localhost 访问
+			if (!is_local_ip_from_req(req)) {
+				return res.status(403).json({ error: 'Only localhost access allowed' })
+			}
+			const { image, message, mode } = req.body || {}
+			if (!image) {
+				return res.status(400).json({ error: 'Missing image field' })
+			}
+			setPendingInjection({ image, message: message || '', mode: mode || 'passive' })
+			res.status(200).json({ success: true, message: '截图已接收，将在下次 AI 回复时注入' })
+		} catch (err) {
+			console.error('[eye/inject] Error:', err)
+			res.status(500).json({ error: err.message })
+		}
+	})
+
+	router.get('/api/eye/status', async (req, res) => {
+		res.status(200).json(getPendingStatus())
+	})
+
+	// 消费截图数据（获取完整 base64 并清除 pending 状态）
+	router.post('/api/eye/consume', async (req, res) => {
+		try {
+			const data = consumePendingInjection()
+			if (!data) {
+				return res.status(200).json({ success: false, message: 'No pending injection' })
+			}
+			console.log('[eye/consume] 截图数据已消费，大小:', Math.round((data.image?.length || 0) / 1024), 'KB')
+			res.status(200).json({ success: true, ...data })
+		} catch (err) {
+			console.error('[eye/consume] Error:', err)
+			res.status(500).json({ error: err.message })
+		}
 	})
 }

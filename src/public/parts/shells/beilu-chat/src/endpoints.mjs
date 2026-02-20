@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 
 import { authenticate, getUserByReq } from '../../../../../server/auth.mjs'
-import { hasPendingInjection, setPendingInjection } from '../../../../plugins/beilu-eye/injection_state.mjs'
+import { processImageFiles } from './imageProcessing.mjs'
 
 import {
   addchar,
@@ -81,8 +81,8 @@ export function setEndpoints(router) {
 	})
 
 	router.put('/api/parts/shells\\:chat/:chatid/timeline', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { delta } } = req
-		const entry = await modifyTimeLine(chatid, delta)
+		const { params: { chatid }, body: { delta, absoluteIndex } } = req
+		const entry = await modifyTimeLine(chatid, delta, absoluteIndex)
 		res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
 	})
 
@@ -103,18 +103,36 @@ export function setEndpoints(router) {
 			...file,
 			buffer: Buffer.from(file.buffer, 'base64')
 		}))
+		// 图片格式校验 + 压缩
+		if (content.files?.length) {
+			content.files = await processImageFiles(content.files)
+		}
 		const entry = await editMessage(chatid, parseInt(index, 10), content)
 		res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
 	})
 
 	router.post('/api/parts/shells\\:chat/:chatid/message', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { reply } } = req
+		const { params: { chatid }, body: { reply, autoReply } } = req
 		reply.files = reply?.files?.map(file => ({
 			...file,
 			buffer: Buffer.from(file.buffer, 'base64')
 		}))
+		// 图片格式校验 + 压缩
+		if (reply.files?.length) {
+			reply.files = await processImageFiles(reply.files)
+		}
 		const entry = await addUserReply(chatid, reply)
-		res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
+		const username = (await getUserByReq(req)).username
+
+		// autoReply: 保存用户消息后自动触发AI回复（避免前端分两次请求导致双重触发）
+		if (autoReply !== false) {
+			// 异步触发，不阻塞响应
+			triggerCharReply(chatid).catch(err => {
+				console.warn('[chat/POST message] autoReply triggerCharReply 失败:', err.message)
+			})
+		}
+
+		res.status(200).json({ success: true, entry: await entry.toData(username) })
 	})
 
 	router.post('/api/parts/shells\\:chat/:chatid/trigger-reply', authenticate, async (req, res) => {
@@ -213,26 +231,6 @@ export function setEndpoints(router) {
 			console.error('[chat/fake-send] Error:', err)
 			res.status(500).json({ error: err.message })
 		}
-	})
-
-	// ---- 贝露的眼睛：桌面截图注入 API（无需认证，仅 localhost） ----
-	router.post('/api/parts/shells\\:beilu-chat/eye/inject', async (req, res) => {
-		try {
-			const { image, message } = req.body || {}
-			if (!image) {
-				return res.status(400).json({ error: 'Missing image field' })
-			}
-			setPendingInjection({ image, message: message || '' })
-			res.status(200).json({ success: true, message: '截图已接收，将在下次 AI 回复时注入' })
-		} catch (err) {
-			console.error('[beilu-eye/inject] Error:', err)
-			res.status(500).json({ error: err.message })
-		}
-	})
-
-	// ---- 贝露的眼睛：检查是否有待注入数据 ----
-	router.get('/api/parts/shells\\:beilu-chat/eye/status', async (req, res) => {
-		res.status(200).json({ hasPending: hasPendingInjection() })
 	})
 
 	router.get('/virtual_files/parts/shells\\:chat/:chatid', authenticate, async (req, res) => {

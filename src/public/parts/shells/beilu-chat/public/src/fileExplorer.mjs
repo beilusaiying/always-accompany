@@ -98,6 +98,13 @@ export async function initFileExplorer(treeEl, editorEl) {
 	// 始终以安全默认路径启动，不恢复上次的浏览位置
 	rootPath = DEFAULT_SAFE_ROOT
 
+	// 同步初始工作区根路径到后端
+	try {
+		await setFilesData({ _action: 'setWorkspaceRoot', rootPath })
+	} catch (err) {
+		console.warn('[fileExplorer] 同步初始工作区根路径失败:', err.message)
+	}
+
 	// 渲染文件树
 	renderTreeLoading()
 	await loadFileTree(rootPath)
@@ -121,6 +128,13 @@ export async function setFileExplorerRoot(path) {
 	try {
 		localStorage.setItem('beilu-file-root', rootPath)
 	} catch { /* ignore */ }
+
+	// 同步工作区根路径到后端（AI沙箱范围 = IDE当前打开的文件夹）
+	try {
+		await setFilesData({ _action: 'setWorkspaceRoot', rootPath })
+	} catch (err) {
+		console.warn('[fileExplorer] 同步工作区根路径失败:', err.message)
+	}
 
 	await loadFileTree(rootPath)
 }
@@ -170,7 +184,7 @@ function renderTreeError(message) {
 	treeContainer.querySelector('#file-tree-retry')?.addEventListener('click', () => loadFileTree(rootPath))
 }
 
-function renderFileTree(treePath, entries) {
+async function renderFileTree(treePath, entries) {
 	if (!treeContainer) return
 
 	const displayPath = treePath === '.' ? '项目根目录' : treePath.replace(/\\/g, '/')
@@ -218,6 +232,9 @@ function renderFileTree(treePath, entries) {
 
 	// 绑定树事件
 	bindTreeEvents()
+
+	// 递归加载所有已展开目录的子内容
+	await loadExpandedDirs()
 
 	// 加载待审批操作
 	loadPendingOps()
@@ -378,8 +395,22 @@ function bindTreeEvents() {
 		}
 	})
 
-	// 文件/目录点击
-	treeContainer.querySelectorAll('.file-tree-item').forEach(item => {
+	// 文件/目录点击 — 统一绑定（支持递归加载后的子节点）
+	bindTreeItemEvents(treeContainer)
+}
+
+/**
+	* 为容器内的所有 .file-tree-item 绑定点击事件
+	* @param {HTMLElement} container - 要绑定事件的容器
+	*/
+function bindTreeItemEvents(container) {
+	if (!container) return
+
+	container.querySelectorAll('.file-tree-item').forEach(item => {
+		// 避免重复绑定
+		if (item.dataset.bound) return
+		item.dataset.bound = 'true'
+
 		item.addEventListener('click', async () => {
 			const path = item.dataset.path
 			const isDir = item.dataset.isDir === 'true'
@@ -406,27 +437,17 @@ function bindTreeEvents() {
 								${renderEntries(result._result.entries, path)}
 							</div>`
 							item.insertAdjacentHTML('afterend', childHtml)
-							// 为新节点绑定事件
+							// 为新插入的子节点绑定事件（递归支持）
 							const newChildren = item.nextElementSibling
 							if (newChildren) {
-								newChildren.querySelectorAll('.file-tree-item').forEach(child => {
-									child.addEventListener('click', function handler() {
-										const p = child.dataset.path
-										const d = child.dataset.isDir === 'true'
-										if (d) {
-											// 简化：重新渲染整棵树
-											if (expandedDirs.has(p)) expandedDirs.delete(p)
-											else expandedDirs.add(p)
-											loadFileTree(rootPath)
-										} else {
-											openFileInEditor(p)
-										}
-									})
-								})
+								bindTreeItemEvents(newChildren)
 							}
 							// 更新图标
 							const toggle = item.querySelector('.tree-toggle')
 							if (toggle) toggle.textContent = '▾'
+
+							// 递归加载该子树中已展开的目录
+							await loadExpandedDirsIn(newChildren)
 						}
 					} catch (err) {
 						showToast('加载目录失败: ' + err.message, 'error')
@@ -441,9 +462,52 @@ function bindTreeEvents() {
 		// 右键菜单
 		item.addEventListener('contextmenu', (e) => {
 			e.preventDefault()
+			e.stopPropagation()
+			console.log('[fileExplorer] 右键菜单触发:', item.dataset.path, 'isDir:', item.dataset.isDir)
 			showFileContextMenu(item.dataset.path, item.dataset.isDir === 'true', e)
 		})
 	})
+}
+
+/**
+	* 递归加载所有已展开目录的子内容（全树范围）
+	*/
+async function loadExpandedDirs() {
+	await loadExpandedDirsIn(treeContainer)
+}
+
+/**
+	* 递归加载指定容器中已展开目录的子内容
+	* @param {HTMLElement} container
+	*/
+async function loadExpandedDirsIn(container) {
+	if (!container) return
+
+	// 找到所有占位符为"加载中..."的已展开目录子容器
+	const pendingChildren = container.querySelectorAll('.file-tree-children')
+	for (const childEl of pendingChildren) {
+		const parentPath = childEl.dataset.parent
+		if (!parentPath || !expandedDirs.has(parentPath)) continue
+
+		// 检查是否只有"加载中..."占位符
+		const isPlaceholder = childEl.children.length === 1 &&
+			childEl.querySelector('p')?.textContent?.includes('加载中')
+		if (!isPlaceholder && childEl.children.length > 0) continue
+
+		// 加载内容
+		try {
+			const result = await setFilesData({ _action: 'listDir', path: parentPath })
+			if (result?._result?.entries) {
+				childEl.innerHTML = renderEntries(result._result.entries, parentPath)
+				// 绑定事件
+				bindTreeItemEvents(childEl)
+				// 递归加载子树中已展开的目录
+				await loadExpandedDirsIn(childEl)
+			}
+		} catch {
+			childEl.innerHTML = '<p class="text-[10px] text-error py-1">加载失败</p>'
+		}
+	}
 }
 
 // ============================================================
@@ -895,9 +959,11 @@ function showFileContextMenu(path, isDir, event) {
 	document.querySelectorAll('.file-context-menu').forEach(m => m.remove())
 
 	const menu = document.createElement('div')
-	menu.className = 'file-context-menu fixed bg-base-100 border border-base-300 rounded-lg shadow-lg z-50 py-1 text-xs min-w-[140px]'
+	menu.className = 'file-context-menu fixed bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 text-xs min-w-[140px]'
 	menu.style.left = event.clientX + 'px'
 	menu.style.top = event.clientY + 'px'
+	menu.style.zIndex = '9999'
+	console.log('[fileExplorer] 创建右键菜单:', path, 'position:', event.clientX, event.clientY)
 
 	const fileName = path.split('/').pop()
 	const items = []
@@ -918,13 +984,16 @@ function showFileContextMenu(path, isDir, event) {
 
 	for (const item of items) {
 		if (item.action === 'divider') {
-			menu.innerHTML += '<div class="divider my-0.5 mx-2"></div>'
+			const divider = document.createElement('div')
+			divider.className = 'divider my-0.5 mx-2'
+			menu.appendChild(divider)
 			continue
 		}
 		const btn = document.createElement('button')
 		btn.className = `block w-full text-left px-3 py-1 hover:bg-base-300/50 ${item.danger ? 'text-error' : ''}`
 		btn.textContent = item.label
-		btn.addEventListener('click', async () => {
+		btn.addEventListener('click', async (e) => {
+			e.stopPropagation()
 			menu.remove()
 			switch (item.action) {
 				case 'open':

@@ -391,11 +391,21 @@ function renderEditorForm(rule) {
 				<input type="checkbox" id="edit-run-on-edit" class="checkbox checkbox-xs"
 					${rule.runOnEdit ? 'checked' : ''} />
 				<span class="text-xs">在编辑时运行</span>
-			</label>
+				</label>
+			</div>
 		</div>
-	</div>
-
-	<!-- 宏替换模式 -->
+	
+		<!-- 绑定角色（仅 scoped 规则生效） -->
+		<div class="form-control" id="bound-char-section" ${rule.scope !== 'scoped' ? 'style="display:none"' : ''}>
+			<label class="label py-0.5">
+				<span class="label-text text-xs font-medium">绑定角色名</span>
+				<span class="label-text-alt text-[10px] text-base-content/40">scoped 规则仅对此角色生效，留空则对所有角色生效</span>
+			</label>
+			<input type="text" id="edit-bound-char-name" value="${escapeAttr(rule.boundCharName || '')}"
+				class="input input-sm input-bordered w-full" placeholder="角色名称（如：贝露）" />
+		</div>
+	
+		<!-- 宏替换模式 -->
 	<div class="form-control">
 		<label class="label py-0.5"><span class="label-text text-xs font-medium">正则表达式查找时的宏</span></label>
 		<select id="edit-substitute-regex" class="select select-xs select-bordered w-full max-w-xs">
@@ -610,6 +620,7 @@ function collectFormData() {
 		maxDepth: parseInt(form.querySelector('#edit-max-depth')?.value || '0', 10),
 		markdownOnly: form.querySelector('#edit-markdown-only')?.checked || false,
 		promptOnly: form.querySelector('#edit-prompt-only')?.checked || false,
+		boundCharName: form.querySelector('#edit-bound-char-name')?.value || '',
 	}
 }
 

@@ -894,6 +894,7 @@ export async function addchar(chatid, charname) {
 	if (timeSlice.chars[charname]) return null
 
 	const char = timeSlice.chars[charname] = await loadPart(username, `chars/${charname}`)
+	chatMetadata.LastTimeSlice.chars[charname] = char // 修复：确保角色加入 LastTimeSlice
 	broadcastChatEvent(chatid, { type: 'char_added', payload: { charname } })
 
 	// 获取问候语
@@ -909,17 +910,51 @@ export async function addchar(chatid, charname) {
 				result = await char.interfaces.chat.GetGroupGreeting(request, 0)
 				break
 		}
-		if (!result) return null
+		if (!result) {
+			saveChat(chatid)
+			return null
+		}
 
 		const greeting_entrie = await BuildChatLogEntryFromCharReply(result, timeSlice, char, charname, username)
 		await addChatLogEntry(chatid, greeting_entrie) // 此处已广播
+
+		// ★ 预加载所有 alternate_greetings 到 timeLines
+		// 酒馆行为：新建聊天时将 [first_mes, ...alternate_greetings] 全部填入 swipes 数组
+		// fount 行为（修复后）：将所有 greetings 预加载到 timeLines，显示 1/N
+		if (timeSlice.greeting_type === 'single' && char.interfaces.chat?.GetGreeting) {
+			let greetingIndex = 1
+			while (true) {
+				try {
+					const altResult = await char.interfaces.chat.GetGreeting(request, greetingIndex)
+					if (!altResult) break
+					const altTimeSlice = timeSlice.copy()
+					altTimeSlice.greeting_type = 'single'
+					altTimeSlice.charname = charname
+					const altEntry = await BuildChatLogEntryFromCharReply(altResult, altTimeSlice, char, charname, username)
+					chatMetadata.timeLines.push(altEntry)
+					greetingIndex++
+				} catch (e) {
+					// GetGreeting 在 index 超出范围时 throw Error('Invalid index')
+					break
+				}
+			}
+			if (chatMetadata.timeLines.length > 1) {
+				// 广播 timeline_info 让前端显示正确的 swipe 计数器（如 1/4）
+				broadcastChatEvent(chatid, {
+					type: 'timeline_info',
+					payload: { timeLineIndex: 0, timeLinesCount: chatMetadata.timeLines.length },
+				})
+				await saveChat(chatid) // 保存含所有 greetings 的 timeLines
+			}
+		}
+
 		return greeting_entrie
 	}
 	catch (error) {
 		console.error(error)
 		chatMetadata.LastTimeSlice.chars[charname] = timeSlice.chars[charname]
 	}
-	if (is_VividChat(chatMetadata)) saveChat(chatid)
+	saveChat(chatid)
 	return null
 }
 
@@ -1810,6 +1845,8 @@ export async function getInitialData(chatid) {
 		frequency_data: timeSlice.chars_speaking_frequency,
 		logLength: chatMetadata.chatLog.length,
 		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => x.toData(chatMetadata.username))),
+		timeLineIndex: chatMetadata.timeLineIndex,
+		timeLinesCount: chatMetadata.timeLines.length,
 	}
 }
 

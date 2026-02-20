@@ -13,9 +13,8 @@ import { applyTheme } from '../../scripts/theme.mjs'
 import { initApiConfig, loadApiConfig } from './src/apiConfig.mjs'
 import { charList, initializeChat, personaName, setPersonaName, setWorldName, worldName } from './src/chat.mjs'
 import { bindDataTableToChar, initDataTable } from './src/dataTable.mjs'
-import { currentChatId, deleteMessage, modifyTimeLine, setPersona, setWorld } from './src/endpoints.mjs'
+import { addUserReply, currentChatId, deleteMessage, modifyTimeLine, setPersona, setWorld } from './src/endpoints.mjs'
 import { initFileExplorer } from './src/fileExplorer.mjs'
-import { hideOrb, initFloatingOrb, showOrb } from './src/floatingOrb.mjs'
 import { initLayout } from './src/layout.mjs'
 import { bindMemoryBrowserToChar, initMemoryBrowser } from './src/memoryBrowser.mjs'
 import { initMemoryPresetChat } from './src/memoryPresetChat.mjs'
@@ -1350,11 +1349,6 @@ async function init() {
 	// 初始化≡扩展菜单
 	initExtendMenu()
 
-	// 初始化悬浮球（截图/上传/发送给 AI）
-	try { initFloatingOrb() } catch (e) {
-		console.warn('[beilu-chat] initFloatingOrb 失败（非致命）:', e.message)
-	}
-
 	// 初始化功能开关面板
 	initFeatureToggles()
 
@@ -1374,7 +1368,12 @@ async function init() {
 		console.warn('[beilu-chat] initMemoryPresetChat 失败（非致命）:', e.message)
 	}
 
-	console.log('[beilu-chat] Shell 已加载 — Phase 4 三栏布局 + 聊天 + 预设 + API 配置 + dataTable 记忆编辑器 + 正则编辑器 + 文件浏览器 + 提示词查看器 + 悬浮球 + 记忆AI输出面板 + 记忆AI预设交互')
+	// 启动贝露的眼睛（桌面截图）主动发送轮询
+	try { startEyeActivePoll() } catch (e) {
+		console.warn('[beilu-chat] startEyeActivePoll 失败（非致命）:', e.message)
+	}
+
+	console.log('[beilu-chat] Shell 已加载 — Phase 4 三栏布局 + 聊天 + 预设 + API 配置 + dataTable 记忆编辑器 + 正则编辑器 + 文件浏览器 + 提示词查看器 + 记忆AI输出面板 + 记忆AI预设交互')
 }
 
 /**
@@ -1456,22 +1455,6 @@ function applyFontScale(scale, chatMessages) {
 // ============================================================
 
 function initFeatureToggles() {
-	// 悬浮球开关
-	const orbToggle = document.getElementById('toggle-floating-orb')
-	if (orbToggle) {
-		const saved = localStorage.getItem('beilu-orb-enabled')
-		orbToggle.checked = saved !== 'false'
-		orbToggle.addEventListener('change', () => {
-			if (orbToggle.checked) {
-				showOrb()
-				localStorage.setItem('beilu-orb-enabled', 'true')
-			} else {
-				hideOrb()
-				localStorage.setItem('beilu-orb-enabled', 'false')
-			}
-		})
-	}
-
 	// 角色名显示开关
 	const charNamesToggle = document.getElementById('toggle-char-names')
 	if (charNamesToggle) {
@@ -1502,6 +1485,62 @@ function initFeatureToggles() {
 		const saved = localStorage.getItem('beilu-thinking-fold')
 		thinkingToggle.checked = saved !== 'false'
 	}
+
+	// AI 文件处理能力权限开关 — 同步到 beilu-files 插件
+	initFilePermissionToggles()
+}
+
+/**
+	* 初始化 AI 文件处理能力权限开关
+	* 从后端加载当前权限状态，绑定开关 change 事件
+	*/
+async function initFilePermissionToggles() {
+	const toggles = document.querySelectorAll('[data-permission]')
+	if (toggles.length === 0) return
+
+	// 从后端加载当前权限状态
+	try {
+		const res = await fetch('/api/parts/plugins:beilu-files/config/getdata')
+		if (res.ok) {
+			const data = await res.json()
+			const permissions = data.permissions || {}
+
+			// 同步 UI 状态
+			toggles.forEach(toggle => {
+				const perm = toggle.dataset.permission
+				if (perm && permissions[perm] !== undefined) {
+					toggle.checked = permissions[perm]
+				}
+			})
+		}
+	} catch (err) {
+		console.warn('[beilu-chat] 加载文件权限状态失败:', err.message)
+	}
+
+	// 绑定 change 事件 — 每次变更同步到后端
+	toggles.forEach(toggle => {
+		toggle.addEventListener('change', async () => {
+			const perm = toggle.dataset.permission
+			if (!perm) return
+
+			try {
+				await fetch('/api/parts/plugins:beilu-files/config/setdata', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						permissions: { [perm]: toggle.checked }
+					}),
+				})
+				console.log(`[beilu-chat] 文件权限更新: ${perm} = ${toggle.checked}`)
+			} catch (err) {
+				console.warn(`[beilu-chat] 更新文件权限 ${perm} 失败:`, err.message)
+				// 回退 UI 状态
+				toggle.checked = !toggle.checked
+			}
+		})
+	})
+
+	console.log('[beilu-chat] AI 文件处理能力权限开关已初始化:', toggles.length, '个')
 }
 
 // ============================================================
@@ -1919,12 +1958,29 @@ function navigateToChat(chatid) {
  */
 async function handleNewChat() {
 	try {
+		// 记住当前角色卡，以便新聊天自动添加并获取开场白
+		const currentChar = (charList && charList.length > 0) ? charList[0] : null
+
 		const res = await fetch('/api/parts/shells:chat/new', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 		})
 		if (!res.ok) throw new Error(`HTTP ${res.status}`)
 		const data = await res.json()
+
+		// 自动添加当前角色卡（后端 addchar 会自动获取 greeting 并保存）
+		if (currentChar) {
+			try {
+				await fetch(`/api/parts/shells:chat/${data.chatid}/char`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ charname: currentChar }),
+				})
+			} catch (err) {
+				console.warn('[beilu-chat] 新聊天自动添加角色失败:', err.message)
+			}
+		}
+
 		showToast(`已创建新聊天，正在跳转…`, 'success')
 		// 跳转到新聊天
 		navigateToChat(data.chatid)
@@ -1940,9 +1996,15 @@ async function handleManageChats() {
 	try {
 		const res = await fetch('/api/parts/shells:chat/getchatlist')
 		if (!res.ok) throw new Error(`HTTP ${res.status}`)
-		const chatList = await res.json()
+		const allChats = await res.json()
 
-		showChatManagerModal(chatList)
+		// 按当前角色卡过滤聊天列表（只显示当前角色的聊天）
+		const currentChar = (charList && charList.length > 0) ? charList[0] : null
+		const filteredChats = currentChar
+			? allChats.filter(chat => chat.chars && chat.chars.includes(currentChar))
+			: allChats
+
+		showChatManagerModal(filteredChats, currentChar)
 	} catch (err) {
 		showToast('获取聊天列表失败: ' + err.message, 'error')
 	}
@@ -2141,7 +2203,7 @@ function showBatchDeleteModal(queue) {
  * 显示聊天管理弹窗
  * @param {Array<object>} chatList - 聊天列表
  */
-function showChatManagerModal(chatList) {
+function showChatManagerModal(chatList, filterCharName) {
 	// 移除已存在的弹窗
 	document.getElementById('chat-manager-overlay')?.remove()
 
@@ -2156,11 +2218,12 @@ function showChatManagerModal(chatList) {
 	modal.className = 'fp-modal'
 	modal.style.width = '540px'
 
-	// 标题栏
+	// 标题栏（显示当前角色名，让用户知道是按角色过滤的）
+	const titleText = filterCharName ? `📂 ${filterCharName} 的聊天` : '📂 聊天管理'
 	const header = document.createElement('div')
 	header.className = 'fp-header'
 	header.innerHTML = `
-		<span class="fp-title">📂 聊天管理</span>
+		<span class="fp-title">${escapeHtml(titleText)}</span>
 		<button class="fp-close-btn" title="关闭">×</button>
 	`
 	header.querySelector('.fp-close-btn').addEventListener('click', () => overlay.remove())
@@ -2267,6 +2330,77 @@ function showChatManagerModal(chatList) {
 	modal.appendChild(footer)
 	overlay.appendChild(modal)
 	document.body.appendChild(overlay)
+}
+
+// ============================================================
+// 贝露的眼睛 — 桌面截图主动发送轮询
+// ============================================================
+
+/** 轮询定时器 */
+let _eyePollTimer = null
+/** 防止重复发送的冷却时间戳 */
+let _eyeCooldownUntil = 0
+
+/**
+ * 启动桌面截图主动发送轮询
+ * 每2秒检查 /api/eye/status，如果有 mode=active 的待注入截图，
+ * 自动调用 addUserReply 发送消息触发 AI 回复
+ */
+function startEyeActivePoll() {
+	if (_eyePollTimer) return
+	_eyePollTimer = setInterval(pollEyeStatus, 2000)
+	console.log('[beilu-chat] 贝露的眼睛主动发送轮询已启动')
+}
+
+async function pollEyeStatus() {
+	// 冷却期内跳过
+	if (Date.now() < _eyeCooldownUntil) return
+	try {
+		const resp = await fetch('/api/eye/status')
+		if (!resp.ok) return
+		const data = await resp.json()
+		if (data.hasPending && data.mode === 'active') {
+			// 设置20秒冷却（消费 + AI 生成需要时间）
+			_eyeCooldownUntil = Date.now() + 20000
+			console.log('[beilu-chat] 检测到桌面截图（主动发送模式），获取截图数据...')
+			try {
+				// 消费截图数据（获取 base64 并清除 pending）
+				const consumeResp = await fetch('/api/eye/consume', { method: 'POST' })
+				if (!consumeResp.ok) {
+					console.error('[beilu-chat] 消费截图数据失败:', consumeResp.status)
+					_eyeCooldownUntil = Date.now() + 3000
+					return
+				}
+				const eyeData = await consumeResp.json()
+				if (!eyeData.success || !eyeData.image) {
+					console.warn('[beilu-chat] 截图数据为空或已被消费')
+					_eyeCooldownUntil = Date.now() + 3000
+					return
+				}
+
+				// 根据 base64 数据头判断图片格式（PNG 以 iVBOR 开头，JPEG 以 /9j/ 开头）
+				const isJpeg = eyeData.image.startsWith('/9j/')
+				const mimeType = isJpeg ? 'image/jpeg' : 'image/png'
+				const ext = isJpeg ? 'jpg' : 'png'
+
+				// 将截图 base64 作为 files 发送（与浏览器上传完全相同的路径）
+				const screenshotFile = {
+					name: `desktop_screenshot_${Date.now()}.${ext}`,
+					mime_type: mimeType,
+					buffer: eyeData.image, // base64 字符串（不含 data:xxx;base64, 前缀）
+					description: '桌面截图',
+				}
+				const message = eyeData.message || '[桌面截图]'
+				await addUserReply({ content: message, files: [screenshotFile] })
+				console.log('[beilu-chat] 截图消息已发送（含图片文件），后端自动触发AI回复')
+			} catch (err) {
+				console.error('[beilu-chat] 截图消息发送失败:', err)
+				_eyeCooldownUntil = Date.now() + 3000
+			}
+		}
+	} catch {
+		// 静默失败（后端可能未启动）
+	}
 }
 
 init()

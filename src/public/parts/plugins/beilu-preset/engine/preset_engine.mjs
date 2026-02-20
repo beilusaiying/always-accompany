@@ -632,8 +632,8 @@ export class PresetEngine {
 	 * Marker 条目展开为对应的宏变量内容。
 	 *
 	 * chatHistory marker 作为分割点：
-	 * - beforeChat: chatHistory 之前的条目（头部预设，role 强制为 system）
-	 * - afterChat: chatHistory 之后的条目（尾部预设，role 强制为 system）
+	 * - beforeChat: chatHistory 之前的条目（头部预设，使用条目自身 role，默认 system）
+	 * - afterChat: chatHistory 之后的条目（尾部预设，使用条目自身 role，默认 system）
 	 * - injectionAbove: injection_position=1 且 depth>=1 的条目（聊天记录上方，可选 role）
 	 * - injectionBelow: injection_position=1 且 depth=0 的条目（聊天记录下方，可选 role）
 	 *
@@ -643,8 +643,8 @@ export class PresetEngine {
 	 * @param {object} memory - 宏替换记忆
 	 * @param {Array} chatLog - 聊天记录（供宏引用）
 	 * @returns {{ beforeChat: Array<object>, afterChat: Array<object>, injectionAbove: Array<object>, injectionBelow: Array<object> }}
-	 *   - beforeChat: chatHistory marker 之前的系统区条目（role 强制 system）
-	 *   - afterChat: chatHistory marker 之后的系统区条目（role 强制 system）
+	 *   - beforeChat: chatHistory marker 之前的预设区条目（使用条目自身 role，默认 system）
+	 *   - afterChat: chatHistory marker 之后的预设区条目（使用条目自身 role，默认 system）
 	 *   - injectionAbove: depth>=1 的注入条目（聊天记录上方，可选 role）
 	 *   - injectionBelow: depth=0 的注入条目（聊天记录下方，可选 role）
 	 */
@@ -741,9 +741,9 @@ export class PresetEngine {
 					injectionBelow.push(msg);
 				}
 			} else {
-				// 预设条目：role 强制为 system
+				// 预设条目：使用条目自身的 role（默认 system）
 				const msg = {
-					role: 'system',
+					role: entry.role || 'system',
 					content,
 					identifier: entry.identifier,
 					name: entry.name || entry.identifier,

@@ -43,6 +43,104 @@ const BUILTIN_PROCESSORS = {
 		get patterns() { return getThinkingFoldPatterns() },
 		template: '<details class="thinking-fold"><summary>💭 我在想你的事情,不要偷看啦</summary><div class="thinking-content">$1</div></details>',
 	},
+	codeFold: {
+		get enabled() { return getCodeFoldEnabled() },
+		get mode() { return getCodeFoldMode() },
+	},
+}
+
+/**
+ * 读取代码折叠是否启用
+ * @returns {boolean}
+ */
+function getCodeFoldEnabled() {
+	try {
+		return localStorage.getItem('beilu-code-fold-enabled') === 'true'
+	} catch { return false }
+}
+
+/**
+ * 读取代码折叠模式
+ * @returns {'all'|'frontend'}
+ */
+function getCodeFoldMode() {
+	try {
+		return localStorage.getItem('beilu-code-fold-mode') || 'frontend'
+	} catch { return 'frontend' }
+}
+
+/**
+ * 判断渲染器是否启用
+ * @returns {boolean}
+ */
+export function isRendererEnabled() {
+	try {
+		const val = localStorage.getItem('beilu-renderer-enabled')
+		return val !== 'false' // 默认启用
+	} catch { return true }
+}
+
+/**
+ * 获取渲染深度设置
+ * @returns {number} 0=全部渲染
+ */
+export function getRenderDepth() {
+	try {
+		return parseInt(localStorage.getItem('beilu-render-depth') || '0', 10) || 0
+	} catch { return 0 }
+}
+
+/**
+ * 前端可渲染的代码块语言标识
+ */
+const FRONTEND_LANGS = new Set(['html', 'htm', 'css', 'javascript', 'js', 'vue', 'svg', 'xml'])
+
+/**
+ * 获取用户配置的思维链标签名列表（纯字符串）
+ * @returns {string[]} 标签名数组，如 ['thinking', 'think']
+ */
+function getThinkingTagList() {
+	const defaultTags = 'thinking,think'
+	let tags = defaultTags
+	try {
+		const stored = localStorage.getItem('beilu-thinking-tags')
+		if (stored && stored.trim()) tags = stored.trim()
+	} catch { /* ignore */ }
+	return tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
+}
+
+/**
+ * 流式输出专用的思维链折叠处理
+ *
+ * 与 applyBuiltinProcessors 的区别：
+ * - 处理未闭合的 <think> 标签（流式中间状态，AI 还在思考）
+ * - 已闭合 <think>...</think> → 折叠的 <details>
+ * - 未闭合 <think>...       → 展开的 <details open>（显示"正在思考"）
+ *
+ * @param {string} content - 流式输出的当前内容
+ * @returns {string} 处理后的内容
+ */
+export function applyStreamingThinkFold(content) {
+	if (!content || typeof content !== 'string') return content
+
+	// 代码围栏剥离（与 applyBuiltinProcessors 一致）
+	content = stripOuterCodeFence(content)
+
+	const tags = getThinkingTagList()
+
+	for (const tag of tags) {
+		// Step 1: 处理所有已闭合的标签对（非贪婪匹配）
+		const closedPattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'gi')
+		content = content.replace(closedPattern,
+			'<details class="thinking-fold"><summary>💭 我在想你的事情,不要偷看啦</summary><div class="thinking-content">$1</div></details>')
+
+		// Step 2: 处理未闭合的标签（流式中间状态 — 贪婪匹配到末尾）
+		const unclosedPattern = new RegExp(`<${tag}>([\\s\\S]*)$`, 'i')
+		content = content.replace(unclosedPattern,
+			'<details class="thinking-fold" open><summary>💭 贝露正在思考中...</summary><div class="thinking-content">$1</div></details>')
+	}
+
+	return content
 }
 
 /**
@@ -66,7 +164,56 @@ export function applyBuiltinProcessors(content) {
 		}
 	}
 
+	// 3. 代码折叠
+	const codeFoldCfg = BUILTIN_PROCESSORS.codeFold
+	if (codeFoldCfg.enabled) {
+		content = applyCodeFold(content, codeFoldCfg.mode)
+	}
+
 	return content
+}
+
+/**
+	* 代码折叠处理器
+	*
+	* 将 ```lang ... ``` 代码块折叠为 <details> 元素
+	* - 'all' 模式：折叠所有代码块
+	* - 'frontend' 模式：仅折叠 html/css/js 等前端代码块
+	*
+	* @param {string} content - 内容
+	* @param {'all'|'frontend'} mode - 折叠模式
+	* @returns {string} 处理后的内容
+	*/
+function applyCodeFold(content, mode) {
+	// 匹配 ```lang\n...\n``` 代码块
+	return content.replace(/```(\w*)\s*\n([\s\S]*?)```/g, (match, lang, code) => {
+		const langLower = (lang || '').toLowerCase()
+
+		// frontend 模式：只折叠前端可渲染语言
+		if (mode === 'frontend' && langLower && !FRONTEND_LANGS.has(langLower)) {
+			return match // 不折叠
+		}
+
+		const displayLang = lang || '代码'
+		const lineCount = code.split('\n').length
+		const preview = code.trim().split('\n')[0]?.substring(0, 60) || ''
+		const previewText = preview ? ` — ${preview}${preview.length >= 60 ? '...' : ''}` : ''
+
+		return `<details class="code-fold"><summary>📦 ${displayLang} (${lineCount}行)${previewText}</summary><pre><code class="language-${langLower}">${escapeCodeHtml(code)}</code></pre></details>`
+	})
+}
+
+/**
+	* 转义代码内容中的 HTML 特殊字符
+	* @param {string} str
+	* @returns {string}
+	*/
+function escapeCodeHtml(str) {
+	return str
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
 }
 
 /**
@@ -136,12 +283,18 @@ export async function loadDisplayRules() {
 		cachedRenderMode = data.renderMode || 'sandbox'
 
 		// 筛选：启用的 + markdownOnly 的 + placement 包含 ai_output 或 display 的
-		cachedDisplayRules = data.rules.filter(rule =>
-			!rule.disabled
-			&& rule.markdownOnly
-			&& rule.placement
-			&& (rule.placement.includes('ai_output') || rule.placement.includes('display'))
-		)
+			// 兼容 ST 旧格式：placement 可能是数字数组（0=ai_output, 1=user_input, 2=slash_command/display）
+			// 也可能是字符串数组 ['ai_output', 'display']
+			cachedDisplayRules = data.rules.filter(rule => {
+				if (rule.disabled || !rule.markdownOnly || !rule.placement) return false
+				// 检查 placement 中是否包含目标值（兼容数字和字符串）
+				const hasTarget = rule.placement.some(p =>
+					p === 'ai_output' || p === 'display'
+					|| p === 0  // ST 数字格式: 0 = ai_output
+					|| p === 2  // ST 数字格式: 2 = slash_command（在 display 上下文中也适用）
+				)
+				return hasTarget
+			})
 
 		console.log(`[displayRegex] 已缓存 ${cachedDisplayRules.length} 条 display 规则, 渲染模式: ${cachedRenderMode}`)
 		return cachedDisplayRules
@@ -248,7 +401,11 @@ function applySingleRule(text, rule, placeholders) {
 		// 需要剥离末尾的 offset/fullString/namedGroups，只保留真正的捕获组
 		const groups = extractCaptureGroups(args)
 
-		const result = computeReplacement(replaceStr, match, groups, trimList)
+		let result = computeReplacement(replaceStr, match, groups, trimList)
+
+		// 剥离替换结果外层代码围栏
+		// 酒馆美化正则（JS-Slash-Runner 等）惯例：用 ``` 包裹 HTML 文档
+		result = stripOuterCodeFence(result)
 
 		// 安全防护：如果替换结果为空但原始匹配有内容，保留原始内容
 		// 这防止了美化正则因 replaceString 缺失/错误导致消息内容完全消失
@@ -257,8 +414,16 @@ function applySingleRule(text, rule, placeholders) {
 			return match
 		}
 
-		// 检测替换结果是否包含 block-level HTML，若是则用占位符保护
-		if (placeholders && COMPLEX_HTML_TAGS.test(result.trim())) {
+		const trimmedResult = result.trim()
+
+		// 完整 HTML 文档 → 直接返回，不做占位符保护
+		// 让 detectContentType() 能正确识别为 'full-html' 并走 iframe/free 渲染路径
+		if (/^<!doctype\s+html/i.test(trimmedResult) || /^<html[\s>]/i.test(trimmedResult)) {
+			return result
+		}
+
+		// 非完整文档但包含 block-level HTML → 占位符保护，防止 markdown 渲染器破坏
+		if (placeholders && COMPLEX_HTML_TAGS.test(trimmedResult)) {
 			const id = placeholders.size
 			const placeholder = `<beilu-ph data-id="${id}"></beilu-ph>`
 			placeholders.set(placeholder, result)
@@ -314,7 +479,7 @@ export function applyDisplayRules(rawContent, options = {}) {
  	return { text: rawContent, placeholders }
  }
 
- const { messageDepth = 0, role = '' } = options
+ const { messageDepth = 0, role = '', charName = '' } = options
 
  // 用户消息不应用 display regex（防止美化正则导致用户消息消失）
  if (role === 'user') {
@@ -329,6 +494,11 @@ export function applyDisplayRules(rawContent, options = {}) {
 		const maxD = rule.maxDepth ?? 0
 		if (minD >= 0 && messageDepth < minD) continue
 		if (maxD > 0 && messageDepth > maxD) continue
+
+		// 作用域过滤：scoped 规则只应用于绑定的角色
+		if (rule.scope === 'scoped' && rule.boundCharName && rule.boundCharName !== charName) {
+			continue
+		}
 
 		text = applySingleRule(text, rule, placeholders)
 	}
@@ -383,6 +553,11 @@ export function detectContentType(text) {
 	if (!text || typeof text !== 'string') return 'markdown'
 
 	const trimmed = text.trim()
+
+	// ★ 渲染器开关：禁用时所有内容都走 markdown
+	if (!isRendererEnabled()) {
+		return 'markdown'
+	}
 
 	// 类型 A：完整 HTML 文档
 	// 检测 <!doctype html 或 <html 开头（不区分大小写）

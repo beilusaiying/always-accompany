@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html data-theme="dark">
+<html>
 
 <head>
 	<meta charset="UTF-8" />
@@ -541,10 +541,15 @@
 										<input type="text" id="mp-detail-desc" class="input input-sm input-bordered w-full text-sm" />
 									</div>
 	
-									<!-- 触发方式（只读显示） -->
+									<!-- 触发方式 -->
 									<div class="flex items-center gap-2 mb-3">
 										<span class="text-xs text-base-content/50">触发方式:</span>
-										<span id="mp-detail-trigger" class="badge badge-sm badge-outline">auto_on_message</span>
+										<select id="mp-detail-trigger" class="select select-xs select-bordered w-40">
+											<option value="auto_on_message">每次消息自动</option>
+											<option value="auto_on_threshold">阈值自动触发</option>
+											<option value="manual_button">手动按钮</option>
+											<option value="manual_or_auto">手动/自动</option>
+										</select>
 									</div>
 	
 									<!-- API 配置 -->
@@ -680,6 +685,25 @@
 							<div id="mm-no-char" class="text-center py-12">
 								<p class="text-base-content/40 text-sm">👆 请先选择一个角色卡</p>
 								<p class="text-base-content/30 text-xs mt-1">记忆表格绑定角色卡，每个角色有独立的记忆空间</p>
+							</div>
+
+							<!-- 归档配置面板（选择角色卡后显示） -->
+							<div id="mm-archive-config" style="display:none;">
+								<div class="beilu-config-section mb-3">
+									<div class="flex items-center justify-between mb-2">
+										<span class="text-sm font-medium">⚙️ 归档配置</span>
+										<span id="mm-config-status" class="text-xs text-base-content/40"></span>
+									</div>
+									<div class="flex flex-wrap gap-x-4 gap-y-2 items-end">
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-base-content/50 shrink-0">P2归档阈值:</span>
+											<input type="number" id="mm-threshold" class="input input-xs input-bordered w-20" min="10" max="500" value="50" title="#4临时记忆超过此数量时自动触发P2归档" />
+											<span class="text-xs text-base-content/40">条</span>
+										</div>
+										<button id="mm-save-config-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存配置</button>
+									</div>
+									<p class="text-xs text-base-content/30 mt-1">#4 临时记忆行数超过阈值后，自动触发 P2 归档AI 进行压缩和归档</p>
+								</div>
 							</div>
 
 							<!-- 表格编辑区域（选择角色卡后显示） -->

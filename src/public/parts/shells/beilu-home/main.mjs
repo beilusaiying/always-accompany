@@ -252,7 +252,7 @@ export default {
 				if (imageBuffer) {
 					const publicDir = path.join(charDir, 'public')
 					fs.mkdirSync(publicDir, { recursive: true })
-					fs.writeFileSync(path.join(publicDir, 'avatar.png'), imageBuffer)
+					fs.writeFileSync(path.join(publicDir, 'image.png'), imageBuffer)
 				}
 
 				// 5. 为新角色写入默认 AIsource 配置（在 notifyPartInstall 之前，确保 Fount 加载时能读到）
@@ -484,6 +484,104 @@ res.status(200).json({ success: true, name: charName, cleanup: cleanupResults })
 console.error('[beilu-home] Error deleting char:', error)
 res.status(500).json({ message: error.message })
 }
+})
+
+// ============================================================
+// PUT /api/parts/shells:beilu-home/update-char/:charName
+// 更新角色卡数据（chardata.json 字段 + 可选头像上传）
+// Body JSON: { first_mes?, description?, personality?, scenario? }
+// 或 multipart: avatar 文件 + JSON 字段
+// ============================================================
+router.put('/api/parts/shells\\:beilu-home/update-char/:charName', authenticate, async (req, res) => {
+	try {
+		const { username } = await getUserByReq(req)
+		const { charName } = req.params
+
+		if (!charName) {
+			return res.status(400).json({ message: '缺少角色名称' })
+		}
+
+		const userDir = getUserDictionary(username)
+		const charDir = path.join(userDir, 'chars', charName)
+
+		if (!fs.existsSync(charDir)) {
+			return res.status(404).json({ message: `角色 "${charName}" 不存在` })
+		}
+
+		const chardataPath = path.join(charDir, 'chardata.json')
+		let chardata = {}
+		if (fs.existsSync(chardataPath)) {
+			chardata = JSON.parse(fs.readFileSync(chardataPath, 'utf-8'))
+		}
+
+		// 更新文本字段
+		const updates = req.body || {}
+		const allowedFields = ['first_mes', 'description', 'personality', 'scenario', 'mes_example', 'system_prompt', 'post_history_instructions', 'creator_notes']
+		let changed = false
+		for (const field of allowedFields) {
+			if (updates[field] !== undefined) {
+				chardata[field] = updates[field]
+				changed = true
+			}
+		}
+		// alternate_greetings 数组（兼容 FormData 字符串传输）
+		let altGreetings = updates.alternate_greetings
+		if (typeof altGreetings === 'string') {
+			try { altGreetings = JSON.parse(altGreetings) } catch (_) { altGreetings = null }
+		}
+		if (Array.isArray(altGreetings)) {
+			chardata.alternate_greetings = altGreetings
+			changed = true
+		}
+
+		if (changed) {
+			fs.writeFileSync(chardataPath, JSON.stringify(chardata, null, '\t'), 'utf-8')
+		}
+
+		// 处理头像上传
+		const avatarFile = req.files?.avatar
+		if (avatarFile) {
+			const publicDir = path.join(charDir, 'public')
+			fs.mkdirSync(publicDir, { recursive: true })
+			fs.writeFileSync(path.join(publicDir, 'image.png'), avatarFile.data)
+		}
+
+		// 清除 parts_details_cache 以刷新
+		try {
+			const cache = loadData(username, 'parts_details_cache')
+			delete cache[`chars/${charName}`]
+			saveData(username, 'parts_details_cache')
+		} catch (_) { /* 静默 */ }
+
+		console.log(`[beilu-home] 角色卡已更新: "${charName}" (user: ${username})`)
+		res.status(200).json({ success: true, name: charName, chardata })
+	} catch (error) {
+		console.error('[beilu-home] Error updating char:', error)
+		res.status(500).json({ message: error.message })
+	}
+})
+
+// ============================================================
+// GET /api/parts/shells:beilu-home/char-data/:charName
+// 获取角色卡完整数据
+// ============================================================
+router.get('/api/parts/shells\\:beilu-home/char-data/:charName', authenticate, async (req, res) => {
+	try {
+		const { username } = await getUserByReq(req)
+		const { charName } = req.params
+		const userDir = getUserDictionary(username)
+		const chardataPath = path.join(userDir, 'chars', charName, 'chardata.json')
+
+		if (!fs.existsSync(chardataPath)) {
+			return res.status(404).json({ message: `角色 "${charName}" 数据不存在` })
+		}
+
+		const chardata = JSON.parse(fs.readFileSync(chardataPath, 'utf-8'))
+		res.status(200).json(chardata)
+	} catch (error) {
+		console.error('[beilu-home] Error reading char data:', error)
+		res.status(500).json({ message: error.message })
+	}
 })
 
 // ============================================================

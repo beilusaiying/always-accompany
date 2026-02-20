@@ -269,14 +269,21 @@ function getCharDisplayName(details, key) {
  */
 function getCharAvatarUrl(details, key) {
 	if (details?.avatar) {
-		// avatar 可能是 base64 或 URL
+		// avatar 可能是 base64、绝对URL、Fount路径 或相对路径
 		if (details.avatar.startsWith('data:') || details.avatar.startsWith('http')) {
 			return details.avatar
 		}
-		// 可能是相对路径
+		// Fount 路径（以 / 开头），直接使用
+		if (details.avatar.startsWith('/')) {
+			return details.avatar
+		}
+		// 相对路径
 		return `/api/parts/res/chars/${key}/${details.avatar}`
 	}
-	return null
+	// details.avatar 为空时，仍然尝试标准头像路径
+	// （导入或编辑器上传的图片可能还没反映到 Fount parts 缓存中）
+	// img.onerror 回调会在 404 时回退到 emoji
+	return `/parts/chars:${encodeURIComponent(key)}/image.png`
 }
 
 // ===== 渲染 =====
@@ -329,6 +336,17 @@ function createCharCard(key, details, summaries) {
 		timeDiv.textContent = formatRelativeTime(summary?.lastMessageTime)
 		card.appendChild(timeDiv)
 	}
+
+	// 设置按钮（左上角）
+	const settingsBtn = document.createElement('button')
+	settingsBtn.className = 'beilu-char-settings-btn'
+	settingsBtn.textContent = '⚙'
+	settingsBtn.title = '编辑角色卡'
+	settingsBtn.addEventListener('click', (e) => {
+		e.stopPropagation()
+		openCharEditDialog(key, displayName, avatarUrl)
+	})
+	card.appendChild(settingsBtn)
 
 	// 删除按钮
 	const deleteBtn = document.createElement('button')
@@ -544,6 +562,230 @@ function setupCreateChar() {
 			alert('创建出错: ' + err.message)
 		}
 	})
+}
+
+// ===== 角色卡编辑弹窗 =====
+
+/**
+ * 打开角色卡编辑弹窗
+ * @param {string} charKey - 角色key
+ * @param {string} displayName - 显示名称
+ * @param {string|null} currentAvatarUrl - 当前头像URL
+ */
+async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
+	// 先获取角色卡完整数据
+	let chardata = {}
+	try {
+		const res = await fetch(`/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charKey)}`)
+		if (res.ok) {
+			chardata = await res.json()
+		}
+	} catch (err) {
+		console.warn('[beilu-home] 获取角色数据失败:', err)
+	}
+
+	// 创建遮罩
+	const overlay = document.createElement('div')
+	overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;'
+
+	const dialog = document.createElement('div')
+	dialog.className = 'beilu-char-edit-dialog'
+	dialog.style.cssText = 'background:rgba(255,253,245,0.8);color:#1a1a1a;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);'
+
+	// 用于暂存新头像文件
+	let newAvatarFile = null
+
+	dialog.innerHTML = `
+		<h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#b45309;">编辑角色卡「${displayName}」</h3>
+		
+		<!-- 头像区域 -->
+		<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+			<div id="char-edit-avatar-preview" style="width:80px;height:80px;border-radius:50%;background:rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:center;font-size:2rem;overflow:hidden;flex-shrink:0;border:2px solid #d97706;">
+				${currentAvatarUrl ? `<img src="${currentAvatarUrl}" style="width:100%;height:100%;object-fit:cover;" />` : '🎭'}
+			</div>
+			<div>
+				<button id="char-edit-avatar-btn" style="padding:6px 16px;border:1px solid #d97706;background:transparent;color:#333;border-radius:6px;cursor:pointer;font-size:13px;">📷 更换头像</button>
+				<input type="file" id="char-edit-avatar-input" accept="image/*" style="display:none;" />
+				<div style="font-size:11px;color:#888;margin-top:4px;">支持 PNG/JPG/WebP</div>
+			</div>
+		</div>
+
+		<!-- 开场白 -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">开场白（第一条消息）</label>
+			<textarea id="char-edit-greeting" style="width:100%;min-height:100px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的第一条消息...">${escapeHtml(chardata.first_mes || '')}</textarea>
+		</div>
+
+		<!-- 备选开场白 (alternate_greetings) -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">备选开场白</label>
+			<div id="char-edit-alt-greetings"></div>
+			<button id="char-edit-add-greeting" type="button" style="padding:6px 14px;border:1px dashed #d97706;background:transparent;color:#b45309;border-radius:6px;cursor:pointer;font-size:13px;margin-top:4px;">+ 添加备选开场白</button>
+			<div style="font-size:11px;color:#888;margin-top:4px;">新建聊天时可在多个开场白之间切换（swipe）</div>
+		</div>
+
+		<!-- 角色描述 -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">角色描述</label>
+			<textarea id="char-edit-desc" style="width:100%;min-height:80px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的描述...">${escapeHtml(chardata.description || '')}</textarea>
+		</div>
+
+		<!-- 角色性格 -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">性格</label>
+			<textarea id="char-edit-personality" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的性格特征...">${escapeHtml(chardata.personality || '')}</textarea>
+		</div>
+
+		<!-- 创作者备注 -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">创作者备注</label>
+			<textarea id="char-edit-notes" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="创作者备注...">${escapeHtml(chardata.creator_notes || '')}</textarea>
+		</div>
+
+		<!-- 操作按钮 -->
+		<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+			<button id="char-edit-cancel" style="padding:8px 20px;border:1px solid rgba(0,0,0,0.15);background:transparent;color:#555;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
+			<button id="char-edit-save" style="padding:8px 20px;border:none;background:#b45309;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;">💾 保存</button>
+		</div>
+		<div id="char-edit-status" style="font-size:12px;text-align:center;color:#888;margin-top:8px;"></div>
+	`
+
+	overlay.appendChild(dialog)
+	document.body.appendChild(overlay)
+
+	// === 初始化 alternate_greetings 编辑区域 ===
+	const altGreetingsContainer = dialog.querySelector('#char-edit-alt-greetings')
+	const addGreetingBtn = dialog.querySelector('#char-edit-add-greeting')
+	const existingAlts = Array.isArray(chardata.alternate_greetings) ? chardata.alternate_greetings : []
+
+	function createAltGreetingItem(text, index) {
+		const item = document.createElement('div')
+		item.className = 'alt-greeting-item'
+		item.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;'
+
+		const textarea = document.createElement('textarea')
+		textarea.className = 'alt-greeting-text'
+		textarea.style.cssText = 'flex:1;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;'
+		textarea.placeholder = `备选开场白 #${index + 1}`
+		textarea.value = text || ''
+		item.appendChild(textarea)
+
+		const deleteBtn = document.createElement('button')
+		deleteBtn.type = 'button'
+		deleteBtn.textContent = '✕'
+		deleteBtn.style.cssText = 'padding:4px 8px;border:1px solid #e53e3e;background:transparent;color:#e53e3e;border-radius:4px;cursor:pointer;font-size:12px;flex-shrink:0;margin-top:4px;'
+		deleteBtn.addEventListener('click', () => {
+			item.remove()
+			updateAltIndices()
+		})
+		item.appendChild(deleteBtn)
+
+		return item
+	}
+
+	function updateAltIndices() {
+		const items = altGreetingsContainer.querySelectorAll('.alt-greeting-text')
+		items.forEach((ta, i) => { ta.placeholder = `备选开场白 #${i + 1}` })
+	}
+
+	// 填充已有数据
+	existingAlts.forEach((text, i) => {
+		altGreetingsContainer.appendChild(createAltGreetingItem(text, i))
+	})
+
+	// 添加按钮
+	addGreetingBtn.addEventListener('click', () => {
+		const count = altGreetingsContainer.querySelectorAll('.alt-greeting-item').length
+		altGreetingsContainer.appendChild(createAltGreetingItem('', count))
+	})
+
+	// 头像上传
+	const avatarBtn = dialog.querySelector('#char-edit-avatar-btn')
+	const avatarInput = dialog.querySelector('#char-edit-avatar-input')
+	const avatarPreview = dialog.querySelector('#char-edit-avatar-preview')
+
+	avatarBtn.addEventListener('click', () => avatarInput.click())
+	avatarInput.addEventListener('change', (e) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		newAvatarFile = file
+		const reader = new FileReader()
+		reader.onload = (ev) => {
+			avatarPreview.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;" />`
+		}
+		reader.readAsDataURL(file)
+	})
+
+	// 取消
+	dialog.querySelector('#char-edit-cancel').addEventListener('click', () => {
+		document.body.removeChild(overlay)
+	})
+	overlay.addEventListener('click', (e) => {
+		if (e.target === overlay) document.body.removeChild(overlay)
+	})
+
+	// 保存
+	dialog.querySelector('#char-edit-save').addEventListener('click', async () => {
+		const statusEl = dialog.querySelector('#char-edit-status')
+		statusEl.textContent = '保存中...'
+		statusEl.style.color = 'var(--beilu-amber)'
+
+		try {
+			// 使用 FormData 支持同时上传文件和JSON数据
+			const formData = new FormData()
+			
+			// 文本字段
+			const greeting = dialog.querySelector('#char-edit-greeting').value
+			const desc = dialog.querySelector('#char-edit-desc').value
+			const personality = dialog.querySelector('#char-edit-personality').value
+			const notes = dialog.querySelector('#char-edit-notes').value
+
+			formData.append('first_mes', greeting)
+			formData.append('description', desc)
+			formData.append('personality', personality)
+			formData.append('creator_notes', notes)
+
+			// 收集备选开场白
+			const altTextareas = dialog.querySelectorAll('#char-edit-alt-greetings .alt-greeting-text')
+			const altGreetings = Array.from(altTextareas).map(ta => ta.value).filter(v => v.trim() !== '')
+			formData.append('alternate_greetings', JSON.stringify(altGreetings))
+
+			if (newAvatarFile) {
+				formData.append('avatar', newAvatarFile)
+			}
+
+			// 使用 PUT 请求
+			// 注意：express-fileupload 需要 multipart，但 PUT + FormData 应该可以
+			// 但后端是用 req.body 解析 JSON 的，FormData 的文本字段会在 req.body 中
+			const res = await fetch(`/api/parts/shells:beilu-home/update-char/${encodeURIComponent(charKey)}`, {
+				method: 'PUT',
+				body: formData,
+			})
+
+			if (res.ok) {
+				statusEl.textContent = '✅ 保存成功'
+				statusEl.style.color = '#22c55e'
+				setTimeout(() => {
+					document.body.removeChild(overlay)
+					loadChars() // 刷新列表
+				}, 800)
+			} else {
+				const err = await res.json().catch(() => ({}))
+				statusEl.textContent = '❌ ' + (err.message || '保存失败')
+				statusEl.style.color = 'oklch(var(--er))'
+			}
+		} catch (err) {
+			statusEl.textContent = '❌ ' + err.message
+			statusEl.style.color = 'oklch(var(--er))'
+		}
+	})
+}
+
+/**
+ * HTML 转义
+ */
+function escapeHtml(str) {
+	return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 // ===== 初始化 =====

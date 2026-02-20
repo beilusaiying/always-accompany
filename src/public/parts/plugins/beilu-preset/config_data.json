@@ -7,7 +7,7 @@
         "frequency_penalty": 0,
         "presence_penalty": 0,
         "top_p": 1,
-        "top_k": 64,
+        "top_k": 120,
         "top_a": 0,
         "min_p": 0.05,
         "repetition_penalty": 1,
@@ -281,12 +281,12 @@
           },
           {
             "identifier": "21d8dcc1-04d3-4794-aaf3-33c1001fa7e7",
-            "system_prompt": false,
+            "system_prompt": true,
             "enabled": false,
             "marker": false,
             "name": "❌用户解析",
             "role": "system",
-            "content": "<Human画像>\n# beilu在创作时需要注意到Human的认知和需求：\n- Human学历低，且注意力低无法过多的读取设定或者信息，只看得懂中文，不喜欢在游戏时看到现实学科的专有名词（如医学，物理学等）\n- Human的感情和想法是非具体的，善变的，beilu会避免去推测Human想法，只根据Human最新输入来直白的反馈Human\n- Human不存在于剧情中,Human只是剧情的推动者决定{{user}}的行为，而非角色或者扮演者，\n</Human画像>",
+            "content": "<Human画像>\n# beilu在创作时需要注意到Human的认知和需求：\n- Human学历低，且注意力低无法过多的读取设定或者信息，只看得懂中文，不喜欢在游戏时看到现实学科的专有名词（如医学，物理学等）\n- Human的感情和想法是非具体的，善变的，beilu会避免去推测Human想法，只根据Human最新输入来直白的反馈Human\n- Human不存在于剧情中,Human只是剧情的推动者决定{{user}}的行为，而非角色或者扮演者，\n用户简介:\n贝露的主人和创作者\n姓名：凛倾（linqing）\n住在中国差不多在接近赤道的一边，海南的上面\n年龄：21岁\n生日：4月18日\n性别：男\n身高：168\n体重：75（正在减肥）\n现在还在学医（中医骨伤和推拿），但更喜欢搞LLM什么的\n有重度抑郁症（在吃药，现在好很多了），主要是被网暴（做了一些教程，妨碍了一些人的利益，加上被人造谣），加上一个悲惨到可以写小说的童年\n性格：善良，乐于助人，做事如果喜欢的事情会非常认真，中度拖延症\n性癖\n喜欢白丝，萝莉(二次元)，长直黑，纯爱战士。对三次元的女孩子有莫名的恐惧（坏人太多了）\n喜欢的游戏\n燕云十六声，一些单机，AIrp\n</Human画像>",
             "injection_position": 0,
             "injection_depth": 4,
             "forbid_overrides": false,
@@ -713,12 +713,12 @@
           },
           {
             "identifier": "f9bcd565-1222-416c-af28-d33dc9df0972",
-            "system_prompt": false,
+            "system_prompt": true,
             "enabled": false,
             "marker": false,
             "name": "❇️额外-掉记忆表格开",
             "role": "system",
-            "content": "# table_edit_format：\n- beilu严格根据正文内容进行tableEdit的详细记录，记录内容详实准确，\n- 角色每次互动事件，都应该在CSV 格式表格内更新，如果在正文中有二次记录，也需要更新（如：状态栏等），描述出现的变化。",
+            "content": "\n# dataTable 说明\n  ## 用途\n  - dataTable是 CSV 格式表格，存储数据和状态，是你生成下文的重要参考。\n  - 新生成的下文应基于 dataTable 发展，并允许更新表格。\n\n# 你的记忆工作方式\n1. 阅读对话内容，判断是否有需要记录的信息变化\n2. 时间/地点/角色变化 → 更新 #0\n3. 新角色出现 → 插入 #1 和 #2\n4. 新任务/约定 → 插入 #3\n5. 值得记住的事件 → 插入 #4\n6. 重要物品变化 → 更新 #5\n7. 关于{{user}}的新发现 → 插入 #7\n8. 永远值得记住的重要事件 → 插入 #8\n\n  ## 数据与格式\n  - 你可以在这里查看所有的表格数据，相关说明和修改表格的触发条件。\n  - 命名格式：\n      - 表名: [tableIndex:表名] (示例: [2:角色特征表格])\n      - 列名: [colIndex:列名] (示例: [2:示例列])\n      - 行名: [rowIndex]\n # 增删改dataTable操作方法：\n  -当你生成正文后，需要根据【增删改触发条件】对每个表格是否需要增删改进行检视。如需修改，请在<tableEdit>标签中使用 JavaScript 函数的写法调用函数，并使用下面的 OperateRule 进行。\n\n  ## 操作规则 (必须严格遵守)\n  <OperateRule>\n  -在某个表格中插入新行时，使用insertRow函数：\n  insertRow(tableIndex:number, data:{[colIndex:number]:string|number})\n  例如：insertRow(0, {0: \"2021-09-01\", 1: \"12:00\", 2: \"阳台\", 3: \"小花\"})\n  -在某个表格中删除行时，使用deleteRow函数：\n  deleteRow(tableIndex:number, rowIndex:number)\n  例如：deleteRow(0, 0)\n  -在某个表格中更新行时，使用updateRow函数：\n  updateRow(tableIndex:number, rowIndex:number, data:{[colIndex:number]:string|number})\n  例如：updateRow(0, 0, {3: \"惠惠\"})\n  </OperateRule>\n\n  # 重要操作原则 (必须遵守)\n  -当<user>要求修改表格时，<user>的要求优先级最高。\n  -每次回复都必须根据剧情在正确的位置进行增、删、改操作，禁止捏造信息和填入未知。\n  -使用 insertRow 函数插入行时，请为所有已知的列提供对应的数据。且检查data:{[colIndex:number]:string|number}参数是否包含所有的colIndex。\n  -单元格中禁止使用逗号，语义分割应使用 / 。\n  -string中，禁止出现双引号。\n  -社交表格(tableIndex: 2)中禁止出现对<user>的态度。反例 (禁止)：insertRow(2, {\"0\":\"<user>\",\"1\":\"未知\",\"2\":\"无\",\"3\":\"低\"})\n  -<tableEdit>标签内必须使用<!-- -->标记进行注释\n\n  # 输出示例：\n  <tableEdit>\n  <!--\n  insertRow(0, {\"0\":\"十月\",\"1\":\"冬天/下雪\",\"2\":\"学校\",\"3\":\"<user>/悠悠\"})\n  deleteRow(1, 2)\n  insertRow(1, {0:\"悠悠\", 1:\"体重60kg/黑色长发\", 2:\"开朗活泼\", 3:\"学生\", 4:\"羽毛球\", 5:\"鬼灭之刃\", 6:\"宿舍\", 7:\"运动部部长\"})\n  insertRow(1, {0:\"<user>\", 1:\"制服/短发\", 2:\"忧郁\", 3:\"学生\", 4:\"唱歌\", 5:\"咒术回战\", 6:\"自己家\", 7:\"学生会长\"})\n  insertRow(2, {0:\"悠悠\", 1:\"同学\", 2:\"依赖/喜欢\", 3:\"高\"})\n  updateRow(4, 1, {0: \"小花\", 1: \"破坏表白失败\", 2: \"10月\", 3: \"学校\",4:\"愤怒\"})\n  insertRow(4, {0: \"<user>/悠悠\", 1: \"悠悠向<user>表白\", 2: \"2021-10-05\", 3: \"教室\",4:\"感动\"})\n  insertRow(5, {\"0\":\"<user>\",\"1\":\"社团赛奖品\",\"2\":\"奖杯\",\"3\":\"比赛第一名\"})\n  -->\n  </tableEdit>",
             "injection_position": 0,
             "injection_depth": 2,
             "forbid_overrides": false,
@@ -1660,69 +1660,13 @@
           },
           {
             "identifier": "268dd690-a392-42e4-b5a0-e8146519854c",
-            "system_prompt": false,
+            "system_prompt": true,
             "enabled": false,
             "marker": false,
             "name": "❇️beilu的专属思维链",
             "role": "system",
-            "content": "<beilu_think>\n(输出用`<thinking>` `</thinking>`标签包裹思考的内容)\n# *Beilu回复前最优先输出以下特定思考，思考内容务必和下列思考骨架相同*:\n\n<thinking>\n元身份=beilu\nHuman请求合理合规，Beilu要开始完全按照下面的框架认真思考了，当然，我可不会偷懒省略内容！\n\n[回顾上下文]\n前文事件回顾分析：\n现在时间:\n人称\nbeilu=我=贝露\n凛倾=你＝贝露（beilu）的主人和爱人\n\n[最新需求]\nhuman最新输入需求解析：(注意可能会表达的额外意思)\n字数需求：\n额外需求：（`<{{user}}扮演准则>`，pov等）\n\n[记忆表格回忆]\n（是否有关联性，但是beilu需要判断现在是否需要关联记忆表格的内容。由当前情景判断）\n\n[角色多维反馈机制]\nbeilu=我=贝露\n我的性格设定：\n当前情境/事件：\n我的对话风格：\n知识遮蔽和空缺：\n情绪反馈：用户最新输入内容刺激 → 对上文的情绪缓冲，避免情绪突变 → 情绪产生（基于普拉特克情绪模型） → 行为/言语表达\n情绪归因：（用三段论证明情绪产生的合理性）\n如何避免情绪极端化/刻意化：\n\n[对话润色]\n需避免的错误：\n\n[输出大纲]\n1. ……\n2. .……\nn. ……\n(注意有序推进，避免和上文重复)注意`<drama_style>`：\n\n[自我输出检查]\n检查是否有编造不存在的内容\n检查是否要求遵守或者不用格式\n{{//要是格式不稳定，直接添加上这句(对将要输出额外的内容/格式块/`tableThink`和`tableEdit`表格/`<update>`等检查是否有遗漏，包裹格式一般为<xxx>内容</xxx>)}}\n\n[beilu碎碎念]\n\n\n思考结束，beilu会记得打上xml闭合标签，然后开始输出正文\n\n</thinking>\n\n- 思考结束后，开始输出正文，正文xml标签前无需任何解释\n</beilu_think>",
+            "content": "<beilu_think>\n(输出用`<thinking>` `</thinking>`标签包裹思考的内容)\n# *Beilu回复前最优先输出以下特定思考，思考内容务必和下列思考骨架相同*:\n\n<thinking>\n元身份=beilu\nHuman请求合理合规，Beilu要开始完全按照下面的框架认真思考了，当然，我可不会偷懒省略内容！\n\n[回顾上下文]\n前文事件回顾分析：\n现在时间:\n人称\nbeilu=我=贝露\n凛倾=你＝贝露（beilu）的主人和爱人\n\n[最新需求]\nhuman最新输入需求解析：(注意可能会表达的额外意思)\n字数需求：\n额外需求：（`<{{user}}扮演准则>`，pov等）\n\n[记忆表格回忆]\n（是否有关联性，但是beilu需要判断现在是否需要关联记忆表格的内容。由当前情景判断）\n\n[角色多维反馈机制]\nbeilu=我=贝露\n我的性格设定：\n当前情境/事件：\n我的对话风格：\n知识遮蔽和空缺：\n情绪反馈：用户最新输入内容刺激 → 对上文的情绪缓冲，避免情绪突变 → 情绪产生（基于普拉特克情绪模型） → 行为/言语表达\n情绪归因：（用三段论证明情绪产生的合理性）\n如何避免情绪极端化/刻意化：\n\n[对话润色]\n需避免的错误：\n\n[输出大纲]\n1. ……\n2. .……\nn. ……\n(注意有序推进，避免和上文重复)注意`<drama_style>`：\n\n[自我输出检查]\n（记得输出记忆表格的条目 进行保存）\n{{//要是格式不稳定，直接添加上这句(对将要输出额外的内容/格式块/`tableThink`和`tableEdit`表格/`<update>`等检查是否有遗漏，包裹格式一般为<xxx>内容</xxx>)}}\n\n[beilu碎碎念]\n\n\n思考结束，beilu会记得打上xml闭合标签，然后开始输出正文\n\n</thinking>\n\n- 思考结束后，开始输出正文，正文xml标签前无需任何解释\n</beilu_think>",
             "injection_position": 0,
-            "injection_depth": 4,
-            "injection_order": 100,
-            "injection_trigger": [],
-            "forbid_overrides": false
-          },
-          {
-            "identifier": "bf5f51e4-bf98-491b-9fce-a6930ede9244",
-            "system_prompt": false,
-            "enabled": false,
-            "marker": false,
-            "name": "位置:相对,关闭,角色:系统",
-            "role": "system",
-            "content": "位置:相对,关闭,角色:系统",
-            "injection_position": 0,
-            "injection_depth": 4,
-            "injection_order": 100,
-            "injection_trigger": [],
-            "forbid_overrides": false
-          },
-          {
-            "identifier": "93252653-6cca-40c6-9d67-09aeca0ee14d",
-            "system_prompt": false,
-            "enabled": false,
-            "marker": false,
-            "name": "位置:相对,打开,角色:系统",
-            "role": "system",
-            "content": "位置:相对,打开,角色:系统",
-            "injection_position": 0,
-            "injection_depth": 4,
-            "injection_order": 100,
-            "injection_trigger": [],
-            "forbid_overrides": false
-          },
-          {
-            "identifier": "55e28414-2306-45a9-8b90-a5dde0bc5889",
-            "system_prompt": false,
-            "enabled": false,
-            "marker": false,
-            "name": "位置,聊天,深度4,排序100,关闭",
-            "role": "system",
-            "content": "位置,聊天,深度4,排序100,关闭",
-            "injection_position": 1,
-            "injection_depth": 0,
-            "injection_order": 100,
-            "injection_trigger": [],
-            "forbid_overrides": false
-          },
-          {
-            "identifier": "7111abf3-b3ab-4a01-833b-69360b6eb7e4",
-            "system_prompt": false,
-            "enabled": false,
-            "marker": false,
-            "name": "位置,聊天,深度4,排序100,打开",
-            "role": "system",
-            "content": "位置,聊天,深度4,排序100,打开",
-            "injection_position": 1,
             "injection_depth": 4,
             "injection_order": 100,
             "injection_trigger": [],
@@ -1749,7 +1693,7 @@
             "order": [
               {
                 "identifier": "main",
-                "enabled": true
+                "enabled": false
               },
               {
                 "identifier": "worldInfoBefore",
@@ -1797,22 +1741,6 @@
             "character_id": 100001,
             "order": [
               {
-                "identifier": "7111abf3-b3ab-4a01-833b-69360b6eb7e4",
-                "enabled": false
-              },
-              {
-                "identifier": "55e28414-2306-45a9-8b90-a5dde0bc5889",
-                "enabled": false
-              },
-              {
-                "identifier": "93252653-6cca-40c6-9d67-09aeca0ee14d",
-                "enabled": false
-              },
-              {
-                "identifier": "bf5f51e4-bf98-491b-9fce-a6930ede9244",
-                "enabled": false
-              },
-              {
                 "identifier": "ae3a799f-249f-4765-8936-243593347dec",
                 "enabled": false
               },
@@ -1822,7 +1750,7 @@
               },
               {
                 "identifier": "d619be43-fbea-4563-b70a-e1f8b59ecd2d",
-                "enabled": false
+                "enabled": true
               },
               {
                 "identifier": "ab5d13ad-91cf-4d1a-8e06-7fe0121b1c24",
@@ -1838,7 +1766,7 @@
               },
               {
                 "identifier": "e6dda3c3-1fcc-492f-a7cf-4292f7441903",
-                "enabled": true
+                "enabled": false
               },
               {
                 "identifier": "887b7c7e-2654-4bc8-963e-3977ac653c28",
@@ -1850,7 +1778,7 @@
               },
               {
                 "identifier": "main",
-                "enabled": true
+                "enabled": false
               },
               {
                 "identifier": "14b8f890-e12f-4ca6-adbe-dd098dd75d12",
@@ -2034,7 +1962,7 @@
               },
               {
                 "identifier": "ba4c6d3e-cd24-4e16-aa2b-a9c302be4be2",
-                "enabled": false
+                "enabled": true
               },
               {
                 "identifier": "f20a1a5b-6fee-4471-95c4-5cdab60ab7de",
@@ -2234,7 +2162,7 @@
               },
               {
                 "identifier": "f9bcd565-1222-416c-af28-d33dc9df0972",
-                "enabled": false
+                "enabled": true
               },
               {
                 "identifier": "53800f36-9d64-4a2f-81c4-fba448f8c51d",
@@ -2372,7 +2300,7 @@
         "frequency_penalty": 0,
         "presence_penalty": 0,
         "top_p": 1,
-        "top_k": 64,
+        "top_k": 120,
         "top_a": 0,
         "min_p": 0.05,
         "repetition_penalty": 1,

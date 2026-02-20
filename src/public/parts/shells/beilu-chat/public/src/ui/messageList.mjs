@@ -4,7 +4,7 @@ import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
 import { renderTemplate, renderTemplateAsHtmlString, renderTemplateNoScriptActivation } from '../../../../../scripts/template.mjs'
 import { showToast, showToastI18n } from '../../../../../scripts/toast.mjs'
 import { stopGeneration } from '../chat.mjs'
-import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
+import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, getRenderDepth, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
 import {
   deleteMessage,
   editMessage,
@@ -21,6 +21,7 @@ import {
   addDeletionListener,
   getChatLogIndexByQueueIndex,
   getMessageElementByQueueIndex,
+  getQueue,
   getQueueIndex,
   replaceMessageInQueue,
 } from './virtualQueue.mjs'
@@ -116,21 +117,30 @@ export async function renderMessage(message) {
 	const builtinProcessed = applyBuiltinProcessors(rawContent)
 	// 传入消息角色，用户消息不应用 display regex（防止内容消失）
 	const messageRole = message.role || (message.is_user ? 'user' : '')
-	const { text: displayProcessed, placeholders } = applyDisplayRules(builtinProcessed, { role: messageRole })
+	const { text: displayProcessed, placeholders } = applyDisplayRules(builtinProcessed, { role: messageRole, charName: message.name || '' })
+
+	// ★ 渲染深度检查：超出深度的旧消息不做 full-html 渲染
+	const renderDepth = getRenderDepth()
+	const queueForDepth = getQueue()
+	const depthIndex = queueForDepth.findIndex(m => m.id === message.id)
+	const distanceFromEnd = depthIndex >= 0 ? (queueForDepth.length - 1 - depthIndex) : 0
+	const isWithinRenderDepth = renderDepth <= 0 || distanceFromEnd < renderDepth
 
 	// ★ 内容类型检测：决定走哪条渲染路径
-	const contentType = detectContentType(displayProcessed)
+	let contentType = detectContentType(displayProcessed)
+	// 超出渲染深度的消息强制走 markdown
+	if (contentType === 'full-html' && !isWithinRenderDepth) {
+		contentType = 'markdown'
+	}
 	const currentRenderMode = getRenderMode()
 
 	let renderedContent
 	if (contentType === 'full-html') {
-		if (currentRenderMode === 'sandbox') {
-			// 沙盒模式：跳过 markdown 渲染，后续由 iframeRenderer 处理
-			renderedContent = '<div class="iframe-placeholder">正在加载美化视图...</div>'
-		} else {
-			// 自由模式：直接注入 HTML，跳过 markdown 渲染
-			renderedContent = displayProcessed
-		}
+		// full-html 统一用 iframe 渲染（无论 sandbox/free 模式）
+		// 自由模式直接 innerHTML 注入完整 HTML 文档会导致：
+		// 1. 浏览器无法在 div 内嵌套 <!doctype>/<html>/<head>/<body>
+		// 2. 文档内的全局 CSS 覆盖页面样式，导致内容不可见
+		renderedContent = '<div class="iframe-placeholder">正在加载美化视图...</div>'
 	} else {
 		// 普通 markdown 或脚本片段 → 走原有 markdown 管线
 		renderedContent = await renderMarkdownAsString(displayProcessed, cache)
@@ -140,19 +150,33 @@ export async function renderMessage(message) {
 	}
 
 	// ★ 预计算 media 判断，避免在模板中对 content 做 match（模板引擎会解析 content 中的 ${} 导致卡死）
-	const contentHasMedia = /<(?:video|iframe)\b[^>]*>[\s\S]*?<\/(?:video|iframe)>/gi.test(renderedContent)
+	// full-html 内容一定包含媒体（iframe），强制为 true 确保气泡获得 w-full 类
+	const contentHasMedia = contentType === 'full-html' || /<(?:video|iframe)\b[^>]*>[\s\S]*?<\/(?:video|iframe)>/gi.test(renderedContent)
 
-	// 预处理 avatar，确保它是有效的 URL 字符串，避免模板引擎解析错误
-	// 如果 avatar 包含 '}' 等特殊字符，可能会干扰模板解析
+	// 预处理 avatar：优先使用角色卡图片路径
 	let safeAvatar = message.avatar || DEFAULT_AVATAR;
+	// 如果 avatar 为空或是默认值，尝试从角色卡路径构建头像 URL
+	if (!message.avatar && message.role === 'char') {
+		// 优先使用 timeSlice.charname（角色卡目录名/key），比 message.name（可能是显示名）更可靠
+		const charKey = message.timeSlice?.charname || message.name
+		if (charKey) {
+			safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/image.png`;
+		}
+	}
 	// 简单的转义，防止模板注入
 	if (typeof safeAvatar === 'string') {
 		safeAvatar = safeAvatar.replace(/"/g, '"');
 	}
 
+	// 计算楼层号（从 virtualQueue 获取消息在队列中的位置）
+	const queueForFloor = getQueue()
+	const floorIndex = queueForFloor.findIndex(m => m.id === message.id)
+	const floorNumber = floorIndex >= 0 ? `#${floorIndex}` : ''
+
 	const preprocessedMessage = {
 		...message,
 		avatar: safeAvatar,
+		floor: floorNumber,
 		time_stamp: new Date(message.time_stamp).toLocaleString(),
 		content: '',              // ★ 空占位：不通过模板 ${content} 传递，避免模板引擎解析 HTML 中的 ${}
 		contentHasMedia,          // ★ 预计算的 media 标志，供模板判断 w-full class
@@ -415,17 +439,9 @@ export async function renderMessage(message) {
 		await editMessageStart(message, queueIndex, chatLogIndex) // 显示编辑界面
 	})
 
-	// --- iframe 渲染（完整 HTML 文档 + 沙盒模式） ---
-	if (contentType === 'full-html' && currentRenderMode === 'sandbox') {
+	// --- iframe 渲染（完整 HTML 文档 — 统一使用 iframe，无论 sandbox/free） ---
+	if (contentType === 'full-html') {
 		renderAsIframe(displayProcessed, messageElement)
-	}
-
-	// --- 自由模式：直接激活 full-html 中的脚本 ---
-	if (contentType === 'full-html' && currentRenderMode === 'free') {
-		const messageContentElement2 = messageElement.querySelector('.message-content')
-		if (messageContentElement2) {
-			await activateScriptsInElement(messageContentElement2)
-		}
 	}
 
 	// --- 激活 display regex 注入的脚本（非 full-html 模式） ---

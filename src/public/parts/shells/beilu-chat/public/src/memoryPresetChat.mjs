@@ -13,6 +13,8 @@
  * - 与后端 beilu-memory 插件通信
  */
 
+import { currentChatId } from './endpoints.mjs'
+
 const MEMORY_API = '/api/parts/plugins:beilu-memory/config/setdata'
 
 // ============================================================
@@ -186,10 +188,209 @@ function selectPreset(presetId) {
 	updatePromptPreview(preset)
 }
 
+/** 当前提示词预览的标签页：'formatted' | 'rawjson' */
+let promptPreviewTab = 'formatted'
+/** 最近一次 fake-send 获取的完整结果 */
+let lastFakeSendResult = null
+
 function updatePromptPreview(preset) {
 	if (!els.promptContent) return
-	const prompt = preset?.prompt || preset?.system_prompt || ''
-	els.promptContent.textContent = prompt || '(此预设暂无提示词)'
+	if (!preset) {
+		els.promptContent.textContent = '(未选择预设)'
+		return
+	}
+	// 如果预览面板可见，自动加载 fake-send
+	if (els.promptPreview && !els.promptPreview.classList.contains('hidden')) {
+		loadFakeSendPreview()
+	} else {
+		els.promptContent.textContent = '(点击 📝 按钮展开查看完整 Chat Completion request)'
+	}
+}
+
+/** 调用 fake-send API 获取完整的聊天 AI request */
+async function loadFakeSendPreview() {
+	if (!els.promptContent) return
+	if (!currentChatId) {
+		els.promptContent.innerHTML = '<p class="text-xs text-error py-2">❌ 当前没有活跃的聊天（chatId 为空）</p>'
+		return
+	}
+
+	els.promptContent.innerHTML = '<p class="text-xs text-base-content/40 text-center py-2">⏳ 正在构建 Chat Completion request...</p>'
+
+	try {
+		const url = `/api/parts/shells:chat/${currentChatId}/fake-send`
+		const res = await fetch(url)
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}))
+			throw new Error(err.error || `HTTP ${res.status}`)
+		}
+		const result = await res.json()
+		lastFakeSendResult = result
+		renderFakeSendPreview(result)
+	} catch (err) {
+		console.error('[memoryPresetChat] fake-send 加载失败:', err)
+		els.promptContent.innerHTML = `<p class="text-xs text-error py-2">❌ 构建失败: ${escapeHtml(err.message)}</p>`
+	}
+}
+
+/** 渲染 fake-send 结果（和 promptViewer 一样的效果） */
+function renderFakeSendPreview(result) {
+	if (!els.promptContent) return
+	els.promptContent.innerHTML = ''
+
+	const messages = result.messages || []
+	const meta = result._meta || {}
+	const totalChars = meta.total_chars ?? messages.reduce((sum, m) => sum + (m.content || '').length, 0)
+
+	// 统计栏
+	const statsDiv = document.createElement('div')
+	statsDiv.className = 'text-xs text-base-content/40 mb-2 flex flex-wrap gap-x-3'
+	const parts = [
+		`${messages.length} 条消息`,
+		`${totalChars.toLocaleString()} 字符`,
+		`≈${(meta.estimated_tokens || Math.round(totalChars / 3.5)).toLocaleString()} tokens`,
+	]
+	if (meta.commander_mode) parts.push('🎖️ 司令员模式')
+	if (result.model || meta.model) parts.push(`模型: ${result.model || meta.model}`)
+	statsDiv.textContent = parts.join(' · ')
+	els.promptContent.appendChild(statsDiv)
+
+	// 标签页栏
+	const tabBar = document.createElement('div')
+	tabBar.className = 'flex gap-1 mb-2'
+	tabBar.innerHTML = `
+		<button class="btn btn-xs mem-prompt-tab ${promptPreviewTab === 'formatted' ? '' : 'btn-outline'}" data-tab="formatted">📝 消息列表</button>
+		<button class="btn btn-xs mem-prompt-tab ${promptPreviewTab === 'rawjson' ? '' : 'btn-outline'}" data-tab="rawjson">📋 原始 JSON</button>
+	`
+	els.promptContent.appendChild(tabBar)
+
+	tabBar.querySelectorAll('.mem-prompt-tab').forEach(btn => {
+		btn.addEventListener('click', () => {
+			promptPreviewTab = btn.dataset.tab
+			renderFakeSendPreview(result)
+		})
+	})
+
+	if (promptPreviewTab === 'rawjson') {
+		renderFakeSendRawJson(result)
+	} else {
+		renderFakeSendMessages(messages)
+	}
+}
+
+/** 消息列表视图（和 promptViewer 一致的可折叠消息卡片） */
+function renderFakeSendMessages(messages) {
+	if (!messages.length) {
+		const p = document.createElement('p')
+		p.className = 'text-xs text-base-content/40 text-center py-4'
+		p.textContent = '没有消息'
+		els.promptContent.appendChild(p)
+		return
+	}
+
+	// 检测是否有 _source 标记（commanderMode）
+	const hasSourceInfo = messages.some(m => m._source)
+	const hasSectionInfo = messages.some(m => m._section)
+
+	const sectionLabels = {
+		beforeChat: '── ▼ 头部预设 (beforeChat) ▼ ──',
+		injectionAbove: '── ▼ 注入上方 (@D≥1) ▼ ──',
+		chatHistory: '── ▼ 聊天记录 ▼ ──',
+		injectionBelow: '── ▼ 注入下方 (@D=0) ▼ ──',
+		afterChat: '── ▼ 尾部预设 (afterChat) ▼ ──',
+		before: '── ▼ 预设(头) ▼ ──',
+		chat: '── ▼ 聊天记录 ▼ ──',
+		after: '── ▼ 预设(尾) ▼ ──',
+	}
+
+	let currentSection = null
+
+	messages.forEach((msg, idx) => {
+		// section 分隔线
+		if (hasSectionInfo && msg._section && msg._section !== currentSection) {
+			const divider = document.createElement('div')
+			divider.className = 'text-[10px] text-center text-base-content/30 py-1 my-1'
+			divider.style.cssText = 'border-top: 1px dashed oklch(var(--bc) / 0.1);'
+			divider.textContent = sectionLabels[msg._section] || `── ▼ ${msg._section} ▼ ──`
+			els.promptContent.appendChild(divider)
+			currentSection = msg._section
+		}
+
+		const card = document.createElement('div')
+		card.className = 'rounded-md border border-base-content/10 overflow-hidden mb-1'
+		if (msg._is_marker) card.style.opacity = '0.5'
+
+		const roleColor = msg.role === 'system' ? 'text-blue-400' : msg.role === 'user' ? 'text-green-400' : 'text-purple-400'
+		const roleBg = msg.role === 'system' ? 'bg-blue-500/5' : msg.role === 'user' ? 'bg-green-500/5' : 'bg-purple-500/5'
+		const content = msg.content || ''
+		const preview = content.substring(0, 80).replace(/\n/g, ' ')
+
+		// source 标签
+		let sourceTag = ''
+		if (hasSourceInfo && msg._source) {
+			const sourceMap = {
+				preset: '📋预设', injection: '💉注入', chat_log: '💬对话',
+			}
+			sourceTag = `<span class="text-[9px] opacity-50">${sourceMap[msg._source] || msg._source}</span>`
+		}
+
+		// identifier 标签
+		const identTag = msg._identifier ? `<span class="text-[9px] opacity-40 font-mono">${escapeHtml(msg._identifier)}</span>` : ''
+
+		const header = document.createElement('div')
+		header.className = `flex items-center gap-1.5 px-2 py-1 text-xs cursor-pointer ${roleBg}`
+		header.innerHTML = `
+			<span class="text-[10px] text-base-content/30">#${idx + 1}</span>
+			<span class="badge badge-xs ${roleColor} font-mono">${escapeHtml(msg.role)}</span>
+			${sourceTag}
+			${identTag}
+			<span class="flex-grow truncate text-base-content/50 text-[10px]">${escapeHtml(preview)}${content.length > 80 ? '...' : ''}</span>
+			<span class="text-base-content/30 text-[10px] shrink-0">${content.length.toLocaleString()}</span>
+			<span class="text-base-content/30 text-[10px] mem-msg-chevron">▶</span>
+		`
+
+		const body = document.createElement('pre')
+		body.className = 'text-xs font-mono whitespace-pre-wrap p-2 max-h-64 overflow-y-auto'
+		body.style.cssText = 'background: oklch(var(--bc) / 0.03); margin: 0; display: none;'
+		body.textContent = content
+
+		// 点击展开/折叠
+		header.addEventListener('click', () => {
+			const isOpen = body.style.display !== 'none'
+			body.style.display = isOpen ? 'none' : ''
+			header.querySelector('.mem-msg-chevron').textContent = isOpen ? '▶' : '▼'
+		})
+
+		card.appendChild(header)
+		card.appendChild(body)
+		els.promptContent.appendChild(card)
+	})
+}
+
+/** 原始 JSON 视图 — 显示完整 JSON（不截断） */
+function renderFakeSendRawJson(result) {
+	const copyBar = document.createElement('div')
+	copyBar.className = 'flex justify-end mb-1'
+	const copyBtn = document.createElement('button')
+	copyBtn.className = 'btn btn-xs btn-outline'
+	copyBtn.textContent = '📋 复制完整 JSON'
+	copyBar.appendChild(copyBtn)
+	els.promptContent.appendChild(copyBar)
+
+	const jsonStr = JSON.stringify(result, null, 2)
+	const pre = document.createElement('pre')
+	pre.className = 'text-xs font-mono whitespace-pre-wrap p-3 rounded-md overflow-y-auto select-all'
+	pre.style.cssText = 'background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1); max-height: 60vh;'
+	pre.textContent = jsonStr
+	els.promptContent.appendChild(pre)
+
+	copyBtn.addEventListener('click', async () => {
+		try {
+			await navigator.clipboard.writeText(jsonStr)
+			copyBtn.textContent = '✅ 已复制'
+			setTimeout(() => { copyBtn.textContent = '📋 复制完整 JSON' }, 1500)
+		} catch (err) { console.error('[memoryPresetChat] 复制失败:', err) }
+	})
 }
 
 function togglePromptPreview() {
@@ -198,6 +399,10 @@ function togglePromptPreview() {
 	els.promptPreview.classList.toggle('hidden')
 	if (els.togglePromptBtn) {
 		els.togglePromptBtn.title = isHidden ? '收起提示词' : '查看提示词'
+	}
+	// 展开时自动加载 fake-send
+	if (isHidden) {
+		loadFakeSendPreview()
 	}
 }
 

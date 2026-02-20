@@ -18,6 +18,7 @@ let currentCharId = ''
 let tables = []
 let currentTableIndex = 0
 let isDirty = false
+let memoryConfig = null  // 记忆系统配置（archive 阈值等）
 
 // ===== DOM 引用缓存 =====
 const dom = {}
@@ -43,6 +44,11 @@ function cacheDom() {
 	dom.gridHead = document.getElementById('mm-grid-head')
 	dom.gridBody = document.getElementById('mm-grid-body')
 	dom.status = document.getElementById('mm-status')
+	// 归档配置面板
+	dom.archiveConfig = document.getElementById('mm-archive-config')
+	dom.threshold = document.getElementById('mm-threshold')
+	dom.saveConfigBtn = document.getElementById('mm-save-config-btn')
+	dom.configStatus = document.getElementById('mm-config-status')
 }
 
 // ===== API 调用 =====
@@ -74,6 +80,25 @@ async function saveTableToBackend(username, charId, tableIndex, tableData) {
 		}),
 	})
 	if (!res.ok) throw new Error(`保存表格失败: ${res.status}`)
+	return res.json()
+}
+
+/**
+ * 保存归档配置到后端
+ */
+async function saveArchiveConfig(username, charId, archiveConfig) {
+	const url = `/api/parts/plugins:beilu-memory/config/setdata?username=${encodeURIComponent(username)}&char_id=${encodeURIComponent(charId)}`
+	const res = await fetch(url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			_action: 'updateConfig',
+			username,
+			charName: charId,
+			archive: archiveConfig,
+		}),
+	})
+	if (!res.ok) throw new Error(`保存归档配置失败: ${res.status}`)
 	return res.json()
 }
 
@@ -116,6 +141,7 @@ async function onCharSelected() {
 	if (!charId) {
 		dom.noChar.style.display = ''
 		dom.editor.style.display = 'none'
+		hideArchiveConfig()
 		tables = []
 		currentCharId = ''
 		return
@@ -130,6 +156,14 @@ async function onCharSelected() {
 }
 
 /**
+	* 角色卡选择清空时隐藏归档配置
+	*/
+function hideArchiveConfig() {
+	if (dom.archiveConfig) dom.archiveConfig.style.display = 'none'
+	memoryConfig = null
+}
+
+/**
  * 加载指定角色卡的表格数据
  */
 async function loadTablesForChar(username, charId) {
@@ -140,11 +174,15 @@ async function loadTablesForChar(username, charId) {
 	try {
 		const data = await fetchMemoryData(username, charId)
 		tables = data.tables || []
+		memoryConfig = data.config || {}
 		isDirty = false
 		updateDirtyIndicator()
 
 		// 渲染统计
 		renderStats()
+
+		// 渲染归档配置
+		renderArchiveConfig()
 
 		// 渲染
 		renderTableTabs()
@@ -156,6 +194,53 @@ async function loadTablesForChar(username, charId) {
 		console.error('[memoryManage] 加载表格数据失败:', err)
 		setStatus(`加载失败: ${err.message}`)
 		dom.noChar.style.display = ''
+	}
+}
+
+// ===== 归档配置面板 =====
+
+function renderArchiveConfig() {
+	if (!dom.archiveConfig || !dom.threshold) return
+
+	const threshold = memoryConfig?.archive?.temp_memory_threshold || 50
+	dom.threshold.value = threshold
+	dom.archiveConfig.style.display = ''
+	if (dom.configStatus) dom.configStatus.textContent = ''
+}
+
+async function onSaveArchiveConfig() {
+	if (!currentUsername || !currentCharId) {
+		if (dom.configStatus) dom.configStatus.textContent = '未选择角色卡'
+		return
+	}
+
+	const threshold = parseInt(dom.threshold.value, 10)
+	if (isNaN(threshold) || threshold < 10 || threshold > 500) {
+		if (dom.configStatus) dom.configStatus.textContent = '阈值应在 10-500 之间'
+		return
+	}
+
+	dom.saveConfigBtn.disabled = true
+	dom.saveConfigBtn.textContent = '保存中...'
+	if (dom.configStatus) dom.configStatus.textContent = '正在保存...'
+
+	try {
+		await saveArchiveConfig(currentUsername, currentCharId, {
+			temp_memory_threshold: threshold,
+		})
+
+		// 更新本地缓存
+		if (!memoryConfig.archive) memoryConfig.archive = {}
+		memoryConfig.archive.temp_memory_threshold = threshold
+
+		if (dom.configStatus) dom.configStatus.textContent = `✅ 阈值已设为 ${threshold} 条`
+		setStatus(`归档阈值已更新为 ${threshold}`)
+	} catch (err) {
+		console.error('[memoryManage] 保存归档配置失败:', err)
+		if (dom.configStatus) dom.configStatus.textContent = `❌ ${err.message}`
+	} finally {
+		dom.saveConfigBtn.disabled = false
+		dom.saveConfigBtn.textContent = '💾 保存配置'
 	}
 }
 
@@ -454,6 +539,7 @@ function bindEvents() {
 	})
 	dom.addRowBtn.addEventListener('click', addRow)
 	dom.saveBtn.addEventListener('click', saveCurrentTable)
+	if (dom.saveConfigBtn) dom.saveConfigBtn.addEventListener('click', onSaveArchiveConfig)
 
 	// 离开前提示未保存
 	window.addEventListener('beforeunload', (e) => {

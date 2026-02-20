@@ -187,6 +187,15 @@ export function modifyTimeLine(delta) {
 }
 
 /**
+ * 设置时间线绝对索引（用于 iframe 内 switchSwipe 切换到指定开场白）。
+ * @param {number} absoluteIndex - 目标时间线索引。
+ * @returns {Promise<any>} - 响应数据。
+ */
+export function setTimeLineAbsolute(absoluteIndex) {
+	return callApi('timeline', 'PUT', { absoluteIndex })
+}
+
+/**
  * 获取初始数据。
  * @returns {Promise<any>} - 初始数据。
  */

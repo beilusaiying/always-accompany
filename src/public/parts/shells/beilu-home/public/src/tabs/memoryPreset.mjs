@@ -333,7 +333,7 @@ function renderDetail() {
 	dom.detailName.textContent = preset.name
 	dom.detailToggle.checked = preset.enabled
 	dom.detailDesc.value = preset.description || ''
-	dom.detailTrigger.textContent = TRIGGER_LABELS[preset.trigger] || preset.trigger
+	dom.detailTrigger.value = preset.trigger || 'manual_button'
 
 	// API 配置
 	const api = preset.api_config || {}
@@ -1101,6 +1101,7 @@ function bindEvents() {
 			presetId: selectedPresetId,
 			enabled: dom.detailToggle.checked,
 			description: dom.detailDesc.value,
+			trigger: dom.detailTrigger.value,
 			api_config: {
 				use_custom: dom.apiCustom.checked,
 				source: dom.apiSource.value,
@@ -1118,12 +1119,13 @@ function bindEvents() {
 			if (p.builtin && p.content === '{{chat_history}}') continue
 
 			const pOk = await setPluginData({
-				_action: 'updatePresetPrompt',
-				presetId: selectedPresetId,
-				promptIndex: i,
-				content: p.content,
-				enabled: p.enabled,
-			})
+					_action: 'updatePresetPrompt',
+					presetId: selectedPresetId,
+					promptIndex: i,
+					content: p.content,
+					enabled: p.enabled,
+					role: p.role,
+				})
 			if (!pOk || pOk.success === false) allOk = false
 		}
 
@@ -1464,10 +1466,17 @@ async function triggerMaintenanceAction(action, extraData = {}) {
 
 // ===== 预设预览渲染 (Dry Run) =====
 
+/** 最近一次 dryRun 的原始 messages 数据，用于 JSON 视图 */
+let lastDryRunMessages = null
+
+/** 当前预览标签页：'formatted' | 'rawjson' */
+let previewActiveTab = 'formatted'
+
 function renderDryRunPreview(result) {
 	if (!dom.presetPreviewContent) return
 
 	const messages = result.messages || []
+	lastDryRunMessages = messages
 	const totalChars = messages.reduce((sum, m) => sum + (m.content || '').length, 0)
 
 	// 统计
@@ -1477,6 +1486,32 @@ function renderDryRunPreview(result) {
 
 	dom.presetPreviewContent.innerHTML = ''
 
+	// === 标签页栏 ===
+	const tabBar = document.createElement('div')
+	tabBar.className = 'flex gap-1 mb-2'
+	tabBar.innerHTML = `
+		<button class="btn btn-xs mp-preview-tab ${previewActiveTab === 'formatted' ? '' : 'btn-outline'}" data-tab="formatted">📝 格式化视图</button>
+		<button class="btn btn-xs mp-preview-tab ${previewActiveTab === 'rawjson' ? '' : 'btn-outline'}" data-tab="rawjson">📋 原始 JSON</button>
+	`
+	dom.presetPreviewContent.appendChild(tabBar)
+
+	// 标签页事件
+	tabBar.querySelectorAll('.mp-preview-tab').forEach(btn => {
+		btn.addEventListener('click', () => {
+			previewActiveTab = btn.dataset.tab
+			renderDryRunPreview(result) // 重新渲染
+		})
+	})
+
+	if (previewActiveTab === 'rawjson') {
+		renderDryRunRawJson(messages)
+	} else {
+		renderDryRunFormatted(messages)
+	}
+}
+
+/** 格式化卡片视图 */
+function renderDryRunFormatted(messages) {
 	messages.forEach((msg, idx) => {
 		const card = document.createElement('div')
 		card.className = 'rounded-md border border-base-content/10 overflow-hidden mb-2'
@@ -1508,6 +1543,42 @@ function renderDryRunPreview(result) {
 		card.appendChild(bodyDiv)
 		dom.presetPreviewContent.appendChild(card)
 	})
+}
+
+/** 原始 JSON 视图 */
+function renderDryRunRawJson(messages) {
+	const wrapper = document.createElement('div')
+
+	// 复制按钮
+	const copyBar = document.createElement('div')
+	copyBar.className = 'flex justify-end mb-1'
+	const copyBtn = document.createElement('button')
+	copyBtn.className = 'btn btn-xs btn-outline'
+	copyBtn.textContent = '📋 复制 JSON'
+	copyBtn.title = '复制完整 JSON 到剪贴板'
+	copyBar.appendChild(copyBtn)
+	wrapper.appendChild(copyBar)
+
+	const jsonStr = JSON.stringify(messages, null, 2)
+
+	const pre = document.createElement('pre')
+	pre.className = 'text-xs font-mono whitespace-pre-wrap p-3 rounded-md overflow-y-auto select-all'
+	pre.style.cssText = 'background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1); max-height: 70vh;'
+	pre.textContent = jsonStr
+	wrapper.appendChild(pre)
+
+	// 复制事件
+	copyBtn.addEventListener('click', async () => {
+		try {
+			await navigator.clipboard.writeText(jsonStr)
+			copyBtn.textContent = '✅ 已复制'
+			setTimeout(() => { copyBtn.textContent = '📋 复制 JSON' }, 1500)
+		} catch (err) {
+			console.error('[memoryPreset] 复制 JSON 失败:', err)
+		}
+	})
+
+	dom.presetPreviewContent.appendChild(wrapper)
 }
 
 // ===== 运行结果渲染 =====

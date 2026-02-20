@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { evaluateMacros } from './engine/marco.mjs';
 import { PresetEngine, buildDefaultMemory } from './engine/preset_engine.mjs';
 import info from './info.json' with { type: 'json' };
 
@@ -58,13 +59,21 @@ let lastPromptSnapshot = null;
  * 运行时参数（不持久化到磁盘）
  * 由前端通过 update_runtime_params 设置，用于瞬时控制
  * @type {{
- *   context_msg_limit: number,  // 上下文消息条数限制，0=不限制
- *   stream: boolean,            // 流式输出开关
+ *   context_msg_limit: number,           // 上下文消息条数限制，0=不限制
+ *   stream: boolean,                     // 流式输出开关
+ *   prompt_post_processing: string,      // 提示词后处理: 'none'|'merge'|'semi'|'strict'
+ *   prefill_enabled: boolean,            // 通用预填充开关（尾部 assistant 保持身份）
+ *   claude_prefill_enabled: boolean,     // Claude 预填充开关（+自动严格角色）
+ *   continue_prefill: boolean,           // 继续预填充（继续时以 assistant 身份发送）
  * }}
  */
 let runtimeParams = {
 	context_msg_limit: 0,
 	stream: true,
+	prompt_post_processing: 'none',
+	prefill_enabled: false,
+	claude_prefill_enabled: false,
+	continue_prefill: false,
 };
 
 /**
@@ -188,20 +197,34 @@ const pluginExport = {
 		});
 
 		// ---- 运行时参数 API（不持久化） ----
-		router.get('/api/parts/plugins\\:beilu-preset/runtime-params', async (_req, res) => {
+		router.get('/api/parts/plugins\\:beilu-preset/config/runtime-params', async (_req, res) => {
 			res.json({ ...runtimeParams });
 		});
 
-		router.post('/api/parts/plugins\\:beilu-preset/runtime-params', async (req, res) => {
+		router.post('/api/parts/plugins\\:beilu-preset/config/runtime-params', async (req, res) => {
 			try {
 				if (req.body) {
-					if (req.body.context_msg_limit !== undefined) {
-						runtimeParams.context_msg_limit = parseInt(req.body.context_msg_limit, 10) || 0;
+						if (req.body.context_msg_limit !== undefined) {
+							runtimeParams.context_msg_limit = parseInt(req.body.context_msg_limit, 10) || 0;
+						}
+						if (req.body.stream !== undefined) {
+							runtimeParams.stream = !!req.body.stream;
+						}
+						if (req.body.prompt_post_processing !== undefined) {
+							const valid = ['none', 'merge', 'semi', 'strict'];
+							runtimeParams.prompt_post_processing = valid.includes(req.body.prompt_post_processing)
+								? req.body.prompt_post_processing : 'none';
+						}
+						if (req.body.prefill_enabled !== undefined) {
+							runtimeParams.prefill_enabled = !!req.body.prefill_enabled;
+						}
+						if (req.body.claude_prefill_enabled !== undefined) {
+							runtimeParams.claude_prefill_enabled = !!req.body.claude_prefill_enabled;
+						}
+						if (req.body.continue_prefill !== undefined) {
+							runtimeParams.continue_prefill = !!req.body.continue_prefill;
+						}
 					}
-					if (req.body.stream !== undefined) {
-						runtimeParams.stream = !!req.body.stream;
-					}
-				}
 				res.json({ success: true, params: { ...runtimeParams } });
 			} catch (err) {
 				console.error('[beilu-preset] runtime-params error:', err);
@@ -573,6 +596,19 @@ const pluginExport = {
 						if (pluginContent) {
 							env[`plugin_${name}`] = pluginContent;
 						}
+						// 从插件 extension 中提取宏变量（不用 truthy 判断，允许空字符串）
+						if (prompt?.extension) {
+							if (prompt.extension.workspace_root !== undefined) {
+								env.workspace_root = prompt.extension.workspace_root;
+							}
+							if (prompt.extension.workspace_tree !== undefined) {
+								env.workspace_tree = prompt.extension.workspace_tree;
+							}
+						}
+					}
+					// 诊断日志：确认宏变量是否被收集
+					if (env.workspace_root !== undefined || env.workspace_tree !== undefined) {
+						console.log(`[beilu-preset] Round 1: workspace_root="${env.workspace_root || ''}", workspace_tree=${env.workspace_tree ? env.workspace_tree.length + '字符' : '(空)'}`);
 					}
 
 					// 清空原始模块（预设将完全接管）
@@ -657,11 +693,18 @@ const pluginExport = {
 									// 先按 order 排序
 									const sorted = [...memoryDepthInjections].sort((a, b) => (a.order || 0) - (b.order || 0))
 									for (const depthInj of sorted) {
+										// 对注入内容执行宏替换（支持 {{workspace_tree}} 等自定义宏）
+										let injContent = depthInj.content
+										try {
+											injContent = evaluateMacros(injContent, env, macroMemory, chatLog)
+										} catch (e) {
+											console.warn(`[beilu-preset] 记忆注入宏替换失败 (${depthInj.id}):`, e.message)
+										}
 										const msg = {
 											role: depthInj.role || 'system',
 											name: `memory_${depthInj.id}`,
 											identifier: `memory_${depthInj.id}`,
-											content: depthInj.content,
+											content: injContent,
 											depth: depthInj.depth ?? 0,
 										}
 										if (depthInj.depth >= 1) {
@@ -696,9 +739,13 @@ const pluginExport = {
 					// 向后兼容：beilu_injection_messages 合并 above+below
 					my_prompt.extension.beilu_injection_messages = [...injectionAbove, ...injectionBelow];
 					my_prompt.extension.beilu_model_params = {
-						...engine.modelParams,
-						stream: runtimeParams.stream,
-					};
+							...engine.modelParams,
+							stream: runtimeParams.stream,
+							prompt_post_processing: runtimeParams.prompt_post_processing,
+							prefill_enabled: runtimeParams.prefill_enabled,
+							claude_prefill_enabled: runtimeParams.claude_prefill_enabled,
+							continue_prefill: runtimeParams.continue_prefill,
+						};
 
 					return;
 				}

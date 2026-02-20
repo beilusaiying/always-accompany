@@ -1,11 +1,12 @@
 <div class="chat-message mb-3 group" id="${id}" data-template-type="message">
-	<!-- 消息头部：头像 + 名字 + 时间 -->
+	<!-- 消息头部：头像 + 名字 + 楼层号 + 时间 -->
 	<div class="message-header flex items-center gap-2 px-1 mb-1">
-		<div class="message-avatar w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30">
+		<div class="message-avatar w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30 border border-amber-700/40">
 			<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
-				onerror="this.style.display='none'" />
+				onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-amber-400 text-xs font-bold\'>'+('${name}'||'?')[0]+'</div>'" />
 		</div>
 		<span class="char-name text-sm font-bold text-primary">${name}</span>
+		<span class="message-floor text-xs opacity-30 font-mono">${floor}</span>
 		<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
 	</div>
 	<!-- 消息体 -->

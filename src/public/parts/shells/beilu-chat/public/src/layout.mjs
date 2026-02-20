@@ -577,6 +577,56 @@ function initFeatureControls() {
 		})
 	}
 
+	// --- 渲染器开关 ---
+	const rendererToggle = document.getElementById('toggle-renderer')
+	if (rendererToggle) {
+		const saved = localStorage.getItem('beilu-renderer-enabled')
+		if (saved !== null) rendererToggle.checked = saved !== 'false'
+		rendererToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-renderer-enabled', rendererToggle.checked)
+		})
+	}
+
+	// --- 代码折叠开关 ---
+	const codeFoldToggle = document.getElementById('toggle-code-fold')
+	if (codeFoldToggle) {
+		const saved = localStorage.getItem('beilu-code-fold-enabled')
+		if (saved !== null) codeFoldToggle.checked = saved === 'true'
+		codeFoldToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-code-fold-enabled', codeFoldToggle.checked)
+		})
+	}
+
+	// --- 代码折叠模式 ---
+	const codeFoldMode = document.getElementById('code-fold-mode')
+	if (codeFoldMode) {
+		const saved = localStorage.getItem('beilu-code-fold-mode')
+		if (saved) codeFoldMode.value = saved
+		codeFoldMode.addEventListener('change', () => {
+			localStorage.setItem('beilu-code-fold-mode', codeFoldMode.value)
+		})
+	}
+
+	// --- 流式渲染开关 ---
+	const streamRenderToggle = document.getElementById('toggle-stream-render')
+	if (streamRenderToggle) {
+		const saved = localStorage.getItem('beilu-stream-render-enabled')
+		if (saved !== null) streamRenderToggle.checked = saved === 'true'
+		streamRenderToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-stream-render-enabled', streamRenderToggle.checked)
+		})
+	}
+
+	// --- 渲染深度 ---
+	const renderDepth = document.getElementById('render-depth')
+	if (renderDepth) {
+		const saved = localStorage.getItem('beilu-render-depth')
+		if (saved) renderDepth.value = saved
+		renderDepth.addEventListener('change', () => {
+			localStorage.setItem('beilu-render-depth', renderDepth.value)
+		})
+	}
+
 	// --- 消息加载限制 ---
 	const msgLoadLimit = document.getElementById('msg-load-limit')
 	if (msgLoadLimit) {
@@ -612,6 +662,63 @@ function initFeatureControls() {
 		})
 		// 页面加载时也同步一次
 		syncRuntimeParams({ stream: streamToggle.checked })
+	}
+
+	// --- 通用预填充开关 ---
+	const prefillToggle = document.getElementById('param-prefill-toggle')
+	if (prefillToggle) {
+		const saved = localStorage.getItem('beilu-prefill-enabled')
+		if (saved !== null) prefillToggle.checked = saved === 'true'
+		prefillToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-prefill-enabled', prefillToggle.checked)
+			syncRuntimeParams({ prefill_enabled: prefillToggle.checked })
+		})
+		syncRuntimeParams({ prefill_enabled: prefillToggle.checked })
+	}
+
+	// --- Claude 预填充开关 ---
+	const claudePrefillToggle = document.getElementById('param-claude-prefill-toggle')
+	if (claudePrefillToggle) {
+		const saved = localStorage.getItem('beilu-claude-prefill-enabled')
+		if (saved !== null) claudePrefillToggle.checked = saved === 'true'
+		claudePrefillToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-claude-prefill-enabled', claudePrefillToggle.checked)
+			syncRuntimeParams({ claude_prefill_enabled: claudePrefillToggle.checked })
+			// Claude 预填充启用时自动切换后处理为严格模式
+			if (claudePrefillToggle.checked) {
+				const ppSelect = document.getElementById('param-post-processing')
+				if (ppSelect && ppSelect.value !== 'strict' && ppSelect.value !== 'semi') {
+					ppSelect.value = 'strict'
+					localStorage.setItem('beilu-post-processing', 'strict')
+					syncRuntimeParams({ prompt_post_processing: 'strict' })
+				}
+			}
+		})
+		syncRuntimeParams({ claude_prefill_enabled: claudePrefillToggle.checked })
+	}
+
+	// --- 提示词后处理下拉框 ---
+	const postProcessingSelect = document.getElementById('param-post-processing')
+	if (postProcessingSelect) {
+		const saved = localStorage.getItem('beilu-post-processing')
+		if (saved) postProcessingSelect.value = saved
+		postProcessingSelect.addEventListener('change', () => {
+			localStorage.setItem('beilu-post-processing', postProcessingSelect.value)
+			syncRuntimeParams({ prompt_post_processing: postProcessingSelect.value })
+		})
+		syncRuntimeParams({ prompt_post_processing: postProcessingSelect.value })
+	}
+
+	// --- 继续预填充开关 ---
+	const continuePrefillToggle = document.getElementById('param-continue-prefill')
+	if (continuePrefillToggle) {
+		const saved = localStorage.getItem('beilu-continue-prefill')
+		if (saved !== null) continuePrefillToggle.checked = saved === 'true'
+		continuePrefillToggle.addEventListener('change', () => {
+			localStorage.setItem('beilu-continue-prefill', continuePrefillToggle.checked)
+			syncRuntimeParams({ continue_prefill: continuePrefillToggle.checked })
+		})
+		syncRuntimeParams({ continue_prefill: continuePrefillToggle.checked })
 	}
 
 	// --- 字体比例滑块（聊天消息区域） ---

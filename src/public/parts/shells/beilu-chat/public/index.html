@@ -207,6 +207,43 @@
 									<input type="checkbox" id="param-stream" class="toggle toggle-xs toggle-warning" checked />
 								</label>
 							</div>
+							<!-- 通用预填充开关 -->
+							<div class="form-control">
+								<label class="label py-0.5 cursor-pointer">
+									<span class="label-text text-xs">通用预填充</span>
+									<input type="checkbox" id="param-prefill-toggle" class="toggle toggle-xs toggle-warning" />
+								</label>
+								<span class="text-[9px] text-base-content/30 pl-1">开启：预设尾部条目以 assistant 身份发送（预填充）</span>
+							</div>
+							<!-- Claude 预填充开关 -->
+							<div class="form-control">
+								<label class="label py-0.5 cursor-pointer">
+									<span class="label-text text-xs">Claude 预填充</span>
+									<input type="checkbox" id="param-claude-prefill-toggle" class="toggle toggle-xs toggle-warning" />
+								</label>
+								<span class="text-[9px] text-base-content/30 pl-1">启用时自动开启严格角色模式</span>
+							</div>
+							<!-- 提示词后处理 -->
+							<div class="form-control">
+								<label class="label py-0.5">
+									<span class="label-text text-xs">提示词后处理</span>
+								</label>
+								<select id="param-post-processing" class="select select-xs select-bordered w-full text-xs">
+									<option value="none">无</option>
+									<option value="merge">合并相同角色连续发言</option>
+									<option value="semi">半严格（合并+system转user交替）</option>
+									<option value="strict">严格（合并+user在前+system仅一条）</option>
+								</select>
+								<span class="text-[9px] text-base-content/30 pl-1">部分API要求严格角色交替，按需选择</span>
+							</div>
+							<!-- 继续预填充 -->
+							<div class="form-control">
+								<label class="label py-0.5 cursor-pointer">
+									<span class="label-text text-xs">继续预填充</span>
+									<input type="checkbox" id="param-continue-prefill" class="toggle toggle-xs toggle-warning" />
+								</label>
+								<span class="text-[9px] text-base-content/30 pl-1">继续时以 assistant 身份发送最后消息</span>
+							</div>
 							<button id="model-params-save" class="btn btn-xs btn-block bg-amber-700 hover:bg-amber-800 text-white border-amber-700 mt-1">
 								💾 保存参数
 							</button>
@@ -759,12 +796,7 @@
 						</div>
 						<div class="collapse-content px-2 pb-2">
 							<div class="space-y-1.5">
-								<!-- 悬浮球开关 -->
-								<label class="flex items-center justify-between cursor-pointer">
-									<span class="text-xs">✦ 悬浮球（截图/上传）</span>
-									<input type="checkbox" id="toggle-floating-orb" class="toggle toggle-xs" checked />
-								</label>
-								<!-- 正则处理器开关 -->
+									<!-- 正则处理器开关 -->
 								<label class="flex items-center justify-between cursor-pointer">
 									<span class="text-xs">🔤 正则处理器</span>
 									<input type="checkbox" id="toggle-regex" class="toggle toggle-xs" checked />
@@ -802,6 +834,43 @@
 	
 								<div class="divider my-1 opacity-30"></div>
 	
+								<!-- 渲染器开关 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">🎨 启用渲染器</span>
+									<input type="checkbox" id="toggle-renderer" class="toggle toggle-xs" checked />
+								</label>
+								<span class="text-[9px] text-base-content/30 pl-4">启用后，符合条件的代码将被渲染为美化界面</span>
+
+								<!-- 代码折叠 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">📦 代码折叠</span>
+									<input type="checkbox" id="toggle-code-fold" class="toggle toggle-xs" />
+								</label>
+								<div class="pl-4 mt-0.5">
+									<select id="code-fold-mode" class="select select-xs select-bordered w-full text-[10px]">
+										<option value="all">折叠所有代码块</option>
+										<option value="frontend" selected>仅前端（HTML/CSS/JS）</option>
+									</select>
+									<span class="text-[9px] text-base-content/30">折叠可渲染但未被渲染的代码块</span>
+								</div>
+
+								<!-- 流式渲染 -->
+								<label class="flex items-center justify-between cursor-pointer">
+									<span class="text-xs">⚡ 流式渲染</span>
+									<input type="checkbox" id="toggle-stream-render" class="toggle toggle-xs" />
+								</label>
+								<span class="text-[9px] text-base-content/30 pl-4">AI流式输出时即时渲染美化界面</span>
+
+								<!-- 渲染深度 -->
+								<div class="flex items-center justify-between mt-1">
+									<span class="text-xs">🔍 渲染深度</span>
+									<input type="number" id="render-depth" class="input input-xs input-bordered w-20 font-mono text-xs"
+										min="0" max="9999" step="1" value="0" title="0=全部渲染" />
+								</div>
+								<span class="text-[9px] text-base-content/30 pl-4">只渲染最近N层的美化（0=全部）</span>
+
+								<div class="divider my-1 opacity-30"></div>
+
 								<!-- 消息加载限制 -->
 								<div class="flex items-center justify-between">
 									<span class="text-xs">📜 消息加载数</span>

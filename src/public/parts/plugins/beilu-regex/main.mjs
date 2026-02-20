@@ -114,6 +114,33 @@ function createDefaultRule(overrides = {}) {
 }
 
 // ============================================================
+// placement 数字→字符串映射（兼容 ST 旧版数字格式）
+// ============================================================
+
+const PLACEMENT_NUM_TO_STR = {
+	0: 'ai_output',
+	1: 'user_input',
+	2: 'slash_command',
+	3: 'world_info',
+	4: 'reasoning',
+}
+
+/**
+ * 检查规则的 placement 是否包含指定过滤器（兼容数字和字符串格式）
+ * @param {(string|number)[]} placement - 规则的 placement 数组
+ * @param {string} filter - 过滤器字符串，如 'ai_output'
+ * @returns {boolean}
+ */
+function placementIncludes(placement, filter) {
+	if (!placement || !Array.isArray(placement)) return false
+	for (const p of placement) {
+		if (p === filter) return true
+		if (typeof p === 'number' && PLACEMENT_NUM_TO_STR[p] === filter) return true
+	}
+	return false
+}
+
+// ============================================================
 // 正则执行引擎
 // ============================================================
 
@@ -202,7 +229,7 @@ function applyRegexRules(text, rules, placementFilter, options = {}) {
 
 	for (const rule of rules) {
 		if (rule.disabled) continue
-		if (!rule.placement || !rule.placement.includes(placementFilter)) continue
+		if (!rule.placement || !placementIncludes(rule.placement, placementFilter)) continue
 
 		// 作用域过滤：scoped 规则只对绑定的角色生效
 		if (rule.scope === 'scoped' && rule.boundCharName && currentCharName) {
@@ -562,6 +589,7 @@ const pluginExport = {
 				]
 
 				// 遍历聊天记录应用正则
+				// 注意：在副本上操作，避免污染原始存储数据
 				const chatLog = prompt_struct?.chat_log
 				if (chatLog && Array.isArray(chatLog)) {
 					for (let i = chatLog.length - 1; i >= 0; i--) {
@@ -569,23 +597,29 @@ const pluginExport = {
 						if (!entry || !entry.content) continue
 
 						const depth = chatLog.length - 1 - i
+						let content = entry.content
 
 						// 内置：剥离 AI 回复中的思维链
 						if (entry.role === 'char' || entry.role === 'assistant') {
 							for (const pattern of thinkingPatterns) {
-								entry.content = entry.content.replace(pattern, '')
+								content = content.replace(pattern, '')
 							}
 							// 清理剥离后可能产生的多余空行
-							entry.content = entry.content.replace(/\n{3,}/g, '\n\n').trim()
+							content = content.replace(/\n{3,}/g, '\n\n').trim()
 						}
 
 						if (entry.role === 'user') {
-							entry.content = applyRegexRules(
-								entry.content,
+							content = applyRegexRules(
+								content,
 								pluginData.rules,
 								'user_input',
 								{ messageDepth: depth, macroValues, currentCharName }
 							)
+						}
+
+						// 只有实际变化时才写回（写回到 prompt_struct 的副本上，不影响存储）
+						if (content !== entry.content) {
+							entry.content = content
 						}
 					}
 				}

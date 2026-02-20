@@ -1,12 +1,20 @@
 # always accompany
 
+### beilu
+
 > **Make AI truly remember.**
 
-beilu-always accompany is an **AI companion platform unifying companionship and productivity**, combining an **IDE editing environment**, a **multi-AI collaboration engine**, an **original layered memory algorithm**, and a **chat system compatible with the SillyTavern ecosystem**. It addresses the two fundamental bottlenecks of current LLMs head-on: **limited context windows** and **attention degradation as context grows**.
+always accompany is an **AI companion platform unifying companionship and productivity**, combining an **IDE editing environment**, a **multi-AI collaboration engine**, an **original layered memory algorithm**, and a **chat system compatible with the SillyTavern ecosystem**. It addresses the two fundamental bottlenecks of current LLMs head-on: **limited context windows** and **attention degradation as context grows**.
 
 English | [中文](README_CN.md)
 
 > This entire project — design, architecture, and development — was completed independently by a university student, leveraging AI-assisted programming with skills spanning algorithm design, biomimicry principles, framework architecture, and logical thinking.
+
+### 💬 Join the Community
+
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/agHeDq9bqU)
+
+Get dedicated prompts (Chat AI, Memory AI, etc.), build the community together, and have fun!
 
 ---
 
@@ -141,7 +149,7 @@ The management home page (beilu-home) supports 4 languages via a "translation ov
 
 ### vs AI Chat Applications (ChatGPT / Claude / Gemini)
 
-| Dimension      | ChatGPT etc.                            | beilu-always accompany                                           |
+| Dimension      | ChatGPT etc.                            | always accompany                                                 |
 | -------------- | --------------------------------------- | ---------------------------------------------------------------- |
 | Memory         | Simple summaries / conversation history | Three-layer graded + multi-AI retrieval, theoretically unlimited |
 | Attention      | Degrades as context grows               | Retrieval AI pre-filters; Reply AI attention stays focused       |
@@ -150,7 +158,7 @@ The management home page (beilu-home) supports 4 languages via a "translation ov
 
 ### vs AI Coding Tools (Cursor / Copilot / Windsurf)
 
-| Dimension              | Cursor etc.                     | beilu-always accompany                                                                             |
+| Dimension              | Cursor etc.                     | always accompany                                                                                   |
 | ---------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Project memory         | Based on current file context   | Cross-session persistent memory (architecture decisions, code conventions, historical discussions) |
 | Multi-AI collaboration | Single model                    | 7 AIs with dedicated roles; retrieval/summary/reply separated                                      |
@@ -158,7 +166,7 @@ The management home page (beilu-home) supports 4 languages via a "translation ov
 
 ### vs AI Roleplay Platforms (SillyTavern)
 
-| Dimension            | SillyTavern               | beilu-always accompany                                       |
+| Dimension            | SillyTavern               | always accompany                                             |
 | -------------------- | ------------------------- | ------------------------------------------------------------ |
 | Memory               | No built-in memory system | Original three-layer memory + 6 auxiliary AIs                |
 | File operations      | None                      | Built-in IDE file management + AI file operations            |

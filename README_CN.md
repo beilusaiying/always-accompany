@@ -1,12 +1,20 @@
-# beilu-always accompany
+# always accompany
+
+### beilu
 
 > **让 AI 真正记住。**
 
-beilu-always accompany 是一个**陪伴与工作一体的 AI 伴侣平台**，融合 **IDE 编辑环境**、**多 AI 协作引擎**、**原创分层记忆算法** 和 **兼容 SillyTavern 生态的聊天系统**，旨在从根本上解决当前 LLM 的两大瓶颈——**上下文窗口有限** 和 **注意力随上下文增长而分散**。
+always accompany 是一个**陪伴与工作一体的 AI 伴侣平台**，融合 **IDE 编辑环境**、**多 AI 协作引擎**、**原创分层记忆算法** 和 **兼容 SillyTavern 生态的聊天系统**，旨在从根本上解决当前 LLM 的两大瓶颈——**上下文窗口有限** 和 **注意力随上下文增长而分散**。
 
 [English](README.md) | 中文
 
 > 本项目由一名在校大学生独立完成全部设计与开发，借助 AI 辅助编程，融合算法设计、仿生学原理、框架架构和逻辑思维等多方面能力。
+
+### 💬 加入社区
+
+[![Discord](https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/agHeDq9bqU)
+
+在这里你可以获取专门的提示词（聊天 AI、记忆 AI 等），也欢迎一起创建社区、交流玩耍！
 
 ---
 
@@ -141,7 +149,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 聊天软件（ChatGPT / Claude / Gemini）
 
-| 维度       | ChatGPT 等           | beilu-always accompany             |
+| 维度       | ChatGPT 等           | always accompany                   |
 | ---------- | -------------------- | ---------------------------------- |
 | 记忆       | 简单的摘要/对话历史  | 三层分级 + 多 AI 检索，理论无限期  |
 | 注意力     | 上下文越长越分散     | 检索 AI 预筛选，回复 AI 注意力集中 |
@@ -150,7 +158,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 编程工具（Cursor / Copilot / Windsurf）
 
-| 维度       | Cursor 等          | beilu-always accompany                         |
+| 维度       | Cursor 等          | always accompany                               |
 | ---------- | ------------------ | ---------------------------------------------- |
 | 项目记忆   | 基于当前文件上下文 | 跨会话持久记忆（架构决策、代码约定、历史讨论） |
 | 多 AI 协作 | 单模型             | 7 个 AI 各司其职，检索/总结/回复分离           |
@@ -158,7 +166,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 角色扮演平台（SillyTavern）
 
-| 维度     | SillyTavern    | beilu-always accompany          |
+| 维度     | SillyTavern    | always accompany                |
 | -------- | -------------- | ------------------------------- |
 | 记忆     | 无内置记忆系统 | 原创三层记忆 + 6 个辅助 AI      |
 | 文件操作 | 无             | 内置 IDE 文件管理 + AI 文件操作 |

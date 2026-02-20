@@ -792,13 +792,11 @@ function renderInjectionList() {
 			previewArea.style.display = ''
 
 			try {
-				const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/setdata`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ _action: 'previewInjectionPrompt', injectionId: injId }),
-				})
-				if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-				const result = await resp.json()
+					// 使用 setPluginData 发送请求（自动注入 charName / charDisplayName）
+					const result = await setPluginData({
+						_action: 'previewInjectionPrompt',
+						injectionId: injId,
+					})
 
 				if (result.error) {
 					if (contentEl) contentEl.textContent = `❌ ${result.error}`
@@ -1249,19 +1247,13 @@ function bindEvents() {
 		panel.style.display = ''
 
 		try {
-			// 使用 runMemoryPreset 并开启 dryRun
-			const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/setdata`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					_action: 'runMemoryPreset',
-					presetId: selectedPresetId,
-					dryRun: true,
-					chatHistory: 'User: (模拟的最近对话记录)\nChar: (模拟的最近回复)' // 提供一个模拟上下文以便查看效果
-				}),
+			// 使用 setPluginData 发送 dryRun 请求（自动注入 charName / charDisplayName）
+			const result = await setPluginData({
+				_action: 'runMemoryPreset',
+				presetId: selectedPresetId,
+				dryRun: true,
+				chatHistory: 'User: (模拟的最近对话记录)\nChar: (模拟的最近回复)', // 提供一个模拟上下文以便查看效果
 			})
-			if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-			const result = await resp.json()
 
 			if (result.error) {
 				if (dom.presetPreviewContent) dom.presetPreviewContent.innerHTML = `<p class="text-xs text-error py-4">❌ ${escapeHtml(result.error)}</p>`
@@ -1317,13 +1309,11 @@ function bindEvents() {
 		if (dom.runResultTime) dom.runResultTime.textContent = ''
 
 		try {
-			const resp = await fetch(`/api/parts/plugins:${PLUGIN_NAME}/config/setdata`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ _action: 'runMemoryPreset', presetId: selectedPresetId }),
+			// 使用 setPluginData 发送请求（自动注入 charName / charDisplayName）
+			const result = await setPluginData({
+				_action: 'runMemoryPreset',
+				presetId: selectedPresetId,
 			})
-			if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-			const result = await resp.json()
 
 			if (result.error) {
 				renderRunError(result.error)

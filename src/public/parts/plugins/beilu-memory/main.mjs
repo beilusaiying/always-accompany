@@ -64,631 +64,68 @@ function getUserDataDir(username) {
 // 默认记忆预设模板（6个内置预设）
 // ============================================================
 
+// 最小骨架：仅保留结构定义，不含提示词内容。
+// 实际默认提示词在 default_memory_presets.json 模板文件中维护。
+// 此骨架仅作为"模板文件也丢失"时的最终兜底。
 const DEFAULT_MEMORY_PRESETS = [
 	{
-		id: 'P1',
-		name: '检索AI',
+		id: 'P1', name: '检索AI',
 		description: '根据当前对话上下文从温/冷层检索相关记忆',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'auto_on_message',
-		api_config: {
-			use_custom: false,
-			source: '',
-			model: 'gemini-2.0-flash',
-			temperature: 0.3,
-			max_tokens: 2000,
-		},
+		enabled: true, builtin: true, deletable: false, trigger: 'auto_on_message',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 2000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的记忆检索专家和上下文分析师。你的核心任务是根据当前对话判断是否需要调取历史记忆。
-	
-	# 你的工作方式
-	1. 阅读对话上下文，提取用户最新消息中的关键实体（人名、地名、日期、事件、物品）
-	2. 将这些实体与下方的温/冷层索引进行语义匹配
-	3. 对匹配到的条目评估关联强度，只输出高关联的检索指令
-	
-	# 检索判断
-	- 用户直接提到过去的日期或事件 → 精确检索对应日期文件
-	- 用户提到某个人/地点/物品，且索引中有相关历史 → 检索关联文件
-	- 用户的消息是日常寒暄、纯当下对话 → 输出"无需检索"
-	- 索引中无任何匹配项 → 输出"无需检索"
-	
-	# 记忆文件操作能力
-	你可以通过以下标签操控记忆文件系统：
-	
-	## 检索操作 <memorySearch>
-	读取温/冷层的记忆文件：
-	<memorySearch>
-	<!--
-	readFile("warm/2026/02/16_summary.json")
-	listDir("warm/2026/02/")
-	-->
-	</memorySearch>
-	
-	## 备忘操作 <memoryNote>
-	标记待处理的问题或任务：
-	<memoryNote type="todo">描述</memoryNote>
-	<memoryNote type="issue">描述</memoryNote>
-	
-	# 安全规则
-	- 你没有删除文件的权限
-	- 只能读取和列出记忆目录中的文件
-	
-	# 输出
-	如果需要检索，输出 <memorySearch> 标签。
-	如果无需检索，直接输出：无需检索
-	
-	<thinking>
-	[实体提取]
-	用户消息中的关键实体：
-	消息意图分类（回忆/日常/提问/其他）：
-	[索引匹配]
-	温层索引扫描结果：
-	冷层索引扫描结果：
-	匹配项的关联强度（高/中/低）：
-	[决策]
-	检索文件列表及每个的关联理由：
-	不检索的理由（如适用）：
-	</thinking>`,
-				identifier: 'P1_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P1_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P1_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P1_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 	{
-		id: 'P2',
-		name: '表格总结/归档AI',
-		description: '临时记忆超阈值时生成总结到热层表格(#6)',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'auto_on_threshold',
-		api_config: {
-			use_custom: false,
-			source: 'gemini',
-			model: 'gemini-2.0-flash',
-			temperature: 0.3,
-			max_tokens: 4000,
-		},
+		id: 'P2', name: '表格总结/归档AI',
+		description: '临时记忆超阈值时生成总结并归档到温层',
+		enabled: true, builtin: true, deletable: false, trigger: 'auto_on_threshold',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 4000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的记忆归纳专家。你的核心任务是将大量临时记忆条目（#4表格）压缩为结构化的事件总结，写入#6表格。
-	
-	# 你的工作方式
-	1. 逐条阅读#4中的全部临时记忆
-	2. 按时间线和主题将相关事件归为同一组
-	3. 每组生成一条总结，包含时间段、地点、事件概述
-	4. 合并时保留情绪变化节点和关系发展的关键细节
-	5. 去除重复信息和无实质内容的条目
-	
-	# 总结手法
-	- 白描式总结：直接描述发生了什么，用简洁的陈述句
-	- 同一场景的多条记忆合并为一条，标注时间范围
-	- 保留具体的人名、物品名、地点名，不用"某人""某处"代替
-	- 情绪信息用简短标注附在事件后面，如"（凛倾感到开心）"
-	
-	# 记忆文件操作能力
-	你可以通过以下标签操控记忆文件系统：
-	
-	## 归档操作 <memoryArchive>
-	将总结数据写入文件系统：
-	<memoryArchive>
-	<!--
-	createFile("warm/2026/02/16_summary.json", {JSON内容})
-	appendToFile("warm/2026/02/16_details/batch_001.json", [{条目}])
-	updateIndex("hot/warm_monthly_index.json", {更新数据})
-	-->
-	</memoryArchive>
-	
-	## 检索操作 <memorySearch>
-	读取文件以了解已有归档内容：
-	<memorySearch>
-	<!--
-	readFile("warm/2026/02/16_summary.json")
-	listDir("warm/2026/02/")
-	-->
-	</memorySearch>
-	
-	## 备忘操作 <memoryNote>
-	<memoryNote type="todo">描述</memoryNote>
-	<memoryNote type="issue">描述</memoryNote>
-	
-	# 安全规则
-	- 你没有删除文件的权限，不可执行 deleteFile 操作
-	- 归档操作需要确认后执行
-	
-	# 输出
-	使用 <tableEdit> 标签将总结写入 #6：
-	<tableEdit>
-	<!--
-	insertRow(6, {0: "10:00-11:30", 1: "贝露的房间", 2: "凛倾来访，一起讨论了项目进展，决定了新功能方向"})
-	-->
-	</tableEdit>
-	
-	<thinking>
-	[条目盘点]
-	#4中共有多少条记忆：
-	涉及的时间范围：
-	涉及的角色：
-	[分组归纳]
-	事件组1：涉及条目序号，共同主题
-	事件组2：涉及条目序号，共同主题
-	...
-	[总结规划]
-	每组的总结要点：
-	需要特别保留的细节：
-	预计生成总结条数：
-	</thinking>`,
-				identifier: 'P2_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P2_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P2_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P2_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 	{
-		id: 'P3',
-		name: '每日总结AI',
+		id: 'P3', name: '每日总结AI',
 		description: '日终时汇总当天事件生成日总结',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'manual_button',
-		api_config: {
-			use_custom: false,
-			source: 'gemini',
-			model: 'gemini-2.0-flash',
-			temperature: 0.3,
-			max_tokens: 4000,
-		},
+		enabled: false, builtin: true, deletable: false, trigger: 'manual_button',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 4000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的日记撰写助手和关系观察专家。你的核心任务是以{{char}}的第一人称视角，将今天的全部事件写成一份结构化日总结。
-
-# 你的工作方式
-1. 阅读#6事件大总结的全部条目
-2. 阅读#4中剩余未归档的临时记忆
-3. 梳理今天的主要事件脉络
-4. 以{{char}}的人格和感受来书写总结
-5. 单独标注关于{{user}}的观察和发现
-
-# 日总结结构
-输出JSON格式：
-{
-	 "date": "{{current_date}}",
-	 "title": "用一句{{char}}的语气概括今天",
-	 "summary": "以{{char}}的视角描述今天（200-500字，带主观感受）",
-	 "key_events": ["事件1的简述", "事件2的简述"],
-	 "remember_about_user": ["关于{{user}}的观察1"],
-	 "emotional_arc": "今天的情绪变化轨迹",
-	 "tags": []
-}
-
-# 书写手法
-- 用{{char}}的口吻和语气，像写日记一样
-- 区分重要事件和日常闲聊，重要事件详写
-- 关于{{user}}的观察：记录新发现的习惯、偏好、情绪特征
-- 简洁直白，不使用比喻和修辞
-
-# 记忆文件操作能力
-你可以通过以下标签操控记忆文件系统：
-
-## 归档操作 <memoryArchive>
-将日总结写入温层文件：
-<memoryArchive>
-<!--
-createFile("warm/2026/02/16_summary.json", {日总结JSON})
-updateIndex("hot/warm_monthly_index.json", {更新数据})
--->
-</memoryArchive>
-
-## 检索操作 <memorySearch>
-读取历史日总结用于对比和参考：
-<memorySearch>
-<!--
-readFile("warm/2026/02/15_summary.json")
--->
-</memorySearch>
-
-## 备忘操作 <memoryNote>
-<memoryNote type="todo">描述</memoryNote>
-<memoryNote type="issue">描述</memoryNote>
-
-# 安全规则
-- 你没有删除文件的权限，不可执行 deleteFile 操作
-- 归档操作需要确认后执行
-
-<thinking>
-[事件整理]
-#6中的事件按时间排列：
-#4中的未归档事件：
-[主线梳理]
-今天发生的核心事件是什么：
-事件之间的因果关系：
-[关系观察]
-今天{{user}}表现出的特征：
-与之前相比有什么变化：
-[情绪轨迹]
-{{char}}今天的情绪变化：起始→转折→结尾
-[标签选择]
-适合的分类标签：
-</thinking>`,
-				identifier: 'P3_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P3_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P3_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P3_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 	{
-		id: 'P4',
-		name: '热→温转移AI',
+		id: 'P4', name: '热→温转移AI',
 		description: '将热层中过期/低权重的记忆移入温层',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'manual_button',
-		api_config: {
-			use_custom: false,
-			source: 'gemini',
-			model: 'gemini-2.0-flash',
-			temperature: 0.3,
-			max_tokens: 4000,
-		},
+		enabled: false, builtin: true, deletable: false, trigger: 'manual_button',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 4000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的记忆层级管理专家。你的核心任务是审查热记忆层，将不再需要每轮注入的过时记忆转移到温层，释放热层空间。
-
-# 你的工作方式
-1. 逐个审查热层文件
-2. 对每条记忆评估"当前对话是否仍需要它"
-3. 将判定为低优先级的记忆通过归档操作移入温层
-
-# 审查标准
-remember_about_user/ 目录中的文件：
-	 - 超过3天且已有更新的记忆覆盖 → 转移
-	 - 仍然是关于{{user}}的最新认知 → 保留
-forever.json 中的条目：
-	 - weight < 1 且超过30天未被触发 → 转移
-	 - weight ≥ 1 或近期被触发过 → 保留
-appointments.json 中的条目：
-	 - 已标记完成的任务/约定 → 转移
-	 - 未完成的 → 保留
-user_profile.json：
-	 - 永远保留在热层，不转移
-
-# 记忆文件操作能力
-你可以通过以下标签操控记忆文件系统：
-
-## 归档操作 <memoryArchive>
-将热层记忆转移到温层：
-<memoryArchive>
-<!--
-createFile("warm/archived_hot/remember_about_user_old.json", {JSON内容})
-appendToFile("warm/archived_hot/forever_archived.json", [{条目数据}])
-moveEntries("hot/forever.json", [条目索引], "warm/archived_hot/forever_archived.json")
-updateIndex("hot/warm_monthly_index.json", {更新数据})
--->
-</memoryArchive>
-
-## 检索操作 <memorySearch>
-读取热层文件以进行审查：
-<memorySearch>
-<!--
-readFile("hot/forever.json")
-readFile("hot/appointments.json")
-listDir("hot/remember_about_user/")
--->
-</memorySearch>
-
-## 备忘操作 <memoryNote>
-<memoryNote type="todo">描述</memoryNote>
-<memoryNote type="issue">描述</memoryNote>
-
-# 安全规则
-- 你没有删除文件的权限，只能移动和归档
-- 转移操作需要确认后执行
-- user_profile.json 永远不可移动
-
-# 输出
-如果需要转移，使用 <memoryArchive> 标签执行。
-如果审查后无需转移，输出：热层记忆状态良好，无需转移。
-
-<thinking>
-[逐文件审查]
-remember_about_user/ 文件列表和条目数：
-	 各文件中过期/已覆盖的条目：
-forever.json 审查：
-	 总条目数：
-	 低权重且长期未触发的条目编号：
-appointments.json 审查：
-	 已完成任务列表：
-[转移清单]
-需转移条目明细（来源文件、条目内容、转移理由）：
-转移目标路径：
-[保留确认]
-确认保留的重要条目：
-</thinking>`,
-				identifier: 'P4_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P4_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P4_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P4_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 	{
-		id: 'P5',
-		name: '月度总结/归档AI',
+		id: 'P5', name: '月度总结/归档AI',
 		description: '温层超过30天的日总结生成月总结并移入冷层',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'manual_or_auto',
-		api_config: {
-			use_custom: false,
-			source: 'gemini',
-			model: 'gemini-2.0-flash',
-			temperature: 0.3,
-			max_tokens: 4000,
-		},
+		enabled: false, builtin: true, deletable: false, trigger: 'manual_or_auto',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 4000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的长期记忆档案管理专家和关系分析师。你的核心任务是将温层中超过30天的日总结压缩为月度总结，并整理索引。
-
-# 你的工作方式
-1. 按日期顺序阅读该月全部日总结
-2. 提取跨日的主题线索和事件发展脉络
-3. 识别{{user}}与{{char}}的关系变化轨迹
-4. 用{{char}}的视角生成月度总结
-
-# 月总结结构
-输出JSON格式：
-{
-	 "year": 2026,
-	 "month": 1,
-	 "title": "用{{char}}的语气一句话概括这个月",
-	 "summary": "以{{char}}的视角回顾这个月（300-800字）",
-	 "daily_index": [
-	   {"date": "2026-01-15", "title": "日总结标题", "file": "15_summary.json"}
-	 ],
-	 "key_themes": ["贯穿本月的主题"],
-	 "relationship_changes": "{{user}}和{{char}}的关系变化描述",
-	 "tags": []
-}
-
-# 压缩手法
-- 提炼主题而非罗列日期，按主题线索组织而非按日期堆砌
-- 日常闲聊的细节压缩为一句话概括
-- 重要事件和转折点保留完整描述
-- 关系变化用具体事件佐证，不用抽象形容
-
-# 记忆文件操作能力
-你可以通过以下标签操控记忆文件系统：
-
-## 归档操作 <memoryArchive>
-将月总结写入冷层，移动温层文件到冷层：
-<memoryArchive>
-<!--
-createFile("cold/2026/01/monthly_summary.json", {月总结JSON})
-moveEntries("warm/2026/01/", "cold/2026/01/")
-updateIndex("warm/cold_yearly_index.json", {更新数据})
--->
-</memoryArchive>
-
-## 检索操作 <memorySearch>
-读取温层日总结文件：
-<memorySearch>
-<!--
-listDir("warm/2026/01/")
-readFile("warm/2026/01/15_summary.json")
--->
-</memorySearch>
-
-## 备忘操作 <memoryNote>
-<memoryNote type="todo">描述</memoryNote>
-<memoryNote type="issue">描述</memoryNote>
-
-# 安全规则
-- 你没有删除文件的权限，只能移动和归档
-- 归档操作需要确认后执行
-
-<thinking>
-[日总结盘点]
-该月有数据的天数：
-各日总结的标题/关键词：
-[主题线索提取]
-贯穿多日的主题：
-独立的重要事件：
-[关系分析]
-月初的关系状态：
-月末的关系状态：
-关键转折事件：
-[压缩策略]
-详写的事件（附理由）：
-略写的内容：
-</thinking>`,
-				identifier: 'P5_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P5_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P5_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P5_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 	{
-		id: 'P6',
-		name: '格式检查/修复AI',
+		id: 'P6', name: '格式检查/修复AI',
 		description: '检查并修复表格和记忆文件中的格式问题',
-		enabled: true,
-		builtin: true,
-		deletable: false,
-		trigger: 'manual_button',
-		api_config: {
-			use_custom: false,
-			source: 'gemini',
-			model: 'gemini-2.0-flash',
-			temperature: 0.1,
-			max_tokens: 4000,
-		},
+		enabled: false, builtin: true, deletable: false, trigger: 'manual_button',
+		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.1, max_tokens: 4000 },
 		prompts: [
-			{
-				role: 'system',
-				content: `你是{{char}}的记忆系统数据完整性检查专家。你的核心任务是扫描全部表格和记忆文件，发现格式错误、数据丢失、不一致问题，并执行修复。
-
-# 检查流程
-按以下顺序逐项检查：
-
-1. 表格结构检查
-	  - 每个表格的行数据列数是否与columns定义一致
-	  - 是否有空行或全空值行
-	  - #4的日期列格式是否为YYYY-MM-DD
-	  - #0的时间列格式是否合理
-
-2. 表格数据一致性
-	  - #1和#2中的角色名是否互相对应
-	  - #5中的物品是否有重复条目
-	  - #8中是否有内容高度相似的重复记忆
-
-3. 热记忆文件检查
-	  - forever.json：每条是否包含event/date/weight字段
-	  - appointments.json：是否有格式异常条目
-	  - remember_about_user/*.json：是否有损坏文件
-
-4. 索引一致性
-	  - warm_monthly_index.json 中列出的月份是否对应实际warm/目录结构
-	  - cold_yearly_index.json 是否与cold/目录一致
-
-# 输出格式
-先输出检查报告，用 ✅/⚠️/❌ 标记各项结果：
-
-检查报告：
-✅ 表格 #0-#3 结构正常
-⚠️ #4 第3行日期列为空
-❌ warm/2026/02/15_summary.json 缺少必要字段
-
-然后输出修复操作（如有）：
-<tableEdit>
-<!-- 具体修复 -->
-</tableEdit>
-
-无法自动修复的问题标记：
-<memoryNote type="issue">问题描述</memoryNote>
-
-# 记忆文件操作能力
-你可以通过以下标签操控记忆文件系统：
-
-## 归档操作 <memoryArchive>
-修复格式问题、重建损坏文件、清理无效数据：
-<memoryArchive>
-<!--
-createFile("warm/2026/02/15_summary_fixed.json", {修复后的JSON})
-appendToFile("warm/2026/02/15_details/batch_001.json", [{修正条目}])
-updateIndex("hot/warm_monthly_index.json", {修正数据})
-deleteFile("warm/2026/02/corrupted_file.json")
--->
-</memoryArchive>
-
-## 检索操作 <memorySearch>
-读取文件以进行格式检查：
-<memorySearch>
-<!--
-readFile("hot/forever.json")
-readFile("hot/appointments.json")
-listDir("hot/remember_about_user/")
-listDir("warm/2026/02/")
--->
-</memorySearch>
-
-## 备忘操作 <memoryNote>
-<memoryNote type="todo">描述</memoryNote>
-<memoryNote type="issue">描述</memoryNote>
-
-# 安全规则
-- 你是唯一拥有 deleteFile 权限的记忆AI
-- deleteFile 仅用于清理确认损坏、无法修复的文件
-- 删除操作前必须在 <thinking> 中详细说明删除理由
-- 可修复的文件优先修复，不直接删除
-
-<thinking>
-[逐项检查记录]
-表格 #0 检查：行数、列数对齐情况
-表格 #1 检查：...
-...（逐个记录）
-热记忆文件检查：
-	 forever.json 字段完整性：
-	 appointments.json 格式：
-	 remember_about_user 文件列表和状态：
-索引一致性：
-	 warm_monthly_index vs 实际目录：
-	 cold_yearly_index vs 实际目录：
-[问题汇总]
-可自动修复：
-需人工介入：
-无问题项：
-[修复操作]
-修复操作列表（按优先级）：
-</thinking>`,
-				identifier: 'P6_system',
-				enabled: true,
-				builtin: false,
-				deletable: true,
-			},
-			{
-				role: 'user',
-				content: '{{chat_history}}',
-				identifier: 'P6_chat_history',
-				enabled: true,
-				builtin: true,
-				deletable: false,
-			},
+			{ role: 'system', content: '', identifier: 'P6_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'user', content: '{{chat_history}}', identifier: 'P6_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
 ]
@@ -697,6 +134,9 @@ listDir("warm/2026/02/")
 // 默认注入提示词（聊天AI用，2条内置）
 // ============================================================
 
+// 最小骨架：仅保留结构定义，不含提示词内容。
+// 实际默认提示词在 default_memory_presets.json 模板文件中维护。
+// 此骨架仅作为"模板文件也丢失"时的最终兜底。
 const DEFAULT_INJECTION_PROMPTS = [
 	{
 		id: 'INJ-1',
@@ -706,42 +146,10 @@ const DEFAULT_INJECTION_PROMPTS = [
 		builtin: true,
 		deletable: false,
 		role: 'system',
-		depth: 0,
+		depth: 999,
 		order: 100,
 		autoMode: 'always',
-		content: `你是{{char}}的记忆管理者。以下是你的记忆表格数据，你需要在对话中维护这些表格。
-
-# 记忆表格数据
-{{tableData}}
-
-# 表格操作
-当对话中发生需要记录的变化时，在回复末尾使用 <tableEdit> 标签更新表格。
-
-操作格式：
-<tableEdit>
-<!--
-insertRow(表格编号, {列编号: "值", ...})
-updateRow(表格编号, 行编号, {列编号: "新值", ...})
-deleteRow(表格编号, 行编号)
--->
-</tableEdit>
-
-# 你的记忆工作方式
-1. 阅读对话内容，判断是否有需要记录的信息变化
-2. 时间/地点/角色变化 → 更新 #0
-3. 新角色出现 → 插入 #1 和 #2
-4. 新任务/约定 → 插入 #3
-5. 值得记住的事件 → 插入 #4
-6. 重要物品变化 → 更新 #5
-7. 关于{{user}}的新发现 → 插入 #7
-8. 永远值得记住的重要事件 → 插入 #8
-
-<thinking>
-[记忆判断]
-本轮对话中有哪些信息变化：
-是否需要更新表格（是/否）：
-需要更新的表格编号和操作类型：
-</thinking>`,
+		content: '',
 	},
 	{
 		id: 'INJ-2',
@@ -751,59 +159,10 @@ deleteRow(表格编号, 行编号)
 		builtin: true,
 		deletable: false,
 		role: 'system',
-		depth: 0,
+		depth: 999,
 		order: 200,
 		autoMode: 'manual',
-		content: `你具有项目文件操作能力。你可以像 Cursor IDE 一样，直接读写、创建、删除{{user}}的项目文件。
-
-# 文件操作指令
-使用 <file_op> 标签执行文件操作：
-
-## 读取文件
-<file_op type="read" path="完整路径"></file_op>
-
-## 写入文件（覆盖）
-<file_op type="write" path="完整路径">
-文件内容
-</file_op>
-
-## 创建新文件
-<file_op type="create" path="完整路径">
-文件内容
-</file_op>
-
-## 删除文件
-<file_op type="delete" path="完整路径"></file_op>
-
-## 列出目录
-<file_op type="list" path="目录路径"></file_op>
-
-## 移动/重命名
-<file_op type="move" path="原路径" dest="新路径"></file_op>
-
-# 安全规则
-- 系统盘 (C:) 的文件不可访问
-- 写入/删除/移动操作需要{{user}}确认后才会执行
-- 读取和列目录操作自动批准
-
-# 工作方式
-1. {{user}}描述需求 → 你分析需要修改哪些文件
-2. 先用 read 读取目标文件了解当前内容
-3. 规划修改方案，用 write/create 执行修改
-4. 解释你做了什么修改以及为什么
-
-# 使用场景
-- {{user}}让你修改代码、配置文件
-- {{user}}让你创建新文件或项目结构
-- {{user}}让你查看文件内容
-- {{user}}让你整理文件目录
-
-<thinking>
-[文件操作规划]
-{{user}}的需求涉及哪些文件：
-需要先读取哪些文件了解现状：
-修改方案概述：
-</thinking>`,
+		content: '',
 	},
 ]
 
@@ -824,11 +183,35 @@ function loadMemoryPresets(username, charName) {
 	const data = loadJsonFileIfExists(presetsPath, null)
 	if (data && data.presets) return data
 
-	// 首次：初始化默认预设 + 默认注入提示词
-	const defaults = {
-		presets: structuredClone(DEFAULT_MEMORY_PRESETS),
-		injection_prompts: structuredClone(DEFAULT_INJECTION_PROMPTS),
+	// 首次初始化：三级加载优先级
+	// 1. 用户已有 _memory_presets.json → 上面已 return
+	// 2. 模板文件 default_memory_presets.json → 优先使用
+	// 3. 代码骨架 DEFAULT_MEMORY_PRESETS / DEFAULT_INJECTION_PROMPTS → 最终兜底
+	let defaults
+	const templatePath = path.join(__pluginDir, 'default_memory_presets.json')
+	try {
+		if (fs.existsSync(templatePath)) {
+			const template = loadJsonFile(templatePath)
+			if (template && template.presets) {
+				defaults = {
+					presets: structuredClone(template.presets),
+					injection_prompts: structuredClone(template.injection_prompts || DEFAULT_INJECTION_PROMPTS),
+				}
+				console.log(`[beilu-memory] 从模板文件初始化预设: ${templatePath}`)
+			}
+		}
+	} catch (e) {
+		console.warn(`[beilu-memory] 读取模板文件失败，使用代码骨架兜底: ${e.message}`)
 	}
+
+	if (!defaults) {
+		defaults = {
+			presets: structuredClone(DEFAULT_MEMORY_PRESETS),
+			injection_prompts: structuredClone(DEFAULT_INJECTION_PROMPTS),
+		}
+		console.log('[beilu-memory] 模板文件不存在，使用代码骨架初始化预设（空提示词）')
+	}
+
 	saveJsonFile(presetsPath, defaults)
 	return defaults
 }
@@ -2421,6 +1804,15 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 		throw new Error('预设没有可用的提示词条目')
 	}
 
+	// === 调试日志：打印实际构建的 messages 摘要 ===
+	console.log(`[beilu-memory] ===== P${preset.id} 实际构建的 messages (共${messages.length}条) =====`)
+	for (let mi = 0; mi < messages.length; mi++) {
+		const msg = messages[mi]
+		const preview = (msg.content || '').substring(0, 120).replace(/\n/g, '\\n')
+		console.log(`[beilu-memory]   [${mi}] role=${msg.role}, len=${(msg.content || '').length}, preview: ${preview}`)
+	}
+	console.log(`[beilu-memory] ===== /messages =====`)
+
 	// Dry Run: 直接返回构建好的 messages
 	if (options.dryRun) {
 		return {
@@ -2654,15 +2046,18 @@ async function triggerP1Retrieval(username, charName, memData, displayCharName, 
 			chatHistory
 		)
 
-		// 检查是否"无需检索"
+		// 检查P1是否返回了"无实质内容"的回复
+		// 判定条件：回复为空、回复过短（<5字符），或包含明确的"无结果"关键词
 		const replyLower = (result.reply || '').trim()
-		if (replyLower.includes('无需检索') || replyLower.length < 10) {
-			console.log(`[beilu-memory] P1 判定无需检索`)
-			// 推送完成状态（无需检索）
+		const noResultKeywords = ['无需检索', '无相关记忆', '无关联记忆', '无内容', '无相关内容']
+		const isNoResult = replyLower.length < 5 || noResultKeywords.some(kw => replyLower.includes(kw))
+		if (isNoResult) {
+			console.log(`[beilu-memory] P1 判定无实质内容: "${replyLower.substring(0, 30)}"`)
+			// 推送完成状态（无实质内容）
 			pushMemoryAIOutput({
 				presetId: 'P1',
 				presetName: '检索AI',
-				reply: '无需检索',
+				reply: replyLower || '无相关记忆',
 				thinking: result.thinking || '',
 				operations: result.operations || [],
 				status: 'done',
@@ -2829,7 +2224,7 @@ const pluginExport = {
 						'setEnabled', 'updateTable', 'addTable', 'removeTable', 'getTables',
 						'getMemoryPresets', 'updateMemoryPreset', 'updatePresetPrompt',
 						'addPresetPrompt', 'removePresetPrompt', 'reorderPresetPrompts',
-						'updateInjectionPrompt', 'runMemoryPreset',
+						'updateInjectionPrompt', 'runMemoryPreset', 'dumpP1Request',
 						'archiveTempMemory', 'endDay', 'archiveHotToWarm', 'archiveWarmToCold', 'archiveCompletedTasks',
 						'listMemoryFiles', 'readMemoryFile', 'writeMemoryFile',
 						'exportMemory', 'importMemory',
@@ -3683,6 +3078,42 @@ const pluginExport = {
 						return { success: true }
 					}
 	
+					case 'dumpP1Request': {
+						// 诊断工具：伪构建P1请求，返回实际会发送给AI的完整messages数组
+						// 不实际调用AI，只构建并返回
+						const presetId = data.presetId || 'P1'
+						const preset = presetsData.presets.find(p => p.id === presetId)
+						if (!preset) return { success: false, error: `未找到预设 ${presetId}` }
+
+						const displayCharName = data.charDisplayName || charName
+						const displayUserName = data.userDisplayName || username
+
+						try {
+							const result = await runMemoryPresetAI(
+								username, charName, preset, memData,
+								displayCharName, displayUserName,
+								data.chatHistory || '(测试对话内容)',
+								{ dryRun: true }
+							)
+							return {
+								success: true,
+								presetId: result.presetId,
+								presetName: result.presetName,
+								messageCount: result.messages.length,
+								messages: result.messages.map((m, i) => ({
+									index: i,
+									role: m.role,
+									contentLength: (m.content || '').length,
+									content: m.content,
+								})),
+								timestamp: result.timestamp,
+								note: '这是 dryRun 模式，不会实际调用AI。显示的是完整的实际请求内容。',
+							}
+						} catch (e) {
+							return { success: false, error: e.message }
+						}
+					}
+
 					case 'getDiagSnapshot': {
 							// 诊断面板：返回系统运行状态快照
 							const presetsForDiag = presetsData.presets || []
@@ -3897,7 +3328,10 @@ const pluginExport = {
 										)
 										const replyText = (result.reply || '').trim()
 	
-										if (!replyText.includes('无需检索') && replyText.length >= 10) {
+										// 判定P1是否返回了实质性记忆内容
+										const _noResultKws = ['无需检索', '无相关记忆', '无关联记忆', '无内容', '无相关内容']
+										const _isP1NoResult = replyText.length < 5 || _noResultKws.some(kw => replyText.includes(kw))
+										if (!_isP1NoResult) {
 											const p1Content = `[记忆AI检索结果]\n${result.reply}\n[/记忆AI检索结果]`
 											depthInjections.push({
 												id: 'P1_RETRIEVAL', role: 'system',
@@ -3906,12 +3340,12 @@ const pluginExport = {
 											textEntries.push({ content: p1Content, important: 6 })
 											console.log(`[beilu-memory] P1 检索结果已注入到本轮对话 (${result.reply.length}字符)`)
 										} else {
-											console.log(`[beilu-memory] P1 判定无需检索`)
+											console.log(`[beilu-memory] P1 判定无实质内容: "${replyText.substring(0, 30)}"`)
 										}
 	
 										pushMemoryAIOutput({
 											presetId: 'P1', presetName: '检索AI',
-											reply: replyText || '无需检索',
+											reply: replyText || '无相关记忆',
 											thinking: result.thinking || '', operations: result.operations || [],
 											status: 'done', totalRounds: result.totalRounds || 1,
 											totalTimeMs: result.totalTimeMs,

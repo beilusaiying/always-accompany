@@ -148,11 +148,11 @@ export default {
 			 */
 			GetReply: async args => {
 				if (!AIsource) return {
-					content: 'this character does not have an AI source, [set the AI source](https://steve02081504.github.io/fount/protocol?url=fount://page/parts/shells:serviceSourceManage) first',
+					content: 'this character does not have an AI source, [set the AI source](/parts/shells:serviceSourceManage) first',
 				}
 				// 注入角色插件
 				args.plugins = Object.assign({}, plugins, args.plugins)
-				// 用fount提供的工具构建提示词结构
+				// 用 beilu 提供的工具构建提示词结构
 				const prompt_struct = await buildPromptStruct(args)
 				// 创建回复容器
 				/** @type {import("../../../../../src/public/parts/shells/chat/decl/chatLog.ts").chatReply_t} */

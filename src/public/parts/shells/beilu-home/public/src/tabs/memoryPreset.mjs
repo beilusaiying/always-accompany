@@ -261,6 +261,10 @@ function cacheDom() {
 	// 角色选择器
 	dom.charSelect = document.getElementById('mp-char-select')
 	dom.charStatus = document.getElementById('mp-char-status')
+
+	// 预设导出/导入
+	dom.exportPresetsBtn = document.getElementById('mp-export-presets')
+	dom.importPresetsBtn = document.getElementById('mp-import-presets')
 }
 
 // ===== 状态 =====
@@ -1407,6 +1411,16 @@ function bindEvents() {
 		}
 	})
 
+	// ===== 预设导出/导入 =====
+
+	dom.exportPresetsBtn?.addEventListener('click', () => {
+		exportPresets()
+	})
+
+	dom.importPresetsBtn?.addEventListener('click', () => {
+		importPresets()
+	})
+
 	// 启用开关即时保存
 	dom.detailToggle?.addEventListener('change', async () => {
 		if (!selectedPresetId) return
@@ -1649,6 +1663,118 @@ function escapeHtml(str) {
 	const div = document.createElement('div')
 	div.textContent = str
 	return div.innerHTML
+}
+
+// ===== 预设导出/导入 =====
+
+/** 导出 INJ + P1-P6 预设为 JSON 文件下载 */
+function exportPresets() {
+	if (!presets || presets.length === 0) {
+		showStatus('❌ 没有可导出的预设数据', 3000)
+		return
+	}
+
+	// 深拷贝后清洗敏感信息（api_config 中的 source 可能泄露用户私有服务器名称）
+	const cleanPresets = structuredClone(presets)
+	for (const preset of cleanPresets) {
+		if (preset.api_config) {
+			// 只保留模型参数，清除服务源信息
+			preset.api_config = {
+				use_custom: false,
+				source: '',
+				model: preset.api_config.model || '',
+				temperature: preset.api_config.temperature ?? 0.3,
+				max_tokens: preset.api_config.max_tokens ?? 2000,
+			}
+		}
+	}
+
+	const exportData = {
+		_format: 'beilu-memory-presets-export',
+		_version: 1,
+		_exported_at: new Date().toISOString(),
+		presets: cleanPresets,
+		injection_prompts: structuredClone(injectionPrompts),
+	}
+
+	const jsonStr = JSON.stringify(exportData, null, '\t')
+	const blob = new Blob([jsonStr], { type: 'application/json' })
+	const url = URL.createObjectURL(blob)
+
+	const dateStr = new Date().toISOString().slice(0, 10)
+	const fileName = `beilu-presets_${dateStr}.json`
+
+	const a = document.createElement('a')
+	a.href = url
+	a.download = fileName
+	document.body.appendChild(a)
+	a.click()
+	document.body.removeChild(a)
+	URL.revokeObjectURL(url)
+
+	showStatus(`✅ 已导出 ${presets.length} 个预设 + ${injectionPrompts.length} 个注入条目`, 3000)
+}
+
+/** 导入预设 JSON 文件 */
+function importPresets() {
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = '.json'
+	input.style.display = 'none'
+
+	input.addEventListener('change', async (e) => {
+		const file = e.target.files[0]
+		if (!file) return
+
+		try {
+			const text = await file.text()
+			let importData
+			try {
+				importData = JSON.parse(text)
+			} catch {
+				showStatus('❌ 文件不是有效的 JSON', 3000)
+				return
+			}
+
+			// 格式验证
+			if (importData._format !== 'beilu-memory-presets-export') {
+				showStatus('❌ 不是有效的预设导出文件', 3000)
+				return
+			}
+			if (!Array.isArray(importData.presets) || !Array.isArray(importData.injection_prompts)) {
+				showStatus('❌ 文件缺少 presets 或 injection_prompts', 3000)
+				return
+			}
+
+			// 确认导入
+			const presetNames = importData.presets.map(p => `${p.id}(${p.name})`).join(', ')
+			const injNames = importData.injection_prompts.map(p => `${p.id}(${p.name})`).join(', ')
+			const msg = `确定导入以下预设吗？\n\n预设: ${presetNames}\n注入: ${injNames}\n\n⚠️ 这将覆盖当前所有预设配置（原配置会备份）。`
+			if (!confirm(msg)) return
+
+			showStatus('⏳ 导入中...')
+
+			const result = await setPluginData({
+				_action: 'importPresets',
+				importData: importData,
+				backupExisting: true,
+			})
+
+			if (result && result.success) {
+				await refreshPresets()
+				showStatus(`✅ 导入成功: ${result.presetsCount} 个预设, ${result.injectionCount} 个注入条目`, 4000)
+			} else {
+				showStatus(`❌ 导入失败: ${result?.error || '未知错误'}`, 5000)
+			}
+		} catch (err) {
+			console.error('[memoryPreset] 导入预设失败:', err)
+			showStatus(`❌ 导入出错: ${err.message}`, 5000)
+		}
+	})
+
+	document.body.appendChild(input)
+	input.click()
+	document.body.removeChild(input)
 }
 
 // ===== 初始化 =====

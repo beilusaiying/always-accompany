@@ -2857,6 +2857,13 @@ const pluginExport = {
 				const presetsData = loadMemoryPresets(username, charName)
 
 				switch (data._action) {
+					case 'clearCache': {
+						// 清理指定角色的内存缓存（角色卡删除时由 beilu-home 调用）
+						const cacheKey = `${username}/${charName}`
+						memoryCache.delete(cacheKey)
+						console.log(`[beilu-memory] 已清除缓存: ${cacheKey}`)
+						return { success: true }
+					}
 					case 'updateTable': {
 						// 更新指定表格的 rows/columns/rules
 						const tableIdx = data.tableIndex
@@ -3280,33 +3287,84 @@ const pluginExport = {
 				const zip = new JSZip()
 				let fileCount = 0
 
-				// 递归添加文件到 zip
-				function addDirToZip(dir, zipFolder, relBase) {
-					if (!fs.existsSync(dir)) return
-					let entries
-					try {
-						entries = fs.readdirSync(dir, { withFileTypes: true })
-					} catch (e) {
-						console.warn(`[beilu-memory] exportMemory: 无法读取目录 ${relBase || '/'}: ${e.message}`)
-						return
+				// 清洗 _memory_presets.json 中的敏感信息（api_config.source 泄露用户私有服务源名称）
+					function sanitizePresetsForExport(jsonStr) {
+						try {
+							const data = JSON.parse(jsonStr)
+							if (data.presets && Array.isArray(data.presets)) {
+								for (const preset of data.presets) {
+									if (preset.api_config) {
+										preset.api_config = {
+											use_custom: false,
+											source: '',
+											model: preset.api_config.model || '',
+											temperature: preset.api_config.temperature ?? 0.3,
+											max_tokens: preset.api_config.max_tokens ?? 2000,
+										}
+									}
+								}
+							}
+							return JSON.stringify(data, null, '\t') + '\n'
+						} catch (e) {
+							console.warn('[beilu-memory] exportMemory: 清洗 _memory_presets.json 失败:', e.message)
+							return jsonStr // 解析失败则原样返回（不阻断导出）
+						}
 					}
-					for (const entry of entries) {
-						// 跳过 .bak 和 .import_bak 文件
-						if (entry.name.endsWith('.bak') || entry.name.endsWith('.import_bak')) continue
-						const fullPath = path.join(dir, entry.name)
-						if (entry.isDirectory()) {
-							addDirToZip(fullPath, zipFolder.folder(entry.name), relBase ? `${relBase}/${entry.name}` : entry.name)
-						} else if (entry.isFile()) {
-							try {
-								const content = fs.readFileSync(fullPath, 'utf8')
-								zipFolder.file(entry.name, content)
-								fileCount++
-							} catch (e) {
-								console.warn(`[beilu-memory] exportMemory: 读取失败 ${relBase ? relBase + '/' : ''}${entry.name}: ${e.message}`)
+	
+					// 清洗 _config.json 中的敏感信息（api_key, base_url 泄露用户 API 密钥和端点）
+					function sanitizeConfigForExport(jsonStr) {
+						try {
+							const data = JSON.parse(jsonStr)
+							// 清除 retrieval_ai 和 summary_ai 中的密钥和自定义 URL
+							for (const key of ['retrieval_ai', 'summary_ai']) {
+								if (data[key]) {
+									data[key] = {
+										...data[key],
+										api_key: null,
+										base_url: null,
+									}
+								}
+							}
+							return JSON.stringify(data, null, '\t') + '\n'
+						} catch (e) {
+							console.warn('[beilu-memory] exportMemory: 清洗 _config.json 失败:', e.message)
+							return jsonStr
+						}
+					}
+	
+					// 递归添加文件到 zip（对敏感文件进行清洗）
+					function addDirToZip(dir, zipFolder, relBase) {
+						if (!fs.existsSync(dir)) return
+						let entries
+						try {
+							entries = fs.readdirSync(dir, { withFileTypes: true })
+						} catch (e) {
+							console.warn(`[beilu-memory] exportMemory: 无法读取目录 ${relBase || '/'}: ${e.message}`)
+							return
+						}
+						for (const entry of entries) {
+							// 跳过 .bak 和 .import_bak 文件
+							if (entry.name.endsWith('.bak') || entry.name.endsWith('.import_bak')) continue
+							const fullPath = path.join(dir, entry.name)
+							if (entry.isDirectory()) {
+								addDirToZip(fullPath, zipFolder.folder(entry.name), relBase ? `${relBase}/${entry.name}` : entry.name)
+							} else if (entry.isFile()) {
+								try {
+									let content = fs.readFileSync(fullPath, 'utf8')
+									// 对敏感文件进行清洗
+									if (entry.name === '_memory_presets.json') {
+										content = sanitizePresetsForExport(content)
+									} else if (entry.name === '_config.json') {
+										content = sanitizeConfigForExport(content)
+									}
+									zipFolder.file(entry.name, content)
+									fileCount++
+								} catch (e) {
+									console.warn(`[beilu-memory] exportMemory: 读取失败 ${relBase ? relBase + '/' : ''}${entry.name}: ${e.message}`)
+								}
 							}
 						}
 					}
-				}
 
 				addDirToZip(memDir, zip, '')
 
@@ -3428,6 +3486,42 @@ const pluginExport = {
 							} catch (e) {
 								console.error(`[beilu-memory] importMemory 失败:`, e.message)
 								return { success: false, error: `导入失败: ${e.message}` }
+							}
+						}
+	
+						case 'importPresets': {
+							// 导入记忆预设（一次性覆盖 presets + injection_prompts）
+							const importData = data.importData
+							if (!importData) return { success: false, error: '缺少 importData' }
+							if (importData._format !== 'beilu-memory-presets-export') {
+								return { success: false, error: '无效的预设文件：格式标识不匹配' }
+							}
+							if (!Array.isArray(importData.presets) || !Array.isArray(importData.injection_prompts)) {
+								return { success: false, error: '无效的预设文件：缺少 presets 或 injection_prompts 数组' }
+							}
+	
+							// 备份现有预设
+							const backupExisting = data.backupExisting !== false
+							if (backupExisting) {
+								const memDir = ensureMemoryDir(username, '_global')
+								const presetsPath = path.join(memDir, '_memory_presets.json')
+								if (fs.existsSync(presetsPath)) {
+									try { fs.copyFileSync(presetsPath, presetsPath + '.import_bak') } catch { /* ignore */ }
+								}
+							}
+	
+							// 写入新预设
+							const newPresetsData = {
+								presets: importData.presets,
+								injection_prompts: importData.injection_prompts,
+							}
+							saveMemoryPresets(username, charName, newPresetsData)
+	
+							console.log(`[beilu-memory] 预设已导入: ${importData.presets.length} 个预设, ${importData.injection_prompts.length} 个注入条目`)
+							return {
+								success: true,
+								presetsCount: importData.presets.length,
+								injectionCount: importData.injection_prompts.length,
 							}
 						}
 	

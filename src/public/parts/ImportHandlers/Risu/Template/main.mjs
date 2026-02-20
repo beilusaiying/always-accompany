@@ -12,8 +12,8 @@ import { loadAnyPreferredDefaultPart, loadPart } from '../../../../../src/server
 /** @typedef {import('../../../../../src/decl/pluginAPI.ts').PluginAPI_t} PluginAPI_t */
 /** @typedef {import('../../../../../src/decl/charAPI.ts').CharAPI_t} CharAPI_t */
 /** @typedef {import('../../../../../src/decl/AIsource.ts').AIsource_t} AIsource_t */
-/** @typedef {import("../../../../../src/decl/prompt_struct.ts').single_part_prompt_t} single_part_prompt_t */
-/** @typedef {import("../../../../../src/public/parts/shells/chat/decl/prompt_struct.ts').chatReplyRequest_t} chatReplyRequest_t */
+/** @typedef {import('../../../../../src/decl/prompt_struct.ts').single_part_prompt_t} single_part_prompt_t */
+/** @typedef {import('../../../../../src/public/parts/shells/chat/decl/prompt_struct.ts').chatReplyRequest_t} chatReplyRequest_t */
 /** @typedef {import('../../../../../src/public/parts/ImportHandlers/SillyTavern/engine/charData.mjs').v2CharData} chardata_t */
 
 /** @type {AIsource_t} */
@@ -24,7 +24,7 @@ let plugins = {}
 let username = ''
 
 const chardir = import.meta.dirname
-// fount 的资源 URL 格式，确保 charname 部分已正确编码
+// beilu 的资源 URL 格式，确保 charname 部分已正确编码
 const charnameForUrl = encodeURIComponent(path.basename(chardir))
 const charurl = `/parts/chars:${charnameForUrl}`
 const charjson = path.join(chardir, 'chardata.json')
@@ -54,9 +54,9 @@ function getMacroEnv(userCharName) {
  */
 function buildCharInfo(charData) {
 	const info = {}
-	// fount 的默认语言键通常是 '' 或特定语言如 'en'。CCv3 使用 ISO 639-1 ('en', 'zh').
+	// beilu 的默认语言键通常是 '' 或特定语言如 'en'。CCv3 使用 ISO 639-1 ('en', 'zh').
 	// 我们将使用 CCv3 的语言代码作为键，并为 '' 设置一个后备。
-	const defaultLocaleKey = '' // fount 使用的默认/后备 locale key
+	const defaultLocaleKey = '' // beilu 使用的默认/后备 locale key
 
 	/**
 	 * 为语言创建info对象
@@ -66,7 +66,7 @@ function buildCharInfo(charData) {
 	const createInfoForLang = note => {
 		// 注意：chardata.creator_notes 已经是经过 evaluateMacros 的（如果ST的宏在其中）
 		// 但CCv3的creator_notes通常是纯文本，宏处理应在显示时。
-		// 因此，这里我们直接使用 note，宏将在fount显示时处理（如果fount的UI层面支持）。
+		// 因此，这里我们直接使用 note，宏将在 beilu 显示时处理（如果 beilu 的UI层面支持）。
 		// 或者，如果希望在导入时就评估宏，则调用 evaluateMacros。
 		// 为保持与原模板一致（原模板在info中评估宏），我们也在这里评估。
 		const evaluatedNote = evaluateMacros(note || '', getMacroEnv('User')) // 'User' 作为占位符
@@ -91,8 +91,8 @@ function buildCharInfo(charData) {
 		for (const langCode in charData.extensions.creator_notes_multilingual)
 			if (Object.hasOwnProperty.call(charData.extensions.creator_notes_multilingual, langCode)) {
 				const noteForLang = charData.extensions.creator_notes_multilingual[langCode]
-				// fount 的 locale 通常是 'en-US', 'zh-CN' 等。CCv3 的是 'en', 'zh'。
-				// 直接使用 CCv3 的 langCode。fount 在查找时应能处理 'en' 匹配 'en-US' 的情况。
+				// beilu 的 locale 通常是 'en-US', 'zh-CN' 等。CCv3 的是 'en', 'zh'。
+				// 直接使用 CCv3 的 langCode。beilu 在查找时应能处理 'en' 匹配 'en-US' 的情况。
 				if (langCode !== defaultLocaleKey)  //避免覆盖已经由 `chardata.creator_notes` 设置的默认条目
 					info[langCode] = createInfoForLang(noteForLang)
 				else if (!info[defaultLocaleKey].description_markdown && noteForLang)
@@ -104,7 +104,7 @@ function buildCharInfo(charData) {
 	// 如果 fount 强制要求 'en' 存在，且 '' 不是 'en' 的有效代理，可以在这里确保 'en' 条目
 	if (!info.en && info[''] && chardata.creator_notes === (chardata.extensions?.creator_notes_multilingual?.en || chardata.creator_notes)) {
 		// 如果 '' 的内容实际上是英文内容，并且没有显式的 'en'，可以考虑复制一份
-		// 但更好的做法是让fount的locale匹配机制处理 '' 和 'en'
+		// 但更好的做法是让 beilu 的 locale 匹配机制处理 '' 和 'en'
 	}
 
 	return info
@@ -236,7 +236,7 @@ const charAPI_definition = {
 			 */
 			GetReply: async args => {
 				if (!AIsource) return {
-					content: 'This character does not have an AI source. Please [set the AI source](https://steve02081504.github.io/fount/protocol?url=fount://page/parts/shells:serviceSourceManage) first.'
+					content: 'This character does not have an AI source. Please [set the AI source](/parts/shells:serviceSourceManage) first.'
 				}
 				const env = getMacroEnv(args.UserCharname)
 				/**

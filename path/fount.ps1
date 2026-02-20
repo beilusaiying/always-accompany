@@ -226,6 +226,111 @@ function Test-Browser {
 	} catch { <# ignore #> }
 }
 
+# beilu: 必须依赖检查（node/git/python 需用户自行安装）
+function Test-RequiredDependencies {
+	$missing = @()
+
+	if (!(Get-Command node -ErrorAction SilentlyContinue)) {
+		$missing += [PSCustomObject]@{ Name = 'Node.js'; Url = 'https://nodejs.org/en/download' }
+	}
+	if (!(Get-Command git -ErrorAction SilentlyContinue)) {
+		$missing += [PSCustomObject]@{ Name = 'Git'; Url = 'https://git-scm.com/install/windows' }
+	}
+	$hasPython = (Get-Command python -ErrorAction SilentlyContinue) -or
+	             (Get-Command python3 -ErrorAction SilentlyContinue)
+	if (!$hasPython) {
+		$missing += [PSCustomObject]@{ Name = 'Python'; Url = 'https://www.python.org/downloads/' }
+	}
+
+	if ($missing.Count -gt 0) {
+		# 先检查 git 是否可以交互式自动安装
+		$gitMissing = $missing | Where-Object { $_.Name -eq 'Git' }
+		$otherMissing = $missing | Where-Object { $_.Name -ne 'Git' }
+
+		if ($gitMissing) {
+			Write-Host ""
+			Write-Host "  Git 未安装。" -ForegroundColor Yellow
+			Write-Host "  手动安装可以自行配置更多选项。" -ForegroundColor Gray
+			$answer = Read-Host "  是否自动安装 Git? (Y/N)"
+			if ($answer -eq 'Y' -or $answer -eq 'y') {
+				Write-Host "  正在自动安装 Git..." -ForegroundColor Cyan
+				Test-Winget
+				if (Get-Command winget -ErrorAction SilentlyContinue) {
+					winget install --id Git.Git -e --source winget
+					New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
+					Set-Content "$FOUNT_DIR/data/installer/auto_installed_git" '1'
+					RefreshPath
+				}
+				if (Get-Command git -ErrorAction SilentlyContinue) {
+					Write-Host "  ✓ Git 安装成功" -ForegroundColor Green
+					$gitMissing = $null
+				} else {
+					Write-Host "  ✗ Git 自动安装失败" -ForegroundColor Red
+				}
+			}
+		}
+
+		# 重新汇总仍然缺失的依赖
+		$stillMissing = @()
+		if ($gitMissing) { $stillMissing += $gitMissing }
+		$stillMissing += $otherMissing
+
+		if ($stillMissing.Count -gt 0) {
+			Write-Host ""
+			Write-Host "  ❌ 缺少必须依赖，无法启动" -ForegroundColor Red
+			Write-Host ""
+			foreach ($dep in $stillMissing) {
+				Write-Host "    • $($dep.Name)" -ForegroundColor Yellow -NoNewline
+				Write-Host "  →  $($dep.Url)" -ForegroundColor Cyan
+			}
+			Write-Host ""
+			Write-Host "  请安装以上依赖后重新启动。" -ForegroundColor Red
+			Write-Host ""
+			Read-Host "  按 Enter 退出"
+			exit 1
+		}
+	}
+
+	Write-Host "  ✓ 必须依赖检查通过" -ForegroundColor Green
+}
+
+# beilu: 等待服务器就绪后再打开浏览器
+function Wait-AndOpenBrowser {
+	param([int]$Port = 1314)
+
+	Start-Job -ScriptBlock {
+		param($p)
+		$timeout = 120
+		$elapsed = 0
+		while ($elapsed -lt $timeout) {
+			try {
+				$r = Invoke-WebRequest -Uri "http://localhost:$p/api/ping" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+				if ($r.StatusCode -eq 200) {
+					Start-Process "http://localhost:$p"
+					return
+				}
+			} catch { }
+			Start-Sleep -Seconds 1
+			$elapsed++
+		}
+		# 超时兜底
+		Start-Process "http://localhost:$p"
+	} -ArgumentList $Port | Out-Null
+}
+
+# beilu: 从配置读取端口号
+function Get-FountPort {
+	$port = 1314
+	$cfgPath = Join-Path $FOUNT_DIR 'data/config.json'
+	if (Test-Path $cfgPath) {
+		try {
+			$cfg = Get-Content $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+			if ($cfg.port) { $port = $cfg.port }
+		} catch { }
+	}
+	return $port
+}
+
 function New-InstallerDir {
 	New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
 }
@@ -372,7 +477,6 @@ function deno_upgrade() {
 
 function Update-FountAndDeno {
 	if (Test-Path -Path "$FOUNT_DIR/.noupdate") {
-		Write-Host (Get-I18n -key 'update.skippingFountUpdate')
 	}
 	else {
 		deno_upgrade
@@ -384,10 +488,15 @@ if ($args[0] -eq 'nop') {
 	exit 0
 }
 elseif ($args[0] -eq 'open') {
+	# beilu: 启动前检查必须依赖
+	Test-RequiredDependencies
+	$port = Get-FountPort
+
 	if (Test-Path -Path "$FOUNT_DIR/data") {
 		Invoke-DockerPassthrough -CurrentArgs $args
 		Test-Browser
-		Start-Process 'http://localhost:1314'
+		# beilu: 等待服务器就绪后再打开浏览器
+		Wait-AndOpenBrowser -Port $port
 		$runargs = $args[1..$args.Count]
 		& "$PSScriptRoot/fount.ps1" @runargs
 		exit $LastExitCode
@@ -418,7 +527,8 @@ elseif ($args[0] -eq 'open') {
 		try {
 			$runargs = $args[1..$args.Count]
 			Test-Browser
-			Start-Process 'http://localhost:1314'
+			# beilu: 等待服务器就绪后再打开浏览器
+			Wait-AndOpenBrowser -Port $port
 			& "$PSScriptRoot/fount.ps1" @runargs
 			exit $LastExitCode
 		}
@@ -590,23 +700,8 @@ if (!$IsWindows) {
 	exit $LastExitCode
 }
 
-# Git 安装和更新
-if (!(Get-Command git -ErrorAction SilentlyContinue)) {
-	Write-Host (Get-I18n -key 'git.notInstalled')
-	Test-Winget
-	if (Get-Command winget -ErrorAction SilentlyContinue) {
-		winget install --id Git.Git -e --source winget
-		New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
-		Set-Content "$FOUNT_DIR/data/installer/auto_installed_git" '1'
-	}
-	else {
-		Write-Host (Get-I18n -key 'git.installFailedWinget')
-	}
-	RefreshPath
-	if (!(Get-Command git -ErrorAction SilentlyContinue)) {
-		Write-Host (Get-I18n -key 'git.installFailedManual')
-	}
-}
+# beilu: 主流程依赖检查（node/git/python），git 改为交互式安装
+Test-RequiredDependencies
 
 function fount_upgrade {
 	if (!(Get-Command git -ErrorAction SilentlyContinue)) {

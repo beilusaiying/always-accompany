@@ -40,7 +40,10 @@ export function registerResources(router) {
 					return betterSendFile(res, __dirname + '/src/public/pages/favicon.png')
 				break
 			case '/favicon.svg':
-				return betterSendFile(res, __dirname + '/imgs/icon.svg')
+			case '/favicon.png':
+				if (fs.existsSync(__dirname + '/src/public/pages/favicon.png'))
+					return betterSendFile(res, __dirname + '/src/public/pages/favicon.png')
+				break
 		}
 		return next()
 	})

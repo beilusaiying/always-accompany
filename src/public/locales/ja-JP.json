@@ -16,7 +16,7 @@
 				"failed": "mDNS 登録に失敗しました: ${error}",
 				"bonjourFailed": "Bonjour サービスの作成に失敗しました: ${error}"
 			},
-			"localUrl": "同じネットワーク上の他のデバイスからのfountへのアクセス：${url}",
+			"localUrl": "同じネットワーク上の他のデバイスからのbeiluへのアクセス：${url}",
 			"update": {
 				"restarting": "新しいバージョンが発見され、更新が再起動されています..."
 			}
@@ -31,7 +31,7 @@
 			"instanceRunning": "別のインスタンスが既に実行中です。",
 			"runPartLog": "${partpath} を ${username}、引数: ${args} として実行します。",
 			"invokePartLog": "${partpath} を ${username}、パラメータ: ${invokedata} として呼び出します",
-			"invalidCommand": "無効なコマンドです。「fount run <コンポーネントタイプ> <ユーザー名> <コンポーネント名> <パラメーター...>」を使用してください。",
+			"invalidCommand": "無効なコマンドです。「beilu run <コンポーネントタイプ> <ユーザー名> <コンポーネント名> <パラメーター...>」を使用してください。",
 			"invalidCommandFormat": "無効なコマンド形式です。",
 			"unsupportedCommand": "サポートされていないコマンドタイプです。",
 			"processMessageError": "IPCメッセージの処理中にエラーが発生しました：${error}",
@@ -74,22 +74,22 @@
 			"codeNotifyBody": "認証コード：${code}（60秒後に期限切れとなります）"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "アイコンファイルの読み込みに失敗しました：${error}",
 			"createTrayFailed": "トレイアイコンの作成に失敗しました：${error}",
 			"items": {
 				"open": {
 					"title": "開く",
-					"tooltip": "fountを開く"
+					"tooltip": "beiluを開く"
 				},
 				"github": {
 					"title": "GitHub",
-					"tooltip": "fountのGitHubを開く"
+					"tooltip": "beiluのGitHubを開く"
 				},
 				"discord": {
 					"title": "Discord",
-					"tooltip": "fountのDiscordを開く"
+					"tooltip": "beiluのDiscordを開く"
 				},
 				"restart": {
 					"title": "再起動",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL: fount プロトコル",
+				"description": "URL: beilu プロトコル",
 				"registerFailed": "fount:// プロトコル ハンドラーの登録に失敗しました: ${message}",
 				"noUrl": "エラー: プロトコルハンドラーの URL が指定されていません。"
 			},
 			"update": {
-				"skippingFountUpdate": ".noupdate ファイルが存在するため、カウントの更新はスキップされます",
+				"skippingBeiluUpdate": ".noupdate ファイルが存在するため、カウントの更新はスキップされます",
 				"skippingDenoUpgradeDocker": "Docker環境でのDenoアップグレードのスキップ"
 			},
 			"shortcut": {
@@ -151,7 +151,7 @@
 			},
 			"deno": {
 				"missing": "Deno が見つかりません。自動的にインストールされます...",
-				"isRequired": "Deno が見つかりません。Deno なしでは fount を実行できません",
+				"isRequired": "Deno が見つかりません。Deno なしでは beilu を実行できません",
 				"installingTermux": "Termux 用の Deno をインストールしています...",
 				"installFailedFallback": "Deno のインストールが失敗しました。見つかったパス フォルダーに自動的にインストールしようとしています...",
 				"notWorking": "何らかの理由で Deno が動作しない場合は、https://discord.gg/deno に参加してサポートを受けることをお勧めします。",
@@ -165,9 +165,9 @@
 				"installingDependencies": "依存関係をインストールしています...",
 				"packageFailed": "エラー: ${package} のインストールに失敗しました。",
 				"browserMissing": "デフォルトのブラウザが検出されません。インストールしようとしています...",
-				"untrustedPartsWarning": "信頼できない fount コンポーネントはシステムにインストールしないでください。コンポーネントは何でもできるからです。",
-				"rootWarning1": "推奨されません: root として fount を実行すると、すべての fount コンポーネントへの完全なシステム アクセスが許可されます。",
-				"rootWarning2": "自分が何をしているのかよくわからない場合は、通常のユーザーとして fount を実行することをお勧めします。"
+				"untrustedPartsWarning": "信頼できない beilu コンポーネントはシステムにインストールしないでください。コンポーネントは何でもできるからです。",
+				"rootWarning1": "推奨されません: root として beilu を実行すると、すべての beilu コンポーネントへの完全なシステム アクセスが許可されます。",
+				"rootWarning2": "自分が何をしているのかよくわからない場合は、通常のユーザーとして beilu を実行することをお勧めします。"
 			},
 			"clean": {
 				"removingCaches": "キャッシュを削除しています...",
@@ -177,29 +177,29 @@
 			},
 			"keepalive": {
 				"initComplete": "再初期化が完了しました。フォントを再起動しようとしています...",
-				"autoInitDisabled": "fount は過去の短期間に複数回再起動されましたが、.noautoinit ファイルが存在するため自動再初期化が無効になっています。退出中。",
-				"restartingTooFast": "fount が短期間に複数回再起動されました。強制再初期化...",
+				"autoInitDisabled": "beilu は過去の短期間に複数回再起動されましたが、.noautoinit ファイルが存在するため自動再初期化が無効になっています。退出中。",
+				"restartingTooFast": "beilu が短期間に複数回再起動されました。強制再初期化...",
 				"failedToStart": "自動修復を試みた後でも、噴水は短期間起動しません。ログでエラーを確認してください。",
 				"initFailed": "フォントの初期化に失敗しました。退出中。"
 			},
 			"remove": {
-				"removingFount": "フォントを削除しています...",
-				"fountUninstallationComplete": "fountのアンインストールが完了しました。",
-				"removingFountInstallationDir": "fount インストール ディレクトリを削除しています...",
-				"fountInstallationDirRemoved": "fount のインストール ディレクトリは削除されました。",
-				"removingFountFromPath": "PATH からフォントを削除しています...",
+				"removingBeilu": "フォントを削除しています...",
+				"beiluUninstallationComplete": "beiluのアンインストールが完了しました。",
+				"removingBeiluInstallationDir": "beilu インストール ディレクトリを削除しています...",
+				"beiluInstallationDirRemoved": "beilu のインストール ディレクトリは削除されました。",
+				"removingBeiluFromPath": "PATH からフォントを削除しています...",
 				"removingProtocolHandler": "fount:// プロトコル ハンドラーを削除しています...",
 				"protocolHandlerRemoved": "fount:// プロトコル ハンドラーは削除されました。",
 				"removeProtocolHandlerFailed": "fount:// プロトコル ハンドラーの削除に失敗しました: ${message}",
-				"removingFountFromGitSafeDir": "gitsafe.directory から fount を削除しています...",
+				"removingBeiluFromGitSafeDir": "gitsafe.directory から beilu を削除しています...",
 				"removingInstalledSystemPackages": "インストールされているシステム パッケージを削除しています...",
 				"uninstallingDeno": "Deno をアンインストールしています...",
 				"removeDenoFailed": "Deno を削除できませんでした: ${message}",
-				"removingFountPwshFromProfile": "PowerShell プロファイルから fount-pwsh を削除しています...",
-				"fountPwshRemovedFromProfile": "fount-pwsh は PowerShell プロファイルから削除されました。",
+				"removingBeiluPwshFromProfile": "PowerShell プロファイルから fount-pwsh を削除しています...",
+				"beiluPwshRemovedFromProfile": "fount-pwsh は PowerShell プロファイルから削除されました。",
 				"pwshProfileNotFound": "PowerShell プロファイルが見つかりません。プロファイルからの fount-pwsh の削除はスキップされます。",
-				"uninstallingFountPwsh": "fount-pwsh をアンインストールしています...",
-				"uninstallFountPwshFailed": "fount-pwsh のアンインストールに失敗しました: ${message}",
+				"uninstallingBeiluPwsh": "fount-pwsh をアンインストールしています...",
+				"uninstallBeiluPwshFailed": "fount-pwsh のアンインストールに失敗しました: ${message}",
 				"removingTerminalProfile": "Windows ターミナル プロファイルを削除しています...",
 				"terminalProfileRemoved": "Windows ターミナル プロファイル ディレクトリが削除されました。",
 				"terminalProfileNotFound": "Windows ターミナル プロファイル ディレクトリが見つかりません。",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "fountへようこそ！",
-		"description": "インストールの進行状況を追跡し、その機能を垣間見てみましょう。すぐに fount を起動する準備が整います。",
+		"title": "beiluへようこそ！",
+		"description": "インストールの進行状況を追跡し、その機能を垣間見てみましょう。すぐに beilu を起動する準備が整います。",
 		"hero": {
 			"title": "想いを形に、心を繋ぐ",
-			"description": "fountは、<i>あなた</i>の可能性を最大限に引き出すために設計された、AI搭載のキャラクター対話プラットフォームです。想像の世界のキャラクターとあなたを繋ぐ架け橋となり、気軽に会話を楽しんだり、自分だけのキャラクターを創り出して世界と共有したりすることを可能にします。"
+			"description": "beiluは、<i>あなた</i>の可能性を最大限に引き出すために設計された、AI搭載のキャラクター対話プラットフォームです。想像の世界のキャラクターとあなたを繋ぐ架け橋となり、気軽に会話を楽しんだり、自分だけのキャラクターを創り出して世界と共有したりすることを可能にします。"
 		},
 		"feature1": {
 			"title": "どこでもシームレスな対話を",
-			"description": "PCで始めたチャットを、スマートフォンやタブレットでシームレスに継続。fountが会話を常に同期し、どこにいてもあなたのキャラクターと繋がっていられます。Windows、macOS、Linux、そしてAndroidにも対応しています。"
+			"description": "PCで始めたチャットを、スマートフォンやタブレットでシームレスに継続。beiluが会話を常に同期し、どこにいてもあなたのキャラクターと繋がっていられます。Windows、macOS、Linux、そしてAndroidにも対応しています。"
 		},
 		"feature2": {
 			"title": "美しく、カスタマイズ可能なインターフェース",
-			"description": "30種類以上の美しいテーマから選択、または独自のテーマを作成しましょう。fountはあなたのパーソナルキャンバスです。自分らしさを表現し、好みに合わせて環境をカスタマイズして、真にパーソナルな体験を手に入れましょう。"
+			"description": "30種類以上の美しいテーマから選択、または独自のテーマを作成しましょう。beiluはあなたのパーソナルキャンバスです。自分らしさを表現し、好みに合わせて環境をカスタマイズして、真にパーソナルな体験を手に入れましょう。"
 		},
 		"feature3": {
 			"title": "表現力豊かで、没入感あふれるチャット",
-			"description": "fountはHTMLの力を最大限に活用し、キャラクターがリッチテキスト、画像、さらにはインタラクティブな要素を通じて自己表現することを可能にします。複数のキャラクターと同時に、ダイナミックで魅力的なグループチャットをお楽しみください。"
+			"description": "beiluはHTMLの力を最大限に活用し、キャラクターがリッチテキスト、画像、さらにはインタラクティブな要素を通じて自己表現することを可能にします。複数のキャラクターと同時に、ダイナミックで魅力的なグループチャットをお楽しみください。"
 		},
 		"feature4": {
 			"title": "AIソースとの自由な連携",
-			"description": "fountは、比類のない選択肢と柔軟性を提供します。OpenAI、Claude、OpenRouter、NovelAIなど、<i>あらゆる</i>AIソースに接続可能です。コミュニケーションのロジックは、あなたの意のままに、コードの力によって形作られます。"
+			"description": "beiluは、比類のない選択肢と柔軟性を提供します。OpenAI、Claude、OpenRouter、NovelAIなど、<i>あらゆる</i>AIソースに接続可能です。コミュニケーションのロジックは、あなたの意のままに、コードの力によって形作られます。"
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "ここでミニゲームをして、少し時間を潰しましょう。"
 		},
 		"data_showcase": {
-			"title_prefix": "fountは最も",
+			"title_prefix": "beiluは最も",
 			"title_of": "",
 			"active_users": "アクティブユーザー数",
 			"stars": "GitHubスター",
@@ -289,21 +289,21 @@
 		"footer": {
 			"ready_text": "冒険を始める準備はできましたか？",
 			"wait_text": "しばらくお待ちください...",
-			"open_fount": "fountを開く",
-			"open_or_install_fount": "fountを開く/インストール",
+			"open_beilu": "beiluを開く",
+			"open_or_install_beilu": "beiluを開く/インストール",
 			"error_message": "あらら…\n\nエラーが発生しました：\n${error}"
 		},
 		"error": {
 			"title": "インストールに失敗しました！",
-			"description": "fountインストーラーに問題が発生したようです。",
+			"description": "beiluインストーラーに問題が発生したようです。",
 			"connection_failed": "接続に失敗しました！",
-			"description1": "fountインストーラーに問題が発生したようです。",
+			"description1": "beiluインストーラーに問題が発生したようです。",
 			"description2": "ターミナルを確認して、もう一度お試しください。",
 			"close_page": "ページを閉じる"
 		}
 	},
 	"protocolhandler": {
-		"title": "fountプロトコルの処理",
+		"title": "beiluプロトコルの処理",
 		"description": "このページは、静かかつ効率的に、ユーザーの意図をフォント内でのシームレスな遷移に変換します。それはカーテンの向こうにある静かな魔法だと考えてください。",
 		"processing": "プロトコルを処理中です...",
 		"shellCommandSent": "シェルコマンドを送信しました。",
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "ホストがオフラインです",
-			"message": "fount ホスト ${hostUrl} はオフラインのようです。再試行しますか？",
+			"message": "beilu ホスト ${hostUrl} はオフラインのようです。再試行しますか？",
 			"buttons": {
 				"start": "起動",
 				"retry": "再試行"
 			}
 		},
-		"fountNotFound": "あらら…\n\nfountが見つかりませんでした。最初にインストールする必要がありますか？",
+		"beiluNotFound": "あらら…\n\nbeiluが見つかりませんでした。最初にインストールする必要がありますか？",
 		"invalidProtocol": "無効なプロトコルです。",
 		"insufficientParams": "パラメーターが不足しています。",
 		"unknownCommand": "不明なコマンドです。",
@@ -330,14 +330,14 @@
 		"unknownError": "あらら…\n\nエラーが発生しました：\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
+		"title": "beilu!",
 		"description": "泉の敷居へようこそ。展開を待つ会話や物語の核心に足を踏み入れる前の、短い準備の時間。"
 	},
 	"tutorial": {
 		"title": "チュートリアルはいかがですか？",
 		"description": "あなたと一緒に泉の世界を歩きましょう。このインタラクティブなチュートリアルは道を明らかにし、その核心に織り込まれた魔法を発見するのに役立ちます。あなたの冒険は理解することから始まります。",
 		"modal": {
-			"title": "fountへようこそ！",
+			"title": "beiluへようこそ！",
 			"instruction": "入門チュートリアルを開始しますか？",
 			"buttons": {
 				"start": "チュートリアル開始",
@@ -443,7 +443,7 @@
 			"title": "証明書転送エラー",
 			"retrieve_error": "ログイン情報を保存しようとしているときにエラーが発生しました。\n${error}\n続行できますが、ログイン情報を保存できません。",
 			"transfer_error": "ログイン情報を転送しようとしているときにエラーが発生しました。\n${error}\n続行できますが、ログイン情報を取得できません。",
-			"no_credentials": "保存された認証情報が見つかりません。\nfount 内から再度ログインして認証情報を更新するか、下のボタンをクリックして認証情報なしで対象のページに進んでください。",
+			"no_credentials": "保存された認証情報が見つかりません。\nbeilu 内から再度ログインして認証情報を更新するか、下のボタンをクリックして認証情報なしで対象のページに進んでください。",
 			"missing_params": "リンクに必須パラメーターが不足しています。",
 			"buttons": {
 				"ignore": "無視して続行",
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "空です...<br/>[新しいパーツを作成](${newpartLink}) するか、[fount の Discord サーバー](${discordLink}) に行って楽しんでみてはいかがでしょうか?"
+			"message": "空です...<br/>[新しいパーツを作成](${newpartLink}) するか、[beilu の Discord サーバー](${discordLink}) に行って楽しんでみてはいかがでしょうか?"
 		},
 		"part_pages": {
 			"default": {
@@ -630,7 +630,7 @@
 				}
 			}
 		},
-		"escapeConfirm": "fountを終了しますか？",
+		"escapeConfirm": "beiluを終了しますか？",
 		"alerts": {
 			"fetchHomeRegistryFailed": "ホームレジストリ情報の取得に失敗しました。"
 		},
@@ -672,7 +672,7 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "カウントコンポーネント情報の生成"
 			}
 		}
@@ -935,8 +935,8 @@
 			},
 			"code_greeting": {
 				"name": "コードで挨拶",
-				"description": "「こんにちは、fount！」",
-				"locked_description": "コードブロックを実行して、'hello fount!' と出力する。"
+				"description": "「こんにちは、beilu！」",
+				"locked_description": "コードブロックを実行して、'hello beilu!' と出力する。"
 			}
 		},
 		"dragAndDrop": {
@@ -1120,7 +1120,7 @@
 	},
 	"import": {
 		"title": "インポート",
-		"description": "あなたの大切なキャラクター、世界、構成をFountに抱かせましょう。ファイルからでも、貼り付けたテキストからでも、ここで新しい要素があなたの個人的なタペストリーに織り込まれます。",
+		"description": "あなたの大切なキャラクター、世界、構成をBeiluに抱かせましょう。ファイルからでも、貼り付けたテキストからでも、ここで新しい要素があなたの個人的なタペストリーに織り込まれます。",
 		"tabs": {
 			"tabsLabel": {
 				"aria-label": "インポート方法の選択"
@@ -1432,9 +1432,9 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "Subfount - ピアツーピアデバイス管理",
-		"pageTitle": "Subfount",
+	"subbeilus": {
+		"title": "Subbeilu - ピアツーピアデバイス管理",
+		"pageTitle": "Subbeilu",
 		"description": "ピアツーピアのファウンテン接続を管理する",
 		"hostConnectionCode": {
 			"title": "ホスト接続コード",
@@ -1442,14 +1442,14 @@
 			"passwordLabel": "パスワード",
 			"copyButton": "コピー",
 			"regenerateButton": "再生成",
-			"infoMessage": "これらの資格情報をSubfountクライアントと共有して、接続を確立します。",
+			"infoMessage": "これらの資格情報をSubbeiluクライアントと共有して、接続を確立します。",
 			"connectionCodeCopied": "接続コードがクリップボードにコピーしました",
 			"passwordCopied": "パスワードがクリップボードにコピーしました",
 			"regenerateSuccess": "接続コードが再生成されました"
 		},
-		"connectedSubfounts": {
-			"title": "接続されたSubfount",
-			"noSubfountsConnected": "Subfountが接続されていません",
+		"connectedSubbeilus": {
+			"title": "接続されたSubbeilu",
+			"noSubbeilusConnected": "Subbeiluが接続されていません",
 			"table": {
 				"id": "ID",
 				"description": "備考",
@@ -1467,23 +1467,23 @@
 		},
 		"codeExecution": {
 			"title": "コードの実行",
-			"description": "選択したSubfountで JavaScript コードを実行します",
-			"selectSubfountLabel": "Subfountの選択",
-			"selectSubfountPlaceholder": "コードを実行するSubfountを選択してください...",
+			"description": "選択したSubbeiluで JavaScript コードを実行します",
+			"selectSubbeiluLabel": "Subbeiluの選択",
+			"selectSubbeiluPlaceholder": "コードを実行するSubbeiluを選択してください...",
 			"hostOption": "ホスト (ID: ${id})",
-			"subfountOption": "端末 ${id}${deviceId}",
+			"subbeiluOption": "端末 ${id}${deviceId}",
 			"scriptLabel": "JavaScriptコード",
 			"executeButton": "実行",
 			"executing": "実行中...",
-			"noSubfountSelected": "最初にSubfountを選択してください",
+			"noSubbeiluSelected": "最初にSubbeiluを選択してください",
 			"noScriptProvided": "実行するコードを入力してください",
 			"executionSuccess": "コードの実行が成功しました",
 			"executionFailed": "コードの実行に失敗しました: ${message}"
 		},
 		"downloadClient": {
 			"title": "サブファウントクライアントをダウンロードする",
-			"description": "スタンドアロンのSubfount クライアント スクリプトをダウンロードして、リモート デバイス上で実行します。",
-			"downloadButton": "subfount.mjsをダウンロード"
+			"description": "スタンドアロンのSubbeilu クライアント スクリプトをダウンロードして、リモート デバイス上で実行します。",
+			"downloadButton": "subbeilu.mjsをダウンロード"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "接続コードのロードに失敗しました: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "開発中",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "サブデバイス",
 						"sub_items": {
 							"main": {
@@ -1932,13 +1932,13 @@
 		"title": "ブラウザの統合",
 		"description": "噴水とウェブの間のギャップを埋めます。このページには、シームレスな統合を可能にし、AI コンパニオンをブラウジング エクスペリエンスに組み込むためのユーザー スクリプトが提供されます。",
 		"pageHeader": "ブラウザの統合",
-		"pageDescription": "fountロールがWebページと対話するには、このブラウザ統合スクリプトをインストールする必要があります。キャラクターとブラウザの間のブリッジとして機能し、ページコンテンツを表示してアクションを実行できるようにします。",
+		"pageDescription": "beiluロールがWebページと対話するには、このブラウザ統合スクリプトをインストールする必要があります。キャラクターとブラウザの間のブリッジとして機能し、ページコンテンツを表示してアクションを実行できるようにします。",
 		"install_script_title": "インストールスクリプト",
 		"install_script_description": "下のボタンをクリックして、ブラウザ統合スクリプトをインストールします。最初にTampermonkey のようなユーザースクリプトマネージャーをインストールする必要があります。",
 		"install_button": "インストール",
 		"install_from_url_tip": "ブラウザはインストールできませんか？このURLをコピーして、Tampermonkey プラグインのURLからスクリプトをインポートします。",
 		"what_is_manager": "ユーザースクリプトマネージャーとは何ですか？",
-		"manager_explanation": "ユーザースクリプトマネージャーは、Webページを変更するスクリプトをインストールおよび実行できるブラウザ拡張機能です。 fount Integration Scriptを使用するには、拡張機能の1つが必要です。",
+		"manager_explanation": "ユーザースクリプトマネージャーは、Webページを変更するスクリプトをインストールおよび実行できるブラウザ拡張機能です。 beilu Integration Scriptを使用するには、拡張機能の1つが必要です。",
 		"popular_managers": "人気のある選択肢：",
 		"csp_warning": "統合機能を適切に動作させるためにCSPを無効にするプラグインのインストールが必要になる場合があります。${browser}の場合は[こちらのプラグイン](${link})をご利用いただけます。",
 		"connected_pages_title": "接続されたページ",
@@ -1996,10 +1996,10 @@
 				"description": "「私の名において、ブラウザに命令してください...」",
 				"locked_description": "ブラウザで JavaScript コードを 1 回実行します。"
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "オープンソースのスター",
-				"description": "GitHubでfountにスターを付けていただき、ありがとうございます！",
-				"locked_description": "fount の GitHub リポジトリにアクセスして、スターを付けてください。"
+				"description": "GitHubでbeiluにスターを付けていただき、ありがとうございます！",
+				"locked_description": "beilu の GitHub リポジトリにアクセスして、スターを付けてください。"
 			}
 		},
 		"home_function_buttons": {
@@ -2015,20 +2015,20 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "fount Browser Integration Scriptの新しいバージョンが利用可能です。更新ページは開いていますか？"
+			"prompt": "beilu Browser Integration Scriptの新しいバージョンが利用可能です。更新ページは開いていますか？"
 		},
-		"csp_warning": "fount Browser Integration Scriptは、CSPポリシーがページに存在することを検出し、統合スクリプトが適切に機能しない可能性があります。 CSPを無効にするためにプラグインをインストールすることを検討してください。",
+		"csp_warning": "beilu Browser Integration Scriptは、CSPポリシーがページに存在することを検出し、統合スクリプトが適切に機能しない可能性があります。 CSPを無効にするためにプラグインをインストールすることを検討してください。",
 		"hostChange": {
-			"securityWarningTitle": "--- fount 安全警告---",
-			"message": "現在のページ（ \"${origin}\"）は、ファウントホストアドレスを次のように変更しようとしています。\n\n「${newHost}」\n\n警告：このアクションを承認すると、新しいホストがブラウザの統合機能を完全に制御できるようになり、機密情報の漏れやアカウントの盗難につながる可能性があります。\n承認は、これがあなた自身の操作であると確信している場合にのみ行う必要があります（たとえば、fount サーバーの移行）。\n\nこの変更を許可したいですか？",
-			"uuidMismatchError": "fount セキュリティエラー：ホスト${newHost}のID（UUID）は、既存のものと一致しません。操作はキャンセルされました。",
+			"securityWarningTitle": "--- beilu 安全警告---",
+			"message": "現在のページ（ \"${origin}\"）は、ファウントホストアドレスを次のように変更しようとしています。\n\n「${newHost}」\n\n警告：このアクションを承認すると、新しいホストがブラウザの統合機能を完全に制御できるようになり、機密情報の漏れやアカウントの盗難につながる可能性があります。\n承認は、これがあなた自身の操作であると確信している場合にのみ行う必要があります（たとえば、beilu サーバーの移行）。\n\nこの変更を許可したいですか？",
+			"uuidMismatchError": "beilu セキュリティエラー：ホスト${newHost}のID（UUID）は、既存のものと一致しません。操作はキャンセルされました。",
 			"verificationError": "セキュリティエラーのファウント：新しいホスト「${newHost}」を確認できません。住所が正しいかどうか、およびサービスが実行されているかどうかを確認してください。"
 		}
 	},
 	"terminal_assistant": {
 		"title": "ターミナルアシスタント",
-		"description": "グラフィカル インターフェイスの向こうには、直接コマンドを実行できるスペースがあります。ターミナル アシスタントを通じて fount のコアと対話し、テキストが独自の強力な魔法を織り交ぜます。",
-		"initialMessage": "fountは、お気に入りのキャラクターをターミナルに導入し、コーディング作業をサポートします！",
+		"description": "グラフィカル インターフェイスの向こうには、直接コマンドを実行できるスペースがあります。ターミナル アシスタントを通じて beilu のコアと対話し、テキストが独自の強力な魔法を織り交ぜます。",
+		"initialMessage": "beiluは、お気に入りのキャラクターをターミナルに導入し、コーディング作業をサポートします！",
 		"initialMessageLink": "詳細はこちら",
 		"achievements": {
 			"invoke_shell_assist": {
@@ -2105,15 +2105,15 @@
 		}
 	},
 	"access": {
-		"title": "他のデバイスからfountにアクセス",
+		"title": "他のデバイスからbeiluにアクセス",
 		"description": "単一の画面を超えてファウントの範囲を拡張します。ここには、他のデバイスから仲間と接続するためのゲートウェイ (URL や QR コード) があり、ローカル イーサを渡る単純なブリッジとなります。",
-		"heading": "他のデバイスからfountにアクセスしますか？",
+		"heading": "他のデバイスからbeiluにアクセスしますか？",
 		"instruction": {
-			"sameLAN": "デバイスとfountホストが同じローカルネットワーク上にあることを確認してください。",
+			"sameLAN": "デバイスとbeiluホストが同じローカルネットワーク上にあることを確認してください。",
 			"accessthis": "次のURLにアクセスしてください："
 		},
 		"QRcode": {
-			"alt": "この QR コードをスキャンして fount にアクセス"
+			"alt": "この QR コードをスキャンして beilu にアクセス"
 		},
 		"urlInput": {
 			"aria-label": "URL"
@@ -2128,9 +2128,9 @@
 	},
 	"proxy": {
 		"title": "APIプロキシ",
-		"description": "開発者とインテグレータ向けに、このページでは fount API プロキシ、つまり fount の機能を他のアプリケーションに組み込むための接続を公開します。",
+		"description": "開発者とインテグレータ向けに、このページでは beilu API プロキシ、つまり beilu の機能を他のアプリケーションに組み込むための接続を公開します。",
 		"heading": "APIプロキシゲートウェイ",
-		"instruction": "このページでAPIキーを生成・管理し、fountを他のアプリケーションと統合します。",
+		"instruction": "このページでAPIキーを生成・管理し、beiluを他のアプリケーションと統合します。",
 		"endpointSectionTitle": "APIエンドポイント",
 		"endpointInstruction": "これは他のサービスと統合するためのベースURLです。",
 		"apiUrlInput": {
@@ -2161,16 +2161,16 @@
 		}
 	},
 	"ide_integration": {
-		"description": "エージェント クライアント プロトコルを介してfountロールをサポートされているエディター (Zed、JetBrains、Neovim など) に接続し、API キーとロールを構成して、AI パートナーを開発ワークフローに参加させます。",
+		"description": "エージェント クライアント プロトコルを介してbeiluロールをサポートされているエディター (Zed、JetBrains、Neovim など) に接続し、API キーとロールを構成して、AI パートナーを開発ワークフローに参加させます。",
 		"title": "IDE連携",
 		"heading": "IDE連携",
-		"instruction": "fountロールを使用して、ACP 対応エディター (Zed、JetBrains、Neovim など) でのプログラミングを支援します。",
+		"instruction": "beiluロールを使用して、ACP 対応エディター (Zed、JetBrains、Neovim など) でのプログラミングを支援します。",
 		"supportedEditorsTitle": "サポートされているエディターとクライアント",
-		"supportedEditorsIntro": "以下のクライアントで fount が利用可能です。",
+		"supportedEditorsIntro": "以下のクライアントで beilu が利用可能です。",
 		"supportedEditorsLoading": "読み込み中…",
 		"supportedEditorsError": "リストの読み込みに失敗しました: ${message}",
-		"acpTitle": "fount ACP スクリプトを構成する",
-		"acpDesc": "fount ACP スクリプトを構成するには、次の例を参照してください。",
+		"acpTitle": "beilu ACP スクリプトを構成する",
+		"acpDesc": "beilu ACP スクリプトを構成するには、次の例を参照してください。",
 		"acpCharLabel": "ロール",
 		"acpCharPlaceholder": "ロールの選択",
 		"charListError": "ロールリストの取得に失敗しました",
@@ -2181,7 +2181,7 @@
 		"copyButton": "コピー",
 		"copied": "クリップボードにコピー完了",
 		"apiKeySectionTitle": "APIキー",
-		"apiKeyHint": "ACP スクリプト接続の fountに使用されます (API プロキシと同じキーのセット。ユーザー設定で作成できます)。",
+		"apiKeyHint": "ACP スクリプト接続の beiluに使用されます (API プロキシと同じキーのセット。ユーザー設定で作成できます)。",
 		"generateApiKeyButton": "新しいキーを生成する",
 		"apiKeyCopied": "APIキーをクリップボードにコピーしました",
 		"apiKeyCreateError": "API キーの作成に失敗しました: ${message}",
@@ -2197,14 +2197,14 @@
 		"achievements": {
 			"first_ide_use": {
 				"name": "工欲善其事",
-				"description": "初めて、fount ロールを使用して、Zed、JetBrains、Neovim などの ACP 対応エディターでのプログラミングを支援します。",
-				"locked_description": "外部 IDE で fount ロールに接続し、セッションを完了します。"
+				"description": "初めて、beilu ロールを使用して、Zed、JetBrains、Neovim などの ACP 対応エディターでのプログラミングを支援します。",
+				"locked_description": "外部 IDE で beilu ロールに接続し、セッションを完了します。"
 			}
 		}
 	},
 	"achievements": {
 		"title": "成果",
-		"description": "fount を使用して、旅のマイルストーンと成果を探索しましょう。それぞれの成果は、あなた独自の物語の一歩を表します。",
+		"description": "beilu を使用して、旅のマイルストーンと成果を探索しましょう。それぞれの成果は、あなた独自の物語の一歩を表します。",
 		"pageHeader": "功績の殿堂",
 		"pageDescription": "ロック解除された実績とマイルストーンをここで確認してください。",
 		"unlocked_on": "${date} にロック解除されました",
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "デバッグとシステム情報",
-		"description": "fount のインストールに関する詳細なデバッグ情報とシステム情報を取得します。これは、トラブルシューティングやサポート リクエストに非常に役立ちます。",
+		"description": "beilu のインストールに関する詳細なデバッグ情報とシステム情報を取得します。これは、トラブルシューティングやサポート リクエストに非常に役立ちます。",
 		"heading": "デバッグとシステム情報",
 		"copyButton": "レポートのコピー",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount! バッジコンバーター",
-		"description": "プロジェクトにFountのキャラクターのタッチが必要な場合に。 Shields.io バッジを変換して、新しく共鳴するアイデンティティを与えます。",
-		"card_title": "fountバッジリンクコンバーター",
+		"title": "beilu! バッジコンバーター",
+		"description": "プロジェクトにBeiluのキャラクターのタッチが必要な場合に。 Shields.io バッジを変換して、新しく共鳴するアイデンティティを与えます。",
+		"card_title": "beiluバッジリンクコンバーター",
 		"original_url_label": "img.shields.io URLを貼り付けます",
 		"original_url": {
 			"placeholder": "例：https://img.shields.io/badge/hello-world-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "ディレクトリインデックス",
-		"description": "fountワークスペース内のファイルとフォルダーを参照して探索します。",
+		"description": "beiluワークスペース内のファイルとフォルダーを参照して探索します。",
 		"indexOf": "インデックス: ${path}",
 		"name": "名前",
 		"mimeType": "MIMEタイプ",

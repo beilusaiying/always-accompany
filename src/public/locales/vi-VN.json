@@ -16,7 +16,7 @@
 				"failed": "Đăng ký mDNS không thành công: ${error}",
 				"bonjourFailed": "Tạo dịch vụ Bonjour không thành công: ${error}"
 			},
-			"localUrl": "Truy cập fount từ các thiết bị khác trên cùng mạng: ${url}",
+			"localUrl": "Truy cập beilu từ các thiết bị khác trên cùng mạng: ${url}",
 			"update": {
 				"restarting": "Một phiên bản mới đã được phát hiện và bản cập nhật đang được khởi động lại..."
 			}
@@ -31,7 +31,7 @@
 			"instanceRunning": "Một tiến trình khác đang chạy.",
 			"runPartLog": "Chạy ${partpath} với tên ${username}, đối số: ${args}",
 			"invokePartLog": "Gọi ${partpath} là ${username}, tham số: ${invokedata}",
-			"invalidCommand": "Lệnh không hợp lệ. Vui lòng sử dụng \"fount run <loại thành phần> <tên người dùng> <tên thành phần> <tham số ...>\".",
+			"invalidCommand": "Lệnh không hợp lệ. Vui lòng sử dụng \"beilu run <loại thành phần> <tên người dùng> <tên thành phần> <tham số ...>\".",
 			"invalidCommandFormat": "Định dạng lệnh không hợp lệ.",
 			"unsupportedCommand": "Loại lệnh không được hỗ trợ.",
 			"processMessageError": "Đã xảy ra lỗi khi xử lý tin nhắn IPC: ${error}",
@@ -74,22 +74,22 @@
 			"codeNotifyBody": "Mã xác minh: ${code} (hết hạn sau 60 giây)"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "Đọc tệp biểu tượng thất bại: ${error}",
 			"createTrayFailed": "Tạo biểu tượng trên khay hệ thống thất bại: ${error}",
 			"items": {
 				"open": {
 					"title": "Mở",
-					"tooltip": "Mở fount"
+					"tooltip": "Mở beilu"
 				},
 				"github": {
 					"title": "GitHub",
-					"tooltip": "Mở GitHub của fount"
+					"tooltip": "Mở GitHub của beilu"
 				},
 				"discord": {
 					"title": "Discord",
-					"tooltip": "Mở Discord của fount"
+					"tooltip": "Mở Discord của beilu"
 				},
 				"restart": {
 					"title": "Khởi động lại",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL: giao thức fount",
+				"description": "URL: giao thức beilu",
 				"registerFailed": "Không thể đăng ký trình xử lý giao thức fount://: ${message}",
 				"noUrl": "Lỗi: URL cho trình xử lý giao thức không được cung cấp."
 			},
 			"update": {
-				"skippingFountUpdate": "Vì tệp .noupdate tồn tại nên bản cập nhật fount bị bỏ qua",
+				"skippingBeiluUpdate": "Vì tệp .noupdate tồn tại nên bản cập nhật beilu bị bỏ qua",
 				"skippingDenoUpgradeDocker": "Bỏ qua nâng cấp Deno trong môi trường Docker"
 			},
 			"shortcut": {
@@ -131,7 +131,7 @@
 				"createDesktopAppFailed": "Lỗi: Không tạo được ứng dụng dành cho máy tính để bàn."
 			},
 			"git": {
-				"repoNotFound": "Không tìm thấy kho git của fount. Đang khởi tạo một cái mới...",
+				"repoNotFound": "Không tìm thấy kho git của beilu. Đang khởi tạo một cái mới...",
 				"fetchingAndResetting": "Đang tìm nạp từ kho lưu trữ từ xa và đặt lại về kho chính...",
 				"localChangesDetected": "Những thay đổi cục bộ được phát hiện, những khác biệt sẽ được lưu trước khi ghi đè.",
 				"backupSavedTo": "Bản sao lưu các thay đổi cục bộ của bạn đã được lưu vào: ${path}",
@@ -153,7 +153,7 @@
 				"missing": "Không tìm thấy Deno, cài đặt tự động...",
 				"isRequired": "Không tìm thấy Deno, không thể chạy được nếu không có Deno",
 				"installingTermux": "Đang cài đặt Deno cho Termux...",
-				"installFailedFallback": "Cài đặt Deno không thành công, cố gắng tự động cài đặt vào thư mục đường dẫn của fount...",
+				"installFailedFallback": "Cài đặt Deno không thành công, cố gắng tự động cài đặt vào thư mục đường dẫn của beilu...",
 				"notWorking": "Vì lý do nào đó Deno không hoạt động, bạn có thể tham gia https://discord.gg/deno để được hỗ trợ",
 				"upgradeFailed": "Cảnh báo: Nâng cấp Deno có thể không thành công. Vui lòng kiểm tra lỗi.",
 				"upgradeFailedTermux": "Lệnh nâng cấp Deno không thành công, đang cố cài đặt lại Deno cho Termux...",
@@ -166,8 +166,8 @@
 				"packageFailed": "Lỗi: Cài đặt ${package} không thành công.",
 				"browserMissing": "Không tìm thấy trình duyệt mặc định, đang cố gắng cài đặt...",
 				"untrustedPartsWarning": "Không cài đặt bất kỳ thành phần nguồn không đáng tin cậy nào trên hệ thống của bạn, chúng có thể làm bất cứ điều gì.",
-				"rootWarning1": "Không được khuyến nghị: chạy fount với quyền root cấp quyền truy cập toàn bộ hệ thống vào tất cả các thành phần của fount.",
-				"rootWarning2": "Trừ khi bạn biết mình đang làm gì, bạn nên chạy fount như một người dùng bình thường."
+				"rootWarning1": "Không được khuyến nghị: chạy beilu với quyền root cấp quyền truy cập toàn bộ hệ thống vào tất cả các thành phần của beilu.",
+				"rootWarning2": "Trừ khi bạn biết mình đang làm gì, bạn nên chạy beilu như một người dùng bình thường."
 			},
 			"clean": {
 				"removingCaches": "Đang xóa bộ nhớ đệm...",
@@ -176,30 +176,30 @@
 				"cleaningOldPwshModules": "Dọn dẹp các mô-đun pwsh cũ..."
 			},
 			"keepalive": {
-				"initComplete": "Quá trình khởi tạo lại đã hoàn tất. Đang cố gắng khởi động lại fount...",
-				"autoInitDisabled": "fount đã được khởi động lại nhiều lần trong khoảng thời gian ngắn vừa qua, nhưng quá trình khởi tạo lại tự động đã bị tắt do sự hiện diện của tệp .noautoinit. Đang thoát.",
-				"restartingTooFast": "fount đã được khởi động lại nhiều lần trong một khoảng thời gian ngắn. Buộc khởi động lại...",
-				"failedToStart": "Ngay cả sau khi cố gắng sửa chữa tự động, fount vẫn không khởi động được trong một khoảng thời gian ngắn. Vui lòng kiểm tra nhật ký để tìm lỗi.",
-				"initFailed": "Khởi tạo fount không thành công. Đang thoát."
+				"initComplete": "Quá trình khởi tạo lại đã hoàn tất. Đang cố gắng khởi động lại beilu...",
+				"autoInitDisabled": "beilu đã được khởi động lại nhiều lần trong khoảng thời gian ngắn vừa qua, nhưng quá trình khởi tạo lại tự động đã bị tắt do sự hiện diện của tệp .noautoinit. Đang thoát.",
+				"restartingTooFast": "beilu đã được khởi động lại nhiều lần trong một khoảng thời gian ngắn. Buộc khởi động lại...",
+				"failedToStart": "Ngay cả sau khi cố gắng sửa chữa tự động, beilu vẫn không khởi động được trong một khoảng thời gian ngắn. Vui lòng kiểm tra nhật ký để tìm lỗi.",
+				"initFailed": "Khởi tạo beilu không thành công. Đang thoát."
 			},
 			"remove": {
-				"removingFount": "Đang xóa fount...",
-				"fountUninstallationComplete": "quá trình gỡ cài đặt fount đã hoàn tất.",
-				"removingFountInstallationDir": "Đang xóa thư mục cài đặt fount...",
-				"fountInstallationDirRemoved": "Thư mục cài đặt fount đã bị xóa.",
-				"removingFountFromPath": "Đang xóa fount khỏi PATH...",
+				"removingBeilu": "Đang xóa beilu...",
+				"beiluUninstallationComplete": "quá trình gỡ cài đặt beilu đã hoàn tất.",
+				"removingBeiluInstallationDir": "Đang xóa thư mục cài đặt beilu...",
+				"beiluInstallationDirRemoved": "Thư mục cài đặt beilu đã bị xóa.",
+				"removingBeiluFromPath": "Đang xóa beilu khỏi PATH...",
 				"removingProtocolHandler": "Đang xóa trình xử lý giao thức fount://...",
 				"protocolHandlerRemoved": "Trình xử lý giao thức fount:// đã bị xóa.",
 				"removeProtocolHandlerFailed": "Không xóa được trình xử lý giao thức fount://: ${message}",
-				"removingFountFromGitSafeDir": "Xóa fount khỏi git safe.directory...",
+				"removingBeiluFromGitSafeDir": "Xóa beilu khỏi git safe.directory...",
 				"removingInstalledSystemPackages": "Đang xóa các gói hệ thống đã cài đặt...",
 				"uninstallingDeno": "Đang gỡ cài đặt Deno...",
 				"removeDenoFailed": "Không xóa được Deno: ${message}",
-				"removingFountPwshFromProfile": "Đang xóa foun-pwsh khỏi Cấu hình PowerShell...",
-				"fountPwshRemovedFromProfile": "fount-pwsh đã bị xóa khỏi Hồ sơ PowerShell.",
+				"removingBeiluPwshFromProfile": "Đang xóa foun-pwsh khỏi Cấu hình PowerShell...",
+				"beiluPwshRemovedFromProfile": "fount-pwsh đã bị xóa khỏi Hồ sơ PowerShell.",
 				"pwshProfileNotFound": "Không tìm thấy Hồ sơ PowerShell, bỏ qua việc xóa fount-pwsh khỏi hồ sơ.",
-				"uninstallingFountPwsh": "Đang gỡ cài đặt fount-pwsh...",
-				"uninstallFountPwshFailed": "Gỡ cài đặt fount-pwsh không thành công: ${message}",
+				"uninstallingBeiluPwsh": "Đang gỡ cài đặt fount-pwsh...",
+				"uninstallBeiluPwshFailed": "Gỡ cài đặt fount-pwsh không thành công: ${message}",
 				"removingTerminalProfile": "Đang xóa cấu hình thiết bị đầu cuối Windows...",
 				"terminalProfileRemoved": "Thư mục Windows Terminal Profile đã bị xóa.",
 				"terminalProfileNotFound": "Không tìm thấy thư mục Cấu hình thiết bị đầu cuối Windows.",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "Chào mừng đến với fount!",
-		"description": "Theo dõi tiến trình cài đặt và xem qua các tính năng bên trong. fount sẽ sẵn sàng khởi chạy sau giây lát.",
+		"title": "Chào mừng đến với beilu!",
+		"description": "Theo dõi tiến trình cài đặt và xem qua các tính năng bên trong. beilu sẽ sẵn sàng khởi chạy sau giây lát.",
 		"hero": {
 			"title": "Từ Ý Niệm, đến Tri Kỷ",
-			"description": "fount là một nền tảng tương tác nhân vật được hỗ trợ bởi AI, thiết kế để trao quyền cho <i>bạn</i>. Đây là cầu nối giúp bạn kết nối với các nhân vật trong tưởng tượng, cho phép bạn dễ dàng trò chuyện, tạo ra nhân vật của riêng mình và chia sẻ chúng với thế giới."
+			"description": "beilu là một nền tảng tương tác nhân vật được hỗ trợ bởi AI, thiết kế để trao quyền cho <i>bạn</i>. Đây là cầu nối giúp bạn kết nối với các nhân vật trong tưởng tượng, cho phép bạn dễ dàng trò chuyện, tạo ra nhân vật của riêng mình và chia sẻ chúng với thế giới."
 		},
 		"feature1": {
 			"title": "Đối thoại liền mạch, mọi lúc mọi nơi",
-			"description": "Bắt đầu trò chuyện trên máy tính và tiếp tục một cách liền mạch trên điện thoại hoặc máy tính bảng của bạn. fount giữ cho các cuộc trò chuyện luôn được đồng bộ, giúp bạn giữ liên lạc với nhân vật của mình dù bạn ở bất cứ đâu. Hoạt động trên Windows, macOS, Linux và cả Android."
+			"description": "Bắt đầu trò chuyện trên máy tính và tiếp tục một cách liền mạch trên điện thoại hoặc máy tính bảng của bạn. beilu giữ cho các cuộc trò chuyện luôn được đồng bộ, giúp bạn giữ liên lạc với nhân vật của mình dù bạn ở bất cứ đâu. Hoạt động trên Windows, macOS, Linux và cả Android."
 		},
 		"feature2": {
 			"title": "Giao diện đẹp mắt, tùy chỉnh dễ dàng",
-			"description": "Chọn từ hơn 30 chủ đề đẹp mắt, hoặc tự tạo chủ đề của riêng bạn. fount là không gian sáng tạo của riêng bạn. Thể hiện bản thân, tùy chỉnh môi trường theo sở thích và tận hưởng trải nghiệm được cá nhân hóa thực sự."
+			"description": "Chọn từ hơn 30 chủ đề đẹp mắt, hoặc tự tạo chủ đề của riêng bạn. beilu là không gian sáng tạo của riêng bạn. Thể hiện bản thân, tùy chỉnh môi trường theo sở thích và tận hưởng trải nghiệm được cá nhân hóa thực sự."
 		},
 		"feature3": {
 			"title": "Trò chuyện biểu cảm, nhập vai sâu sắc",
-			"description": "fount tận dụng sức mạnh của HTML, cho phép các nhân vật thể hiện bản thân qua văn bản đa dạng, hình ảnh và cả các yếu tố tương tác. Tham gia vào các cuộc trò chuyện nhóm năng động và hấp dẫn với nhiều nhân vật cùng một lúc."
+			"description": "beilu tận dụng sức mạnh của HTML, cho phép các nhân vật thể hiện bản thân qua văn bản đa dạng, hình ảnh và cả các yếu tố tương tác. Tham gia vào các cuộc trò chuyện nhóm năng động và hấp dẫn với nhiều nhân vật cùng một lúc."
 		},
 		"feature4": {
 			"title": "Tích hợp Nguồn AI không giới hạn",
-			"description": "fount mang đến sự lựa chọn và linh hoạt vô song. Kết nối với <i>bất kỳ</i> nguồn AI nào – OpenAI, Claude, OpenRouter, NovelAI, v.v. Logic giao tiếp sẽ được định hình bởi sức mạnh của mã nguồn, theo ý muốn của <i>bạn</i>."
+			"description": "beilu mang đến sự lựa chọn và linh hoạt vô song. Kết nối với <i>bất kỳ</i> nguồn AI nào – OpenAI, Claude, OpenRouter, NovelAI, v.v. Logic giao tiếp sẽ được định hình bởi sức mạnh của mã nguồn, theo ý muốn của <i>bạn</i>."
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "Có những trò chơi nhỏ ở đây để bạn giải trí trong lúc chờ đợi."
 		},
 		"data_showcase": {
-			"title_prefix": "fount là nền tảng ",
+			"title_prefix": "beilu là nền tảng ",
 			"title_of": " ",
 			"active_users": "Người dùng hoạt động",
 			"stars": "Sao trên GitHub",
@@ -289,22 +289,22 @@
 		"footer": {
 			"ready_text": "Sẵn sàng bắt đầu hành trình của bạn?",
 			"wait_text": "Vui lòng đợi một lát...",
-			"open_fount": "Mở fount",
-			"open_or_install_fount": "Mở/Cài đặt fount",
+			"open_beilu": "Mở beilu",
+			"open_or_install_beilu": "Mở/Cài đặt beilu",
 			"error_message": "Ối... :(\n\nĐã xảy ra lỗi:\n${error}"
 		},
 		"error": {
 			"title": "Cài đặt thất bại!",
-			"description": "Dường như có sự cố với trình cài đặt fount.",
+			"description": "Dường như có sự cố với trình cài đặt beilu.",
 			"connection_failed": "Kết nối thất bại!",
-			"description1": "Dường như có sự cố với trình cài đặt fount.",
+			"description1": "Dường như có sự cố với trình cài đặt beilu.",
 			"description2": "Vui lòng kiểm tra terminal của bạn và thử lại.",
 			"close_page": "Đóng trang"
 		}
 	},
 	"protocolhandler": {
-		"title": "Xử lý giao thức fount",
-		"description": "Một cách âm thầm và hiệu quả, trang này chuyển ý định của bạn thành một quá trình chuyển đổi liền mạch trong fount. Hãy coi đó là phép thuật thầm lặng đằng sau bức màn.",
+		"title": "Xử lý giao thức beilu",
+		"description": "Một cách âm thầm và hiệu quả, trang này chuyển ý định của bạn thành một quá trình chuyển đổi liền mạch trong beilu. Hãy coi đó là phép thuật thầm lặng đằng sau bức màn.",
 		"processing": "Đang xử lý giao thức...",
 		"shellCommandSent": "Lệnh Shell đã được gửi.",
 		"runPartConfirm": {
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "Máy chủ ngoại tuyến",
-			"message": "Máy chủ fount ${hostUrl} dường như đang ngoại tuyến. Bạn có muốn thử lại không?",
+			"message": "Máy chủ beilu ${hostUrl} dường như đang ngoại tuyến. Bạn có muốn thử lại không?",
 			"buttons": {
 				"start": "Khởi động",
 				"retry": "Thử lại"
 			}
 		},
-		"fountNotFound": "Ối... :(\n\nKhông tìm thấy fount. Có lẽ bạn cần cài đặt trước?",
+		"beiluNotFound": "Ối... :(\n\nKhông tìm thấy beilu. Có lẽ bạn cần cài đặt trước?",
 		"invalidProtocol": "Giao thức không hợp lệ.",
 		"insufficientParams": "Không đủ tham số.",
 		"unknownCommand": "Lệnh không xác định.",
@@ -330,14 +330,14 @@
 		"unknownError": "Ối... :(\n\nĐã xảy ra lỗi:\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
-		"description": "Chào mừng đến với ngưỡng của fount. Một khoảnh khắc chuẩn bị ngắn ngủi, trước khi bước vào tâm điểm của những cuộc trò chuyện và những câu chuyện đang chờ được hé mở."
+		"title": "beilu!",
+		"description": "Chào mừng đến với ngưỡng của beilu. Một khoảnh khắc chuẩn bị ngắn ngủi, trước khi bước vào tâm điểm của những cuộc trò chuyện và những câu chuyện đang chờ được hé mở."
 	},
 	"tutorial": {
 		"title": "Thử hướng dẫn nhé?",
-		"description": "Hãy để chúng tôi cùng bạn dạo bước qua thế giới của fount. Hướng dẫn tương tác này sẽ soi sáng con đường, giúp bạn khám phá điều kỳ diệu được dệt nên từ cốt lõi của nó. Cuộc phiêu lưu của bạn bắt đầu bằng sự hiểu biết.",
+		"description": "Hãy để chúng tôi cùng bạn dạo bước qua thế giới của beilu. Hướng dẫn tương tác này sẽ soi sáng con đường, giúp bạn khám phá điều kỳ diệu được dệt nên từ cốt lõi của nó. Cuộc phiêu lưu của bạn bắt đầu bằng sự hiểu biết.",
 		"modal": {
-			"title": "Chào mừng bạn đến với fount!",
+			"title": "Chào mừng bạn đến với beilu!",
 			"instruction": "Bạn có muốn xem hướng dẫn cho người mới bắt đầu không?",
 			"buttons": {
 				"start": "Bắt đầu hướng dẫn",
@@ -381,7 +381,7 @@
 	"auth": {
 		"title": "Xác thực",
 		"subtitle": "Dữ liệu người dùng được lưu trữ cục bộ.",
-		"description": "Ở đây, bạn xác định sự hiện diện của mình. Dù quay trở lại thiên đường quen thuộc hay định hình một không gian mới cho câu chuyện của mình, đây chính là nơi bắt đầu hành trình của bạn với fount.",
+		"description": "Ở đây, bạn xác định sự hiện diện của mình. Dù quay trở lại thiên đường quen thuộc hay định hình một không gian mới cho câu chuyện của mình, đây chính là nơi bắt đầu hành trình của bạn với beilu.",
 		"usernameLabel": "Tên người dùng:",
 		"usernameInput": {
 			"placeholder": "Vui lòng nhập tên người dùng"
@@ -443,7 +443,7 @@
 			"title": "Lỗi chuyển chứng chỉ",
 			"retrieve_error": "Đã xảy ra lỗi trong khi cố gắng lưu thông tin đăng nhập của bạn:\n${error}\nBạn có thể tiếp tục nhưng không thể lưu thông tin đăng nhập.",
 			"transfer_error": "Đã xảy ra lỗi trong khi cố gắng chuyển thông tin đăng nhập của bạn:\n${error}\nBạn có thể tiếp tục nhưng không thể lấy thông tin đăng nhập.",
-			"no_credentials": "Không tìm thấy thông tin đăng nhập đã lưu.\nVui lòng đăng nhập lại từ bên trong fount để cập nhật thông tin đăng nhập của bạn hoặc nhấp vào nút bên dưới để tiếp tục đến trang đích mà không có thông tin đăng nhập.",
+			"no_credentials": "Không tìm thấy thông tin đăng nhập đã lưu.\nVui lòng đăng nhập lại từ bên trong beilu để cập nhật thông tin đăng nhập của bạn hoặc nhấp vào nút bên dưới để tiếp tục đến trang đích mà không có thông tin đăng nhập.",
 			"missing_params": "Liên kết thiếu tham số bắt buộc.",
 			"buttons": {
 				"ignore": "Bỏ qua và tiếp tục",
@@ -453,7 +453,7 @@
 	},
 	"home": {
 		"title": "Trang chủ",
-		"description": "Trung tâm của trải nghiệm fount của bạn. Tại đây, hãy quản lý những thành phần trong trí tưởng tượng của bạn—nhân vật, thế giới và cá tính. Câu chuyện của bạn bắt đầu và phân nhánh từ mối liên hệ trung tâm này.",
+		"description": "Trung tâm của trải nghiệm beilu của bạn. Tại đây, hãy quản lý những thành phần trong trí tưởng tượng của bạn—nhân vật, thế giới và cá tính. Câu chuyện của bạn bắt đầu và phân nhánh từ mối liên hệ trung tâm này.",
 		"sidebarTitle": "Chi tiết",
 		"itemDescription": "Chọn một mục ở đây để xem chi tiết.",
 		"noDescription": "Không có mô tả.",
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "Trống...<br/>Có lẽ bạn có thể [tạo một phần mới](${newpartLink}) hoặc truy cập [máy chủ Discord của fount](${discordLink}) để giải trí?"
+			"message": "Trống...<br/>Có lẽ bạn có thể [tạo một phần mới](${newpartLink}) hoặc truy cập [máy chủ Discord của beilu](${discordLink}) để giải trí?"
 		},
 		"part_pages": {
 			"default": {
@@ -630,15 +630,15 @@
 				}
 			}
 		},
-		"escapeConfirm": "Bạn có chắc chắn muốn thoát fount không?",
+		"escapeConfirm": "Bạn có chắc chắn muốn thoát beilu không?",
 		"alerts": {
 			"fetchHomeRegistryFailed": "Lấy thông tin đăng ký trang chủ thất bại."
 		},
 		"achievements": {
 			"first_login": {
-				"name": "Xin chào, fount!",
+				"name": "Xin chào, beilu!",
 				"description": "Hướng tới thế giới mới, đăng nhập lần đầu tiên!",
-				"locked_description": "Đăng nhập vào fount một lần."
+				"locked_description": "Đăng nhập vào beilu một lần."
 			},
 			"sfw_mode_on": {
 				"name": "Có ai đó ở phía sau bạn!",
@@ -672,14 +672,14 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "Tạo thông tin thành phần nguồn"
 			}
 		}
 	},
 	"chat": {
 		"title": "Trò chuyện",
-		"description": "Nơi lời nói cất cánh và những câu chuyện mở ra. Tương tác với những người bạn đồng hành AI của bạn, định hình câu chuyện và hòa mình vào dòng chảy thăng trầm của cuộc đối thoại kỹ thuật số. Trái tim của fount đập ở đây.",
+		"description": "Nơi lời nói cất cánh và những câu chuyện mở ra. Tương tác với những người bạn đồng hành AI của bạn, định hình câu chuyện và hòa mình vào dòng chảy thăng trầm của cuộc đối thoại kỹ thuật số. Trái tim của beilu đập ở đây.",
 		"new": {
 			"title": "Trò chuyện mới",
 			"description": "Sự chờ đợi thầm lặng của một câu chuyện chưa được viết ra. Một cuộc trò chuyện mới bắt đầu, một phương tiện rõ ràng cho những tương tác mới và những câu chuyện mở ra với những người bạn đồng hành mà bạn đã chọn."
@@ -935,8 +935,8 @@
 			},
 			"code_greeting": {
 				"name": "Nói xin chào bằng mã",
-				"description": "\"Xin chào, fount!\"",
-				"locked_description": "Chạy một đoạn mã để xuất ra 'hello fount!'."
+				"description": "\"Xin chào, beilu!\"",
+				"locked_description": "Chạy một đoạn mã để xuất ra 'hello beilu!'."
 			}
 		},
 		"dragAndDrop": {
@@ -1120,7 +1120,7 @@
 	},
 	"import": {
 		"title": "Nhập",
-		"description": "Đưa các nhân vật, thế giới và cấu hình yêu quý của bạn vào vòng tay của fount. Cho dù từ tệp hay văn bản được dán, đây là nơi các yếu tố mới được dệt vào tấm thảm cá nhân của bạn.",
+		"description": "Đưa các nhân vật, thế giới và cấu hình yêu quý của bạn vào vòng tay của beilu. Cho dù từ tệp hay văn bản được dán, đây là nơi các yếu tố mới được dệt vào tấm thảm cá nhân của bạn.",
 		"tabs": {
 			"tabsLabel": {
 				"aria-label": "Chọn phương thức nhập"
@@ -1189,7 +1189,7 @@
 		"title": "Trình xuất Thành phần",
 		"pageTitle": "Trình xuất Thành phần",
 		"pageSubtitle": "Xuất nội dung yêu thích của bạn",
-		"description": "Xuất các sáng tạo fount của bạn. Công cụ này tập hợp các phần đã chọn của bạn thành một tệp zip đơn giản để lưu giữ hoặc chia sẻ an toàn.",
+		"description": "Xuất các sáng tạo beilu của bạn. Công cụ này tập hợp các phần đã chọn của bạn thành một tệp zip đơn giản để lưu giữ hoặc chia sẻ an toàn.",
 		"steps": {
 			"part": "Chọn các thành phần",
 			"action": "Xuất"
@@ -1283,7 +1283,7 @@
 	},
 	"uninstall": {
 		"title": "Gỡ cài đặt",
-		"description": "Nếu bạn chọn chia tay, không gian này sẽ là nơi chào tạm biệt duyên dáng. Xác nhận việc loại bỏ các thành phần hoặc fount của chính nó. Những con đường khác nhau, nhưng ký ức có thể vẫn còn.",
+		"description": "Nếu bạn chọn chia tay, không gian này sẽ là nơi chào tạm biệt duyên dáng. Xác nhận việc loại bỏ các thành phần hoặc beilu của chính nó. Những con đường khác nhau, nhưng ký ức có thể vẫn còn.",
 		"titleWithName": "Gỡ cài đặt ${type}/${name}",
 		"confirmMessage": "Bạn có chắc chắn muốn gỡ cài đặt ${type}: ${name} không?",
 		"invalidParamsTitle": "Tham số không hợp lệ",
@@ -1432,10 +1432,10 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "Subfount - quản lý thiết bị ngang hàng",
+	"subbeilus": {
+		"title": "Subbeilu - quản lý thiết bị ngang hàng",
 		"pageTitle": "nguồn phụ",
-		"description": "Quản lý kết nối fount ngang hàng",
+		"description": "Quản lý kết nối beilu ngang hàng",
 		"hostConnectionCode": {
 			"title": "Mã kết nối máy chủ",
 			"connectionCodeLabel": "Mã kết nối (ID ngang hàng)",
@@ -1447,9 +1447,9 @@
 			"passwordCopied": "Đã sao chép mật khẩu vào bảng nhớ tạm",
 			"regenerateSuccess": "Mã kết nối đã được tạo lại"
 		},
-		"connectedSubfounts": {
+		"connectedSubbeilus": {
 			"title": "Nguồn phụ được kết nối",
-			"noSubfountsConnected": "Không có đài phụ nào được kết nối",
+			"noSubbeilusConnected": "Không có đài phụ nào được kết nối",
 			"table": {
 				"id": "NHẬN DẠNG",
 				"description": "Nhận xét",
@@ -1467,15 +1467,15 @@
 		},
 		"codeExecution": {
 			"title": "thực thi mã",
-			"description": "Thực thi mã JavaScript trên Subfount đã chọn",
-			"selectSubfountLabel": "Chọn Subfount",
-			"selectSubfountPlaceholder": "Vui lòng chọn Subfount để thực thi mã trên...",
+			"description": "Thực thi mã JavaScript trên Subbeilu đã chọn",
+			"selectSubbeiluLabel": "Chọn Subbeilu",
+			"selectSubbeiluPlaceholder": "Vui lòng chọn Subbeilu để thực thi mã trên...",
 			"hostOption": "Máy chủ (ID: ${id})",
-			"subfountOption": "Thiết bị con ${id}${deviceId}",
+			"subbeiluOption": "Thiết bị con ${id}${deviceId}",
 			"scriptLabel": "Mã JavaScript",
 			"executeButton": "thực hiện",
 			"executing": "Đang thực hiện...",
-			"noSubfountSelected": "Vui lòng chọn Subfount trước",
+			"noSubbeiluSelected": "Vui lòng chọn Subbeilu trước",
 			"noScriptProvided": "Vui lòng nhập mã để thực thi",
 			"executionSuccess": "Thực thi mã thành công",
 			"executionFailed": "Việc thực thi mã không thành công: ${message}"
@@ -1483,7 +1483,7 @@
 		"downloadClient": {
 			"title": "Tải xuống ứng dụng khách phụ",
 			"description": "Tải xuống tập lệnh máy khách phụ độc lập để chạy trên thiết bị từ xa.",
-			"downloadButton": "Tải xuống subfount.mjs"
+			"downloadButton": "Tải xuống subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "Không tải được mã kết nối: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "Đang được phát triển",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "thiết bị phụ",
 						"sub_items": {
 							"main": {
@@ -1509,7 +1509,7 @@
 	"languageSettings": {
 		"title": "Cài đặt ngôn ngữ",
 		"pageTitle": "Cài đặt ngôn ngữ",
-		"description": "Quản lý tùy chọn ngôn ngữ của bạn cho ứng dụng fount. Tùy chỉnh trải nghiệm của bạn với các tùy chọn ngôn ngữ có sẵn.",
+		"description": "Quản lý tùy chọn ngôn ngữ của bạn cho ứng dụng beilu. Tùy chỉnh trải nghiệm của bạn với các tùy chọn ngôn ngữ có sẵn.",
 		"pageDescription": "Quản lý sở thích ngôn ngữ của bạn ở đây. Các ngôn ngữ trong danh sách sẽ được ưu tiên hơn các cài đặt trình duyệt theo thứ tự.",
 		"availableLanguages": "Ngôn ngữ có sẵn",
 		"preferredLanguages": "Danh sách ngôn ngữ ưu tiên",
@@ -1538,7 +1538,7 @@
 	},
 	"themeManage": {
 		"title": "Quản lý chủ đề",
-		"description": "Chọn phong cách thẩm mỹ phản ánh tâm trạng hoặc câu chuyện của bạn. Xem trước và chọn từ bảng chủ đề, mỗi chủ đề mang lại bầu không khí khác nhau cho các tương tác với fount của bạn. Thế giới của bạn, phong cách của bạn.",
+		"description": "Chọn phong cách thẩm mỹ phản ánh tâm trạng hoặc câu chuyện của bạn. Xem trước và chọn từ bảng chủ đề, mỗi chủ đề mang lại bầu không khí khác nhau cho các tương tác với beilu của bạn. Thế giới của bạn, phong cách của bạn.",
 		"instruction": "Chọn một chủ đề!",
 		"search": {
 			"placeholder": "Tìm kiếm chủ đề...",
@@ -1628,7 +1628,7 @@
 		"achievements": {
 			"change_theme": {
 				"name": "Thay áo mới!",
-				"description": "fount đã có một diện mạo mới và một tâm trạng hoàn toàn mới.",
+				"description": "beilu đã có một diện mạo mới và một tâm trạng hoàn toàn mới.",
 				"locked_description": "Chuyển chủ đề một lần."
 			}
 		},
@@ -1646,7 +1646,7 @@
 	"part_config": {
 		"title": "Cấu hình thành phần",
 		"pageTitle": "Cấu hình thành phần",
-		"description": "Nhìn vào trung tâm của fount. Tại đây, bạn có thể điều chỉnh cài đặt của các thành phần đa dạng, điều chỉnh công cụ thúc đẩy trải nghiệm của bạn.",
+		"description": "Nhìn vào trung tâm của beilu. Tại đây, bạn có thể điều chỉnh cài đặt của các thành phần đa dạng, điều chỉnh công cụ thúc đẩy trải nghiệm của bạn.",
 		"labels": {
 			"part": "Chọn thành phần"
 		},
@@ -1930,15 +1930,15 @@
 	},
 	"browser_integration": {
 		"title": "Tích hợp trình duyệt",
-		"description": "Thu hẹp khoảng cách giữa fount và web. Trang này cung cấp mô tả người dùng để cho phép tích hợp liền mạch, đưa những người bạn đồng hành AI của bạn vào trải nghiệm duyệt web của bạn.",
+		"description": "Thu hẹp khoảng cách giữa beilu và web. Trang này cung cấp mô tả người dùng để cho phép tích hợp liền mạch, đưa những người bạn đồng hành AI của bạn vào trải nghiệm duyệt web của bạn.",
 		"pageHeader": "Tích hợp trình duyệt",
-		"pageDescription": "Để vai trò fount của bạn tương tác với trang web, bạn cần cài đặt tập lệnh tích hợp trình duyệt này. Nó hoạt động như một cầu nối giữa ký tự và trình duyệt, cho phép họ xem nội dung trang và thực hiện các hành động.",
+		"pageDescription": "Để vai trò beilu của bạn tương tác với trang web, bạn cần cài đặt tập lệnh tích hợp trình duyệt này. Nó hoạt động như một cầu nối giữa ký tự và trình duyệt, cho phép họ xem nội dung trang và thực hiện các hành động.",
 		"install_script_title": "Tập lệnh cài đặt",
 		"install_script_description": "Nhấp vào nút bên dưới để cài đặt tập lệnh tích hợp trình duyệt. Trước tiên bạn phải cài đặt một trình quản lý userscript như Tampermonkey.",
 		"install_button": "Cài đặt",
 		"install_from_url_tip": "Trình duyệt của bạn không cho phép bạn cài đặt nó? Sao chép URL này và nhập tập lệnh từ URL trong plugin Tampermonkey.",
 		"what_is_manager": "Trình quản lý userscript là gì?",
-		"manager_explanation": "Một trình quản lý userscript là một tiện ích mở rộng trình duyệt cho phép bạn cài đặt và chạy các tập lệnh sửa đổi các trang web. Để sử dụng tập lệnh tích hợp fount, bạn cần một trong các tiện ích mở rộng.",
+		"manager_explanation": "Một trình quản lý userscript là một tiện ích mở rộng trình duyệt cho phép bạn cài đặt và chạy các tập lệnh sửa đổi các trang web. Để sử dụng tập lệnh tích hợp beilu, bạn cần một trong các tiện ích mở rộng.",
 		"popular_managers": "Lựa chọn phổ biến:",
 		"csp_warning": "Bạn có thể cần cài đặt plugin để tắt CSP nhằm giúp chức năng tích hợp hoạt động bình thường. Đối với ${browser}, bạn có thể sử dụng [plugin này](${link}).",
 		"connected_pages_title": "Trang được kết nối",
@@ -1996,10 +1996,10 @@
 				"description": "\"Nhân danh tôi, ra lệnh cho trình duyệt...\"",
 				"locked_description": "Chạy mã JavaScript một lần trong trình duyệt."
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "ngôi sao nguồn mở",
-				"description": "Hãy gắn sao cho fount trên GitHub, cảm ơn sự hỗ trợ của bạn!",
-				"locked_description": "Truy cập kho lưu trữ GitHub của fount và thắp sáng ngôi sao."
+				"description": "Hãy gắn sao cho beilu trên GitHub, cảm ơn sự hỗ trợ của bạn!",
+				"locked_description": "Truy cập kho lưu trữ GitHub của beilu và thắp sáng ngôi sao."
 			}
 		},
 		"home_function_buttons": {
@@ -2015,24 +2015,24 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "Một phiên bản mới của tập lệnh tích hợp trình duyệt fount có sẵn. Bây giờ trang cập nhật có mở không?"
+			"prompt": "Một phiên bản mới của tập lệnh tích hợp trình duyệt beilu có sẵn. Bây giờ trang cập nhật có mở không?"
 		},
-		"csp_warning": "Tập lệnh tích hợp trình duyệt fount phát hiện chính sách CSP tồn tại trên trang, điều này có thể khiến tập lệnh tích hợp không hoạt động chính xác. Vui lòng xem xét cài đặt plugin để tắt CSP.",
+		"csp_warning": "Tập lệnh tích hợp trình duyệt beilu phát hiện chính sách CSP tồn tại trên trang, điều này có thể khiến tập lệnh tích hợp không hoạt động chính xác. Vui lòng xem xét cài đặt plugin để tắt CSP.",
 		"hostChange": {
-			"securityWarningTitle": "--- Cảnh báo an toàn fount ---",
-			"message": "Trang hiện tại (\"${origin}\") đang cố gắng thay đổi địa chỉ máy chủ fount của bạn thành:\n\n\"${newHost}\"\n\nCảnh báo: Phê duyệt hành động này sẽ cho phép máy chủ mới kiểm soát hoàn toàn các tính năng tích hợp trình duyệt của bạn, điều này có thể dẫn đến rò rỉ thông tin nhạy cảm hoặc trộm cắp tài khoản.\nPhê duyệt chỉ nên được thực hiện nếu bạn chắc chắn rằng đây là hoạt động của riêng bạn (ví dụ: di chuyển một máy chủ fount).\n\nBạn có chắc là bạn muốn cho phép thay đổi này?",
-			"uuidMismatchError": "Lỗi bảo mật fount: Danh tính (UUID) của máy chủ ${newHost} không khớp với danh tính hiện tại của bạn. Các hoạt động đã bị hủy bỏ.",
-			"verificationError": "Lỗi bảo mật fount: Không thể xác minh máy chủ mới \"${newHost}\". Vui lòng kiểm tra xem địa chỉ có chính xác không và nếu dịch vụ đang chạy."
+			"securityWarningTitle": "--- Cảnh báo an toàn beilu ---",
+			"message": "Trang hiện tại (\"${origin}\") đang cố gắng thay đổi địa chỉ máy chủ beilu của bạn thành:\n\n\"${newHost}\"\n\nCảnh báo: Phê duyệt hành động này sẽ cho phép máy chủ mới kiểm soát hoàn toàn các tính năng tích hợp trình duyệt của bạn, điều này có thể dẫn đến rò rỉ thông tin nhạy cảm hoặc trộm cắp tài khoản.\nPhê duyệt chỉ nên được thực hiện nếu bạn chắc chắn rằng đây là hoạt động của riêng bạn (ví dụ: di chuyển một máy chủ beilu).\n\nBạn có chắc là bạn muốn cho phép thay đổi này?",
+			"uuidMismatchError": "Lỗi bảo mật beilu: Danh tính (UUID) của máy chủ ${newHost} không khớp với danh tính hiện tại của bạn. Các hoạt động đã bị hủy bỏ.",
+			"verificationError": "Lỗi bảo mật beilu: Không thể xác minh máy chủ mới \"${newHost}\". Vui lòng kiểm tra xem địa chỉ có chính xác không và nếu dịch vụ đang chạy."
 		}
 	},
 	"terminal_assistant": {
 		"title": "Trợ lý Terminal",
-		"description": "Ngoài giao diện đồ họa, còn có không gian cho lệnh trực tiếp. Tương tác với lõi của fount thông qua trợ lý đầu cuối, nơi văn bản dệt nên phép thuật mạnh mẽ của riêng nó.",
-		"initialMessage": "fount hỗ trợ triển khai các nhân vật yêu thích của bạn vào terminal để trợ giúp bạn trong quá trình lập trình!",
+		"description": "Ngoài giao diện đồ họa, còn có không gian cho lệnh trực tiếp. Tương tác với lõi của beilu thông qua trợ lý đầu cuối, nơi văn bản dệt nên phép thuật mạnh mẽ của riêng nó.",
+		"initialMessage": "beilu hỗ trợ triển khai các nhân vật yêu thích của bạn vào terminal để trợ giúp bạn trong quá trình lập trình!",
 		"initialMessageLink": "Nhấp vào đây để tìm hiểu thêm.",
 		"achievements": {
 			"invoke_shell_assist": {
-				"name": "\"Này, fount.\"",
+				"name": "\"Này, beilu.\"",
 				"description": "Trong thiết bị đầu cuối tối, tên của đối tác AI được gọi.",
 				"locked_description": "Gọi hỗ trợ thiết bị đầu cuối một lần."
 			}
@@ -2050,7 +2050,7 @@
 	},
 	"deskpet": {
 		"title": "Thú cưng để bàn",
-		"description": "Khởi chạy các ký tự fount của bạn dưới dạng thú cưng tương tác sống trên màn hình của bạn.",
+		"description": "Khởi chạy các ký tự beilu của bạn dưới dạng thú cưng tương tác sống trên màn hình của bạn.",
 		"launcherCard": {
 			"title": "món khai vị thú cưng",
 			"buttons": {
@@ -2105,15 +2105,15 @@
 		}
 	},
 	"access": {
-		"title": "Truy cập fount trên các thiết bị khác",
-		"description": "Mở rộng phạm vi tiếp cận của fount ngoài một màn hình. Đây là cổng—một URL, một mã QR—để kết nối với những người bạn đồng hành của bạn từ các thiết bị khác, một cầu nối đơn giản xuyên qua ether địa phương.",
-		"heading": "Bạn muốn truy cập fount trên các thiết bị khác?",
+		"title": "Truy cập beilu trên các thiết bị khác",
+		"description": "Mở rộng phạm vi tiếp cận của beilu ngoài một màn hình. Đây là cổng—một URL, một mã QR—để kết nối với những người bạn đồng hành của bạn từ các thiết bị khác, một cầu nối đơn giản xuyên qua ether địa phương.",
+		"heading": "Bạn muốn truy cập beilu trên các thiết bị khác?",
 		"instruction": {
-			"sameLAN": "Đảm bảo thiết bị và máy chủ fount đang ở trên cùng một mạng LAN.",
+			"sameLAN": "Đảm bảo thiết bị và máy chủ beilu đang ở trên cùng một mạng LAN.",
 			"accessthis": "Truy cập địa chỉ sau:"
 		},
 		"QRcode": {
-			"alt": "Quét mã QR này để truy cập fount"
+			"alt": "Quét mã QR này để truy cập beilu"
 		},
 		"urlInput": {
 			"aria-label": "URL"
@@ -2130,7 +2130,7 @@
 		"title": "Proxy API",
 		"description": "Đối với các nhà phát triển và nhà tích hợp, trang này tiết lộ proxy API của nguồn—kết nối của bạn để kết hợp các khả năng của nguồn vào các ứng dụng khác.",
 		"heading": "Cổng Proxy API",
-		"instruction": "Tạo và quản lý các khóa API của bạn trên trang này để tích hợp fount với các ứng dụng khác.",
+		"instruction": "Tạo và quản lý các khóa API của bạn trên trang này để tích hợp beilu với các ứng dụng khác.",
 		"endpointSectionTitle": "Điểm cuối API",
 		"endpointInstruction": "Đây là URL cơ sở để tích hợp với các dịch vụ khác.",
 		"apiUrlInput": {
@@ -2161,12 +2161,12 @@
 		}
 	},
 	"ide_integration": {
-		"description": "Kết nối vai trò fount với các trình chỉnh sửa được hỗ trợ (chẳng hạn như Zed, JetBrains, Neovim) thông qua Giao thức máy khách tác nhân, định cấu hình các khóa và vai trò API, đồng thời đưa các đối tác AI vào quy trình phát triển.",
+		"description": "Kết nối vai trò beilu với các trình chỉnh sửa được hỗ trợ (chẳng hạn như Zed, JetBrains, Neovim) thông qua Giao thức máy khách tác nhân, định cấu hình các khóa và vai trò API, đồng thời đưa các đối tác AI vào quy trình phát triển.",
 		"title": "Tích hợp IDE",
 		"heading": "Tích hợp IDE",
-		"instruction": "Sử dụng vai trò fount để hỗ trợ lập trình trong các trình soạn thảo hỗ trợ ACP (chẳng hạn như Zed, JetBrains, Neovim, v.v.).",
+		"instruction": "Sử dụng vai trò beilu để hỗ trợ lập trình trong các trình soạn thảo hỗ trợ ACP (chẳng hạn như Zed, JetBrains, Neovim, v.v.).",
 		"supportedEditorsTitle": "Các biên tập viên và khách hàng được hỗ trợ",
-		"supportedEditorsIntro": "Các khách hàng sau đây làm việc với fount:",
+		"supportedEditorsIntro": "Các khách hàng sau đây làm việc với beilu:",
 		"supportedEditorsLoading": "đang tải…",
 		"supportedEditorsError": "Không tải được danh sách: ${message}",
 		"acpTitle": "Định cấu hình tập lệnh ACP nguồn",
@@ -2196,15 +2196,15 @@
 		},
 		"achievements": {
 			"first_ide_use": {
-				"name": "Lần đầu tiên sử dụng fount trong IDE bên ngoài",
-				"description": "Lần đầu tiên, hãy sử dụng vai trò fount để hỗ trợ lập trình trong các trình chỉnh sửa hỗ trợ ACP như Zed, JetBrains, Neovim, v.v.",
-				"locked_description": "Kết nối với vai trò fount trong IDE bên ngoài và hoàn thành phiên."
+				"name": "Lần đầu tiên sử dụng beilu trong IDE bên ngoài",
+				"description": "Lần đầu tiên, hãy sử dụng vai trò beilu để hỗ trợ lập trình trong các trình chỉnh sửa hỗ trợ ACP như Zed, JetBrains, Neovim, v.v.",
+				"locked_description": "Kết nối với vai trò beilu trong IDE bên ngoài và hoàn thành phiên."
 			}
 		}
 	},
 	"achievements": {
 		"title": "Thành tích",
-		"description": "Khám phá các cột mốc quan trọng và thành tựu trong hành trình của bạn với fount. Mỗi thành tích đánh dấu một bước trong câu chuyện độc đáo của bạn.",
+		"description": "Khám phá các cột mốc quan trọng và thành tựu trong hành trình của bạn với beilu. Mỗi thành tích đánh dấu một bước trong câu chuyện độc đáo của bạn.",
 		"pageHeader": "Hội trường thành tựu",
 		"pageDescription": "Kiểm tra những thành tựu và cột mốc đã mở khóa của bạn tại đây.",
 		"unlocked_on": "Đã mở khóa vào ${date}",
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "Gỡ lỗi và thông tin hệ thống",
-		"description": "Nhận thông tin hệ thống và gỡ lỗi chi tiết về cài đặt fount của bạn. Điều này rất hữu ích cho việc khắc phục sự cố và yêu cầu hỗ trợ.",
+		"description": "Nhận thông tin hệ thống và gỡ lỗi chi tiết về cài đặt beilu của bạn. Điều này rất hữu ích cho việc khắc phục sự cố và yêu cầu hỗ trợ.",
 		"heading": "Gỡ lỗi và thông tin hệ thống",
 		"copyButton": "Sao chép báo cáo",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount! Bộ chuyển đổi huy hiệu",
-		"description": "Vì khi dự án của bạn cần có nét đặc trưng của fount. Chuyển đổi huy hiệu Shields.io, cho chúng một danh tính mới, có tiếng vang.",
-		"card_title": "Bộ chuyển đổi liên kết huy hiệu fount",
+		"title": "beilu! Bộ chuyển đổi huy hiệu",
+		"description": "Vì khi dự án của bạn cần có nét đặc trưng của beilu. Chuyển đổi huy hiệu Shields.io, cho chúng một danh tính mới, có tiếng vang.",
+		"card_title": "Bộ chuyển đổi liên kết huy hiệu beilu",
 		"original_url_label": "Dán URL img.shields.io",
 		"original_url": {
 			"placeholder": "Ví dụ: https://img.shields.io/badge/hello-world-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "chỉ mục thư mục",
-		"description": "Duyệt và khám phá các tệp và thư mục trong không gian làm việc của fount.",
+		"description": "Duyệt và khám phá các tệp và thư mục trong không gian làm việc của beilu.",
 		"indexOf": "Chỉ mục: ${path}",
 		"name": "tên",
 		"mimeType": "loại MIME",

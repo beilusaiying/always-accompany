@@ -398,13 +398,73 @@ const pluginExport = {
 					} else if (configData.presets[name]) {
 						console.warn(`[beilu-preset] 预设 "${name}" 已存在`);
 					} else {
-						const blankPreset = {
-							prompts: [],
-							prompt_order: [
-								{ character_id: 100000, order: [] },
-								{ character_id: 100001, order: [] },
-							],
-						};
+						const defaultOrder = [
+								{ identifier: 'main', enabled: true },
+								{ identifier: 'personaDescription', enabled: true },
+								{ identifier: 'worldInfoBefore', enabled: true },
+								{ identifier: 'charDescription', enabled: true },
+								{ identifier: 'charPersonality', enabled: true },
+								{ identifier: 'scenario', enabled: true },
+								{ identifier: 'nsfw', enabled: true },
+								{ identifier: 'worldInfoAfter', enabled: true },
+								{ identifier: 'dialogueExamples', enabled: true },
+								{ identifier: 'chatHistory', enabled: true },
+								{ identifier: 'jailbreak', enabled: true },
+							];
+							const blankPreset = {
+								prompts: [
+									// 3 个内置非 Marker 条目（内容为空，用户可编辑）
+									{
+										name: 'Main Prompt',
+										system_prompt: true,
+										role: 'system',
+										content: '',
+										identifier: 'main',
+										forbid_overrides: false,
+										injection_position: 0,
+										injection_depth: 4,
+										injection_order: 100,
+										injection_trigger: [],
+									},
+									{
+										name: 'NSFW Prompt',
+										system_prompt: true,
+										role: 'system',
+										content: '',
+										identifier: 'nsfw',
+										forbid_overrides: false,
+										injection_position: 0,
+										injection_depth: 4,
+										injection_order: 100,
+										injection_trigger: [],
+									},
+									{
+										name: 'Jailbreak',
+										system_prompt: true,
+										role: 'system',
+										content: '',
+										identifier: 'jailbreak',
+										forbid_overrides: false,
+										injection_position: 0,
+										injection_depth: 4,
+										injection_order: 100,
+										injection_trigger: [],
+									},
+									// 8 个 Marker 条目（占位符，由引擎展开为模块内容）
+									{ identifier: 'personaDescription', name: 'Persona Description', system_prompt: true, marker: true },
+									{ identifier: 'scenario', name: 'Scenario', system_prompt: true, marker: true },
+									{ identifier: 'charDescription', name: 'Char Description', system_prompt: true, marker: true },
+									{ identifier: 'charPersonality', name: 'Char Personality', system_prompt: true, marker: true },
+									{ identifier: 'worldInfoBefore', name: 'World Info (before)', system_prompt: true, marker: true },
+									{ identifier: 'worldInfoAfter', name: 'World Info (after)', system_prompt: true, marker: true },
+									{ identifier: 'chatHistory', name: 'Chat History', system_prompt: true, marker: true },
+									{ identifier: 'dialogueExamples', name: 'Chat Examples', system_prompt: true, marker: true },
+								],
+								prompt_order: [
+									{ character_id: 100000, order: defaultOrder.map(o => ({ ...o })) },
+									{ character_id: 100001, order: defaultOrder.map(o => ({ ...o })) },
+								],
+							};
 						configData.presets[name] = {
 							preset_json: blankPreset,
 							model_params: {},

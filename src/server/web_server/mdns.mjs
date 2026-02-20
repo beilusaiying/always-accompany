@@ -1,4 +1,4 @@
-import { geti18n, console } from '../../scripts/i18n.mjs'
+import { console, geti18n } from '../../scripts/i18n.mjs'
 
 /**
  * mDNS 服务实例。
@@ -15,7 +15,7 @@ export let mdns
  */
 export async function initMdns(port, protocol, config) {
 	const mdns_config = {
-		name: 'fount',
+		name: 'beilu',
 		port,
 		type: protocol,
 		txt: {

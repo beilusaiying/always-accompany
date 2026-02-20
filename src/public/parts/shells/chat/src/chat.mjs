@@ -1126,7 +1126,7 @@ async function addChatLogEntry(chatid, entry) {
 	if (entry.role === 'char')
 		sendNotification(chatMetadata.username, entry.name ?? 'Character', {
 			body: entry.content,
-			icon: entry.avatar || '/favicon.svg', // Use a default icon
+			icon: entry.avatar || '/favicon.png', // Use a default icon
 			data: {
 				url: `/parts/shells:chat/#${chatid}`, // URL to open on click
 			},

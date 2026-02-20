@@ -5,6 +5,8 @@
  * 复用 serviceSourceManage 后端 API（与 beilu-chat apiConfig.mjs 相同的 API）
  */
 
+import { t } from '../i18n.mjs'
+
 const API_BASE = '/api/parts/shells:serviceSourceManage'
 const SERVICE_TYPE = 'AI'
 
@@ -132,7 +134,7 @@ function renderApiSelect(list) {
 	if (list.length === 0) {
 		const opt = document.createElement('option')
 		opt.value = ''
-		opt.textContent = '（无配置）'
+		opt.textContent = t('sys.api.noConfig')
 		dom.apiSelect.appendChild(opt)
 		return
 	}
@@ -187,7 +189,7 @@ async function loadApiSource(name) {
 		// 重置模型选择器
 		if (dom.apiModelSelect) {
 			dom.apiModelSelect.classList.add('hidden')
-			dom.apiModelSelect.innerHTML = '<option value="" disabled selected>选择模型...</option>'
+			dom.apiModelSelect.innerHTML = `<option value="" disabled selected>${t('sys.api.model.select')}</option>`
 		}
 
 		syncUrlLabel()
@@ -244,7 +246,7 @@ async function handleSave() {
 
 async function handleDelete() {
 	if (!currentApiName) return
-	if (!confirm(`确定删除 API 配置「${currentApiName}」吗？`)) return
+	if (!confirm(t('sys.api.confirmDelete', { name: currentApiName }))) return
 	try {
 		await deleteApiSource(currentApiName)
 		showStatus('已删除', 'success')
@@ -260,7 +262,7 @@ async function handleDelete() {
 // ============================================================
 
 async function handleNew() {
-	const name = prompt('输入新 API 配置名称：')
+	const name = prompt(t('sys.api.promptNew'))
 	if (!name?.trim()) return
 	const safeName = name.trim()
 
@@ -433,7 +435,7 @@ async function fetchModels() {
 		
 		// 更新下拉框
 		if (select) {
-			select.innerHTML = '<option value="" disabled selected>选择模型...</option>'
+			select.innerHTML = `<option value="" disabled selected>${t('sys.api.model.select')}</option>`
 			modelIds.forEach(id => {
 				const opt = document.createElement('option')
 				opt.value = id

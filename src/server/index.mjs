@@ -30,7 +30,7 @@ let args = process.argv.slice(2)
  * 应用程序的主配置对象。
  * @type {object}
  */
-const fount_config = {
+const beilu_config = {
 	restartor: () => process.exit(131),
 	data_path: __dirname + '/data',
 	needs_output: process.stdout.writable && process.stdout.isTTY,
@@ -81,7 +81,7 @@ if (args.length) {
 		command_obj = {
 			type: command,
 		}
-		fount_config.starts = {
+		beilu_config.starts = {
 			Base: false,
 			Web: false,
 		}
@@ -92,11 +92,11 @@ if (args.length) {
 	}
 }
 // 初始化应用程序。
-const okey = await init(fount_config)
+const okey = await init(beilu_config)
 
 // 如果提供了命令，则通过 IPC 发送。
 if (command_obj) try {
-	if (!fount_config.starts.IPC) throw new Error('cannot send command when IPC not enabled')
+	if (!beilu_config.starts.IPC) throw new Error('cannot send command when IPC not enabled')
 	const { IPCManager } = await import('./ipc_server/index.mjs')
 	const result = await IPCManager.sendCommand(command_obj.type, command_obj.data)
 	switch (command_obj.type) {

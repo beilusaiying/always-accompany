@@ -31,7 +31,7 @@
 			"instanceRunning": "已有他體運行，請勿再擾",
 			"runPartLog": "以 ${username} 之名行 ${partpath}，其參曰：${args}",
 			"invokePartLog": "以 ${username} 之名召 ${partpath}，其數曰：${invokedata}",
-			"invalidCommand": "令式有誤，當循此法：\"fount run <類> <名> <件> <參...>\"",
+			"invalidCommand": "令式有誤，當循此法：\"beilu run <類> <名> <件> <參...>\"",
 			"invalidCommandFormat": "令式不合",
 			"unsupportedCommand": "此令未識，難以從命",
 			"processMessageError": "處內令有失：${error}",
@@ -74,30 +74,30 @@
 			"codeNotifyBody": "此乃驗碼: ${code} (稍縱即逝，務必把握)"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "讀像有失: ${error}",
 			"createTrayFailed": "造盤有失: ${error}",
 			"items": {
 				"open": {
 					"title": "開門揖客",
-					"tooltip": "啟 fount"
+					"tooltip": "啟 beilu"
 				},
 				"github": {
 					"title": "源碼寶庫",
-					"tooltip": "啟 fount 之源碼寶庫"
+					"tooltip": "啟 beilu 之源碼寶庫"
 				},
 				"discord": {
 					"title": "Discord雅集",
-					"tooltip": "啟 fount 之 Discord 雅集"
+					"tooltip": "啟 beilu 之 Discord 雅集"
 				},
 				"restart": {
 					"title": "重整旗鼓",
-					"tooltip": "重啟 fount"
+					"tooltip": "重啟 beilu"
 				},
 				"exit": {
 					"title": "掛冠而去",
-					"tooltip": "退出 fount"
+					"tooltip": "退出 beilu"
 				},
 				"clearTerminalScreen": {
 					"title": "滌除終端幕",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL:fount 協議",
+				"description": "URL:beilu 協議",
 				"registerFailed": "註 fount:// 協定處置器未果：${message}",
 				"noUrl": "誤：未供協定處置器之 URL。"
 			},
 			"update": {
-				"skippingFountUpdate": "因有 .noupdate 檔，fount 之更新暫略",
+				"skippingBeiluUpdate": "因有 .noupdate 檔，beilu 之更新暫略",
 				"skippingDenoUpgradeDocker": "Docker 中 Deno 之晉級暫略"
 			},
 			"shortcut": {
@@ -131,7 +131,7 @@
 				"createDesktopAppFailed": "誤：桌面應用創建未果"
 			},
 			"git": {
-				"repoNotFound": "fount 之 git 倉庫未尋得，今新創之...",
+				"repoNotFound": "beilu 之 git 倉庫未尋得，今新創之...",
 				"fetchingAndResetting": "正自遠端獲取，並重置於主...",
 				"localChangesDetected": "察本地有變，將存其異再覆之",
 				"backupSavedTo": "閣下本地之變更，其備份已存於: ${path}",
@@ -151,9 +151,9 @@
 			},
 			"deno": {
 				"missing": "Deno 未尋得，自動安裝之...",
-				"isRequired": "Deno 未尋得，無之則 fount 不可運行",
+				"isRequired": "Deno 未尋得，無之則 beilu 不可運行",
 				"installingTermux": "正為 Termux 安裝 Deno...",
-				"installFailedFallback": "Deno 安裝未果，嘗試安裝至 fount 之 path 目錄...",
+				"installFailedFallback": "Deno 安裝未果，嘗試安裝至 beilu 之 path 目錄...",
 				"notWorking": "未知何故 Deno 不動，可往 https://discord.gg/deno 求助",
 				"upgradeFailed": "警：Deno 之晉級或已失利，請察其誤",
 				"upgradeFailedTermux": "Deno 晉級之命失利，嘗試為 Termux 重裝...",
@@ -165,9 +165,9 @@
 				"installingDependencies": "正安裝其依賴...",
 				"packageFailed": "誤：${package} 安裝未果。",
 				"browserMissing": "未獲預設瀏覽器，試安裝之...",
-				"untrustedPartsWarning": "勿在系統安裝任何不受信之 fount 部件，其能行萬事",
-				"rootWarning1": "不宜：以 root 身份運行 fount，將授予其所有部件完全之系統權限",
-				"rootWarning2": "非明其所以者，宜以普通用戶身份運行 fount"
+				"untrustedPartsWarning": "勿在系統安裝任何不受信之 beilu 部件，其能行萬事",
+				"rootWarning1": "不宜：以 root 身份運行 beilu，將授予其所有部件完全之系統權限",
+				"rootWarning2": "非明其所以者，宜以普通用戶身份運行 beilu"
 			},
 			"clean": {
 				"removingCaches": "正清除緩存...",
@@ -176,30 +176,30 @@
 				"cleaningOldPwshModules": "正清理舊 pwsh 模塊..."
 			},
 			"keepalive": {
-				"initComplete": "重新初始化已畢，嘗試重啟 fount...",
-				"autoInitDisabled": "fount 近時已重啟數次，然因有 .noautoinit 檔，自動重啟已禁用。退出",
-				"restartingTooFast": "fount 短時內重啟過頻，強行重新初始化...",
-				"failedToStart": "縱自動修復，fount 仍短時內啟動未果，請察日誌之誤",
-				"initFailed": "fount 初始化未果，退出"
+				"initComplete": "重新初始化已畢，嘗試重啟 beilu...",
+				"autoInitDisabled": "beilu 近時已重啟數次，然因有 .noautoinit 檔，自動重啟已禁用。退出",
+				"restartingTooFast": "beilu 短時內重啟過頻，強行重新初始化...",
+				"failedToStart": "縱自動修復，beilu 仍短時內啟動未果，請察日誌之誤",
+				"initFailed": "beilu 初始化未果，退出"
 			},
 			"remove": {
-				"removingFount": "正移除 fount...",
-				"fountUninstallationComplete": "fount 卸載已畢",
-				"removingFountInstallationDir": "正移除 fount 安裝目錄...",
-				"fountInstallationDirRemoved": "fount 安裝目錄已移除",
-				"removingFountFromPath": "正自 PATH 移除 fount...",
+				"removingBeilu": "正移除 beilu...",
+				"beiluUninstallationComplete": "beilu 卸載已畢",
+				"removingBeiluInstallationDir": "正移除 beilu 安裝目錄...",
+				"beiluInstallationDirRemoved": "beilu 安裝目錄已移除",
+				"removingBeiluFromPath": "正自 PATH 移除 beilu...",
 				"removingProtocolHandler": "正移除 fount:// 協議...",
 				"protocolHandlerRemoved": "fount:// 協議已移除",
 				"removeProtocolHandlerFailed": "移除 fount:// 協議未果: ${message}",
-				"removingFountFromGitSafeDir": "正自 git safe.directory 移除 fount...",
+				"removingBeiluFromGitSafeDir": "正自 git safe.directory 移除 beilu...",
 				"removingInstalledSystemPackages": "正移除已裝之系統包...",
 				"uninstallingDeno": "正卸載 Deno...",
 				"removeDenoFailed": "移除 Deno 未果: ${message}",
-				"removingFountPwshFromProfile": "正自 PowerShell Profile 移除 fount-pwsh...",
-				"fountPwshRemovedFromProfile": "已自 PowerShell Profile 移除 fount-pwsh",
+				"removingBeiluPwshFromProfile": "正自 PowerShell Profile 移除 fount-pwsh...",
+				"beiluPwshRemovedFromProfile": "已自 PowerShell Profile 移除 fount-pwsh",
 				"pwshProfileNotFound": "PowerShell Profile 未尋得，移除 fount-pwsh 暫略",
-				"uninstallingFountPwsh": "正卸載 fount-pwsh...",
-				"uninstallFountPwshFailed": "卸載 fount-pwsh 未果: ${message}",
+				"uninstallingBeiluPwsh": "正卸載 fount-pwsh...",
+				"uninstallBeiluPwshFailed": "卸載 fount-pwsh 未果: ${message}",
 				"removingTerminalProfile": "正移除 Windows Terminal Profile...",
 				"terminalProfileRemoved": "Windows Terminal Profile 目錄已移除",
 				"terminalProfileNotFound": "Windows Terminal Profile 目錄未尋得",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "幸會fount！",
+		"title": "幸會beilu！",
 		"description": "觀其進度，覽其內秀。頃刻之間，活泉待發。",
 		"hero": {
 			"title": "靈犀一點，應念而生",
-			"description": "fount者，靈臺也，神思驅之，幻身託焉。旨在通神，以便<i>君</i>行。為津梁，繫遐思，共清談，塑真身，佈天下，皆易如反掌。"
+			"description": "beilu者，靈臺也，神思驅之，幻身託焉。旨在通神，以便<i>君</i>行。為津梁，繫遐思，共清談，塑真身，佈天下，皆易如反掌。"
 		},
 		"feature1": {
 			"title": "雲程萬里，晤言無間",
-			"description": "始於案前清談，繼於掌中晤言，行止無礙。fount 令君言談相續，身在何方，皆可與化身相伴。Windows、macOS、Linux、Android，無不咸宜。"
+			"description": "始於案前清談，繼於掌中晤言，行止無礙。beilu 令君言談相續，身在何方，皆可與化身相伴。Windows、macOS、Linux、Android，無不咸宜。"
 		},
 		"feature2": {
 			"title": "儀態萬方，隨心所化",
-			"description": "三十餘種風貌，任君擇選，亦可自成一家。fount 乃君之畫卷。書君之意，隨君之好，成君之境。"
+			"description": "三十餘種風貌，任君擇選，亦可自成一家。beilu 乃君之畫卷。書君之意，隨君之好，成君之境。"
 		},
 		"feature3": {
 			"title": "意通神會，身臨其境",
-			"description": "fount 盡用織紋之妙，化身得以富文、圖像乃至互動之法表情達意。可與眾多化身共聚一堂，動靜皆宜，相談甚歡。"
+			"description": "beilu 盡用織紋之妙，化身得以富文、圖像乃至互動之法表情達意。可與眾多化身共聚一堂，動靜皆宜，相談甚歡。"
 		},
 		"feature4": {
 			"title": "海納百川，有容乃大",
-			"description": "fount 供無雙之選，無窮之變。可接<i>任意</i>智源——OpenAI、Claude、OpenRouter、NovelAI 等。通靈之法，皆由君之符碼之力隨心塑造。"
+			"description": "beilu 供無雙之選，無窮之變。可接<i>任意</i>智源——OpenAI、Claude、OpenRouter、NovelAI 等。通靈之法，皆由君之符碼之力隨心塑造。"
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "此有小物可遣時日，聊博一粲。"
 		},
 		"data_showcase": {
-			"title_prefix": "fount 乃",
+			"title_prefix": "beilu 乃",
 			"title_of": "之",
 			"active_users": "在席高朋",
 			"stars": "源庫星輝",
@@ -289,21 +289,21 @@
 		"footer": {
 			"ready_text": "啟程乎？",
 			"wait_text": "稍安勿躁...",
-			"open_fount": "啟 fount",
-			"open_or_install_fount": "啟/安 fount",
+			"open_beilu": "啟 beilu",
+			"open_or_install_beilu": "啟/安 beilu",
 			"error_message": "嗚呼哀哉 :(\n\n禍起蕭牆：\n${error}"
 		},
 		"error": {
 			"title": "安設失利。",
-			"description": "fount 安設似有不諧。",
+			"description": "beilu 安設似有不諧。",
 			"connection_failed": "連接之途，遇阻不通。",
-			"description1": "fount 安設似有不諧。",
+			"description1": "beilu 安設似有不諧。",
 			"description2": "請察終端而後重試，或能力挽狂瀾。",
 			"close_page": "闔頁"
 		}
 	},
 	"protocolhandler": {
-		"title": "處 fount 規儀",
+		"title": "處 beilu 規儀",
 		"description": "潛移默化，無縫自達。此乃幕後之妙法玄通也。",
 		"processing": "處規儀中...",
 		"shellCommandSent": "外令已發",
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "主機未繫",
-			"message": "fount主機 ${hostUrl} 未繫。欲復試乎？",
+			"message": "beilu主機 ${hostUrl} 未繫。欲復試乎？",
 			"buttons": {
 				"start": "啟動",
 				"retry": "復試"
 			}
 		},
-		"fountNotFound": "嗚呼哀哉 :(\n\n未尋獲 fount，莫非需先安設之？",
+		"beiluNotFound": "嗚呼哀哉 :(\n\n未尋獲 beilu，莫非需先安設之？",
 		"invalidProtocol": "規儀無效",
 		"insufficientParams": "參數不足，難為無米之炊",
 		"unknownCommand": "未知之令",
@@ -330,14 +330,14 @@
 		"unknownError": "嗚呼哀哉 :(\n\n天有不測風雲：\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
+		"title": "beilu!",
 		"description": "客至泉源門，一步入玄境。清談妙語，待君啟卷。"
 	},
 	"tutorial": {
 		"title": "欲習之乎？",
 		"description": "願為君引，同遊泉境。此中玄妙，一覽無遺。奇旅始於開悟。",
 		"modal": {
-			"title": "幸會 fount！",
+			"title": "幸會 beilu！",
 			"instruction": "欲循新手之儀軌，初窺門徑乎？",
 			"buttons": {
 				"start": "始",
@@ -443,7 +443,7 @@
 			"title": "憑證傳送之誤",
 			"retrieve_error": "錄存登錄憑證時有誤：\n${error}\n可續行，然憑證不得存，如鏡花水月。",
 			"transfer_error": "傳送登錄憑證時有誤：\n${error}\n可續行，然憑證不得取，如緣木求魚。",
-			"no_credentials": "舊符未見。\n請復登於 fount 以新其符，或點選下鈕，免符逕往彼端。",
+			"no_credentials": "舊符未見。\n請復登於 beilu 以新其符，或點選下鈕，免符逕往彼端。",
 			"missing_params": "鏈接闕遺，無以成行。",
 			"buttons": {
 				"ignore": "略而續行",
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "此間空虛。<br/>可[新添一物](${newpartLink})，亦可往[fount議壇](${discordLink})一敘？"
+			"message": "此間空虛。<br/>可[新添一物](${newpartLink})，亦可往[beilu議壇](${discordLink})一敘？"
 		},
 		"part_pages": {
 			"default": {
@@ -672,7 +672,7 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "以器衍其標"
 			}
 		}
@@ -936,7 +936,7 @@
 			"code_greeting": {
 				"name": "以碼致候",
 				"description": "「泉君安否？」",
-				"locked_description": "令代碼塊出「hello fount!」字，功成。"
+				"locked_description": "令代碼塊出「hello beilu!」字，功成。"
 			}
 		},
 		"dragAndDrop": {
@@ -1432,10 +1432,10 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "Subfounts - 朋輩互連之器",
-		"pageTitle": "Subfounts",
-		"description": "治Subfount朋輩之源流",
+	"subbeilus": {
+		"title": "Subbeilus - 朋輩互連之器",
+		"pageTitle": "Subbeilus",
+		"description": "治Subbeilu朋輩之源流",
 		"hostConnectionCode": {
 			"title": "東道連繫碼",
 			"connectionCodeLabel": "連繫碼 (朋輩ID)",
@@ -1447,9 +1447,9 @@
 			"passwordCopied": "通行語已謄於剪貼板",
 			"regenerateSuccess": "連繫碼已更造"
 		},
-		"connectedSubfounts": {
-			"title": "已連之Subfount",
-			"noSubfountsConnected": "未有Subfount相連",
+		"connectedSubbeilus": {
+			"title": "已連之Subbeilu",
+			"noSubbeilusConnected": "未有Subbeilu相連",
 			"table": {
 				"id": "ID",
 				"description": "註",
@@ -1467,23 +1467,23 @@
 		},
 		"codeExecution": {
 			"title": "行代碼",
-			"description": "於所選Subfount行JavaScript代碼",
-			"selectSubfountLabel": "擇Subfount",
-			"selectSubfountPlaceholder": "請擇Subfount以行代碼...",
+			"description": "於所選Subbeilu行JavaScript代碼",
+			"selectSubbeiluLabel": "擇Subbeilu",
+			"selectSubbeiluPlaceholder": "請擇Subbeilu以行代碼...",
 			"hostOption": "主機 (號: ${id})",
-			"subfountOption": "支機 ${id}${deviceId}",
+			"subbeiluOption": "支機 ${id}${deviceId}",
 			"scriptLabel": "JavaScript代碼",
 			"executeButton": "行",
 			"executing": "行之...",
-			"noSubfountSelected": "請先擇一Subfount",
+			"noSubbeiluSelected": "請先擇一Subbeilu",
 			"noScriptProvided": "請入代碼以行之",
 			"executionSuccess": "代碼行之有成",
 			"executionFailed": "代碼行之敗績: ${message}"
 		},
 		"downloadClient": {
-			"title": "下載Subfount客端",
-			"description": "下載獨立Subfount客端腳本，以備遠端之用。",
-			"downloadButton": "下載 subfount.mjs"
+			"title": "下載Subbeilu客端",
+			"description": "下載獨立Subbeilu客端腳本，以備遠端之用。",
+			"downloadButton": "下載 subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "載連繫碼敗績: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "開發中",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "子器",
 						"sub_items": {
 							"main": {
@@ -1938,7 +1938,7 @@
 		"install_button": "置",
 		"install_from_url_tip": "覽器不允？錄此網址，於油猴策管中取之。",
 		"what_is_manager": "油猴策管何物也？",
-		"manager_explanation": "油猴策管，覽器之輔具，所以置策易頁也。欲用 fount 統合之策，必先有此物。",
+		"manager_explanation": "油猴策管，覽器之輔具，所以置策易頁也。欲用 beilu 統合之策，必先有此物。",
 		"popular_managers": "常用者：",
 		"csp_warning": "或需置輔具以停 CSP，方能使統合之功順行。${browser} 可用[此輔具](${link})。",
 		"connected_pages_title": "已連之頁",
@@ -1996,7 +1996,7 @@
 				"description": "奉吾之名，敕令天地。",
 				"locked_description": "宜以JS之术驱浏览器一次。"
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "源启之星",
 				"description": "于技府赞之，感君之助。",
 				"locked_description": "宜访技府之仓，以星耀之。"
@@ -2015,20 +2015,20 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "fount 覽器統合之策有新版。今啟新頁乎？"
+			"prompt": "beilu 覽器統合之策有新版。今啟新頁乎？"
 		},
-		"csp_warning": "fount 覽器統合之策察覺頁中有 CSP 策略，或致其功不行。請思置輔具以停之。",
+		"csp_warning": "beilu 覽器統合之策察覺頁中有 CSP 策略，或致其功不行。請思置輔具以停之。",
 		"hostChange": {
-			"securityWarningTitle": "--- fount 安危之警 ---",
-			"message": "當前之頁（「${origin}」）欲易君之 fount 主址為：\n\n「${newHost}」\n\n警曰：許此操作，則新主將盡制君覽器統合之能，或致密聞外泄、帳戶見竊。\n確為己行（如遷 fount 之服），方可應允。\n\n確許此易乎？",
-			"uuidMismatchError": "fount 安危之誤：主址 ${newHost} 之標識（UUID）與舊不符。操作已止。",
-			"verificationError": "fount 安危之誤：未能驗證新主址「${newHost}」。請查其址是否無誤，其役是否在行。"
+			"securityWarningTitle": "--- beilu 安危之警 ---",
+			"message": "當前之頁（「${origin}」）欲易君之 beilu 主址為：\n\n「${newHost}」\n\n警曰：許此操作，則新主將盡制君覽器統合之能，或致密聞外泄、帳戶見竊。\n確為己行（如遷 beilu 之服），方可應允。\n\n確許此易乎？",
+			"uuidMismatchError": "beilu 安危之誤：主址 ${newHost} 之標識（UUID）與舊不符。操作已止。",
+			"verificationError": "beilu 安危之誤：未能驗證新主址「${newHost}」。請查其址是否無誤，其役是否在行。"
 		}
 	},
 	"terminal_assistant": {
 		"title": "終端輔佐",
 		"description": "圖形之外，別有洞天，可直接號令。通過終端助手，與泉源之心互動，文本亦可編織其強大之魔力。",
-		"initialMessage": "fount 可將君所喜之化身部署於終端，以輔編碼。",
+		"initialMessage": "beilu 可將君所喜之化身部署於終端，以輔編碼。",
 		"initialMessageLink": "點此詳閱",
 		"achievements": {
 			"invoke_shell_assist": {
@@ -2105,11 +2105,11 @@
 		}
 	},
 	"access": {
-		"title": "從他器訪問 fount",
+		"title": "從他器訪問 beilu",
 		"description": "擴泉源之境，越單一之屏。此乃門戶，一址一碼，可從他器連接君之夥伴，猶如跨越虛空之橋。",
-		"heading": "欲從他器訪問 fount 乎？",
+		"heading": "欲從他器訪問 beilu 乎？",
 		"instruction": {
-			"sameLAN": "請確保諸器與 fount 主機同處一網",
+			"sameLAN": "請確保諸器與 beilu 主機同處一網",
 			"accessthis": "請訪此址："
 		},
 		"QRcode": {
@@ -2130,7 +2130,7 @@
 		"title": "API中介",
 		"description": "此頁為開發者與集成者揭示泉源之API代理——乃君之連接，可將泉源之力，織入他用。",
 		"heading": "API中介關隘",
-		"instruction": "於此頁生成並掌管爾之API密鑰，以便將fount與他用整合。",
+		"instruction": "於此頁生成並掌管爾之API密鑰，以便將beilu與他用整合。",
 		"endpointSectionTitle": "API端點",
 		"endpointInstruction": "此乃與他服務整合之基址。",
 		"apiUrlInput": {
@@ -2161,16 +2161,16 @@
 		}
 	},
 	"ide_integration": {
-		"description": "援 ACP 协定，以此泉（fount）角役连诸编辑器（若 Zed、JetBrains、Neovim 之属），设符钥、定职分，引机智同侪以此佐编程之业。",
+		"description": "援 ACP 协定，以此泉（beilu）角役连诸编辑器（若 Zed、JetBrains、Neovim 之属），设符钥、定职分，引机智同侪以此佐编程之业。",
 		"title": "工欲善其事",
 		"heading": "工欲善其事",
-		"instruction": "于 Zed、JetBrains、Neovim 等 ACP 之器，以 fount 司职佐编程之事。",
+		"instruction": "于 Zed、JetBrains、Neovim 等 ACP 之器，以 beilu 司职佐编程之事。",
 		"supportedEditorsTitle": "所容之器与客",
-		"supportedEditorsIntro": "下所列者，皆可与 fount 通：",
+		"supportedEditorsIntro": "下所列者，皆可与 beilu 通：",
 		"supportedEditorsLoading": "载入中…",
 		"supportedEditorsError": "名录载入不成：${message}",
-		"acpTitle": "置 fount ACP 脚本",
-		"acpDesc": "依下例以置 fount ACP 脚本：",
+		"acpTitle": "置 beilu ACP 脚本",
+		"acpDesc": "依下例以置 beilu ACP 脚本：",
 		"acpCharLabel": "司职",
 		"acpCharPlaceholder": "择其司职",
 		"charListError": "司职名录未能得",
@@ -2181,7 +2181,7 @@
 		"copyButton": "誊录",
 		"copied": "已存简帖",
 		"apiKeySectionTitle": "API 符节",
-		"apiKeyHint": "用于 ACP 脚本连 fount（与 API 代理同符，可于用户设中制）。",
+		"apiKeyHint": "用于 ACP 脚本连 beilu（与 API 代理同符，可于用户设中制）。",
 		"generateApiKeyButton": "制新符",
 		"apiKeyCopied": "API 符节已誊",
 		"apiKeyCreateError": "制 API 符节不成：${message}",
@@ -2197,7 +2197,7 @@
 		"achievements": {
 			"first_ide_use": {
 				"name": "灵光外现",
-				"description": "初于支持 ACP 之编辑器（如 Zed 等）用 fount 司职佐编程。",
+				"description": "初于支持 ACP 之编辑器（如 Zed 等）用 beilu 司职佐编程。",
 				"locked_description": "于外器接引泉源之灵，以助编修。"
 			}
 		}
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "糾錯與系統之情",
-		"description": "觀此 fount 系統之詳情，以備糾錯排難之用，甚爲有益。",
+		"description": "觀此 beilu 系統之詳情，以備糾錯排難之用，甚爲有益。",
 		"heading": "糾錯與系統之情",
 		"copyButton": "謄錄報告",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount 徽章轉換器",
+		"title": "beilu 徽章轉換器",
 		"description": "若君之項目需泉源之風采，可轉換Shields.io之徽章，賦予其全新之共鳴身份。",
-		"card_title": "fount 徽章鏈接轉換器",
+		"card_title": "beilu 徽章鏈接轉換器",
 		"original_url_label": "貼入 img.shields.io 網址",
 		"original_url": {
 			"placeholder": "例: https://img.shields.io/badge/Hello-World-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "目錄",
-		"description": "閱覽 fount 案頭之文檔。",
+		"description": "閱覽 beilu 案頭之文檔。",
 		"indexOf": "目次：${path}",
 		"name": "名",
 		"mimeType": "格致",

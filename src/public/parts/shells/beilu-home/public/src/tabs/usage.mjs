@@ -10,6 +10,7 @@
  * - 左侧导航子菜单切换
  */
 
+import { t } from '../i18n.mjs'
 import { getAllCachedPartDetails } from '/scripts/parts.mjs'
 
 // ===== 角色卡附属资源提取 =====
@@ -90,9 +91,9 @@ async function extractAndImportResources(data, charName) {
  * @returns {string} 摘要消息
  */
 function buildImportSummary(charName, totalRegex, totalWorldbook) {
-	const parts = [`角色卡「${charName}」导入成功！`]
-	if (totalRegex > 0) parts.push(`📝 自动导入 ${totalRegex} 条正则脚本`)
-	if (totalWorldbook > 0) parts.push(`📖 自动导入 ${totalWorldbook} 条世界书条目`)
+	const parts = [t('chars.import.success', { name: charName })]
+	if (totalRegex > 0) parts.push(t('chars.import.regex', { count: totalRegex }))
+	if (totalWorldbook > 0) parts.push(t('chars.import.worldbook', { count: totalWorldbook }))
 	return parts.join('\n')
 }
 
@@ -111,20 +112,20 @@ function showDeleteConfirmDialog(displayName) {
 		dialog.style.cssText = 'background:#2a2a2a;color:#eee;border-radius:12px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.4);'
 
 		dialog.innerHTML = `
-			<h3 style="margin:0 0 12px;font-size:16px;">删除角色卡「${displayName}」</h3>
-			<p style="margin:0 0 16px;font-size:13px;color:#aaa;">角色卡将被移至回收站。<br>绑定的正则脚本将自动删除。<br>请选择是否同时清理以下关联数据：</p>
+			<h3 style="margin:0 0 12px;font-size:16px;">${t('chars.delete.title', { name: displayName })}</h3>
+			<p style="margin:0 0 16px;font-size:13px;color:#aaa;">${t('chars.delete.desc')}</p>
 			<label style="display:flex;align-items:center;gap:8px;margin:8px 0;cursor:pointer;font-size:14px;">
-				<input type="checkbox" id="del-chats" checked style="width:16px;height:16px;"> 删除聊天记录
+				<input type="checkbox" id="del-chats" checked style="width:16px;height:16px;"> ${t('chars.delete.chats')}
 			</label>
 			<label style="display:flex;align-items:center;gap:8px;margin:8px 0;cursor:pointer;font-size:14px;">
-				<input type="checkbox" id="del-memory" checked style="width:16px;height:16px;"> 删除记忆数据
+				<input type="checkbox" id="del-memory" checked style="width:16px;height:16px;"> ${t('chars.delete.memory')}
 			</label>
 			<label style="display:flex;align-items:center;gap:8px;margin:8px 0;cursor:pointer;font-size:14px;">
-				<input type="checkbox" id="del-worldbook" checked style="width:16px;height:16px;"> 删除绑定的世界书
+				<input type="checkbox" id="del-worldbook" checked style="width:16px;height:16px;"> ${t('chars.delete.worldbook')}
 			</label>
 			<div style="display:flex;gap:12px;margin-top:20px;justify-content:flex-end;">
-				<button id="del-cancel" style="padding:8px 20px;border:1px solid #555;background:transparent;color:#ccc;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
-				<button id="del-confirm" style="padding:8px 20px;border:none;background:#e53e3e;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;">确认删除</button>
+				<button id="del-cancel" style="padding:8px 20px;border:1px solid #555;background:transparent;color:#ccc;border-radius:6px;cursor:pointer;font-size:14px;">${t('chars.delete.cancel')}</button>
+				<button id="del-confirm" style="padding:8px 20px;border:none;background:#e53e3e;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;">${t('chars.delete.confirm')}</button>
 			</div>
 		`
 
@@ -236,14 +237,14 @@ function formatRelativeTime(isoTime) {
 	if (!isoTime) return ''
 	const diff = Date.now() - new Date(isoTime).getTime()
 	const minutes = Math.floor(diff / 60000)
-	if (minutes < 1) return '刚刚'
-	if (minutes < 60) return `${minutes}分钟前`
+	if (minutes < 1) return t('time.justNow')
+	if (minutes < 60) return t('time.minutesAgo', { n: minutes })
 	const hours = Math.floor(minutes / 60)
-	if (hours < 24) return `${hours}小时前`
+	if (hours < 24) return t('time.hoursAgo', { n: hours })
 	const days = Math.floor(hours / 24)
-	if (days < 30) return `${days}天前`
+	if (days < 30) return t('time.daysAgo', { n: days })
 	const months = Math.floor(days / 30)
-	return `${months}个月前`
+	return t('time.monthsAgo', { n: months })
 }
 
 /**
@@ -341,7 +342,7 @@ function createCharCard(key, details, summaries) {
 	const settingsBtn = document.createElement('button')
 	settingsBtn.className = 'beilu-char-settings-btn'
 	settingsBtn.textContent = '⚙'
-	settingsBtn.title = '编辑角色卡'
+	settingsBtn.title = t('chars.edit.title')
 	settingsBtn.addEventListener('click', (e) => {
 		e.stopPropagation()
 		openCharEditDialog(key, displayName, avatarUrl)
@@ -352,7 +353,7 @@ function createCharCard(key, details, summaries) {
 	const deleteBtn = document.createElement('button')
 	deleteBtn.className = 'beilu-char-delete-btn'
 	deleteBtn.textContent = '×'
-	deleteBtn.title = '删除角色卡'
+	deleteBtn.title = t('chars.delete')
 	deleteBtn.addEventListener('click', async (e) => {
 		e.stopPropagation()  // 阻止触发卡片的点击事件
 		const deleteOptions = await showDeleteConfirmDialog(displayName)
@@ -407,7 +408,7 @@ function createImportCard() {
 
 	const label = document.createElement('div')
 	label.className = 'beilu-import-label'
-	label.textContent = '导入角色卡'
+	label.textContent = t('chars.import.card')
 	card.appendChild(label)
 
 	// 创建隐藏的文件输入
@@ -459,7 +460,7 @@ async function loadChars() {
 			// 在空状态区域也放一个导入按钮
 			charsEmpty.innerHTML = ''
 			const p = document.createElement('p')
-			p.textContent = '还没有角色卡'
+				p.textContent = t('chars.empty.short')
 			charsEmpty.appendChild(p)
 			charsEmpty.appendChild(createImportCard())
 			return
@@ -541,7 +542,7 @@ function setupCreateChar() {
 	if (!charsCreateBtn) return
 
 	charsCreateBtn.addEventListener('click', async () => {
-		const name = prompt('请输入新角色名称：')
+		const name = prompt(t('chars.prompt.newName'))
 		if (!name || !name.trim()) return
 
 		try {
@@ -596,7 +597,7 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 	let newAvatarFile = null
 
 	dialog.innerHTML = `
-		<h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#b45309;">编辑角色卡「${displayName}」</h3>
+		<h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#b45309;">${t('chars.edit.settings')}「${escapeHtml(displayName)}」</h3>
 		
 		<!-- 头像区域 -->
 		<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
@@ -604,48 +605,48 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 				${currentAvatarUrl ? `<img src="${currentAvatarUrl}" style="width:100%;height:100%;object-fit:cover;" />` : '🎭'}
 			</div>
 			<div>
-				<button id="char-edit-avatar-btn" style="padding:6px 16px;border:1px solid #d97706;background:transparent;color:#333;border-radius:6px;cursor:pointer;font-size:13px;">📷 更换头像</button>
+				<button id="char-edit-avatar-btn" style="padding:6px 16px;border:1px solid #d97706;background:transparent;color:#333;border-radius:6px;cursor:pointer;font-size:13px;">${t('chars.edit.avatar')}</button>
 				<input type="file" id="char-edit-avatar-input" accept="image/*" style="display:none;" />
-				<div style="font-size:11px;color:#888;margin-top:4px;">支持 PNG/JPG/WebP</div>
+				<div style="font-size:11px;color:#888;margin-top:4px;">${t('chars.edit.avatar.hint')}</div>
 			</div>
 		</div>
 
 		<!-- 开场白 -->
 		<div style="margin-bottom:12px;">
-			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">开场白（第一条消息）</label>
-			<textarea id="char-edit-greeting" style="width:100%;min-height:100px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的第一条消息...">${escapeHtml(chardata.first_mes || '')}</textarea>
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.greeting')}</label>
+			<textarea id="char-edit-greeting" style="width:100%;min-height:100px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="${t('chars.edit.greeting.placeholder')}">${escapeHtml(chardata.first_mes || '')}</textarea>
 		</div>
 
 		<!-- 备选开场白 (alternate_greetings) -->
 		<div style="margin-bottom:12px;">
-			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">备选开场白</label>
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.altGreetings')}</label>
 			<div id="char-edit-alt-greetings"></div>
-			<button id="char-edit-add-greeting" type="button" style="padding:6px 14px;border:1px dashed #d97706;background:transparent;color:#b45309;border-radius:6px;cursor:pointer;font-size:13px;margin-top:4px;">+ 添加备选开场白</button>
-			<div style="font-size:11px;color:#888;margin-top:4px;">新建聊天时可在多个开场白之间切换（swipe）</div>
+			<button id="char-edit-add-greeting" type="button" style="padding:6px 14px;border:1px dashed #d97706;background:transparent;color:#b45309;border-radius:6px;cursor:pointer;font-size:13px;margin-top:4px;">${t('chars.edit.altGreetings.add')}</button>
+			<div style="font-size:11px;color:#888;margin-top:4px;">${t('chars.edit.altGreetings.hint')}</div>
 		</div>
 
 		<!-- 角色描述 -->
 		<div style="margin-bottom:12px;">
-			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">角色描述</label>
-			<textarea id="char-edit-desc" style="width:100%;min-height:80px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的描述...">${escapeHtml(chardata.description || '')}</textarea>
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.description')}</label>
+			<textarea id="char-edit-desc" style="width:100%;min-height:80px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="${t('chars.edit.description.placeholder')}">${escapeHtml(chardata.description || '')}</textarea>
 		</div>
 
 		<!-- 角色性格 -->
 		<div style="margin-bottom:12px;">
-			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">性格</label>
-			<textarea id="char-edit-personality" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="角色的性格特征...">${escapeHtml(chardata.personality || '')}</textarea>
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.personality')}</label>
+			<textarea id="char-edit-personality" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="${t('chars.edit.personality.placeholder')}">${escapeHtml(chardata.personality || '')}</textarea>
 		</div>
 
 		<!-- 创作者备注 -->
 		<div style="margin-bottom:12px;">
-			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">创作者备注</label>
-			<textarea id="char-edit-notes" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="创作者备注...">${escapeHtml(chardata.creator_notes || '')}</textarea>
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.creatorNotes')}</label>
+			<textarea id="char-edit-notes" style="width:100%;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="${t('chars.edit.creatorNotes.placeholder')}">${escapeHtml(chardata.creator_notes || '')}</textarea>
 		</div>
 
 		<!-- 操作按钮 -->
 		<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
-			<button id="char-edit-cancel" style="padding:8px 20px;border:1px solid rgba(0,0,0,0.15);background:transparent;color:#555;border-radius:6px;cursor:pointer;font-size:14px;">取消</button>
-			<button id="char-edit-save" style="padding:8px 20px;border:none;background:#b45309;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;">💾 保存</button>
+			<button id="char-edit-cancel" style="padding:8px 20px;border:1px solid rgba(0,0,0,0.15);background:transparent;color:#555;border-radius:6px;cursor:pointer;font-size:14px;">${t('chars.edit.cancel')}</button>
+			<button id="char-edit-save" style="padding:8px 20px;border:none;background:#b45309;color:#fff;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;">${t('chars.edit.save')}</button>
 		</div>
 		<div id="char-edit-status" style="font-size:12px;text-align:center;color:#888;margin-top:8px;"></div>
 	`
@@ -666,7 +667,7 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 		const textarea = document.createElement('textarea')
 		textarea.className = 'alt-greeting-text'
 		textarea.style.cssText = 'flex:1;min-height:60px;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;resize:vertical;box-sizing:border-box;'
-		textarea.placeholder = `备选开场白 #${index + 1}`
+		textarea.placeholder = t('chars.edit.altGreetings.placeholder', { index: index + 1 })
 		textarea.value = text || ''
 		item.appendChild(textarea)
 
@@ -685,7 +686,7 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 
 	function updateAltIndices() {
 		const items = altGreetingsContainer.querySelectorAll('.alt-greeting-text')
-		items.forEach((ta, i) => { ta.placeholder = `备选开场白 #${i + 1}` })
+		items.forEach((ta, i) => { ta.placeholder = t('chars.edit.altGreetings.placeholder', { index: i + 1 }) })
 	}
 
 	// 填充已有数据
@@ -727,7 +728,7 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 	// 保存
 	dialog.querySelector('#char-edit-save').addEventListener('click', async () => {
 		const statusEl = dialog.querySelector('#char-edit-status')
-		statusEl.textContent = '保存中...'
+		statusEl.textContent = t('chars.edit.saving')
 		statusEl.style.color = 'var(--beilu-amber)'
 
 		try {
@@ -763,7 +764,7 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 			})
 
 			if (res.ok) {
-				statusEl.textContent = '✅ 保存成功'
+				statusEl.textContent = t('chars.edit.saved')
 				statusEl.style.color = '#22c55e'
 				setTimeout(() => {
 					document.body.removeChild(overlay)

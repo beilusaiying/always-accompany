@@ -16,7 +16,7 @@
 				"failed": "mDNS-registratie mislukt: ${error}",
 				"bonjourFailed": "Aanmaken van Bonjour-service mislukt: ${error}"
 			},
-			"localUrl": "Toegang tot fount vanaf andere apparaten op hetzelfde netwerk: ${url}",
+			"localUrl": "Toegang tot beilu vanaf andere apparaten op hetzelfde netwerk: ${url}",
 			"update": {
 				"restarting": "Er is een nieuwe versie gevonden. De update wordt opnieuw gestart..."
 			}
@@ -31,7 +31,7 @@
 			"instanceRunning": "Een andere instantie draait al",
 			"runPartLog": "Voer ${partpath} uit als ${username}, argumenten: ${args}",
 			"invokePartLog": "Roep ${partpath} aan als ${username}, parameter: ${invokedata}",
-			"invalidCommand": "Ongeldig commando, gebruik \"fount run <componenttype> <gebruikersnaam> <componentnaam> <parameters...>\"",
+			"invalidCommand": "Ongeldig commando, gebruik \"beilu run <componenttype> <gebruikersnaam> <componentnaam> <parameters...>\"",
 			"invalidCommandFormat": "Ongeldig commandoformaat",
 			"unsupportedCommand": "Niet-ondersteund commandotype",
 			"processMessageError": "Fout bij het verwerken van IPC-bericht: ${error}",
@@ -74,22 +74,22 @@
 			"codeNotifyBody": "Je verificatiecode is: ${code} (verloopt na 60 seconden)"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "Lezen van pictogrambestand mislukt: ${error}",
 			"createTrayFailed": "Aanmaken van systeempictogram mislukt: ${error}",
 			"items": {
 				"open": {
 					"title": "Openen",
-					"tooltip": "Open fount"
+					"tooltip": "Open beilu"
 				},
 				"github": {
 					"title": "GitHub",
-					"tooltip": "Open de GitHub-pagina van fount"
+					"tooltip": "Open de GitHub-pagina van beilu"
 				},
 				"discord": {
 					"title": "Discord",
-					"tooltip": "Open de Discord-server van fount"
+					"tooltip": "Open de Discord-server van beilu"
 				},
 				"restart": {
 					"title": "Herstarten",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL:fount protocol",
+				"description": "URL:beilu protocol",
 				"registerFailed": "Kan fount:// protocolhandler niet registreren: ${message}",
 				"noUrl": "Fout: URL voor protocolhandler niet opgegeven."
 			},
 			"update": {
-				"skippingFountUpdate": "Omdat het .noupdate-bestand bestaat, wordt de fount-update overgeslagen",
+				"skippingBeiluUpdate": "Omdat het .noupdate-bestand bestaat, wordt de beilu-update overgeslagen",
 				"skippingDenoUpgradeDocker": "Sla de Deno-upgrade over in de Docker-omgeving"
 			},
 			"shortcut": {
@@ -131,7 +131,7 @@
 				"createDesktopAppFailed": "Fout: Kan bureaubladtoepassing niet maken."
 			},
 			"git": {
-				"repoNotFound": "De git-repository van fount is niet gevonden. Een nieuwe initialiseren...",
+				"repoNotFound": "De git-repository van beilu is niet gevonden. Een nieuwe initialiseren...",
 				"fetchingAndResetting": "Ophalen uit externe opslagplaats en opnieuw instellen op master...",
 				"localChangesDetected": "Lokale wijzigingen gedetecteerd, verschillen worden opgeslagen voordat ze worden overschreven.",
 				"backupSavedTo": "Er is een back-up van uw lokale wijzigingen opgeslagen in: ${path}",
@@ -153,7 +153,7 @@
 				"missing": "Deno niet gevonden, automatisch geïnstalleerd...",
 				"isRequired": "Deno niet gevonden, bron kan niet worden uitgevoerd zonder Deno",
 				"installingTermux": "Deno voor Termux installeren...",
-				"installFailedFallback": "Deno-installatie is mislukt. Er wordt geprobeerd automatisch te installeren in de padmap van de fount...",
+				"installFailedFallback": "Deno-installatie is mislukt. Er wordt geprobeerd automatisch te installeren in de padmap van de beilu...",
 				"notWorking": "Om de een of andere reden werkt Deno niet. Misschien wil je lid worden van https://discord.gg/deno voor ondersteuning",
 				"upgradeFailed": "Waarschuwing: Deno-upgrade is mogelijk mislukt. Controleer op fouten.",
 				"upgradeFailedTermux": "Deno-upgradeopdracht is mislukt, poging om Deno voor Termux opnieuw te installeren...",
@@ -165,8 +165,8 @@
 				"installingDependencies": "Afhankelijkheden installeren...",
 				"packageFailed": "Fout: Installatie van ${package} is mislukt.",
 				"browserMissing": "Standaardbrowser niet gedetecteerd, probeert te installeren...",
-				"untrustedPartsWarning": "Installeer geen onbetrouwbare fountcomponenten op uw systeem; deze kunnen alles doen.",
-				"rootWarning1": "Niet aanbevolen: het uitvoeren van fount als root geeft volledige systeemtoegang tot alle fountcomponenten.",
+				"untrustedPartsWarning": "Installeer geen onbetrouwbare beilucomponenten op uw systeem; deze kunnen alles doen.",
+				"rootWarning1": "Niet aanbevolen: het uitvoeren van beilu als root geeft volledige systeemtoegang tot alle beilucomponenten.",
 				"rootWarning2": "Tenzij u weet wat u doet, wordt aanbevolen om font als normale gebruiker uit te voeren."
 			},
 			"clean": {
@@ -180,26 +180,26 @@
 				"autoInitDisabled": "font is de afgelopen korte tijd meerdere keren opnieuw opgestart, maar automatische herinitialisatie is uitgeschakeld vanwege de aanwezigheid van het bestand .noautoinit. Afsluiten.",
 				"restartingTooFast": "font is in korte tijd meerdere keren opnieuw opgestart. Geforceerde herinitialisatie...",
 				"failedToStart": "Zelfs na automatische reparatiepogingen start de fontein korte tijd niet. Controleer de logboeken op fouten.",
-				"initFailed": "Initialisatie van fount is mislukt. Afsluiten."
+				"initFailed": "Initialisatie van beilu is mislukt. Afsluiten."
 			},
 			"remove": {
-				"removingFount": "fount verwijderen...",
-				"fountUninstallationComplete": "Het verwijderen van de fount is voltooid.",
-				"removingFountInstallationDir": "Installatiemap voor fount verwijderen...",
-				"fountInstallationDirRemoved": "De font-installatiemap is verwijderd.",
-				"removingFountFromPath": "Lettertype uit PATH verwijderen...",
+				"removingBeilu": "beilu verwijderen...",
+				"beiluUninstallationComplete": "Het verwijderen van de beilu is voltooid.",
+				"removingBeiluInstallationDir": "Installatiemap voor beilu verwijderen...",
+				"beiluInstallationDirRemoved": "De font-installatiemap is verwijderd.",
+				"removingBeiluFromPath": "Lettertype uit PATH verwijderen...",
 				"removingProtocolHandler": "Fot:// protocolhandler verwijderen...",
 				"protocolHandlerRemoved": "De protocolhandler fount:// is verwijderd.",
 				"removeProtocolHandlerFailed": "Kan fount:// protocolhandler niet verwijderen: ${message}",
-				"removingFountFromGitSafeDir": "Font verwijderen uit git safe.directory...",
+				"removingBeiluFromGitSafeDir": "Font verwijderen uit git safe.directory...",
 				"removingInstalledSystemPackages": "Geïnstalleerde systeempakketten verwijderen...",
 				"uninstallingDeno": "Deno verwijderen...",
 				"removeDenoFailed": "Kan Deno niet verwijderen: ${message}",
-				"removingFountPwshFromProfile": "font-pwsh verwijderen uit PowerShell-profiel...",
-				"fountPwshRemovedFromProfile": "font-pwsh is verwijderd uit het PowerShell-profiel.",
+				"removingBeiluPwshFromProfile": "font-pwsh verwijderen uit PowerShell-profiel...",
+				"beiluPwshRemovedFromProfile": "font-pwsh is verwijderd uit het PowerShell-profiel.",
 				"pwshProfileNotFound": "PowerShell-profiel niet gevonden. Het verwijderen van fount-pwsh uit het profiel wordt overgeslagen.",
-				"uninstallingFountPwsh": "Font-pwsh verwijderen...",
-				"uninstallFountPwshFailed": "Verwijderen van fount-pwsh mislukt: ${message}",
+				"uninstallingBeiluPwsh": "Font-pwsh verwijderen...",
+				"uninstallBeiluPwshFailed": "Verwijderen van fount-pwsh mislukt: ${message}",
 				"removingTerminalProfile": "Windows Terminal-profiel verwijderen...",
 				"terminalProfileRemoved": "De map Windows Terminal Profile is verwijderd.",
 				"terminalProfileNotFound": "Windows Terminal-profielmap niet gevonden.",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "Welkom bij fount!",
+		"title": "Welkom bij beilu!",
 		"description": "Volg de voortgang van de installatie en bekijk de functies ervan. font zal binnen enkele ogenblikken klaar zijn voor lancering.",
 		"hero": {
 			"title": "Een Vonk van de Geest, een Vriend voor het Leven",
-			"description": "fount is een AI-aangedreven platform voor personage-interactie, ontworpen om <i>jou</i> de controle te geven. Het is een brug die je verbindt met de personages uit je verbeelding, waardoor je moeiteloos met hen kunt praten, je eigen personages kunt creëren en ze met de wereld kunt delen."
+			"description": "beilu is een AI-aangedreven platform voor personage-interactie, ontworpen om <i>jou</i> de controle te geven. Het is een brug die je verbindt met de personages uit je verbeelding, waardoor je moeiteloos met hen kunt praten, je eigen personages kunt creëren en ze met de wereld kunt delen."
 		},
 		"feature1": {
 			"title": "Naadloze gesprekken, altijd en overal",
-			"description": "Begin een chat op je computer en ga naadloos verder op je telefoon of tablet. fount houdt je gesprekken gesynchroniseerd, zodat je altijd verbonden bent met je personages, waar je ook bent. Werkt op Windows, macOS, Linux en zelfs Android."
+			"description": "Begin een chat op je computer en ga naadloos verder op je telefoon of tablet. beilu houdt je gesprekken gesynchroniseerd, zodat je altijd verbonden bent met je personages, waar je ook bent. Werkt op Windows, macOS, Linux en zelfs Android."
 		},
 		"feature2": {
 			"title": "Prachtige, aanpasbare interface",
-			"description": "Kies uit meer dan 30 prachtige thema's, of creëer je eigen. fount is jouw persoonlijke canvas. Druk jezelf uit, pas je omgeving aan naar jouw smaak en krijg een echt gepersonaliseerde ervaring."
+			"description": "Kies uit meer dan 30 prachtige thema's, of creëer je eigen. beilu is jouw persoonlijke canvas. Druk jezelf uit, pas je omgeving aan naar jouw smaak en krijg een echt gepersonaliseerde ervaring."
 		},
 		"feature3": {
 			"title": "Expressieve, meeslepende chat",
-			"description": "fount maakt volledig gebruik van de kracht van HTML, waardoor personages zich kunnen uiten via rich text, afbeeldingen en zelfs interactieve elementen. Voer dynamische en boeiende groepschats met meerdere personages tegelijk."
+			"description": "beilu maakt volledig gebruik van de kracht van HTML, waardoor personages zich kunnen uiten via rich text, afbeeldingen en zelfs interactieve elementen. Voer dynamische en boeiende groepschats met meerdere personages tegelijk."
 		},
 		"feature4": {
 			"title": "Onbeperkte AI-bronintegratie",
-			"description": "fount biedt een ongeëvenaarde keuze en flexibiliteit. Maak verbinding met <i>elke</i> AI-bron – OpenAI, Claude, OpenRouter, NovelAI en meer. De communicatielogica wordt gevormd naar <i>jouw</i> wil, door de kracht van code."
+			"description": "beilu biedt een ongeëvenaarde keuze en flexibiliteit. Maak verbinding met <i>elke</i> AI-bron – OpenAI, Claude, OpenRouter, NovelAI en meer. De communicatielogica wordt gevormd naar <i>jouw</i> wil, door de kracht van code."
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "Hier is een spelletje om de tijd te doden."
 		},
 		"data_showcase": {
-			"title_prefix": "fount is het meest ",
+			"title_prefix": "beilu is het meest ",
 			"title_of": " e ",
 			"active_users": "Aantal actieve gebruikers",
 			"stars": "GitHub Stars",
@@ -289,21 +289,21 @@
 		"footer": {
 			"ready_text": "Klaar om je reis te beginnen?",
 			"wait_text": "Een ogenblik geduld...",
-			"open_fount": "Open fount",
-			"open_or_install_fount": "Open/Installeer fount",
+			"open_beilu": "Open beilu",
+			"open_or_install_beilu": "Open/Installeer beilu",
 			"error_message": "Oeps :(\n\nEr is een fout opgetreden:\n${error}"
 		},
 		"error": {
 			"title": "Installatie mislukt!",
-			"description": "Er lijkt iets mis te zijn gegaan met het installatieprogramma van fount.",
+			"description": "Er lijkt iets mis te zijn gegaan met het installatieprogramma van beilu.",
 			"connection_failed": "Verbinding mislukt!",
-			"description1": "Er lijkt iets mis te zijn gegaan met het installatieprogramma van fount.",
+			"description1": "Er lijkt iets mis te zijn gegaan met het installatieprogramma van beilu.",
 			"description2": "Controleer je terminal en probeer het opnieuw.",
 			"close_page": "Pagina sluiten"
 		}
 	},
 	"protocolhandler": {
-		"title": "fount-protocol verwerken",
+		"title": "beilu-protocol verwerken",
 		"description": "Geruisloos en efficiënt vertaalt deze pagina uw intentie naar een naadloze overgang binnen font. Beschouw het als de stille magie achter het gordijn.",
 		"processing": "Protocol wordt verwerkt...",
 		"shellCommandSent": "Shell-commando verzonden",
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "Host offline",
-			"message": "fount-host ${hostUrl} lijkt offline te zijn. Wil je het opnieuw proberen?",
+			"message": "beilu-host ${hostUrl} lijkt offline te zijn. Wil je het opnieuw proberen?",
 			"buttons": {
 				"start": "Starten",
 				"retry": "Probeer het opnieuw"
 			}
 		},
-		"fountNotFound": "Oeps :(\n\nKan fount niet vinden, misschien moet je het eerst installeren?",
+		"beiluNotFound": "Oeps :(\n\nKan beilu niet vinden, misschien moet je het eerst installeren?",
 		"invalidProtocol": "Ongeldig protocol",
 		"insufficientParams": "Onvoldoende parameters",
 		"unknownCommand": "Onbekend commando",
@@ -330,14 +330,14 @@
 		"unknownError": "Oeps :(\n\nEr is een fout opgetreden:\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
+		"title": "beilu!",
 		"description": "Welkom op de drempel van de bron. Een kort moment van voorbereiding, voordat je midden in de gesprekken en verhalen stapt die wachten om zich te ontvouwen."
 	},
 	"tutorial": {
 		"title": "Een tutorial nodig?",
-		"description": "Laat ons met u meelopen door de wereld van fount. Deze interactieve tutorial zal het pad belichten en je helpen de magie te ontdekken die in de kern ervan verweven is. Je avontuur begint met begrip.",
+		"description": "Laat ons met u meelopen door de wereld van beilu. Deze interactieve tutorial zal het pad belichten en je helpen de magie te ontdekken die in de kern ervan verweven is. Je avontuur begint met begrip.",
 		"modal": {
-			"title": "Welkom bij fount!",
+			"title": "Welkom bij beilu!",
 			"instruction": "Wil je de tutorial voor beginners doorlopen?",
 			"buttons": {
 				"start": "Start tutorial",
@@ -443,7 +443,7 @@
 			"title": "Certificaatoverdrachtsfout",
 			"retrieve_error": "Er is een fout opgetreden bij het proberen uw inloggegevens op te slaan:\n${error}\nU kunt doorgaan, maar kunt de inloggegevens niet opslaan.",
 			"transfer_error": "Er is een fout opgetreden bij het proberen uw inloggegevens over te dragen:\n${error}\nU kunt doorgaan, maar kunt geen inloggegevens ophalen.",
-			"no_credentials": "Geen opgeslagen inloggegevens gevonden.\nMeld u opnieuw aan vanuit fount om uw inloggegevens bij te werken, of klik op de onderstaande knop om zonder inloggegevens door te gaan naar de doelpagina.",
+			"no_credentials": "Geen opgeslagen inloggegevens gevonden.\nMeld u opnieuw aan vanuit beilu om uw inloggegevens bij te werken, of klik op de onderstaande knop om zonder inloggegevens door te gaan naar de doelpagina.",
 			"missing_params": "Er ontbreekt een vereiste parameter in de link.",
 			"buttons": {
 				"ignore": "Negeer en ga door",
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "Leeg...<br/>Misschien kun je [een nieuw onderdeel maken](${newpartLink}) of naar [fount's Discord-server](${discordLink}) gaan om wat plezier te hebben?"
+			"message": "Leeg...<br/>Misschien kun je [een nieuw onderdeel maken](${newpartLink}) of naar [beilu's Discord-server](${discordLink}) gaan om wat plezier te hebben?"
 		},
 		"part_pages": {
 			"default": {
@@ -630,13 +630,13 @@
 				}
 			}
 		},
-		"escapeConfirm": "Weet je zeker dat je fount wilt verlaten?",
+		"escapeConfirm": "Weet je zeker dat je beilu wilt verlaten?",
 		"alerts": {
 			"fetchHomeRegistryFailed": "Ophalen van startpaginagegevens mislukt"
 		},
 		"achievements": {
 			"first_login": {
-				"name": "Hallo, fount!",
+				"name": "Hallo, beilu!",
 				"description": "Op weg naar de nieuwe wereld, voor de eerste keer inloggen!",
 				"locked_description": "Log eenmalig in bij de fontein."
 			},
@@ -672,14 +672,14 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "Genereer informatie over lettertypecomponenten"
 			}
 		}
 	},
 	"chat": {
 		"title": "Chat",
-		"description": "Waar woorden de vlucht nemen en verhalen zich ontvouwen. Ga in gesprek met uw AI-metgezellen, geef vorm aan het verhaal en verlies uzelf in de eb en vloed van de digitale dialoog. Het hart van fount klopt hier.",
+		"description": "Waar woorden de vlucht nemen en verhalen zich ontvouwen. Ga in gesprek met uw AI-metgezellen, geef vorm aan het verhaal en verlies uzelf in de eb en vloed van de digitale dialoog. Het hart van beilu klopt hier.",
 		"new": {
 			"title": "Nieuwe chat",
 			"description": "De stille verwachting van een nog ongeschreven verhaal. Er begint een nieuwe chat, een schone lei voor nieuwe interacties en zich ontvouwende verhalen met de door u gekozen metgezellen."
@@ -935,8 +935,8 @@
 			},
 			"code_greeting": {
 				"name": "Zeg hallo met code",
-				"description": "\"Hallo, fount!\"",
-				"locked_description": "Voer een codeblok uit dat 'hello fount!' als uitvoer geeft."
+				"description": "\"Hallo, beilu!\"",
+				"locked_description": "Voer een codeblok uit dat 'hello beilu!' als uitvoer geeft."
 			}
 		},
 		"dragAndDrop": {
@@ -1432,9 +1432,9 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "subfounts - peer-to-peer apparaatbeheer",
-		"pageTitle": "subfounts",
+	"subbeilus": {
+		"title": "subbeilus - peer-to-peer apparaatbeheer",
+		"pageTitle": "subbeilus",
 		"description": "Beheer peer-to-peer-fonteinverbindingen",
 		"hostConnectionCode": {
 			"title": "Hostverbindingscode",
@@ -1442,14 +1442,14 @@
 			"passwordLabel": "wachtwoord",
 			"copyButton": "kopiëren",
 			"regenerateButton": "Regenereer",
-			"infoMessage": "Deel deze inloggegevens met subfount-clients om verbindingen tot stand te brengen.",
+			"infoMessage": "Deel deze inloggegevens met subbeilu-clients om verbindingen tot stand te brengen.",
 			"connectionCodeCopied": "De verbindingscode is naar het klembord gekopieerd",
 			"passwordCopied": "Wachtwoord gekopieerd naar klembord",
 			"regenerateSuccess": "De verbindingscode is opnieuw gegenereerd"
 		},
-		"connectedSubfounts": {
-			"title": "Verbonden subfount",
-			"noSubfountsConnected": "Er is geen subfount aangesloten",
+		"connectedSubbeilus": {
+			"title": "Verbonden subbeilu",
+			"noSubbeilusConnected": "Er is geen subbeilu aangesloten",
 			"table": {
 				"id": "ID",
 				"description": "Opmerking",
@@ -1467,23 +1467,23 @@
 		},
 		"codeExecution": {
 			"title": "uitvoering van code",
-			"description": "Voer JavaScript-code uit op de geselecteerde subfount",
-			"selectSubfountLabel": "Selecteer subfount",
-			"selectSubfountPlaceholder": "Selecteer de subfount waarop de code moet worden uitgevoerd...",
+			"description": "Voer JavaScript-code uit op de geselecteerde subbeilu",
+			"selectSubbeiluLabel": "Selecteer subbeilu",
+			"selectSubbeiluPlaceholder": "Selecteer de subbeilu waarop de code moet worden uitgevoerd...",
 			"hostOption": "Host (ID: ${id})",
-			"subfountOption": "Extensie ${id}${deviceId}",
+			"subbeiluOption": "Extensie ${id}${deviceId}",
 			"scriptLabel": "JavaScript-code",
 			"executeButton": "uitvoeren",
 			"executing": "Uitvoeren...",
-			"noSubfountSelected": "Selecteer eerst een subfount",
+			"noSubbeiluSelected": "Selecteer eerst een subbeilu",
 			"noScriptProvided": "Voer de uit te voeren code in",
 			"executionSuccess": "Code-uitvoering succesvol",
 			"executionFailed": "Uitvoering van code mislukt: ${message}"
 		},
 		"downloadClient": {
-			"title": "subfount-client downloaden",
-			"description": "Download het zelfstandige subfount-clientscript om op het externe apparaat uit te voeren.",
-			"downloadButton": "Download subfount.mjs"
+			"title": "subbeilu-client downloaden",
+			"description": "Download het zelfstandige subbeilu-clientscript om op het externe apparaat uit te voeren.",
+			"downloadButton": "Download subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "Kan verbindingscode niet laden: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "In ontwikkeling",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "subapparaat",
 						"sub_items": {
 							"main": {
@@ -1932,13 +1932,13 @@
 		"title": "Browserintegratie",
 		"description": "Overbrug de kloof tussen de font en het web. Deze pagina biedt het gebruikersscript om een ​​naadloze integratie mogelijk te maken, waardoor uw AI-metgezellen in uw browse-ervaring terechtkomen.",
 		"pageHeader": "Browserintegratie",
-		"pageDescription": "Om uw fount -rol te laten communiceren met de webpagina, moet u dit browser -integratiescript installeren. Het fungeert als een brug tussen het personage en de browser, waardoor ze de pagina -inhoud kunnen bekijken en acties kunnen uitvoeren.",
+		"pageDescription": "Om uw beilu -rol te laten communiceren met de webpagina, moet u dit browser -integratiescript installeren. Het fungeert als een brug tussen het personage en de browser, waardoor ze de pagina -inhoud kunnen bekijken en acties kunnen uitvoeren.",
 		"install_script_title": "Installatiescript",
 		"install_script_description": "Klik op de onderstaande knop om het script van de browserintegratie te installeren. U moet eerst een userscriptmanager zoals Tampermonkey installeren.",
 		"install_button": "Installeren",
 		"install_from_url_tip": "Staat uw browser u niet toe het te installeren? Kopieer deze URL en importeer het script vanuit de URL in de Tampermonkey-plug-in.",
 		"what_is_manager": "Wat is een userscriptbeheerder?",
-		"manager_explanation": "Een userscriptbeheerder is een browserverlenging waarmee u scripts kunt installeren en uitvoeren die webpagina's wijzigen. Om het fount Integration Script te gebruiken, hebt u een van de extensies nodig.",
+		"manager_explanation": "Een userscriptbeheerder is een browserverlenging waarmee u scripts kunt installeren en uitvoeren die webpagina's wijzigen. Om het beilu Integration Script te gebruiken, hebt u een van de extensies nodig.",
 		"popular_managers": "Populaire keuzes:",
 		"csp_warning": "Mogelijk moet u de plug -in installeren om CSP uit te schakelen om de integratiefunctie goed te laten werken. Voor ${browser} kunt u [deze plugin](${link}).",
 		"connected_pages_title": "Verbonden pagina",
@@ -1996,10 +1996,10 @@
 				"description": "\"In mijn naam, geef opdracht aan de browser...\"",
 				"locked_description": "Voer de JavaScript-code één keer uit in de browser."
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "open source-ster",
-				"description": "Geef fount een ster op GitHub, bedankt voor je steun!",
-				"locked_description": "Bezoek de GitHub-repository van fount en geef het een ster."
+				"description": "Geef beilu een ster op GitHub, bedankt voor je steun!",
+				"locked_description": "Bezoek de GitHub-repository van beilu en geef het een ster."
 			}
 		},
 		"home_function_buttons": {
@@ -2015,20 +2015,20 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "Een nieuwe versie van het fount Browser Integration Script is beschikbaar. Is de updatepagina nu geopend?"
+			"prompt": "Een nieuwe versie van het beilu Browser Integration Script is beschikbaar. Is de updatepagina nu geopend?"
 		},
-		"csp_warning": "Het fount Browser Integration Script detecteert dat het CSP -beleid op de pagina bestaat, waardoor het integratiescript niet goed werkt. Overweeg de plug -in te installeren om CSP uit te schakelen.",
+		"csp_warning": "Het beilu Browser Integration Script detecteert dat het CSP -beleid op de pagina bestaat, waardoor het integratiescript niet goed werkt. Overweeg de plug -in te installeren om CSP uit te schakelen.",
 		"hostChange": {
-			"securityWarningTitle": "--- fount Veiligheidswaarschuwing ---",
-			"message": "De huidige pagina (\"${origin}\") probeert uw fount-hostadres te wijzigen in:\n\n\"${newHost}\"\n\nWaarschuwing: door deze actie goed te keuren, kan de nieuwe host uw browserintegratiefuncties volledig beheersen, wat kan leiden tot gevoelige informatielekkage of accountdiefstal.\nEr mag alleen goedkeuring worden gemaakt als u er zeker van bent dat dit uw eigen bewerking is (bijvoorbeeld een fount-server migreren).\n\nWeet u zeker dat u deze wijziging wilt toestaan?",
-			"uuidMismatchError": "fount-beveiligingsfout: de identiteit (UUID) van host ${newHost} komt niet overeen met uw bestaande. De bewerking is geannuleerd.",
-			"verificationError": "fount-beveiligingsfout: niet in staat om nieuwe host \"${newHost}\" te verifiëren. Controleer of het adres correct is en of de service wordt uitgevoerd."
+			"securityWarningTitle": "--- beilu Veiligheidswaarschuwing ---",
+			"message": "De huidige pagina (\"${origin}\") probeert uw beilu-hostadres te wijzigen in:\n\n\"${newHost}\"\n\nWaarschuwing: door deze actie goed te keuren, kan de nieuwe host uw browserintegratiefuncties volledig beheersen, wat kan leiden tot gevoelige informatielekkage of accountdiefstal.\nEr mag alleen goedkeuring worden gemaakt als u er zeker van bent dat dit uw eigen bewerking is (bijvoorbeeld een beilu-server migreren).\n\nWeet u zeker dat u deze wijziging wilt toestaan?",
+			"uuidMismatchError": "beilu-beveiligingsfout: de identiteit (UUID) van host ${newHost} komt niet overeen met uw bestaande. De bewerking is geannuleerd.",
+			"verificationError": "beilu-beveiligingsfout: niet in staat om nieuwe host \"${newHost}\" te verifiëren. Controleer of het adres correct is en of de service wordt uitgevoerd."
 		}
 	},
 	"terminal_assistant": {
 		"title": "Terminal-assistent",
 		"description": "Naast de grafische interface is er ruimte voor directe bediening. Communiceer met de kern van Font via de terminalassistent, waar tekst zijn eigen krachtige magie weeft.",
-		"initialMessage": "fount ondersteunt het implementeren van je favoriete personage in je terminal om je te helpen met coderen!",
+		"initialMessage": "beilu ondersteunt het implementeren van je favoriete personage in je terminal om je te helpen met coderen!",
 		"initialMessageLink": "Klik hier voor meer informatie",
 		"achievements": {
 			"invoke_shell_assist": {
@@ -2105,15 +2105,15 @@
 		}
 	},
 	"access": {
-		"title": "Toegang tot fount op andere apparaten",
-		"description": "Vergroot het bereik van de fount tot voorbij een enkel scherm. Hier ligt de toegangspoort (een URL, een QR-code) om vanaf andere apparaten verbinding te maken met uw metgezellen, een eenvoudige brug over de lokale ether.",
-		"heading": "Wil je fount op andere apparaten gebruiken?",
+		"title": "Toegang tot beilu op andere apparaten",
+		"description": "Vergroot het bereik van de beilu tot voorbij een enkel scherm. Hier ligt de toegangspoort (een URL, een QR-code) om vanaf andere apparaten verbinding te maken met uw metgezellen, een eenvoudige brug over de lokale ether.",
+		"heading": "Wil je beilu op andere apparaten gebruiken?",
 		"instruction": {
-			"sameLAN": "Zorg ervoor dat het apparaat en de fount-host zich op hetzelfde lokale netwerk bevinden",
+			"sameLAN": "Zorg ervoor dat het apparaat en de beilu-host zich op hetzelfde lokale netwerk bevinden",
 			"accessthis": "Bezoek het volgende adres:"
 		},
 		"QRcode": {
-			"alt": "Scan deze QR-code om toegang te krijgen tot fount"
+			"alt": "Scan deze QR-code om toegang te krijgen tot beilu"
 		},
 		"urlInput": {
 			"aria-label": "URL"
@@ -2128,9 +2128,9 @@
 	},
 	"proxy": {
 		"title": "API Proxy",
-		"description": "Voor ontwikkelaars en integrators onthult deze pagina de fount API-proxy: uw verbinding om de mogelijkheden van fount in andere applicaties te verweven.",
+		"description": "Voor ontwikkelaars en integrators onthult deze pagina de beilu API-proxy: uw verbinding om de mogelijkheden van beilu in andere applicaties te verweven.",
 		"heading": "API Proxy Gateway",
-		"instruction": "Genereer en beheer uw API-sleutels op deze pagina om fount te integreren met andere applicaties.",
+		"instruction": "Genereer en beheer uw API-sleutels op deze pagina om beilu te integreren met andere applicaties.",
 		"endpointSectionTitle": "API-eindpunt",
 		"endpointInstruction": "Dit is de basis-URL voor integratie met andere services.",
 		"apiUrlInput": {
@@ -2161,12 +2161,12 @@
 		}
 	},
 	"ide_integration": {
-		"description": "Verbind de fount-rol met ondersteunde editors (zoals Zed, JetBrains, Neovim) via Agent Client Protocol, configureer API-sleutels en -rollen en betrek AI-partners in de ontwikkelingsworkflow.",
+		"description": "Verbind de beilu-rol met ondersteunde editors (zoals Zed, JetBrains, Neovim) via Agent Client Protocol, configureer API-sleutels en -rollen en betrek AI-partners in de ontwikkelingsworkflow.",
 		"title": "IDE-integratie",
 		"heading": "IDE-integratie",
-		"instruction": "Gebruik fount-rollen voor ondersteuning bij het programmeren in ACP-compatibele editors (zoals Zed, JetBrains, Neovim, enz.).",
+		"instruction": "Gebruik beilu-rollen voor ondersteuning bij het programmeren in ACP-compatibele editors (zoals Zed, JetBrains, Neovim, enz.).",
 		"supportedEditorsTitle": "Ondersteunde redacteuren en klanten",
-		"supportedEditorsIntro": "De volgende klanten werken met fount:",
+		"supportedEditorsIntro": "De volgende klanten werken met beilu:",
 		"supportedEditorsLoading": "laden…",
 		"supportedEditorsError": "Kan lijst niet laden: ${message}",
 		"acpTitle": "Configureer het lettertype ACP-script",
@@ -2204,7 +2204,7 @@
 	},
 	"achievements": {
 		"title": "Prestatie",
-		"description": "Ontdek de mijlpalen en prestaties van uw reis met fount. Elke prestatie markeert een stap in jouw unieke verhaal.",
+		"description": "Ontdek de mijlpalen en prestaties van uw reis met beilu. Elke prestatie markeert een stap in jouw unieke verhaal.",
 		"pageHeader": "Hal van prestatie",
 		"pageDescription": "Bekijk hier je ontgrendelde prestaties en mijlpalen.",
 		"unlocked_on": "Ontgrendeld op ${date}",
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "Foutopsporing en systeeminformatie",
-		"description": "Ontvang gedetailleerde foutopsporing en systeeminformatie over uw fount-installatie. Dit is erg handig bij het oplossen van problemen en ondersteuningsverzoeken.",
+		"description": "Ontvang gedetailleerde foutopsporing en systeeminformatie over uw beilu-installatie. Dit is erg handig bij het oplossen van problemen en ondersteuningsverzoeken.",
 		"heading": "Foutopsporing en systeeminformatie",
 		"copyButton": "Kopieer rapport",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount! Badge-omzetter",
+		"title": "beilu! Badge-omzetter",
 		"description": "Voor als uw project om een ​​vleugje karakter vraagt. Converteer schilden.io-badges en geef ze een nieuwe, resonerende identiteit.",
-		"card_title": "fount Badge Link-omzetter",
+		"card_title": "beilu Badge Link-omzetter",
 		"original_url_label": "Plak img.shields.io-URL",
 		"original_url": {
 			"placeholder": "Bijv: https://img.shields.io/badge/Hello-World-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "directory-index",
-		"description": "Blader en verken de bestanden en mappen in de fount-werkruimte.",
+		"description": "Blader en verken de bestanden en mappen in de beilu-werkruimte.",
 		"indexOf": "Index: ${path}",
 		"name": "naam",
 		"mimeType": "MIME-type",

@@ -16,7 +16,7 @@
 				"failed": "Registrazione mDNS non riuscita: ${error}",
 				"bonjourFailed": "Creazione del servizio Bonjour non riuscita: ${error}"
 			},
-			"localUrl": "Accesso a fount da altri dispositivi sulla stessa rete: ${url}",
+			"localUrl": "Accesso a beilu da altri dispositivi sulla stessa rete: ${url}",
 			"update": {
 				"restarting": "È stata scoperta una nuova versione e l'aggiornamento viene riavviato..."
 			}
@@ -31,7 +31,7 @@
 			"instanceRunning": "Un'altra istanza è già in esecuzione.",
 			"runPartLog": "Esegui ${partpath} come ${username}, argomenti: ${args}",
 			"invokePartLog": "Chiama ${partpath} come ${username}, parametro: ${invokedata}",
-			"invalidCommand": "Comando non valido. Usa \"fount run <tipo componente> <nome utente> <nome componente> <parametri...>\".",
+			"invalidCommand": "Comando non valido. Usa \"beilu run <tipo componente> <nome utente> <nome componente> <parametri...>\".",
 			"invalidCommandFormat": "Formato comando non valido.",
 			"unsupportedCommand": "Tipo di comando non supportato.",
 			"processMessageError": "Errore durante l'elaborazione del messaggio IPC: ${error}",
@@ -74,22 +74,22 @@
 			"codeNotifyBody": "Codice di verifica: ${code} (scade tra 60 secondi)"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "Impossibile leggere il file dell'icona: ${error}",
 			"createTrayFailed": "Impossibile creare l'icona nell'area di notifica: ${error}",
 			"items": {
 				"open": {
 					"title": "Apri",
-					"tooltip": "Apri fount"
+					"tooltip": "Apri beilu"
 				},
 				"github": {
 					"title": "GitHub",
-					"tooltip": "Apri il GitHub di fount"
+					"tooltip": "Apri il GitHub di beilu"
 				},
 				"discord": {
 					"title": "Discord",
-					"tooltip": "Apri il Discord di fount"
+					"tooltip": "Apri il Discord di beilu"
 				},
 				"restart": {
 					"title": "Riavvia",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL: protocollo del fount",
+				"description": "URL: protocollo del beilu",
 				"registerFailed": "Impossibile registrare il gestore del protocollo fount://: ${message}",
 				"noUrl": "Errore: URL per il protocollo handle non fornito."
 			},
 			"update": {
-				"skippingFountUpdate": "Poiché il file .noupdate esiste, l'aggiornamento del fount viene ignorato",
+				"skippingBeiluUpdate": "Poiché il file .noupdate esiste, l'aggiornamento del beilu viene ignorato",
 				"skippingDenoUpgradeDocker": "Salta l'aggiornamento di Deno nell'ambiente Docker"
 			},
 			"shortcut": {
@@ -131,7 +131,7 @@
 				"createDesktopAppFailed": "Errore: impossibile creare l'applicazione desktop."
 			},
 			"git": {
-				"repoNotFound": "Impossibile trovare il repository git del fount. Inizializzandone uno nuovo...",
+				"repoNotFound": "Impossibile trovare il repository git del beilu. Inizializzandone uno nuovo...",
 				"fetchingAndResetting": "Recupero dal repository remoto e ripristino del master...",
 				"localChangesDetected": "Rilevate modifiche locali, le differenze verranno salvate prima della sovrascrittura.",
 				"backupSavedTo": "Un backup delle modifiche locali è stato salvato in: ${path}",
@@ -151,9 +151,9 @@
 			},
 			"deno": {
 				"missing": "Deno non trovato, installazione automatica...",
-				"isRequired": "Deno non trovato, fount non può essere eseguita senza Deno",
+				"isRequired": "Deno non trovato, beilu non può essere eseguita senza Deno",
 				"installingTermux": "Installazione di Deno per Termux...",
-				"installFailedFallback": "Installazione di Deno non riuscita, tentativo di installazione automatica nella cartella del percorso del fount...",
+				"installFailedFallback": "Installazione di Deno non riuscita, tentativo di installazione automatica nella cartella del percorso del beilu...",
 				"notWorking": "Per qualche motivo Deno non funziona, potresti voler iscriverti a https://discord.gg/deno per ricevere supporto",
 				"upgradeFailed": "Avvertenza: l'aggiornamento di Deno potrebbe non essere riuscito. Si prega di verificare la presenza di errori.",
 				"upgradeFailedTermux": "Comando di aggiornamento Deno non riuscito, tentativo di reinstallare Deno per Termux...",
@@ -166,8 +166,8 @@
 				"packageFailed": "Errore: installazione di ${package} non riuscita.",
 				"browserMissing": "Browser predefinito non rilevato, tentativo di installazione...",
 				"untrustedPartsWarning": "Non installare componenti di font non attendibili sul tuo sistema, possono fare qualsiasi cosa.",
-				"rootWarning1": "Non consigliato: l'esecuzione del fount come root garantisce l'accesso completo al sistema a tutti i componenti del fount.",
-				"rootWarning2": "A meno che tu non sappia cosa stai facendo, si consiglia di eseguire fount come utente normale."
+				"rootWarning1": "Non consigliato: l'esecuzione del beilu come root garantisce l'accesso completo al sistema a tutti i componenti del beilu.",
+				"rootWarning2": "A meno che tu non sappia cosa stai facendo, si consiglia di eseguire beilu come utente normale."
 			},
 			"clean": {
 				"removingCaches": "Rimozione cache...",
@@ -176,30 +176,30 @@
 				"cleaningOldPwshModules": "Ripulire i vecchi moduli pwsh..."
 			},
 			"keepalive": {
-				"initComplete": "Reinizializzazione completata. Tentativo di riavviare fount...",
-				"autoInitDisabled": "fount è stato riavviato più volte nell'ultimo breve periodo di tempo, ma la reinizializzazione automatica è stata disabilitata a causa della presenza del file .noautoinit. In uscita.",
+				"initComplete": "Reinizializzazione completata. Tentativo di riavviare beilu...",
+				"autoInitDisabled": "beilu è stato riavviato più volte nell'ultimo breve periodo di tempo, ma la reinizializzazione automatica è stata disabilitata a causa della presenza del file .noautoinit. In uscita.",
 				"restartingTooFast": "La fonte è stata riavviata più volte in un breve periodo di tempo. Reinizializzazione forzata...",
 				"failedToStart": "Anche dopo i tentativi di riparazione automatica, la fontana non si avvia per un breve periodo di tempo. Si prega di verificare la presenza di errori nei log.",
-				"initFailed": "Inizializzazione del fount non riuscita. In uscita."
+				"initFailed": "Inizializzazione del beilu non riuscita. In uscita."
 			},
 			"remove": {
-				"removingFount": "Rimozione di fount...",
-				"fountUninstallationComplete": "disinstallazione di fount completata.",
-				"removingFountInstallationDir": "Rimozione della directory di installazione di fount in corso...",
-				"fountInstallationDirRemoved": "La directory di installazione di fount è stata rimossa.",
-				"removingFountFromPath": "Rimozione del fount dal PERCORSO...",
+				"removingBeilu": "Rimozione di beilu...",
+				"beiluUninstallationComplete": "disinstallazione di beilu completata.",
+				"removingBeiluInstallationDir": "Rimozione della directory di installazione di beilu in corso...",
+				"beiluInstallationDirRemoved": "La directory di installazione di beilu è stata rimossa.",
+				"removingBeiluFromPath": "Rimozione del beilu dal PERCORSO...",
 				"removingProtocolHandler": "Rimozione del gestore del protocollo fount:// in corso...",
 				"protocolHandlerRemoved": "Il gestore del protocollo fount:// è stato rimosso.",
 				"removeProtocolHandlerFailed": "Impossibile rimuovere il gestore del protocollo fount://: ${message}",
-				"removingFountFromGitSafeDir": "Rimozione di font da git safe.directory...",
+				"removingBeiluFromGitSafeDir": "Rimozione di font da git safe.directory...",
 				"removingInstalledSystemPackages": "Rimozione dei pacchetti di sistema installati...",
 				"uninstallingDeno": "Disinstallazione di Deno...",
 				"removeDenoFailed": "Impossibile rimuovere Deno: ${message}",
-				"removingFountPwshFromProfile": "Rimozione di font-pwsh dal profilo PowerShell in corso...",
-				"fountPwshRemovedFromProfile": "font-pwsh è stato rimosso dal profilo PowerShell.",
+				"removingBeiluPwshFromProfile": "Rimozione di font-pwsh dal profilo PowerShell in corso...",
+				"beiluPwshRemovedFromProfile": "font-pwsh è stato rimosso dal profilo PowerShell.",
 				"pwshProfileNotFound": "Profilo PowerShell non trovato, verrà ignorata la rimozione di font-pwsh dal profilo.",
-				"uninstallingFountPwsh": "Disinstallazione di font-pwsh in corso...",
-				"uninstallFountPwshFailed": "Disinstallazione di font-pwsh non riuscita: ${message}",
+				"uninstallingBeiluPwsh": "Disinstallazione di font-pwsh in corso...",
+				"uninstallBeiluPwshFailed": "Disinstallazione di font-pwsh non riuscita: ${message}",
 				"removingTerminalProfile": "Rimozione del profilo terminale di Windows...",
 				"terminalProfileRemoved": "La directory del profilo terminale di Windows è stata rimossa.",
 				"terminalProfileNotFound": "Directory del profilo terminale di Windows non trovata.",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "Benvenuto in fount!",
+		"title": "Benvenuto in beilu!",
 		"description": "Segui l'avanzamento dell'installazione e scopri le funzionalità all'interno. font sarà pronto per il lancio in un attimo.",
 		"hero": {
 			"title": "Una Scintilla di Pensiero, un Compagno per l'Anima.",
-			"description": "fount è una piattaforma di interazione con personaggi basata sull'IA, progettata per dare più potere a <i>te</i>. È un ponte che ti connette con i personaggi della tua immaginazione, permettendoti di parlare facilmente con loro, creare i tuoi personaggi e condividerli con il mondo."
+			"description": "beilu è una piattaforma di interazione con personaggi basata sull'IA, progettata per dare più potere a <i>te</i>. È un ponte che ti connette con i personaggi della tua immaginazione, permettendoti di parlare facilmente con loro, creare i tuoi personaggi e condividerli con il mondo."
 		},
 		"feature1": {
 			"title": "Dialoghi fluidi, ovunque",
-			"description": "Inizia a chattare sul tuo computer e prosegui senza interruzioni sul tuo telefono o tablet. fount mantiene sincronizzate le tue conversazioni, così puoi restare in contatto con il tuo personaggio ovunque tu vada. Funziona su Windows, macOS, Linux e persino Android."
+			"description": "Inizia a chattare sul tuo computer e prosegui senza interruzioni sul tuo telefono o tablet. beilu mantiene sincronizzate le tue conversazioni, così puoi restare in contatto con il tuo personaggio ovunque tu vada. Funziona su Windows, macOS, Linux e persino Android."
 		},
 		"feature2": {
 			"title": "Interfaccia elegante e personalizzabile",
-			"description": "Scegli tra oltre 30 temi magnifici o crea il tuo. fount è la tua tela personale. Esprimiti, personalizza l'ambiente secondo le tue preferenze e vivi un'esperienza davvero unica."
+			"description": "Scegli tra oltre 30 temi magnifici o crea il tuo. beilu è la tua tela personale. Esprimiti, personalizza l'ambiente secondo le tue preferenze e vivi un'esperienza davvero unica."
 		},
 		"feature3": {
 			"title": "Chat espressiva e coinvolgente",
-			"description": "fount sfrutta la potenza dell'HTML, consentendo ai personaggi di esprimersi attraverso testo formattato, immagini e persino elementi interattivi. Partecipa a chat di gruppo dinamiche e avvincenti con più personaggi contemporaneamente."
+			"description": "beilu sfrutta la potenza dell'HTML, consentendo ai personaggi di esprimersi attraverso testo formattato, immagini e persino elementi interattivi. Partecipa a chat di gruppo dinamiche e avvincenti con più personaggi contemporaneamente."
 		},
 		"feature4": {
 			"title": "Integrazione illimitata con sorgenti IA",
-			"description": "fount offre scelta e flessibilità senza pari. Connettiti a <i>qualsiasi</i> sorgente IA: OpenAI, Claude, OpenRouter, NovelAI, ecc. La logica di comunicazione sarà modellata dalla potenza del codice, secondo i <i>tuoi</i> desideri."
+			"description": "beilu offre scelta e flessibilità senza pari. Connettiti a <i>qualsiasi</i> sorgente IA: OpenAI, Claude, OpenRouter, NovelAI, ecc. La logica di comunicazione sarà modellata dalla potenza del codice, secondo i <i>tuoi</i> desideri."
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "Ecco un mini-gioco per passare il tempo."
 		},
 		"data_showcase": {
-			"title_prefix": "fount è il più ",
+			"title_prefix": "beilu è il più ",
 			"title_of": " ",
 			"active_users": "Utenti attivi",
 			"stars": "Stelle di GitHub",
@@ -289,22 +289,22 @@
 		"footer": {
 			"ready_text": "Pronto per iniziare il tuo viaggio?",
 			"wait_text": "Attendi un momento...",
-			"open_fount": "Apri fount",
-			"open_or_install_fount": "Apri/Installa fount",
+			"open_beilu": "Apri beilu",
+			"open_or_install_beilu": "Apri/Installa beilu",
 			"error_message": "Uffa :(\n\nSi è verificato un errore:\n${error}"
 		},
 		"error": {
 			"title": "Installazione non riuscita!",
-			"description": "Sembra esserci un problema con il programma di installazione di fount.",
+			"description": "Sembra esserci un problema con il programma di installazione di beilu.",
 			"connection_failed": "Connessione non riuscita!",
-			"description1": "Sembra esserci un problema con il programma di installazione di fount.",
+			"description1": "Sembra esserci un problema con il programma di installazione di beilu.",
 			"description2": "Controlla il tuo terminale e riprova.",
 			"close_page": "Chiudi pagina"
 		}
 	},
 	"protocolhandler": {
-		"title": "Gestione Protocollo fount",
-		"description": "Silenziosamente ed efficientemente, questa pagina traduce il tuo intento in una transizione senza soluzione di continuità all'interno di fount. Considerala la magia silenziosa dietro le quinte.",
+		"title": "Gestione Protocollo beilu",
+		"description": "Silenziosamente ed efficientemente, questa pagina traduce il tuo intento in una transizione senza soluzione di continuità all'interno di beilu. Considerala la magia silenziosa dietro le quinte.",
 		"processing": "Elaborazione del protocollo in corso...",
 		"shellCommandSent": "Comando shell inviato.",
 		"runPartConfirm": {
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "Host offline",
-			"message": "L'host fount ${hostUrl} sembra essere offline. Vuoi riprovare?",
+			"message": "L'host beilu ${hostUrl} sembra essere offline. Vuoi riprovare?",
 			"buttons": {
 				"start": "Avviare",
 				"retry": "Riprova"
 			}
 		},
-		"fountNotFound": "Uffa :(\n\nfount non trovato. Forse devi prima installarlo?",
+		"beiluNotFound": "Uffa :(\n\nbeilu non trovato. Forse devi prima installarlo?",
 		"invalidProtocol": "Protocollo non valido.",
 		"insufficientParams": "Parametri insufficienti.",
 		"unknownCommand": "Comando sconosciuto.",
@@ -330,14 +330,14 @@
 		"unknownError": "Uffa :(\n\nSi è verificato un errore:\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
-		"description": "Benvenuti alla soglia di fount. Un breve momento di preparazione, prima di entrare nel vivo delle conversazioni e delle storie in attesa di svolgersi."
+		"title": "beilu!",
+		"description": "Benvenuti alla soglia di beilu. Un breve momento di preparazione, prima di entrare nel vivo delle conversazioni e delle storie in attesa di svolgersi."
 	},
 	"tutorial": {
 		"title": "Ti va un tutorial?",
 		"description": "Camminiamo con voi attraverso il mondo di font. Questo tutorial interattivo illuminerà il percorso, aiutandoti a scoprire la magia intessuta nel suo nucleo. La tua avventura inizia con la comprensione.",
 		"modal": {
-			"title": "Benvenuto in fount!",
+			"title": "Benvenuto in beilu!",
 			"instruction": "Vuoi seguire il tutorial per principianti?",
 			"buttons": {
 				"start": "Inizia il tutorial",
@@ -381,7 +381,7 @@
 	"auth": {
 		"title": "Autenticazione",
 		"subtitle": "I dati utente sono archiviati localmente.",
-		"description": "Qui definisci la tua presenza. Che tu voglia tornare in un rifugio familiare o dare forma a un nuovo spazio per le tue storie, è qui che inizia il tuo viaggio con fount.",
+		"description": "Qui definisci la tua presenza. Che tu voglia tornare in un rifugio familiare o dare forma a un nuovo spazio per le tue storie, è qui che inizia il tuo viaggio con beilu.",
 		"usernameLabel": "Nome utente:",
 		"usernameInput": {
 			"placeholder": "Inserisci il tuo nome utente"
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "Vuoto...<br/>Forse potresti [creare una nuova parte](${newpartLink}) o andare sul [server Discord di fount](${discordLink}) per divertirti un po'?"
+			"message": "Vuoto...<br/>Forse potresti [creare una nuova parte](${newpartLink}) o andare sul [server Discord di beilu](${discordLink}) per divertirti un po'?"
 		},
 		"part_pages": {
 			"default": {
@@ -630,7 +630,7 @@
 				}
 			}
 		},
-		"escapeConfirm": "Sei sicuro di voler uscire da fount?",
+		"escapeConfirm": "Sei sicuro di voler uscire da beilu?",
 		"alerts": {
 			"fetchHomeRegistryFailed": "Impossibile recuperare le informazioni del registro home."
 		},
@@ -672,14 +672,14 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "Genera informazioni sui componenti del carattere"
 			}
 		}
 	},
 	"chat": {
 		"title": "Chat",
-		"description": "Dove le parole prendono il volo e le storie si svelano. Interagisci con i tuoi compagni IA, dai forma alla narrazione e perditi nel flusso e riflusso del dialogo digitale. Qui batte il cuore di fount.",
+		"description": "Dove le parole prendono il volo e le storie si svelano. Interagisci con i tuoi compagni IA, dai forma alla narrazione e perditi nel flusso e riflusso del dialogo digitale. Qui batte il cuore di beilu.",
 		"new": {
 			"title": "Nuova chat",
 			"description": "La silenziosa anticipazione di una storia ancora non scritta. Inizia una nuova chat, una tabula rasa per nuove interazioni e narrazioni in evoluzione con i tuoi compagni scelti."
@@ -921,7 +921,7 @@
 			"first_chat": {
 				"name": "ciao straniero",
 				"description": "Il primo messaggio è stato inviato e la storia ha inizio.",
-				"locked_description": "Invia il tuo primo messaggio con qualsiasi fount."
+				"locked_description": "Invia il tuo primo messaggio con qualsiasi beilu."
 			},
 			"multiplayer_chat": {
 				"name": "La stagione di White Album",
@@ -935,8 +935,8 @@
 			},
 			"code_greeting": {
 				"name": "Saluta con il codice",
-				"description": "\"Ciao, fount!\"",
-				"locked_description": "Esegui un blocco di codice che stampi 'hello fount!'."
+				"description": "\"Ciao, beilu!\"",
+				"locked_description": "Esegui un blocco di codice che stampi 'hello beilu!'."
 			}
 		},
 		"dragAndDrop": {
@@ -1120,7 +1120,7 @@
 	},
 	"import": {
 		"title": "Importa",
-		"description": "Porta i tuoi amati personaggi, mondi e configurazioni nell'abbraccio di fount. Che si tratti di un file o di un testo incollato, è qui che i nuovi elementi si intrecciano nel tuo arazzo personale.",
+		"description": "Porta i tuoi amati personaggi, mondi e configurazioni nell'abbraccio di beilu. Che si tratti di un file o di un testo incollato, è qui che i nuovi elementi si intrecciano nel tuo arazzo personale.",
 		"tabs": {
 			"tabsLabel": {
 				"aria-label": "Selezione del tipo di importazione"
@@ -1283,7 +1283,7 @@
 	},
 	"uninstall": {
 		"title": "Disinstalla",
-		"description": "Se scegli di separarti, questo spazio consente un grazioso addio. Confermare la rimozione dei componenti o fount stesso. Le strade divergono, ma i ricordi possono rimanere.",
+		"description": "Se scegli di separarti, questo spazio consente un grazioso addio. Confermare la rimozione dei componenti o beilu stesso. Le strade divergono, ma i ricordi possono rimanere.",
 		"titleWithName": "Disinstalla ${type}/${name}",
 		"confirmMessage": "Sei sicuro di voler disinstallare ${type}: ${name}?",
 		"invalidParamsTitle": "Parametri non validi",
@@ -1432,9 +1432,9 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "subfounts: gestione dei dispositivi peer-to-peer",
-		"pageTitle": "subfounts",
+	"subbeilus": {
+		"title": "subbeilus: gestione dei dispositivi peer-to-peer",
+		"pageTitle": "subbeilus",
 		"description": "Gestisci le connessioni di fontane peer-to-peer",
 		"hostConnectionCode": {
 			"title": "Codice di connessione all'host",
@@ -1447,9 +1447,9 @@
 			"passwordCopied": "Password copiata negli appunti",
 			"regenerateSuccess": "Il codice di connessione è stato rigenerato"
 		},
-		"connectedSubfounts": {
+		"connectedSubbeilus": {
 			"title": "Sottofonte collegata",
-			"noSubfountsConnected": "Nessuna fonte secondaria è collegata",
+			"noSubbeilusConnected": "Nessuna fonte secondaria è collegata",
 			"table": {
 				"id": "ID",
 				"description": "Osservazione",
@@ -1467,15 +1467,15 @@
 		},
 		"codeExecution": {
 			"title": "esecuzione del codice",
-			"description": "Esegui il codice JavaScript sulla subfount selezionata",
-			"selectSubfountLabel": "Seleziona la subfount",
-			"selectSubfountPlaceholder": "Seleziona la subfount su cui eseguire il codice...",
+			"description": "Esegui il codice JavaScript sulla subbeilu selezionata",
+			"selectSubbeiluLabel": "Seleziona la subbeilu",
+			"selectSubbeiluPlaceholder": "Seleziona la subbeilu su cui eseguire il codice...",
 			"hostOption": "Ospite (ID: ${id})",
-			"subfountOption": "Estensione ${id}${deviceId}",
+			"subbeiluOption": "Estensione ${id}${deviceId}",
 			"scriptLabel": "Codice JavaScript",
 			"executeButton": "esegui",
 			"executing": "In esecuzione...",
-			"noSubfountSelected": "Seleziona prima una subfount",
+			"noSubbeiluSelected": "Seleziona prima una subbeilu",
 			"noScriptProvided": "Inserisci il codice da eseguire",
 			"executionSuccess": "Esecuzione del codice riuscita",
 			"executionFailed": "Esecuzione del codice non riuscita: ${message}"
@@ -1483,7 +1483,7 @@
 		"downloadClient": {
 			"title": "Scarica il client dei font secondari",
 			"description": "Scarica lo script client del subfont autonomo da eseguire sul dispositivo remoto.",
-			"downloadButton": "Scarica subfount.mjs"
+			"downloadButton": "Scarica subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "Impossibile caricare il codice di connessione: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "In fase di sviluppo",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "sottodispositivo",
 						"sub_items": {
 							"main": {
@@ -1646,7 +1646,7 @@
 	"part_config": {
 		"title": "Configurazione Componente",
 		"pageTitle": "Configurazione Componente",
-		"description": "Scruta nel cuore di fount. Qui puoi regolare le impostazioni dei suoi diversi componenti, mettendo a punto il motore che guida la tua esperienza.",
+		"description": "Scruta nel cuore di beilu. Qui puoi regolare le impostazioni dei suoi diversi componenti, mettendo a punto il motore che guida la tua esperienza.",
 		"labels": {
 			"part": "Seleziona componente"
 		},
@@ -1778,7 +1778,7 @@
 	},
 	"discord_bots": {
 		"title": "Bot Discord",
-		"description": "Dai voce ai tuoi compagni di fount nelle vivaci sale di Discord. Configura la loro presenza, gestisci le loro operazioni e consenti loro di collegare i mondi, un server alla volta.",
+		"description": "Dai voce ai tuoi compagni di beilu nelle vivaci sale di Discord. Configura la loro presenza, gestisci le loro operazioni e consenti loro di collegare i mondi, un server alla volta.",
 		"cardTitle": "Bot Discord",
 		"botSelectDropdown": {
 			"placeholder": "Scegli un bot"
@@ -1932,13 +1932,13 @@
 		"title": "Integrazione del browser",
 		"description": "Colma il divario tra font e web. Questa pagina fornisce lo script utente per consentire un'integrazione perfetta, portando i tuoi compagni AI nella tua esperienza di navigazione.",
 		"pageHeader": "Integrazione del browser",
-		"pageDescription": "Affinché il ruolo di fount interagisca con la pagina Web, è necessario installare questo script di integrazione del browser. Agisce come un ponte tra il personaggio e il browser, consentendo loro di visualizzare il contenuto della pagina ed eseguire azioni.",
+		"pageDescription": "Affinché il ruolo di beilu interagisca con la pagina Web, è necessario installare questo script di integrazione del browser. Agisce come un ponte tra il personaggio e il browser, consentendo loro di visualizzare il contenuto della pagina ed eseguire azioni.",
 		"install_script_title": "Script di installazione",
 		"install_script_description": "Fai clic sul pulsante in basso per installare lo script di integrazione del browser. È necessario prima installare un gestore di userscript come Tampermonkey.",
 		"install_button": "Installare",
 		"install_from_url_tip": "Il tuo browser non ti consente di installarlo? Copia questo URL e importa lo script dall'URL nel plugin Tampermonkey.",
 		"what_is_manager": "Cos'è un gestore di userscript?",
-		"manager_explanation": "Un gestore di userscript è un'estensione del browser che consente di installare ed eseguire script che modificano le pagine Web. Per utilizzare lo script di integrazione fount, è necessario una delle estensioni.",
+		"manager_explanation": "Un gestore di userscript è un'estensione del browser che consente di installare ed eseguire script che modificano le pagine Web. Per utilizzare lo script di integrazione beilu, è necessario una delle estensioni.",
 		"popular_managers": "Scelte popolari:",
 		"csp_warning": "Potrebbe essere necessario installare il plug -in per disattivare CSP per far funzionare correttamente la funzione di integrazione. Per ${browser} è possibile utilizzare [questo plug-in](${link}).",
 		"connected_pages_title": "Pagina connessa",
@@ -1996,10 +1996,10 @@
 				"description": "\"A nome mio, comanda il browser...\"",
 				"locked_description": "Esegui il codice JavaScript una volta nel browser."
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "stella open source",
-				"description": "Dai una stella a fount su GitHub, grazie per il tuo supporto!",
-				"locked_description": "Visita il repository GitHub di fount e metti una stella."
+				"description": "Dai una stella a beilu su GitHub, grazie per il tuo supporto!",
+				"locked_description": "Visita il repository GitHub di beilu e metti una stella."
 			}
 		},
 		"home_function_buttons": {
@@ -2015,20 +2015,20 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "È disponibile una nuova versione dello script di integrazione del browser fount. La pagina di aggiornamento è ora aperta?"
+			"prompt": "È disponibile una nuova versione dello script di integrazione del browser beilu. La pagina di aggiornamento è ora aperta?"
 		},
-		"csp_warning": "Lo script di integrazione del browser fount rileva che la politica CSP esiste sulla pagina, che può impedire il corretto funzionamento dello script di integrazione. Si prega di considerare l'installazione del plug -in per disattivare il CSP.",
+		"csp_warning": "Lo script di integrazione del browser beilu rileva che la politica CSP esiste sulla pagina, che può impedire il corretto funzionamento dello script di integrazione. Si prega di considerare l'installazione del plug -in per disattivare il CSP.",
 		"hostChange": {
-			"securityWarningTitle": "--- Avviso di sicurezza fount ---",
-			"message": "La pagina corrente (\"${origin}\") sta cercando di modificare l'indirizzo host di fount in:\n\n\"${newHost}\"\n\nATTENZIONE: l'approvazione di questa azione consentirà al nuovo host di controllare completamente le funzionalità di integrazione del browser, che possono portare a perdite di informazioni sensibili o furto di account.\nL'approvazione dovrebbe essere effettuata solo se sei sicuro che questa è la tua operazione (ad esempio, migrare un server fount).\n\nSei sicuro di voler consentire questo cambiamento?",
-			"uuidMismatchError": "Errore di sicurezza fount: Identity (UUID) dell'host ${newHost} non corrisponde a quello esistente. L'operazione è stata annullata.",
-			"verificationError": "Errore di sicurezza fount: impossibile verificare il nuovo host \"${newHost}\". Si prega di verificare se l'indirizzo è corretto e se il servizio è in esecuzione."
+			"securityWarningTitle": "--- Avviso di sicurezza beilu ---",
+			"message": "La pagina corrente (\"${origin}\") sta cercando di modificare l'indirizzo host di beilu in:\n\n\"${newHost}\"\n\nATTENZIONE: l'approvazione di questa azione consentirà al nuovo host di controllare completamente le funzionalità di integrazione del browser, che possono portare a perdite di informazioni sensibili o furto di account.\nL'approvazione dovrebbe essere effettuata solo se sei sicuro che questa è la tua operazione (ad esempio, migrare un server beilu).\n\nSei sicuro di voler consentire questo cambiamento?",
+			"uuidMismatchError": "Errore di sicurezza beilu: Identity (UUID) dell'host ${newHost} non corrisponde a quello esistente. L'operazione è stata annullata.",
+			"verificationError": "Errore di sicurezza beilu: impossibile verificare il nuovo host \"${newHost}\". Si prega di verificare se l'indirizzo è corretto e se il servizio è in esecuzione."
 		}
 	},
 	"terminal_assistant": {
 		"title": "Assistente Terminale",
-		"description": "Oltre l'interfaccia grafica, uno spazio per il comando diretto. Interagisci con il nucleo di fount attraverso l'assistente terminale, dove il testo intreccia la propria potente magia.",
-		"initialMessage": "fount supporta l'integrazione dei tuoi personaggi preferiti nel terminale per assisterti nella programmazione!",
+		"description": "Oltre l'interfaccia grafica, uno spazio per il comando diretto. Interagisci con il nucleo di beilu attraverso l'assistente terminale, dove il testo intreccia la propria potente magia.",
+		"initialMessage": "beilu supporta l'integrazione dei tuoi personaggi preferiti nel terminale per assisterti nella programmazione!",
 		"initialMessageLink": "Clicca qui per saperne di più.",
 		"achievements": {
 			"invoke_shell_assist": {
@@ -2105,15 +2105,15 @@
 		}
 	},
 	"access": {
-		"title": "Accedi a fount su altri dispositivi",
-		"description": "Estendi la portata di fount oltre un singolo schermo. Qui si trova il gateway – un URL, un codice QR – per connetterti con i tuoi compagni da altri dispositivi, un semplice ponte attraverso l’etere locale.",
-		"heading": "Vuoi accedere a fount da altri dispositivi?",
+		"title": "Accedi a beilu su altri dispositivi",
+		"description": "Estendi la portata di beilu oltre un singolo schermo. Qui si trova il gateway – un URL, un codice QR – per connetterti con i tuoi compagni da altri dispositivi, un semplice ponte attraverso l’etere locale.",
+		"heading": "Vuoi accedere a beilu da altri dispositivi?",
 		"instruction": {
-			"sameLAN": "Assicurati che il dispositivo e l'host fount siano sulla stessa rete locale.",
+			"sameLAN": "Assicurati che il dispositivo e l'host beilu siano sulla stessa rete locale.",
 			"accessthis": "Visita questo URL:"
 		},
 		"QRcode": {
-			"alt": "Scansiona questo codice QR per accedere a fount"
+			"alt": "Scansiona questo codice QR per accedere a beilu"
 		},
 		"urlInput": {
 			"aria-label": "URL"
@@ -2128,9 +2128,9 @@
 	},
 	"proxy": {
 		"title": "Proxy API",
-		"description": "Per sviluppatori e integratori, questa pagina svela il proxy API di fount: la tua connessione per integrare le funzionalità di fount in altre applicazioni.",
+		"description": "Per sviluppatori e integratori, questa pagina svela il proxy API di beilu: la tua connessione per integrare le funzionalità di beilu in altre applicazioni.",
 		"heading": "Gateway Proxy API",
-		"instruction": "Genera e gestisci le tue chiavi API in questa pagina per integrare fount con altre applicazioni.",
+		"instruction": "Genera e gestisci le tue chiavi API in questa pagina per integrare beilu con altre applicazioni.",
 		"endpointSectionTitle": "Endpoint API",
 		"endpointInstruction": "Questo è l'URL di base per l'integrazione con altri servizi.",
 		"apiUrlInput": {
@@ -2161,16 +2161,16 @@
 		}
 	},
 	"ide_integration": {
-		"description": "Connetti il ruolo fount agli editor supportati (come Zed, JetBrains, Neovim) tramite il protocollo Agent Client, configura chiavi e ruoli API e coinvolgi i partner AI nel flusso di lavoro di sviluppo.",
+		"description": "Connetti il ruolo beilu agli editor supportati (come Zed, JetBrains, Neovim) tramite il protocollo Agent Client, configura chiavi e ruoli API e coinvolgi i partner AI nel flusso di lavoro di sviluppo.",
 		"title": "Integrazione dell'IDE",
 		"heading": "Integrazione dell'IDE",
-		"instruction": "Utilizzare i ruoli fount per assistere nella programmazione negli editor abilitati ACP (come Zed, JetBrains, Neovim, ecc.).",
+		"instruction": "Utilizzare i ruoli beilu per assistere nella programmazione negli editor abilitati ACP (come Zed, JetBrains, Neovim, ecc.).",
 		"supportedEditorsTitle": "Editor e clienti supportati",
-		"supportedEditorsIntro": "I seguenti client funzionano con fount:",
+		"supportedEditorsIntro": "I seguenti client funzionano con beilu:",
 		"supportedEditorsLoading": "caricamento…",
 		"supportedEditorsError": "Impossibile caricare l'elenco: ${message}",
-		"acpTitle": "Configura lo script ACP fount",
-		"acpDesc": "Fare riferimento al seguente esempio per configurare lo script ACP fount:",
+		"acpTitle": "Configura lo script ACP beilu",
+		"acpDesc": "Fare riferimento al seguente esempio per configurare lo script ACP beilu:",
 		"acpCharLabel": "Ruolo",
 		"acpCharPlaceholder": "Seleziona ruolo",
 		"charListError": "Impossibile ottenere l'elenco dei ruoli",
@@ -2196,9 +2196,9 @@
 		},
 		"achievements": {
 			"first_ide_use": {
-				"name": "Prima volta che utilizzo il fount in un IDE esterno",
-				"description": "Per la prima volta, utilizza i ruoli fount per assistere nella programmazione negli editor abilitati ACP come Zed, JetBrains, Neovim e altri.",
-				"locked_description": "Connettersi al ruolo fount in un IDE esterno e completare una sessione."
+				"name": "Prima volta che utilizzo il beilu in un IDE esterno",
+				"description": "Per la prima volta, utilizza i ruoli beilu per assistere nella programmazione negli editor abilitati ACP come Zed, JetBrains, Neovim e altri.",
+				"locked_description": "Connettersi al ruolo beilu in un IDE esterno e completare una sessione."
 			}
 		}
 	},
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "Debug e informazioni di sistema",
-		"description": "Ottieni informazioni dettagliate sul debug e sul sistema sull'installazione di fount. Questo è molto utile per la risoluzione dei problemi e le richieste di supporto.",
+		"description": "Ottieni informazioni dettagliate sul debug e sul sistema sull'installazione di beilu. Questo è molto utile per la risoluzione dei problemi e le richieste di supporto.",
 		"heading": "Debug e informazioni di sistema",
 		"copyButton": "Copia rapporto",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount! Convertitore di Badge",
+		"title": "beilu! Convertitore di Badge",
 		"description": "Per quando il tuo progetto richiede un tocco di carattere di font. Converti i badge Shields.io, conferendo loro una nuova identità risonante.",
-		"card_title": "Convertitore di Link Badge fount",
+		"card_title": "Convertitore di Link Badge beilu",
 		"original_url_label": "Incolla URL img.shields.io",
 		"original_url": {
 			"placeholder": "Ad esempio: https://img.shields.io/badge/hello-world-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "Indice della directory",
-		"description": "Sfoglia ed esplora i file e le cartelle nell'area di lavoro di fount.",
+		"description": "Sfoglia ed esplora i file e le cartelle nell'area di lavoro di beilu.",
 		"indexOf": "Indice: ${path}",
 		"name": "nome",
 		"mimeType": "Tipo MIME",

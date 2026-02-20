@@ -5,15 +5,13 @@
 	<meta charset="UTF-8" />
 	<meta name="darkreader-lock" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<meta property="og:title" content="The Threshold of Self: Entering Your fount Sanctuary" />
-	<meta property="og:url" content="https://steve02081504.github.io/fount/protocol?url=fount://page/login/" />
+	<meta property="og:title" content="beilu-与你之诗" />
 	<meta property="og:type" content="website" />
-	<meta property="og:description" content="Here, you define your presence. Whether returning to a familiar haven or shaping a new space for your stories, this is where your journey with fount begins." />
-	<meta name="description" content="Here, you define your presence. Whether returning to a familiar haven or shaping a new space for your stories, this is where your journey with fount begins." />
-	<meta property="og:image" content="https://repository-images.githubusercontent.com/862251163/0ac90205-ae40-4fc6-af67-1e28d074c76b" />
-	<title data-i18n="auth.title"></title>
+	<meta property="og:description" content="选择你的身份，开始与贝露的旅程。" />
+	<meta name="description" content="选择你的身份，开始与贝露的旅程。" />
+	<title>登录 — beilu-与你之诗</title>
 	<link rel="icon" href="/favicon.ico" />
-	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="icon" href="/favicon.png" type="image/png" />
 	<link rel="manifest" href="/manifest.json" />
 	<script blocking="render" type="module" src="/preload.mjs"></script>
 	<link href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
@@ -25,64 +23,95 @@
 
 <body class="flex flex-col min-h-screen">
 	<main class="flex-grow hero">
-		<div class="hero-content flex-col lg:flex-row">
-			<div class="text-center lg:text-right lg:pr-8">
-				<h1 class="text-5xl font-bold" id="form-title"></h1>
-				<p class="py-6" data-i18n="auth.subtitle"></p>
+		<div class="hero-content flex-col w-full max-w-lg">
+
+			<!-- 视图1: 用户选择 -->
+			<div id="view-user-select" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-6">选择用户</h1>
+				<div id="user-list" class="flex flex-col gap-3 mb-4">
+					<!-- 用户卡片将动态插入 -->
+				</div>
+				<div class="divider">或</div>
+				<button class="btn btn-primary w-full" id="btn-create-new">创建新用户</button>
 			</div>
-			<div class="card shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
-				<div class="card-body">
-					<form id="auth-form">
-						<p class="text-error text-xs" id="error-message"></p>
+
+			<!-- 视图2: 创建用户 -->
+			<div id="view-create-user" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-6">创建新用户</h1>
+				<div class="card shrink-0 w-full shadow-2xl bg-base-100">
+					<div class="card-body">
+						<p class="text-error text-xs" id="create-error-message"></p>
 						<div class="form-control">
-							<label class="label" for="username">
-								<span class="label-text" data-i18n="auth.usernameLabel"></span>
+							<label class="label" for="create-username">
+								<span class="label-text">用户名</span>
 							</label>
-							<input type="text" id="username" name="username" class="input" required data-i18n="auth.usernameInput" autocomplete="username" />
+							<input type="text" id="create-username" class="input input-bordered" placeholder="输入你的名字" required autocomplete="username" />
 						</div>
-						<div class="form-control">
-							<label class="label" for="password">
-								<span class="label-text" data-i18n="auth.passwordLabel"></span>
+						<div class="form-control mt-4">
+							<label class="label">
+								<span class="label-text">认证方式</span>
 							</label>
-							<input type="password" id="password" name="password" class="input" required data-i18n="auth.passwordInput" autocomplete="current-password" />
-							<div id="password-strength-feedback" class="text-xs mt-1"></div>
-						</div>
-						<div class="form-control" id="confirm-password-group">
-							<label class="label" for="confirm-password">
-								<span class="label-text" data-i18n="auth.confirmPasswordLabel"></span>
-							</label>
-							<input type="password" id="confirm-password" name="confirm-password" class="input" data-i18n="auth.confirmPasswordInput" autocomplete="new-password">
-						</div>
-						<div class="form-control" id="verification-code-group">
-							<label class="label" for="verification-code">
-								<span class="label-text" data-i18n="auth.verificationCodeLabel"></span>
-							</label>
-							<div class="flex gap-2">
-								<input type="text" id="verification-code" name="verification-code" class="input" required data-i18n="auth.verificationCodeInput" autocomplete="one-time-code" />
-								<button class="btn btn-primary" type="button" id="send-verification-code-btn" data-i18n="auth.sendCodeButton"></button>
+							<div class="flex gap-3">
+								<label class="label cursor-pointer gap-2">
+									<input type="radio" name="auth-mode" value="passwordless" class="radio radio-primary" checked />
+									<span class="label-text">无需密码</span>
+								</label>
+								<label class="label cursor-pointer gap-2">
+									<input type="radio" name="auth-mode" value="password" class="radio radio-primary" />
+									<span class="label-text">使用密码</span>
+								</label>
 							</div>
 						</div>
-						<div class="form-control items-center p-4" id="pow-captcha-container" style="display: none;">
-							<!-- PoW 小部件将在此处插入 -->
+						<div id="create-password-group" class="form-control" style="display: none;">
+							<label class="label" for="create-password">
+								<span class="label-text">密码</span>
+							</label>
+							<input type="password" id="create-password" class="input input-bordered" placeholder="设置密码" autocomplete="new-password" />
+							<div id="create-password-strength" class="text-xs mt-1"></div>
 						</div>
-						<div class="card-actions justify-end mt-4">
-							<button class="btn btn-primary" type="submit" id="submit-btn" data-i18n="auth.login.submitButton"></button>
+						<div id="create-confirm-password-group" class="form-control" style="display: none;">
+							<label class="label" for="create-confirm-password">
+								<span class="label-text">确认密码</span>
+							</label>
+							<input type="password" id="create-confirm-password" class="input input-bordered" placeholder="再次输入密码" autocomplete="new-password" />
 						</div>
-						<p class="text-sm mt-2" id="toggle-link"><span data-i18n="auth.login.toggleLink.textContent"></span><a href="#" class="link link-primary" data-i18n="auth.login.toggleLink.link"></a></p>
-					</form>
+						<div class="card-actions justify-between mt-4">
+							<button class="btn btn-ghost" id="btn-back-to-select">返回</button>
+							<button class="btn btn-primary" id="btn-create-submit">创建并登录</button>
+						</div>
+					</div>
 				</div>
 			</div>
+
+			<!-- 视图3: 密码登录 -->
+			<div id="view-password-login" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-2">欢迎回来</h1>
+				<p class="text-center text-base-content/60 mb-6" id="password-login-username-display"></p>
+				<div class="card shrink-0 w-full shadow-2xl bg-base-100">
+					<div class="card-body">
+						<p class="text-error text-xs" id="login-error-message"></p>
+						<div class="form-control">
+							<label class="label" for="login-password">
+								<span class="label-text">密码</span>
+							</label>
+							<input type="password" id="login-password" class="input input-bordered" placeholder="输入密码" required autocomplete="current-password" />
+						</div>
+						<div class="card-actions justify-between mt-4">
+							<button class="btn btn-ghost" id="btn-back-from-login">返回</button>
+							<button class="btn btn-primary" id="btn-login-submit">登录</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 加载中 -->
+			<div id="view-loading" class="flex flex-col items-center gap-4">
+				<span class="loading loading-ring loading-lg"></span>
+				<p class="text-base-content/60">加载中...</p>
+			</div>
+
 		</div>
 	</main>
-	<footer class="w-full text-center text-xs text-gray-500 p-4">
-		<a href="https://github.com/steve02081504/fount" target="_blank" rel="noopener" class="link">
-			GitHub
-		</a>
-		<span class="mx-2">|</span>
-		<a href="https://discord.gg/GtR9Quzq2v" target="_blank" rel="noopener" class="link">
-			Discord
-		</a>
-	</footer>
 
 	<script type="module" src="./index.mjs"></script>
 </body>

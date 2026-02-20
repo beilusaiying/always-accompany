@@ -1,95 +1,64 @@
-import { redirectToLoginInfo, retrieveAndDecryptCredentials } from '../scripts/credentialManager.mjs'
-import { generateVerificationCode, login, ping, register } from '../scripts/endpoints.mjs'
-import { console, initTranslations, onLanguageChange, savePreferredLangs } from '../scripts/i18n.mjs'
+import { getUserList, login, register } from '../scripts/endpoints.mjs'
 import { getAnyDefaultPart } from '../scripts/parts.mjs'
-import { initPasswordStrengthMeter } from '../scripts/passwordStrength.mjs'
-import { createPOWCaptcha } from '../scripts/POWcaptcha.mjs'
 import { applyTheme, setTheme } from '../scripts/theme.mjs'
 import { showToast } from '../scripts/toast.mjs'
 
-const form = document.getElementById('auth-form')
-const formTitle = document.getElementById('form-title')
-const submitBtn = document.getElementById('submit-btn')
-const toggleLink = document.getElementById('toggle-link')
-const confirmPasswordGroup = document.getElementById('confirm-password-group')
-const errorMessage = document.getElementById('error-message')
-const verificationCodeGroup = document.getElementById('verification-code-group')
-const sendVerificationCodeBtn = document.getElementById('send-verification-code-btn')
-const passwordStrengthFeedback = document.getElementById('password-strength-feedback')
-const passwordInput = document.getElementById('password')
+// --- DOM 元素 ---
+const viewLoading = document.getElementById('view-loading')
+const viewUserSelect = document.getElementById('view-user-select')
+const viewCreateUser = document.getElementById('view-create-user')
+const viewPasswordLogin = document.getElementById('view-password-login')
 
-const isLocalOrigin = await ping().then(data => data.is_local_ip).catch(() => false)
+const userListContainer = document.getElementById('user-list')
+const btnCreateNew = document.getElementById('btn-create-new')
 
-let isLoginForm = true
-let verificationCodeSent = false
-let sendCodeCooldown = false
-let powCaptcha = null
-let passwordStrengthMeter = null
+const createUsername = document.getElementById('create-username')
+const createPassword = document.getElementById('create-password')
+const createConfirmPassword = document.getElementById('create-confirm-password')
+const createPasswordGroup = document.getElementById('create-password-group')
+const createConfirmPasswordGroup = document.getElementById('create-confirm-password-group')
+const createErrorMessage = document.getElementById('create-error-message')
+const btnCreateSubmit = document.getElementById('btn-create-submit')
+const btnBackToSelect = document.getElementById('btn-back-to-select')
+
+const loginPassword = document.getElementById('login-password')
+const loginErrorMessage = document.getElementById('login-error-message')
+const loginUsernameDisplay = document.getElementById('password-login-username-display')
+const btnLoginSubmit = document.getElementById('btn-login-submit')
+const btnBackFromLogin = document.getElementById('btn-back-from-login')
+
+// --- 状态 ---
+let users = []
+let selectedUsername = ''
+
+// --- 视图切换 ---
 
 /**
- * 初始化表单状态。
- * @returns {void}
+ * 隐藏所有视图。
  */
-function initializeForm() {
-	isLoginForm = true
+function hideAllViews() {
+	viewLoading.style.display = 'none'
+	viewUserSelect.style.display = 'none'
+	viewCreateUser.style.display = 'none'
+	viewPasswordLogin.style.display = 'none'
 }
 
 /**
- * 切换表单。
- * @returns {void}
+ * 显示指定视图。
+ * @param {HTMLElement} view - 要显示的视图元素。
  */
-function toggleForm() {
-	isLoginForm = !isLoginForm
-	updateFormDisplay()
+function showView(view) {
+	hideAllViews()
+	view.style.display = 'block'
 }
 
-/**
- * 处理切换链接点击事件。
- * @param {MouseEvent} event - 鼠标事件。
- * @returns {void}
- */
-function handleToggleClick(event) {
-	event.preventDefault()
-	toggleForm()
-}
+// --- 设备 ID ---
 
 /**
- * 刷新 UI 字符串。
- * @returns {void}
+ * 获取或生成设备 ID。
+ * @returns {string} 设备 ID。
  */
-function refreshUIStrings() {
-	updateFormDisplay()
-}
-
-/**
- * 更新表单显示。
- * @returns {void}
- */
-function updateFormDisplay() {
-	const formType = isLoginForm ? 'login' : 'register'
-
-	formTitle.dataset.i18n = `auth.${formType}.title`
-	submitBtn.dataset.i18n = `auth.${formType}.submitButton`
-	const [toggleText, toggleButton] = toggleLink.children
-	toggleText.dataset.i18n = `auth.${formType}.toggleLink.textContent`
-	toggleButton.dataset.i18n = `auth.${formType}.toggleLink.link`
-
-	confirmPasswordGroup.style.display = isLoginForm ? 'none' : 'block'
-	verificationCodeGroup.style.display = isLoginForm || isLocalOrigin ? 'none' : 'block'
-	passwordInput.autocomplete = isLoginForm ? 'current-password' : 'new-password'
-	errorMessage.textContent = ''
-
-	if (isLoginForm) {
-		verificationCodeSent = false
-		sendVerificationCodeBtn.disabled = false
-	}
-}
-
-/**
- * 生成唯一的设备 ID。
- * @returns {string} - 设备 ID。
- */
-function generateDeviceId() {
+function getDeviceId() {
 	let deviceId = localStorage.getItem('deviceId')
 	if (!deviceId) {
 		deviceId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -98,220 +67,306 @@ function generateDeviceId() {
 	return deviceId
 }
 
+// --- 登录成功后的跳转 ---
+
 /**
- * 处理发送验证码。
- * @returns {Promise<void>}
+ * 登录成功后跳转到默认 Shell。
  */
-async function handleSendVerificationCode() {
-	if (sendCodeCooldown) return
+async function redirectAfterLogin() {
+	const urlParams = new URLSearchParams(window.location.search)
+	const redirect = urlParams.get('redirect')
 
-	try {
-		const response = await generateVerificationCode()
-
-		if (response.ok) {
-			errorMessage.dataset.i18n = 'auth.error.verificationCodeSent'
-			verificationCodeSent = true
-			sendCodeCooldown = true
-			let timeLeft = 60
-			sendVerificationCodeBtn.disabled = true
-			sendVerificationCodeBtn.textContent = `${timeLeft}s`
-			const countdown = setInterval(() => {
-				timeLeft--
-				sendVerificationCodeBtn.textContent = `${timeLeft}s`
-				if (timeLeft <= 0) {
-					clearInterval(countdown)
-					sendVerificationCodeBtn.disabled = false
-					sendVerificationCodeBtn.dataset.i18n = 'auth.sendCodeButton'
-					sendCodeCooldown = false
-				}
-			}, 1000)
+	let finalRedirectUrl
+	if (redirect) {
+		finalRedirectUrl = decodeURIComponent(redirect)
+	} else {
+		try {
+			const defaultShell = await getAnyDefaultPart('shells') || 'home'
+			finalRedirectUrl = `/parts/shells:${defaultShell}`
+		} catch {
+			finalRedirectUrl = `/parts/shells:home`
 		}
-		else if (response.status === 429)
-			errorMessage.dataset.i18n = 'auth.error.verificationCodeRateLimit'
-		else
-			errorMessage.dataset.i18n = 'auth.error.verificationCodeSendError'
 	}
-	catch (error) {
-		console.error('Error sending verification code:', error)
-		errorMessage.dataset.i18n = 'auth.error.verificationCodeSendError'
+
+	window.location.href = finalRedirectUrl
+}
+
+// --- 渲染用户列表 ---
+
+/**
+ * 渲染用户卡片列表。
+ */
+function renderUserList() {
+	userListContainer.innerHTML = ''
+
+	for (const user of users) {
+		const card = document.createElement('button')
+		card.className = 'btn btn-outline btn-lg justify-start gap-3 w-full'
+		card.innerHTML = `
+			<div class="avatar placeholder">
+				<div class="bg-neutral text-neutral-content rounded-full w-10">
+					<span class="text-lg">${user.username.charAt(0).toUpperCase()}</span>
+				</div>
+			</div>
+			<div class="flex flex-col items-start">
+				<span class="font-bold">${escapeHtml(user.username)}</span>
+				<span class="text-xs opacity-60">${user.passwordless ? '无密码' : '需要密码'}</span>
+			</div>
+		`
+		card.addEventListener('click', () => handleUserClick(user))
+		userListContainer.appendChild(card)
 	}
 }
 
 /**
- * 处理表单提交。
- * @param {SubmitEvent} event - 提交事件。
- * @returns {Promise<void>}
+ * 转义 HTML 特殊字符。
+ * @param {string} str - 原始字符串。
+ * @returns {string} 转义后的字符串。
  */
-async function handleFormSubmit(event) {
-	event.preventDefault()
+function escapeHtml(str) {
+	const div = document.createElement('div')
+	div.textContent = str
+	return div.innerHTML
+}
 
-	const powToken = powCaptcha?.token
-	if (!isLocalOrigin && !powToken) {
-		errorMessage.dataset.i18n = 'auth.error.powNotSolved'
+// --- 事件处理 ---
+
+/**
+ * 处理用户卡片点击。
+ * @param {object} user - 用户信息对象。
+ */
+async function handleUserClick(user) {
+	selectedUsername = user.username
+
+	if (user.passwordless) {
+		// 无密码用户，直接登录
+		try {
+			const deviceId = getDeviceId()
+			const response = await login(user.username, '', deviceId)
+			const data = await response.json()
+
+			if (response.ok) {
+				await redirectAfterLogin()
+			} else {
+				showToast('error', data.message || '登录失败')
+			}
+		} catch (error) {
+			console.error('Login error:', error)
+			showToast('error', '登录出错')
+		}
+	} else {
+		// 有密码用户，进入密码输入视图
+		loginUsernameDisplay.textContent = user.username
+		loginErrorMessage.textContent = ''
+		loginPassword.value = ''
+		showView(viewPasswordLogin)
+		loginPassword.focus()
+	}
+}
+
+/**
+ * 处理密码登录提交。
+ */
+async function handlePasswordLogin() {
+	const password = loginPassword.value
+	if (!password) {
+		loginErrorMessage.textContent = '请输入密码'
 		return
 	}
 
-	const username = document.getElementById('username').value
-	const password = passwordInput.value
-	const deviceid = generateDeviceId()
-
-	let verificationcode = ''
-	if (!isLoginForm) {
-		const confirmPassword = document.getElementById('confirm-password').value
-		if (password !== confirmPassword) {
-			errorMessage.dataset.i18n = 'auth.error.passwordMismatch'
-			return
-		}
-		// Password strength check
-		const { score } = passwordStrengthMeter.evaluate()
-		if (score < 2) {
-			errorMessage.dataset.i18n = 'auth.error.lowPasswordStrength'
-			return // Prevent form submission
-		}
-		if (!isLocalOrigin) {
-			if (!verificationCodeSent) {
-				errorMessage.dataset.i18n = 'auth.error.verificationCodeError'
-				return
-			}
-			verificationcode = document.getElementById('verification-code').value.trim()
-			if (!verificationcode) {
-				errorMessage.dataset.i18n = 'auth.error.verificationCodeError'
-				return
-			}
-		}
-	}
-
 	try {
-		let response
-		if (isLoginForm)
-			response = await login(username, password, deviceid, powToken)
-		else
-			response = await register(username, password, deviceid, verificationcode, powToken)
-
+		btnLoginSubmit.disabled = true
+		const deviceId = getDeviceId()
+		const response = await login(selectedUsername, password, deviceId)
 		const data = await response.json()
 
-		if (response.ok)
-			if (isLoginForm) {
-				const urlParams = new URLSearchParams(window.location.search)
-				const redirect = urlParams.get('redirect')
-				const defaultShell = await getAnyDefaultPart('shells') || 'home' // Fallback to 'home' if no default shell is set
-
-				let finalRedirectUrl
-				if (redirect)
-					finalRedirectUrl = decodeURIComponent(redirect)
-				else
-					finalRedirectUrl = `/parts/shells:${defaultShell}`
-
-				redirectToLoginInfo(finalRedirectUrl + window.location.hash, username, password)
-			}
-			else toggleForm() // 注册成功后自动切换到登录表单
-		else
-			errorMessage.textContent = data.message
-	}
-	catch (error) {
-		console.error('Error during form submission:', error)
-		errorMessage.dataset.i18n = isLoginForm
-			? 'auth.error.loginError'
-			: 'auth.error.registrationError'
+		if (response.ok) {
+			await redirectAfterLogin()
+		} else {
+			loginErrorMessage.textContent = data.message || '用户名或密码错误'
+		}
+	} catch (error) {
+		console.error('Login error:', error)
+		loginErrorMessage.textContent = '登录出错，请重试'
+	} finally {
+		btnLoginSubmit.disabled = false
 	}
 }
 
 /**
- * 设置事件侦听器。
- * @returns {void}
+ * 处理创建用户提交。
  */
-function setupEventListeners() {
-	toggleLink.addEventListener('click', handleToggleClick)
-	submitBtn.addEventListener('click', handleFormSubmit)
-	sendVerificationCodeBtn.addEventListener('click', handleSendVerificationCode)
-}
-
-/**
- * 初始化应用程序。
- * @returns {Promise<void>}
- */
-async function initializeApp() {
-	localStorage.setItem('theme', localStorage.getItem('theme') || 'dark')
-	const urlParams = new URLSearchParams(window.location.search)
-	applyTheme()
-	if (urlParams.get('theme')) setTheme(urlParams.get('theme'))
-	await initTranslations('auth')
-	if (urlParams.get('userPreferredLanguages')) savePreferredLangs(JSON.parse(urlParams.get('userPreferredLanguages')))
-
-	const powCaptchaContainer = document.getElementById('pow-captcha-container')
-	if (!isLocalOrigin) try {
-		powCaptchaContainer.style.display = 'block'
-		powCaptcha = await createPOWCaptcha(powCaptchaContainer)
-	} catch (err) {
-		errorMessage.dataset.i18n = 'auth.error.powError'
-		console.error(err)
+async function handleCreateUser() {
+	const username = createUsername.value.trim()
+	if (!username) {
+		createErrorMessage.textContent = '请输入用户名'
+		return
 	}
 
-	passwordStrengthMeter = initPasswordStrengthMeter(passwordInput, passwordStrengthFeedback)
-	setupEventListeners()
+	const authMode = document.querySelector('input[name="auth-mode"]:checked').value
+	let password = ''
 
-	initializeForm()
-	onLanguageChange(refreshUIStrings)
-	const autologinParam = urlParams.get('autologin') || urlParams.has('autologin')
-	const usernameInput = document.getElementById('username')
+	if (authMode === 'password') {
+		password = createPassword.value
+		const confirmPassword = createConfirmPassword.value
+
+		if (!password) {
+			createErrorMessage.textContent = '请输入密码'
+			return
+		}
+		if (password.length < 4) {
+			createErrorMessage.textContent = '密码至少需要4个字符'
+			return
+		}
+		if (password !== confirmPassword) {
+			createErrorMessage.textContent = '两次输入的密码不一致'
+			return
+		}
+	}
 
 	try {
-		const hashParams = new URLSearchParams(window.location.hash.substring(1))
-		const uuid = await ping().then(res => res.uuid)
-		const from = hashParams.get('from')
-		const fileId = hashParams.get('fileId')
+		btnCreateSubmit.disabled = true
+		createErrorMessage.textContent = ''
 
-		const plaintextCredentials = await retrieveAndDecryptCredentials(fileId, from, hashParams, uuid)
+		// 1. 注册
+		const regResponse = await register(username, password)
+		const regData = await regResponse.json()
 
-		if (plaintextCredentials) {
-			const { username, password } = JSON.parse(plaintextCredentials)
-			usernameInput.value = username
-			passwordInput.value = password
-		}
-		else {
-			// Legacy plaintext params
-			const usernameParam = urlParams.get('username')
-			const passwordParam = urlParams.get('password')
-			if (usernameParam) usernameInput.value = usernameParam
-			if (passwordParam) passwordInput.value = passwordParam
-		}
-	}
-	catch (e) {
-		console.error('Failed to obtain credentials for autologin.', e)
-	}
-	finally {
-		const hashParams = new URLSearchParams(window.location.hash.substring(1))
-		hashParams.delete('uuid')
-		hashParams.delete('from')
-		hashParams.delete('fileId')
-		hashParams.delete('encrypted_creds')
-		window.location.hash = hashParams.toString()
-	}
-
-	if (JSON.parse(autologinParam)) {
-		if (!isLoginForm) toggleForm()
-		if (powCaptcha) try {
-			submitBtn.disabled = true
-			submitBtn.dataset.i18n = 'pow_captcha.verifying'
-			await powCaptcha.solve()
-		} catch (err) {
-			errorMessage.dataset.i18n = 'auth.error.powError'
-			console.error(err)
+		if (!regResponse.ok) {
+			createErrorMessage.textContent = regData.message || '注册失败'
 			return
-		} finally {
-			submitBtn.disabled = false
-			updateFormDisplay()
 		}
-		submitBtn.click()
+
+		// 2. 自动登录
+		const deviceId = getDeviceId()
+		const loginResponse = await login(username, password, deviceId)
+		const loginData = await loginResponse.json()
+
+		if (loginResponse.ok) {
+			await redirectAfterLogin()
+		} else {
+			// 注册成功但登录失败，提示用户手动登录
+			createErrorMessage.textContent = '注册成功，但自动登录失败，请手动登录'
+			await loadUsers()
+			showView(viewUserSelect)
+		}
+	} catch (error) {
+		console.error('Create user error:', error)
+		createErrorMessage.textContent = '创建用户出错，请重试'
+	} finally {
+		btnCreateSubmit.disabled = false
 	}
 }
+
+/**
+ * 处理认证方式切换（无密码/有密码）。
+ */
+function handleAuthModeChange() {
+	const authMode = document.querySelector('input[name="auth-mode"]:checked').value
+	const showPassword = authMode === 'password'
+	createPasswordGroup.style.display = showPassword ? 'block' : 'none'
+	createConfirmPasswordGroup.style.display = showPassword ? 'block' : 'none'
+
+	if (!showPassword) {
+		createPassword.value = ''
+		createConfirmPassword.value = ''
+	}
+}
+
+// --- 数据加载 ---
+
+/**
+ * 从服务器加载用户列表。
+ */
+async function loadUsers() {
+	try {
+		const data = await getUserList()
+		users = data.users || []
+	} catch (error) {
+		console.error('Failed to load user list:', error)
+		users = []
+	}
+}
+
+// --- 初始化 ---
+
+/**
+ * 初始化应用。
+ */
+async function initializeApp() {
+	// 主题设置
+	localStorage.setItem('theme', localStorage.getItem('theme') || 'dark')
+	applyTheme()
+	const urlParams = new URLSearchParams(window.location.search)
+	if (urlParams.get('theme')) setTheme(urlParams.get('theme'))
+
+	// 加载用户列表
+	await loadUsers()
+
+	if (users.length === 0) {
+		// 无用户，直接进入创建流程
+		btnBackToSelect.style.display = 'none'
+		showView(viewCreateUser)
+		createUsername.focus()
+	} else {
+		// 有用户，显示用户选择
+		renderUserList()
+		showView(viewUserSelect)
+	}
+}
+
+// --- 事件绑定 ---
+btnCreateNew.addEventListener('click', () => {
+	createErrorMessage.textContent = ''
+	createUsername.value = ''
+	createPassword.value = ''
+	createConfirmPassword.value = ''
+	// 重置为无密码模式
+	document.querySelector('input[name="auth-mode"][value="passwordless"]').checked = true
+	handleAuthModeChange()
+	btnBackToSelect.style.display = 'inline-flex'
+	showView(viewCreateUser)
+	createUsername.focus()
+})
+
+btnBackToSelect.addEventListener('click', () => {
+	showView(viewUserSelect)
+})
+
+btnBackFromLogin.addEventListener('click', () => {
+	showView(viewUserSelect)
+})
+
+btnCreateSubmit.addEventListener('click', handleCreateUser)
+btnLoginSubmit.addEventListener('click', handlePasswordLogin)
+
+// 认证方式切换监听
+document.querySelectorAll('input[name="auth-mode"]').forEach(radio => {
+	radio.addEventListener('change', handleAuthModeChange)
+})
+
+// 回车提交
+loginPassword.addEventListener('keydown', (e) => {
+	if (e.key === 'Enter') handlePasswordLogin()
+})
+createUsername.addEventListener('keydown', (e) => {
+	if (e.key === 'Enter') {
+		const authMode = document.querySelector('input[name="auth-mode"]:checked').value
+		if (authMode === 'passwordless') {
+			handleCreateUser()
+		} else {
+			createPassword.focus()
+		}
+	}
+})
+createConfirmPassword.addEventListener('keydown', (e) => {
+	if (e.key === 'Enter') handleCreateUser()
+})
 
 // 执行初始化
 try {
 	await initializeApp()
-	navigator.serviceWorker?.controller?.postMessage({ type: 'EXIT_COLD_BOOT' })
-}
-catch (error) {
+} catch (error) {
 	showToast('error', error.message)
 	console.error('App initialization error:', error)
 }

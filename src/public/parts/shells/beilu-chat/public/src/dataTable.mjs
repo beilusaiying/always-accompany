@@ -164,7 +164,7 @@ async function bindToChar(charId, username) {
 	currentCharId = charId
 
 	const urlParams = new URLSearchParams(window.location.search)
-	currentUsername = username || urlParams.get('username') || 'linqing'
+	currentUsername = username || urlParams.get('username') || ''
 
 	// 更新绑定标签
 	_dom.charLabel.textContent = `🔗 ${charId}`

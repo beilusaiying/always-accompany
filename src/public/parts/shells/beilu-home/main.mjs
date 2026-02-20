@@ -440,11 +440,30 @@ export default {
 						}
 					}
 
-				// 4. 记忆数据 — 根据用户选择
-				//    新路径: chars/{charName}/memory/
-				//    uninstallPartBase 会删除整个 chars/{charName}/ 目录，
-				//    所以如果用户选择不删除记忆，需要先备份再恢复
-				if (!options.deleteMemory) {
+				// 4. 记忆数据 — 根据用户选择（在 uninstallPartBase 之前主动处理）
+				if (options.deleteMemory) {
+					// 主动删除新路径 chars/{charName}/memory/（不依赖 uninstallPartBase 的 trash）
+					const memoryDir = path.join(charDir, 'memory')
+					if (fs.existsSync(memoryDir)) {
+						try {
+							fs.rmSync(memoryDir, { recursive: true, force: true })
+							console.log(`[beilu-home] 已删除记忆目录: ${memoryDir}`)
+						} catch (e) {
+							console.warn('[beilu-home] 删除记忆目录失败:', e.message)
+						}
+					}
+					// 同时清理旧路径残留 memory/{charName}/
+					const oldMemoryDir = path.join(userDir, 'memory', charName)
+					if (fs.existsSync(oldMemoryDir)) {
+						try {
+							fs.rmSync(oldMemoryDir, { recursive: true, force: true })
+							console.log(`[beilu-home] 已删除旧记忆目录: ${oldMemoryDir}`)
+						} catch (e) {
+							console.warn('[beilu-home] 删除旧记忆目录失败:', e.message)
+						}
+					}
+					cleanupResults.memory = true
+				} else {
 					// 用户选择保留记忆 → 备份 memory 目录到临时位置
 					const memoryDir = path.join(charDir, 'memory')
 					const tempMemoryDir = path.join(userDir, '_temp_memory_backup_' + charName)
@@ -457,16 +476,25 @@ export default {
 					}
 					// 标记需要恢复
 					options._restoreMemoryFrom = tempMemoryDir
-				} else {
-					cleanupResults.memory = true
 				}
-
+	
 				// 5. 使用 Fount 的 uninstallPartBase 进行完整卸载
 				// 清理 5 层缓存：parts_set / parts_init / parts_config / parts_details_cache / parts_branch_cache
-				// 同时处理文件删除（trash → rmSync fallback）和事件通知
-				await uninstallPartBase(username, partpath)
-
-				// 6. 如果需要恢复记忆数据
+				// 加 try-catch 保护：trash 对中文路径可能失败，回退为 rmSync
+				try {
+					await uninstallPartBase(username, partpath)
+				} catch (uninstallErr) {
+					console.warn(`[beilu-home] uninstallPartBase 失败(${uninstallErr.message})，手动删除目录...`)
+					if (fs.existsSync(charDir)) {
+						try {
+							fs.rmSync(charDir, { recursive: true, force: true })
+						} catch (rmErr) {
+							console.error('[beilu-home] 手动删除角色卡目录也失败:', rmErr.message)
+						}
+					}
+				}
+	
+				// 6. 如果需要恢复记忆数据（用户选择保留时）
 				if (options._restoreMemoryFrom && fs.existsSync(options._restoreMemoryFrom)) {
 					try {
 						// 恢复到独立的 memory/{charName}/ 目录（角色卡已删除，chars/ 不再存在）
@@ -478,6 +506,14 @@ export default {
 						console.warn('[beilu-home] 恢复记忆数据失败:', e.message)
 					}
 				}
+	
+				// 7. 通知 beilu-memory 清理内存缓存
+				try {
+					const memPlugin = parts_set[username]?.['plugins/beilu-memory']
+					if (memPlugin?.interfaces?.config?.SetData) {
+						await memPlugin.interfaces.config.SetData({ _action: 'clearCache', charName, username })
+					}
+				} catch (_) { /* 插件未加载时忽略 */ }
 console.log(`[beilu-home] 角色卡已删除（含缓存清理）: "${charName}" (user: ${username})`, cleanupResults)
 res.status(200).json({ success: true, name: charName, cleanup: cleanupResults })
 } catch (error) {

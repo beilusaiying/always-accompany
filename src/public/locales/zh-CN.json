@@ -16,7 +16,7 @@
 				"failed": "mDNS 注册失败：${error}",
 				"bonjourFailed": "Bonjour 服务创建失败：${error}"
 			},
-			"localUrl": "通过同一网络下的其他设备访问fount：${url}",
+			"localUrl": "通过同一网络下的其他设备访问beilu：${url}",
 			"update": {
 				"restarting": "发现新版本，正在重启更新..."
 			}
@@ -31,7 +31,7 @@
 			"instanceRunning": "另一个实例正在运行",
 			"runPartLog": "运行 ${partpath} 作为 ${username}，参数：${args}",
 			"invokePartLog": "调用 ${partpath} 作为 ${username}，参数：${invokedata}",
-			"invalidCommand": "无效的命令，请使用\"fount run <组件类型> <用户名> <组件名> <参数...>\"",
+			"invalidCommand": "无效的命令，请使用\"beilu run <组件类型> <用户名> <组件名> <参数...>\"",
 			"invalidCommandFormat": "无效的命令格式",
 			"unsupportedCommand": "不支持的命令类型",
 			"processMessageError": "处理 IPC 消息时出错：${error}",
@@ -74,22 +74,22 @@
 			"codeNotifyBody": "验证码: ${code} (60秒后过期)"
 		},
 		"tray": {
-			"title": "fount",
-			"tooltip": "fount",
+			"title": "beilu",
+			"tooltip": "beilu",
 			"readIconFailed": "读取图标文件失败: ${error}",
 			"createTrayFailed": "创建托盘失败: ${error}",
 			"items": {
 				"open": {
 					"title": "打开",
-					"tooltip": "打开 fount"
+					"tooltip": "打开 beilu"
 				},
 				"github": {
 					"title": "GitHub",
-					"tooltip": "打开 fount 的 GitHub"
+					"tooltip": "打开 beilu 的 GitHub"
 				},
 				"discord": {
 					"title": "Discord",
-					"tooltip": "打开 fount 的 Discord"
+					"tooltip": "打开 beilu 的 Discord"
 				},
 				"restart": {
 					"title": "重启",
@@ -113,12 +113,12 @@
 		},
 		"path": {
 			"protocol": {
-				"description": "URL:fount 协议",
+				"description": "URL:beilu 协议",
 				"registerFailed": "注册 fount:// 协议处理器失败：${message}",
 				"noUrl": "错误：未提供协议处理程序的 URL。"
 			},
 			"update": {
-				"skippingFountUpdate": "因 .noupdate 文件存在，跳过 fount 更新",
+				"skippingBeiluUpdate": "因 .noupdate 文件存在，跳过 beilu 更新",
 				"skippingDenoUpgradeDocker": "在 Docker 环境中跳过 Deno 升级"
 			},
 			"shortcut": {
@@ -131,7 +131,7 @@
 				"createDesktopAppFailed": "错误：创建桌面应用程序失败。"
 			},
 			"git": {
-				"repoNotFound": "未找到 fount 的 git 仓库，正在初始化一个新的...",
+				"repoNotFound": "未找到 beilu 的 git 仓库，正在初始化一个新的...",
 				"fetchingAndResetting": "正在从远程仓库获取并重置到 master...",
 				"localChangesDetected": "检测到本地更改，将在覆盖前保存差异。",
 				"backupSavedTo": "您的本地更改备份已保存到：${path}",
@@ -151,9 +151,9 @@
 			},
 			"deno": {
 				"missing": "未找到 Deno，正在自动安装...",
-				"isRequired": "未找到 Deno，没有 Deno 无法运行 fount",
+				"isRequired": "未找到 Deno，没有 Deno 无法运行 beilu",
 				"installingTermux": "正在为 Termux 安装 Deno...",
-				"installFailedFallback": "Deno 安装失败，尝试自动安装到 fount 的 path 文件夹...",
+				"installFailedFallback": "Deno 安装失败，尝试自动安装到 beilu 的 path 文件夹...",
 				"notWorking": "由于某种原因 Deno 无法工作，您可能需要加入 https://discord.gg/deno 以获取支持",
 				"upgradeFailed": "警告：Deno 升级可能已失败。请检查错误。",
 				"upgradeFailedTermux": "Deno 升级命令失败，正在尝试为 Termux 重新安装 Deno...",
@@ -165,9 +165,9 @@
 				"installingDependencies": "正在安装依赖...",
 				"packageFailed": "错误：${package} 安装失败。",
 				"browserMissing": "未检测到默认浏览器，正在尝试安装...",
-				"untrustedPartsWarning": "不要在您的系统上安装任何不受信任的 fount 组件，它们可以做任何事情。",
-				"rootWarning1": "不推荐：以 root 身份运行 fount 会授予所有 fount 组件完全的系统访问权限。",
-				"rootWarning2": "除非您清楚自己在做什么，否则建议以普通用户身份运行 fount。"
+				"untrustedPartsWarning": "不要在您的系统上安装任何不受信任的 beilu 组件，它们可以做任何事情。",
+				"rootWarning1": "不推荐：以 root 身份运行 beilu 会授予所有 beilu 组件完全的系统访问权限。",
+				"rootWarning2": "除非您清楚自己在做什么，否则建议以普通用户身份运行 beilu。"
 			},
 			"clean": {
 				"removingCaches": "正在移除缓存...",
@@ -176,30 +176,30 @@
 				"cleaningOldPwshModules": "正在清理旧的 pwsh 模块..."
 			},
 			"keepalive": {
-				"initComplete": "重新初始化完成。正在尝试重启 fount...",
-				"autoInitDisabled": "fount 在最近短时间内多次重启，但由于 .noautoinit 文件存在，自动重新初始化已被禁用。正在退出。",
-				"restartingTooFast": "fount 在最近短时间内多次重启。正在强制重新初始化...",
-				"failedToStart": "即使在自动修复尝试后，fount 仍在短时间内启动失败。请检查日志中的错误。",
-				"initFailed": "fount 初始化失败。正在退出。"
+				"initComplete": "重新初始化完成。正在尝试重启 beilu...",
+				"autoInitDisabled": "beilu 在最近短时间内多次重启，但由于 .noautoinit 文件存在，自动重新初始化已被禁用。正在退出。",
+				"restartingTooFast": "beilu 在最近短时间内多次重启。正在强制重新初始化...",
+				"failedToStart": "即使在自动修复尝试后，beilu 仍在短时间内启动失败。请检查日志中的错误。",
+				"initFailed": "beilu 初始化失败。正在退出。"
 			},
 			"remove": {
-				"removingFount": "正在移除 fount...",
-				"fountUninstallationComplete": "fount 卸载完成。",
-				"removingFountInstallationDir": "正在移除 fount 安装目录...",
-				"fountInstallationDirRemoved": "fount 安装目录已移除。",
-				"removingFountFromPath": "正在从 PATH 中移除 fount...",
+				"removingBeilu": "正在移除 beilu...",
+				"beiluUninstallationComplete": "beilu 卸载完成。",
+				"removingBeiluInstallationDir": "正在移除 beilu 安装目录...",
+				"beiluInstallationDirRemoved": "beilu 安装目录已移除。",
+				"removingBeiluFromPath": "正在从 PATH 中移除 beilu...",
 				"removingProtocolHandler": "正在移除 fount:// 协议处理器...",
 				"protocolHandlerRemoved": "fount:// 协议处理器已移除。",
 				"removeProtocolHandlerFailed": "移除 fount:// 协议处理器失败：${message}",
-				"removingFountFromGitSafeDir": "正在从 git safe.directory 中移除 fount...",
+				"removingBeiluFromGitSafeDir": "正在从 git safe.directory 中移除 beilu...",
 				"removingInstalledSystemPackages": "正在移除已安装的系统包...",
 				"uninstallingDeno": "正在卸载 Deno...",
 				"removeDenoFailed": "移除 Deno 失败：${message}",
-				"removingFountPwshFromProfile": "正在从 PowerShell Profile 中移除 fount-pwsh...",
-				"fountPwshRemovedFromProfile": "已从 PowerShell Profile 中移除 fount-pwsh。",
+				"removingBeiluPwshFromProfile": "正在从 PowerShell Profile 中移除 fount-pwsh...",
+				"beiluPwshRemovedFromProfile": "已从 PowerShell Profile 中移除 fount-pwsh。",
 				"pwshProfileNotFound": "未找到 PowerShell Profile，跳过从 profile 中移除 fount-pwsh。",
-				"uninstallingFountPwsh": "正在卸载 fount-pwsh...",
-				"uninstallFountPwshFailed": "卸载 fount-pwsh 失败：${message}",
+				"uninstallingBeiluPwsh": "正在卸载 fount-pwsh...",
+				"uninstallBeiluPwshFailed": "卸载 fount-pwsh 失败：${message}",
 				"removingTerminalProfile": "正在移除 Windows Terminal Profile...",
 				"terminalProfileRemoved": "Windows Terminal Profile 目录已移除。",
 				"terminalProfileNotFound": "未找到 Windows Terminal Profile 目录。",
@@ -220,27 +220,27 @@
 		}
 	},
 	"installer_wait_screen": {
-		"title": "欢迎使用 fount！",
-		"description": "跟踪安装进度并了解其中的功能。fount很快就可以启动了。",
+		"title": "欢迎使用 beilu！",
+		"description": "跟踪安装进度并了解其中的功能。beilu很快就可以启动了。",
 		"hero": {
 			"title": "灵犀一点，应念而生",
-			"description": "fount 是一个由 AI 驱动的角色互动平台，旨在赋能<i>您</i>。它是一座桥梁，将您与您想象中的角色连接起来，让您轻松地与他们对话、创建自己的角色并与世界分享。"
+			"description": "beilu 是一个由 AI 驱动的角色互动平台，旨在赋能<i>您</i>。它是一座桥梁，将您与您想象中的角色连接起来，让您轻松地与他们对话、创建自己的角色并与世界分享。"
 		},
 		"feature1": {
 			"title": "无缝对话，随时随地",
-			"description": "在电脑上开始聊天，在手机或平板电脑上无缝继续。fount 让您的对话保持同步，无论您走到哪里，都能与您的角色保持联系。可在 Windows、macOS、Linux 甚至 Android 上运行。"
+			"description": "在电脑上开始聊天，在手机或平板电脑上无缝继续。beilu 让您的对话保持同步，无论您走到哪里，都能与您的角色保持联系。可在 Windows、macOS、Linux 甚至 Android 上运行。"
 		},
 		"feature2": {
 			"title": "美观、可定制的界面",
-			"description": "从 30 多个精美主题中选择，或创建您自己的主题。fount 是您的个人画布。表达自我，根据您的喜好定制环境，获得真正个性化的体验。"
+			"description": "从 30 多个精美主题中选择，或创建您自己的主题。beilu 是您的个人画布。表达自我，根据您的喜好定制环境，获得真正个性化的体验。"
 		},
 		"feature3": {
 			"title": "富有表现力、沉浸式的聊天",
-			"description": "fount 充分利用 HTML 的强大功能，允许角色通过富文本、图像甚至交互元素表达自己。同时与多个角色进行动态且引人入胜的群聊。"
+			"description": "beilu 充分利用 HTML 的强大功能，允许角色通过富文本、图像甚至交互元素表达自己。同时与多个角色进行动态且引人入胜的群聊。"
 		},
 		"feature4": {
 			"title": "不受束缚的 AI 源集成",
-			"description": "fount 提供无与伦比的选择和灵活性。连接到<i>任何</i> AI 源——OpenAI、Claude、OpenRouter、NovelAI 等。通信逻辑将根据<i>您的</i>意愿，通过代码的力量来塑造。"
+			"description": "beilu 提供无与伦比的选择和灵活性。连接到<i>任何</i> AI 源——OpenAI、Claude、OpenRouter、NovelAI 等。通信逻辑将根据<i>您的</i>意愿，通过代码的力量来塑造。"
 		},
 		"language_selector": {
 			"button": {
@@ -263,7 +263,7 @@
 			"description2": "这里有小游戏用来打发时间。"
 		},
 		"data_showcase": {
-			"title_prefix": "fount是最",
+			"title_prefix": "beilu是最",
 			"title_of": "的",
 			"active_users": "活跃用户数",
 			"stars": "GitHub Stars",
@@ -289,22 +289,22 @@
 		"footer": {
 			"ready_text": "准备好开始您的旅程了吗？",
 			"wait_text": "稍候片刻...",
-			"open_fount": "打开 fount",
-			"open_or_install_fount": "打开/安装 fount",
+			"open_beilu": "打开 beilu",
+			"open_or_install_beilu": "打开/安装 beilu",
 			"error_message": "哎呀 :(\n\n发生错误：\n${error}"
 		},
 		"error": {
 			"title": "安装失败！",
-			"description": "fount 安装程序似乎出了问题。",
+			"description": "beilu 安装程序似乎出了问题。",
 			"connection_failed": "连接失败！",
-			"description1": "fount 安装程序似乎出了问题。",
+			"description1": "beilu 安装程序似乎出了问题。",
 			"description2": "请检查您的终端并重试。",
 			"close_page": "关闭页面"
 		}
 	},
 	"protocolhandler": {
-		"title": "处理 fount 协议",
-		"description": "该页面安静而高效地将您的意图转化为fount内的无缝过渡。认为这是幕后的安静魔法。",
+		"title": "处理 beilu 协议",
+		"description": "该页面安静而高效地将您的意图转化为beilu内的无缝过渡。认为这是幕后的安静魔法。",
 		"processing": "正在处理协议...",
 		"shellCommandSent": "Shell 命令已发送",
 		"runPartConfirm": {
@@ -315,13 +315,13 @@
 		},
 		"offline_dialog": {
 			"title": "主机离线",
-			"message": "fount 主机 ${hostUrl} 似乎已离线。您想重试吗？",
+			"message": "beilu 主机 ${hostUrl} 似乎已离线。您想重试吗？",
 			"buttons": {
 				"start": "启动",
 				"retry": "重试"
 			}
 		},
-		"fountNotFound": "哎呀 :(\n\n没有找到 fount，或许你需要先安装一个？",
+		"beiluNotFound": "哎呀 :(\n\n没有找到 beilu，或许你需要先安装一个？",
 		"invalidProtocol": "无效的协议",
 		"insufficientParams": "参数不足",
 		"unknownCommand": "未知的命令",
@@ -330,14 +330,14 @@
 		"unknownError": "哎呀 :(\n\n发生错误：\n${error}"
 	},
 	"startPage": {
-		"title": "fount!",
-		"description": "欢迎来到fount的门槛。在进入等待展开的对话和故事的核心之前，先进行短暂的准备。"
+		"title": "beilu!",
+		"description": "欢迎来到beilu的门槛。在进入等待展开的对话和故事的核心之前，先进行短暂的准备。"
 	},
 	"tutorial": {
 		"title": "来点教程？",
 		"description": "让我们与您一起走进泉水的世界。这个交互式教程将阐明道路，帮助您发现其核心的魔力。你的冒险始于理解。",
 		"modal": {
-			"title": "欢迎使用fount！",
+			"title": "欢迎使用beilu！",
 			"instruction": "走一遍新手教程吗？",
 			"buttons": {
 				"start": "开始教程",
@@ -443,7 +443,7 @@
 			"title": "凭证转移错误",
 			"retrieve_error": "尝试保存您的登录凭证时发生错误：\n${error}\n您可以继续但无法保存登录信息。",
 			"transfer_error": "尝试转移您的登录凭证时发生错误：\n${error}\n您可以继续但无法获取登录信息。",
-			"no_credentials": "未找到任何已保存的登录凭据。\n请从 fount 内重新登录来更新登录凭证，或点击下方按钮在无登录凭证的前提下继续前往目标页面。",
+			"no_credentials": "未找到任何已保存的登录凭据。\n请从 beilu 内重新登录来更新登录凭证，或点击下方按钮在无登录凭证的前提下继续前往目标页面。",
 			"missing_params": "链接缺少必要参数。",
 			"buttons": {
 				"ignore": "忽略并继续",
@@ -453,7 +453,7 @@
 	},
 	"home": {
 		"title": "主页",
-		"description": "这里是您 fount 体验的核心。管理您想象国度中的一切——无论是鲜活的角色、宏大的世界，还是独特的身份。您的所有故事，都将以此为原点，衍生出无限可能。",
+		"description": "这里是您 beilu 体验的核心。管理您想象国度中的一切——无论是鲜活的角色、宏大的世界，还是独特的身份。您的所有故事，都将以此为原点，衍生出无限可能。",
 		"sidebarTitle": "详情",
 		"itemDescription": "在此处选择一个项目以查看详细信息。",
 		"noDescription": "无描述信息",
@@ -482,7 +482,7 @@
 			}
 		},
 		"emptyList": {
-			"message": "空空如也...<br/>或许你可以[新建一个部件](${newpartLink})或到[fount的Discord服务器](${discordLink})找点乐子？"
+			"message": "空空如也...<br/>或许你可以[新建一个部件](${newpartLink})或到[beilu的Discord服务器](${discordLink})找点乐子？"
 		},
 		"part_pages": {
 			"default": {
@@ -630,15 +630,15 @@
 				}
 			}
 		},
-		"escapeConfirm": "确定要离开fount吗？",
+		"escapeConfirm": "确定要离开beilu吗？",
 		"alerts": {
 			"fetchHomeRegistryFailed": "获取主页注册信息失败"
 		},
 		"achievements": {
 			"first_login": {
-				"name": "Hello, fount!",
+				"name": "Hello, beilu!",
 				"description": "向着新世界，初次登录！",
-				"locked_description": "登录fount一次。"
+				"locked_description": "登录beilu一次。"
 			},
 			"sfw_mode_on": {
 				"name": "老板来了！",
@@ -672,14 +672,14 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
-				"description": "生成 fount 部件信息"
+			"generateXBeiluPart": {
+				"description": "生成 beilu 部件信息"
 			}
 		}
 	},
 	"chat": {
 		"title": "聊天",
-		"description": "言语飞扬，故事展开。与您的人工智能伙伴互动，塑造叙事，并在数字对话的潮起潮落中迷失自我。fount的心脏在这里跳动。",
+		"description": "言语飞扬，故事展开。与您的人工智能伙伴互动，塑造叙事，并在数字对话的潮起潮落中迷失自我。beilu的心脏在这里跳动。",
 		"new": {
 			"title": "新聊天",
 			"description": "静待一篇尚未写就的篇章。开启新的对话，与您选定的伙伴在一片空白之上，描绘全新的互动与叙事。"
@@ -935,8 +935,8 @@
 			},
 			"code_greeting": {
 				"name": "用代码问好",
-				"description": "“你好，fount！”",
-				"locked_description": "通过执行代码块，成功输出 'hello fount!'。"
+				"description": "“你好，beilu！”",
+				"locked_description": "通过执行代码块，成功输出 'hello beilu!'。"
 			}
 		},
 		"dragAndDrop": {
@@ -1005,7 +1005,7 @@
 	},
 	"easynew": {
 		"title": "快速新建",
-		"description": "使用预定义或自定义模板快速构建新的fount部分，例如角色、世界和插件。只需点击几下即可完成您的下一个创作。",
+		"description": "使用预定义或自定义模板快速构建新的beilu部分，例如角色、世界和插件。只需点击几下即可完成您的下一个创作。",
 		"info": {
 			"description": "模板适用于快速创建基础组件。对于更复杂的创作，仍需您亲手雕琢。"
 		},
@@ -1189,7 +1189,7 @@
 		"title": "组件导出器",
 		"pageTitle": "组件导出器",
 		"pageSubtitle": "导出你喜欢的内容",
-		"description": "导出您的fount创作。该工具将您选择的部件收集到一个简单的 zip 文件中，以便妥善保存或共享。",
+		"description": "导出您的beilu创作。该工具将您选择的部件收集到一个简单的 zip 文件中，以便妥善保存或共享。",
 		"steps": {
 			"part": "选择组件",
 			"action": "导出"
@@ -1318,7 +1318,7 @@
 	"userSettings": {
 		"title": "用户设置",
 		"PageTitle": "用户设置",
-		"description": "关注您的fount标识的详细信息。管理您的个人资料、保护您的访问权限并查看连接的设备。为您提供一个安静的圣所。",
+		"description": "关注您的beilu标识的详细信息。管理您的个人资料、保护您的访问权限并查看连接的设备。为您提供一个安静的圣所。",
 		"userInfo": {
 			"title": "用户信息",
 			"usernameLabel": "用户名:",
@@ -1432,24 +1432,24 @@
 			}
 		}
 	},
-	"subfounts": {
-		"title": "子fount - 点对点设备管理",
-		"pageTitle": "子fount",
-		"description": "管理点对点子fount连接",
+	"subbeilus": {
+		"title": "子beilu - 点对点设备管理",
+		"pageTitle": "子beilu",
+		"description": "管理点对点子beilu连接",
 		"hostConnectionCode": {
 			"title": "主机连接码",
 			"connectionCodeLabel": "连接码 (Peer ID)",
 			"passwordLabel": "密码",
 			"copyButton": "复制",
 			"regenerateButton": "重新生成",
-			"infoMessage": "与子fount客户端共享这些凭据以建立连接。",
+			"infoMessage": "与子beilu客户端共享这些凭据以建立连接。",
 			"connectionCodeCopied": "连接码已复制到剪贴板",
 			"passwordCopied": "密码已复制到剪贴板",
 			"regenerateSuccess": "连接码已重新生成"
 		},
-		"connectedSubfounts": {
-			"title": "已连接的子fount",
-			"noSubfountsConnected": "未连接任何子fount",
+		"connectedSubbeilus": {
+			"title": "已连接的子beilu",
+			"noSubbeilusConnected": "未连接任何子beilu",
 			"table": {
 				"id": "ID",
 				"description": "备注",
@@ -1467,23 +1467,23 @@
 		},
 		"codeExecution": {
 			"title": "代码执行",
-			"description": "在选定的Subfount上执行JavaScript代码",
-			"selectSubfountLabel": "选择Subfount",
-			"selectSubfountPlaceholder": "请选择要执行代码的Subfount...",
+			"description": "在选定的Subbeilu上执行JavaScript代码",
+			"selectSubbeiluLabel": "选择Subbeilu",
+			"selectSubbeiluPlaceholder": "请选择要执行代码的Subbeilu...",
 			"hostOption": "主机 (ID: ${id})",
-			"subfountOption": "分机 ${id}${deviceId}",
+			"subbeiluOption": "分机 ${id}${deviceId}",
 			"scriptLabel": "JavaScript代码",
 			"executeButton": "执行",
 			"executing": "执行中...",
-			"noSubfountSelected": "请先选择一个Subfount",
+			"noSubbeiluSelected": "请先选择一个Subbeilu",
 			"noScriptProvided": "请输入要执行的代码",
 			"executionSuccess": "代码执行成功",
 			"executionFailed": "代码执行失败: ${message}"
 		},
 		"downloadClient": {
-			"title": "下载子fount客户端",
-			"description": "下载独立的子fount客户端脚本以在远程设备上运行。",
-			"downloadButton": "下载 subfount.mjs"
+			"title": "下载子beilu客户端",
+			"description": "下载独立的子beilu客户端脚本以在远程设备上运行。",
+			"downloadButton": "下载 subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "加载连接码失败: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "正在开发",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "子设备",
 						"sub_items": {
 							"main": {
@@ -1509,7 +1509,7 @@
 	"languageSettings": {
 		"title": "语言设置",
 		"pageTitle": "语言设置",
-		"description": "管理您的fount应用程序的语言首选项。使用可用的语言选项定制您的体验。",
+		"description": "管理您的beilu应用程序的语言首选项。使用可用的语言选项定制您的体验。",
 		"pageDescription": "在此处管理您的语言偏好。列表中的语言将按顺序优先于浏览器设置。",
 		"availableLanguages": "可用语言",
 		"preferredLanguages": "优先语言列表",
@@ -1538,7 +1538,7 @@
 	},
 	"themeManage": {
 		"title": "主题管理",
-		"description": "选择反映您的心情或故事的美学。预览并从主题调色板中进行选择，每个主题都为您的fount交互提供不同的氛围。你的世界，你的风格。",
+		"description": "选择反映您的心情或故事的美学。预览并从主题调色板中进行选择，每个主题都为您的beilu交互提供不同的氛围。你的世界，你的风格。",
 		"instruction": "选择一个主题！",
 		"search": {
 			"placeholder": "搜索主题...",
@@ -1628,7 +1628,7 @@
 		"achievements": {
 			"change_theme": {
 				"name": "换个痛涂！",
-				"description": "让fount换上了新的装扮，心情也焕然一新。",
+				"description": "让beilu换上了新的装扮，心情也焕然一新。",
 				"locked_description": "切换一次主题。"
 			}
 		},
@@ -1646,7 +1646,7 @@
 	"part_config": {
 		"title": "组件配置",
 		"pageTitle": "组件配置",
-		"description": "凝视fount的心脏。在这里，您可以调整其不同组件的设置，调整驱动您体验的引擎。",
+		"description": "凝视beilu的心脏。在这里，您可以调整其不同组件的设置，调整驱动您体验的引擎。",
 		"labels": {
 			"part": "选择组件"
 		},
@@ -1930,15 +1930,15 @@
 	},
 	"browser_integration": {
 		"title": "浏览器集成",
-		"description": "弥合fount和网络之间的差距。此页面提供用户脚本以实现无缝集成，将您的 AI 伴侣带入您的浏览体验中。",
+		"description": "弥合beilu和网络之间的差距。此页面提供用户脚本以实现无缝集成，将您的 AI 伴侣带入您的浏览体验中。",
 		"pageHeader": "浏览器集成",
-		"pageDescription": "为了让您的 fount 角色能够与网页互动，需要安装此浏览器集成脚本。它充当角色与浏览器之间的桥梁，使他们能够查看页面内容并执行操作。",
+		"pageDescription": "为了让您的 beilu 角色能够与网页互动，需要安装此浏览器集成脚本。它充当角色与浏览器之间的桥梁，使他们能够查看页面内容并执行操作。",
 		"install_script_title": "安装脚本",
 		"install_script_description": "点击下面的按钮来安装浏览器集成脚本。您必须先安装一个像油猴 (Tampermonkey) 一样的用户脚本管理器。",
 		"install_button": "安装",
 		"install_from_url_tip": "浏览器不允许你安装？复制这个网址并在油猴插件中通过 URL 导入脚本。",
 		"what_is_manager": "什么是油猴脚本管理器？",
-		"manager_explanation": "油猴脚本管理器是一个浏览器扩展，允许您安装和运行修改网页的脚本。要使用 fount 集成脚本，您需要其中一个扩展。",
+		"manager_explanation": "油猴脚本管理器是一个浏览器扩展，允许您安装和运行修改网页的脚本。要使用 beilu 集成脚本，您需要其中一个扩展。",
 		"popular_managers": "热门选择：",
 		"csp_warning": "您可能需要安装插件以停用 CSP，来确保集成功能正常运行，对于${browser}可以使用[这个插件](${link})。",
 		"connected_pages_title": "已连接的页面",
@@ -1996,10 +1996,10 @@
 				"description": "“以我之名，命令浏览器……”",
 				"locked_description": "在浏览器中运行一次JavaScript代码。"
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "开源之星",
-				"description": "在GitHub上为fount点亮星星（Star），感谢您的支持！",
-				"locked_description": "访问fount的GitHub仓库并点亮星星。"
+				"description": "在GitHub上为beilu点亮星星（Star），感谢您的支持！",
+				"locked_description": "访问beilu的GitHub仓库并点亮星星。"
 			}
 		},
 		"home_function_buttons": {
@@ -2015,24 +2015,24 @@
 	},
 	"browser_integration_script": {
 		"update": {
-			"prompt": "fount 浏览器集成脚本的新版本可用。是否现在打开更新页面？"
+			"prompt": "beilu 浏览器集成脚本的新版本可用。是否现在打开更新页面？"
 		},
-		"csp_warning": "fount 浏览器集成脚本检测到页面存在CSP策略，这可能导致集成脚本无法正常运行。请考虑安装插件以停用 CSP。",
+		"csp_warning": "beilu 浏览器集成脚本检测到页面存在CSP策略，这可能导致集成脚本无法正常运行。请考虑安装插件以停用 CSP。",
 		"hostChange": {
-			"securityWarningTitle": "--- fount 安全警告 ---",
-			"message": "当前页面 (\"${origin}\") 正试图将您的 fount 主机地址更改为:\n\n\"${newHost}\"\n\n警告：批准此操作将允许新主机完全控制您的浏览器集成功能，可能导致敏感信息泄露或账户被盗用。\n只有在您确信这是您本人操作（例如，迁移 fount 服务器）时才应批准。\n\n您确定要允许这次更改吗？",
-			"uuidMismatchError": "fount 安全错误：主机 ${newHost} 的标识 (UUID) 与您当前的标识不匹配。操作已取消。",
-			"verificationError": "fount 安全错误：无法验证新的主机 \"${newHost}\"。请检查地址是否正确以及服务是否正在运行。"
+			"securityWarningTitle": "--- beilu 安全警告 ---",
+			"message": "当前页面 (\"${origin}\") 正试图将您的 beilu 主机地址更改为:\n\n\"${newHost}\"\n\n警告：批准此操作将允许新主机完全控制您的浏览器集成功能，可能导致敏感信息泄露或账户被盗用。\n只有在您确信这是您本人操作（例如，迁移 beilu 服务器）时才应批准。\n\n您确定要允许这次更改吗？",
+			"uuidMismatchError": "beilu 安全错误：主机 ${newHost} 的标识 (UUID) 与您当前的标识不匹配。操作已取消。",
+			"verificationError": "beilu 安全错误：无法验证新的主机 \"${newHost}\"。请检查地址是否正确以及服务是否正在运行。"
 		}
 	},
 	"terminal_assistant": {
 		"title": "终端辅助",
-		"description": "除了图形界面之外，还有直接命令的空间。通过终端助手与fount的核心进行交互，其中文本编织了自己强大的魔力。",
-		"initialMessage": "fount 支持将你喜欢的角色部署到你的终端中辅助你编码！",
+		"description": "除了图形界面之外，还有直接命令的空间。通过终端助手与beilu的核心进行交互，其中文本编织了自己强大的魔力。",
+		"initialMessage": "beilu 支持将你喜欢的角色部署到你的终端中辅助你编码！",
 		"initialMessageLink": "点击这里了解更多信息",
 		"achievements": {
 			"invoke_shell_assist": {
-				"name": "“Hey, fount.”",
+				"name": "“Hey, beilu.”",
 				"description": "在黑漆漆的终端里，呼唤了AI伙伴的名字。",
 				"locked_description": "调用一次终端辅助。"
 			}
@@ -2050,7 +2050,7 @@
 	},
 	"deskpet": {
 		"title": "桌面宠物",
-		"description": "将您的fount角色作为桌面上的互动宠物启动。",
+		"description": "将您的beilu角色作为桌面上的互动宠物启动。",
 		"launcherCard": {
 			"title": "宠物启动器",
 			"buttons": {
@@ -2105,15 +2105,15 @@
 		}
 	},
 	"access": {
-		"title": "在其他设备上访问 fount",
-		"description": "将fount的覆盖范围扩展到单个屏幕之外。这里有网关（一个 URL、一个 QR 码），用于通过其他设备与您的同伴进行连接，这是一个跨本地以太网的简单桥梁。",
-		"heading": "想在其他设备上访问 fount 吗？",
+		"title": "在其他设备上访问 beilu",
+		"description": "将beilu的覆盖范围扩展到单个屏幕之外。这里有网关（一个 URL、一个 QR 码），用于通过其他设备与您的同伴进行连接，这是一个跨本地以太网的简单桥梁。",
+		"heading": "想在其他设备上访问 beilu 吗？",
 		"instruction": {
-			"sameLAN": "确保设备和 fount 主机在同一个局域网下",
+			"sameLAN": "确保设备和 beilu 主机在同一个局域网下",
 			"accessthis": "访问以下网址："
 		},
 		"QRcode": {
-			"alt": "扫描此二维码访问 fount"
+			"alt": "扫描此二维码访问 beilu"
 		},
 		"urlInput": {
 			"aria-label": "网址"
@@ -2128,9 +2128,9 @@
 	},
 	"proxy": {
 		"title": "API 代理",
-		"description": "对于开发人员和集成商，此页面推出了 fount API 代理，您可以将 fount 的功能编织到其他应用程序中。",
+		"description": "对于开发人员和集成商，此页面推出了 beilu API 代理，您可以将 beilu 的功能编织到其他应用程序中。",
 		"heading": "API 代理网关",
-		"instruction": "在此页面生成并管理您的 API 密钥，以将 fount 与其他应用程序集成。",
+		"instruction": "在此页面生成并管理您的 API 密钥，以将 beilu 与其他应用程序集成。",
 		"endpointSectionTitle": "API 端点",
 		"endpointInstruction": "这是与其他服务集成的基本 URL。",
 		"apiUrlInput": {
@@ -2161,16 +2161,16 @@
 		}
 	},
 	"ide_integration": {
-		"description": "通过 Agent Client Protocol 将 fount 角色接入支持的编辑器（如 Zed、JetBrains、Neovim），配置 API 密钥与角色，将 AI 伙伴带入开发工作流。",
+		"description": "通过 Agent Client Protocol 将 beilu 角色接入支持的编辑器（如 Zed、JetBrains、Neovim），配置 API 密钥与角色，将 AI 伙伴带入开发工作流。",
 		"title": "IDE 集成",
 		"heading": "IDE 集成",
-		"instruction": "在支持 ACP 的编辑器（如 Zed、JetBrains、Neovim 等）中用 fount 角色辅助编程。",
+		"instruction": "在支持 ACP 的编辑器（如 Zed、JetBrains、Neovim 等）中用 beilu 角色辅助编程。",
 		"supportedEditorsTitle": "受支持的编辑器与客户端",
-		"supportedEditorsIntro": "以下客户端可与 fount 配合使用：",
+		"supportedEditorsIntro": "以下客户端可与 beilu 配合使用：",
 		"supportedEditorsLoading": "加载中…",
 		"supportedEditorsError": "加载列表失败：${message}",
-		"acpTitle": "配置 fount ACP 脚本",
-		"acpDesc": "参考以下示例配置 fount ACP 脚本：",
+		"acpTitle": "配置 beilu ACP 脚本",
+		"acpDesc": "参考以下示例配置 beilu ACP 脚本：",
 		"acpCharLabel": "角色",
 		"acpCharPlaceholder": "选择角色",
 		"charListError": "获取角色列表失败",
@@ -2181,7 +2181,7 @@
 		"copyButton": "复制",
 		"copied": "已复制到剪贴板",
 		"apiKeySectionTitle": "API 密钥",
-		"apiKeyHint": "用于 ACP 脚本连接 fount（与 API 代理同套密钥，可在用户设置中创建）。",
+		"apiKeyHint": "用于 ACP 脚本连接 beilu（与 API 代理同套密钥，可在用户设置中创建）。",
 		"generateApiKeyButton": "生成新密钥",
 		"apiKeyCopied": "API 密钥已复制",
 		"apiKeyCreateError": "创建 API 密钥失败：${message}",
@@ -2197,14 +2197,14 @@
 		"achievements": {
 			"first_ide_use": {
 				"name": "初探代码之泉",
-				"description": "在支持 ACP 的编辑器（如 Zed、JetBrains、Neovim 等）中首次使用 fount 角色辅助编程。",
-				"locked_description": "在外部 IDE 中连接 fount 角色并完成一次对话。"
+				"description": "在支持 ACP 的编辑器（如 Zed、JetBrains、Neovim 等）中首次使用 beilu 角色辅助编程。",
+				"locked_description": "在外部 IDE 中连接 beilu 角色并完成一次对话。"
 			}
 		}
 	},
 	"achievements": {
 		"title": "成就",
-		"description": "探索您与 fount 旅程的里程碑和成就。每项成就都标志着您独特叙事的一步。",
+		"description": "探索您与 beilu 旅程的里程碑和成就。每项成就都标志着您独特叙事的一步。",
 		"pageHeader": "成就殿堂",
 		"pageDescription": "在这里查看您已解锁的成就和里程碑。",
 		"unlocked_on": "解锁于 ${date}",
@@ -2233,7 +2233,7 @@
 	},
 	"debug_info": {
 		"title": "调试与系统信息",
-		"description": "获取有关您的 fount 安装的详细调试和系统信息。这对于故障排除和支持请求非常有帮助。",
+		"description": "获取有关您的 beilu 安装的详细调试和系统信息。这对于故障排除和支持请求非常有帮助。",
 		"heading": "调试与系统信息",
 		"copyButton": "复制报告",
 		"versionStatus": {
@@ -2267,9 +2267,9 @@
 		}
 	},
 	"badges_maker": {
-		"title": "fount! 徽章转换器",
-		"description": "当您的项目需要一点fount的特色时。转换shields.io徽章，赋予它们新的、引起共鸣的身份。",
-		"card_title": "fount 徽章链接转换器",
+		"title": "beilu! 徽章转换器",
+		"description": "当您的项目需要一点beilu的特色时。转换shields.io徽章，赋予它们新的、引起共鸣的身份。",
+		"card_title": "beilu 徽章链接转换器",
 		"original_url_label": "粘贴 img.shields.io 网址",
 		"original_url": {
 			"placeholder": "例如: https://img.shields.io/badge/Hello-World-blue"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "目录索引",
-		"description": "浏览并探索 fount 工作区中的文件和文件夹。",
+		"description": "浏览并探索 beilu 工作区中的文件和文件夹。",
 		"indexOf": "索引：${path}",
 		"name": "名称",
 		"mimeType": "MIME 类型",

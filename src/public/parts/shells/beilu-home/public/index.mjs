@@ -8,6 +8,7 @@
  * - 初始化各选项卡内容模块
  */
 
+import { getCurrentLang, initI18n, switchLang, t } from './src/i18n.mjs'
 import { init as initAiDiag } from './src/tabs/aiDiag.mjs'
 import { init as initDebug } from './src/tabs/debug.mjs'
 import { init as initFakeSend } from './src/tabs/fakeSend.mjs'
@@ -22,19 +23,19 @@ import { init as initSysViewer } from './src/tabs/sysViewer.mjs'
 import { init as initUsage } from './src/tabs/usage.mjs'
 import { init as initWorldbook } from './src/tabs/worldbook.mjs'
 
-// ===== 选项卡配置 =====
+// ===== 选项卡配置（使用 i18n key） =====
 const TAB_CONFIG = {
 	usage: {
-		title: '角色卡',
-		description: '管理你的角色、世界和对话',
+		titleKey: 'nav.usage.chars',
+		descKey: 'desc.usage',
 	},
 	system: {
-		title: 'AI 服务源',
-		description: '服务源、插件和系统组件管理',
+		titleKey: 'nav.system.api',
+		descKey: 'desc.system',
 	},
 	user: {
-		title: '主题和外观',
-		description: '主题、语言和工具配置',
+		titleKey: 'nav.user.theme',
+		descKey: 'desc.user',
 	},
 }
 
@@ -59,8 +60,8 @@ function switchTab(tabId) {
 	// 更新子头部
 	const config = TAB_CONFIG[tabId]
 	if (config) {
-		dynamicTitle.textContent = config.title
-		dynamicDescription.textContent = config.description
+		dynamicTitle.textContent = t(config.titleKey)
+		dynamicDescription.textContent = t(config.descKey)
 	}
 }
 
@@ -80,15 +81,15 @@ if (navigator.serviceWorker?.controller) {
 
 // ===== "使用"选项卡导航切换 =====
 const usageNavItems = document.querySelectorAll('.beilu-usage-nav-item')
-const usageSectionTitles = {
-	chars: '角色卡',
-	worlds: '世界书',
-	personas: '用户人设',
-	presets: '聊天预设',
-	memoryPresets: '记忆预设',
-	memoryManage: '记忆管理',
-	sysViewer: '系统查看器',
-	aiDiag: 'AI诊断',
+const usageSectionTitleKeys = {
+	chars: 'nav.usage.chars',
+	worlds: 'nav.usage.worlds',
+	personas: 'nav.usage.personas',
+	presets: 'nav.usage.presets',
+	memoryPresets: 'nav.usage.memoryPresets',
+	memoryManage: 'nav.usage.memoryManage',
+	sysViewer: 'nav.usage.sysViewer',
+	aiDiag: 'nav.usage.aiDiag',
 }
 
 usageNavItems.forEach(btn => {
@@ -102,7 +103,7 @@ usageNavItems.forEach(btn => {
 			s.classList.toggle('active', s.id === `section-${sectionId}`)
 		})
 		// 更新子头部标题
-		dynamicTitle.textContent = usageSectionTitles[sectionId] || sectionId
+		dynamicTitle.textContent = t(usageSectionTitleKeys[sectionId]) || sectionId
 
 		// 懒加载：首次切换到预设管理时初始化
 		if (sectionId === 'presets' && !presetInitialized) {
@@ -164,14 +165,14 @@ usageNavItems.forEach(btn => {
 
 // ===== "系统设置"选项卡导航切换 =====
 const systemNavItems = document.querySelectorAll('.beilu-system-nav-item')
-const systemSectionTitles = {
-	api: 'AI 服务源',
-	search: '搜索服务源',
-	translate: '翻译服务源',
-	import: '导入处理器',
-	plugins: '功能插件',
-	generators: 'AI 服务生成器',
-	shells: '系统 UI 组件',
+const systemSectionTitleKeys = {
+	api: 'nav.system.api',
+	search: 'nav.system.search',
+	translate: 'nav.system.translate',
+	import: 'nav.system.import',
+	plugins: 'nav.system.plugins',
+	generators: 'nav.system.generators',
+	shells: 'nav.system.shells',
 }
 
 systemNavItems.forEach(btn => {
@@ -185,19 +186,19 @@ systemNavItems.forEach(btn => {
 			s.classList.toggle('active', s.id === `sys-section-${sectionId}`)
 		})
 		// 更新子头部标题
-		dynamicTitle.textContent = systemSectionTitles[sectionId] || sectionId
+		dynamicTitle.textContent = t(systemSectionTitleKeys[sectionId]) || sectionId
 	})
 })
 
 // ===== "用户设置"选项卡导航切换 =====
 const userNavItems = document.querySelectorAll('.beilu-user-nav-item')
-const userSectionTitles = {
-	theme: '主题和外观',
-	language: '语言设置',
-	remote: '远程访问',
-	browser: '浏览器集成',
-	debug: '调试面板',
-	about: '关于',
+const userSectionTitleKeys = {
+	theme: 'nav.user.theme',
+	language: 'nav.user.language',
+	remote: 'nav.user.remote',
+	browser: 'nav.user.browser',
+	debug: 'nav.user.debug',
+	about: 'nav.user.about',
 }
 
 userNavItems.forEach(btn => {
@@ -211,7 +212,7 @@ userNavItems.forEach(btn => {
 			s.classList.toggle('active', s.id === `user-section-${sectionId}`)
 		})
 		// 更新子头部标题
-		dynamicTitle.textContent = userSectionTitles[sectionId] || sectionId
+		dynamicTitle.textContent = t(userSectionTitleKeys[sectionId]) || sectionId
 	})
 })
 
@@ -303,20 +304,20 @@ function initBeiluEyePanel() {
 		try {
 			const res = await fetch(`${BE_API}/getdata`)
 			if (!res.ok) {
-				if (statusBadge) statusBadge.textContent = '未加载'
-				return
+				if (statusBadge) statusBadge.textContent = t('sys.plugins.eye.notLoaded')
+						return
 			}
 			const data = await res.json()
 			if (statusBadge) {
-				const labels = { stopped: '已停止', installing: '安装中...', starting: '启动中...', running: '运行中', error: '错误' }
-				statusBadge.textContent = labels[data.electronStatus] || data.electronStatus
+				const labelKeys = { stopped: 'sys.plugins.eye.stopped', installing: 'sys.plugins.eye.installing', starting: 'sys.plugins.eye.starting', running: 'sys.plugins.eye.running', error: 'sys.plugins.eye.error' }
+						statusBadge.textContent = labelKeys[data.electronStatus] ? t(labelKeys[data.electronStatus]) : data.electronStatus
 				statusBadge.className = 'badge badge-sm badge-outline'
 				if (data.electronStatus === 'running') statusBadge.classList.add('badge-success')
 				else if (data.electronStatus === 'error') statusBadge.classList.add('badge-error')
 				else statusBadge.classList.add('badge-warning')
 			}
 		} catch {
-			if (statusBadge) statusBadge.textContent = '未加载'
+			if (statusBadge) statusBadge.textContent = t('sys.plugins.eye.notLoaded')
 		}
 	}
 
@@ -351,13 +352,13 @@ function initDarkMode() {
 
 	// 更新描述文字
 	const desc = toggle.closest('.beilu-settings-item')?.querySelector('.text-xs')
-	if (desc) desc.textContent = isDark ? '当前使用深色主题' : '当前使用浅色主题'
+	if (desc) desc.textContent = isDark ? t('user.theme.darkMode.on') : t('user.theme.darkMode.off')
 
 	toggle.addEventListener('change', () => {
 		const theme = toggle.checked ? 'dark' : 'light'
 		localStorage.setItem('theme', theme)
 		document.documentElement.setAttribute('data-theme', theme)
-		if (desc) desc.textContent = toggle.checked ? '当前使用深色主题' : '当前使用浅色主题'
+		if (desc) desc.textContent = toggle.checked ? t('user.theme.darkMode.on') : t('user.theme.darkMode.off')
 	})
 }
 
@@ -402,7 +403,7 @@ async function initRemoteAccess() {
 		const ips = data.ips || []
 
 		if (ips.length === 0) {
-			urlEl.textContent = `http://localhost:${port}（未检测到局域网地址）`
+				urlEl.textContent = `http://localhost:${port}` + t('user.remote.noLan')
 		} else {
 			// 显示所有局域网地址（后端返回 [{name, address}]）
 			const urls = ips.map(ip => `http://${ip.address}:${port}`)
@@ -414,8 +415,8 @@ async function initRemoteAccess() {
 			copyBtn.addEventListener('click', () => {
 				const firstUrl = ips.length > 0 ? `http://${ips[0].address}:${port}` : `http://localhost:${port}`
 				navigator.clipboard.writeText(firstUrl).then(() => {
-					copyBtn.textContent = '✅ 已复制'
-					setTimeout(() => { copyBtn.textContent = '📋 复制' }, 2000)
+					copyBtn.textContent = t('user.remote.copied')
+					setTimeout(() => { copyBtn.textContent = t('user.remote.copy') }, 2000)
 				}).catch(() => {
 					// fallback
 					const ta = document.createElement('textarea')
@@ -424,14 +425,14 @@ async function initRemoteAccess() {
 					ta.select()
 					document.execCommand('copy')
 					document.body.removeChild(ta)
-					copyBtn.textContent = '✅ 已复制'
-					setTimeout(() => { copyBtn.textContent = '📋 复制' }, 2000)
+					copyBtn.textContent = t('user.remote.copied')
+					setTimeout(() => { copyBtn.textContent = t('user.remote.copy') }, 2000)
 				})
 			})
 		}
 	} catch (err) {
 		console.warn('[beilu-home] 获取网络信息失败:', err)
-		urlEl.textContent = `http://localhost:1314（获取局域网地址失败）`
+		urlEl.textContent = `http://localhost:1314` + t('user.remote.failed')
 	}
 }
 
@@ -446,7 +447,8 @@ function initMobileAdaptation() {
 	contentAreas.forEach(area => {
 		const backBtn = document.createElement('button')
 		backBtn.className = 'beilu-mobile-back-btn'
-		backBtn.innerHTML = '← 返回导航'
+		backBtn.innerHTML = t('mobile.back')
+		backBtn.dataset.i18n = 'mobile.back'
 		backBtn.addEventListener('click', () => showMobileNav())
 		area.prepend(backBtn)
 	})
@@ -501,3 +503,42 @@ function initMobileAdaptation() {
 }
 
 initMobileAdaptation()
+
+// ===== 语言切换 =====
+function initLanguageSwitch() {
+	const langSelect = document.getElementById('user-language')
+	if (!langSelect) return
+
+	// 从 localStorage 恢复
+	const saved = localStorage.getItem('beiluHomeLang') || 'zh-CN'
+	langSelect.value = saved
+
+	langSelect.addEventListener('change', () => {
+		switchLang(langSelect.value)
+	})
+
+	// 语言切换事件 → 更新动态标题
+	window.addEventListener('beilu-lang-change', () => {
+		// 找到当前激活的顶级 tab
+		const activeTab = document.querySelector('.beilu-tab.active')
+		if (activeTab) {
+			switchTab(activeTab.dataset.tab)
+		}
+	})
+}
+
+// ===== 初始化 i18n =====
+initI18n().then(() => {
+	initLanguageSwitch()
+
+	// 如果不是中文，需要重新设置动态标题
+	if (getCurrentLang() !== 'zh-CN') {
+		const activeTab = document.querySelector('.beilu-tab.active')
+		if (activeTab) {
+			switchTab(activeTab.dataset.tab)
+		}
+	}
+}).catch(err => {
+	console.warn('[beilu-home] i18n 初始化失败:', err)
+	initLanguageSwitch()
+})

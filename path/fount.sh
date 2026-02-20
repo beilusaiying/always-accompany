@@ -643,7 +643,7 @@ handle_docker_termux_passthrough() {
 
 update_fount_if_not_noupdate() {
 	if [ -f "$FOUNT_DIR/.noupdate" ]; then
-		get_i18n 'update.skippingFountUpdate'
+		:
 	else
 		fount_upgrade
 	fi
@@ -664,6 +664,113 @@ open_url_in_browser() {
 	elif [ "$OS_TYPE" = "Darwin" ]; then
 		open "$url" >/dev/null 2>&1 &
 	fi
+}
+
+# beilu: 从配置读取端口号
+get_fount_port() {
+	local port=1314
+	local cfg_path="$FOUNT_DIR/data/config.json"
+	if [ -f "$cfg_path" ] && command -v jq &>/dev/null; then
+		local cfg_port
+		cfg_port=$(jq -r '.port // empty' "$cfg_path" 2>/dev/null)
+		if [ -n "$cfg_port" ]; then
+			port=$cfg_port
+		fi
+	fi
+	echo "$port"
+}
+
+# beilu: 必须依赖检查（node/git/python 需用户自行安装）
+test_required_dependencies() {
+	local missing_names=()
+	local missing_urls=()
+
+	if ! command -v node &>/dev/null; then
+		missing_names+=("Node.js")
+		missing_urls+=("https://nodejs.org/en/download")
+	fi
+	if ! command -v git &>/dev/null; then
+		missing_names+=("Git")
+		missing_urls+=("https://git-scm.com/downloads")
+	fi
+	if ! command -v python &>/dev/null && ! command -v python3 &>/dev/null; then
+		missing_names+=("Python")
+		missing_urls+=("https://www.python.org/downloads/")
+	fi
+
+	if [ ${#missing_names[@]} -gt 0 ]; then
+		# 先处理 git 交互式安装
+		local git_resolved=0
+		local i
+		for i in "${!missing_names[@]}"; do
+			if [ "${missing_names[$i]}" = "Git" ]; then
+				echo ""
+				echo -e "  ${C_YELLOW}Git 未安装。${C_RESET}"
+				echo -e "  手动安装可以自行配置更多选项。"
+				printf "  是否自动安装 Git? (Y/N): "
+				read -r answer
+				if [ "$answer" = "Y" ] || [ "$answer" = "y" ]; then
+					echo -e "  ${C_CYAN}正在自动安装 Git...${C_RESET}"
+					if install_package "git" "git git-core"; then
+						echo -e "  ${C_GREEN}✓ Git 安装成功${C_RESET}"
+						git_resolved=1
+					else
+						echo -e "  ${C_RED}✗ Git 自动安装失败${C_RESET}"
+					fi
+				fi
+				break
+			fi
+		done
+
+		# 重新汇总仍然缺失的依赖
+		local still_missing_names=()
+		local still_missing_urls=()
+		for i in "${!missing_names[@]}"; do
+			if [ "${missing_names[$i]}" = "Git" ] && [ "$git_resolved" -eq 1 ]; then
+				continue
+			fi
+			still_missing_names+=("${missing_names[$i]}")
+			still_missing_urls+=("${missing_urls[$i]}")
+		done
+
+		if [ ${#still_missing_names[@]} -gt 0 ]; then
+			echo ""
+			echo -e "  ${C_RED}❌ 缺少必须依赖，无法启动${C_RESET}"
+			echo ""
+			for i in "${!still_missing_names[@]}"; do
+				echo -e "    • ${C_YELLOW}${still_missing_names[$i]}${C_RESET}  →  ${C_CYAN}${still_missing_urls[$i]}${C_RESET}"
+			done
+			echo ""
+			echo -e "  ${C_RED}请安装以上依赖后重新启动。${C_RESET}"
+			echo ""
+			printf "  按 Enter 退出"
+			read -r
+			exit 1
+		fi
+	fi
+
+	echo -e "  ${C_GREEN}✓ 必须依赖检查通过${C_RESET}"
+}
+
+# beilu: 等待服务器就绪后再打开浏览器
+wait_and_open_browser() {
+	local port="${1:-1314}"
+	(
+		local timeout=120
+		local elapsed=0
+		while [ "$elapsed" -lt "$timeout" ]; do
+			local http_code
+			http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/api/ping" 2>/dev/null) || true
+			if [ "$http_code" = "200" ]; then
+				open_url_in_browser "http://localhost:$port"
+				exit 0
+			fi
+			sleep 1
+			elapsed=$((elapsed + 1))
+		done
+		# 超时兜底
+		open_url_in_browser "http://localhost:$port"
+	) &
 }
 
 install_ipc_tools() {
@@ -961,11 +1068,14 @@ if [[ $# -gt 0 ]]; then
 	case "$1" in
 	open)
 		handle_docker_termux_passthrough "$@"
+		# beilu: 启动前检查必须依赖
+		test_required_dependencies
+		port=$(get_fount_port)
 		# 若 $FOUNT_DIR/data 是目录
 		if [ -d "$FOUNT_DIR/data" ]; then
 			ensure_dependencies "open" || exit 1
-			TARGET_URL='https://steve02081504.github.io/fount/wait?cold_bootting=true'
-			open_url_in_browser "$TARGET_URL"
+			# beilu: 等待服务器就绪后再打开浏览器
+			wait_and_open_browser "$port"
 			"$0" "${@:2}"
 			exit $?
 		else
@@ -983,8 +1093,8 @@ if [[ $# -gt 0 ]]; then
 			fi
 
 			if [[ -n "$STATUS_SERVER_PID" ]]; then
-				URL='https://steve02081504.github.io/fount/wait/install'
-				open_url_in_browser "$URL"
+				# beilu: 等待服务器就绪后再打开浏览器
+				wait_and_open_browser "$port"
 			else
 				echo -e "${C_YELLOW}Warning: Could not start status server. Proceeding with standard installation.${C_RESET}"
 			fi
@@ -1108,6 +1218,9 @@ fount_upgrade() {
 		fi
 	fi
 }
+
+# beilu: 主流程依赖检查（node/git/python），git 改为交互式安装
+test_required_dependencies
 
 # 更新 fount
 if [[ $# -eq 0 || $1 != "shutdown" ]]; then

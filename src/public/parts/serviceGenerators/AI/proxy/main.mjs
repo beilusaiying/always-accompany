@@ -82,8 +82,8 @@ async function GetSource(config, { SaveConfig }) {
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: config.apikey ? 'Bearer ' + config.apikey : undefined,
-				'HTTP-Referer': 'https://steve02081504.github.io/fount/',
-				'X-Title': 'fount',
+				'HTTP-Referer': 'https://localhost/',
+				'X-Title': 'beilu',
 				...config?.custom_headers
 			},
 			body: requestBody,

@@ -27,7 +27,7 @@ const console = baseConsole
  * 所有可用区域设置的列表。
  * @type {{id: string, name: string}[]}
  */
-export const fountLocaleList = fs.readFileSync(__dirname + '/src/public/locales/list.csv', 'utf8')
+export const beiluLocaleList = fs.readFileSync(__dirname + '/src/public/locales/list.csv', 'utf8')
 	.trim()
 	.split('\n')
 	.slice(1) // Skip header
@@ -61,7 +61,7 @@ export function getbestlocale(preferredlocaleList, localeList) {
 	return 'en-UK' // 默认
 }
 
-const fountLocaleCache = {}
+const beiluLocaleCache = {}
 
 /**
  * 获取区域设置数据。
@@ -69,8 +69,8 @@ const fountLocaleCache = {}
  * @returns {LocaleData} 区域设置数据。
  */
 export function getLocaleData(localeList) {
-	const resultLocale = getbestlocale(localeList, fountLocaleList)
-	return fountLocaleCache[resultLocale] ?? loadJsonFile(__dirname + `/src/public/locales/${resultLocale}.json`)
+	const resultLocale = getbestlocale(localeList, beiluLocaleList)
+	return beiluLocaleCache[resultLocale] ?? loadJsonFile(__dirname + `/src/public/locales/${resultLocale}.json`)
 }
 /**
  * 获取用户的区域设置数据。
@@ -134,8 +134,8 @@ fs.watch(`${__dirname}/src/public/locales`, (event, filename) => {
 	console.log(`Detected change in ${filename}.`)
 
 	// 清除已更改文件的缓存（如果存在）
-	if (!fountLocaleCache[locale]) return
-	delete fountLocaleCache[locale]
+	if (!beiluLocaleCache[locale]) return
+	delete beiluLocaleCache[locale]
 	localhostLocaleData = getLocaleData(localhostLocales)
 	sendEventToAll('locale-updated', null)
 })

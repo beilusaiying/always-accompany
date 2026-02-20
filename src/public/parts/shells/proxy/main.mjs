@@ -40,7 +40,7 @@ export default {
 				console.log(`Please go to ${webUI} to generate an API key.`)
 				const qrcode = await import('npm:qrcode-terminal')
 				qrcode.generate(webUI, { small: true }, console.noBreadcrumb.log)
-				console.log(`You can use it with any OpenAI-compatible client, for example, to list models, run: curl ${url}/v1/models -H "Authorization: Bearer <your_fount_apikey>"`)
+				console.log(`You can use it with any OpenAI-compatible client, for example, to list models, run: curl ${url}/v1/models -H "Authorization: Bearer <your_beilu_apikey>"`)
 			},
 			/**
 			 * 处理IPC调用以获取API端点URL。

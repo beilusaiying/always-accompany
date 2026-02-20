@@ -70,6 +70,16 @@ export async function getAvailableLocales() {
 }
 
 /**
+ * 获取用户列表（用于登录页面）。
+ * @returns {Promise<object>} - 包含 users 数组的对象。
+ */
+export async function getUserList() {
+	const response = await fetch('/api/users/list')
+	if (!response.ok) return Promise.reject(Object.assign(new Error(`API request failed with status ${response.status}`), await response.json().catch(() => ({})), { response }))
+	return response.json()
+}
+
+/**
  * 生成验证码。
  * @returns {Promise<Response>} - 服务器响应。
  */
@@ -97,37 +107,33 @@ export async function whoami() {
 /**
  * 登录。
  * @param {string} username - 用户名。
- * @param {string} password - 密码。
+ * @param {string} [password] - 密码（无密码用户可不提供）。
  * @param {string} deviceid - 设备 ID。
- * @param {string} powToken - POW 令牌。
  * @returns {Promise<Response>} - 服务器响应。
  */
-export async function login(username, password, deviceid, powToken) {
+export async function login(username, password, deviceid) {
 	return await fetch('/api/login', {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
-		body: JSON.stringify({ username, password, deviceid, powToken }),
+		body: JSON.stringify({ username, password: password || '', deviceid }),
 	})
 }
 
 /**
  * 注册。
  * @param {string} username - 用户名。
- * @param {string} password - 密码。
- * @param {string} deviceid - 设备 ID。
- * @param {string} verificationcode - 验证码。
- * @param {string} powToken - POW 令牌。
+ * @param {string} [password] - 密码（无密码注册可不提供）。
  * @returns {Promise<Response>} - 服务器响应。
  */
-export async function register(username, password, deviceid, verificationcode, powToken) {
+export async function register(username, password) {
 	return await fetch('/api/register', {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
-		body: JSON.stringify({ username, password, deviceid, verificationcode, powToken }),
+		body: JSON.stringify({ username, password: password || '' }),
 	})
 }
 

@@ -118,7 +118,7 @@
 				"noUrl": "❌: 🚫🔗 ➡️ 🔗👮"
 			},
 			"update": {
-				"skippingFountUpdate": "⏭️ ⛲ ⏫",
+				"skippingBeiluUpdate": "⏭️ ⛲ ⏫",
 				"skippingDenoUpgradeDocker": "🐳 ⏭️ 🦕 ⏫"
 			},
 			"shortcut": {
@@ -183,23 +183,23 @@
 				"initFailed": "❌✨ ⛲ ➡️ 🛑"
 			},
 			"remove": {
-				"removingFount": "👋 ⛲...",
-				"fountUninstallationComplete": "✅ ⛲ 👋💯",
-				"removingFountInstallationDir": "👋 ⛲ 📁...",
-				"fountInstallationDirRemoved": "✅ ⛲ 📁 👋",
-				"removingFountFromPath": "👋 ⛲ @ 🛣️",
+				"removingBeilu": "👋 ⛲...",
+				"beiluUninstallationComplete": "✅ ⛲ 👋💯",
+				"removingBeiluInstallationDir": "👋 ⛲ 📁...",
+				"beiluInstallationDirRemoved": "✅ ⛲ 📁 👋",
+				"removingBeiluFromPath": "👋 ⛲ @ 🛣️",
 				"removingProtocolHandler": "👋 🔗⛲://",
 				"protocolHandlerRemoved": "✅ 👋 🔗⛲://",
 				"removeProtocolHandlerFailed": "❌ 👋 🔗⛲://: ${message}",
-				"removingFountFromGitSafeDir": "👋 ⛲ @ 🐙🐱🔒",
+				"removingBeiluFromGitSafeDir": "👋 ⛲ @ 🐙🐱🔒",
 				"removingInstalledSystemPackages": "👋 📦...",
 				"uninstallingDeno": "👋 🦕...",
 				"removeDenoFailed": "❌ 👋 🦕: ${message}",
-				"removingFountPwshFromProfile": "👋 ⛲ @ 💪🐚",
-				"fountPwshRemovedFromProfile": "✅ 👋 ⛲ @ 💪🐚",
+				"removingBeiluPwshFromProfile": "👋 ⛲ @ 💪🐚",
+				"beiluPwshRemovedFromProfile": "✅ 👋 ⛲ @ 💪🐚",
 				"pwshProfileNotFound": "❓ 💪🐚 Profile",
-				"uninstallingFountPwsh": "👋 ⛲-💪🐚",
-				"uninstallFountPwshFailed": "❌ 👋 ⛲-💪🐚: ${message}",
+				"uninstallingBeiluPwsh": "👋 ⛲-💪🐚",
+				"uninstallBeiluPwshFailed": "❌ 👋 ⛲-💪🐚: ${message}",
 				"removingTerminalProfile": "👋 🪟🖥️",
 				"terminalProfileRemoved": "✅ 👋 🪟🖥️",
 				"terminalProfileNotFound": "❓ 🪟🖥️",
@@ -289,8 +289,8 @@
 		"footer": {
 			"ready_text": "🚀❓",
 			"wait_text": "⏳...",
-			"open_fount": "▶️ ⛲",
-			"open_or_install_fount": "▶️/📥 ⛲",
+			"open_beilu": "▶️ ⛲",
+			"open_or_install_beilu": "▶️/📥 ⛲",
 			"error_message": "😢\n\n❌:\n${error}"
 		},
 		"error": {
@@ -321,7 +321,7 @@
 				"retry": "🔄"
 			}
 		},
-		"fountNotFound": "😢\n\n🤷‍♂️⛲, 📥❓",
+		"beiluNotFound": "😢\n\n🤷‍♂️⛲, 📥❓",
 		"invalidProtocol": "🚫🔗",
 		"insufficientParams": "❓🔢",
 		"unknownCommand": "🤷‍♂️➡️",
@@ -672,7 +672,7 @@
 			}
 		},
 		"home_drag_out_generators": {
-			"generateXFountPart": {
+			"generateXBeiluPart": {
 				"description": "📥🧩📃"
 			}
 		}
@@ -936,7 +936,7 @@
 			"code_greeting": {
 				"name": "👋💻",
 				"description": "💬💧",
-				"locked_description": "✅ 'hello fount!'"
+				"locked_description": "✅ 'hello beilu!'"
 			}
 		},
 		"dragAndDrop": {
@@ -1432,7 +1432,7 @@
 			}
 		}
 	},
-	"subfounts": {
+	"subbeilus": {
 		"title": "🖇️⛲ - 📱↔️📱",
 		"pageTitle": "🖇️⛲",
 		"description": "⚙️ 📱↔️📱",
@@ -1447,9 +1447,9 @@
 			"passwordCopied": "🔑 📋✅",
 			"regenerateSuccess": "🔗🔢 🔄✅"
 		},
-		"connectedSubfounts": {
+		"connectedSubbeilus": {
 			"title": "🔗✅ 🖇️⛲",
-			"noSubfountsConnected": "🚫🔗",
+			"noSubbeilusConnected": "🚫🔗",
 			"table": {
 				"id": "ID",
 				"description": "📝",
@@ -1468,14 +1468,14 @@
 		"codeExecution": {
 			"title": "💻 ▶️",
 			"description": "▶️ JS ➡️ 📱",
-			"selectSubfountLabel": "👆 📱",
-			"selectSubfountPlaceholder": "❓ 👆 📱",
+			"selectSubbeiluLabel": "👆 📱",
+			"selectSubbeiluPlaceholder": "❓ 👆 📱",
 			"hostOption": "🏠 (🆔: ${id})",
-			"subfountOption": "🔌 ${id}${deviceId}",
+			"subbeiluOption": "🔌 ${id}${deviceId}",
 			"scriptLabel": "JS {}",
 			"executeButton": "▶️",
 			"executing": "🏃...",
-			"noSubfountSelected": "🚫 👆 📱",
+			"noSubbeiluSelected": "🚫 👆 📱",
 			"noScriptProvided": "🚫 ⌨️",
 			"executionSuccess": "▶️ ✅",
 			"executionFailed": "▶️ ❌: ${message}"
@@ -1483,7 +1483,7 @@
 		"downloadClient": {
 			"title": "⬇️🖇️⛲🤖",
 			"description": "⬇️ .mjs ➡️ 📱",
-			"downloadButton": "⬇️ subfount.mjs"
+			"downloadButton": "⬇️ subbeilu.mjs"
 		},
 		"errors": {
 			"loadConnectionCodeFailed": "❌ 🔗🔢: ${message}",
@@ -1494,7 +1494,7 @@
 			"in_dev": {
 				"title": "🚧",
 				"sub_items": {
-					"subfounts_related": {
+					"subbeilus_related": {
 						"title": "📱👶",
 						"sub_items": {
 							"main": {
@@ -1996,7 +1996,7 @@
 				"description": "⌨️➡️⚡️",
 				"locked_description": "🔒"
 			},
-			"star_fount": {
+			"star_beilu": {
 				"name": "⭐💻",
 				"description": "🙏⭐",
 				"locked_description": "🖱️➡️⭐"
@@ -2295,7 +2295,7 @@
 	},
 	"directoryListing": {
 		"title": "📂📇",
-		"description": "👀🔭 fount 📦📂📄",
+		"description": "👀🔭 beilu 📦📂📄",
 		"indexOf": "📇: ${path}",
 		"name": "🏷️",
 		"mimeType": "🆔",

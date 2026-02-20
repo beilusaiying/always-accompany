@@ -27,12 +27,14 @@ export function diff_if_auth(if_auth, if_not_auth) {
  * @returns {void}
  */
 export function registerMiddleware(router) {
+	router.use(cookieParser())
+
 	router.use((req, res, next) => {
 		res.setHeader('X-Powered-By', info.xPoweredBy)
 		if (!req.path.endsWith('/heartbeat'))
 			console.logI18n('fountConsole.web.requestReceived', {
 				method: req.method + ' '.repeat(Math.max(0, 8 - req.method.length)),
-				url: req.url.replace(/fount-apikey=[^&]*/, 'fount-apikey=45450721')
+				url: req.url.replace(/beilu-apikey=[^&]*/, 'beilu-apikey=45450721')
 			})
 		webRequestHappend()
 		return next()
@@ -57,6 +59,4 @@ export function registerMiddleware(router) {
 		fileUpload({ limits: { fileSize: Infinity } }),
 		fileUpload({ limits: { fileSize: 5 * 1024 * 1024 } })
 	))
-
-	router.use(cookieParser())
 }

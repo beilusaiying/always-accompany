@@ -181,7 +181,7 @@ export default {
 				if (!AIsource) {
 					return {
 						content:
-							'请先配置 AI 源。[前往设置](https://steve02081504.github.io/fount/protocol?url=fount://page/parts/shells:serviceSourceManage)',
+							'请先配置 AI 源。[前往设置](/parts/shells:serviceSourceManage)',
 					}
 				}
 

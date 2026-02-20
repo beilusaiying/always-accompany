@@ -5,7 +5,7 @@
 	<meta charset="UTF-8" />
 	<meta name="darkreader-lock" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>贝露 · 与你之诗</title>
+	<title data-i18n="title">贝露 · 与你之诗</title>
 	<link rel="icon" href="/favicon.ico" />
 	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 	<link rel="manifest" href="/manifest.json" />
@@ -24,15 +24,15 @@
 		<div class="beilu-tab-bar-inner">
 			<button class="beilu-tab active" data-tab="usage">
 				<span class="beilu-tab-icon">📋</span>
-				<span class="beilu-tab-label">使用</span>
+				<span class="beilu-tab-label" data-i18n="tab.usage">使用</span>
 			</button>
 			<button class="beilu-tab" data-tab="system">
 				<span class="beilu-tab-icon">⚙️</span>
-				<span class="beilu-tab-label">系统和功能设置</span>
+				<span class="beilu-tab-label" data-i18n="tab.system">系统和功能设置</span>
 			</button>
 			<button class="beilu-tab" data-tab="user">
 				<span class="beilu-tab-icon">👤</span>
-				<span class="beilu-tab-label">用户设置</span>
+				<span class="beilu-tab-label" data-i18n="tab.user">用户设置</span>
 			</button>
 		</div>
 	</div>
@@ -40,7 +40,7 @@
 	<!-- ===== 子头部 ===== -->
 	<div class="beilu-subheader">
 		<div class="beilu-subheader-left">
-			<span class="beilu-logo-text">贝露 · 与你之诗</span>
+			<span class="beilu-logo-text" data-i18n="header.logo">贝露 · 与你之诗</span>
 		</div>
 		<div class="beilu-subheader-center">
 			<h1 id="dynamic-title" class="beilu-dynamic-title">角色卡</h1>
@@ -62,35 +62,35 @@
 				<nav class="beilu-usage-nav">
 					<button class="beilu-usage-nav-item active" data-section="chars">
 						<span class="beilu-usage-nav-icon">🎭</span>
-						<span class="beilu-usage-nav-label">角色卡</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.usage.chars">角色卡</span>
 					</button>
 					<button class="beilu-usage-nav-item" data-section="worlds">
 						<span class="beilu-usage-nav-icon">🌍</span>
-						<span class="beilu-usage-nav-label">世界书</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.usage.worlds">世界书</span>
 					</button>
 					<button class="beilu-usage-nav-item" data-section="personas">
 						<span class="beilu-usage-nav-icon">👤</span>
-						<span class="beilu-usage-nav-label">用户人设</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.usage.personas">用户人设</span>
 					</button>
 					<button class="beilu-usage-nav-item" data-section="presets">
 						<span class="beilu-usage-nav-icon">📝</span>
-						<span class="beilu-usage-nav-label">聊天预设</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.usage.presets">聊天预设</span>
 					</button>
 					<button class="beilu-usage-nav-item" data-section="memoryPresets">
 							<span class="beilu-usage-nav-icon">🧠</span>
-							<span class="beilu-usage-nav-label">记忆预设</span>
+							<span class="beilu-usage-nav-label" data-i18n="nav.usage.memoryPresets">记忆预设</span>
 						</button>
 						<button class="beilu-usage-nav-item" data-section="memoryManage">
 							<span class="beilu-usage-nav-icon">📊</span>
-							<span class="beilu-usage-nav-label">记忆管理</span>
+							<span class="beilu-usage-nav-label" data-i18n="nav.usage.memoryManage">记忆管理</span>
 						</button>
 						<button class="beilu-usage-nav-item" data-section="sysViewer">
 							<span class="beilu-usage-nav-icon">📖</span>
-							<span class="beilu-usage-nav-label">系统查看器</span>
+							<span class="beilu-usage-nav-label" data-i18n="nav.usage.sysViewer">系统查看器</span>
 						</button>
 						<button class="beilu-usage-nav-item" data-section="aiDiag">
 							<span class="beilu-usage-nav-icon">🔬</span>
-							<span class="beilu-usage-nav-label">AI诊断</span>
+							<span class="beilu-usage-nav-label" data-i18n="nav.usage.aiDiag">AI诊断</span>
 						</button>
 						</nav>
 
@@ -100,24 +100,24 @@
 					<!-- ======== 角色卡区域 ======== -->
 					<div id="section-chars" class="beilu-usage-section active">
 						<div class="beilu-section-toolbar">
-							<input type="text" id="chars-search" placeholder="搜索角色..."
+							<input type="text" id="chars-search" data-i18n="chars.search" data-i18n-attr="placeholder" placeholder="搜索角色..."
 								class="input input-sm input-bordered flex-grow max-w-xs" />
 							<div class="flex gap-2">
-								<button id="chars-import-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+								<button id="chars-import-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="chars.import">
 									📥 导入
 								</button>
-								<button id="chars-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+								<button id="chars-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="chars.create">
 									✨ 新建
 								</button>
 							</div>
 						</div>
 						<div id="chars-loading" class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载角色卡...</p>
+							<p data-i18n="chars.loading">加载角色卡...</p>
 						</div>
 						<div id="chars-grid" class="beilu-chars-grid" style="display:none;"></div>
 						<div id="chars-empty" class="beilu-empty-state" style="display:none;">
-							<p>还没有角色卡，导入一个试试？</p>
+							<p data-i18n="chars.empty">还没有角色卡，导入一个试试？</p>
 						</div>
 					</div>
 
@@ -125,24 +125,24 @@
 						<div id="section-worlds" class="beilu-usage-section">
 							<div id="wb-loading" class="beilu-loading">
 								<span class="loading loading-spinner loading-lg text-amber-500"></span>
-								<p>加载世界书数据...</p>
+								<p data-i18n="worlds.loading">加载世界书数据...</p>
 							</div>
 							<div id="wb-main" style="display:none;">
 								<!-- 顶部：世界书选择 + 操作按钮 -->
 								<div class="beilu-preset-header">
 									<div class="beilu-preset-info">
-										<span class="text-sm text-base-content/50">当前世界书</span>
+										<span class="text-sm text-base-content/50" data-i18n="worlds.current">当前世界书</span>
 										<div class="flex items-center gap-2 mt-1">
 											<select id="wb-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
-												<option value="">未加载</option>
+												<option value="" data-i18n="worlds.notLoaded">未加载</option>
 											</select>
-											<button id="wb-delete" class="btn btn-xs btn-outline btn-error" title="删除选中世界书" disabled>🗑️</button>
+											<button id="wb-delete" class="btn btn-xs btn-outline btn-error" title="删除选中世界书" data-i18n="worlds.delete.title" data-i18n-attr="title" disabled>🗑️</button>
 										</div>
 									</div>
 									<div class="beilu-preset-actions">
-										<button id="wb-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📥 导入</button>
-										<button id="wb-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📤 导出</button>
-										<button id="wb-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">✨ 新建</button>
+										<button id="wb-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="worlds.import">📥 导入</button>
+										<button id="wb-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="worlds.export">📤 导出</button>
+										<button id="wb-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="worlds.create">✨ 新建</button>
 									</div>
 								</div>
 								<!-- 统计 -->
@@ -157,21 +157,21 @@
 									<!-- 左栏：条目列表 -->
 									<div class="beilu-preset-list-col">
 										<div class="flex gap-1 mb-2">
-											<input type="text" id="wb-entry-search" placeholder="搜索条目..."
+											<input type="text" id="wb-entry-search" placeholder="搜索条目..." data-i18n="worlds.search" data-i18n-attr="placeholder"
 												class="input input-sm input-bordered flex-grow" />
-											<button id="wb-add-entry" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目">+</button>
+											<button id="wb-add-entry" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目" data-i18n="worlds.addEntry" data-i18n-attr="title">+</button>
 										</div>
 										<div id="wb-entry-list" class="beilu-preset-entry-list">
-											<p class="text-sm text-base-content/50 text-center py-8">请先导入一个 ST 世界书文件</p>
+											<p class="text-sm text-base-content/50 text-center py-8" data-i18n="worlds.placeholder">请先导入一个 ST 世界书文件</p>
 										</div>
 									</div>
 									<!-- 右栏：条目详情 -->
 									<div id="wb-entry-detail" class="beilu-preset-detail-col" style="display:none;">
 										<!-- 条目标题 + 启用开关 -->
 										<div class="beilu-preset-detail-head">
-											<input type="text" id="wb-detail-comment" class="input input-sm input-bordered font-bold text-sm flex-grow" placeholder="条目名称/备注" readonly />
+											<input type="text" id="wb-detail-comment" class="input input-sm input-bordered font-bold text-sm flex-grow" placeholder="条目名称/备注" data-i18n="worlds.detail.comment" data-i18n-attr="placeholder" readonly />
 											<label class="cursor-pointer label gap-2 p-0 ml-2">
-												<span class="label-text text-xs">启用</span>
+												<span class="label-text text-xs" data-i18n="worlds.detail.enabled">启用</span>
 												<input type="checkbox" id="wb-detail-toggle" class="toggle toggle-sm toggle-warning" />
 											</label>
 										</div>
@@ -179,34 +179,34 @@
 										<!-- ===== 触发方式 ===== -->
 										<div class="text-xs space-y-2 mb-3">
 											<div class="form-control">
-												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">主要关键字（逗号分隔）</span></label>
-												<input type="text" id="wb-detail-keys" class="input input-xs input-bordered w-full font-mono" placeholder="关键词1, 关键词2" readonly />
+												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50" data-i18n="worlds.detail.keys">主要关键字（逗号分隔）</span></label>
+												<input type="text" id="wb-detail-keys" class="input input-xs input-bordered w-full font-mono" placeholder="关键词1, 关键词2" data-i18n="worlds.detail.keys.placeholder" data-i18n-attr="placeholder" readonly />
 											</div>
 											<div class="form-control">
-												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">辅助关键字（逗号分隔）</span></label>
-												<input type="text" id="wb-detail-keys2" class="input input-xs input-bordered w-full font-mono" placeholder="辅助关键词" readonly />
+												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50" data-i18n="worlds.detail.keys2">辅助关键字（逗号分隔）</span></label>
+												<input type="text" id="wb-detail-keys2" class="input input-xs input-bordered w-full font-mono" placeholder="辅助关键词" data-i18n="worlds.detail.keys2.placeholder" data-i18n-attr="placeholder" readonly />
 											</div>
 											<div class="flex flex-wrap gap-x-4 gap-y-2">
 												<label class="cursor-pointer label gap-1 p-0">
 													<input type="checkbox" id="wb-detail-constant" class="checkbox checkbox-xs checkbox-warning" disabled />
-													<span class="label-text text-xs">必须有（常驻）</span>
+													<span class="label-text text-xs" data-i18n="worlds.detail.constant">必须有（常驻）</span>
 												</label>
 												<div class="flex items-center gap-1">
-													<span class="text-base-content/50 shrink-0">匹配逻辑:</span>
+													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.logic">匹配逻辑:</span>
 													<select id="wb-detail-logic" class="select select-xs select-bordered w-24" disabled>
-														<option value="0">与任意 (ANY)</option>
-														<option value="1">与所有 (ALL)</option>
+														<option value="0" data-i18n="worlds.detail.logic.any">与任意 (ANY)</option>
+														<option value="1" data-i18n="worlds.detail.logic.all">与所有 (ALL)</option>
 													</select>
 												</div>
 											</div>
 											<div class="flex flex-wrap gap-x-4 gap-y-2">
 												<label class="cursor-pointer label gap-1 p-0">
 													<input type="checkbox" id="wb-detail-exclude-recursion" class="checkbox checkbox-xs checkbox-warning" disabled />
-													<span class="label-text text-xs">不可递归</span>
+													<span class="label-text text-xs" data-i18n="worlds.detail.excludeRecursion">不可递归</span>
 												</label>
 												<label class="cursor-pointer label gap-1 p-0">
 													<input type="checkbox" id="wb-detail-prevent-recursion" class="checkbox checkbox-xs checkbox-warning" disabled />
-													<span class="label-text text-xs">防止进一步递归</span>
+													<span class="label-text text-xs" data-i18n="worlds.detail.preventRecursion">防止进一步递归</span>
 												</label>
 											</div>
 										</div>
@@ -215,27 +215,27 @@
 										<div class="text-xs space-y-2 mb-3">
 											<div class="flex flex-wrap gap-x-3 gap-y-2">
 												<div class="flex items-center gap-1">
-													<span class="text-base-content/50 shrink-0">插入位置:</span>
+													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.position">插入位置:</span>
 													<select id="wb-detail-position" class="select select-xs select-bordered w-28" disabled>
-														<option value="0">角色之前</option>
-														<option value="1">角色之后</option>
-														<option value="4">@深度</option>
+														<option value="0" data-i18n="worlds.detail.position.before">角色之前</option>
+														<option value="1" data-i18n="worlds.detail.position.after">角色之后</option>
+														<option value="4" data-i18n="worlds.detail.position.depth">@深度</option>
 													</select>
 												</div>
 												<div id="wb-depth-group" class="flex items-center gap-1">
-													<span class="text-base-content/50 shrink-0">深度:</span>
+													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.depth">深度:</span>
 													<input type="number" id="wb-detail-depth" class="input input-xs input-bordered w-16" min="0" value="4" disabled />
 												</div>
 												<div id="wb-role-group" class="flex items-center gap-1">
-													<span class="text-base-content/50 shrink-0">角色:</span>
+													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.role">角色:</span>
 													<select id="wb-detail-role" class="select select-xs select-bordered w-20" disabled>
-														<option value="0">系统</option>
-														<option value="1">人类</option>
-														<option value="2">AI</option>
+														<option value="0" data-i18n="worlds.detail.role.system">系统</option>
+														<option value="1" data-i18n="worlds.detail.role.human">人类</option>
+														<option value="2" data-i18n="worlds.detail.role.ai">AI</option>
 													</select>
 												</div>
 												<div class="flex items-center gap-1">
-													<span class="text-base-content/50 shrink-0">顺序:</span>
+													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.order">顺序:</span>
 													<input type="number" id="wb-detail-order" class="input input-xs input-bordered w-16" min="0" value="100" disabled />
 												</div>
 											</div>
@@ -244,14 +244,14 @@
 										<!-- 内容 -->
 										<textarea id="wb-detail-content"
 											class="textarea textarea-bordered w-full text-xs font-mono beilu-preset-content-textarea"
-											rows="16" readonly placeholder="条目内容..."></textarea>
+											rows="16" readonly placeholder="条目内容..." data-i18n="worlds.detail.content" data-i18n-attr="placeholder"></textarea>
 										<!-- 操作按钮 -->
 										<div class="flex justify-between items-center mt-2">
-											<button id="wb-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;">🗑️ 删除条目</button>
+											<button id="wb-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;" data-i18n="worlds.detail.deleteEntry">🗑️ 删除条目</button>
 											<div class="flex gap-1 ml-auto">
-												<button id="wb-detail-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
-												<button id="wb-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;">💾 保存</button>
-												<button id="wb-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;">取消</button>
+												<button id="wb-detail-edit-btn" class="btn btn-xs btn-outline" data-i18n="worlds.detail.edit">✏️ 编辑</button>
+												<button id="wb-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;" data-i18n="worlds.detail.save">💾 保存</button>
+												<button id="wb-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;" data-i18n="worlds.detail.cancel">取消</button>
 											</div>
 										</div>
 									</div>
@@ -262,38 +262,38 @@
 					<!-- ======== 用户人设区域 ======== -->
 						<div id="section-personas" class="beilu-usage-section">
 							<div class="beilu-section-toolbar">
-								<input type="text" id="persona-search" placeholder="搜索人设..."
+								<input type="text" id="persona-search" placeholder="搜索人设..." data-i18n="personas.search" data-i18n-attr="placeholder"
 									class="input input-sm input-bordered flex-grow max-w-xs" />
 								<div class="flex gap-2">
-									<button id="persona-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">
+									<button id="persona-create-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="personas.create">
 										✨ 新建人设
 									</button>
 								</div>
 							</div>
 							<div id="persona-loading" class="beilu-loading">
 								<span class="loading loading-spinner loading-lg text-amber-500"></span>
-								<p>加载用户人设...</p>
+								<p data-i18n="personas.loading">加载用户人设...</p>
 							</div>
 							<div id="persona-list" style="display:none;"></div>
 							<div id="persona-empty" class="beilu-empty-state" style="display:none;">
-								<p>还没有人设，创建一个试试？</p>
+								<p data-i18n="personas.empty">还没有人设，创建一个试试？</p>
 							</div>
 							<!-- 人设编辑/新建对话框 -->
 							<dialog id="persona-edit-dialog" class="modal">
 								<div class="modal-box">
-									<h3 id="persona-dialog-title" class="font-bold text-lg mb-4">新建人设</h3>
+									<h3 id="persona-dialog-title" class="font-bold text-lg mb-4" data-i18n="personas.dialog.create">新建人设</h3>
 									<div class="form-control mb-3">
-										<label class="label py-1"><span class="label-text text-sm font-medium">人设名称</span></label>
-										<input type="text" id="persona-edit-name" class="input input-sm input-bordered w-full" placeholder="人设名称" />
+										<label class="label py-1"><span class="label-text text-sm font-medium" data-i18n="personas.dialog.name">人设名称</span></label>
+										<input type="text" id="persona-edit-name" class="input input-sm input-bordered w-full" placeholder="人设名称" data-i18n="personas.dialog.name.placeholder" data-i18n-attr="placeholder" />
 									</div>
 									<div class="form-control mb-3">
-										<label class="label py-1"><span class="label-text text-sm font-medium">个人描述</span></label>
+										<label class="label py-1"><span class="label-text text-sm font-medium" data-i18n="personas.dialog.desc">个人描述</span></label>
 										<textarea id="persona-edit-desc" class="textarea textarea-bordered w-full text-sm" rows="6"
-											placeholder="简要描述这个人设，AI 会参考这段描述来认识你..."></textarea>
+											placeholder="简要描述这个人设，AI 会参考这段描述来认识你..." data-i18n="personas.dialog.desc.placeholder" data-i18n-attr="placeholder"></textarea>
 									</div>
 									<div class="modal-action">
-										<button id="persona-dialog-cancel" class="btn btn-ghost btn-sm">取消</button>
-										<button id="persona-dialog-save" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+										<button id="persona-dialog-cancel" class="btn btn-ghost btn-sm" data-i18n="personas.dialog.cancel">取消</button>
+										<button id="persona-dialog-save" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="personas.dialog.save">💾 保存</button>
 									</div>
 									<p id="persona-dialog-status" class="text-xs text-center text-base-content/40 mt-2"></p>
 								</div>
@@ -305,24 +305,24 @@
 					<div id="section-presets" class="beilu-usage-section">
 						<div id="preset-loading" class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载预设数据...</p>
+							<p data-i18n="presets.loading">加载预设数据...</p>
 						</div>
 						<div id="preset-main" style="display:none;">
 							<!-- 顶部：预设选择 + 操作按钮 -->
 							<div class="beilu-preset-header">
 								<div class="beilu-preset-info">
-									<span class="text-sm text-base-content/50">当前预设</span>
+									<span class="text-sm text-base-content/50" data-i18n="presets.current">当前预设</span>
 									<div class="flex items-center gap-2 mt-1">
 										<select id="home-preset-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
-											<option value="">未加载</option>
+											<option value="" data-i18n="presets.notLoaded">未加载</option>
 										</select>
-										<button id="home-preset-delete" class="btn btn-xs btn-outline btn-error" title="删除选中预设" disabled>🗑️</button>
+										<button id="home-preset-delete" class="btn btn-xs btn-outline btn-error" title="删除选中预设" data-i18n="presets.delete.title" data-i18n-attr="title" disabled>🗑️</button>
 									</div>
 								</div>
 								<div class="beilu-preset-actions">
-									<button id="home-preset-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📥 导入</button>
-									<button id="home-preset-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">📤 导出</button>
-									<button id="home-preset-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">✨ 新建</button>
+									<button id="home-preset-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="presets.import">📥 导入</button>
+									<button id="home-preset-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="presets.export">📤 导出</button>
+									<button id="home-preset-create" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="presets.create">✨ 新建</button>
 								</div>
 							</div>
 							<!-- 统计 -->
@@ -337,12 +337,12 @@
 								<!-- 左栏：条目列表 -->
 								<div class="beilu-preset-list-col">
 									<div class="flex gap-1 mb-2">
-										<input type="text" id="home-entry-search" placeholder="搜索条目名称..."
+										<input type="text" id="home-entry-search" placeholder="搜索条目名称..." data-i18n="presets.search" data-i18n-attr="placeholder"
 											class="input input-sm input-bordered flex-grow" />
-										<button id="home-entry-add" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目">+</button>
+										<button id="home-entry-add" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增条目" data-i18n="presets.addEntry" data-i18n-attr="title">+</button>
 									</div>
 									<div id="home-entry-list" class="beilu-preset-entry-list">
-										<p class="text-sm text-base-content/50 text-center py-8">请先导入一个 ST 预设文件</p>
+										<p class="text-sm text-base-content/50 text-center py-8" data-i18n="presets.placeholder">请先导入一个 ST 预设文件</p>
 									</div>
 								</div>
 								<!-- 右栏：条目详情 -->
@@ -350,13 +350,13 @@
 									<div class="beilu-preset-detail-head">
 										<input type="text" id="home-detail-name" class="input input-sm input-bordered font-bold text-sm flex-grow" readonly />
 										<label class="cursor-pointer label gap-2 p-0 ml-2">
-											<span class="label-text text-xs">启用</span>
+											<span class="label-text text-xs" data-i18n="presets.detail.enabled">启用</span>
 											<input type="checkbox" id="home-detail-toggle" class="toggle toggle-sm toggle-warning" />
 										</label>
 									</div>
 									<div class="text-xs space-y-2 mb-3">
 										<div class="flex items-center gap-2">
-											<span class="text-base-content/50 w-16 shrink-0">角色:</span>
+											<span class="text-base-content/50 w-16 shrink-0" data-i18n="presets.detail.role">角色:</span>
 											<select id="home-detail-role" class="select select-xs select-bordered flex-grow" disabled>
 												<option value="system">system</option>
 												<option value="user">user</option>
@@ -364,14 +364,14 @@
 											</select>
 										</div>
 										<div class="flex items-center gap-2">
-											<span class="text-base-content/50 w-16 shrink-0">类型:</span>
+											<span class="text-base-content/50 w-16 shrink-0" data-i18n="presets.detail.type">类型:</span>
 											<select id="home-detail-type" class="select select-xs select-bordered flex-grow" disabled>
-												<option value="system_prompt">系统级提示词</option>
-												<option value="injection">注入式条目</option>
+												<option value="system_prompt" data-i18n="presets.detail.type.system">系统级提示词</option>
+												<option value="injection" data-i18n="presets.detail.type.injection">注入式条目</option>
 											</select>
 										</div>
 										<div id="home-detail-depth-row" class="flex items-center gap-2">
-											<span class="text-base-content/50 w-16 shrink-0">注入深度:</span>
+											<span class="text-base-content/50 w-16 shrink-0" data-i18n="presets.detail.depth">注入深度:</span>
 											<input type="number" id="home-detail-depth" class="input input-xs input-bordered w-20" min="0" value="0" disabled />
 										</div>
 									</div>
@@ -379,11 +379,11 @@
 										class="textarea textarea-bordered w-full text-xs font-mono"
 										rows="20" readonly></textarea>
 									<div class="flex justify-between items-center mt-2">
-										<button id="home-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;">🗑️ 删除条目</button>
+										<button id="home-detail-delete-btn" class="btn btn-xs btn-outline btn-error" style="display:none;" data-i18n="presets.detail.deleteEntry">🗑️ 删除条目</button>
 										<div class="flex gap-1 ml-auto">
-											<button id="home-detail-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
-											<button id="home-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;">💾 保存</button>
-											<button id="home-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;">取消</button>
+											<button id="home-detail-edit-btn" class="btn btn-xs btn-outline" data-i18n="presets.detail.edit">✏️ 编辑</button>
+											<button id="home-detail-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700" style="display:none;" data-i18n="presets.detail.save">💾 保存</button>
+											<button id="home-detail-cancel-btn" class="btn btn-xs btn-ghost" style="display:none;" data-i18n="presets.detail.cancel">取消</button>
 										</div>
 									</div>
 								</div>
@@ -395,23 +395,27 @@
 					<div id="section-memoryPresets" class="beilu-usage-section">
 						<div id="mp-loading" class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载记忆预设...</p>
+							<p data-i18n="mp.loading">加载记忆预设...</p>
 						</div>
 						<div id="mp-main" style="display:none;">
 							<!-- 顶部说明 -->
 							<!-- 顶部说明 -->
 							<div class="beilu-preset-header">
 								<div class="beilu-preset-info">
-									<span class="text-sm text-base-content/50">记忆系统辅助AI预设</span>
-									<div class="text-xs text-base-content/40 mt-1">
+									<span class="text-sm text-base-content/50" data-i18n="mp.header">记忆系统辅助AI预设</span>
+									<div class="text-xs text-base-content/40 mt-1" data-i18n="mp.headerDesc">
 										配置记忆系统各环节使用的AI模型和提示词。这些预设用于检索、总结、归档等自动化记忆任务。
 									</div>
 								</div>
 								<div class="beilu-preset-actions">
 									<div class="flex items-center gap-2">
-										<span class="text-xs text-base-content/50 shrink-0">角色:</span>
+										<button id="mp-export-presets" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="mp.exportPresets">📤 导出预设</button>
+										<button id="mp-import-presets" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="mp.importPresets">📥 导入预设</button>
+									</div>
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-base-content/50 shrink-0" data-i18n="mp.charSelect">角色:</span>
 										<select id="mp-char-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
-											<option value="">选择角色卡查看宏数据...</option>
+											<option value="" data-i18n="mp.charSelect.placeholder">选择角色卡查看宏数据...</option>
 										</select>
 									</div>
 									<span id="mp-char-status" class="text-xs text-base-content/40"></span>
@@ -419,69 +423,69 @@
 							</div>
 							<div class="beilu-config-section mb-3" id="mp-maintenance-panel">
 								<div class="flex items-center justify-between mb-2">
-									<span class="text-sm font-medium">🔧 记忆维护</span>
+									<span class="text-sm font-medium" data-i18n="mp.maintenance">🔧 记忆维护</span>
 									<span id="mp-maintenance-status" class="text-xs text-base-content/40"></span>
 								</div>
 								<div class="flex flex-wrap gap-2">
-									<button id="mp-end-day-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="执行日终归档流程：汇总今日记忆→写入温层→清空临时表格">🌙 结束今天</button>
-									<button id="mp-archive-temp-btn" class="btn btn-xs btn-outline" title="手动归档#4临时记忆到温层">📦 归档临时记忆</button>
-									<button id="mp-archive-hot-btn" class="btn btn-xs btn-outline" title="手动归档#7/#8到热记忆文件">🔥 归档热记忆</button>
-									<button id="mp-archive-cold-btn" class="btn btn-xs btn-outline" title="将超过30天的温层数据移入冷层">❄️ 温→冷归档</button>
+									<button id="mp-end-day-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="执行日终归档流程：汇总今日记忆→写入温层→清空临时表格" data-i18n="mp.maintenance.endDay">🌙 结束今天</button>
+									<button id="mp-archive-temp-btn" class="btn btn-xs btn-outline" title="手动归档#4临时记忆到温层" data-i18n="mp.maintenance.archiveTemp">📦 归档临时记忆</button>
+									<button id="mp-archive-hot-btn" class="btn btn-xs btn-outline" title="手动归档#7/#8到热记忆文件" data-i18n="mp.maintenance.archiveHot">🔥 归档热记忆</button>
+									<button id="mp-archive-cold-btn" class="btn btn-xs btn-outline" title="将超过30天的温层数据移入冷层" data-i18n="mp.maintenance.archiveCold">❄️ 温→冷归档</button>
 								</div>
 								<div id="mp-end-day-result" class="text-xs text-base-content/40 mt-2" style="display:none;"></div>
 							</div>
 							<!-- 聊天AI注入提示词面板 -->
 							<div class="beilu-config-section mb-3" id="mp-injection-panel">
 								<div class="flex items-center justify-between mb-2">
-									<span class="text-sm font-medium">📝 聊天AI注入提示词</span>
-									<span class="text-xs text-base-content/40">控制注入到聊天AI对话中的记忆数据格式</span>
+									<span class="text-sm font-medium" data-i18n="mp.injection">📝 聊天AI注入提示词</span>
+									<span class="text-xs text-base-content/40" data-i18n="mp.injection.desc">控制注入到聊天AI对话中的记忆数据格式</span>
 								</div>
 								<div id="mp-injection-list" class="space-y-3">
-									<p class="text-xs text-base-content/40 text-center py-2">加载中...</p>
+									<p class="text-xs text-base-content/40 text-center py-2" data-i18n="mp.injection.loading">加载中...</p>
 								</div>
 							</div>
 							<!-- 记忆检索配置面板 -->
 							<div class="beilu-config-section mb-3" id="mp-retrieval-config-panel">
 								<div class="flex items-center justify-between mb-2">
-									<span class="text-sm font-medium">⚙️ 记忆检索配置</span>
-									<span class="text-xs text-base-content/40">控制记忆检索AI的行为参数</span>
+									<span class="text-sm font-medium" data-i18n="mp.retrieval">⚙️ 记忆检索配置</span>
+									<span class="text-xs text-base-content/40" data-i18n="mp.retrieval.desc">控制记忆检索AI的行为参数</span>
 								</div>
 								<div class="space-y-2">
 									<div class="beilu-config-row">
 										<div>
-											<div class="text-sm">自动触发检索</div>
-											<div class="text-xs text-base-content/40">每次用户发消息时自动运行检索AI</div>
+											<div class="text-sm" data-i18n="mp.retrieval.autoTrigger">自动触发检索</div>
+											<div class="text-xs text-base-content/40" data-i18n="mp.retrieval.autoTrigger.desc">每次用户发消息时自动运行检索AI</div>
 										</div>
 										<input type="checkbox" id="mp-cfg-auto-trigger" class="toggle toggle-xs toggle-warning" checked />
 									</div>
 									<div class="flex items-center gap-3 flex-wrap">
 										<div class="flex items-center gap-2">
-											<span class="text-xs text-base-content/50 shrink-0">聊天记录条数:</span>
+											<span class="text-xs text-base-content/50 shrink-0" data-i18n="mp.retrieval.chatHistory">聊天记录条数:</span>
 											<input type="number" id="mp-cfg-chat-history-count" class="input input-xs input-bordered w-20" min="1" max="50" value="5" title="发送给检索AI的最近聊天记录条数" />
 										</div>
 										<div class="flex items-center gap-2">
-											<span class="text-xs text-base-content/50 shrink-0">最大搜索轮数:</span>
+											<span class="text-xs text-base-content/50 shrink-0" data-i18n="mp.retrieval.maxRounds">最大搜索轮数:</span>
 											<input type="number" id="mp-cfg-max-search-rounds" class="input input-xs input-bordered w-20" min="1" max="20" value="5" />
 										</div>
 										<div class="flex items-center gap-2">
-											<span class="text-xs text-base-content/50 shrink-0">超时(ms):</span>
+											<span class="text-xs text-base-content/50 shrink-0" data-i18n="mp.retrieval.timeout">超时(ms):</span>
 											<input type="number" id="mp-cfg-timeout" class="input input-xs input-bordered w-24" min="5000" max="300000" step="1000" value="60000" />
 										</div>
 									</div>
 								</div>
 								<div class="flex justify-end mt-2">
-									<button id="mp-cfg-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存配置</button>
+									<button id="mp-cfg-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="mp.retrieval.save">💾 保存配置</button>
 								</div>
 								<p id="mp-cfg-status" class="text-xs text-center text-base-content/40 mt-1"></p>
 							</div>
 							<!-- 可用宏参考面板 -->
 							<div class="beilu-config-section mb-3" id="mp-macro-ref-panel">
 								<div class="flex items-center justify-between mb-2 cursor-pointer" id="mp-macro-ref-header">
-									<span class="text-sm font-medium">📖 可用宏参考</span>
+									<span class="text-sm font-medium" data-i18n="mp.macroRef">📖 可用宏参考</span>
 									<span class="text-xs text-base-content/30" id="mp-macro-ref-arrow">▶</span>
 								</div>
 								<div id="mp-macro-ref-body" style="display:none;">
-									<p class="text-xs text-base-content/40 mb-2">在预设提示词和注入模板中可使用以下宏，运行时会被替换为实际数据：</p>
+									<p class="text-xs text-base-content/40 mb-2" data-i18n="mp.macroRef.desc">在预设提示词和注入模板中可使用以下宏，运行时会被替换为实际数据：</p>
 									<div class="space-y-1.5 text-xs">
 										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
 											<code class="font-mono text-amber-500 shrink-0 select-all">{{tableData}}</code>
@@ -518,7 +522,7 @@
 								<!-- 左栏：预设列表 -->
 								<div class="beilu-preset-list-col">
 									<div id="mp-preset-list" class="beilu-preset-entry-list">
-										<p class="text-sm text-base-content/50 text-center py-8">加载中...</p>
+										<p class="text-sm text-base-content/50 text-center py-8" data-i18n="common.loading">加载中...</p>
 									</div>
 								</div>
 								<!-- 右栏：预设详情 -->
@@ -530,56 +534,56 @@
 											<span id="mp-detail-name" class="font-bold text-sm">检索AI</span>
 										</div>
 										<label class="cursor-pointer label gap-2 p-0 ml-2">
-											<span class="label-text text-xs">启用</span>
+											<span class="label-text text-xs" data-i18n="mp.detail.enabled">启用</span>
 											<input type="checkbox" id="mp-detail-toggle" class="toggle toggle-sm toggle-warning" />
 										</label>
 									</div>
 	
 									<!-- 描述 -->
 									<div class="form-control mb-3">
-										<label class="label py-0.5"><span class="label-text text-xs text-base-content/50">描述</span></label>
+										<label class="label py-0.5"><span class="label-text text-xs text-base-content/50" data-i18n="mp.detail.desc">描述</span></label>
 										<input type="text" id="mp-detail-desc" class="input input-sm input-bordered w-full text-sm" />
 									</div>
 	
 									<!-- 触发方式 -->
 									<div class="flex items-center gap-2 mb-3">
-										<span class="text-xs text-base-content/50">触发方式:</span>
+										<span class="text-xs text-base-content/50" data-i18n="mp.detail.trigger">触发方式:</span>
 										<select id="mp-detail-trigger" class="select select-xs select-bordered w-40">
-											<option value="auto_on_message">每次消息自动</option>
-											<option value="auto_on_threshold">阈值自动触发</option>
-											<option value="manual_button">手动按钮</option>
-											<option value="manual_or_auto">手动/自动</option>
+											<option value="auto_on_message" data-i18n="mp.detail.trigger.auto">每次消息自动</option>
+											<option value="auto_on_threshold" data-i18n="mp.detail.trigger.threshold">阈值自动触发</option>
+											<option value="manual_button" data-i18n="mp.detail.trigger.manual">手动按钮</option>
+											<option value="manual_or_auto" data-i18n="mp.detail.trigger.both">手动/自动</option>
 										</select>
 									</div>
 	
 									<!-- API 配置 -->
 									<div class="beilu-config-section mb-3">
-										<div class="text-sm font-medium mb-2">API 配置</div>
+										<div class="text-sm font-medium mb-2" data-i18n="mp.detail.api">API 配置</div>
 										<div class="space-y-2">
 											<div class="beilu-config-row">
 												<div>
-													<div class="text-sm">使用独立API配置</div>
-													<div class="text-xs text-base-content/40">关闭则使用主对话AI的配置</div>
+													<div class="text-sm" data-i18n="mp.detail.api.custom">使用独立API配置</div>
+													<div class="text-xs text-base-content/40" data-i18n="mp.detail.api.custom.desc">关闭则使用主对话AI的配置</div>
 												</div>
 												<input type="checkbox" id="mp-api-custom" class="toggle toggle-xs toggle-warning" />
 											</div>
 											<div id="mp-api-fields" class="space-y-2" style="display:none;">
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-base-content/50 w-16 shrink-0">服务源:</span>
+													<span class="text-xs text-base-content/50 w-16 shrink-0" data-i18n="mp.detail.api.source">服务源:</span>
 													<select id="mp-api-source" class="select select-xs select-bordered flex-grow">
-														<option value="">加载中...</option>
+														<option value="" data-i18n="mp.detail.api.source.loading">加载中...</option>
 													</select>
 												</div>
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-base-content/50 w-16 shrink-0">模型:</span>
+													<span class="text-xs text-base-content/50 w-16 shrink-0" data-i18n="mp.detail.api.model">模型:</span>
 													<input type="text" id="mp-api-model" class="input input-xs input-bordered flex-grow font-mono" placeholder="gemini-2.0-flash" />
 												</div>
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-base-content/50 w-16 shrink-0">温度:</span>
+													<span class="text-xs text-base-content/50 w-16 shrink-0" data-i18n="mp.detail.api.temperature">温度:</span>
 													<input type="number" id="mp-api-temperature" class="input input-xs input-bordered w-20" min="0" max="2" step="0.1" value="0.3" />
 												</div>
 												<div class="flex items-center gap-2">
-													<span class="text-xs text-base-content/50 w-16 shrink-0">最大Token:</span>
+													<span class="text-xs text-base-content/50 w-16 shrink-0" data-i18n="mp.detail.api.maxTokens">最大Token:</span>
 													<input type="number" id="mp-api-max-tokens" class="input input-xs input-bordered w-24" min="100" max="32000" step="100" value="2000" />
 												</div>
 											</div>
@@ -589,50 +593,50 @@
 									<!-- 提示词条目列表 -->
 									<div class="beilu-config-section mb-3">
 										<div class="flex items-center justify-between mb-2">
-											<span class="text-sm font-medium">提示词条目</span>
-											<button id="mp-add-prompt" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">+ 添加</button>
+											<span class="text-sm font-medium" data-i18n="mp.detail.prompts">提示词条目</span>
+											<button id="mp-add-prompt" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="mp.detail.prompts.add">+ 添加</button>
 										</div>
 										<div id="mp-prompt-list" class="space-y-2">
-											<p class="text-xs text-base-content/40 text-center py-4">加载中...</p>
+											<p class="text-xs text-base-content/40 text-center py-4" data-i18n="mp.detail.prompts.loading">加载中...</p>
 										</div>
 									</div>
 	
 									<!-- 操作按钮 -->
 									<div class="flex justify-between items-center mt-3">
 										<div class="flex items-center gap-2">
-											<button id="mp-preview-preset-btn" class="btn btn-xs btn-outline">👁️ 查看提示词</button>
-											<button id="mp-run-preset-btn" class="btn btn-xs btn-outline border-cyan-600 text-cyan-600 hover:bg-cyan-600 hover:text-white">🚀 运行记忆AI</button>
+											<button id="mp-preview-preset-btn" class="btn btn-xs btn-outline" data-i18n="mp.detail.preview">👁️ 查看提示词</button>
+											<button id="mp-run-preset-btn" class="btn btn-xs btn-outline border-cyan-600 text-cyan-600 hover:bg-cyan-600 hover:text-white" data-i18n="mp.detail.run">🚀 运行记忆AI</button>
 										</div>
-										<button id="mp-save-btn" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+										<button id="mp-save-btn" class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="mp.detail.save">💾 保存</button>
 									</div>
 									<p id="mp-status" class="text-xs text-center text-base-content/40 mt-2"></p>
 	
 									<!-- 记忆AI运行结果面板 -->
 									<div id="mp-run-result-panel" style="display:none;" class="mt-3">
 										<div class="flex items-center justify-between mb-2">
-											<span class="text-sm font-medium text-cyan-500">🧠 记忆AI运行结果</span>
+											<span class="text-sm font-medium text-cyan-500" data-i18n="mp.run.title">🧠 记忆AI运行结果</span>
 											<div class="flex items-center gap-2">
 												<span id="mp-run-result-time" class="text-xs text-base-content/40"></span>
-												<button id="mp-run-result-copy" class="btn btn-xs btn-ghost" title="复制完整结果">📋</button>
-												<button id="mp-run-result-close" class="btn btn-xs btn-ghost" title="关闭">✕</button>
+												<button id="mp-run-result-copy" class="btn btn-xs btn-ghost" title="复制完整结果" data-i18n="mp.run.copy" data-i18n-attr="title">📋</button>
+												<button id="mp-run-result-close" class="btn btn-xs btn-ghost" title="关闭" data-i18n="mp.run.close" data-i18n-attr="title">✕</button>
 											</div>
 										</div>
 										<!-- 思维链 -->
 										<div id="mp-run-thinking" class="mb-2" style="display:none;">
 											<div class="flex items-center gap-1 mb-1 cursor-pointer" id="mp-run-thinking-header">
 												<span class="text-xs text-base-content/30" id="mp-run-thinking-arrow">▶</span>
-												<span class="text-xs font-medium text-base-content/50">💭 思维链</span>
+												<span class="text-xs font-medium text-base-content/50" data-i18n="mp.run.thinking">💭 思维链</span>
 											</div>
 											<pre id="mp-run-thinking-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md max-h-48 overflow-y-auto" style="display:none; background: oklch(var(--bc) / 0.04); border: 1px solid oklch(var(--bc) / 0.08);"></pre>
 										</div>
 										<!-- 操作结果 -->
 										<div id="mp-run-operations" class="mb-2" style="display:none;">
-											<div class="text-xs font-medium text-base-content/50 mb-1">📝 执行的操作</div>
+											<div class="text-xs font-medium text-base-content/50 mb-1" data-i18n="mp.run.operations">📝 执行的操作</div>
 											<div id="mp-run-operations-list" class="space-y-1"></div>
 										</div>
 										<!-- AI回复 -->
 										<div id="mp-run-reply" class="mb-2">
-											<div class="text-xs font-medium text-base-content/50 mb-1">💬 AI回复</div>
+											<div class="text-xs font-medium text-base-content/50 mb-1" data-i18n="mp.run.reply">💬 AI回复</div>
 											<pre id="mp-run-reply-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md max-h-64 overflow-y-auto" style="background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1);"></pre>
 										</div>
 										<!-- 错误 -->
@@ -644,11 +648,11 @@
 									<!-- 预设提示词预览面板 -->
 									<div id="mp-preset-preview-panel" style="display:none;" class="mt-3">
 										<div class="flex items-center justify-between mb-2">
-											<span class="text-sm font-medium text-amber-600">📝 提示词预览（宏替换后）</span>
+											<span class="text-sm font-medium text-amber-600" data-i18n="mp.preview.title">📝 提示词预览（宏替换后）</span>
 											<div class="flex items-center gap-2">
 												<span id="mp-preset-preview-stats" class="text-xs text-base-content/40"></span>
-												<button id="mp-preset-preview-copy" class="btn btn-xs btn-ghost" title="复制全部预览">📋</button>
-												<button id="mp-preset-preview-close" class="btn btn-xs btn-ghost" title="关闭预览">✕</button>
+												<button id="mp-preset-preview-copy" class="btn btn-xs btn-ghost" title="复制全部预览" data-i18n="mp.preview.copy" data-i18n-attr="title">📋</button>
+												<button id="mp-preset-preview-close" class="btn btn-xs btn-ghost" title="关闭预览" data-i18n="mp.preview.close" data-i18n-attr="title">✕</button>
 											</div>
 										</div>
 										<div id="mp-preset-preview-content" class="space-y-2"></div>
@@ -662,18 +666,18 @@
 					<div id="section-memoryManage" class="beilu-usage-section">
 						<div id="mm-loading" class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载记忆管理...</p>
+							<p data-i18n="mm.loading">加载记忆管理...</p>
 						</div>
 						<div id="mm-main" style="display:none;">
 							<!-- 顶部：角色卡选择器 -->
 							<div class="beilu-preset-header">
 								<div class="beilu-preset-info">
-									<span class="text-sm text-base-content/50">记忆表格编辑器</span>
+									<span class="text-sm text-base-content/50" data-i18n="mm.header">记忆表格编辑器</span>
 									<div class="flex items-center gap-2 mt-1">
 										<select id="mm-char-select" class="select select-sm select-bordered flex-grow min-w-0 text-sm">
-											<option value="">选择角色卡...</option>
+											<option value="" data-i18n="mm.charSelect">选择角色卡...</option>
 										</select>
-										<button id="mm-refresh-btn" class="btn btn-xs btn-outline" title="刷新数据">🔄</button>
+										<button id="mm-refresh-btn" class="btn btn-xs btn-outline" title="刷新数据" data-i18n="mm.refresh" data-i18n-attr="title">🔄</button>
 									</div>
 								</div>
 								<div class="beilu-preset-actions">
@@ -683,26 +687,26 @@
 
 							<!-- 未选择角色卡时的占位 -->
 							<div id="mm-no-char" class="text-center py-12">
-								<p class="text-base-content/40 text-sm">👆 请先选择一个角色卡</p>
-								<p class="text-base-content/30 text-xs mt-1">记忆表格绑定角色卡，每个角色有独立的记忆空间</p>
+							<p class="text-base-content/40 text-sm" data-i18n="mm.noChar">👆 请先选择一个角色卡</p>
+							<p class="text-base-content/30 text-xs mt-1" data-i18n="mm.noChar.desc">记忆表格绑定角色卡，每个角色有独立的记忆空间</p>
 							</div>
 
 							<!-- 归档配置面板（选择角色卡后显示） -->
 							<div id="mm-archive-config" style="display:none;">
 								<div class="beilu-config-section mb-3">
 									<div class="flex items-center justify-between mb-2">
-										<span class="text-sm font-medium">⚙️ 归档配置</span>
+										<span class="text-sm font-medium" data-i18n="mm.archiveConfig">⚙️ 归档配置</span>
 										<span id="mm-config-status" class="text-xs text-base-content/40"></span>
 									</div>
 									<div class="flex flex-wrap gap-x-4 gap-y-2 items-end">
 										<div class="flex items-center gap-2">
-											<span class="text-xs text-base-content/50 shrink-0">P2归档阈值:</span>
+											<span class="text-xs text-base-content/50 shrink-0" data-i18n="mm.archiveThreshold">P2归档阈值:</span>
 											<input type="number" id="mm-threshold" class="input input-xs input-bordered w-20" min="10" max="500" value="50" title="#4临时记忆超过此数量时自动触发P2归档" />
-											<span class="text-xs text-base-content/40">条</span>
+											<span class="text-xs text-base-content/40" data-i18n="mm.archiveThreshold.unit">条</span>
 										</div>
-										<button id="mm-save-config-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存配置</button>
+										<button id="mm-save-config-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="mm.saveConfig">💾 保存配置</button>
 									</div>
-									<p class="text-xs text-base-content/30 mt-1">#4 临时记忆行数超过阈值后，自动触发 P2 归档AI 进行压缩和归档</p>
+									<p class="text-xs text-base-content/30 mt-1" data-i18n="mm.archiveThreshold.desc">#4 临时记忆行数超过阈值后，自动触发 P2 归档AI 进行压缩和归档</p>
 								</div>
 							</div>
 
@@ -716,13 +720,13 @@
 									<div class="flex items-center justify-between mb-2">
 										<div class="flex items-center gap-2">
 											<span id="mm-table-id" class="badge badge-sm badge-outline badge-warning font-mono">#0</span>
-											<span id="mm-table-name" class="text-sm font-medium">表格名称</span>
-											<span id="mm-table-dirty" class="badge badge-xs badge-error" style="display:none;">未保存</span>
+											<span id="mm-table-name" class="text-sm font-medium" data-i18n="mm.tableName">表格名称</span>
+											<span id="mm-table-dirty" class="badge badge-xs badge-error" style="display:none;" data-i18n="mm.unsaved">未保存</span>
 										</div>
 										<div class="flex items-center gap-2">
 											<span id="mm-row-count" class="text-xs text-base-content/40">0 行</span>
-											<button id="mm-add-row-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">➕ 添加行</button>
-											<button id="mm-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
+											<button id="mm-add-row-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="mm.addRow">➕ 添加行</button>
+											<button id="mm-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="mm.save">💾 保存</button>
 										</div>
 									</div>
 									<!-- 规则显示 -->
@@ -755,7 +759,7 @@
 					<div id="section-sysViewer" class="beilu-usage-section">
 						<div class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载系统查看器...</p>
+							<p data-i18n="sysViewer.loading">加载系统查看器...</p>
 						</div>
 					</div>
 
@@ -763,7 +767,7 @@
 					<div id="section-aiDiag" class="beilu-usage-section">
 						<div class="beilu-loading">
 							<span class="loading loading-spinner loading-lg text-amber-500"></span>
-							<p>加载AI诊断面板...</p>
+							<p data-i18n="aiDiag.loading">加载AI诊断面板...</p>
 						</div>
 					</div>
 
@@ -780,31 +784,31 @@
 				<nav class="beilu-usage-nav">
 					<button class="beilu-system-nav-item active" data-sys-section="api">
 						<span class="beilu-usage-nav-icon">🔌</span>
-						<span class="beilu-usage-nav-label">AI 服务源</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.api">AI 服务源</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="search">
 						<span class="beilu-usage-nav-icon">🔍</span>
-						<span class="beilu-usage-nav-label">搜索服务源</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.search">搜索服务源</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="translate">
 						<span class="beilu-usage-nav-icon">🌐</span>
-						<span class="beilu-usage-nav-label">翻译服务源</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.translate">翻译服务源</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="import">
 						<span class="beilu-usage-nav-icon">📦</span>
-						<span class="beilu-usage-nav-label">导入处理器</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.import">导入处理器</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="plugins">
 						<span class="beilu-usage-nav-icon">🧩</span>
-						<span class="beilu-usage-nav-label">功能插件</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.plugins">功能插件</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="generators">
 						<span class="beilu-usage-nav-icon">⚡</span>
-						<span class="beilu-usage-nav-label">服务生成器</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.generators">服务生成器</span>
 					</button>
 					<button class="beilu-system-nav-item" data-sys-section="shells">
 						<span class="beilu-usage-nav-icon">🖥️</span>
-						<span class="beilu-usage-nav-label">系统 UI 组件</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.system.shells">系统 UI 组件</span>
 					</button>
 				</nav>
 				<!-- 主内容区 -->
@@ -812,128 +816,128 @@
 
 					<!-- AI 服务源配置 -->
 					<div id="sys-section-api" class="beilu-system-section active">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">AI 服务源管理</h3>
-						<p class="text-sm text-base-content/50 mb-4">配置 AI 服务源，用于对话和记忆系统</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="sys.api.title">AI 服务源管理</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.api.desc">配置 AI 服务源，用于对话和记忆系统</p>
 						<div class="flex items-center gap-2 mb-4">
 							<select id="home-api-select" class="select select-sm select-bordered flex-grow"></select>
-							<button id="home-api-new-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white">+ 新建</button>
+							<button id="home-api-new-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="sys.api.new">+ 新建</button>
 						</div>
 						<div class="beilu-api-form">
 							<div class="form-control mb-3">
-								<label class="label py-1"><span class="label-text text-sm">配置名称</span></label>
+								<label class="label py-1"><span class="label-text text-sm" data-i18n="sys.api.name">配置名称</span></label>
 								<input type="text" id="home-api-name" class="input input-sm input-bordered w-full" placeholder="my-api" />
 							</div>
 							<div class="form-control mb-3">
-								<label class="label py-1"><span class="label-text text-sm">API 类型</span></label>
+								<label class="label py-1"><span class="label-text text-sm" data-i18n="sys.api.type">API 类型</span></label>
 								<select id="home-api-type" class="select select-sm select-bordered w-full">
-									<option value="proxy">OpenAI 兼容</option>
-									<option value="gemini">Google Gemini</option>
+									<option value="proxy" data-i18n="sys.api.type.proxy">OpenAI 兼容</option>
+									<option value="gemini" data-i18n="sys.api.type.gemini">Google Gemini</option>
 								</select>
 							</div>
 							<div class="form-control mb-3">
-								<label class="label py-1"><span class="label-text text-sm" id="home-api-url-label">API URL（完整端点地址）</span></label>
+								<label class="label py-1"><span class="label-text text-sm" id="home-api-url-label" data-i18n="sys.api.url">API URL（完整端点地址）</span></label>
 								<input type="text" id="home-api-url" class="input input-sm input-bordered w-full font-mono text-xs" placeholder="https://api.openai.com/v1/chat/completions" />
 							</div>
 							<div class="form-control mb-3">
-								<label class="label py-1"><span class="label-text text-sm">API Key</span></label>
+								<label class="label py-1"><span class="label-text text-sm" data-i18n="sys.api.key">API Key</span></label>
 								<input type="password" id="home-api-key" class="input input-sm input-bordered w-full font-mono text-xs" placeholder="sk-..." />
 							</div>
 							<div class="form-control mb-3">
-								<label class="label py-1"><span class="label-text text-sm">模型</span></label>
+								<label class="label py-1"><span class="label-text text-sm" data-i18n="sys.api.model">模型</span></label>
 								<div class="flex gap-2">
 									<input type="text" id="home-api-model" class="input input-sm input-bordered flex-grow font-mono text-xs" placeholder="gpt-4o / gemini-2.0-flash" />
-									<button id="home-api-fetch-models" class="btn btn-sm btn-outline" title="获取模型列表">🔄</button>
+									<button id="home-api-fetch-models" class="btn btn-sm btn-outline" title="获取模型列表" data-i18n="sys.api.fetchModels" data-i18n-attr="title">🔄</button>
 								</div>
 								<select id="home-api-model-select" class="select select-sm select-bordered w-full mt-2 hidden">
-									<option value="" disabled selected>选择模型...</option>
+									<option value="" disabled selected data-i18n="sys.api.model.select">选择模型...</option>
 								</select>
 							</div>
 						</div>
 						<div class="flex gap-2 mt-4">
-							<button id="home-api-save-btn" class="btn btn-sm flex-grow bg-amber-700 hover:bg-amber-800 text-white border-amber-700">💾 保存</button>
-							<button id="home-api-delete-btn" class="btn btn-sm btn-outline btn-error" disabled>🗑️ 删除</button>
+							<button id="home-api-save-btn" class="btn btn-sm flex-grow bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="sys.api.save">💾 保存</button>
+							<button id="home-api-delete-btn" class="btn btn-sm btn-outline btn-error" disabled data-i18n="sys.api.delete">🗑️ 删除</button>
 						</div>
 						<div id="home-api-status" class="text-xs text-center mt-1 hidden"></div>
 					</div>
 
 					<!-- 搜索服务源 -->
 					<div id="sys-section-search" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">搜索服务源</h3>
-						<p class="text-sm text-base-content/50 mb-4">配置 AI 联网搜索使用的搜索服务</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.search.title">搜索服务源</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.search.desc">配置 AI 联网搜索使用的搜索服务</p>
 						<div class="beilu-part-list" id="search-source-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">🔍</span>
 									<div>
 										<div class="font-medium text-sm">google-sr</div>
-										<div class="text-xs text-base-content/40">Google 搜索（默认）</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.search.google">Google 搜索（默认）</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+								<span class="badge badge-sm badge-outline badge-warning" data-i18n="sys.search.default">默认</span>
 							</div>
 						</div>
-						<p class="text-xs text-base-content/30 mt-3">搜索服务源由 Fount 管理，可在此查看已安装的搜索服务。</p>
+						<p class="text-xs text-base-content/30 mt-3" data-i18n="sys.search.footer">搜索服务源由 Fount 管理，可在此查看已安装的搜索服务。</p>
 					</div>
 
 					<!-- 翻译服务源 -->
 					<div id="sys-section-translate" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">翻译服务源</h3>
-						<p class="text-sm text-base-content/50 mb-4">配置翻译服务</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.translate.title">翻译服务源</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.translate.desc">配置翻译服务</p>
 						<div class="beilu-part-list" id="translate-source-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">🌐</span>
 									<div>
 										<div class="font-medium text-sm">google-translate</div>
-										<div class="text-xs text-base-content/40">Google 翻译（默认）</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.translate.google">Google 翻译（默认）</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+								<span class="badge badge-sm badge-outline badge-warning" data-i18n="sys.translate.default">默认</span>
 							</div>
 						</div>
-						<p class="text-xs text-base-content/30 mt-3">翻译服务源由 Fount 管理，可在此查看已安装的翻译服务。</p>
+						<p class="text-xs text-base-content/30 mt-3" data-i18n="sys.translate.footer">翻译服务源由 Fount 管理，可在此查看已安装的翻译服务。</p>
 					</div>
 
 					<!-- 导入处理器 -->
 					<div id="sys-section-import" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">导入处理器</h3>
-						<p class="text-sm text-base-content/50 mb-4">管理角色卡、世界书等文件的导入格式支持</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.import.title">导入处理器</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.import.desc">管理角色卡、世界书等文件的导入格式支持</p>
 						<div class="beilu-part-list" id="import-handler-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">📦</span>
 									<div>
-										<div class="font-medium text-sm">ST 角色卡导入</div>
-										<div class="text-xs text-base-content/40">支持 .png / .json / .charx 格式</div>
+										<div class="font-medium text-sm" data-i18n="sys.import.char">ST 角色卡导入</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.import.char.desc">支持 .png / .json / .charx 格式</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+								<span class="badge badge-sm badge-outline badge-success" data-i18n="sys.import.installed">已安装</span>
 							</div>
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">🌍</span>
 									<div>
-										<div class="font-medium text-sm">ST 世界书导入</div>
-										<div class="text-xs text-base-content/40">支持 .json 格式</div>
+										<div class="font-medium text-sm" data-i18n="sys.import.world">ST 世界书导入</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.import.world.desc">支持 .json 格式</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+								<span class="badge badge-sm badge-outline badge-success" data-i18n="sys.import.installed">已安装</span>
 							</div>
 						</div>
-						<p class="text-xs text-base-content/30 mt-3">导入处理器由 Fount 核心提供，负责解析各种格式的角色卡和世界书文件。</p>
+						<p class="text-xs text-base-content/30 mt-3" data-i18n="sys.import.footer">导入处理器由 Fount 核心提供，负责解析各种格式的角色卡和世界书文件。</p>
 					</div>
 
 					<!-- 功能插件 -->
 					<div id="sys-section-plugins" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">功能插件</h3>
-						<p class="text-sm text-base-content/50 mb-4">管理已安装的功能插件</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.plugins.title">功能插件</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.plugins.desc">管理已安装的功能插件</p>
 						<div class="beilu-part-list" id="plugin-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">📝</span>
 									<div>
 										<div class="font-medium text-sm">beilu-preset</div>
-										<div class="text-xs text-base-content/40">ST 预设引擎 — 兼容 SillyTavern 预设格式</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.preset">ST 预设引擎 — 兼容 SillyTavern 预设格式</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -944,7 +948,7 @@
 										<span class="beilu-part-item-icon">📁</span>
 										<div>
 											<div class="font-medium text-sm">beilu-files</div>
-											<div class="text-xs text-base-content/40">AI 文件操作 — 让 AI 读写本地文件</div>
+											<div class="text-xs text-base-content/40" data-i18n="sys.plugins.files">AI 文件操作 — 让 AI 读写本地文件</div>
 										</div>
 									</div>
 									<div class="flex items-center gap-2">
@@ -958,49 +962,49 @@
 										<!-- 自动注入开关 -->
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">工具提示词注入</div>
-												<div class="text-xs text-base-content/40">在文件/IDE模式下自动向AI注入文件操作能力说明</div>
+												<div class="text-sm" data-i18n="sys.plugins.files.inject">工具提示词注入</div>
+												<div class="text-xs text-base-content/40" data-i18n="sys.plugins.files.inject.desc">在文件/IDE模式下自动向AI注入文件操作能力说明</div>
 											</div>
 											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-auto-inject" checked disabled />
 										</div>
 										<!-- 自动批准设置 -->
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">自动批准读取</div>
-												<div class="text-xs text-base-content/40">AI的read/list操作无需手动确认</div>
+												<div class="text-sm" data-i18n="sys.plugins.files.autoRead">自动批准读取</div>
+												<div class="text-xs text-base-content/40" data-i18n="sys.plugins.files.autoRead.desc">AI的read/list操作无需手动确认</div>
 											</div>
 											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-auto-read" />
 										</div>
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">自动批准所有操作</div>
-												<div class="text-xs text-base-content/40 text-error/60">⚠ 危险：write/delete/exec也将自动执行</div>
+												<div class="text-sm" data-i18n="sys.plugins.files.autoAll">自动批准所有操作</div>
+												<div class="text-xs text-base-content/40 text-error/60" data-i18n="sys.plugins.files.autoAll.desc">⚠ 危险：write/delete/exec也将自动执行</div>
 											</div>
 											<input type="checkbox" class="toggle toggle-xs toggle-error" id="bf-auto-all" />
 										</div>
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">允许命令执行</div>
-												<div class="text-xs text-base-content/40">允许AI执行系统命令(exec)</div>
+												<div class="text-sm" data-i18n="sys.plugins.files.allowExec">允许命令执行</div>
+												<div class="text-xs text-base-content/40" data-i18n="sys.plugins.files.allowExec.desc">允许AI执行系统命令(exec)</div>
 											</div>
 											<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-allow-exec" />
 										</div>
 										<!-- 自定义提示词 -->
 										<div class="beilu-config-section">
 											<div class="flex items-center justify-between mb-1">
-												<span class="text-sm">自定义提示词</span>
+												<span class="text-sm" data-i18n="sys.plugins.files.customPrompt">自定义提示词</span>
 												<input type="checkbox" class="toggle toggle-xs toggle-warning" id="bf-custom-prompt-toggle" />
 											</div>
 											<textarea id="bf-custom-prompt" class="textarea textarea-bordered w-full text-xs font-mono" rows="4"
-												placeholder="在文件操作场景中追加给AI的额外指令..." disabled></textarea>
+												placeholder="在文件操作场景中追加给AI的额外指令..." data-i18n="sys.plugins.files.customPrompt.placeholder" data-i18n-attr="placeholder" disabled></textarea>
 										</div>
 										<!-- 路径安全 -->
 										<div class="beilu-config-section">
-											<div class="text-sm mb-1">路径安全管理</div>
-											<div class="text-xs text-base-content/40 mb-2">控制AI可访问的文件路径范围</div>
+											<div class="text-sm mb-1" data-i18n="sys.plugins.files.pathSecurity">路径安全管理</div>
+											<div class="text-xs text-base-content/40 mb-2" data-i18n="sys.plugins.files.pathSecurity.desc">控制AI可访问的文件路径范围</div>
 											<div class="flex gap-2 mb-2">
 												<div class="flex-1">
-													<label class="text-xs text-base-content/50">允许路径</label>
+													<label class="text-xs text-base-content/50" data-i18n="sys.plugins.files.allowedPaths">允许路径</label>
 													<div id="bf-allowed-paths" class="beilu-path-list"></div>
 													<div class="flex gap-1 mt-1">
 														<input type="text" id="bf-new-allowed" class="input input-xs input-bordered flex-grow font-mono" placeholder="D:/projects" />
@@ -1008,7 +1012,7 @@
 													</div>
 												</div>
 												<div class="flex-1">
-													<label class="text-xs text-base-content/50">禁止路径</label>
+													<label class="text-xs text-base-content/50" data-i18n="sys.plugins.files.blockedPaths">禁止路径</label>
 													<div id="bf-blocked-paths" class="beilu-path-list"></div>
 													<div class="flex gap-1 mt-1">
 														<input type="text" id="bf-new-blocked" class="input input-xs input-bordered flex-grow font-mono" placeholder="C:/" />
@@ -1020,14 +1024,14 @@
 										<!-- 当前模式显示 -->
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">当前活跃模式</div>
-												<div class="text-xs text-base-content/40">由聊天界面模式切换自动设置</div>
+												<div class="text-sm" data-i18n="sys.plugins.files.activeMode">当前活跃模式</div>
+												<div class="text-xs text-base-content/40" data-i18n="sys.plugins.files.activeMode.desc">由聊天界面模式切换自动设置</div>
 											</div>
 											<span class="badge badge-sm badge-outline" id="bf-active-mode">chat</span>
 										</div>
 										<!-- 保存按钮 -->
 										<div class="flex justify-end mt-3">
-											<button class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700" id="bf-save-config">💾 保存配置</button>
+											<button class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700" id="bf-save-config" data-i18n="sys.plugins.files.save">💾 保存配置</button>
 										</div>
 									</div>
 								</div>
@@ -1038,7 +1042,7 @@
 										<span class="beilu-part-item-icon">👁️</span>
 										<div>
 											<div class="font-medium text-sm">beilu-eye</div>
-											<div class="text-xs text-base-content/40">贝露的眼睛 — 桌面截图临时注入 AI</div>
+											<div class="text-xs text-base-content/40" data-i18n="sys.plugins.eye">贝露的眼睛 — 桌面截图临时注入 AI</div>
 										</div>
 									</div>
 									<div class="flex items-center gap-2">
@@ -1050,20 +1054,20 @@
 									<div class="beilu-expand-inner">
 										<div class="beilu-config-row">
 											<div>
-												<div class="text-sm">桌面截图工具</div>
-												<div class="text-xs text-base-content/40">Electron 桌面悬浮球 + 框选截图</div>
+												<div class="text-sm" data-i18n="sys.plugins.eye.title">桌面截图工具</div>
+												<div class="text-xs text-base-content/40" data-i18n="sys.plugins.eye.desc">Electron 桌面悬浮球 + 框选截图</div>
 											</div>
-											<span class="badge badge-sm badge-outline" id="be-electron-status">未知</span>
+											<span class="badge badge-sm badge-outline" id="be-electron-status" data-i18n="sys.plugins.eye.unknown">未知</span>
 										</div>
 										<div class="flex gap-2 mt-2">
-											<button class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" id="be-start-btn">▶ 启动</button>
-											<button class="btn btn-xs btn-outline" id="be-stop-btn">⏹ 停止</button>
-											<button class="btn btn-xs btn-outline" id="be-restart-btn">🔄 重启</button>
+											<button class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" id="be-start-btn" data-i18n="sys.plugins.eye.start">▶ 启动</button>
+											<button class="btn btn-xs btn-outline" id="be-stop-btn" data-i18n="sys.plugins.eye.stop">⏹ 停止</button>
+											<button class="btn btn-xs btn-outline" id="be-restart-btn" data-i18n="sys.plugins.eye.restart">🔄 重启</button>
 										</div>
 										<div class="text-xs text-base-content/30 mt-3">
-											<p>💡 启动后桌面显示 ✦ 悬浮球，点击可框选截图发送给 AI</p>
-											<p class="mt-1">• 快捷键 Alt+Shift+S 也可触发</p>
-											<p>• 浏览器内 Ctrl+V 粘贴截图始终可用</p>
+											<p data-i18n="sys.plugins.eye.hint1">💡 启动后桌面显示 ✦ 悬浮球，点击可框选截图发送给 AI</p>
+											<p class="mt-1" data-i18n="sys.plugins.eye.hint2">• 快捷键 Alt+Shift+S 也可触发</p>
+											<p data-i18n="sys.plugins.eye.hint3">• 浏览器内 Ctrl+V 粘贴截图始终可用</p>
 										</div>
 									</div>
 								</div>
@@ -1073,7 +1077,7 @@
 									<span class="beilu-part-item-icon">🌐</span>
 									<div>
 										<div class="font-medium text-sm">beilu-web</div>
-										<div class="text-xs text-base-content/40">AI 联网 — 搜索和浏览网页</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.web">AI 联网 — 搜索和浏览网页</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1083,7 +1087,7 @@
 									<span class="beilu-part-item-icon">🧠</span>
 									<div>
 										<div class="font-medium text-sm">beilu-memory</div>
-										<div class="text-xs text-base-content/40">记忆系统 — 长期无限记忆（开发中）</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.memory">记忆系统 — 长期无限记忆（开发中）</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1093,7 +1097,7 @@
 									<span class="beilu-part-item-icon">🔧</span>
 									<div>
 										<div class="font-medium text-sm">beilu-regex</div>
-										<div class="text-xs text-base-content/40">正则脚本 — ST 风格正则替换引擎</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.regex">正则脚本 — ST 风格正则替换引擎</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1103,7 +1107,7 @@
 									<span class="beilu-part-item-icon">💻</span>
 									<div>
 										<div class="font-medium text-sm">beilu-sysinfo</div>
-										<div class="text-xs text-base-content/40">系统信息 — 向 AI 注入运行环境上下文</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.sysinfo">系统信息 — 向 AI 注入运行环境上下文</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1113,7 +1117,7 @@
 									<span class="beilu-part-item-icon">📋</span>
 									<div>
 										<div class="font-medium text-sm">beilu-logger</div>
-										<div class="text-xs text-base-content/40">日志系统 — 服务器日志收集与可视化</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.logger">日志系统 — 服务器日志收集与可视化</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1123,7 +1127,7 @@
 									<span class="beilu-part-item-icon">🔀</span>
 									<div>
 										<div class="font-medium text-sm">beilu-toggle</div>
-										<div class="text-xs text-base-content/40">预设条目开关 — 动态启停预设条目</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.toggle">预设条目开关 — 动态启停预设条目</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1133,7 +1137,7 @@
 									<span class="beilu-part-item-icon">🤖</span>
 									<div>
 										<div class="font-medium text-sm">beilu-agents</div>
-										<div class="text-xs text-base-content/40">代理系统 — 多步骤 AI 代理执行</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.plugins.agents">代理系统 — 多步骤 AI 代理执行</div>
 									</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-xs toggle-warning" checked disabled />
@@ -1143,67 +1147,67 @@
 
 					<!-- 服务生成器 -->
 					<div id="sys-section-generators" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">AI 服务生成器</h3>
-						<p class="text-sm text-base-content/50 mb-4">系统底层的 AI 接口适配器，将不同 API 格式转换为统一调用</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.generators.title">AI 服务生成器</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.generators.desc">系统底层的 AI 接口适配器，将不同 API 格式转换为统一调用</p>
 						<div class="beilu-part-list" id="generator-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">⚡</span>
 									<div>
 										<div class="font-medium text-sm">proxy</div>
-										<div class="text-xs text-base-content/40">OpenAI 兼容接口（支持大部分第三方API）</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.generators.proxy">OpenAI 兼容接口（支持大部分第三方API）</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-info">内置</span>
+								<span class="badge badge-sm badge-outline badge-info" data-i18n="sys.generators.builtin">内置</span>
 							</div>
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">⚡</span>
 									<div>
 										<div class="font-medium text-sm">gemini</div>
-										<div class="text-xs text-base-content/40">Google Gemini 原生接口</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.generators.gemini">Google Gemini 原生接口</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-info">内置</span>
+								<span class="badge badge-sm badge-outline badge-info" data-i18n="sys.generators.builtin">内置</span>
 							</div>
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">⚡</span>
 									<div>
 										<div class="font-medium text-sm">claude-api</div>
-										<div class="text-xs text-base-content/40">Anthropic Claude 原生接口</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.generators.claude">Anthropic Claude 原生接口</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-info">内置</span>
+								<span class="badge badge-sm badge-outline badge-info" data-i18n="sys.generators.builtin">内置</span>
 							</div>
 						</div>
-						<p class="text-xs text-base-content/30 mt-3">服务生成器通常不需要手动管理，由 AI 服务源自动调用。</p>
+						<p class="text-xs text-base-content/30 mt-3" data-i18n="sys.generators.footer">服务生成器通常不需要手动管理，由 AI 服务源自动调用。</p>
 					</div>
 
 					<!-- 系统 UI 组件 -->
 					<div id="sys-section-shells" class="beilu-system-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-2">系统 UI 组件</h3>
-						<p class="text-sm text-base-content/50 mb-4">已安装的交互界面模块</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-2" data-i18n="sys.shells.title">系统 UI 组件</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="sys.shells.desc">已安装的交互界面模块</p>
 						<div class="beilu-part-list" id="shell-list">
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">🏠</span>
 									<div>
 										<div class="font-medium text-sm">beilu-home</div>
-										<div class="text-xs text-base-content/40">首页 — 当前页面</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.shells.home">首页 — 当前页面</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-warning">默认</span>
+								<span class="badge badge-sm badge-outline badge-warning" data-i18n="sys.shells.home.default">默认</span>
 							</div>
 							<div class="beilu-part-item">
 								<div class="beilu-part-item-info">
 									<span class="beilu-part-item-icon">💬</span>
 									<div>
 										<div class="font-medium text-sm">beilu-chat</div>
-										<div class="text-xs text-base-content/40">聊天界面 — AI 对话交互</div>
+										<div class="text-xs text-base-content/40" data-i18n="sys.shells.chat">聊天界面 — AI 对话交互</div>
 									</div>
 								</div>
-								<span class="badge badge-sm badge-outline badge-success">已安装</span>
+								<span class="badge badge-sm badge-outline badge-success" data-i18n="sys.shells.chat.installed">已安装</span>
 							</div>
 						</div>
 					</div>
@@ -1221,27 +1225,27 @@
 				<nav class="beilu-usage-nav">
 					<button class="beilu-user-nav-item active" data-user-section="theme">
 						<span class="beilu-usage-nav-icon">🎨</span>
-						<span class="beilu-usage-nav-label">主题和外观</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.theme">主题和外观</span>
 					</button>
 					<button class="beilu-user-nav-item" data-user-section="language">
 						<span class="beilu-usage-nav-icon">🌍</span>
-						<span class="beilu-usage-nav-label">语言</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.language">语言</span>
 					</button>
 					<button class="beilu-user-nav-item" data-user-section="remote">
 						<span class="beilu-usage-nav-icon">📱</span>
-						<span class="beilu-usage-nav-label">远程访问</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.remote">远程访问</span>
 					</button>
 					<button class="beilu-user-nav-item" data-user-section="browser">
 						<span class="beilu-usage-nav-icon">🔗</span>
-						<span class="beilu-usage-nav-label">浏览器集成</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.browser">浏览器集成</span>
 					</button>
 					<button class="beilu-user-nav-item" data-user-section="debug">
 						<span class="beilu-usage-nav-icon">🐛</span>
-						<span class="beilu-usage-nav-label">调试面板</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.debug">调试面板</span>
 					</button>
 					<button class="beilu-user-nav-item" data-user-section="about">
 						<span class="beilu-usage-nav-icon">ℹ️</span>
-						<span class="beilu-usage-nav-label">关于</span>
+						<span class="beilu-usage-nav-label" data-i18n="nav.user.about">关于</span>
 					</button>
 				</nav>
 				<!-- 主内容区 -->
@@ -1249,31 +1253,31 @@
 
 					<!-- 主题和外观 -->
 					<div id="user-section-theme" class="beilu-user-section active">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">主题和外观</h3>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.theme.title">主题和外观</h3>
 						<div class="beilu-settings-group">
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">深色模式</div>
-									<div class="text-xs text-base-content/40">当前使用深色主题</div>
+									<div class="font-medium text-sm" data-i18n="user.theme.darkMode">深色模式</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.theme.darkMode.on">当前使用深色主题</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-sm toggle-warning" checked id="user-dark-mode" />
 							</div>
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">主题色</div>
-									<div class="text-xs text-base-content/40">琥珀色（amber）</div>
+									<div class="font-medium text-sm" data-i18n="user.theme.color">主题色</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.theme.color.amber">琥珀色（amber）</div>
 								</div>
 								<div class="w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-600"></div>
 							</div>
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">字体大小</div>
-									<div class="text-xs text-base-content/40">界面字体大小调节</div>
+									<div class="font-medium text-sm" data-i18n="user.theme.fontSize">字体大小</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.theme.fontSize.desc">界面字体大小调节</div>
 								</div>
 								<select class="select select-xs select-bordered w-24" id="user-font-size">
-									<option value="small">小</option>
-									<option value="medium" selected>中</option>
-									<option value="large">大</option>
+									<option value="small" data-i18n="user.theme.fontSize.small">小</option>
+									<option value="medium" selected data-i18n="user.theme.fontSize.medium">中</option>
+									<option value="large" data-i18n="user.theme.fontSize.large">大</option>
 								</select>
 							</div>
 						</div>
@@ -1281,17 +1285,18 @@
 
 					<!-- 语言 -->
 					<div id="user-section-language" class="beilu-user-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">语言设置</h3>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.lang.title">语言设置</h3>
 						<div class="beilu-settings-group">
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">界面语言</div>
-									<div class="text-xs text-base-content/40">选择界面显示语言</div>
+									<div class="font-medium text-sm" data-i18n="user.lang.label">界面语言</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.lang.desc">选择界面显示语言</div>
 								</div>
 								<select class="select select-sm select-bordered w-40" id="user-language">
 									<option value="zh-CN" selected>简体中文</option>
 									<option value="en-UK">English</option>
 									<option value="ja-JP">日本語</option>
+									<option value="zh-TW">繁體中文</option>
 								</select>
 							</div>
 						</div>
@@ -1299,20 +1304,20 @@
 
 					<!-- 远程访问 -->
 					<div id="user-section-remote" class="beilu-user-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">远程访问</h3>
-						<p class="text-sm text-base-content/50 mb-4">从其他设备访问贝露</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.remote.title">远程访问</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="user.remote.desc">从其他设备访问贝露</p>
 						<div class="beilu-settings-group">
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">局域网地址</div>
-									<div class="text-xs text-base-content/40 font-mono" id="user-local-url">加载中...</div>
+									<div class="font-medium text-sm" data-i18n="user.remote.lanUrl">局域网地址</div>
+									<div class="text-xs text-base-content/40 font-mono" id="user-local-url" data-i18n="user.remote.loading">加载中...</div>
 								</div>
-								<button class="btn btn-xs btn-outline" id="user-copy-url">📋 复制</button>
+								<button class="btn btn-xs btn-outline" id="user-copy-url" data-i18n="user.remote.copy">📋 复制</button>
 							</div>
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">mDNS 发现</div>
-									<div class="text-xs text-base-content/40">允许同一网络内的设备自动发现</div>
+									<div class="font-medium text-sm" data-i18n="user.remote.mdns">mDNS 发现</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.remote.mdns.desc">允许同一网络内的设备自动发现</div>
 								</div>
 								<input type="checkbox" class="toggle toggle-sm toggle-warning" id="user-mdns" />
 							</div>
@@ -1321,50 +1326,50 @@
 
 					<!-- 浏览器集成 -->
 					<div id="user-section-browser" class="beilu-user-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">浏览器集成</h3>
-						<p class="text-sm text-base-content/50 mb-4">让 AI 能在浏览器中执行操作</p>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.browser.title">浏览器集成</h3>
+						<p class="text-sm text-base-content/50 mb-4" data-i18n="user.browser.desc">让 AI 能在浏览器中执行操作</p>
 						<div class="beilu-settings-group">
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">浏览器扩展</div>
-									<div class="text-xs text-base-content/40">安装浏览器扩展以启用集成功能</div>
+									<div class="font-medium text-sm" data-i18n="user.browser.ext">浏览器扩展</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.browser.ext.desc">安装浏览器扩展以启用集成功能</div>
 								</div>
-								<span class="badge badge-sm badge-outline" id="user-browser-ext-status">未检测</span>
+								<span class="badge badge-sm badge-outline" id="user-browser-ext-status" data-i18n="user.browser.ext.status">未检测</span>
 							</div>
 							<div class="beilu-settings-item">
 								<div>
-									<div class="font-medium text-sm">自动运行脚本</div>
-									<div class="text-xs text-base-content/40">页面加载时自动执行的脚本</div>
+									<div class="font-medium text-sm" data-i18n="user.browser.autorun">自动运行脚本</div>
+									<div class="text-xs text-base-content/40" data-i18n="user.browser.autorun.desc">页面加载时自动执行的脚本</div>
 								</div>
-								<button class="btn btn-xs btn-outline">管理</button>
+								<button class="btn btn-xs btn-outline" data-i18n="user.browser.autorun.manage">管理</button>
 							</div>
 						</div>
 					</div>
 
 					<!-- 调试面板 -->
 						<div id="user-section-debug" class="beilu-user-section">
-							<h3 class="text-lg font-bold text-amber-700 mb-4">调试面板</h3>
-							<p class="text-sm text-base-content/50 mb-4">查看完整的提示词输出和系统日志</p>
+							<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.debug.title">调试面板</h3>
+							<p class="text-sm text-base-content/50 mb-4" data-i18n="user.debug.desc">查看完整的提示词输出和系统日志</p>
 	
 							<!-- ===== 服务器日志面板 ===== -->
 							<div class="beilu-debug-panel mb-4">
 								<div class="flex items-center justify-between mb-3">
-									<span class="text-sm font-medium">📋 服务器日志</span>
+									<span class="text-sm font-medium" data-i18n="user.debug.logger">📋 服务器日志</span>
 									<div class="flex items-center gap-2">
 										<span id="logger-stats" class="text-xs text-base-content/40"></span>
-										<button class="btn btn-xs btn-outline" id="logger-refresh-btn" title="刷新日志">🔄 刷新</button>
+										<button class="btn btn-xs btn-outline" id="logger-refresh-btn" title="刷新日志" data-i18n="user.debug.logger.refresh">🔄 刷新</button>
 									</div>
 								</div>
 								<!-- 筛选和控制栏 -->
 								<div class="flex items-center justify-between mb-2 flex-wrap gap-2">
 									<div class="flex gap-1">
-										<button class="btn btn-xs logger-filter-btn active" data-level="all">全部</button>
-										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="warn">⚠️ 警告</button>
-										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="error">❌ 错误</button>
+										<button class="btn btn-xs logger-filter-btn active" data-level="all" data-i18n="user.debug.logger.all">全部</button>
+										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="warn" data-i18n="user.debug.logger.warn">⚠️ 警告</button>
+										<button class="btn btn-xs btn-outline logger-filter-btn" data-level="error" data-i18n="user.debug.logger.error">❌ 错误</button>
 									</div>
 									<div class="flex items-center gap-2">
 										<label class="cursor-pointer label gap-1 p-0">
-											<span class="label-text text-xs">自动刷新</span>
+											<span class="label-text text-xs" data-i18n="user.debug.logger.autoRefresh">自动刷新</span>
 											<input type="checkbox" id="logger-auto-refresh" class="checkbox checkbox-xs checkbox-warning" />
 										</label>
 										<button class="btn btn-xs btn-outline btn-ghost" id="logger-copy-btn" title="复制全部日志">📋</button>
@@ -1373,25 +1378,25 @@
 								</div>
 								<!-- 日志输出区 -->
 								<div id="logger-output" class="beilu-debug-output beilu-logger-output">
-									<p class="text-xs text-base-content/30 text-center py-8">点击"刷新"加载服务器日志</p>
+									<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.logger.placeholder">点击"刷新"加载服务器日志</p>
 								</div>
 							</div>
 	
 							<!-- ===== 伪发送面板 ===== -->
 							<div class="beilu-debug-panel mb-4">
 								<div class="flex items-center justify-between mb-3">
-									<span class="text-sm font-medium">🚀 伪发送预览</span>
+									<span class="text-sm font-medium" data-i18n="user.debug.fakeSend">🚀 伪发送预览</span>
 									<div class="flex items-center gap-2">
 										<span id="fake-send-status" class="text-xs text-base-content/40"></span>
-										<button class="btn btn-xs btn-outline" id="fake-send-btn">📡 构建请求</button>
+										<button class="btn btn-xs btn-outline" id="fake-send-btn" data-i18n="user.debug.fakeSend.btn">📡 构建请求</button>
 									</div>
 								</div>
-								<p class="text-xs text-base-content/50 mb-3">模拟完整的 AI 调用链路，生成 Chat Completion request 预览。不会实际发送。</p>
+								<p class="text-xs text-base-content/50 mb-3" data-i18n="user.debug.fakeSend.desc">模拟完整的 AI 调用链路，生成 Chat Completion request 预览。不会实际发送。</p>
 								<!-- 聊天选择 -->
 								<div class="flex items-center gap-2 mb-3">
-									<span class="text-xs text-base-content/50 shrink-0">聊天:</span>
+									<span class="text-xs text-base-content/50 shrink-0" data-i18n="user.debug.fakeSend.chat">聊天:</span>
 									<select id="fake-send-chat-select" class="select select-xs select-bordered flex-grow min-w-0">
-										<option value="">选择一个聊天...</option>
+										<option value="" data-i18n="user.debug.fakeSend.chatSelect">选择一个聊天...</option>
 									</select>
 									<button class="btn btn-xs btn-outline" id="fake-send-refresh-chats" title="刷新聊天列表">🔄</button>
 								</div>
@@ -1405,29 +1410,29 @@
 								</div>
 								<!-- 子选项卡 -->
 								<div class="flex gap-1 mb-2">
-									<button class="btn btn-xs fs-sub-tab active" data-fs-tab="messages">消息列表</button>
-									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="params">模型参数</button>
-									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="raw">原始 JSON</button>
+									<button class="btn btn-xs fs-sub-tab active" data-fs-tab="messages" data-i18n="user.debug.fakeSend.messages">消息列表</button>
+									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="params" data-i18n="user.debug.fakeSend.params">模型参数</button>
+									<button class="btn btn-xs btn-outline fs-sub-tab" data-fs-tab="raw" data-i18n="user.debug.fakeSend.raw">原始 JSON</button>
 								</div>
 								<!-- 消息列表 -->
 								<div id="fs-tab-messages" class="fs-tab-content active">
 									<div id="fs-messages-output" class="beilu-debug-output beilu-fs-output">
-										<p class="text-xs text-base-content/30 text-center py-8">点击"构建请求"生成完整的 Chat Completion request 预览</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.fakeSend.placeholder">点击"构建请求"生成完整的 Chat Completion request 预览</p>
 									</div>
 								</div>
 								<!-- 模型参数 -->
 								<div id="fs-tab-params" class="fs-tab-content" style="display:none;">
 									<div id="fs-params-output" class="beilu-debug-output">
-										<p class="text-xs text-base-content/30 text-center py-8">暂无参数数据</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.fakeSend.noParams">暂无参数数据</p>
 									</div>
 								</div>
 								<!-- 原始 JSON -->
 								<div id="fs-tab-raw" class="fs-tab-content" style="display:none;">
 									<div class="flex justify-end mb-1">
-										<button class="btn btn-xs btn-outline" id="fs-copy-raw" title="复制完整 JSON">📋 复制</button>
+										<button class="btn btn-xs btn-outline" id="fs-copy-raw" title="复制完整 JSON" data-i18n="user.debug.fakeSend.copy">📋 复制</button>
 									</div>
 									<div id="fs-raw-output" class="beilu-debug-output beilu-fs-output">
-										<p class="text-xs text-base-content/30 text-center py-8">暂无数据</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.fakeSend.noData">暂无数据</p>
 									</div>
 								</div>
 							</div>
@@ -1435,10 +1440,10 @@
 							<!-- ===== 提示词预览面板 ===== -->
 							<div class="beilu-debug-panel">
 								<div class="flex items-center justify-between mb-3">
-									<span class="text-sm font-medium">📝 提示词快照</span>
+									<span class="text-sm font-medium" data-i18n="user.debug.snapshot">📝 提示词快照</span>
 									<div class="flex items-center gap-2">
 										<span id="debug-snapshot-time" class="text-xs text-base-content/40"></span>
-										<button class="btn btn-xs btn-outline" id="debug-refresh">🔄 刷新</button>
+										<button class="btn btn-xs btn-outline" id="debug-refresh" data-i18n="user.debug.snapshot.refresh">🔄 刷新</button>
 									</div>
 								</div>
 								<!-- 快照元信息 -->
@@ -1459,26 +1464,26 @@
 								</div>
 								<!-- 子选项卡 -->
 								<div class="flex gap-1 mb-2">
-									<button class="btn btn-xs debug-sub-tab active" data-debug-tab="system">系统提示词</button>
-									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="chatlog">聊天记录</button>
-									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="modules">各模块详情</button>
+									<button class="btn btn-xs debug-sub-tab active" data-debug-tab="system" data-i18n="user.debug.snapshot.system">系统提示词</button>
+									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="chatlog" data-i18n="user.debug.snapshot.chatlog">聊天记录</button>
+									<button class="btn btn-xs btn-outline debug-sub-tab" data-debug-tab="modules" data-i18n="user.debug.snapshot.modules">各模块详情</button>
 								</div>
 								<!-- 系统提示词内容 -->
 								<div id="debug-tab-system" class="debug-tab-content active">
 									<div id="debug-system-output" class="beilu-debug-output">
-										<p class="text-xs text-base-content/30 text-center py-8">发送一条消息后，这里会显示完整的提示词内容</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.snapshot.placeholder">发送一条消息后，这里会显示完整的提示词内容</p>
 									</div>
 								</div>
 								<!-- 聊天记录预览 -->
 								<div id="debug-tab-chatlog" class="debug-tab-content" style="display:none;">
 									<div id="debug-chatlog-output" class="beilu-debug-output">
-										<p class="text-xs text-base-content/30 text-center py-8">暂无聊天记录数据</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.snapshot.noChatlog">暂无聊天记录数据</p>
 									</div>
 								</div>
 								<!-- 各模块详情 -->
 								<div id="debug-tab-modules" class="debug-tab-content" style="display:none;">
 									<div id="debug-modules-output" class="beilu-debug-output">
-										<p class="text-xs text-base-content/30 text-center py-8">暂无模块统计数据</p>
+										<p class="text-xs text-base-content/30 text-center py-8" data-i18n="user.debug.snapshot.noModules">暂无模块统计数据</p>
 									</div>
 								</div>
 							</div>
@@ -1486,17 +1491,17 @@
 
 					<!-- 关于 -->
 					<div id="user-section-about" class="beilu-user-section">
-						<h3 class="text-lg font-bold text-amber-700 mb-4">关于</h3>
+						<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.about.title">关于</h3>
 						<div class="beilu-about-card">
-							<div class="text-2xl mb-2">贝露 · 与你之诗</div>
-							<div class="text-sm text-base-content/50 mb-4">跨时代的独立 AI 角色交互系统</div>
+							<div class="text-2xl mb-2" data-i18n="user.about.name">贝露 · 与你之诗</div>
+							<div class="text-sm text-base-content/50 mb-4" data-i18n="user.about.subtitle">跨时代的独立 AI 角色交互系统</div>
 							<div class="text-xs text-base-content/40 space-y-1">
-								<div>基于 <span class="font-mono">Fount</span> 核心运行时</div>
-								<div>兼容 SillyTavern 预设和角色卡</div>
-								<div>由凛倾创造 💛</div>
+								<div data-i18n="user.about.fount">基于 <span class="font-mono">Fount</span> 核心运行时</div>
+								<div data-i18n="user.about.compat">兼容 SillyTavern 预设和角色卡</div>
+								<div data-i18n="user.about.creator">由凛倾创造 💛</div>
 							</div>
 							<div class="mt-4 pt-4 border-t border-base-content/10">
-								<div class="text-xs text-base-content/30 font-mono" id="about-version">版本信息加载中...</div>
+								<div class="text-xs text-base-content/30 font-mono" id="about-version" data-i18n="user.about.version">版本信息加载中...</div>
 							</div>
 						</div>
 					</div>

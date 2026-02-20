@@ -39,7 +39,7 @@ async function downloadChubCharacter(id) {
 	const [creatorName, projectName] = id.split('/')
 	const result = await fetch(`https://api.chub.ai/api/characters/${creatorName}/${projectName}`, {
 		method: 'GET',
-		headers: { 'Content-Type': 'application/json', 'User-Agent': 'fount/1.0' },
+		headers: { 'Content-Type': 'application/json', 'User-Agent': 'beilu/1.0' },
 	})
 
 	if (!result.ok) throw await result.text()

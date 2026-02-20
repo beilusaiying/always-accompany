@@ -155,13 +155,26 @@ export async function initAuth() {
 	config.data.revokedTokens ??= {}
 	config.data.apiKeys ??= {}
 	config.data.users ??= {}
-	for (const user in config.data.users)
-		if (config.data.users[user].auth) {
-			config.data.users[user].auth.refreshTokens ??= []
-			config.data.users[user].auth.apiKeys ??= []
-			config.data.users[user].auth.apiRefreshTokens ??= []
+	let needSave = false
+	for (const username in config.data.users) {
+		const user = config.data.users[username]
+		if (user.auth) {
+			user.auth.refreshTokens ??= []
+			user.auth.apiKeys ??= []
+			user.auth.apiRefreshTokens ??= []
+			// 迁移：空密码用户标记为 passwordless
+			if (user.auth.passwordless === undefined) {
+				if (!user.auth.password || user.auth.password === '') {
+					user.auth.passwordless = true
+					user.auth.password = ''
+					needSave = true
+				} else {
+					user.auth.passwordless = false
+				}
+			}
 		}
-
+	}
+	if (needSave) save_config()
 
 	cleanupRevokedTokens()
 	cleanupRefreshTokens()
@@ -465,7 +478,7 @@ export async function verifyApiKey(apiKey) {
 
 /**
  * 尝试对请求进行身份验证，成功则填充 req.user。
- * beilu: 已禁用登录系统，自动使用第一个可用用户。
+ * 通过 JWT Cookie 或 API 密钥验证用户身份。
  * @param {import('npm:express').Request} req - Express 请求对象。
  * @param {import('npm:express').Response} res - Express 响应对象。
  * @returns {Promise<void>}
@@ -473,29 +486,57 @@ export async function verifyApiKey(apiKey) {
 export async function try_auth_request(req, res) {
 	if (req.user) return
 
-	// beilu: 跳过所有认证，直接使用第一个可用用户
-	const usernames = Object.keys(config.data.users)
-	const username = usernames[0]
-	if (username) {
-		req.user = config.data.users[username]
-	} else {
-		// 如果没有用户，创建一个默认用户
-		const defaultUsername = 'linqing'
-		config.data.users[defaultUsername] = {
-			username: defaultUsername,
-			createdAt: Date.now(),
-			auth: {
-				userId: crypto.randomUUID(),
-				password: '',
-				loginAttempts: 0,
-				lockedUntil: null,
-				refreshTokens: [],
-				apiKeys: [],
-				apiRefreshTokens: [],
-			},
+	const { cookies } = req
+	if (!cookies) return
+
+	// 1. 尝试 API 密钥认证（通过 header）
+	const apiKeyHeader = req.headers['x-api-key']
+	if (apiKeyHeader) {
+		const user = await verifyApiKey(apiKeyHeader)
+		if (user) { req.user = user; return }
+	}
+
+	// 2. 尝试 API Cookie 认证
+	if (cookies.apiAccessToken) {
+		const payload = await verifyToken(cookies.apiAccessToken)
+		if (payload?.type === 'api' && payload.username) {
+			const user = getUserByUsername(payload.username)
+			if (user) { req.user = user; return }
 		}
-		save_config()
-		req.user = config.data.users[defaultUsername]
+		// apiAccessToken 无效，尝试用 apiRefreshToken 刷新
+		if (cookies.apiRefreshToken) {
+			const result = await refreshApiToken(cookies.apiRefreshToken, req)
+			if (result.success) {
+				const cookieOptions = getSecureCookieOptions(req)
+				res.cookie('apiAccessToken', result.apiAccessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION })
+				res.cookie('apiRefreshToken', result.apiRefreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION })
+				const decoded = jose.decodeJwt(result.apiAccessToken)
+				const user = getUserByUsername(decoded.username)
+				if (user) { req.user = user; return }
+			}
+		}
+	}
+
+	// 3. 尝试标准 Cookie 认证
+	if (cookies.accessToken) {
+		const payload = await verifyToken(cookies.accessToken)
+		if (payload && !payload.type && payload.username) {
+			const user = getUserByUsername(payload.username)
+			if (user) { req.user = user; return }
+		}
+	}
+
+	// 4. accessToken 无效，尝试用 refreshToken 刷新
+	if (cookies.refreshToken) {
+		const result = await refresh(cookies.refreshToken, req)
+		if (result.success) {
+			const cookieOptions = getSecureCookieOptions(req)
+			res.cookie('accessToken', result.accessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION })
+			res.cookie('refreshToken', result.refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION })
+			const decoded = jose.decodeJwt(result.accessToken)
+			const user = getUserByUsername(decoded.username)
+			if (user) { req.user = user; return }
+		}
 	}
 }
 
@@ -506,19 +547,21 @@ export async function try_auth_request(req, res) {
  * @returns {Promise<boolean>} 成功时为 true，失败时为 false。
  */
 export function auth_request(req, res) {
-	return try_auth_request(req, res).then(() => true, () => false)
+	return try_auth_request(req, res).then(() => !!req.user, () => false)
 }
 
 /**
- * 认证中间件。
+ * 认证中间件。未认证时返回 401。
  * @param {import('npm:express').Request} req - Express 请求对象。
  * @param {import('npm:express').Response} res - Express 响应对象。
  * @param {import('npm:express').NextFunction} next - Express 的 next 中间件函数。
  * @returns {Promise<void>}
  */
 export async function authenticate(req, res, next) {
-	// beilu: 已禁用登录系统，直接放行
 	await try_auth_request(req, res)
+	if (!req.user) {
+		return res.status(401).json({ success: false, message: 'Authentication required' })
+	}
 	next?.()
 }
 
@@ -580,13 +623,29 @@ export function getAllUsers() {
 }
 
 /**
+ * 获取用户列表（用于登录页面展示）。
+ * 只返回用户名和是否需要密码，不暴露敏感信息。
+ * @returns {Array<{username: string, passwordless: boolean, createdAt: number}>} 用户列表。
+ */
+export function getUserListForLogin() {
+	return Object.values(config.data.users)
+		.filter(u => u.auth)
+		.map(u => ({
+			username: u.username,
+			passwordless: !!u.auth.passwordless,
+			createdAt: u.createdAt,
+		}))
+}
+
+/**
  * 创建一个新用户。
  * @param {string} username - 用户名。
- * @param {string} password - 密码。
+ * @param {string} [password] - 密码。为空或不提供则创建无密码用户。
  * @returns {Promise<object>} 创建的用户对象。
  */
 async function createUser(username, password) {
-	const hashedPassword = await hashPassword(password)
+	const isPasswordless = !password || password === ''
+	const hashedPassword = isPasswordless ? '' : await hashPassword(password)
 	const userId = crypto.randomUUID()
 	const now = Date.now()
 	config.data.users[username] = {
@@ -595,6 +654,7 @@ async function createUser(username, password) {
 		auth: {
 			userId,
 			password: hashedPassword,
+			passwordless: isPasswordless,
 			loginAttempts: 0,
 			lockedUntil: null,
 			refreshTokens: [],
@@ -852,9 +912,9 @@ let avgVerifyTime = 0
 }
 
 /**
- * 用户登录。
+ * 用户登录。支持有密码和无密码用户。
  * @param {string} username - 用户名。
- * @param {string} password - 密码。
+ * @param {string} [password] - 密码（无密码用户可不提供）。
  * @param {string} [deviceId='unknown'] - 设备标识符。
  * @param {import('npm:express').Request} req - Express 请求对象。
  * @returns {Promise<object>} 包含状态码、消息和令牌的对象。
@@ -892,20 +952,26 @@ export async function login(username, password, deviceId = 'unknown', req) {
 		return { status: 403, success: false, message: `Account locked. Try again in ${timeLeft}.` }
 	}
 
-	const startTime = Date.now()
-	const isValidPassword = await verifyPassword(password, authData.password)
-	avgVerifyTime = (avgVerifyTime * 3 + (Date.now() - startTime)) / 4
+	// 无密码用户：跳过密码验证
+	if (authData.passwordless) {
+		// 无密码用户不需要验证，直接通过
+	} else {
+		// 有密码用户：验证密码
+		const startTime = Date.now()
+		const isValidPassword = await verifyPassword(password, authData.password)
+		avgVerifyTime = (avgVerifyTime * 3 + (Date.now() - startTime)) / 4
 
-	if (!isValidPassword) {
-		authData.loginAttempts = (authData.loginAttempts || 0) + 1
-		if (authData.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
-			authData.lockedUntil = Date.now() + ms(ACCOUNT_LOCK_TIME)
-			authData.loginAttempts = 0
-			save_config()
-			console.logI18n('fountConsole.auth.accountLockedLog', { username })
-			return { status: 403, success: false, message: 'Account locked due to too many failed attempts.' }
+		if (!isValidPassword) {
+			authData.loginAttempts = (authData.loginAttempts || 0) + 1
+			if (authData.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+				authData.lockedUntil = Date.now() + ms(ACCOUNT_LOCK_TIME)
+				authData.loginAttempts = 0
+				save_config()
+				console.logI18n('fountConsole.auth.accountLockedLog', { username })
+				return { status: 403, success: false, message: 'Account locked due to too many failed attempts.' }
+			}
+			return await handleFailedLogin()
 		}
-		return await handleFailedLogin()
 	}
 
 	// 登录成功
@@ -948,15 +1014,16 @@ export async function login(username, password, deviceId = 'unknown', req) {
 
 
 /**
- * 注册一个新用户。
+ * 注册一个新用户。支持无密码注册。
  * @param {string} username - 用户名。
- * @param {string} password - 密码。
+ * @param {string} [password] - 密码。为空或不提供则创建无密码用户。
  * @returns {Promise<object>} 包含状态码和用户信息的对象。
  */
 export async function register(username, password) {
+	if (!username || username.trim() === '') return { status: 400, success: false, message: 'Username is required' }
 	if (getUserByUsername(username)?.auth) return { status: 409, success: false, message: 'Username already exists' }
-	const newUser = await createUser(username, password)
-	return { status: 201, success: true, user: { username: newUser.username, userId: newUser.auth.userId, createdAt: newUser.createdAt } }
+	const newUser = await createUser(username, password || '')
+	return { status: 201, success: true, user: { username: newUser.username, userId: newUser.auth.userId, passwordless: newUser.auth.passwordless, createdAt: newUser.createdAt } }
 }
 
 /**

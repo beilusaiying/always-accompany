@@ -2,10 +2,10 @@ import fs from 'node:fs'
 
 import cors from 'npm:cors'
 
-import { console, fountLocaleList, getLocaleDataForUser } from '../../scripts/i18n.mjs'
+import { beiluLocaleList, console, getLocaleDataForUser } from '../../scripts/i18n.mjs'
 import { ms } from '../../scripts/ms.mjs'
 import { get_hosturl_in_local_ip, is_local_ip_from_req, rateLimit } from '../../scripts/ratelimit.mjs'
-import { ACCESS_TOKEN_EXPIRY_DURATION, REFRESH_TOKEN_EXPIRY_DURATION, auth_request, authenticate, generateApiKey, getSecureCookieOptions, getUserByReq, getUserByUsername, getUserDictionary, login, logout, register, revokeApiKey, setApiCookieResponse, verifyApiKey } from '../auth.mjs'
+import { ACCESS_TOKEN_EXPIRY_DURATION, REFRESH_TOKEN_EXPIRY_DURATION, auth_request, authenticate, generateApiKey, getSecureCookieOptions, getUserByReq, getUserByUsername, getUserDictionary, getUserListForLogin, login, logout, register, revokeApiKey, setApiCookieResponse, verifyApiKey } from '../auth.mjs'
 import { currentGitCommit } from '../autoupdate.mjs'
 import { __dirname } from '../base.mjs'
 import { processIPCCommand } from '../ipc_server/index.mjs'
@@ -88,7 +88,7 @@ export function registerEndpoints(router) {
 		}
 		return res.status(200).json({
 			message: 'pong',
-			client_name: 'fount',
+			client_name: 'beilu',
 			ver,
 			uuid: config.uuid,
 			is_local_ip,
@@ -113,12 +113,13 @@ export function registerEndpoints(router) {
 		const preferredLanguages = [...new Set([...userPreferredLanguages, ...browserLanguages])].filter(Boolean)
 
 		let username
-		// beilu: 自动登录模式不依赖 cookie，始终执行认证
+		// beilu: 尝试认证但不强制（登录页面也需要获取语言数据）
 		try {
-			await authenticate(req, res)
-			const user = await getUserByReq(req)
-			user.locales = preferredLanguages
-			username = user.username
+			await auth_request(req, res)
+			if (req.user) {
+				req.user.locales = preferredLanguages
+				username = req.user.username
+			}
 		} catch (error) {
 			console.error('Error setting language preference for user:', error)
 		}
@@ -127,31 +128,31 @@ export function registerEndpoints(router) {
 	})
 
 	router.get('/api/getavailablelocales', async (req, res) => {
-		res.status(200).json(fountLocaleList)
+		res.status(200).json(beiluLocaleList)
+	})
+
+	// 获取用户列表（无需认证，用于登录页面）
+	router.get('/api/users/list', async (req, res) => {
+		res.status(200).json({ success: true, users: getUserListForLogin() })
 	})
 
 	router.post('/api/login', rateLimit({ maxRequests: 5, windowMs: ms('1m') }), async (req, res) => {
-		// beilu: PoW验证已禁用
 		const { username, password, deviceid } = req.body
-		const result = await login(username, password, deviceid, req)
+		const result = await login(username, password || '', deviceid, req)
 		// 在登录成功时设置 Cookie
 		if (result.status === 200) {
 			const cookieOptions = getSecureCookieOptions(req)
-			res.cookie('accessToken', result.accessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION }) // 短效
-			res.cookie('refreshToken', result.refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION }) // 长效
+			res.cookie('accessToken', result.accessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION })
+			res.cookie('refreshToken', result.refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION })
 		}
 		res.status(result.status).json(result)
 	})
 
 	router.post('/api/register/generateverificationcode', async (req, res) => {
-		// get ip
-		const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-		generateVerificationCode(ip)
 		res.status(200).json({ message: 'verification code generated' })
 	})
 	router.post('/api/register', rateLimit({ maxRequests: 5, windowMs: ms('1m') }), async (req, res) => {
 		const { username, password } = req.body
-		// beilu: PoW和验证码验证已禁用
 		const result = await register(username, password)
 		res.status(result.status).json(result)
 	})

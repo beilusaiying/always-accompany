@@ -292,7 +292,7 @@ export async function redirectToLoginInfo(redirectUrl = '/login', username = nul
 	const { uuid } = await fetch('/api/ping', { credentials: 'omit' }).then(res => res.json())
 	if (!uuid) throw new Error('Could not fetch instance UUID.')
 
-	const loginInfoUrl = new URL('https://steve02081504.github.io/fount/login_info/')
+	const loginInfoUrl = new URL('/login/')
 	loginInfoUrl.searchParams.set('redirect', encodeURIComponent(redirectUrl))
 
 	const hashParams = new URLSearchParams()
@@ -333,7 +333,7 @@ export async function generateLoginInfoUrl(credentials, uuid, baseUrl) {
 	redirectUrl.searchParams.set('userPreferredLanguages', localStorage.getItem('userPreferredLanguages') || '[]')
 	redirectUrl.searchParams.set('theme', localStorage.getItem('theme') || 'dark')
 
-	const loginInfoUrl = new URL('https://steve02081504.github.io/fount/login_info/')
+	const loginInfoUrl = new URL('/login/')
 	loginInfoUrl.searchParams.set('redirect', encodeURIComponent(redirectUrl.href))
 	loginInfoUrl.searchParams.set('forward', 'true')
 

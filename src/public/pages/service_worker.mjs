@@ -4,7 +4,7 @@
  * 缓存存储的名称。更改此值将触发 Service Worker 的更新流程。
  * @type {string}
  */
-const CACHE_NAME = 'fount'
+const CACHE_NAME = 'beilu'
 
 /**
  * 用于存储缓存元数据（如时间戳）的 IndexedDB 数据库名称。

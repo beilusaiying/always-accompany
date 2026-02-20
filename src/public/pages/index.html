@@ -5,15 +5,13 @@
 	<meta charset="UTF-8" />
 	<meta name="darkreader-lock" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<meta property="og:title" content="fount's Embrace: Awakening Your Digital Companions" />
-	<meta property="og:url" content="https://steve02081504.github.io/fount/protocol?url=fount://page/" />
+	<meta property="og:title" content="beilu-always accompany — 永远在你身边" />
 	<meta property="og:type" content="website" />
-	<meta property="og:description" content="Welcome to the threshold of fount. A brief moment of preparation, before stepping into the heart of conversations and stories waiting to unfold." />
-	<meta name="description" content="Welcome to the threshold of fount. A brief moment of preparation, before stepping into the heart of conversations and stories waiting to unfold." />
-	<meta property="og:image" content="https://repository-images.githubusercontent.com/862251163/0ac90205-ae40-4fc6-af67-1e28d074c76b" />
-	<title data-i18n="startPage.title">fount!</title>
+	<meta property="og:description" content="beilu-always accompany. 准备就绪，即将进入对话与故事的世界。" />
+	<meta name="description" content="beilu-always accompany. 准备就绪，即将进入对话与故事的世界。" />
+	<title data-i18n="startPage.title">beilu!</title>
 	<link rel="icon" href="/favicon.ico" />
-	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="icon" href="/favicon.png" type="image/png" />
 	<link rel="manifest" href="/manifest.json" />
 	<script blocking="render" type="module" src="/preload.mjs"></script>
 	<link href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
@@ -21,12 +19,10 @@
 	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" crossorigin="anonymous"></script>
 	<script type="module" src="/base.mjs"></script>
 	<script type="module">
-		import { redirectToLoginInfo } from './scripts/credentialManager.mjs'
 		import { initTranslations } from './scripts/i18n.mjs'
 		import { getAnyDefaultPart } from './scripts/parts.mjs'
 		import { setTheme } from './scripts/theme.mjs'
 		initTranslations('startPage')
-		const hostUrl = window.location.origin
 		const urlParams = new URLSearchParams(window.location.search)
 		if (!urlParams.get('cold_bootting')) try {
 			await fetch('/api/ping', { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(500) })
@@ -45,7 +41,7 @@
 		getAnyDefaultPart('shells').then(defaultShell => {
 			window.location.href = `/parts/shells:${defaultShell || 'home'}`
 		}).catch(() => {
-			redirectToLoginInfo('/login')
+			window.location.href = '/login/'
 		})
 	</script>
 </head>

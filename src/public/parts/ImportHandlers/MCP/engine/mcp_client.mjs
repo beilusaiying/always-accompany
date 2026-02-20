@@ -5,7 +5,7 @@ import { SSEClientTransport } from 'npm:@modelcontextprotocol/sdk/client/sse.js'
 import { StdioClientTransport } from 'npm:@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from 'npm:@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { WebSocketClientTransport } from 'npm:@modelcontextprotocol/sdk/client/websocket.js'
-import { ListRootsRequestSchema, CreateMessageRequestSchema } from 'npm:@modelcontextprotocol/sdk/types.js'
+import { CreateMessageRequestSchema, ListRootsRequestSchema } from 'npm:@modelcontextprotocol/sdk/types.js'
 
 /**
  * 创建并初始化 MCP 客户端
@@ -29,7 +29,7 @@ export async function createMCPClient(config) {
 		})
 
 	const client = new Client(
-		{ name: 'fount-mcp-client', version: '1.0.0' },
+		{ name: 'beilu-mcp-client', version: '1.0.0' },
 		{ capabilities: { sampling: {}, roots: { listChanged: true } } }
 	)
 

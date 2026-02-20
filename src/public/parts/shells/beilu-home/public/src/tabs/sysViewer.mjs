@@ -76,6 +76,7 @@ const DOCS = [
 <tr><td><code>{{decvar::name}}</code></td><td>局部变量 -1</td></tr>
 <tr><td><code>{{getglobalvar::name}}</code></td><td>获取全局变量</td></tr>
 <tr><td><code>{{setglobalvar::name::value}}</code></td><td>设置全局变量</td></tr>
+<tr><td><code>{{addglobalvar::name::value}}</code></td><td>累加全局变量</td></tr>
 <tr><td><code>{{incglobalvar::name}}</code></td><td>全局变量 +1</td></tr>
 <tr><td><code>{{decglobalvar::name}}</code></td><td>全局变量 -1</td></tr>
 </tbody>
@@ -95,10 +96,16 @@ const DOCS = [
 <tr><td><code>{{tableData}}</code></td><td>所有记忆表格（#0-#9）的纯数据文本，含列头、行数据、操作规则</td><td>INJ-1, P1-P6</td></tr>
 <tr><td><code>{{hotMemory}}</code></td><td>热记忆层全部内容：remember_about_user、forever、appointments、user_profile、温层月索引</td><td>INJ-1, P1-P6</td></tr>
 <tr><td><code>{{chat_history}}</code></td><td>最近 N 条聊天记录文本（N 由 _config.json 的 retrieval.chat_history_count 控制）</td><td>P1-P6</td></tr>
-<tr><td><code>{{current_date}}</code></td><td>当前日期时间（格式：YYYY年M月D日 周X HH:mm）</td><td>P3, P1-P6</td></tr>
+<tr><td><code>{{current_date}}</code></td><td>当前日期（格式：YYYY-MM-DD）</td><td>P3, P1-P6</td></tr>
 <tr><td><code>{{lastUserMessage}}</code></td><td>用户最后一条消息的完整内容</td><td>P1-P6</td></tr>
 <tr><td><code>{{char}}</code></td><td>角色显示名（同基础宏）</td><td>全部</td></tr>
 <tr><td><code>{{user}}</code></td><td>用户显示名（同基础宏）</td><td>全部</td></tr>
+<tr><td><code>{{time}}</code></td><td>当前时间（HH:mm 格式，由 getTimeMacroValues 独立实现）</td><td>INJ, P1-P6</td></tr>
+<tr><td><code>{{date}}</code></td><td>当前日期（YYYY年M月D日 格式）</td><td>INJ, P1-P6</td></tr>
+<tr><td><code>{{weekday}}</code></td><td>星期几</td><td>INJ, P1-P6</td></tr>
+<tr><td><code>{{idle_duration}}</code></td><td>距上次消息的时间（如 5 minutes ago）</td><td>INJ, P1-P6</td></tr>
+<tr><td><code>{{lasttime}}</code></td><td>最后一条消息的时间（HH:mm）</td><td>INJ, P1-P6</td></tr>
+<tr><td><code>{{lastdate}}</code></td><td>最后一条消息的日期（YYYY年M月D日）</td><td>INJ, P1-P6</td></tr>
 </tbody>
 </table>
 <div class="mt-3 p-2 rounded text-xs" style="background: oklch(var(--bc) / 0.04);">
@@ -110,6 +117,9 @@ const DOCS = [
 <li>关于{{user}} — hot/user_profile.json</li>
 <li>历史记忆索引 — hot/warm_monthly_index.json</li>
 </ul>
+</div>
+<div class="mt-2 p-2 rounded text-xs border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 时间宏双重实现：</strong>基础宏中的 <code>time/date/weekday/idle_duration/lasttime/lastdate</code> 在预设引擎（marco.mjs）和记忆系统（getTimeMacroValues）中各有一套独立实现。预设引擎使用 moment.js 格式化，记忆系统使用 Date 原生 API。两者在各自的宏替换阶段独立生效。
 </div>
 <div class="mt-2 p-2 rounded text-xs border border-warning/30" style="background: oklch(var(--wa) / 0.05);">
 <strong>⚠️ 注意：</strong>记忆系统宏和预设引擎宏是<strong>独立替换</strong>的。记忆系统宏仅在 beilu-memory 的注入提示词和记忆AI预设中生效，不会在聊天预设条目中替换。反之，预设引擎的 env 自定义变量宏也不会在记忆预设中生效。
@@ -152,7 +162,7 @@ const DOCS = [
 <tr><td>#2</td><td>角色社交表格</td><td>角色名, 对{{user}}关系, 态度, 好感度</td><td>社交网络</td></tr>
 <tr><td>#3</td><td>任务/命令/约定</td><td>角色, 任务, 地点, 持续时间</td><td>待办事项</td></tr>
 <tr><td>#4</td><td>当日临时记忆</td><td>角色, 事件简述, 日期, 地点, 情绪</td><td>超50条自动归档</td></tr>
-<tr><td>#5</td><td>重要物品（背包）</td><td>拥有人, 物品描述, 物品名, 重要原因</td><td>随身物品</td></tr>
+<tr><td>#5</td><td>重要物品（背包）</td><td>拥有人, 物品描述, 物品名, 重要原因</td><td>随身物品；放入仓库时归档到 hot/items_archive.json</td></tr>
 <tr><td>#6</td><td>当天事件大总结</td><td>时间, 地点, 事件概述</td><td>日终清空</td></tr>
 <tr><td>#7</td><td>想要记住的关于{{user}}的事</td><td>日期, 想要记住的事情, 原因</td><td>超3天归档到热层</td></tr>
 <tr><td>#8</td><td>永远记住的事情</td><td>事件, 日期</td><td>超200条溢出到 forever.json</td></tr>
@@ -227,13 +237,17 @@ deleteRow(表格编号, 行编号)
 <strong>记忆AI文件操作标签：</strong>
 <ul class="list-disc pl-4 mt-1 space-y-0.5">
 <li><code>&lt;memorySearch&gt;</code> — 检索（readFile / listDir）</li>
-<li><code>&lt;memoryArchive&gt;</code> — 归档（createFile / appendToFile / updateIndex / moveEntries）</li>
+<li><code>&lt;memoryArchive&gt;</code> — 归档（createFile / appendToFile / updateIndex / moveEntries / deleteFile）</li>
 <li><code>&lt;memoryNote type="todo|issue"&gt;</code> — 备忘</li>
 <li><code>&lt;tableEdit&gt;</code> — 表格操作</li>
 </ul>
+<p class="mt-1 text-base-content/40">注意：<code>deleteFile</code> 仅 P6（格式检查/修复AI）拥有权限，其他预设不可删除文件。</p>
 </div>
 <div class="mt-2 p-2 rounded text-xs border border-info/30" style="background: oklch(var(--in) / 0.05);">
 <strong>P2 归档阈值：</strong>P2 的触发条件是 <code>auto_on_threshold</code>，当 #4 临时记忆行数超过 <code>_config.json → archive.temp_memory_threshold</code>（默认 50）时自动触发。可在「记忆管理」页面的归档配置中自定义阈值。
+</div>
+<div class="mt-2 p-2 rounded text-xs" style="background: oklch(var(--bc) / 0.04);">
+<strong>📂 预设配置存储：</strong>P1-P6 和 INJ-1/INJ-2 的配置是<strong>全局的</strong>，存储在 <code>_global/memory/_memory_presets.json</code>，不按角色分。所有角色共享同一套记忆AI预设和注入配置。
 </div>`,
 	},
 	{
@@ -470,24 +484,46 @@ beilu-memory_{角色ID}_{日期}.zip
 <div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
 <strong>📋 热层 JSON 通用格式</strong>
 <pre class="mt-1 font-mono text-xs leading-relaxed">
-// forever.json / appointments.json
-[
-	 { "event": "事件描述", "date": "2026-02-18" },
-	 ...
-]
+// forever.json
+{
+	 "entries": [
+	   { "event": "事件描述", "date": "2026-02-18", "weight": 1, "last_triggered": "ISO时间" },
+	   ...
+	 ]
+}
+
+// appointments.json
+{
+	 "entries": [
+	   { "character": "角色", "task": "任务", "location": "地点", "completed_at": "ISO时间" },
+	   ...
+	 ]
+}
 
 // user_profile.json
 {
-	 "name": "用户名",
-	 "traits": ["特征1", "特征2"],
-	 ...  // 自由格式
+	 "entries": [
+	   "用户特征描述1",
+	   "用户特征描述2",
+	   ...
+	 ]
+}
+
+// items_archive.json（物品仓库）
+{
+	 "items": [
+	   { "owner": "拥有人", "name": "物品名", "description": "描述", "reason": "原因" },
+	   ...
+	 ]
 }
 
 // remember_about_user/{date}.json
-[
-	 { "date": "2026-02-14", "content": "想记住的事", "reason": "原因" },
-	 ...
-]</pre>
+{
+	 "entries": [
+	   { "thing": "想记住的事", "reason": "原因", "date": "2026-02-14" },
+	   ...
+	 ]
+}</pre>
 </div>
 
 <div class="p-2 rounded border border-warning/30" style="background: oklch(var(--wa) / 0.05);">

@@ -1,4 +1,22 @@
-#confirm-password-group {
+/* 用户卡片悬停效果 */
+#user-list .btn {
+	transition: all 0.2s ease;
+}
+
+#user-list .btn:hover {
+	transform: translateX(4px);
+}
+
+/* 密码组默认隐藏 */
+#create-password-group,
+#create-confirm-password-group {
 	display: none;
-	/* 默认隐藏 */
+}
+
+/* 加载视图居中 */
+#view-loading {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 200px;
 }

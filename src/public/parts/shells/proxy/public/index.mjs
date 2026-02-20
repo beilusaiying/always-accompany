@@ -1,17 +1,17 @@
 /**
  * 代理 shell 的客户端逻辑。
  */
-import { initTranslations, console } from '/scripts/i18n.mjs'
-import { applyTheme } from '/scripts/theme.mjs'
+import { console, initTranslations } from '/scripts/i18n.mjs'
 import { renderTemplate, usingTemplates } from '/scripts/template.mjs'
+import { applyTheme } from '/scripts/theme.mjs'
 import { showToast, showToastI18n } from '/scripts/toast.mjs'
 
 applyTheme()
 usingTemplates('/parts/shells:proxy/templates')
 await initTranslations('proxy')
 
-const fountHost = window.location.origin
-const apiUrl = `${fountHost}/api/parts/shells:proxy/calling/openai`
+const beiluHost = window.location.origin
+const apiUrl = `${beiluHost}/api/parts/shells:proxy/calling/openai`
 
 const proxyApiUrlInput = document.getElementById('proxyApiUrl')
 const copyProxyButton = document.getElementById('copyProxyButton')
@@ -96,7 +96,7 @@ async function renderApiKey() {
 				toggleApiKeyButton.innerHTML = /* html */ `<img src="https://api.iconify.design/line-md/watch${apiKeyInput.type === 'password' ? '-off' : ''}.svg" class="text-icon h-6 w-6" />`
 			})
 
-		proxyApiUrlQueryInput.value = `${apiUrl}?fount-apikey=${apiKey}`
+		proxyApiUrlQueryInput.value = `${apiUrl}?beilu-apikey=${apiKey}`
 	}
 	else {
 		const generateButtonElement = await renderTemplate('generate_api_key_button')

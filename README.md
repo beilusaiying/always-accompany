@@ -1,4 +1,4 @@
-# beilu-always accompany
+# always accompany
 
 > **Make AI truly remember.**
 

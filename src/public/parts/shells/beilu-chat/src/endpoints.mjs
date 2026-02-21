@@ -62,11 +62,27 @@ export function setEndpoints(router) {
 		const { params: { chatid }, query: { start, end } } = req
 		const { username } = await getUserByReq(req)
 		const log = await GetChatLog(chatid, parseInt(start, 10), parseInt(end, 10))
-		res.status(200).json(await Promise.all(log.map(entry => {
-			if (typeof entry?.toData === 'function') return entry.toData(username)
-			console.warn('[chat/endpoints] log entry missing toData, using fallback')
-			if (typeof entry?.toJSON === 'function') return entry.toJSON()
-			return entry
+		res.status(200).json(await Promise.all(log.map(async entry => {
+			try {
+				if (typeof entry?.toData === 'function') return await entry.toData(username)
+			} catch (err) {
+				console.warn('[chat/endpoints] toData failed for log entry:', err.message)
+			}
+			try {
+				if (typeof entry?.toJSON === 'function') return entry.toJSON()
+			} catch (err2) {
+				console.warn('[chat/endpoints] toJSON also failed:', err2.message)
+			}
+			// 最终 fallback：确保至少有 id、content、role
+			return {
+				id: entry?.id || crypto.randomUUID(),
+				content: entry?.content || '',
+				role: entry?.role || 'char',
+				name: entry?.name || 'Unknown',
+				time_stamp: entry?.time_stamp || new Date(),
+				files: [],
+				timeSlice: { chars: [], plugins: [] },
+			}
 		})))
 	})
 

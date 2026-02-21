@@ -15,6 +15,9 @@
 // ============================================================
 // ★ 调试标记：如果在控制台看到这条日志，说明新版 displayRegex.mjs 已加载
 // ============================================================
+import { createDiag } from './diagLogger.mjs'
+const diag = createDiag('displayRegex')
+
 console.log('%c[displayRegex] ★ v8-debug 版本已加载', 'color: #ff6600; font-weight: bold; font-size: 14px')
 
 // ============================================================
@@ -438,31 +441,7 @@ function applySingleRule(text, rule, placeholders) {
 		// 需要剥离末尾的 offset/fullString/namedGroups，只保留真正的捕获组
 		const groups = extractCaptureGroups(args)
 
-		// ★ 调试日志：打印正则匹配的关键信息
-		console.log('%c[displayRegex DEBUG] applySingleRule 匹配成功', 'color: #00cc00; font-weight: bold', {
-			ruleName: rule.scriptName || rule.findRegex,
-			matchLen: match.length,
-			matchPreview: match.substring(0, 100),
-			groupsLen: groups.length,
-			group0Type: typeof groups[0],
-			group0Len: groups[0]?.length,
-			group0Preview: groups[0]?.substring?.(0, 200) || String(groups[0]).substring(0, 200),
-		})
-
 		let result = computeReplacement(replaceStr, match, groups, trimList)
-
-		// ★ 调试日志：打印替换结果的关键信息
-		console.log('%c[displayRegex DEBUG] computeReplacement 结果', 'color: #0099ff; font-weight: bold', {
-			resultLen: result?.length,
-			resultPreview: result?.substring(0, 200),
-			hasStDataInjection: result?.includes('st-data-injection'),
-			hasDollar1Literal: result?.includes("'" + '$' + "'" + " + " + "'" + '1' + "'") || false,
-			// 检查 st-data-injection div 中的内容
-			injectionContent: (() => {
-				const m = result?.match(/id="st-data-injection"[^>]*>([\s\S]{0,300})/)
-				return m ? m[1].substring(0, 200) : '未找到'
-			})(),
-		})
 
 		// 剥离替换结果外层代码围栏
 		// 酒馆美化正则（JS-Slash-Runner 等）惯例：用 ``` 包裹 HTML 文档
@@ -621,8 +600,14 @@ export function detectContentType(text) {
 	}
 
 	// 类型 A：完整 HTML 文档
-	// 检测 <!doctype html 或 <html 开头（不区分大小写）
+	// ★ 修复：不仅检查开头，也检查全文是否包含完整 HTML 文档标记
+	// 原因：思维链折叠等内置处理器可能在文档前插入 <details> 等标签，
+	// 导致 <!doctype html 不在开头而无法被识别
 	if (/^<!doctype\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed)) {
+		return 'full-html'
+	}
+	// 检查全文中是否包含完整 HTML 文档（可能被思维链折叠等前置内容遮挡）
+	if (/<!doctype\s+html/i.test(trimmed) || /<html[\s>]/i.test(trimmed)) {
 		return 'full-html'
 	}
 

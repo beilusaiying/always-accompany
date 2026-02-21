@@ -5,6 +5,17 @@ import { base_dir } from '../base.mjs'
 import { geti18n, i18nElement } from './i18n.mjs'
 import { svgInliner } from './svgInliner.mjs'
 
+// 模板引擎诊断 — 使用简单的 localStorage 检查（不依赖 diagLogger 以避免循环依赖）
+const _templateDiagEnabled = (() => {
+	try {
+		const val = localStorage.getItem('beilu-diag-modules')
+		return val === '*' || (val && val.includes('template'))
+	} catch { return false }
+})()
+function _tDiag(method, ...args) {
+	if (_templateDiagEnabled) console[method]('%c[template DIAG]', 'color: #ff9800; font-weight: bold', ...args)
+}
+
 const template_cache = {}
 
 // 不需要闭合的空元素 (Void Elements)
@@ -201,11 +212,14 @@ export async function renderTemplateNoScriptActivation(template, data = {}) {
 
 	// 使用循环匹配所有 ${...} 表达式
 	let result = ''
+	let _templateExprCount = 0
+	let _templateFailCount = 0
 	while (html.indexOf('${') != -1) {
 		const length = html.indexOf('${')
 		result += html.slice(0, length)
 		html = html.slice(length + 2)
 		let end_index = 0
+		let _exprResolved = false
 		find: while (html.indexOf('}', end_index) != -1) { // 我们需要遍历所有的结束符直到表达式跑通
 			end_index = html.indexOf('}', end_index) + 1
 			const expression = html.slice(0, end_index - 1)
@@ -214,12 +228,24 @@ export async function renderTemplateNoScriptActivation(template, data = {}) {
 				if (eval_result.error) throw eval_result.error
 				result += escapeUnclosedTags(String(eval_result.result))
 				html = html.slice(end_index)
+				_exprResolved = true
+				_templateExprCount++
 				break find
 			} catch (error) {
-				if (!(error instanceof SyntaxError))
-					console.error(error)
+				if (!(error instanceof SyntaxError)) {
+					_templateFailCount++
+				}
 			}
 		}
+		if (!_exprResolved) {
+			_templateFailCount++
+		}
+	}
+	if (_templateFailCount > 0) {
+		console.warn('[template DIAG] template render summary:',
+			'template:', template,
+			'resolved:', _templateExprCount,
+			'failed:', _templateFailCount)
 	}
 	result += html
 	return i18nElement(await svgInliner(createDOMFromHtmlStringNoScriptActivation(result)), { skip_report: true })

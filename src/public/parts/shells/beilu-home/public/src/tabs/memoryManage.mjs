@@ -149,7 +149,7 @@ async function onCharSelected() {
 
 	// 获取当前用户名（从 URL 参数或默认值）
 	const urlParams = new URLSearchParams(window.location.search)
-	currentUsername = urlParams.get('username') || ''
+	currentUsername = urlParams.get('username') || 'linqing'
 	currentCharId = charId
 
 	await loadTablesForChar(currentUsername, charId)

@@ -472,7 +472,7 @@ export async function initMemoryBrowser(treeContainer, viewerContainer, options 
 
 	if (options.charId) {
 		_charId = options.charId
-		_username = options.username || ''
+		_username = options.username || 'linqing'
 		await renderFileTree()
 	} else {
 		treeContainer.innerHTML = '<div class="mb-empty-dir" style="padding:1rem;">等待角色卡绑定...</div>'
@@ -491,7 +491,7 @@ export async function bindMemoryBrowserToChar(charId, username) {
 	if (charId === _charId) return // 同角色跳过
 
 	_charId = charId
-	_username = username || _username || ''
+	_username = username || _username || 'linqing'
 	_selectedFilePath = ''
 	_expandedPaths.clear()
 

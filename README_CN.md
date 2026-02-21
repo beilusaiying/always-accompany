@@ -1,24 +1,16 @@
 <p align="center">
-  <img src="imgs/icon.jpg" alt="always accompany" width="200">
+  <img src="imgs/icon.jpg" alt="beilu-always accompany" width="200">
 </p>
 
-# always accompany
-
-### beilu
+# beilu-always accompany
 
 > **让 AI 真正记住。**
 
-always accompany 是一个**陪伴与工作一体的 AI 伴侣平台**，融合 **IDE 编辑环境**、**多 AI 协作引擎**、**原创分层记忆算法** 和 **兼容 SillyTavern 生态的聊天系统**，旨在从根本上解决当前 LLM 的两大瓶颈——**上下文窗口有限** 和 **注意力随上下文增长而分散**。
+beilu-always accompany 是一个**陪伴与工作一体的 AI 伴侣平台**，融合 **IDE 编辑环境**、**多 AI 协作引擎**、**原创分层记忆算法** 和 **兼容 SillyTavern 生态的聊天系统**，旨在从根本上解决当前 LLM 的两大瓶颈——**上下文窗口有限** 和 **注意力随上下文增长而分散**。
 
 [English](README.md) | 中文
 
 > 本项目由一名在校大学生独立完成全部设计与开发，借助 AI 辅助编程，融合算法设计、仿生学原理、框架架构和逻辑思维等多方面能力。
-
-### 💬 加入社区
-
-[![Discord](https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/agHeDq9bqU)
-
-在这里你可以获取专门的提示词（聊天 AI、记忆 AI 等），也欢迎一起创建社区、交流玩耍！
 
 <p align="center">
   <img src="imgs/screenshots/chat-interface.png" alt="对话界面" width="800">
@@ -159,7 +151,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 聊天软件（ChatGPT / Claude / Gemini）
 
-| 维度       | ChatGPT 等           | always accompany                   |
+| 维度       | ChatGPT 等           | beilu-always accompany             |
 | ---------- | -------------------- | ---------------------------------- |
 | 记忆       | 简单的摘要/对话历史  | 三层分级 + 多 AI 检索，理论无限期  |
 | 注意力     | 上下文越长越分散     | 检索 AI 预筛选，回复 AI 注意力集中 |
@@ -168,7 +160,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 编程工具（Cursor / Copilot / Windsurf）
 
-| 维度       | Cursor 等          | always accompany                               |
+| 维度       | Cursor 等          | beilu-always accompany                         |
 | ---------- | ------------------ | ---------------------------------------------- |
 | 项目记忆   | 基于当前文件上下文 | 跨会话持久记忆（架构决策、代码约定、历史讨论） |
 | 多 AI 协作 | 单模型             | 7 个 AI 各司其职，检索/总结/回复分离           |
@@ -176,7 +168,7 @@ VSCode 风格三栏布局：
 
 ### vs AI 角色扮演平台（SillyTavern）
 
-| 维度     | SillyTavern    | always accompany                |
+| 维度     | SillyTavern    | beilu-always accompany          |
 | -------- | -------------- | ------------------------------- |
 | 记忆     | 无内置记忆系统 | 原创三层记忆 + 6 个辅助 AI      |
 | 文件操作 | 无             | 内置 IDE 文件管理 + AI 文件操作 |
@@ -259,31 +251,6 @@ chmod +x run.sh
 2. **导入角色卡**：首页 → 使用 → 导入（支持 SillyTavern PNG/JSON 格式）
 3. **配置记忆预设**：首页 → 记忆预设 → 为 P1-P6 配置 API（推荐 Gemini 2.0 Flash）
 4. **开始对话**：点击角色卡进入聊天界面
-
-### 📥 记忆预设导入（推荐）
-
-`presets/` 目录下提供了一份**开箱即用的记忆预设文件**，包含优化好的 P1-P6 提示词：
-
-```
-presets/beilu-presets_2026-02-21.json
-```
-
-**导入方式：**
-1. 进入首页 → 记忆预设
-2. 点击「导入」，选择 `presets/` 目录下的 JSON 文件
-3. 为每个预设配置 API 源和模型（推荐 Gemini 2.0/2.5 Flash）
-
-**包含内容：**
-- **P1 检索 AI**：7 步思维链，上下文感知的记忆检索
-- **P2 归档 AI**：结构化总结，含去重和去噪规则
-- **P3 日总结 AI**：9 步日终归档流程
-- **P4 热→温 AI**：基于规则的热层清理（数量/权重/触发阈值）
-- **P5 月总结 AI**：主题提取与关系分析，用于冷层归档
-- **P6 修复 AI**：全量数据完整性检查与自动修复
-- **INJ-1 表格注入**：聊天 AI 的 dataTable 操作说明
-- **INJ-2 文件操作**：IDE 风格的文件操作指令（默认关闭）
-
-> ⚠️ **安全说明**：此文件**不包含任何 API 密钥、Token 或敏感数据**。`api_config.source` 字段为空，导入后需自行配置 AI 服务源。
 
 ### 记忆系统使用
 

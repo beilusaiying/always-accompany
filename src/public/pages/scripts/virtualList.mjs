@@ -101,7 +101,10 @@ export function createVirtualList({
 		fragment.appendChild(state.sentinelTop)
 		const renderPromises = state.queue.map((item, i) => {
 			const itemIndex = state.startIndex + i
-			return Promise.resolve(renderItem(item, itemIndex))
+			return Promise.resolve(renderItem(item, itemIndex)).catch(err => {
+				console.error(`[virtualList] renderItem failed at index ${itemIndex}:`, err)
+				return null // 渲染失败的项跳过，不阻塞其他项
+			})
 		})
 		const elements = await Promise.all(renderPromises)
 		elements.forEach((element, i) => {

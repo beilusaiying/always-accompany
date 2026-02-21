@@ -4,6 +4,7 @@ import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
 import { renderTemplate, renderTemplateAsHtmlString, renderTemplateNoScriptActivation } from '../../../../../scripts/template.mjs'
 import { showToast, showToastI18n } from '../../../../../scripts/toast.mjs'
 import { stopGeneration } from '../chat.mjs'
+import { createDiag } from '../diagLogger.mjs'
 import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, getRenderDepth, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
 import {
   deleteMessage,
@@ -14,6 +15,7 @@ import { handleFilesSelect, renderAttachmentPreview } from '../fileHandling.mjs'
 import { getfile } from '../files.mjs'
 import { createShareLink } from '../share.mjs'
 import { DEFAULT_AVATAR, SWIPE_THRESHOLD, TRANSITION_DURATION, arrayBufferToBase64 } from '../utils.mjs'
+const diag = createDiag('messageList')
 
 import { addDragAndDropSupport } from './dragAndDrop.mjs'
 import { renderAsIframe } from './iframeRenderer.mjs'
@@ -110,6 +112,21 @@ async function generateFullHtmlForMessage(message, cache) {
  * @returns {Promise<HTMLElement>} - 渲染好的消息 DOM 元素。
  */
 export async function renderMessage(message) {
+	// ★ 全面防御：确保 message 对象完整性
+	if (!message || typeof message !== 'object') {
+		console.error('[messageList] renderMessage received invalid message:', message)
+		const div = document.createElement('div')
+		div.className = 'chat-message mb-3'
+		div.textContent = '[渲染错误：无效消息对象]'
+		return div
+	}
+
+	if (!message.id) {
+		message.id = 'msg-' + Math.random().toString(36).substring(2, 15)
+		console.warn('[messageList] message missing id, generated fallback:', message.id)
+	}
+
+
 	const cache = getMessageCache(message)
 
 	// 获取原始内容，先应用内置处理器（思维链折叠等），再应用 display regex

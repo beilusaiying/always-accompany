@@ -1353,6 +1353,119 @@
 							<h3 class="text-lg font-bold text-amber-700 mb-4" data-i18n="user.debug.title">调试面板</h3>
 							<p class="text-sm text-base-content/50 mb-4" data-i18n="user.debug.desc">查看完整的提示词输出和系统日志</p>
 	
+							<!-- ===== 诊断控制面板 ===== -->
+							<div class="beilu-debug-panel mb-4" id="diag-control-panel">
+								<div class="flex items-center justify-between mb-3">
+									<span class="text-sm font-medium" data-i18n="user.debug.diag">🔬 诊断系统控制</span>
+									<div class="flex items-center gap-2">
+										<span id="diag-status-badge" class="badge badge-sm badge-outline">未激活</span>
+										<button class="btn btn-xs btn-outline" id="diag-refresh-btn" title="刷新状态">🔄</button>
+									</div>
+								</div>
+								<p class="text-xs text-base-content/50 mb-3" data-i18n="user.debug.diag.desc">控制前端和后端的诊断日志输出，用于快速定位问题。</p>
+	
+								<!-- 前端诊断控制 -->
+								<div class="mb-3 p-2 rounded-md" style="background: oklch(var(--bc) / 0.03);">
+									<div class="text-xs font-medium text-base-content/60 mb-2">🖥️ 前端诊断</div>
+									<!-- 快捷操作 -->
+									<div class="flex flex-wrap gap-1 mb-2">
+										<button class="btn btn-xs btn-outline border-green-600 text-green-600 hover:bg-green-600 hover:text-white" id="diag-enable-all">✅ 全部启用</button>
+										<button class="btn btn-xs btn-outline border-red-600 text-red-600 hover:bg-red-600 hover:text-white" id="diag-disable-all">❌ 全部禁用</button>
+										<button class="btn btn-xs btn-outline" id="diag-export-btn">📋 导出报告</button>
+									</div>
+									<!-- 日志级别 -->
+									<div class="flex items-center gap-2 mb-2">
+										<span class="text-xs text-base-content/50 shrink-0">日志级别:</span>
+										<select id="diag-level-select" class="select select-xs select-bordered w-24">
+											<option value="error">error</option>
+											<option value="warn">warn</option>
+											<option value="info" selected>info</option>
+											<option value="debug">debug</option>
+											<option value="trace">trace</option>
+										</select>
+									</div>
+									<!-- 模块开关网格 -->
+									<div class="text-xs text-base-content/40 mb-1">模块开关（点击切换）:</div>
+									<div id="diag-modules-grid" class="flex flex-wrap gap-1 mb-2">
+										<!-- 聊天引擎组 -->
+										<div class="flex flex-wrap gap-1 w-full mb-1">
+											<span class="text-xs text-base-content/30 w-full">聊天引擎</span>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="template">template</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="displayRegex">displayRegex</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="messageList">messageList</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="streamRenderer">streamRenderer</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="virtualQueue">virtualQueue</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="websocket">websocket</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="iframeRenderer">iframeRenderer</button>
+										</div>
+										<!-- UI组 -->
+										<div class="flex flex-wrap gap-1 w-full mb-1">
+											<span class="text-xs text-base-content/30 w-full">UI</span>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="sidebar">sidebar</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="fileExplorer">fileExplorer</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="layout">layout</button>
+										</div>
+										<!-- 系统组 -->
+										<div class="flex flex-wrap gap-1 w-full">
+											<span class="text-xs text-base-content/30 w-full">系统</span>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="config">config</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="api">api</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="dom">dom</button>
+											<button class="btn btn-xs btn-outline diag-module-btn" data-module="perf">perf</button>
+										</div>
+									</div>
+								</div>
+	
+								<!-- 后端诊断控制 -->
+								<div class="mb-3 p-2 rounded-md" style="background: oklch(var(--bc) / 0.03);">
+									<div class="text-xs font-medium text-base-content/60 mb-2">🖧 后端诊断</div>
+									<div class="flex flex-wrap gap-1 mb-2">
+										<button class="btn btn-xs btn-outline border-green-600 text-green-600 hover:bg-green-600 hover:text-white" id="diag-backend-enable-all">✅ 全部启用</button>
+										<button class="btn btn-xs btn-outline border-red-600 text-red-600 hover:bg-red-600 hover:text-white" id="diag-backend-disable-all">❌ 全部禁用</button>
+									</div>
+									<div class="flex items-center gap-2 mb-2">
+										<span class="text-xs text-base-content/50 shrink-0">日志级别:</span>
+										<select id="diag-backend-level-select" class="select select-xs select-bordered w-24">
+											<option value="error">error</option>
+											<option value="warn">warn</option>
+											<option value="info" selected>info</option>
+											<option value="debug">debug</option>
+											<option value="trace">trace</option>
+										</select>
+									</div>
+									<div id="diag-backend-modules-grid" class="flex flex-wrap gap-1 mb-2">
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="chat">chat</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="proxy">proxy</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="preset">preset</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="memory">memory</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="worldbook">worldbook</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="files">files</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="eye">eye</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="regex">regex</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="auth">auth</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="server">server</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="parts">parts</button>
+										<button class="btn btn-xs btn-outline diag-backend-module-btn" data-module="stream">stream</button>
+									</div>
+									<div id="diag-backend-status" class="text-xs text-base-content/40"></div>
+								</div>
+	
+								<!-- 快照查看器 -->
+								<div class="mb-2 p-2 rounded-md" style="background: oklch(var(--bc) / 0.03);">
+									<div class="flex items-center justify-between mb-2">
+										<span class="text-xs font-medium text-base-content/60">📸 状态快照</span>
+										<div class="flex items-center gap-1">
+											<span id="diag-snapshot-count" class="text-xs text-base-content/30">0/200</span>
+											<button class="btn btn-xs btn-outline btn-ghost" id="diag-view-snapshots" title="查看快照">👁️</button>
+											<button class="btn btn-xs btn-outline btn-ghost" id="diag-clear-snapshots" title="清空快照">🗑️</button>
+										</div>
+									</div>
+									<div id="diag-snapshots-output" class="beilu-debug-output" style="display:none; max-height: 200px; overflow-y: auto;">
+										<p class="text-xs text-base-content/30 text-center py-4">暂无快照</p>
+									</div>
+								</div>
+							</div>
+	
 							<!-- ===== 服务器日志面板 ===== -->
 							<div class="beilu-debug-panel mb-4">
 								<div class="flex items-center justify-between mb-3">

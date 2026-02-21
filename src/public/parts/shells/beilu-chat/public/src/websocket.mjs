@@ -1,6 +1,10 @@
 import { onServerEvent } from '../../../../../scripts/server_events.mjs'
 
+import { createDiag } from './diagLogger.mjs'
 import { currentChatId } from './endpoints.mjs'
+
+const diag = createDiag('websocket')
+
 import {
   addPartToSelect,
   handleCharAdded,
@@ -81,9 +85,23 @@ async function handleBroadcastEvent(event) {
 	const { type, payload } = event
 	switch (type) {
 		case 'message_added':
+			console.log('[websocket DIAG] message_added received:',
+				'id:', payload?.id,
+				'is_generating:', payload?.is_generating,
+				'role:', payload?.role,
+				'avatar:', payload?.avatar?.substring?.(0, 50),
+				'content.len:', payload?.content?.length,
+				'name:', payload?.name)
 			await handleMessageAdded(payload)
 			break
 		case 'message_replaced':
+			// ★ DIAG: 追踪 message_replaced 事件的 payload
+			console.log('[websocket DIAG] message_replaced received:',
+				'index:', payload.index,
+				'entry.id:', payload.entry?.id,
+				'entry.is_generating:', payload.entry?.is_generating,
+				'entry.avatar:', payload.entry?.avatar?.substring?.(0, 50),
+				'entry.content_len:', payload.entry?.content?.length)
 			await handleMessageReplaced(payload.index, payload.entry)
 			break
 		case 'message_deleted':
@@ -123,9 +141,19 @@ async function handleBroadcastEvent(event) {
 			await handleTypingStatus(payload.typingList)
 			break
 		case 'stream_start':
-			console.log('Stream started for message:', payload.messageId)
+			console.log('[websocket DIAG] stream_start:', 'messageId:', payload.messageId)
 			break
 		case 'stream_update':
+			// 只记首次和每50次
+			if (!window._streamUpdateCount) window._streamUpdateCount = {}
+			if (!window._streamUpdateCount[payload.messageId]) window._streamUpdateCount[payload.messageId] = 0
+			window._streamUpdateCount[payload.messageId]++
+			if (window._streamUpdateCount[payload.messageId] === 1 || window._streamUpdateCount[payload.messageId] % 50 === 0) {
+				console.log('[websocket DIAG] stream_update:',
+					'messageId:', payload.messageId,
+					'count:', window._streamUpdateCount[payload.messageId],
+					'slices:', payload.slices?.length)
+			}
 			await handleStreamUpdate(payload)
 			break
 		default:

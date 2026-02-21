@@ -88,9 +88,30 @@ export function setEndpoints(router) {
 	})
 
 	router.put('/api/parts/shells\\:chat/:chatid/timeline', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { delta } } = req
-		const entry = await modifyTimeLine(chatid, delta)
-		res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
+		try {
+			const { params: { chatid }, body: { delta } } = req
+			const entry = await modifyTimeLine(chatid, delta)
+			if (!entry) {
+				// ★ DIAG: modifyTimeLine 返回了 undefined（可能是无可用角色的 fallback 分支）
+				return res.status(200).json({ success: false, error: 'No entry returned from modifyTimeLine' })
+			}
+			const { username } = await getUserByReq(req)
+			let entryData
+			try {
+				entryData = await entry.toData(username)
+			} catch (toDataErr) {
+				// ★ DIAG: entry.toData 失败时提供更多上下文
+				console.error(`[endpoints] timeline entry.toData failed:`, toDataErr.message,
+					'entry.id:', entry?.id,
+					'entry.constructor:', entry?.constructor?.name,
+					'has toJSON:', typeof entry?.toJSON === 'function')
+				entryData = typeof entry?.toJSON === 'function' ? entry.toJSON() : entry
+			}
+			res.status(200).json({ success: true, entry: entryData })
+		} catch (err) {
+			console.error(`[endpoints] PUT timeline error:`, err.stack || err.message)
+			res.status(500).json({ success: false, error: err.message })
+		}
 	})
 
 	router.delete('/api/parts/shells\\:chat/:chatid/message/:index', authenticate, async (req, res) => {

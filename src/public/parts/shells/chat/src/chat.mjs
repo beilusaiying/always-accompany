@@ -20,6 +20,19 @@ import { sendNotification } from '../../../../../server/web_server/event_dispatc
 import { addfile, getfile } from './files.mjs'
 import { createBufferedSyncPreviewUpdater, generateDiff } from './stream.mjs'
 
+// ============================================================
+// 诊断日志（按需启用，覆盖其他用户报告的高频错误场景）
+// ============================================================
+let diag
+try {
+	const mod = await import('../../../../../server/diagLogger.mjs')
+	diag = mod.createDiag('chat')
+} catch {
+	// diagLogger 不可用时使用空操作
+	const noop = () => {}
+	diag = { log: noop, warn: noop, error: noop, debug: noop, trace: noop, guard: () => true, snapshot: noop, typeCheck: () => true }
+}
+
 const activeStreams = new Map()
 const StreamManager = {
 	/**
@@ -387,7 +400,7 @@ class timeSlice_t {
 	 * @returns {Promise<timeSlice_t>} 一个填充了完整数据的 timeSlice_t 实例。
 	 */
 	static async fromJSON(json, username) {
-		return Object.assign(new timeSlice_t(), {
+		const result = Object.assign(new timeSlice_t(), {
 			...json,
 			chars: Object.fromEntries(await Promise.all(
 				(json.chars || []).map(async charname => [charname, await loadPart(username, 'chars/' + charname).catch(() => { })])
@@ -400,6 +413,21 @@ class timeSlice_t {
 			player_id: json.player,
 			player: json.player ? await loadPart(username, 'personas/' + json.player).catch(() => { }) : undefined,
 		})
+
+		// ★ DIAG: 检查 loadPart 后的对象完整性（覆盖 Bug2: empty AI source placeholder）
+		for (const [charname, charObj] of Object.entries(result.chars)) {
+			if (!charObj) {
+				diag.warn(`[fromJSON] char "${charname}" loadPart 返回空值（可能已卸载或路径无效）`, { username })
+			} else if (!charObj.interfaces?.chat) {
+				diag.warn(`[fromJSON] char "${charname}" 缺少 interfaces.chat（可能是空占位符 AI source）`,
+					{ hasInterfaces: !!charObj.interfaces, interfaceKeys: charObj.interfaces ? Object.keys(charObj.interfaces) : [] })
+			}
+		}
+		if (json.world && result.world && !result.world.interfaces?.chat) {
+			diag.warn(`[fromJSON] world "${json.world}" 缺少 interfaces.chat`, { username })
+		}
+
+		return result
 	}
 }
 
@@ -1249,6 +1277,26 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 			signal: stream.signal,
 		}
 
+		// ★ DIAG: 在调用 GetReply 前检查 request.char（覆盖 Bug1: Cannot read properties of undefined 'interfaces'）
+		if (!request.char) {
+			const charId = request.char_id
+			const availableChars = Object.keys(chatMetadata.LastTimeSlice?.chars || {})
+			diag.error(`[executeGeneration] request.char 为 undefined！`,
+				`char_id="${charId}"`,
+				`可用角色: [${availableChars.join(', ')}]`,
+				`chatLog长度: ${chatMetadata.chatLog.length}`,
+				`最后一条消息的 role: ${chatMetadata.chatLog[chatMetadata.chatLog.length - 1]?.role}`,
+				`最后一条消息的 charname: ${chatMetadata.chatLog[chatMetadata.chatLog.length - 1]?.timeSlice?.charname}`)
+			throw new Error(`char "${charId}" not found in chat. Available chars: [${availableChars.join(', ')}]`)
+		}
+		if (!request.char.interfaces?.chat?.GetReply) {
+			diag.error(`[executeGeneration] request.char 存在但缺少 interfaces.chat.GetReply`,
+				`char_id="${request.char_id}"`,
+				`interfaces keys: ${request.char.interfaces ? Object.keys(request.char.interfaces) : 'none'}`,
+				`char constructor: ${request.char.constructor?.name}`)
+			throw new Error(`char "${request.char_id}" has no GetReply interface (possibly an empty AI source placeholder)`)
+		}
+
 		const result = await request.char.interfaces.chat.GetReply(request)
 
 		if (result === null) {
@@ -1427,13 +1475,38 @@ export async function modifyTimeLine(chatid, delta) {
 			}
 
 		else {
-			// **普通回复逻辑 (流式)**
-			const { charname } = timeSlice
-			const request = await getChatRequest(chatid, charname)
-			const stream = StreamManager.create(chatid, newEntry.id)
-			// 在后台执行生成
-			executeGeneration(chatid, request, stream, newEntry, chatMetadata)
-		}
+				// **普通回复逻辑 (流式)**
+				const { charname } = timeSlice
+	
+				// ★ DIAG: 检查 charname（覆盖 Bug1: modifyTimeLine 普通回复分支 charname 为 undefined）
+				if (!charname) {
+					const availableChars = Object.keys(chatMetadata.LastTimeSlice?.chars || {})
+					const previousEntry = chatMetadata.chatLog[chatMetadata.chatLog.length - 2] // 上一条（非当前占位符）
+					diag.warn(`[modifyTimeLine] charname 为空（普通回复分支）`,
+						`上一条消息 role="${previousEntry?.role}"`,
+						`上一条消息 charname="${previousEntry?.timeSlice?.charname}"`,
+						`可用角色: [${availableChars.join(', ')}]`,
+						`chatLog长度: ${chatMetadata.chatLog.length}`)
+				}
+				// 防御：charname 为空时回退到第一个可用角色
+				const effectiveCharname = charname || Object.keys(chatMetadata.LastTimeSlice?.chars || {})[0]
+				if (!effectiveCharname) {
+					diag.error(`[modifyTimeLine] 无可用角色进行回复，跳过生成`,
+						`chatLog长度: ${chatMetadata.chatLog.length}`)
+					newEntry.content = '```\nError: No character available for reply\n```'
+					newEntry.is_generating = false
+					broadcastChatEvent(chatid, {
+						type: 'message_replaced',
+						payload: { index: chatMetadata.chatLog.length - 1, entry: await newEntry.toData(chatMetadata.username) },
+					})
+					return newEntry
+				}
+	
+				const request = await getChatRequest(chatid, effectiveCharname)
+				const stream = StreamManager.create(chatid, newEntry.id)
+				// 在后台执行生成
+				executeGeneration(chatid, request, stream, newEntry, chatMetadata)
+			}
 	} else {
 		// === 简单的切换逻辑 (无生成) ===
 		entry = chatMetadata.timeLines[newTimeLineIndex]

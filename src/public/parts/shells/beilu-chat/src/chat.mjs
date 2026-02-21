@@ -24,9 +24,12 @@ import { getAllDefaultParts, getAnyDefaultPart, getPartDetails, loadPart } from 
 import { skip_report } from '../../../../../server/server.mjs'
 import { loadShellData, saveShellData } from '../../../../../server/setting_loader.mjs'
 
+import { createDiag } from '../../../../server/diagLogger.mjs'
 import { addfile, getfile } from './files.mjs'
 import { buildPromptStruct, margeStructPromptChatLog, structPromptToSingleNoChatLog } from './prompt_struct.mjs'
 import { createBufferedSyncPreviewUpdater, generateDiff } from './stream.mjs'
+
+const diag = createDiag('chat')
 
 // ============================================================
 // StreamManager — 流式生成任务管理（保留原样）
@@ -449,6 +452,13 @@ class chatMetadata_t {
 			username: this.username,
 			chatLog: await Promise.all(this.chatLog.map(async (log, i) => {
 				if (typeof log?.toData === 'function') return log.toData(this.username)
+					// ★ DIAG: 追踪纯对象来源
+					diag.warn(`chatLog[${i}] missing toData method.`,
+						'constructor:', log?.constructor?.name,
+						'id:', log?.id,
+						'role:', log?.role,
+						'has toJSON:', typeof log?.toJSON === 'function',
+						'keys:', log ? Object.keys(log).join(',') : 'null')
 				if (typeof log?.toJSON === 'function') return log.toJSON()
 				return log
 			})),
@@ -463,8 +473,39 @@ class chatMetadata_t {
 	}
 
 	static async fromJSON(json) {
-		const chatLog = await Promise.all(json.chatLog.map(data => chatLogEntry_t.fromJSON(data, json.username)))
-		const timeLines = await Promise.all(json.timeLines.map(entry => chatLogEntry_t.fromJSON(entry, json.username)))
+		const chatLog = await Promise.all(json.chatLog.map(async (data, i) => {
+			try {
+				return await chatLogEntry_t.fromJSON(data, json.username)
+			} catch (err) {
+				diag.error(`chatLog[${i}] fromJSON failed:`, err.message,
+					'data keys:', data ? Object.keys(data).join(',') : 'null',
+					'id:', data?.id, 'role:', data?.role)
+				// 构建最小有效 entry 防止崩溃
+				const fallback = new chatLogEntry_t()
+				fallback.id = data?.id || fallback.id
+				fallback.content = data?.content || `[加载失败: ${err.message}]`
+				fallback.role = data?.role || 'system'
+				fallback.name = data?.name || 'System'
+				fallback.time_stamp = data?.time_stamp || new Date()
+				fallback.timeSlice = new timeSlice_t()
+				return fallback
+			}
+		}))
+		const timeLines = await Promise.all(json.timeLines.map(async (entry, i) => {
+			try {
+				return await chatLogEntry_t.fromJSON(entry, json.username)
+			} catch (err) {
+				diag.error(`timeLines[${i}] fromJSON failed:`, err.message)
+				const fallback = new chatLogEntry_t()
+				fallback.id = entry?.id || fallback.id
+				fallback.content = entry?.content || `[加载失败: ${err.message}]`
+				fallback.role = entry?.role || 'system'
+				fallback.name = entry?.name || 'System'
+				fallback.time_stamp = entry?.time_stamp || new Date()
+				fallback.timeSlice = new timeSlice_t()
+				return fallback
+			}
+		}))
 
 		// 清理上次崩溃残留的 generating 状态
 		for (const entry of chatLog)
@@ -1009,11 +1050,11 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 		// 去掉 handleAutoReply / world.AfterAddChatLogEntry
 	} catch (e) {
 		if (e.name === 'AbortError') {
-			console.log(`Generation aborted for message ${entryId}: ${e.message}`)
 			placeholderEntry.is_generating = false
 			placeholderEntry.extension = { ...placeholderEntry.extension, aborted: true }
 			await finalizeEntry(placeholderEntry, false)
 		} else {
+			console.error('[chat] executeGeneration error:', e.name, e.message)
 			stream.abort(e.message)
 			placeholderEntry.content = `\`\`\`\nError:\n${e.stack || e.message}\n\`\`\``
 			await finalizeEntry(placeholderEntry, true)
@@ -1442,17 +1483,48 @@ export async function getInitialData(chatid) {
 	const chatMetadata = await loadChat(chatid)
 	if (!chatMetadata) throw skip_report(new Error('Chat not found'))
 	const timeSlice = chatMetadata.LastTimeSlice
+
+	// ★ DIAG: 检查 chatLog 中每个 entry 的类型
+	const last20 = chatMetadata.chatLog.slice(-20)
+	for (let i = 0; i < last20.length; i++) {
+		const x = last20[i]
+		if (typeof x?.toData !== 'function') {
+			diag.warn(`getInitialData chatLog[${chatMetadata.chatLog.length - last20.length + i}] missing toData.`,
+				'constructor:', x?.constructor?.name,
+				'id:', x?.id, 'avatar:', x?.avatar?.substring?.(0, 50),
+				'keys:', x ? Object.keys(x).join(',') : 'null')
+		}
+	}
+
 	return {
 		charlist: Object.keys(timeSlice.chars),
 		pluginlist: Object.keys(timeSlice.plugins),
 		worldname: timeSlice.world_id,
 		personaname: timeSlice.player_id,
 		logLength: chatMetadata.chatLog.length,
-		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => {
-			if (typeof x?.toData === 'function') return x.toData(chatMetadata.username)
-			console.warn('[chat] getInitialData: chatLog entry missing toData, using fallback')
-			if (typeof x?.toJSON === 'function') return x.toJSON()
-			return x
+		initialLog: await Promise.all(last20.map(async (x, i) => {
+			try {
+				if (typeof x?.toData === 'function') return await x.toData(chatMetadata.username)
+			} catch (err) {
+				diag.error(`getInitialData toData[${i}] failed:`, err.message)
+			}
+			try {
+				if (typeof x?.toJSON === 'function') return x.toJSON()
+			} catch (err2) {
+				diag.error(`getInitialData toJSON[${i}] failed:`, err2.message)
+			}
+			// 最终 fallback：确保返回有效对象
+			return {
+				id: x?.id || crypto.randomUUID(),
+				content: x?.content || '',
+				role: x?.role || 'char',
+				name: x?.name || 'Unknown',
+				avatar: x?.avatar || null,
+				time_stamp: x?.time_stamp || new Date(),
+				files: [],
+				is_generating: false,
+				timeSlice: { chars: [], plugins: [] },
+			}
 		})),
 		timeLineIndex: chatMetadata.timeLineIndex,
 		timeLinesCount: chatMetadata.timeLines.length,

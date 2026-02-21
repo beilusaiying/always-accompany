@@ -1,11 +1,14 @@
-import { createVirtualList } from '../../../../../scripts/virtualList.mjs'
+ import { createVirtualList } from '../../../../../scripts/virtualList.mjs'
 import { getChatLog, getChatLogLength } from '../../src/endpoints.mjs'
 import { modifyTimeLine } from '../endpoints.mjs'
 import { applySlice } from '../stream.mjs'
 
+import { createDiag } from '../diagLogger.mjs'
 import { disableSwipe, enableSwipe, renderMessage } from './messageList.mjs'
 import { streamRenderer } from './StreamRenderer.mjs'
 import { handleTypingStatus } from './typingIndicator.mjs'
+
+const diag = createDiag('virtualQueue')
 
 const chatMessagesContainer = document.getElementById('chat-messages')
 let virtualList = null
@@ -476,6 +479,7 @@ export async function handleStreamUpdate({ messageId, slices }) {
 		} else if (!streamRenderer.streamingMessages.has(messageId)) {
 			// 500ms 超时已渲染骨架屏，但 streamRenderer 还未注册
 			// 此处补注册，使后续 updateTarget 生效，启动逐字渲染
+			console.log('[virtualQueue DIAG] handleStreamUpdate: late register to streamRenderer. messageId:', messageId)
 			streamRenderer.register(messageId, itemState.messageData.content || '')
 		}
 

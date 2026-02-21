@@ -1,6 +1,9 @@
 import { renderMarkdownAsString } from '../../../../../scripts/markdown.mjs'
+import { createDiag } from '../diagLogger.mjs'
 import { applyStreamingThinkFold, detectContentType, isRendererEnabled } from '../displayRegex.mjs'
 import { renderAsIframe } from './iframeRenderer.mjs'
+
+const diag = createDiag('streamRenderer')
 
 /**
  * 读取流式渲染是否启用
@@ -37,6 +40,11 @@ class StreamRenderer {
 	 * @param {string} initialContent - 消息的初始内容。
 	 */
 	register(id, initialContent) {
+		diag.log('register:',
+			'id:', id,
+			'initialContent.len:', initialContent?.length,
+			'domElement found:', !!document.getElementById(id),
+			'already registered:', this.streamingMessages.has(id))
 		this.streamingMessages.set(id, {
 			targetContent: initialContent || '',
 			displayedContent: initialContent || '',
@@ -57,7 +65,20 @@ class StreamRenderer {
 	 */
 	updateTarget(id, newContent) {
 		const state = this.streamingMessages.get(id)
-		if (state) state.targetContent = newContent
+		if (state) {
+			const prevLen = state.targetContent?.length || 0
+			state.targetContent = newContent
+			// 每50次更新打印一次，避免日志爆炸
+			if (prevLen === 0 || (newContent?.length || 0) - prevLen > 200) {
+				diag.log('updateTarget:',
+					'id:', id,
+					'prevLen:', prevLen,
+					'newLen:', newContent?.length,
+					'displayedLen:', state.displayedContent?.length)
+			}
+		} else {
+			diag.warn('updateTarget: id not registered:', id)
+		}
 		this.startLoop()
 	}
 
@@ -66,11 +87,14 @@ class StreamRenderer {
 	 * @param {string} id - 消息的唯一 ID。
 	 */
 	stop(id) {
+		const had = this.streamingMessages.has(id)
 		const state = this.streamingMessages.get(id)
 		if (state?.streamIframe) {
 			state.streamIframe = null // 清除引用，iframe 保留在 DOM 中
 		}
 		this.streamingMessages.delete(id)
+		// ★ DIAG: 确认 StreamRenderer 停止
+		diag.log('stop called:', 'id:', id, 'was_registered:', had)
 	}
 
 	/**

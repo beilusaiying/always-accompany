@@ -119,21 +119,6 @@ export async function renderMessage(message) {
 	const messageRole = message.role || (message.is_user ? 'user' : '')
 	const { text: displayProcessed, placeholders } = applyDisplayRules(builtinProcessed, { role: messageRole, charName: message.name || '' })
 
-	// ★ 调试日志：追踪消息渲染管线的输入输出
-	console.log('%c[renderMessage DEBUG] 渲染管线', 'color: #ff00ff; font-weight: bold', {
-		messageName: message.name,
-		messageRole,
-		hasContentForShow: !!message.content_for_show,
-		rawContentLen: rawContent?.length,
-		rawContentPreview: rawContent?.substring(0, 150),
-		hasGameText: rawContent?.includes('<game_text>'),
-		hasKcb: rawContent?.includes('<kcb>'),
-		builtinProcessedLen: builtinProcessed?.length,
-		displayProcessedLen: displayProcessed?.length,
-		displayProcessedStart: displayProcessed?.substring(0, 100),
-		placeholdersCount: placeholders?.size,
-	})
-
 	// ★ 渲染深度检查：超出深度的旧消息不做 full-html 渲染
 	const renderDepth = getRenderDepth()
 	const queueForDepth = getQueue()

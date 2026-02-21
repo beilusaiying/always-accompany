@@ -1125,6 +1125,25 @@ async function addChatLogEntry(chatid, entry) {
 	else
 		chatMetadata.chatLog.push(entry)
 
+	// 防御：确保 chatLog 中所有 entry 都有 id 和 toData
+	// world 的 AddChatLogEntry 可能替换了 entry 为纯对象
+	for (let i = 0; i < chatMetadata.chatLog.length; i++) {
+		const e = chatMetadata.chatLog[i]
+		if (!e) continue
+		if (typeof e.toData !== 'function') {
+			// 将纯对象提升为 chatLogEntry_t 实例
+			const repaired = Object.assign(new chatLogEntry_t(), e)
+			if (!repaired.id) repaired.id = crypto.randomUUID()
+			// 确保 timeSlice 也是正确的实例
+			if (repaired.timeSlice && typeof repaired.timeSlice.toData !== 'function')
+				repaired.timeSlice = Object.assign(new timeSlice_t(), repaired.timeSlice)
+			chatMetadata.chatLog[i] = repaired
+			console.log(`[chat] repaired chatLog[${i}] from plain Object to chatLogEntry_t (id: ${repaired.id.substring(0, 8)})`)
+		} else if (!e.id) {
+			e.id = crypto.randomUUID()
+		}
+	}
+
 	// 更新最后一条消息的时间线分支
 	chatMetadata.timeLines = [entry]
 	chatMetadata.timeLineIndex = 0
@@ -1175,6 +1194,7 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 		finalEntry.is_generating = false
 
 		let idx = chatMetadata.chatLog.findIndex(e => e.id === entryId)
+
 		if (idx === -1) {
 			chatMetadata.chatLog.push(finalEntry)
 			idx = chatMetadata.chatLog.length - 1
@@ -1190,9 +1210,17 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 
 		chatMetadata.LastTimeSlice = finalEntry.timeSlice
 
+		let entryData
+		try {
+			entryData = await finalEntry.toData(chatMetadata.username)
+		} catch (toDataErr) {
+			console.error('[chat] toData failed in finalizeEntry:', toDataErr.message)
+			entryData = typeof finalEntry.toJSON === 'function' ? finalEntry.toJSON() : finalEntry
+		}
+
 		broadcastChatEvent(chatid, {
 			type: 'message_replaced',
-			payload: { index: idx, entry: await finalEntry.toData(chatMetadata.username) },
+			payload: { index: idx, entry: entryData },
 		})
 
 		if (!isError && is_VividChat(chatMetadata)) {

@@ -447,9 +447,8 @@ class chatMetadata_t {
 	async toData() {
 		return {
 			username: this.username,
-			chatLog: await Promise.all(this.chatLog.map(async log => {
+			chatLog: await Promise.all(this.chatLog.map(async (log, i) => {
 				if (typeof log?.toData === 'function') return log.toData(this.username)
-				console.warn('[chat] chatLog entry missing toData method, using fallback')
 				if (typeof log?.toJSON === 'function') return log.toJSON()
 				return log
 			})),
@@ -937,9 +936,21 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 
 		chatMetadata.LastTimeSlice = finalEntry.timeSlice
 
+		let entryData
+		try {
+			entryData = await finalEntry.toData(chatMetadata.username)
+		} catch (toDataErr) {
+			console.error('[chat] toData failed in finalizeEntry:', toDataErr.message)
+			try {
+				entryData = typeof finalEntry.toJSON === 'function' ? finalEntry.toJSON() : finalEntry
+			} catch (fallbackErr) {
+				entryData = { id: entryId, content: finalEntry?.content || '', role: finalEntry?.role || 'char', error: 'toData_and_toJSON_failed' }
+			}
+		}
+
 		broadcastChatEvent(chatid, {
 			type: 'message_replaced',
-			payload: { index: idx, entry: await finalEntry.toData(chatMetadata.username) },
+			payload: { index: idx, entry: entryData },
 		})
 
 		if (!isError) {

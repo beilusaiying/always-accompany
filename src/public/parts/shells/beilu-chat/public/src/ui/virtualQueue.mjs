@@ -5,6 +5,7 @@ import { applySlice } from '../stream.mjs'
 
 import { disableSwipe, enableSwipe, renderMessage } from './messageList.mjs'
 import { streamRenderer } from './StreamRenderer.mjs'
+import { handleTypingStatus } from './typingIndicator.mjs'
 
 const chatMessagesContainer = document.getElementById('chat-messages')
 let virtualList = null
@@ -220,13 +221,12 @@ export async function handleMessageAdded(message) {
 			}
 			streamingMessages.set(message.id, itemState)
 
-			// 设置 200ms 超时，如果超时还没收到 stream_update，强制渲染骨架屏
+			// 设置 500ms 超时，如果超时还没收到 stream_update，强制渲染骨架屏
 			setTimeout(async () => {
 				if (itemState.pendingRender) {
 					itemState.pendingRender = false
 					const shouldScroll = chatMessagesContainer.scrollTop >= chatMessagesContainer.scrollHeight - chatMessagesContainer.clientHeight - 20
 					await virtualList.appendItem(message, shouldScroll)
-					// 这里不注册 streamRenderer，因为内容为空，等待真正的 stream_update 更新内容
 				}
 			}, 500)
 		} else {
@@ -253,31 +253,65 @@ export async function handleMessageReplaced(index, message) {
 		// 此时直接作为新消息添加到列表底部
 		if (itemState?.pendingRender) {
 			itemState.pendingRender = false
+			// ★ 关键：先停止 StreamRenderer，防止覆盖新渲染的内容
+			streamRenderer.stop(message.id)
+			streamingMessages.delete(message.id)
 			const shouldScroll = chatMessagesContainer.scrollTop >= chatMessagesContainer.scrollHeight - chatMessagesContainer.clientHeight - 20
 			await virtualList.appendItem(message, shouldScroll)
-			streamingMessages.delete(message.id)
+			if (!message.is_generating) handleTypingStatus([])
 			updateLastCharMessageArrows()
 			return
 		}
 
-		// Find the item in the queue by its log index before it gets replaced
+		// ★ 关键修复：在 replaceItem 之前停止 StreamRenderer
+		// 否则 StreamRenderer 的 renderFrame 会在 replaceItem 完成后
+		// 用纯文本覆盖正则处理后的 HTML 内容
+		if (streamingMessages.has(message.id)) {
+			streamRenderer.stop(message.id)
+			streamingMessages.delete(message.id)
+		}
+
+		// 也检查队列中旧消息的 streaming 状态
 		const queue = virtualList.getQueue()
 		for (let i = 0; i < queue.length; i++) {
-			const logIndex = virtualList.getChatLogIndexByQueueIndex(i)
-			if (logIndex === index) {
-				const oldItem = queue[i]
-				if (oldItem && streamingMessages.has(oldItem.id)) {
+			const oldItem = queue[i]
+			if (oldItem && oldItem.id !== message.id && streamingMessages.has(oldItem.id)) {
+				const logIndex = virtualList.getChatLogIndexByQueueIndex(i)
+				if (logIndex === index) {
 					streamRenderer.stop(oldItem.id)
 					streamingMessages.delete(oldItem.id)
+					break
 				}
-				break
 			}
 		}
 
-		await virtualList.replaceItem(index, message)
+		// 策略：先尝试通过 chatLog index 替换；如果失败，再尝试通过 messageId 在队列中查找并替换
+		const currentQueue = virtualList.getQueue()
+		let foundByIndex = false
+		let foundByIdQueueIdx = -1
 
-		// If the newly replaced message is a generating one
-		if (message.is_generating) {
+		for (let i = 0; i < currentQueue.length; i++) {
+			const logIdx = virtualList.getChatLogIndexByQueueIndex(i)
+			if (logIdx === index) { foundByIndex = true; break }
+			// 同时查找队列中是否有同 id 的旧消息（骨架屏）
+			if (currentQueue[i]?.id === message.id) foundByIdQueueIdx = i
+		}
+
+		if (foundByIndex) {
+			await virtualList.replaceItem(index, message)
+		} else if (foundByIdQueueIdx >= 0) {
+			const logIdx = virtualList.getChatLogIndexByQueueIndex(foundByIdQueueIdx)
+			await virtualList.replaceItem(logIdx, message)
+		} else {
+			const shouldScroll = chatMessagesContainer.scrollTop >= chatMessagesContainer.scrollHeight - chatMessagesContainer.clientHeight - 20
+			await virtualList.appendItem(message, shouldScroll)
+		}
+
+		// 消息完成时强制清除 typing indicator
+		if (!message.is_generating) {
+			handleTypingStatus([])
+		} else {
+			// 仍在生成中（不太可能走到这里，但作为防御）
 			streamingMessages.set(message.id, { messageData: message })
 			streamRenderer.register(message.id, message.content)
 		}

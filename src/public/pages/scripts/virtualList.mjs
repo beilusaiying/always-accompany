@@ -406,10 +406,7 @@ export function createVirtualList({
 		if (!item) throw new Error('item is required')
 		if (index < 0 || index >= state.totalCount) return
 		const queueIndex = index - state.startIndex
-		if (!state.queue[queueIndex]) {
-			console.warn(`[virtualList] replaceItem called for index ${index} which is not in view.`)
-			return
-		}
+		if (!state.queue[queueIndex]) return
 		await getMutex()
 		try {
 			const oldElement = state.renderedElements.get(index)

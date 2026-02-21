@@ -480,7 +480,17 @@ function Update-FountAndDeno {
 	}
 	else {
 		deno_upgrade
-		fount_upgrade
+		# beilu: 询问用户是否检查更新
+		if (Get-Command git -ErrorAction SilentlyContinue) {
+			Write-Host ""
+			Write-Host "  检查 beilu-always accompany 更新..." -ForegroundColor Cyan
+			$answer = Read-Host "  是否检查并更新到最新版本? (Y/N, 默认N)"
+			if ($answer -eq 'Y' -or $answer -eq 'y') {
+				fount_upgrade
+			} else {
+				Write-Host "  已跳过更新检查。" -ForegroundColor Gray
+			}
+		}
 	}
 }
 
@@ -711,15 +721,19 @@ function fount_upgrade {
 	if ($FOUNT_DIR -in $(git config --global --get-all safe.directory)) {} else {
 		git config --global --add safe.directory "$FOUNT_DIR"
 	}
+	# beilu: 仓库地址和分支名改为 beilu 公共仓库
+	$BEILU_REPO_URL = "https://github.com/beilusaiying/always-accompany.git"
+	$BEILU_BRANCH = "main"
+
 	if (!(Test-Path -Path "$FOUNT_DIR/.git")) {
 		Write-Host (Get-I18n -key 'git.repoNotFound')
-		git -C "$FOUNT_DIR" init -b master
+		git -C "$FOUNT_DIR" init -b $BEILU_BRANCH
 		git -C "$FOUNT_DIR" config core.autocrlf false
-		git -C "$FOUNT_DIR" remote add origin https://github.com/steve02081504/fount.git
+		git -C "$FOUNT_DIR" remote add origin $BEILU_REPO_URL
 		Write-Host (Get-I18n -key 'git.fetchingAndResetting')
-		git -C "$FOUNT_DIR" fetch origin master --depth 1
+		git -C "$FOUNT_DIR" fetch origin $BEILU_BRANCH --depth 1
 		if ($LastExitCode) { Write-Error (Get-I18n -key 'git.fetchFailed'); return }
-		$diffOutput = git -C "$FOUNT_DIR" diff "origin/master"
+		$diffOutput = git -C "$FOUNT_DIR" diff "origin/$BEILU_BRANCH"
 		if ($diffOutput) {
 			Write-Host (Get-I18n -key 'git.localChangesDetected') -ForegroundColor Yellow
 			$timestamp = (Get-Date -Format 'yyyyMMdd_HHmmss')
@@ -730,28 +744,33 @@ function fount_upgrade {
 			Write-Host $diffFilePath -ForegroundColor Cyan
 		}
 		git -C "$FOUNT_DIR" clean -fd
-		git -C "$FOUNT_DIR" reset --hard "origin/master"
+		git -C "$FOUNT_DIR" reset --hard "origin/$BEILU_BRANCH"
 	}
 
 	if (!(Test-Path -Path "$FOUNT_DIR/.git")) {
 		Write-Host (Get-I18n -key 'git.repoNotFoundSkippingPull')
 	}
 	else {
+		# beilu: 确保 origin 指向 beilu 仓库
+		$currentOrigin = git -C "$FOUNT_DIR" remote get-url origin 2>$null
+		if ($currentOrigin -and $currentOrigin -ne $BEILU_REPO_URL) {
+			git -C "$FOUNT_DIR" remote set-url origin $BEILU_REPO_URL
+		}
 		git -C "$FOUNT_DIR" config core.autocrlf false
 		git -C "$FOUNT_DIR" fetch origin
 		$currentBranch = git -C "$FOUNT_DIR" rev-parse --abbrev-ref HEAD
 		if ($currentBranch -eq 'HEAD') {
 			Write-Host (Get-I18n -key 'git.notOnBranch')
 			git -C "$FOUNT_DIR" clean -fd
-			git -C "$FOUNT_DIR" reset --hard "origin/master"
-			git -C "$FOUNT_DIR" checkout master
+			git -C "$FOUNT_DIR" reset --hard "origin/$BEILU_BRANCH"
+			git -C "$FOUNT_DIR" checkout $BEILU_BRANCH
 			$currentBranch = git -C "$FOUNT_DIR" rev-parse --abbrev-ref HEAD
 		}
 		$remoteBranch = git -C "$FOUNT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
 		if (-not $remoteBranch) {
 			Write-Warning (Get-I18n -key 'git.noUpstreamBranch' -params @{branch = $currentBranch })
-			git -C "$FOUNT_DIR" branch --set-upstream-to origin/master
-			$remoteBranch = "origin/master"
+			git -C "$FOUNT_DIR" branch --set-upstream-to "origin/$BEILU_BRANCH"
+			$remoteBranch = "origin/$BEILU_BRANCH"
 		}
 		$mergeBase = git -C "$FOUNT_DIR" merge-base $currentBranch $remoteBranch
 		$localCommit = git -C "$FOUNT_DIR" rev-parse $currentBranch
@@ -901,7 +920,7 @@ if (!(Test-Path -Path "$FOUNT_DIR/node_modules") -or $args[0] -eq 'init') {
 		if (Get-Command git -ErrorAction Ignore) {
 			git -C "$FOUNT_DIR" config core.autocrlf false
 			git -C "$FOUNT_DIR" clean -fd
-			git -C "$FOUNT_DIR" reset --hard "origin/master"
+			git -C "$FOUNT_DIR" reset --hard "origin/main" 2>$null
 			git -C "$FOUNT_DIR" gc --aggressive --prune=now --force
 		}
 	}
@@ -917,14 +936,14 @@ if (!(Test-Path -Path "$FOUNT_DIR/node_modules") -or $args[0] -eq 'init') {
 
 	# 隐藏文件设置和desktop.ini生效
 	if ((Test-Path "$FOUNT_DIR/.git") -and (-not (Test-Path "$FOUNT_DIR/.git/desktop.ini"))) {
-		Copy-Item "$FOUNT_DIR/default/git_desktop.ini" "$FOUNT_DIR/.git/desktop.ini" -Force
+		Copy-Item "$FOUNT_DIR/default/git_desktop.ini" "$FOUNT_DIR/.git/desktop.ini" -Force -ErrorAction SilentlyContinue
 	}
 	New-InstallerDir # For data/desktop.ini
 	if (-not (Test-Path "$FOUNT_DIR/data/desktop.ini")) {
-		Copy-Item "$FOUNT_DIR/default/default_desktop.ini" "$FOUNT_DIR/data/desktop.ini" -Force
+		Copy-Item "$FOUNT_DIR/default/default_desktop.ini" "$FOUNT_DIR/data/desktop.ini" -Force -ErrorAction SilentlyContinue
 	}
 	if (-not (Test-Path "$FOUNT_DIR/node_modules/desktop.ini")) {
-		Copy-Item "$FOUNT_DIR/default/node_modules_desktop.ini" "$FOUNT_DIR/node_modules/desktop.ini" -Force
+		Copy-Item "$FOUNT_DIR/default/node_modules_desktop.ini" "$FOUNT_DIR/node_modules/desktop.ini" -Force -ErrorAction SilentlyContinue
 	}
 	Set-FountFileAttributes
 
@@ -985,7 +1004,7 @@ if ($args[0] -eq 'clean') {
 		Get-InstalledModule -Name $module.Name -AllVersions | Where-Object { $_.Version -ne $module.Version } | Uninstall-Module
 	}
 	if (-not (Test-Path "$FOUNT_DIR/node_modules/desktop.ini")) {
-		Copy-Item "$FOUNT_DIR/default/node_modules_desktop.ini" "$FOUNT_DIR/node_modules/desktop.ini" -Force
+		Copy-Item "$FOUNT_DIR/default/node_modules_desktop.ini" "$FOUNT_DIR/node_modules/desktop.ini" -Force -ErrorAction SilentlyContinue
 	}
 	Set-FountFileAttributes
 }

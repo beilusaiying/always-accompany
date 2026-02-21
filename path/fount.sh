@@ -641,11 +641,22 @@ handle_docker_termux_passthrough() {
 	fi
 }
 
+# beilu: 仓库地址和分支配置
+BEILU_REPO_URL="https://github.com/beilusaiying/always-accompany.git"
+BEILU_BRANCH="main"
+
 update_fount_if_not_noupdate() {
 	if [ -f "$FOUNT_DIR/.noupdate" ]; then
 		:
 	else
-		fount_upgrade
+		echo ""
+		printf "  是否检查并更新到最新版本? (Y/N, 默认N): "
+		read -r answer
+		if [ "$answer" = "Y" ] || [ "$answer" = "y" ]; then
+			fount_upgrade
+		else
+			echo -e "  ${C_CYAN}跳过更新检查${C_RESET}"
+		fi
 	fi
 }
 
@@ -781,7 +792,7 @@ git_reset_and_clean() {
 	if command -v git &>/dev/null; then
 		git -C "$FOUNT_DIR" config core.autocrlf false
 		git -C "$FOUNT_DIR" clean -fd
-		git -C "$FOUNT_DIR" reset --hard "origin/master"
+		git -C "$FOUNT_DIR" reset --hard "origin/$BEILU_BRANCH"
 		git -C "$FOUNT_DIR" gc --aggressive --prune=now --force
 	fi
 }
@@ -1153,18 +1164,30 @@ fount_upgrade() {
 	if git config --global --get-all safe.directory | grep -q -xF "$FOUNT_DIR"; then : else
 		git config --global --add safe.directory "$FOUNT_DIR"
 	fi
+
+	# beilu: 自动修正 origin URL
+	if [ -d "$FOUNT_DIR/.git" ]; then
+		local current_origin
+		current_origin=$(git -C "$FOUNT_DIR" remote get-url origin 2>/dev/null)
+		if [ -n "$current_origin" ] && [ "$current_origin" != "$BEILU_REPO_URL" ]; then
+			echo -e "  ${C_YELLOW}检测到 origin 指向旧仓库，正在修正...${C_RESET}"
+			git -C "$FOUNT_DIR" remote set-url origin "$BEILU_REPO_URL"
+			echo -e "  ${C_GREEN}✓ origin 已修正为 $BEILU_REPO_URL${C_RESET}"
+		fi
+	fi
+
 	if [ ! -d "$FOUNT_DIR/.git" ]; then
 		get_i18n 'git.repoNotFound'
-		git -C "$FOUNT_DIR" init -b master
+		git -C "$FOUNT_DIR" init -b "$BEILU_BRANCH"
 		git -C "$FOUNT_DIR" config core.autocrlf false
-		git -C "$FOUNT_DIR" remote add origin https://github.com/steve02081504/fount.git
+		git -C "$FOUNT_DIR" remote add origin "$BEILU_REPO_URL"
 		get_i18n 'git.fetchingAndResetting'
-		if ! git -C "$FOUNT_DIR" fetch origin master --depth 1; then
+		if ! git -C "$FOUNT_DIR" fetch origin "$BEILU_BRANCH" --depth 1; then
 			echo -e "${C_RED}$(get_i18n 'git.fetchFailed')${C_RESET}"
 			return 1
 		fi
 		local diff_output
-		diff_output=$(git -C "$FOUNT_DIR" diff "origin/master")
+		diff_output=$(git -C "$FOUNT_DIR" diff "origin/$BEILU_BRANCH")
 		if [ -n "$diff_output" ]; then
 			echo -e "${C_YELLOW}$(get_i18n 'git.localChangesDetected')${C_RESET}"
 			local timestamp
@@ -1184,15 +1207,15 @@ fount_upgrade() {
 		if [ "$currentBranch" = "HEAD" ]; then
 			get_i18n 'git.notOnBranch'
 			git_reset_and_clean
-			git -C "$FOUNT_DIR" checkout master
+			git -C "$FOUNT_DIR" checkout "$BEILU_BRANCH"
 			currentBranch=$(git -C "$FOUNT_DIR" rev-parse --abbrev-ref HEAD)
 		fi
 		local remoteBranch
 		remoteBranch=$(git -C "$FOUNT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)
 		if [ -z "$remoteBranch" ]; then
 			echo -e "${C_YELLOW}$(get_i18n 'git.noUpstreamBranch' 'branch' "$currentBranch")${C_RESET}" >&2
-			git -C "$FOUNT_DIR" branch --set-upstream-to origin/master "$currentBranch"
-			remoteBranch="origin/master"
+			git -C "$FOUNT_DIR" branch --set-upstream-to "origin/$BEILU_BRANCH" "$currentBranch"
+			remoteBranch="origin/$BEILU_BRANCH"
 		fi
 		if [ -n "$(git -C "$FOUNT_DIR" status --porcelain)" ]; then
 			echo -e "${C_YELLOW}$(get_i18n 'git.dirtyWorkingDirectory')${C_RESET}" >&2

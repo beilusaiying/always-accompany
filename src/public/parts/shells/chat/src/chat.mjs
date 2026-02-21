@@ -538,16 +538,16 @@ class chatMetadata_t {
 
 		metadata.LastTimeSlice.player_id = getAnyDefaultPart(username, 'personas')
 		if (metadata.LastTimeSlice.player_id)
-			metadata.LastTimeSlice.player = await loadPart(username, 'personas/' + metadata.LastTimeSlice.player_id)
+			metadata.LastTimeSlice.player = await loadPart(username, 'personas/' + metadata.LastTimeSlice.player_id).catch(() => { })
 
 		metadata.LastTimeSlice.world_id = getAnyDefaultPart(username, 'worlds')
 		if (metadata.LastTimeSlice.world_id)
-			metadata.LastTimeSlice.world = await loadPart(username, 'worlds/' + metadata.LastTimeSlice.world_id)
+			metadata.LastTimeSlice.world = await loadPart(username, 'worlds/' + metadata.LastTimeSlice.world_id).catch(() => { })
 
 		metadata.LastTimeSlice.plugins = Object.fromEntries(await Promise.all(
 			getAllDefaultParts(username, 'plugins').map(async plugin => [
 				plugin,
-				await loadPart(username, 'plugins/' + plugin)
+				await loadPart(username, 'plugins/' + plugin).catch(() => { })
 			])
 		))
 

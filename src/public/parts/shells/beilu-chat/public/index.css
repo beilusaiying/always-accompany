@@ -2531,6 +2531,70 @@ input[type="checkbox"].checkbox:checked {
 }
 
 /* ============================================================
+   思维链切换组件（位于消息头部下方、气泡上方）
+   ============================================================ */
+
+.thinking-toggle {
+	margin-left: 2.5rem;
+	margin-bottom: 0.25rem;
+}
+
+.thinking-toggle.hidden {
+	display: none !important;
+}
+
+.thinking-toggle-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 10px;
+	border: none;
+	background: rgba(212, 160, 23, 0.1);
+	color: var(--beilu-amber);
+	font-size: 0.8em;
+	cursor: pointer;
+	border-radius: 12px;
+	transition: background-color 0.15s ease;
+	user-select: none;
+}
+
+.thinking-toggle-btn:hover {
+	background: rgba(212, 160, 23, 0.2);
+}
+
+.thinking-toggle-icon {
+	font-size: 0.6em;
+	transition: transform 0.2s ease;
+	display: inline-block;
+}
+
+.thinking-toggle-content {
+	margin-top: 4px;
+	padding: 8px 12px;
+	font-size: 0.85em;
+	color: rgba(255, 255, 255, 0.5);
+	border-left: 2px solid rgba(212, 160, 23, 0.25);
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.5;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.thinking-toggle-content.hidden {
+	display: none !important;
+}
+
+.thinking-toggle-content::-webkit-scrollbar {
+	width: 4px;
+}
+
+.thinking-toggle-content::-webkit-scrollbar-thumb {
+	background-color: rgba(212, 160, 23, 0.2);
+	border-radius: 2px;
+}
+
+/* ============================================================
    代码折叠（内置处理器样式）
    ============================================================ */
 

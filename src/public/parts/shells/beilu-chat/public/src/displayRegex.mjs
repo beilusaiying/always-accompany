@@ -118,37 +118,63 @@ function getThinkingTagList() {
 }
 
 /**
- * 流式输出专用的思维链折叠处理
+ * 从文本中提取思维链内容并返回清理后的正文
  *
- * 与 applyBuiltinProcessors 的区别：
- * - 处理未闭合的 <think> 标签（流式中间状态，AI 还在思考）
- * - 已闭合 <think>...</think> → 折叠的 <details>
- * - 未闭合 <think>...       → 展开的 <details open>（显示"正在思考"）
+ * 将 <think>/<thinking> 标签内容从消息正文中剥离，
+ * 供调用方将思维链渲染到独立的 UI 组件中，而非嵌入消息气泡。
  *
- * @param {string} content - 流式输出的当前内容
- * @returns {string} 处理后的内容
+ * @param {string} text - 原始消息文本
+ * @returns {{ cleanText: string, thinkingText: string, isComplete: boolean }}
+ *   - cleanText: 剥离思维链后的正文
+ *   - thinkingText: 思维链内容（纯文本，多段用换行拼接）
+ *   - isComplete: 所有思维链标签是否已闭合（false = 流式中间状态）
  */
-export function applyStreamingThinkFold(content) {
-	if (!content || typeof content !== 'string') return content
+export function extractThinkingContent(text) {
+	if (!text || typeof text !== 'string') return { cleanText: text || '', thinkingText: '', isComplete: true }
 
-	// 代码围栏剥离（与 applyBuiltinProcessors 一致）
-	content = stripOuterCodeFence(content)
+	let cleanText = stripOuterCodeFence(text)
+	let thinkingText = ''
+	let isComplete = true
 
 	const tags = getThinkingTagList()
 
 	for (const tag of tags) {
-		// Step 1: 处理所有已闭合的标签对（非贪婪匹配）
+		// Step 1: 提取所有已闭合的标签对（非贪婪匹配）
 		const closedPattern = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'gi')
-		content = content.replace(closedPattern,
-			'<details class="thinking-fold"><summary>💭 我在想你的事情,不要偷看啦</summary><div class="thinking-content">$1</div></details>')
+		let match
+		while ((match = closedPattern.exec(cleanText)) !== null) {
+			if (thinkingText) thinkingText += '\n'
+			thinkingText += match[1].trim()
+		}
+		cleanText = cleanText.replace(closedPattern, '')
 
 		// Step 2: 处理未闭合的标签（流式中间状态 — 贪婪匹配到末尾）
 		const unclosedPattern = new RegExp(`<${tag}>([\\s\\S]*)$`, 'i')
-		content = content.replace(unclosedPattern,
-			'<details class="thinking-fold" open><summary>💭 贝露正在思考中...</summary><div class="thinking-content">$1</div></details>')
+		const unclosedMatch = cleanText.match(unclosedPattern)
+		if (unclosedMatch) {
+			if (thinkingText) thinkingText += '\n'
+			thinkingText += unclosedMatch[1].trim()
+			cleanText = cleanText.replace(unclosedPattern, '')
+			isComplete = false
+		}
 	}
 
-	return content
+	return { cleanText: cleanText.trim(), thinkingText, isComplete }
+}
+
+/**
+ * 流式输出专用的思维链折叠处理
+ *
+ * ★ 已废弃：保留导出签名以兼容旧调用，内部改为使用 extractThinkingContent。
+ * 新代码应直接使用 extractThinkingContent()。
+ *
+ * @deprecated 使用 extractThinkingContent() 代替
+ * @param {string} content - 流式输出的当前内容
+ * @returns {string} 处理后的内容（剥离思维链后的正文）
+ */
+export function applyStreamingThinkFold(content) {
+	const { cleanText } = extractThinkingContent(content)
+	return cleanText
 }
 
 /**
@@ -164,13 +190,8 @@ export function applyBuiltinProcessors(content) {
 	// 1. 代码围栏剥离 — 兼容美化正则作者在 AI 输出头尾加 ``` 的做法
 	content = stripOuterCodeFence(content)
 
-	// 2. 思维链折叠
-	const cfg = BUILTIN_PROCESSORS.thinkingFold
-	if (cfg.enabled) {
-		for (const pattern of cfg.patterns) {
-			content = content.replace(pattern, cfg.template)
-		}
-	}
+	// 2. 思维链折叠 — ★ 已移到 extractThinkingContent()，不再在此处处理
+	// 思维链现在由调用方（messageList / StreamRenderer）提取到独立 UI 组件
 
 	// 3. 代码折叠
 	const codeFoldCfg = BUILTIN_PROCESSORS.codeFold

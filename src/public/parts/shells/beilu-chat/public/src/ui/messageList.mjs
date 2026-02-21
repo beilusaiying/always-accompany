@@ -5,7 +5,7 @@ import { renderTemplate, renderTemplateAsHtmlString, renderTemplateNoScriptActiv
 import { showToast, showToastI18n } from '../../../../../scripts/toast.mjs'
 import { stopGeneration } from '../chat.mjs'
 import { createDiag } from '../diagLogger.mjs'
-import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, getRenderDepth, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
+import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, extractThinkingContent, getRenderDepth, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
 import {
   deleteMessage,
   editMessage,
@@ -129,9 +129,14 @@ export async function renderMessage(message) {
 
 	const cache = getMessageCache(message)
 
-	// 获取原始内容，先应用内置处理器（思维链折叠等），再应用 display regex
+	// 获取原始内容
 	const rawContent = message.content_for_show || message.content
-	const builtinProcessed = applyBuiltinProcessors(rawContent)
+
+	// ★ 提取思维链内容（从正文中剥离，后续渲染到独立 UI 组件）
+	const { cleanText: thinkingCleanText, thinkingText } = extractThinkingContent(rawContent)
+
+	// 对剥离思维链后的正文应用内置处理器（代码折叠等），再应用 display regex
+	const builtinProcessed = applyBuiltinProcessors(thinkingCleanText)
 	// 传入消息角色，用户消息不应用 display regex（防止内容消失）
 	const messageRole = message.role || (message.is_user ? 'user' : '')
 	const { text: displayProcessed, placeholders } = applyDisplayRules(builtinProcessed, { role: messageRole, charName: message.name || '' })
@@ -233,6 +238,25 @@ export async function renderMessage(message) {
 	// ★ 通过 DOM 注入内容，绕过模板引擎的 ${} 解析器
 	if (messageContentElement && renderedContent) {
 		messageContentElement.innerHTML = renderedContent
+	}
+
+	// ★ 注入思维链内容到独立组件
+	const thinkingEl = messageElement.querySelector('.thinking-toggle')
+	if (thinkingEl && thinkingText) {
+		thinkingEl.classList.remove('hidden')
+		const thinkingContentEl = thinkingEl.querySelector('.thinking-toggle-content')
+		if (thinkingContentEl) thinkingContentEl.textContent = thinkingText
+
+		// 绑定折叠/展开事件
+		const toggleBtn = thinkingEl.querySelector('.thinking-toggle-btn')
+		if (toggleBtn) {
+			toggleBtn.addEventListener('click', () => {
+				const contentDiv = thinkingEl.querySelector('.thinking-toggle-content')
+				const iconEl = thinkingEl.querySelector('.thinking-toggle-icon')
+				const isHidden = contentDiv.classList.toggle('hidden')
+				if (iconEl) iconEl.textContent = isHidden ? '▶' : '▼'
+			})
+		}
 	}
 	const messageMarkdownContent = message.content_for_show || message.content
 

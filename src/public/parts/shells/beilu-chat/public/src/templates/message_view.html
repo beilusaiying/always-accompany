@@ -9,6 +9,14 @@
 		<span class="message-floor text-xs opacity-30 font-mono">${floor}</span>
 		<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
 	</div>
+	<!-- 思维链（独立于消息气泡，默认隐藏） -->
+	<div class="thinking-toggle hidden" data-thinking-for="${id}">
+		<button class="thinking-toggle-btn">
+			<span class="thinking-toggle-icon">▶</span>
+			<span class="thinking-toggle-label">💭 思考了一会</span>
+		</button>
+		<div class="thinking-toggle-content hidden"></div>
+	</div>
 	<!-- 消息体 -->
 	<div class="chat-bubble relative p-[15px] ml-10 rounded-lg ${contentHasMedia ? 'w-full' : ''}">
 		<div class="button-group">

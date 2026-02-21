@@ -1,6 +1,6 @@
 import { renderMarkdownAsString } from '../../../../../scripts/markdown.mjs'
 import { createDiag } from '../diagLogger.mjs'
-import { applyStreamingThinkFold, detectContentType, isRendererEnabled } from '../displayRegex.mjs'
+import { detectContentType, extractThinkingContent, isRendererEnabled } from '../displayRegex.mjs'
 import { renderAsIframe } from './iframeRenderer.mjs'
 
 const diag = createDiag('streamRenderer')
@@ -182,13 +182,47 @@ class StreamRenderer {
 					}
 				}
 
+				// ★ 提取思维链内容到独立 UI 组件
+				const { cleanText, thinkingText, isComplete } = extractThinkingContent(state.displayedContent)
+	
+				// 1. 更新思维链区域（纯文本，不走 markdown，零开销）
+				const thinkingEl = state.domElement.querySelector('.thinking-toggle')
+				if (thinkingEl) {
+					if (thinkingText) {
+						thinkingEl.classList.remove('hidden')
+						const labelEl = thinkingEl.querySelector('.thinking-toggle-label')
+						if (labelEl) {
+							labelEl.textContent = isComplete
+								? '💭 思考了一会'
+								: '💭 正在思考中...'
+						}
+						const thinkContentEl = thinkingEl.querySelector('.thinking-toggle-content')
+						if (thinkContentEl) thinkContentEl.textContent = thinkingText
+	
+						// 流式阶段绑定折叠事件（仅绑定一次）
+						if (!thinkingEl.dataset.bound) {
+							thinkingEl.dataset.bound = '1'
+							const toggleBtn = thinkingEl.querySelector('.thinking-toggle-btn')
+							if (toggleBtn) {
+								toggleBtn.addEventListener('click', () => {
+									const cd = thinkingEl.querySelector('.thinking-toggle-content')
+									const iconEl = thinkingEl.querySelector('.thinking-toggle-icon')
+									const isHidden = cd.classList.toggle('hidden')
+									if (iconEl) iconEl.textContent = isHidden ? '▶' : '▼'
+								})
+							}
+						}
+					} else {
+						thinkingEl.classList.add('hidden')
+					}
+				}
+	
+				// 2. 更新消息正文（只渲染剥离思维链后的内容）
 				const contentEl = state.domElement.querySelector('.message-content')
 				if (contentEl) {
-					// 流式阶段应用思维链折叠（处理已闭合和未闭合的 think 标签）
-					const processed = applyStreamingThinkFold(state.displayedContent)
-					contentEl.innerHTML = await renderMarkdownAsString(processed, state.cache)
-
-					if (state.displayedContent.trim()) {
+					contentEl.innerHTML = await renderMarkdownAsString(cleanText, state.cache)
+	
+					if (cleanText.trim()) {
 						const skeletonEl = state.domElement.querySelector('.skeleton-loader')
 						if (skeletonEl) skeletonEl.classList.add('hidden')
 						contentEl.classList.remove('hidden')

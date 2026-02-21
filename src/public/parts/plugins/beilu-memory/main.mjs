@@ -3730,7 +3730,8 @@ const pluginExport = {
 								}
 							}
 							// 兼容：旧缓存结果注入（正常情况不会触发）
-							if (lastP1Result) {
+							// 必须在 !isFakeSend 条件内，防止伪发送错误消费缓存
+							if (lastP1Result && !arg.isFakeSend) {
 								const p1Content = `[记忆AI检索结果 (${lastP1Result.timestamp || ''})]\n${lastP1Result.reply}\n[/记忆AI检索结果]`
 								depthInjections.push({ id: 'P1_RETRIEVAL', role: 'system', content: p1Content, depth: 0, order: 1 })
 								textEntries.push({ content: p1Content, important: 6 })

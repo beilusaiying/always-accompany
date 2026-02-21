@@ -640,7 +640,10 @@ const pluginExport = {
 			 *    - after  (position=1): important =  1000 + order，排在角色描述之后
 			 * 2. @depth 条目 → 注入到 prompt_struct.chat_log
 			 */
-			TweakPrompt: (arg, prompt_struct, my_prompt) => {
+			TweakPrompt: (arg, prompt_struct, my_prompt, detail_level) => {
+				// 只在第一轮（detail_level=2）执行，避免三轮重复注入
+				if (detail_level !== undefined && detail_level !== 2) return;
+	
 				// ---- 1. before/after 角色描述注入 ----
 				const charInjections = my_prompt?.extension?.worldbook_char_injections;
 				if (charInjections?.length && prompt_struct?.char_prompt?.text) {

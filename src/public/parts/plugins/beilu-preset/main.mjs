@@ -648,6 +648,38 @@ const pluginExport = {
 					env.world_prompt = flattenPromptTexts(prompt_struct.world_prompt);
 					env.world_prompt_after = ''; // Fount 不区分 before/after
 					env.dialogue_examples = '';  // Fount 不单独提供
+	
+					// ---- 从 beilu-worldbook 插件 extension 中提取世界书内容 ----
+					// beilu-worldbook 是 plugin 不是 world 部件，所以 world_prompt 为空
+					// 需要从它的 extension 中读取分类后的世界书条目
+					const wbPrompt = prompt_struct.plugin_prompts?.['beilu-worldbook'];
+					if (wbPrompt?.extension) {
+						// before/after 位置的世界书条目 → 填充 {{worldInfoBefore}} / {{worldInfoAfter}} 宏
+						const charInjections = wbPrompt.extension.worldbook_char_injections;
+						if (Array.isArray(charInjections) && charInjections.length > 0) {
+							const beforeContent = charInjections
+								.filter(inj => inj.position === 0)
+								.map(inj => inj.content)
+								.filter(Boolean)
+								.join('\n');
+							const afterContent = charInjections
+								.filter(inj => inj.position === 1)
+								.map(inj => inj.content)
+								.filter(Boolean)
+								.join('\n');
+							if (beforeContent) env.world_prompt = beforeContent;
+							if (afterContent) env.world_prompt_after = afterContent;
+						}
+	
+						// @depth 注入的世界书条目 → 暂存，在 Round 2 中处理
+						const depthInjections = wbPrompt.extension.worldbook_injections;
+						if (Array.isArray(depthInjections) && depthInjections.length > 0) {
+							my_prompt.extension._worldbook_depth_injections = depthInjections;
+						}
+	
+						// ANTop/ANBottom/EMTop/EMBottom 位置的条目已在 text 中，
+						// 会被 flattenPromptTexts 收集到 env.plugin_beilu-worldbook
+					}
 
 					// 收集其他插件的输出
 					for (const [name, prompt] of Object.entries(prompt_struct.plugin_prompts || {})) {
@@ -737,6 +769,25 @@ const pluginExport = {
 						env, macroMemory, chatLog
 					);
 	
+					// ---- 处理 beilu-worldbook 的 @depth 注入条目 ----
+					const wbDepthInjections = my_prompt.extension?._worldbook_depth_injections;
+					if (Array.isArray(wbDepthInjections) && wbDepthInjections.length > 0) {
+						for (const inj of wbDepthInjections) {
+							const msg = {
+								role: inj.role || 'system',
+								name: 'world_info',
+								identifier: 'worldbook_depth',
+								content: inj.content,
+								depth: inj.depth ?? 4,
+							};
+							if ((inj.depth ?? 4) >= 1) {
+								injectionAbove.push(msg);
+							} else {
+								injectionBelow.push(msg);
+							}
+						}
+					}
+
 					// 将其他插件的内容（Round 1 收集的 env.plugin_* ）追加到注入区域
 						// buildAllEntries 只处理 ST 预设条目，不处理 plugin_* 键
 						// 不追加则这些内容会在 Round 1 清空后彻底丢失

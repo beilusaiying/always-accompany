@@ -1586,11 +1586,49 @@ export async function buildFakeSendRequest(chatid, charname) {
 			})),
 		},
 		world: {
-			texts: (prompt_struct.world_prompt?.text || []).map(t => ({
-				content: t.content || '',
-				important: t.important,
-			})),
-		},
+				texts: (() => {
+					// 优先从 world_prompt 获取
+					const worldTexts = (prompt_struct.world_prompt?.text || []).map(t => ({
+						content: t.content || '',
+						important: t.important,
+					}));
+					if (worldTexts.length > 0) return worldTexts;
+	
+					// 回退：从 beilu-worldbook 插件的 extension 中提取世界书内容
+					const wbExt = prompt_struct.plugin_prompts?.['beilu-worldbook']?.extension;
+					if (wbExt) {
+						const wbTexts = [];
+						// before/after 位置的条目
+						const charInj = wbExt.worldbook_char_injections;
+						if (Array.isArray(charInj)) {
+							for (const inj of charInj) {
+								if (inj.content) {
+									wbTexts.push({
+										content: inj.content,
+										important: 0,
+										_position: inj.position === 0 ? 'before' : 'after',
+									});
+								}
+							}
+						}
+						// @depth 位置的条目
+						const depthInj = wbExt.worldbook_injections;
+						if (Array.isArray(depthInj)) {
+							for (const inj of depthInj) {
+								if (inj.content) {
+									wbTexts.push({
+										content: inj.content,
+										important: 0,
+										_position: `@depth=${inj.depth ?? 4}`,
+									});
+								}
+							}
+						}
+						if (wbTexts.length > 0) return wbTexts;
+					}
+					return worldTexts;
+				})(),
+			},
 		other_chars: Object.fromEntries(
 			Object.entries(prompt_struct.other_chars_prompt || {})
 				.filter(([, v]) => v?.text?.length)

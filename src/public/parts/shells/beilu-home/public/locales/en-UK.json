@@ -58,6 +58,8 @@
 	"chars.import.success": "Character \"${name}\" imported successfully!",
 	"chars.import.regex": "📝 Auto-imported ${count} regex scripts",
 	"chars.import.worldbook": "📖 Auto-imported ${count} world book entries",
+	"chars.edit.name": "Character Name",
+	"chars.edit.name.placeholder": "Display name of the character...",
 	"chars.edit.avatar": "📷 Change Avatar",
 	"chars.edit.avatar.hint": "PNG/JPG/WebP supported",
 	"chars.edit.greeting": "Greeting (First Message)",

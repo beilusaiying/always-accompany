@@ -58,6 +58,8 @@
 	"chars.import.success": "角色卡「${name}」导入成功！",
 	"chars.import.regex": "📝 自动导入 ${count} 条正则脚本",
 	"chars.import.worldbook": "📖 自动导入 ${count} 条世界书条目",
+	"chars.edit.name": "角色名称",
+	"chars.edit.name.placeholder": "角色的显示名称...",
 	"chars.edit.avatar": "📷 更换头像",
 	"chars.edit.avatar.hint": "支持 PNG/JPG/WebP",
 	"chars.edit.greeting": "开场白（第一条消息）",

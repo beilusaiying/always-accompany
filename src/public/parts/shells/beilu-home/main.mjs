@@ -552,7 +552,7 @@ router.put('/api/parts/shells\\:beilu-home/update-char/:charName', authenticate,
 
 		// 更新文本字段
 		const updates = req.body || {}
-		const allowedFields = ['first_mes', 'description', 'personality', 'scenario', 'mes_example', 'system_prompt', 'post_history_instructions', 'creator_notes']
+		const allowedFields = ['name', 'first_mes', 'description', 'personality', 'scenario', 'mes_example', 'system_prompt', 'post_history_instructions', 'creator_notes']
 		let changed = false
 		for (const field of allowedFields) {
 			if (updates[field] !== undefined) {
@@ -572,6 +572,20 @@ router.put('/api/parts/shells\\:beilu-home/update-char/:charName', authenticate,
 
 		if (changed) {
 			fs.writeFileSync(chardataPath, JSON.stringify(chardata, null, '\t'), 'utf-8')
+		}
+
+		// 如果 name 字段变更，同步更新 info.json
+		if (updates.name !== undefined) {
+			const infoPath = path.join(charDir, 'info.json')
+			if (fs.existsSync(infoPath)) {
+				const infoData = JSON.parse(fs.readFileSync(infoPath, 'utf-8'))
+				for (const lang of Object.keys(infoData)) {
+					if (typeof infoData[lang] === 'object') {
+						infoData[lang].name = updates.name
+					}
+				}
+				fs.writeFileSync(infoPath, JSON.stringify(infoData, null, '\t'), 'utf-8')
+			}
 		}
 
 		// 处理头像上传

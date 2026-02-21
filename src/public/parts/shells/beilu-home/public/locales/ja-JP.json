@@ -58,6 +58,8 @@
 	"chars.import.success": "キャラクター「${name}」のインポートに成功しました！",
 	"chars.import.regex": "📝 ${count}件の正規表現スクリプトを自動インポート",
 	"chars.import.worldbook": "📖 ${count}件のワールドブックエントリを自動インポート",
+	"chars.edit.name": "キャラクター名",
+	"chars.edit.name.placeholder": "キャラクターの表示名...",
 	"chars.edit.avatar": "📷 アバター変更",
 	"chars.edit.avatar.hint": "PNG/JPG/WebP対応",
 	"chars.edit.greeting": "挨拶（最初のメッセージ）",

@@ -611,6 +611,12 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 			</div>
 		</div>
 
+		<!-- 角色名称 -->
+		<div style="margin-bottom:12px;">
+			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.name')}</label>
+			<input type="text" id="char-edit-name" value="${escapeHtml(chardata.name || displayName)}" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;background:rgba(255,255,255,0.5);color:#1a1a1a;font-size:13px;box-sizing:border-box;" placeholder="${t('chars.edit.name.placeholder')}" />
+		</div>
+
 		<!-- 开场白 -->
 		<div style="margin-bottom:12px;">
 			<label style="font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px;">${t('chars.edit.greeting')}</label>
@@ -736,11 +742,13 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 			const formData = new FormData()
 			
 			// 文本字段
+			const charName = dialog.querySelector('#char-edit-name').value
 			const greeting = dialog.querySelector('#char-edit-greeting').value
 			const desc = dialog.querySelector('#char-edit-desc').value
 			const personality = dialog.querySelector('#char-edit-personality').value
 			const notes = dialog.querySelector('#char-edit-notes').value
 
+			formData.append('name', charName)
 			formData.append('first_mes', greeting)
 			formData.append('description', desc)
 			formData.append('personality', personality)

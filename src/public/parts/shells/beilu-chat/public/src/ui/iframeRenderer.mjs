@@ -81,15 +81,20 @@ function observeIframeVisibility(iframe) {
 // ============================================================
 
 /**
- * 将 HTML 中 min-height 声明里的 vh 单位替换为 CSS 变量表达式
+ * 将 HTML 中所有 CSS 属性声明里的 vh 单位替换为 CSS 变量表达式
  * 避免 iframe 内 vh 指向 iframe 自身高度导致的循环依赖
+ *
+ * 覆盖范围：
+ * - CSS 声明块中的 vh（height、min-height、max-height、top、margin 等所有属性）
+ * - 行内 style="..." 中的 vh
+ * - JS element.style.xxx = "...vh" 中的 vh
  *
  * @param {string} content - HTML 文档字符串
  * @returns {string} 处理后的 HTML
  */
 function replaceVhInContent(content) {
-	const hasMinHeightVh = /min-height\s*:\s*[^;{}]*\d+(?:\.\d+)?vh/gi.test(content)
-	if (!hasMinHeightVh) return content
+	const hasVh = /\d+(?:\.\d+)?vh/gi.test(content)
+	if (!hasVh) return content
 
 	const convertVh = (value) =>
 		value.replace(/(\d+(?:\.\d+)?)vh\b/gi, (match, num) => {
@@ -100,28 +105,32 @@ function replaceVhInContent(content) {
 			return `calc(${VARIABLE} * ${parsed / 100})`
 		})
 
-	// CSS 声明块中的 min-height: ...vh
+	// CSS 声明块中所有属性的 vh（匹配 属性名: 含vh的值; 或 }）
 	content = content.replace(
-		/(min-height\s*:\s*)([^;{}]*?\d+(?:\.\d+)?vh)(?=\s*[;}])/gi,
-		(_, prefix, value) => `${prefix}${convertVh(value)}`
+		/([\w-]+\s*:\s*)([^;{}]*?\d+(?:\.\d+)?vh[^;{}]*)(?=\s*[;}])/gi,
+		(match, prefix, value) => {
+			// 跳过不在 CSS 上下文中的误匹配（如 JS 变量名）
+			if (/^\s*(\/\/|var\s|let\s|const\s|function\s)/.test(match)) return match
+			return `${prefix}${convertVh(value)}`
+		}
 	)
 
-	// 行内 style="min-height: ...vh"
+	// 行内 style="..." 中的 vh（覆盖所有属性）
 	content = content.replace(
 		/(style\s*=\s*(["']))([^"']*?)(\2)/gi,
 		(match, prefix, _q, styleContent, suffix) => {
-			if (!/min-height\s*:\s*[^;]*vh/i.test(styleContent)) return match
+			if (!/\d+(?:\.\d+)?vh/i.test(styleContent)) return match
 			const replaced = styleContent.replace(
-				/(min-height\s*:\s*)([^;]*?\d+(?:\.\d+)?vh)/gi,
+				/([\w-]+\s*:\s*)([^;]*?\d+(?:\.\d+)?vh[^;]*)/gi,
 				(_, p1, p2) => `${p1}${convertVh(p2)}`
 			)
 			return `${prefix}${replaced}${suffix}`
 		}
 	)
 
-	// JS: element.style.minHeight = "...vh"
+	// JS: element.style.xxx = "...vh"（覆盖所有 style 属性赋值）
 	content = content.replace(
-		/(\.style\.minHeight\s*=\s*(["']))([\s\S]*?)(\2)/gi,
+		/(\.style\.\w+\s*=\s*(["']))([\s\S]*?)(\2)/gi,
 		(match, prefix, _q, val, suffix) => {
 			if (!/\b\d+(?:\.\d+)?vh\b/i.test(val)) return match
 			return `${prefix}${convertVh(val)}${suffix}`
@@ -143,9 +152,18 @@ function replaceVhInContent(content) {
  *
  * @returns {string} <script> 标签字符串
  */
-function createEarlyScript() {
+function createEarlyScript(rawContentBase64 = '') {
 	return `<script>
 (function() {
+	// ★ 提前注入 SillyTavern 兼容 API（必须在角色卡 Vue 脚本之前执行！）
+	var _rawMsg = '';
+	try { _rawMsg = '${rawContentBase64}' ? decodeURIComponent(escape(atob('${rawContentBase64}'))) : ''; } catch(e) { console.warn('[earlyScript] base64 decode failed:', e); }
+	var _stChat = _rawMsg ? [{ message: _rawMsg }] : [];
+	window.__beiluStChat = _stChat;
+	window.SillyTavern = { chat: _stChat };
+	window.getCurrentMessageId = function() { return 0; };
+	window.getChatMessages = function() { return _stChat; };
+
 	// ★ 追踪所有通过 new Audio() 创建的实例
 	var _OrigAudio = window.Audio;
 	var _trackedAudios = [];
@@ -214,12 +232,13 @@ function createEarlyScript() {
  * 1. 注入 overflow:hidden CSS reset
  * 2. 设置 --beilu-viewport-height CSS 变量
  * 3. 使用 frameElement.style.height 直接调整高度
- * 4. SillyTavern 兼容 API
+ * 4. SillyTavern 兼容 API（含原始消息注入，解决 innerText 丢失 HTML 标签问题）
  *
  * @param {string} messageId - 消息元素 ID
+ * @param {string} [rawContentBase64=''] - 原始消息内容的 base64 编码（用于 ST API 兼容）
  * @returns {string} <script> 标签字符串
  */
-function createBridgeScript(messageId) {
+function createBridgeScript(messageId, rawContentBase64 = '') {
 	return `<script>
 (function() {
 	// ============================================================
@@ -344,22 +363,20 @@ function createBridgeScript(messageId) {
 	// ============================================================
 
 	// ============================================================
-	// 5. SillyTavern 兼容 API
+	// 5. SillyTavern 兼容 API（补充 earlyScript 中未定义的方法）
 	// ============================================================
-	var stAPI = {
-		chat: [],
-		switchSwipe: function(index) {
+	// 原始消息数据已在 earlyScript 中注入到 window.__beiluStChat
+	var stAPI = window.SillyTavern || { chat: window.__beiluStChat || [] };
+	stAPI.switchSwipe = function(index) {
 			window.parent.postMessage({
 				type: 'beilu-swipe-switch',
 				id: '${messageId}',
 				index: index
 			}, '*');
-		}
 	};
 
 	window.SillyTavern = stAPI;
-	window.getCurrentMessageId = function() { return 0; };
-	window.getChatMessages = function() { return stAPI.chat; };
+	// getCurrentMessageId 和 getChatMessages 已在 earlyScript 中定义
 	window.createChatMessages = function(msgs) {
 		window.parent.postMessage({
 			type: 'beilu-chat-message',
@@ -387,9 +404,10 @@ function createBridgeScript(messageId) {
  *
  * @param {string} htmlDocument - 完整的 HTML 文档字符串
  * @param {HTMLElement} messageElement - 消息 DOM 元素（需包含 .message-content）
+ * @param {string} [rawContent=''] - 原始消息文本（display regex 处理前），用于注入 ST API
  * @returns {HTMLIFrameElement|null} 创建的 iframe 元素
  */
-export function renderAsIframe(htmlDocument, messageElement) {
+export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 	const contentEl = messageElement.querySelector('.message-content')
 	if (!contentEl) {
 		console.warn('[iframeRenderer] 未找到 .message-content 容器')
@@ -430,8 +448,18 @@ export function renderAsIframe(htmlDocument, messageElement) {
 	// ★ 预处理 HTML：vh 单位替换
 	let modifiedHtml = replaceVhInContent(htmlDocument)
 
-	// ★ 注入 early script（Audio 追踪 + 音频恢复）到 <head> 最前面
-	const earlyScript = createEarlyScript()
+	// ★ 对原始消息做 base64 编码，注入到 earlyScript 中供 ST API 使用
+	let rawContentBase64 = ''
+	try {
+		if (rawContent) {
+			rawContentBase64 = btoa(unescape(encodeURIComponent(rawContent)))
+		}
+	} catch (e) {
+		console.warn('[iframeRenderer] base64 encode failed:', e)
+	}
+
+	// ★ 注入 early script（Audio 追踪 + 音频恢复 + ST API）到 <head> 最前面
+	const earlyScript = createEarlyScript(rawContentBase64)
 	if (modifiedHtml.includes('<head>')) {
 		modifiedHtml = modifiedHtml.replace('<head>', '<head>' + earlyScript)
 	} else if (modifiedHtml.includes('<HEAD>')) {

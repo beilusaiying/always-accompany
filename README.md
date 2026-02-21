@@ -16,6 +16,12 @@ English | [中文](README_CN.md)
 
 Get dedicated prompts (Chat AI, Memory AI, etc.), build the community together, and have fun!
 
+<p align="center">
+  <img src="imgs/screenshots/chat-ide.png" alt="Chat & IDE Interface" width="800">
+</p>
+
+<p align="center"><em>Chat interface with IDE-style file editor — fine-tuned rendering, beautification support, adjustable chat width</em></p>
+
 ---
 
 ## Why This Project?
@@ -279,6 +285,95 @@ This project would not be possible without the contributions of the following op
 - **[Fount](https://github.com/steve02081504/fount)** — The foundational framework providing AI message handling, service source management, module loading, and other core infrastructure, saving significant development time on low-level implementation
 - **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — The pioneering project in AI roleplay, whose preset format, character card specification, and world book system have become community standards. This project is fully compatible with its ecosystem
 - **SillyTavern Plugin Community** — Thanks to all open-source plugin authors for their exploration and sharing. Their work on rendering engines, memory enhancement, and feature extensions provided valuable references and inspiration for this project's design
+
+---
+
+## Screenshots
+
+<details>
+<summary><strong>📁 IDE File Editor — AI-powered file operations with safety controls</strong></summary>
+
+AI file capabilities: 📖 Read / ✏️ Write / 🗑️ Delete / 🔄 Retry / 🔌 MCP / ❓ Questions / 📋 Todo
+
+You can disable write and delete permissions for safety. For beginners unfamiliar with AI coding, we recommend using the designated sandbox space.
+
+![File Editor](imgs/screenshots/file-editor.png)
+
+</details>
+
+<details>
+<summary><strong>🧠 Memory File Browser — View and edit memory data in real-time</strong></summary>
+
+Browse the three-layer memory structure (hot/warm/cold), manually edit content anytime, and observe memory AI operations. You can also make requests to the memory AI directly.
+
+![Memory Browser](imgs/screenshots/memory-browser.png)
+
+</details>
+
+<details>
+<summary><strong>🎨 Regex Script Editor — Sandbox & Free modes for beautification</strong></summary>
+
+Manage regex rules at global, character, and preset levels. Sandbox mode protects against potentially malicious scripts from unknown character cards.
+
+> ⚠️ We cannot guarantee complete safety against all malicious scripts. Always review character card code before use. We are not responsible for any damages.
+
+![Regex Editor](imgs/screenshots/regex-editor.png)
+
+</details>
+
+<details>
+<summary><strong>📋 Preset Manager — Commander-level prompt control</strong></summary>
+
+Full control over all sent content at the commander level, maximizing prompt effectiveness. Drag-and-drop ordering, enable/disable toggles, and role assignment for each entry.
+
+![Preset Manager](imgs/screenshots/preset-manager.png)
+
+</details>
+
+<details>
+<summary><strong>📊 Memory Table Editor — 10 customizable structured tables</strong></summary>
+
+Tables #0-#9 with configurable columns, insert/update/delete rules. Set P2 archive threshold for automatic compression. All table meanings are defined by prompts — zero hardcoded limitations.
+
+![Memory Tables](imgs/screenshots/memory-tables.png)
+
+</details>
+
+<details>
+<summary><strong>🧠 Memory Presets P1-P6 — Fully prompt-driven, zero technical barrier</strong></summary>
+
+Configure each memory AI's behavior, trigger mode, and API settings. P2-P6 behaviors can all be modified through prompts — no coding required, highly adaptable.
+
+![Memory Presets](imgs/screenshots/memory-presets.png)
+
+</details>
+
+<details>
+<summary><strong>📖 System Viewer — Detailed documentation for quick onboarding</strong></summary>
+
+Built-in documentation covering macros, memory system, preset engine, world books, plugin system, and more. Get up to speed quickly without external guides.
+
+![System Viewer](imgs/screenshots/system-viewer.png)
+
+</details>
+
+<details>
+<summary><strong>📦 SillyTavern Compatible — Import/export works seamlessly</strong></summary>
+
+Character cards, world books, personas, chat presets — import and export with full compatibility. It feels just like home for SillyTavern users.
+
+![ST Compatible](imgs/screenshots/st-compatible.png)
+
+</details>
+
+<details>
+<summary><strong>🔬 AI Diagnostics — Complete system self-diagnosis</strong></summary>
+
+Real-time system status, P1 auto-trigger state, cache inspection, injection logs, and memory AI run logs. Faster feedback for troubleshooting errors and issues.
+
+![AI Diagnostics](imgs/screenshots/ai-diagnostics.png)
+
+</details>
 
 ---
 

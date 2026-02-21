@@ -1,8 +1,8 @@
 # beilu-always accompany 项目总结
 
-> 版本: v3.2
-> 日期: 2026-02-20
-> 状态: 核心功能全部完成，管理首页已国际化
+> 版本: v1.0
+> 日期: 2026-02-21
+> 状态: 1.0 正式版 — 核心功能全部完成，已通过完整功能验证
 
 ---
 
@@ -243,13 +243,41 @@ score = weight × (1 / (1 + days_since_triggered × 0.1))
 | INJ-1 | dataTable 说明   | always   | 表格 CSV + `<tableEdit>` 操作规则 |
 | INJ-2 | 记忆文件操作说明 | manual   | 温/冷层文件操作能力               |
 
-### 4.4 实施阶段（全部完成）
+### 4.4 预设加载与导出
+
+#### 三级加载优先级
+
+```
+用户已有 _memory_presets.json → 直接加载（已有用户不受影响）
+     ↓ 不存在
+模板文件 default_memory_presets.json → 复制到用户目录
+     ↓ 不存在
+代码骨架 DEFAULT_MEMORY_PRESETS → 最终兜底（空提示词）
+```
+
+#### 导出安全清洗
+
+| 导出功能              | 清洗内容                                                  | 状态 |
+| --------------------- | --------------------------------------------------------- | ---- |
+| 预设导出（前端 JSON） | `api_config.source` 清空、`use_custom` 重置               | ✅    |
+| 记忆导出（后端 zip）  | `_memory_presets.json` + `_config.json` 中的 API 密钥清除 | ✅    |
+| 世界书导出            | 仅含 entries 条目数据                                     | ✅    |
+
+### 4.5 "无需检索"判定
+
+P1 检索 AI 返回结果判定为"无需检索"的条件（满足其一）：
+
+- 包含关键词：`无需检索` / `不需要检索` / `no retrieval` / `no search` / `not needed`
+- 返回文本长度 < 5
+
+### 4.6 实施阶段（全部完成）
 
 - ✅ Phase 1：基础骨架（文件系统、表格读写、解析器、API）
 - ✅ Phase 2：归档系统（热/温/冷归档、日终 9 步、前端维护按钮）
 - ✅ Phase 2.5：提示词系统（P1-P6 + INJ-1/INJ-2 + 宏替换 + 前端管理）
 - ✅ Phase 3：检索系统（P1 多轮检索、自动触发、输出解析、token 预算、dialogue 层）
 - ✅ Phase 4：前端管理（表格编辑器、管理面板、记忆浏览器、自定义表格）
+- ✅ Phase 5：预设解耦 + 导出/导入 + 安全清洗
 
 ---
 
@@ -305,18 +333,29 @@ score = weight × (1 / (1 + days_since_triggered × 0.1))
 
 ### 6.1 渲染管线
 
-| 功能             | 状态 | 说明                                      |
-| ---------------- | ---- | ----------------------------------------- |
-| 正则替换         | ✅    | CRUD / 测试 / 导入导出 / 角色卡绑定       |
-| 思维链折叠       | ✅    | `<details>` 默认折叠 + CSS max-height     |
-| HTML iframe 渲染 | ✅    | 检测 full-html → iframe 沙箱渲染          |
-| 渲染器开关       | ✅    | localStorage `beilu-renderer-enabled`     |
-| 渲染深度设置     | ✅    | 只渲染最近 N 楼 `beilu-render-depth`      |
-| 代码折叠         | ✅    | 折叠代码块，支持全部/仅前端模式           |
-| 流式渲染         | ✅    | 流式输出时 500ms 间隔更新 iframe          |
-| 思维链节流       | ✅    | StreamRenderer MIN_RENDER_INTERVAL = 80ms |
+| 功能             | 状态 | 说明                                                            |
+| ---------------- | ---- | --------------------------------------------------------------- |
+| 正则替换         | ✅    | CRUD / 测试 / 导入导出 / 角色卡绑定                             |
+| 正则按角色分组   | ✅    | scoped/preset 规则按角色过滤，"显示全部"折叠分组，新建自动绑定  |
+| 思维链折叠       | ✅    | `<details>` 默认折叠 + CSS max-height                           |
+| HTML iframe 渲染 | ✅    | 检测 full-html → iframe 沙箱渲染                                |
+| ST API 注入      | ✅    | base64 编码原始消息注入 iframe bridgeScript，解决自定义标签丢失 |
+| 正则引擎对齐     | ✅    | 前端 `computeReplacement` + 后端 `runRegex` 对齐酒馆回调模式    |
+| 渲染器开关       | ✅    | localStorage `beilu-renderer-enabled`                           |
+| 渲染深度设置     | ✅    | 只渲染最近 N 楼 `beilu-render-depth`                            |
+| 代码折叠         | ✅    | 折叠代码块，支持全部/仅前端模式                                 |
+| 流式渲染         | ✅    | 流式输出时 500ms 间隔更新 iframe                                |
+| 思维链节流       | ✅    | StreamRenderer MIN_RENDER_INTERVAL = 80ms                       |
+| 聊天宽度滑块     | ✅    | 30%-100% 可调，localStorage 持久化                              |
+| vh 全局替换      | ✅    | iframe 内所有 CSS vh 单位替换为浏览器视口等效值                 |
 
-### 6.2 图片处理
+### 6.3 iframe 数据注入（ST API 兼容）
+
+角色卡美化 HTML 通过 `<div id="st-data-injection">$1</div>` 注入游戏数据。`$1` 被正则捕获组替换后，其中的自定义 HTML 标签（如 `<content>`、`<status>`）会被浏览器 DOM 解析为 HTMLUnknownElement，导致 Vue 通过 `innerText` 读取时标签本身丢失。
+
+**解决方案**：在 iframe 的 bridgeScript 中注入 SillyTavern 兼容 API，将原始消息文本通过 base64 编码传入。角色卡优先走 ST API 路径获取完整原始字符串（与酒馆行为一致），绕过 DOM 解析导致的标签丢失。
+
+### 6.4 图片处理
 
 | 功能         | 实现文件                 | 说明                                     |
 | ------------ | ------------------------ | ---------------------------------------- |
@@ -344,6 +383,11 @@ score = weight × (1 / (1 + days_since_triggered × 0.1))
 | 12  | Python 替代 Electron 桌面截图               | Chromium 系统级崩溃无法修复                 |
 | 13  | beilu-eye 模块顶层自启动                    | shallow load 不调 Load()                    |
 | 14  | i18n 采用"翻译覆盖"方案而非重写             | 不破坏现有代码结构，通过 data-i18n 属性覆盖 |
+| 15  | 预设三级加载（用户 > 模板 > 骨架）          | 解耦硬编码，用户修改不被代码更新覆盖        |
+| 16  | 导出清洗 API 密钥和服务源信息               | 安全：导出文件不含任何敏感配置              |
+| 17  | 正则引擎对齐酒馆回调模式                    | 原生 replace 的 `$$`/`$&` 会破坏美化 HTML   |
+| 18  | iframe 注入 ST API（base64 原始消息）       | 解决自定义 HTML 标签被 DOM 解析丢失的问题   |
+| 19  | 字体控制统一到 home 端 class 切换           | CSS 变量方案在 iframe 嵌套中不可靠          |
 
 ---
 
@@ -388,7 +432,7 @@ beilu-always accompany/
 │   │       ├── endpoints.mjs    ← eye API 端点 + verifycode stub
 │   │       └── index.mjs        ← 主路由
 │   └── public/
-│       ├── locales/             ← 20 个语言文件（Fount 框架级）
+│   ├── locales/             ← 20 个语言文件（Fount 框架级）
 │       ├── pages/               ← 前端公共脚本和样式
 │       └── parts/
 │           ├── shells/          ← 6 个 shell
@@ -407,12 +451,14 @@ beilu-always accompany/
 
 **多语言支持**：zh-CN（默认）/ en-UK / ja-JP / zh-TW，通过 `i18n.mjs` + `data-i18n` 属性实现翻译覆盖，语言偏好存储在 `localStorage('beiluHomeLang')`。
 
+**字体大小控制**：5 级字体选择（最小 11px / 小 12px / 中 14px / 中大 15px / 大 16px），通过 `html` 元素 class 切换控制 `font-size`，直接影响所有 `rem` 单位。统一由 home 端管理，chat 端通过 rem 继承自动生效。
+
 导航项（11 个标签）：
 
 - 📋 使用（角色卡管理 — 网格展示 + 导入 + 新建 + 编辑 + 删除 + 附属资源提取）
 - 🌍 世界书管理
 - 📝 聊天预设
-- 🧠 记忆预设（P1-P6 + INJ-1/INJ-2 + 检索配置 + 宏参考）
+- 🧠 记忆预设（P1-P6 + INJ-1/INJ-2 + 检索配置 + 宏参考 + 导出/导入）
 - 📊 记忆管理（表格编辑器 + 维护面板）
 - 👤 用户人设（多人设管理 — 新建 / 编辑 / 删除 / 搜索）
 - 📖 系统查看器（内置文档）
@@ -430,7 +476,7 @@ beilu-always accompany/
   - 聊天 Tab：消息流 + 记忆 AI 输出面板
   - 文件 Tab：IDE 文件编辑器
   - 记忆 Tab：P2-P6 操作 + 记忆文件浏览器 + 导入导出
-- **右栏**：角色信息 + 功能开关（渲染器 / 代码折叠 / 流式渲染 / 渲染深度） + 记忆 AI 操作（P2-P6 手动按钮）
+- **右栏**：角色信息 + 功能开关（渲染器 / 代码折叠 / 流式渲染 / 渲染深度 / 聊天宽度） + 记忆 AI 操作（P2-P6 手动按钮）
 
 ### 9.3 前端模块清单（beilu-chat）
 
@@ -538,8 +584,12 @@ beilu-always accompany/
 | `beilu_worklog_角色卡绑定.md`               | 角色卡导入时自动提取正则/世界书并绑定                               |
 | `beilu_worklog_贝露的眼睛.md`               | 桌面截图系统完整开发日志（9 轮迭代）                                |
 | `beilu_worklog_美化系统.md`                 | 渲染管线 6 项增强（开关 / 深度 / 折叠 / 节流 / 流式渲染）           |
-| `beilu_worklog_美化与开场白.md`             | 多开场白 + 404 头像修复 + 点击发送                                  |
+| `beilu_worklog_美化与开场白.md`             | 多开场白 + iframe ST API 注入 + 正则引擎对齐（10 轮完整诊断）       |
 | `beilu_worklog_国际化.md`                   | beilu-home 多语言支持实现（i18n 模块 + 4 语言文件 + DOM 翻译覆盖）  |
+| `beilu_worklog_预设解耦.md`                 | 预设三级加载 + 宏替换修复 + "无需检索"判定优化                      |
+| `beilu_worklog_正则条目绑定.md`             | 正则规则按角色分组管理（前端过滤 + 新建自动绑定 + 折叠分组）        |
+| `beilu_worklog_聊天界面优化.md`             | vh 全局替换 + 消息宽度 + 聊天宽度滑块                               |
+| `beilu_worklog_字体比例修复.md`             | 字体控制统一到 home 端 5 级 class 切换                              |
 | `项目和修改汇报.md`                         | 变更记录：模型选择器、DryRun、serviceSourceManage 修复等            |
 | `AGENTS(与你之诗).md`                       | 模块说明文档                                                        |
 | `参考项目分析与功能对标.md`                 | JS-Slash-Runner / st-memory-enhancement / APT 对标分析              |
@@ -585,4 +635,4 @@ beilu-always accompany/
 
 ---
 
-*此文档综合了 beilu-always accompany 项目截至 2026-02-20 的所有工作日志、设计文档和代码分析。如需详细了解某个模块，请参考对应的工作日志文件。*
+*此文档综合了 beilu-always accompany 项目截至 2026-02-21 的所有工作日志、设计文档和代码分析。如需详细了解某个模块，请参考对应的工作日志文件。*

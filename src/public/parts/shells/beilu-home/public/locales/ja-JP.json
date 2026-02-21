@@ -358,8 +358,10 @@
 	"user.theme.color.amber": "アンバー",
 	"user.theme.fontSize": "フォントサイズ",
 	"user.theme.fontSize.desc": "インターフェースのフォントサイズ調整",
+	"user.theme.fontSize.xsmall": "最小",
 	"user.theme.fontSize.small": "小",
 	"user.theme.fontSize.medium": "中",
+	"user.theme.fontSize.mlarge": "やや大",
 	"user.theme.fontSize.large": "大",
 
 	"user.lang.title": "言語設定",

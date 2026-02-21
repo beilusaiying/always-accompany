@@ -11,9 +11,9 @@ import { usingTemplates } from '../../scripts/template.mjs'
 import { applyTheme } from '../../scripts/theme.mjs'
 
 import { initApiConfig, loadApiConfig } from './src/apiConfig.mjs'
-import { charList, initializeChat, personaName, setPersonaName, setWorldName, worldName } from './src/chat.mjs'
+import { charList, initializeChat, personaName, setPersonaName, worldName } from './src/chat.mjs'
 import { bindDataTableToChar, initDataTable } from './src/dataTable.mjs'
-import { addUserReply, currentChatId, deleteMessage, modifyTimeLine, setPersona, setWorld } from './src/endpoints.mjs'
+import { addUserReply, currentChatId, deleteMessage, modifyTimeLine, setPersona } from './src/endpoints.mjs'
 import { initFileExplorer } from './src/fileExplorer.mjs'
 import { initLayout } from './src/layout.mjs'
 import { bindMemoryBrowserToChar, initMemoryBrowser } from './src/memoryBrowser.mjs'
@@ -786,65 +786,133 @@ function fallbackToast(message, type) {
 }
 
 // ============================================================
-// 世界书绑定（左栏）
+// 世界书绑定（左栏）— 从 beilu-worldbook 插件获取
 // ============================================================
 
 const leftWorldSelect = document.getElementById('left-world-select')
 const leftWorldStatus = document.getElementById('left-world-status')
 
+const WB_API_GET = '/api/parts/plugins:beilu-worldbook/config/getdata'
+const WB_API_SET = '/api/parts/plugins:beilu-worldbook/config/setdata'
+
 /**
  * 初始化世界书绑定下拉框
- * 从 Fount parts API 获取世界书列表，填充下拉框，绑定事件
+ * 从 beilu-worldbook 插件获取世界书列表，填充下拉框
+ * 选择时绑定角色卡名称（boundCharName），激活对应世界书
  */
 async function initWorldBinding() {
 	if (!leftWorldSelect) return
 
 	try {
-		const worlds = await getPartList('worlds')
+		const res = await fetch(WB_API_GET)
+		if (!res.ok) throw new Error(`HTTP ${res.status}`)
+		const data = await res.json()
+
+		const wbList = data.worldbook_list || []
+		const wbDetails = data.worldbook_details || {}
+		const activeWb = data.active_worldbook || ''
 
 		// 填充下拉框
 		leftWorldSelect.innerHTML = '<option value="">(无世界书)</option>'
-		worlds.forEach(name => {
+		wbList.forEach(name => {
 			const opt = document.createElement('option')
 			opt.value = name
-			opt.textContent = name
+			const detail = wbDetails[name]
+			const suffix = detail?.boundCharName ? ` [${detail.boundCharName}]` : ''
+			opt.textContent = name + suffix
 			leftWorldSelect.appendChild(opt)
 		})
 
-		// 设置当前值（延迟获取，因为 worldName 可能在 initializeChat 之后才有值）
-		const syncValue = () => {
-			leftWorldSelect.value = worldName || ''
-			leftWorldStatus.textContent = worldName || '未绑定'
-		}
-		syncValue()
-
-		// 如果初始化时还没加载好，延迟重试
-		if (!worldName) {
-			const retryTimer = setInterval(() => {
-				if (worldName != null) {
-					clearInterval(retryTimer)
-					syncValue()
+		// 查找当前角色卡绑定的世界书
+		const charId = getCurrentCharId()
+		let boundWb = ''
+		if (charId) {
+			for (const [name, detail] of Object.entries(wbDetails)) {
+				if (detail.boundCharName === charId) {
+					boundWb = name
+					break
 				}
-			}, 2000)
-			setTimeout(() => clearInterval(retryTimer), 15000)
+			}
 		}
 
-		// 选择变化时设置世界书
-		leftWorldSelect.addEventListener('change', async () => {
-			const newName = leftWorldSelect.value || null
+		// 设置当前值：优先显示角色卡绑定的世界书，其次显示 active_worldbook
+		const currentWb = boundWb || activeWb
+		leftWorldSelect.value = currentWb || ''
+		leftWorldStatus.textContent = currentWb || '未绑定'
+
+		// 如果找到角色卡绑定的世界书且不是当前激活的，自动激活
+		if (boundWb && boundWb !== activeWb) {
 			try {
-				await setWorld(newName)
-				setWorldName(newName)
-				leftWorldStatus.textContent = newName || '未绑定'
-				showToast(`世界书已${newName ? '设为: ' + newName : '取消绑定'}`, 'success')
+				await fetch(WB_API_SET, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ switch_worldbook: { name: boundWb } }),
+				})
+				console.log(`[beilu-chat] 自动激活角色 "${charId}" 绑定的世界书: "${boundWb}"`)
+			} catch (err) {
+				console.warn('[beilu-chat] 自动激活绑定世界书失败:', err.message)
+			}
+		}
+
+		// 选择变化时：绑定角色卡 + 激活世界书
+		leftWorldSelect.addEventListener('change', async () => {
+			const newName = leftWorldSelect.value || ''
+			const charName = getCurrentCharId() || ''
+
+			try {
+				if (newName) {
+					// 激活选中的世界书
+					await fetch(WB_API_SET, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ switch_worldbook: { name: newName } }),
+					})
+					// 绑定到当前角色卡
+					if (charName) {
+						await fetch(WB_API_SET, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ bind_worldbook: { name: newName, charName } }),
+						})
+					}
+					leftWorldStatus.textContent = newName
+					showToast(`世界书 "${newName}" 已激活${charName ? '并绑定到 ' + charName : ''}`, 'success')
+				} else {
+					// 取消绑定：解除当前角色绑定的所有世界书
+					if (charName) {
+						for (const [name, detail] of Object.entries(wbDetails)) {
+							if (detail.boundCharName === charName) {
+								await fetch(WB_API_SET, {
+									method: 'POST',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ bind_worldbook: { name, charName: '' } }),
+								})
+							}
+						}
+					}
+					leftWorldStatus.textContent = '未绑定'
+					showToast('世界书已取消绑定', 'info')
+				}
 			} catch (err) {
 				showToast('设置世界书失败: ' + err.message, 'error')
-				// 回退选择
-				leftWorldSelect.value = worldName || ''
+				leftWorldSelect.value = currentWb || ''
 			}
 		})
 	} catch (err) {
 		console.warn('[beilu-chat] initWorldBinding 失败:', err)
+		// 回退：如果 beilu-worldbook 插件不可用，尝试原生方式
+		try {
+			const worlds = await getPartList('worlds')
+			leftWorldSelect.innerHTML = '<option value="">(无世界书)</option>'
+			worlds.forEach(name => {
+				const opt = document.createElement('option')
+				opt.value = name
+				opt.textContent = name
+				leftWorldSelect.appendChild(opt)
+			})
+			leftWorldSelect.value = worldName || ''
+			leftWorldStatus.textContent = worldName || '未绑定'
+		} catch { /* 静默 */ }
 	}
 }
 
@@ -1214,8 +1282,7 @@ async function init() {
 		console.warn('[beilu-chat] initLayout 失败（非致命）:', e.message)
 	}
 
-	// 初始化字体比例控制
-	initFontScale()
+	// 字体比例控制已在 initLayout() → initFeatureControls() 中初始化，不再重复调用
 
 	try { await initializeChat() } catch (e) {
 		console.warn('[beilu-chat] initializeChat 失败（非致命）:', e.message)
@@ -1411,43 +1478,6 @@ async function loadPresetDataWithRetry() {
 	// 所有重试都失败，回退到普通加载
 	console.warn('[beilu-chat] 预设加载重试耗尽，执行普通加载')
 	await loadPresetData()
-}
-
-// ============================================================
-// 字体比例控制
-// ============================================================
-
-function initFontScale() {
-	const fontScaleSlider = document.getElementById('font-scale')
-	const fontScaleValue = document.getElementById('font-scale-value')
-	const chatMessages = document.getElementById('chat-messages')
-	if (!fontScaleSlider || !fontScaleValue) return
-
-	// 从 localStorage 读取保存的值
-	const saved = localStorage.getItem('beilu-font-scale')
-	const scale = saved ? parseInt(saved, 10) : 100
-	fontScaleSlider.value = scale
-	fontScaleValue.textContent = scale + '%'
-	applyFontScale(scale, chatMessages)
-
-	// 滑块拖动实时预览
-	fontScaleSlider.addEventListener('input', () => {
-		const val = parseInt(fontScaleSlider.value, 10)
-		fontScaleValue.textContent = val + '%'
-		applyFontScale(val, chatMessages)
-		localStorage.setItem('beilu-font-scale', val)
-	})
-}
-
-/**
- * 将字体比例应用到聊天消息区域
- * @param {number} scale - 百分比值 (50-200)
- * @param {HTMLElement} chatMessages - 聊天消息容器
- */
-function applyFontScale(scale, chatMessages) {
-	if (!chatMessages) return
-	const factor = scale / 100
-	chatMessages.style.fontSize = factor + 'rem'
 }
 
 // ============================================================

@@ -383,7 +383,7 @@ function initFontSize() {
 
 function applyFontSize(size) {
 	// 移除所有字体大小 class（设在 <html> 上，rem 才能生效）
-	document.documentElement.classList.remove('font-size-small', 'font-size-medium', 'font-size-large')
+	document.documentElement.classList.remove('font-size-xsmall', 'font-size-small', 'font-size-medium', 'font-size-mlarge', 'font-size-large')
 	document.documentElement.classList.add(`font-size-${size}`)
 }
 

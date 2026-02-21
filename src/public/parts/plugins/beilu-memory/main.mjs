@@ -1523,7 +1523,370 @@ function parseMemoryArchiveTags(content) {
 }
 
 /**
- * 从 AI 回复中提取 <memorySearch> 标签
+	* 路径安全检查：确保路径在记忆目录内且不含 .. 越界
+	* @param {string} fullPath - 完整路径
+	* @param {string} resolvedMemDir - path.resolve 后的记忆目录
+	* @returns {boolean}
+	*/
+function isPathSafe(fullPath, resolvedMemDir) {
+	const resolved = path.resolve(fullPath)
+	return resolved.startsWith(resolvedMemDir) && !fullPath.includes('..')
+}
+
+/**
+	* 从 <memoryArchive> 原始文本中解析操作调用
+	* 使用括号计数法处理嵌套的 JSON 参数
+	* @param {string} body - 去掉 HTML 注释后的文本
+	* @returns {Array<{name: string, rawArgs: string}>}
+	*/
+function parseArchiveOperations(body) {
+	const ops = []
+	const opNames = ['createFile', 'appendToFile', 'updateFile', 'updateIndex', 'moveEntries', 'clearTable', 'deleteFile']
+
+	let pos = 0
+	while (pos < body.length) {
+		let found = false
+		for (const opName of opNames) {
+			if (!body.startsWith(opName, pos)) continue
+
+			// 确认不是某个更长标识符的一部分
+			const before = pos > 0 ? body[pos - 1] : ' '
+			if (/[a-zA-Z_]/.test(before)) continue
+
+			// 找到开括号
+			let parenStart = pos + opName.length
+			while (parenStart < body.length && body[parenStart] !== '(') {
+				if (!/\s/.test(body[parenStart])) break
+				parenStart++
+			}
+			if (parenStart >= body.length || body[parenStart] !== '(') continue
+
+			// 括号计数法找到匹配的闭括号
+			let depth = 1
+			let parenEnd = parenStart + 1
+			let inString = false
+			let stringChar = ''
+
+			while (parenEnd < body.length && depth > 0) {
+				const ch = body[parenEnd]
+				if (inString) {
+					if (ch === '\\') { parenEnd += 2; continue }
+					if (ch === stringChar) inString = false
+				} else {
+					if (ch === '"' || ch === "'") { inString = true; stringChar = ch }
+					else if (ch === '(') depth++
+					else if (ch === ')') depth--
+				}
+				parenEnd++
+			}
+
+			if (depth === 0) {
+				const rawArgs = body.slice(parenStart + 1, parenEnd - 1).trim()
+				ops.push({ name: opName, rawArgs })
+				pos = parenEnd
+				found = true
+				break
+			}
+		}
+		if (!found) pos++
+	}
+
+	return ops
+}
+
+/**
+	* 解析并执行 <memoryArchive> 中的文件操作
+	* 支持: createFile / appendToFile / updateFile / updateIndex / moveEntries / clearTable
+	* 禁止: deleteFile（安全策略）
+	* @param {string[]} archiveOpsRaw - parseMemoryArchiveTags() 提取的原始字符串数组
+	* @param {string} username
+	* @param {string} charName
+	* @param {object[]} [tables] - 表格数组（clearTable 需要）
+	* @returns {Array<{op: string, status: string, path?: string, error?: string}>}
+	*/
+function executeMemoryArchiveOps(archiveOpsRaw, username, charName, tables) {
+	const memDir = getMemoryDir(username, charName)
+	const resolvedMemDir = path.resolve(memDir)
+	const results = []
+
+	for (const rawBlock of archiveOpsRaw) {
+		// 去掉 HTML 注释包裹
+		const body = rawBlock.replace(/<!--([\s\S]*?)-->/g, '$1').trim()
+		const ops = parseArchiveOperations(body)
+
+		for (const op of ops) {
+			try {
+				// 解析参数：包装为 JSON 数组来解析
+				let args
+				try {
+					let cleaned = op.rawArgs
+						.replace(/'/g, '"') // 单引号→双引号
+						.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":') // 未加引号的key加引号
+					args = JSON.parse('[' + cleaned + ']')
+				} catch (parseErr) {
+					results.push({ op: op.name, status: 'error', error: `参数解析失败: ${parseErr.message}` })
+					continue
+				}
+
+				switch (op.name) {
+					case 'createFile': {
+						// createFile("path", {content})
+						const [relPath, content] = args
+						if (!relPath) { results.push({ op: 'createFile', status: 'error', error: '缺少路径' }); break }
+
+						const fullPath = path.join(memDir, relPath)
+						if (!isPathSafe(fullPath, resolvedMemDir)) {
+							results.push({ op: 'createFile', status: 'error', path: relPath, error: '路径越界' })
+							break
+						}
+
+						saveJsonFile(fullPath, content || {})
+						results.push({ op: 'createFile', status: 'ok', path: relPath })
+						console.log(`[beilu-memory] memoryArchive: createFile("${relPath}")`)
+						break
+					}
+
+					case 'appendToFile': {
+						// appendToFile("path", [{entries}])
+						const [relPath, newEntries] = args
+						if (!relPath) { results.push({ op: 'appendToFile', status: 'error', error: '缺少路径' }); break }
+
+						const fullPath = path.join(memDir, relPath)
+						if (!isPathSafe(fullPath, resolvedMemDir)) {
+							results.push({ op: 'appendToFile', status: 'error', path: relPath, error: '路径越界' })
+							break
+						}
+
+						const existing = loadJsonFileIfExists(fullPath, null)
+						if (existing === null) {
+							// 文件不存在，自动创建
+							if (Array.isArray(newEntries)) {
+								saveJsonFile(fullPath, { entries: newEntries })
+							} else {
+								saveJsonFile(fullPath, newEntries || {})
+							}
+						} else {
+							// 文件存在，找到可追加的数组字段
+							if (Array.isArray(newEntries)) {
+								if (Array.isArray(existing.entries)) {
+									existing.entries = existing.entries.concat(newEntries)
+								} else if (Array.isArray(existing.items)) {
+									existing.items = existing.items.concat(newEntries)
+								} else {
+									// 没有 entries/items，创建 entries
+									existing.entries = [].concat(newEntries)
+								}
+							}
+							saveJsonFile(fullPath, existing)
+						}
+						results.push({ op: 'appendToFile', status: 'ok', path: relPath })
+						console.log(`[beilu-memory] memoryArchive: appendToFile("${relPath}")`)
+						break
+					}
+
+					case 'updateFile': {
+						// updateFile("path", content) — 覆盖写入，若传入数组则追加到 entries
+						const [relPath, content] = args
+						if (!relPath) { results.push({ op: 'updateFile', status: 'error', error: '缺少路径' }); break }
+
+						const fullPath = path.join(memDir, relPath)
+						if (!isPathSafe(fullPath, resolvedMemDir)) {
+							results.push({ op: 'updateFile', status: 'error', path: relPath, error: '路径越界' })
+							break
+						}
+
+						// 如果传入的是数组，当作追加到 entries（兼容 updateFile 被当 appendToFile 用）
+						if (Array.isArray(content)) {
+							const existing = loadJsonFileIfExists(fullPath, { entries: [] })
+							if (Array.isArray(existing.entries)) {
+								existing.entries = existing.entries.concat(content)
+							} else if (Array.isArray(existing.items)) {
+								existing.items = existing.items.concat(content)
+							} else {
+								existing.entries = content
+							}
+							saveJsonFile(fullPath, existing)
+						} else {
+							saveJsonFile(fullPath, content || {})
+						}
+						results.push({ op: 'updateFile', status: 'ok', path: relPath })
+						console.log(`[beilu-memory] memoryArchive: updateFile("${relPath}")`)
+						break
+					}
+
+					case 'updateIndex': {
+						// updateIndex("path", {data}) — 顶层 key 浅合并（数组 concat，其他覆盖）
+						const [relPath, updateData] = args
+						if (!relPath) { results.push({ op: 'updateIndex', status: 'error', error: '缺少路径' }); break }
+
+						const fullPath = path.join(memDir, relPath)
+						if (!isPathSafe(fullPath, resolvedMemDir)) {
+							results.push({ op: 'updateIndex', status: 'error', path: relPath, error: '路径越界' })
+							break
+						}
+
+						const existing = loadJsonFileIfExists(fullPath, {})
+						if (updateData && typeof updateData === 'object' && !Array.isArray(updateData)) {
+							for (const [key, val] of Object.entries(updateData)) {
+								if (Array.isArray(val) && Array.isArray(existing[key])) {
+									existing[key] = existing[key].concat(val)
+								} else {
+									existing[key] = val
+								}
+							}
+						}
+						saveJsonFile(fullPath, existing)
+						results.push({ op: 'updateIndex', status: 'ok', path: relPath })
+						console.log(`[beilu-memory] memoryArchive: updateIndex("${relPath}")`)
+						break
+					}
+
+					case 'moveEntries': {
+						if (args.length === 2 && typeof args[0] === 'string' && typeof args[1] === 'string') {
+							// 形式2: moveEntries("sourceDir/", "targetDir/") — 目录级别移动
+							const [srcRel, destRel] = args
+							const srcFull = path.join(memDir, srcRel)
+							const destFull = path.join(memDir, destRel)
+
+							if (!isPathSafe(srcFull, resolvedMemDir) || !isPathSafe(destFull, resolvedMemDir)) {
+								results.push({ op: 'moveEntries', status: 'error', error: '路径越界' })
+								break
+							}
+
+							if (fs.existsSync(srcFull) && fs.statSync(srcFull).isDirectory()) {
+								if (!fs.existsSync(destFull)) fs.mkdirSync(destFull, { recursive: true })
+								const files = fs.readdirSync(srcFull)
+								let moved = 0
+								for (const f of files) {
+									const s = path.join(srcFull, f)
+									const d = path.join(destFull, f)
+									try {
+										if (fs.statSync(s).isDirectory()) {
+											if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true })
+											fs.cpSync(s, d, { recursive: true })
+											fs.rmSync(s, { recursive: true })
+										} else {
+											fs.copyFileSync(s, d)
+											fs.unlinkSync(s)
+										}
+										moved++
+									} catch (moveErr) {
+										console.warn(`[beilu-memory] moveEntries: 移动 ${f} 失败:`, moveErr.message)
+									}
+								}
+								results.push({ op: 'moveEntries', status: 'ok', from: srcRel, to: destRel, moved })
+								console.log(`[beilu-memory] memoryArchive: moveEntries("${srcRel}" → "${destRel}") ${moved}个文件`)
+							} else {
+								results.push({ op: 'moveEntries', status: 'error', error: `源目录不存在: ${srcRel}` })
+							}
+						} else if (args.length >= 3) {
+							// 形式1: moveEntries("source.json", [indices], "target.json") — 条目级别移动
+							const [srcRel, indices, destRel] = args
+							const srcFull = path.join(memDir, srcRel)
+							const destFull = path.join(memDir, destRel)
+
+							if (!isPathSafe(srcFull, resolvedMemDir) || !isPathSafe(destFull, resolvedMemDir)) {
+								results.push({ op: 'moveEntries', status: 'error', error: '路径越界' })
+								break
+							}
+
+							if (!Array.isArray(indices)) {
+								results.push({ op: 'moveEntries', status: 'error', error: '索引参数不是数组' })
+								break
+							}
+
+							const srcData = loadJsonFileIfExists(srcFull, null)
+							if (!srcData) {
+								results.push({ op: 'moveEntries', status: 'error', error: `源文件不存在: ${srcRel}` })
+								break
+							}
+
+							// 确定源文件的数组字段
+							const srcArrayKey = Array.isArray(srcData.entries) ? 'entries'
+								: Array.isArray(srcData.items) ? 'items' : null
+							if (!srcArrayKey) {
+								results.push({ op: 'moveEntries', status: 'error', error: '源文件无 entries/items 数组' })
+								break
+							}
+
+							const srcArray = srcData[srcArrayKey]
+							const sortedIndices = [...indices].map(Number).filter(i => !isNaN(i)).sort((a, b) => b - a)
+							const toMove = []
+
+							// 提取要移动的条目（从大到小 splice）
+							for (const idx of sortedIndices) {
+								if (idx >= 0 && idx < srcArray.length) {
+									toMove.unshift(srcArray[idx]) // unshift 保持原顺序
+								}
+							}
+
+							if (toMove.length === 0) {
+								results.push({ op: 'moveEntries', status: 'ok', moved: 0, note: '无有效索引' })
+								break
+							}
+
+							// 追加到目标文件
+							const destData = loadJsonFileIfExists(destFull, {})
+							const destArrayKey = Array.isArray(destData.entries) ? 'entries'
+								: Array.isArray(destData.items) ? 'items' : srcArrayKey
+							if (!Array.isArray(destData[destArrayKey])) destData[destArrayKey] = []
+							destData[destArrayKey] = destData[destArrayKey].concat(toMove)
+							saveJsonFile(destFull, destData)
+
+							// 从源文件删除（从大到小 splice）
+							for (const idx of sortedIndices) {
+								if (idx >= 0 && idx < srcArray.length) {
+									srcArray.splice(idx, 1)
+								}
+							}
+							saveJsonFile(srcFull, srcData)
+
+							results.push({ op: 'moveEntries', status: 'ok', from: srcRel, to: destRel, moved: toMove.length })
+							console.log(`[beilu-memory] memoryArchive: moveEntries("${srcRel}" → "${destRel}") ${toMove.length}条`)
+						} else {
+							results.push({ op: 'moveEntries', status: 'error', error: '参数不足' })
+						}
+						break
+					}
+
+					case 'clearTable': {
+						// clearTable(tableIndex)
+						const [tableIndex] = args
+						if (typeof tableIndex !== 'number' || !tables) {
+							results.push({ op: 'clearTable', status: 'error', error: '无效的表格索引或缺少表格引用' })
+							break
+						}
+						if (tableIndex >= 0 && tableIndex < tables.length) {
+							tables[tableIndex].rows = []
+							results.push({ op: 'clearTable', status: 'ok', tableIndex })
+							console.log(`[beilu-memory] memoryArchive: clearTable(${tableIndex})`)
+						} else {
+							results.push({ op: 'clearTable', status: 'error', error: `表格 #${tableIndex} 不存在` })
+						}
+						break
+					}
+
+					case 'deleteFile': {
+						results.push({ op: 'deleteFile', status: 'blocked', error: '安全策略禁止AI删除文件' })
+						console.warn('[beilu-memory] memoryArchive: deleteFile 被拒绝（安全策略）')
+						break
+					}
+
+					default:
+						results.push({ op: op.name, status: 'error', error: '未知操作' })
+				}
+			} catch (e) {
+				results.push({ op: op.name, status: 'error', error: e.message })
+				console.error(`[beilu-memory] memoryArchive: ${op.name} 异常:`, e.message)
+			}
+		}
+	}
+
+	return results
+}
+
+/**
+	* 从 AI 回复中提取 <memorySearch> 标签
  * @param {string} content
  * @returns {{ searchOps: Array, cleanContent: string }}
  */
@@ -1915,11 +2278,17 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 			}
 		}
 
-		// <memoryArchive>
+		// <memoryArchive> — 解析并执行文件操作
 		const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(processedContent)
 		processedContent = afterArchive
 		if (archiveOps.length > 0) {
-			allExecutedOps.push({ type: 'memoryArchive', raw: archiveOps, round })
+			const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, memData.tables)
+			const archiveOkCount = archiveResults.filter(r => r.status === 'ok').length
+			if (archiveOkCount > 0) {
+				saveTablesData(username, charName)
+			}
+			allExecutedOps.push({ type: 'memoryArchive', results: archiveResults, count: archiveOkCount, total: archiveResults.length, round })
+			console.log(`[beilu-memory] 记忆AI(${preset.id}) 第${round}轮: memoryArchive ${archiveOkCount}/${archiveResults.length} 操作成功`)
 		}
 
 		// <memorySearch> — 核心：判断是否需要继续搜索
@@ -3459,9 +3828,18 @@ const pluginExport = {
 						}
 					}
 
-					// 2. 解析 <memoryArchive>（Phase 2 完善）
-					const { cleanContent: afterArchive } = parseMemoryArchiveTags(content)
+					// 2. 解析 <memoryArchive> 并执行文件操作
+					const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(content)
 					content = afterArchive
+					if (archiveOps.length > 0) {
+						const replyMemData = loadMemoryData(username, charName)
+						const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, replyMemData.tables)
+						const archiveOkCount = archiveResults.filter(r => r.status === 'ok').length
+						if (archiveOkCount > 0) {
+							saveTablesData(username, charName)
+						}
+						console.log(`[beilu-memory] ReplyHandler: memoryArchive ${archiveOkCount}/${archiveResults.length} 操作成功 (${charName})`)
+					}
 
 					// 3. 解析 <memorySearch>（Phase 2 完善）
 					const { cleanContent: afterSearch } = parseMemorySearchTags(content)

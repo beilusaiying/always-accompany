@@ -55,9 +55,11 @@
 	margin-left: auto;
 }
 
-/* 消息气泡 — 左缩进对齐名字 */
+/* 消息气泡 — 左缩进对齐名字，铺满宽度 */
 .chat-message .chat-bubble {
 	margin-left: 2.5rem;
+	max-inline-size: 100%;
+	width: auto;
 }
 
 .chat-message .message-content {

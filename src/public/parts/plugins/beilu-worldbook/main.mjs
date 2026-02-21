@@ -102,6 +102,69 @@ function createBlankEntry(uid) {
 }
 
 /**
+ * 将 ST 世界书原始格式的条目转换为 beilu 内部格式
+ * ST 格式使用 id/keys/secondary_keys/enabled/extensions.* 等字段
+ * beilu 内部格式使用 uid/key/keysecondary/disable/顶层字段 等
+ * @param {object} raw - ST 格式的原始条目
+ * @param {number} fallbackUid - 当无法从原始数据获取 uid 时的备用值
+ * @returns {object} beilu 内部格式的条目
+ */
+function convertSTEntry(raw, fallbackUid = 0) {
+	const uid = raw.uid ?? raw.id ?? fallbackUid;
+	const ext = raw.extensions || {};
+	return {
+		...createBlankEntry(uid),
+		uid,
+		comment: raw.comment || '',
+		content: raw.content || '',
+		key: raw.key || raw.keys || [],
+		keysecondary: raw.keysecondary || raw.secondary_keys || [],
+		constant: !!raw.constant,
+		selective: raw.selective !== false,
+		order: raw.order ?? raw.insertion_order ?? 100,
+		disable: raw.disable ?? (raw.enabled === false),
+		position: (typeof raw.position === 'number') ? raw.position : (ext.position ?? 0),
+		depth: raw.depth ?? ext.depth ?? 4,
+		role: raw.role ?? ext.role ?? null,
+		selectiveLogic: raw.selectiveLogic ?? ext.selectiveLogic ?? 0,
+		excludeRecursion: raw.excludeRecursion ?? ext.exclude_recursion ?? false,
+		preventRecursion: raw.preventRecursion ?? ext.prevent_recursion ?? false,
+		delayUntilRecursion: raw.delayUntilRecursion ?? ext.delay_until_recursion ?? false,
+		displayIndex: raw.displayIndex ?? ext.display_index ?? uid,
+		probability: raw.probability ?? ext.probability ?? 100,
+		useProbability: raw.useProbability ?? ext.useProbability ?? true,
+		group: raw.group ?? ext.group ?? '',
+		groupOverride: raw.groupOverride ?? ext.group_override ?? false,
+		groupWeight: raw.groupWeight ?? ext.group_weight ?? 100,
+		scanDepth: raw.scanDepth ?? ext.scan_depth ?? null,
+		caseSensitive: raw.caseSensitive ?? ext.case_sensitive ?? null,
+		matchWholeWords: raw.matchWholeWords ?? ext.match_whole_words ?? null,
+		useGroupScoring: raw.useGroupScoring ?? ext.use_group_scoring ?? null,
+		automationId: raw.automationId ?? ext.automation_id ?? '',
+		sticky: raw.sticky ?? ext.sticky ?? 0,
+		cooldown: raw.cooldown ?? ext.cooldown ?? 0,
+		delay: raw.delay ?? ext.delay ?? 0,
+	};
+}
+
+/**
+ * 将 entries（数组或对象）统一转换为 beilu 内部格式的对象
+ * @param {Array|object} rawEntries - ST 格式的 entries（数组或对象形式）
+ * @returns {object} uid 为 key 的内部格式对象
+ */
+function convertSTEntries(rawEntries) {
+	const rawList = Array.isArray(rawEntries)
+		? rawEntries
+		: Object.values(rawEntries);
+	const converted = {};
+	for (let i = 0; i < rawList.length; i++) {
+		const entry = convertSTEntry(rawList[i], i);
+		converted[String(entry.uid)] = entry;
+	}
+	return converted;
+}
+
+/**
  * 获取当前激活世界书的 entries 对象（用于 UI 编辑）
  * @returns {object|null}
  */
@@ -169,9 +232,24 @@ const pluginExport = {
 					worldbooks: saved.worldbooks || {},
 				};
 				// 数据迁移：为旧世界书添加 enabled 和 boundCharName 字段
+				let migrated = false;
 				for (const [name, wb] of Object.entries(configData.worldbooks)) {
 					if (wb.enabled === undefined) wb.enabled = true;
 					if (wb.boundCharName === undefined) wb.boundCharName = '';
+					// 数据迁移：将旧的 ST 格式 entries 转换为 beilu 内部格式
+					if (!wb.entries) continue;
+					const entriesValues = Array.isArray(wb.entries) ? wb.entries : Object.values(wb.entries);
+					const needsMigration = Array.isArray(wb.entries) ||
+						(entriesValues.length > 0 && entriesValues[0].uid === undefined && entriesValues[0].id !== undefined);
+					if (needsMigration) {
+						console.log(`[beilu-worldbook] 迁移世界书 "${name}" 的条目格式 (ST → beilu)...`);
+						wb.entries = convertSTEntries(wb.entries);
+						migrated = true;
+					}
+				}
+				if (migrated) {
+					saveConfigToDisk();
+					console.log('[beilu-worldbook] 旧格式数据迁移完成，已保存');
 				}
 				const count = Object.keys(configData.worldbooks).length;
 				const active = configData.active_worldbook;
@@ -253,17 +331,18 @@ const pluginExport = {
 			SetData: async (data) => {
 				if (!data) return;
 
-				// 导入世界书
+				// 导入世界书（ST 格式 → beilu 内部格式）
 					if (data.import_worldbook) {
 						const { json, name, boundCharName } = data.import_worldbook;
 						if (json?.entries) {
+							const convertedEntries = convertSTEntries(json.entries);
 							configData.worldbooks[name] = {
-								entries: json.entries,
+								entries: convertedEntries,
 								enabled: true,
 								boundCharName: boundCharName || '',
 							};
 							configData.active_worldbook = name;
-							const count = Object.keys(json.entries).length;
+							const count = Object.keys(convertedEntries).length;
 							console.log(`[beilu-worldbook] 世界书已导入: "${name}" (${count} 条目${boundCharName ? ', 绑定: ' + boundCharName : ''})`);
 						}
 					}

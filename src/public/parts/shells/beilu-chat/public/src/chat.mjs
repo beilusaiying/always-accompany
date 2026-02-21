@@ -9,7 +9,7 @@ import { initializeVirtualQueue } from './ui/virtualQueue.mjs'
 import { initializeWebSocket, sendWebsocketMessage } from './websocket.mjs'
 
 // beilu 专用插件列表 — 创建/加载聊天时自动注册
-const BEILU_AUTO_PLUGINS = ['beilu-preset', 'beilu-toggle', 'beilu-logger', 'beilu-files', 'beilu-regex']
+const BEILU_AUTO_PLUGINS = ['beilu-preset', 'beilu-toggle', 'beilu-logger', 'beilu-files', 'beilu-regex', 'beilu-worldbook']
 
 // These are shared state used by the sidebar.
 // They will be updated by events from the websocket.

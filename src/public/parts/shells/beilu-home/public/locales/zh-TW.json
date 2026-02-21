@@ -358,8 +358,10 @@
 	"user.theme.color.amber": "琥珀色（amber）",
 	"user.theme.fontSize": "字型大小",
 	"user.theme.fontSize.desc": "介面字型大小調節",
+	"user.theme.fontSize.xsmall": "最小",
 	"user.theme.fontSize.small": "小",
-	"user.theme.fontSize.medium": "中",
+	"user.theme.fontSize.medium": "中等",
+	"user.theme.fontSize.mlarge": "中等偏大",
 	"user.theme.fontSize.large": "大",
 
 	"user.lang.title": "語言設定",

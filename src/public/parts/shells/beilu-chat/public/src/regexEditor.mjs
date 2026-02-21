@@ -43,6 +43,9 @@ let selectedRuleId = null
 let globalEnabled = true
 let isTestMode = false
 let renderMode = 'sandbox' // 'sandbox' | 'free'
+let showAllScoped = false // 是否显示全部角色的 scoped/preset 规则
+/** @type {Set<string>} 已展开的角色名折叠组 */
+let expandedCharGroups = new Set()
 /** @type {HTMLElement|null} */
 let container = null
 
@@ -104,11 +107,19 @@ function buildMainHTML() {
 	<div class="flex flex-1 overflow-hidden">
 		<!-- 左侧：脚本列表 -->
 		<div class="regex-list-panel w-72 min-w-[240px] border-r border-base-300 flex flex-col overflow-hidden shrink-0">
+			<!-- 角色过滤开关 -->
+				<div class="px-2 py-1 border-b border-base-300/50 flex items-center justify-between">
+					<span class="text-[10px] text-blue-600 font-bold" id="regex-current-char-label">角色正则脚本</span>
+					<label class="cursor-pointer flex items-center gap-1" title="只影响当前角色，保存在角色卡中">
+						<span class="text-[10px] text-base-content/40">显示全部</span>
+						<input type="checkbox" id="regex-show-all-toggle" class="toggle toggle-xs" ${showAllScoped ? 'checked' : ''} />
+					</label>
+				</div>
 			<!-- 搜索 -->
-			<div class="px-2 py-1.5 border-b border-base-300/50">
-				<input type="text" id="regex-search" placeholder="搜索规则..."
-					class="input input-xs input-bordered w-full" />
-			</div>
+				<div class="px-2 py-1.5 border-b border-base-300/50">
+					<input type="text" id="regex-search" placeholder="搜索规则..."
+						class="input input-xs input-bordered w-full" />
+				</div>
 			<!-- 列表 -->
 			<div id="regex-list" class="flex-1 overflow-y-auto text-xs">
 				<p class="text-center text-base-content/40 py-8">加载中...</p>
@@ -142,6 +153,114 @@ function buildMainHTML() {
 // 规则列表渲染
 // ============================================================
 
+/**
+ * 获取当前角色名
+ * @returns {string}
+ */
+function getCurrentCharName() {
+	return document.getElementById('char-name-display')?.textContent?.trim() || ''
+}
+
+/**
+ * 渲染单条规则的列表项 HTML
+ * @param {object} rule - 规则对象
+ * @param {string} colorClass - 颜色 class（如 'amber', 'blue', 'green'）
+ * @param {boolean} showCharLabel - 是否显示角色名标签
+ * @returns {string}
+ */
+function renderRuleItemHTML(rule, colorClass, showCharLabel = false) {
+	const isSelected = rule.id === selectedRuleId
+	const charLabelHtml = showCharLabel && rule.boundCharName
+		? `<span class="badge badge-xs badge-outline text-[9px] shrink-0" title="绑定: ${escapeHtml(rule.boundCharName)}">${escapeHtml(rule.boundCharName)}</span>`
+		: ''
+	return `
+	<div class="regex-rule-item flex items-center gap-1.5 px-2 py-1.5 cursor-pointer hover:bg-base-300/50 border-l-2 ${isSelected ? `border-${colorClass}-500 bg-base-300/60` : 'border-transparent'}"
+		data-rule-id="${rule.id}">
+		<span class="drag-handle cursor-grab text-base-content/30 hover:text-base-content/60" title="拖拽排序">≡</span>
+		<input type="checkbox" class="checkbox checkbox-xs checkbox-warning rule-toggle"
+			data-rule-id="${rule.id}" ${rule.disabled ? '' : 'checked'} />
+		<span class="flex-1 truncate ${rule.disabled ? 'line-through opacity-40' : ''}">${escapeHtml(rule.scriptName || '(无名)')}</span>
+		${charLabelHtml}
+		<div class="flex items-center gap-0.5 opacity-60">
+			${rule.placement?.includes('user_input') ? '<span class="badge badge-xs" title="用户输入">U</span>' : ''}
+			${rule.placement?.includes('ai_output') ? '<span class="badge badge-xs" title="AI输出">A</span>' : ''}
+			${rule.placement?.includes('world_info') ? '<span class="badge badge-xs" title="世界信息">W</span>' : ''}
+		</div>
+		<button class="btn btn-xs btn-ghost btn-square rule-menu-btn opacity-0 group-hover:opacity-100" data-rule-id="${rule.id}" title="更多">⋯</button>
+	</div>
+	`
+}
+
+/**
+ * 渲染按角色分组的 scoped/preset 规则
+ * @param {object[]} rules - scoped 或 preset 规则数组
+ * @param {string} currentCharName - 当前角色名
+ * @param {string} colorClass - 颜色 class
+ * @param {string} scope - 作用域名
+ * @returns {string}
+ */
+function renderGroupedRules(rules, currentCharName, colorClass, scope) {
+	if (!showAllScoped) {
+		// 只显示当前角色的规则
+		const currentRules = rules.filter(r => r.boundCharName === currentCharName)
+		if (currentRules.length === 0) {
+			return `<p class="text-center text-base-content/30 py-3 text-[11px]">当前角色无${scope === 'scoped' ? '角色' : '预设'}规则</p>`
+		}
+		let html = ''
+		for (const rule of currentRules) {
+			html += renderRuleItemHTML(rule, colorClass, false)
+		}
+		return html
+	}
+
+	// 显示全部：按角色名分组折叠
+	const byChar = {}
+	for (const rule of rules) {
+		const charName = rule.boundCharName || '(未绑定)'
+		if (!byChar[charName]) byChar[charName] = []
+		byChar[charName].push(rule)
+	}
+
+	if (Object.keys(byChar).length === 0) {
+		return `<p class="text-center text-base-content/30 py-3 text-[11px]">无规则</p>`
+	}
+
+	let html = ''
+	// 当前角色排最前
+	const sortedNames = Object.keys(byChar).sort((a, b) => {
+		if (a === currentCharName) return -1
+		if (b === currentCharName) return 1
+		return a.localeCompare(b)
+	})
+
+	for (const charName of sortedNames) {
+		const charRules = byChar[charName]
+		const isCurrent = charName === currentCharName
+		const groupKey = `${scope}-${charName}`
+		const isExpanded = isCurrent || expandedCharGroups.has(groupKey)
+
+		html += `
+		<div class="regex-char-group">
+			<div class="px-3 py-1 bg-base-200/50 flex items-center justify-between cursor-pointer char-group-toggle"
+				data-group-key="${escapeHtml(groupKey)}">
+				<div class="flex items-center gap-1.5">
+					<span class="text-[10px] ${isCurrent ? `text-${colorClass}-600 font-bold` : 'text-base-content/50'}">${isCurrent ? '▸ ' : ''}${escapeHtml(charName)}</span>
+					<span class="badge badge-xs ${isCurrent ? `badge-${colorClass === 'blue' ? 'info' : 'success'}` : 'badge-ghost'}">${charRules.length}</span>
+					${isCurrent ? '<span class="text-[9px] text-base-content/40">当前</span>' : ''}
+				</div>
+				<span class="text-[10px] text-base-content/30">${isExpanded ? '▼' : '▶'}</span>
+			</div>
+			<div class="char-group-content" style="${isExpanded ? '' : 'display:none'}" data-group-key="${escapeHtml(groupKey)}">
+		`
+		for (const rule of charRules) {
+			html += renderRuleItemHTML(rule, colorClass, false)
+		}
+		html += `</div></div>`
+	}
+
+	return html
+}
+
 function renderRuleList(filter = '') {
 	const listEl = container?.querySelector('#regex-list')
 	if (!listEl) return
@@ -149,6 +268,14 @@ function renderRuleList(filter = '') {
 	const filtered = filter
 		? allRules.filter(r => r.scriptName?.toLowerCase().includes(filter.toLowerCase()))
 		: allRules
+
+	const currentCharName = getCurrentCharName()
+
+	// 更新当前角色名标签
+	const charLabel = container?.querySelector('#regex-current-char-label')
+	if (charLabel) {
+		charLabel.textContent = currentCharName ? `角色: ${currentCharName}` : '角色正则脚本'
+	}
 
 	// 按 scope 分组
 	const groups = {
@@ -159,17 +286,10 @@ function renderRuleList(filter = '') {
 
 	let html = ''
 
-	// 渲染每个分组
-	for (const [scope, rules] of Object.entries(groups)) {
-		if (rules.length === 0 && !filter) continue
-
-		const scopeLabels = {
-			global: { title: '全局正则脚本', subtitle: '影响所有角色', color: 'amber' },
-			scoped: { title: '角色正则脚本', subtitle: '只影响当前角色，保存在角色卡中', color: 'blue' },
-			preset: { title: '预设正则脚本', subtitle: '只影响当前预设，保存在预设中', color: 'green' },
-		}
-		const label = scopeLabels[scope]
-
+	// 渲染全局分组（保持不变）
+	const globalRules = groups.global
+	if (globalRules.length > 0 || !filter) {
+		const label = { title: '全局正则脚本', subtitle: '影响所有角色', color: 'amber' }
 		html += `
 		<div class="regex-scope-group">
 			<div class="px-2 py-1.5 bg-base-300/30 sticky top-0 z-10 flex items-center justify-between">
@@ -178,35 +298,59 @@ function renderRuleList(filter = '') {
 					<span class="text-[10px] text-base-content/40 ml-1">${label.subtitle}</span>
 				</div>
 				<label class="cursor-pointer flex items-center gap-0.5">
-					<input type="checkbox" class="toggle toggle-xs scope-toggle" data-scope="${scope}"
-						${rules.some(r => !r.disabled) ? 'checked' : ''} />
+					<input type="checkbox" class="toggle toggle-xs scope-toggle" data-scope="global"
+						${globalRules.some(r => !r.disabled) ? 'checked' : ''} />
 				</label>
 			</div>
 		`
-
-		if (rules.length === 0) {
+		if (globalRules.length === 0) {
 			html += `<p class="text-center text-base-content/30 py-3 text-[11px]">无规则</p>`
 		}
-
-		for (const rule of rules) {
-			const isSelected = rule.id === selectedRuleId
-			html += `
-			<div class="regex-rule-item flex items-center gap-1.5 px-2 py-1.5 cursor-pointer hover:bg-base-300/50 border-l-2 ${isSelected ? `border-${label.color}-500 bg-base-300/60` : 'border-transparent'}"
-				data-rule-id="${rule.id}">
-				<span class="drag-handle cursor-grab text-base-content/30 hover:text-base-content/60" title="拖拽排序">≡</span>
-				<input type="checkbox" class="checkbox checkbox-xs checkbox-warning rule-toggle"
-					data-rule-id="${rule.id}" ${rule.disabled ? '' : 'checked'} />
-				<span class="flex-1 truncate ${rule.disabled ? 'line-through opacity-40' : ''}">${escapeHtml(rule.scriptName || '(无名)')}</span>
-				<div class="flex items-center gap-0.5 opacity-60">
-					${rule.placement?.includes('user_input') ? '<span class="badge badge-xs" title="用户输入">U</span>' : ''}
-					${rule.placement?.includes('ai_output') ? '<span class="badge badge-xs" title="AI输出">A</span>' : ''}
-					${rule.placement?.includes('world_info') ? '<span class="badge badge-xs" title="世界信息">W</span>' : ''}
-				</div>
-				<button class="btn btn-xs btn-ghost btn-square rule-menu-btn opacity-0 group-hover:opacity-100" data-rule-id="${rule.id}" title="更多">⋯</button>
-			</div>
-			`
+		for (const rule of globalRules) {
+			html += renderRuleItemHTML(rule, 'amber', false)
 		}
+		html += `</div>`
+	}
 
+	// 渲染 scoped 分组（按角色分组）
+	const scopedRules = groups.scoped
+	if (scopedRules.length > 0 || !filter) {
+		const label = { title: '角色正则脚本', subtitle: showAllScoped ? '全部角色' : '只影响当前角色', color: 'blue' }
+		html += `
+		<div class="regex-scope-group">
+			<div class="px-2 py-1.5 bg-base-300/30 sticky top-0 z-10 flex items-center justify-between">
+				<div>
+					<span class="font-bold text-${label.color}-700 text-xs">${label.title}</span>
+					<span class="text-[10px] text-base-content/40 ml-1">${label.subtitle}</span>
+				</div>
+				<label class="cursor-pointer flex items-center gap-0.5">
+					<input type="checkbox" class="toggle toggle-xs scope-toggle" data-scope="scoped"
+						${scopedRules.some(r => !r.disabled) ? 'checked' : ''} />
+				</label>
+			</div>
+		`
+		html += renderGroupedRules(scopedRules, currentCharName, 'blue', 'scoped')
+		html += `</div>`
+	}
+
+	// 渲染 preset 分组（按预设名分组，复用相同逻辑）
+	const presetRules = groups.preset
+	if (presetRules.length > 0 || !filter) {
+		const label = { title: '预设正则脚本', subtitle: showAllScoped ? '全部预设' : '只影响当前预设', color: 'green' }
+		html += `
+		<div class="regex-scope-group">
+			<div class="px-2 py-1.5 bg-base-300/30 sticky top-0 z-10 flex items-center justify-between">
+				<div>
+					<span class="font-bold text-${label.color}-700 text-xs">${label.title}</span>
+					<span class="text-[10px] text-base-content/40 ml-1">${label.subtitle}</span>
+				</div>
+				<label class="cursor-pointer flex items-center gap-0.5">
+					<input type="checkbox" class="toggle toggle-xs scope-toggle" data-scope="preset"
+						${presetRules.some(r => !r.disabled) ? 'checked' : ''} />
+				</label>
+			</div>
+		`
+		html += renderGroupedRules(presetRules, currentCharName, 'green', 'preset')
 		html += `</div>`
 	}
 
@@ -242,6 +386,25 @@ function renderRuleList(filter = '') {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation()
 			showRuleContextMenu(btn.dataset.ruleId, e)
+		})
+	})
+
+	// 绑定折叠组事件
+	listEl.querySelectorAll('.char-group-toggle').forEach(toggle => {
+		toggle.addEventListener('click', () => {
+			const groupKey = toggle.dataset.groupKey
+			const contentEl = listEl.querySelector(`.char-group-content[data-group-key="${groupKey}"]`)
+			if (!contentEl) return
+			const isHidden = contentEl.style.display === 'none'
+			contentEl.style.display = isHidden ? '' : 'none'
+			if (isHidden) {
+				expandedCharGroups.add(groupKey)
+			} else {
+				expandedCharGroups.delete(groupKey)
+			}
+			// 更新箭头
+			const arrow = toggle.querySelector('span:last-child')
+			if (arrow) arrow.textContent = isHidden ? '▼' : '▶'
 		})
 	})
 
@@ -807,15 +970,25 @@ function bindEvents() {
 	})
 	container.querySelector('#regex-file-input')?.addEventListener('change', handleImport)
 
+	// 显示全部 scoped 开关
+	container.querySelector('#regex-show-all-toggle')?.addEventListener('change', (e) => {
+		showAllScoped = e.target.checked
+		renderRuleList(container?.querySelector('#regex-search')?.value || '')
+	})
+
 	// 导出全部
 	container.querySelector('#regex-export-all-btn')?.addEventListener('click', handleExportAll)
 }
 
 async function addRule(scope) {
 	try {
+		const rule = { scope, scriptName: '新规则' }
+		if (scope === 'scoped') {
+			rule.boundCharName = getCurrentCharName()
+		}
 		const result = await setRegexData({
 			_action: 'addRule',
-			rule: { scope, scriptName: '新规则' },
+			rule,
 		})
 		await loadData()
 		if (result?._result?.id) selectRule(result._result.id)

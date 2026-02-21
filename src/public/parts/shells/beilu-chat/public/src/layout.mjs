@@ -721,32 +721,58 @@ function initFeatureControls() {
 		syncRuntimeParams({ continue_prefill: continuePrefillToggle.checked })
 	}
 
-	// --- 字体比例滑块（聊天消息区域） ---
-	const fontScale = document.getElementById('font-scale')
-	const fontScaleValue = document.getElementById('font-scale-value')
-	if (fontScale) {
-		const saved = localStorage.getItem('beilu-font-scale')
-		if (saved) fontScale.value = saved
-		if (fontScaleValue) fontScaleValue.textContent = fontScale.value + '%'
-		applyFontScale(fontScale.value)
+	// --- 聊天宽度滑块 ---
+	const chatWidth = document.getElementById('chat-width')
+	const chatWidthValue = document.getElementById('chat-width-value')
+	if (chatWidth) {
+		const saved = localStorage.getItem('beilu-chat-width')
+		if (saved) chatWidth.value = saved
+		if (chatWidthValue) chatWidthValue.textContent = chatWidth.value + '%'
+		applyChatWidth(chatWidth.value)
 
-		fontScale.addEventListener('input', () => {
-			const val = fontScale.value
-			localStorage.setItem('beilu-font-scale', val)
-			if (fontScaleValue) fontScaleValue.textContent = val + '%'
-			applyFontScale(val)
+		chatWidth.addEventListener('input', () => {
+			const val = chatWidth.value
+			localStorage.setItem('beilu-chat-width', val)
+			if (chatWidthValue) chatWidthValue.textContent = val + '%'
+			applyChatWidth(val)
 		})
 	}
 }
 
 /**
 	* 应用字体比例到聊天消息区域
+	* 通过更新 CSS 变量 --beilu-font-size 实现，确保 .message-content 等子元素也生效
 	* @param {string|number} percent - 百分比值 (50-200)
 	*/
 function applyFontScale(percent) {
 	const scale = parseInt(percent) / 100
+	const basePx = 14 // 默认基准字体大小（px）
+	const newSize = Math.round(basePx * scale) + 'px'
+	document.documentElement.style.setProperty('--beilu-font-size', newSize)
+	// 同时设置容器 font-size，影响非 .message-content 的子元素（如时间戳等）
 	const chatMessages = document.getElementById('chat-messages')
 	if (chatMessages) chatMessages.style.fontSize = `${scale}rem`
+}
+
+/**
+	* 应用聊天宽度到整个聊天容器（包括消息和输入区域）
+	* 限制 #chat-container 的最大宽度，居中显示
+	* @param {string|number} percent - 百分比值 (30-100)
+	*/
+function applyChatWidth(percent) {
+	const val = parseInt(percent)
+	const chatContainer = document.getElementById('chat-container')
+	if (chatContainer) {
+		if (val >= 100) {
+			chatContainer.style.maxWidth = ''
+			chatContainer.style.width = ''
+			chatContainer.style.alignSelf = ''
+		} else {
+			chatContainer.style.maxWidth = val + '%'
+			chatContainer.style.width = '100%'
+			chatContainer.style.alignSelf = 'center'
+		}
+	}
 }
 
 /**

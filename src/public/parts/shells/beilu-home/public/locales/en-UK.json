@@ -358,8 +358,10 @@
 	"user.theme.color.amber": "Amber",
 	"user.theme.fontSize": "Font Size",
 	"user.theme.fontSize.desc": "Adjust interface font size",
+	"user.theme.fontSize.xsmall": "Extra Small",
 	"user.theme.fontSize.small": "Small",
 	"user.theme.fontSize.medium": "Medium",
+	"user.theme.fontSize.mlarge": "Medium Large",
 	"user.theme.fontSize.large": "Large",
 
 	"user.lang.title": "Language Settings",

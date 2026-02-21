@@ -16,6 +16,12 @@ always accompany 是一个**陪伴与工作一体的 AI 伴侣平台**，融合 
 
 在这里你可以获取专门的提示词（聊天 AI、记忆 AI 等），也欢迎一起创建社区、交流玩耍！
 
+<p align="center">
+  <img src="imgs/screenshots/chat-ide.png" alt="聊天与 IDE 界面" width="800">
+</p>
+
+<p align="center"><em>对话界面 + IDE 风格文件编辑器 — 精细渲染调节、美化适配、聊天宽度可调</em></p>
+
 ---
 
 ## 为什么需要这个项目？
@@ -279,6 +285,95 @@ chmod +x run.sh
 - **[Fount](https://github.com/steve02081504/fount)** — 项目基础框架，提供了 AI 消息收发、服务源管理、模块加载等核心基础设施，为本项目节省了大量底层开发时间
 - **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — AI 角色扮演领域的先驱项目，其预设格式、角色卡规范和世界书系统已成为社区标准，本项目完全兼容其生态
 - **SillyTavern 插件社区** — 感谢所有开源插件作者的探索和分享，他们在渲染引擎、记忆增强、功能扩展等方面的实践，为本项目的功能设计提供了宝贵的参考和灵感
+
+---
+
+## 功能展示
+
+<details>
+<summary><strong>📁 IDE 文件编辑器 — AI 驱动的文件操作，安全可控</strong></summary>
+
+AI 文件处理能力：📖 读取 / ✏️ 写入 / 🗑️ 删除 / 🔄 重试 / 🔌 MCP / ❓ 问题 / 📋 待办
+
+可关闭写入和删除权限，保障安全。如果不了解 AI 编程或是电脑小白，推荐在指定的 AI 玩耍空间中使用。后期会加入插件接入和管理。
+
+![文件编辑器](imgs/screenshots/file-editor.png)
+
+</details>
+
+<details>
+<summary><strong>🧠 记忆文件浏览器 — 实时查看和编辑记忆数据</strong></summary>
+
+浏览三层记忆结构（热/温/冷），随时手动更改内容，观察记忆 AI 的运作过程。也可以在这里直接向记忆 AI 提出要求。
+
+![记忆浏览器](imgs/screenshots/memory-browser.png)
+
+</details>
+
+<details>
+<summary><strong>🎨 正则脚本编辑器 — 沙盒与自由模式</strong></summary>
+
+管理全局、角色和预设级别的正则规则。沙盒模式可防范来自不明角色卡的潜在恶意脚本。
+
+> ⚠️ 我们不保证能完全抵御所有恶意脚本，请在使用前检查角色卡代码是否有恶意内容。因此造成的损失我们概不负责。
+
+![正则编辑器](imgs/screenshots/regex-editor.png)
+
+</details>
+
+<details>
+<summary><strong>📋 预设条目管理 — 司令员级别提示词控制</strong></summary>
+
+掌管全部发送内容，将提示词的效力发挥到最大。支持拖拽排序、启用/禁用开关、角色分配等精细控制。
+
+![预设管理](imgs/screenshots/preset-manager.png)
+
+</details>
+
+<details>
+<summary><strong>📊 记忆表格编辑器 — 10 张可自定义结构化表格</strong></summary>
+
+表格 #0-#9，可配置列名、插入/更新/删除规则。设置 P2 归档阈值实现自动压缩。所有表格含义由提示词定义，零硬编码限制。
+
+![记忆表格](imgs/screenshots/memory-tables.png)
+
+</details>
+
+<details>
+<summary><strong>🧠 记忆预设 P1-P6 — 纯提示词驱动，无技术门槛</strong></summary>
+
+配置每个记忆 AI 的行为、触发方式和 API 设置。P2-P6 的行为都可以通过修改提示词来调整，无需编程，适配性强。
+
+![记忆预设](imgs/screenshots/memory-presets.png)
+
+</details>
+
+<details>
+<summary><strong>📖 系统查看器 — 详细文档，快速上手</strong></summary>
+
+内置文档覆盖宏变量、记忆系统、预设引擎、世界书、插件系统等。无需外部教程即可快速上手使用。
+
+![系统查看器](imgs/screenshots/system-viewer.png)
+
+</details>
+
+<details>
+<summary><strong>📦 酒馆完全适配 — 导入导出完全没问题</strong></summary>
+
+角色卡、世界书、用户人设、聊天预设——导入导出完全兼容，就像回家了一样。
+
+![酒馆兼容](imgs/screenshots/st-compatible.png)
+
+</details>
+
+<details>
+<summary><strong>🔬 AI 诊断 — 完善的系统自诊断</strong></summary>
+
+实时系统状态、P1 自动触发状态、缓存查看、注入记录和记忆 AI 运行日志。更快反馈报错和问题。
+
+![AI 诊断](imgs/screenshots/ai-diagnostics.png)
+
+</details>
 
 ---
 

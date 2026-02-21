@@ -1882,12 +1882,20 @@ html {
 	font-size: 14px;
 }
 
+html.font-size-xsmall {
+	font-size: 11px;
+}
+
 html.font-size-small {
 	font-size: 12px;
 }
 
 html.font-size-medium {
 	font-size: 14px;
+}
+
+html.font-size-mlarge {
+	font-size: 15px;
 }
 
 html.font-size-large {

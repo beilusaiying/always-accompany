@@ -13,6 +13,11 @@
  */
 
 // ============================================================
+// ★ 调试标记：如果在控制台看到这条日志，说明新版 displayRegex.mjs 已加载
+// ============================================================
+console.log('%c[displayRegex] ★ v8-debug 版本已加载', 'color: #ff6600; font-weight: bold; font-size: 14px')
+
+// ============================================================
 // 内置处理器（不依赖 beilu-regex 插件）
 // ============================================================
 
@@ -351,6 +356,12 @@ function parseRegexFromString(input) {
 
 /**
  * 计算正则替换结果
+ *
+ * 与酒馆 runRegexScript 行为对齐：
+ * - 使用正则 /\$(\d+)|\$<([^>]+)>/g 精确匹配 $N 和 $<name>
+ * - 不使用 replaceAll 的字符串替换模式（避免 $$/$&/$`/$' 被特殊解释）
+ * - 未匹配的捕获组返回空字符串
+ *
  * @param {string} replaceStr - 替换字符串模板
  * @param {string} match - 匹配文本
  * @param {Array} groups - 捕获组
@@ -364,12 +375,38 @@ function computeReplacement(replaceStr, match, groups, trimList) {
 			target = target.replaceAll(trim, '')
 		}
 	}
-	let result = replaceStr.replaceAll('{{match}}', target)
-	for (let i = 0; i < groups.length; i++) {
-		if (typeof groups[i] === 'string') {
-			result = result.replaceAll(`$${i + 1}`, groups[i])
+
+	// Step 1: 将 {{match}} 转换为 $0（与酒馆一致）
+	let result = replaceStr.replace(/\{\{match\}\}/gi, '$0')
+
+	// Step 2: 使用正则精确匹配 $N 和 $<name>，与酒馆 runRegexScript 行为对齐
+	// 酒馆原版使用 replaceAll(/\$(\d+)|\$<([^>]+)>/g, callback)
+	// 这里用回调函数模式，避免 replacement 参数中 $$ $& $` $' 被特殊解释
+	result = result.replace(/\$(\d+)|\$<([^>]+)>/g, (_placeholder, num, _groupName) => {
+		let value
+		if (num !== undefined) {
+			const idx = Number(num)
+			if (idx === 0) {
+				value = target  // $0 = 完整匹配（经过 trimList 处理）
+			} else {
+				value = groups[idx - 1]  // $1 = groups[0], $2 = groups[1], ...
+			}
 		}
-	}
+		// 命名捕获组暂不支持（beilu 的 extractCaptureGroups 不提取命名组）
+
+		if (value === undefined || value === null) {
+			return ''  // 与酒馆一致：未匹配的捕获组返回空字符串
+		}
+
+		// 对捕获组内容应用 trimList（与酒馆 filterString 对齐）
+		let filtered = String(value)
+		if (trimList.length > 0) {
+			for (const trim of trimList) { filtered = filtered.replaceAll(trim, '') }
+		}
+
+		return filtered
+	})
+
 	return result
 }
 
@@ -401,7 +438,31 @@ function applySingleRule(text, rule, placeholders) {
 		// 需要剥离末尾的 offset/fullString/namedGroups，只保留真正的捕获组
 		const groups = extractCaptureGroups(args)
 
+		// ★ 调试日志：打印正则匹配的关键信息
+		console.log('%c[displayRegex DEBUG] applySingleRule 匹配成功', 'color: #00cc00; font-weight: bold', {
+			ruleName: rule.scriptName || rule.findRegex,
+			matchLen: match.length,
+			matchPreview: match.substring(0, 100),
+			groupsLen: groups.length,
+			group0Type: typeof groups[0],
+			group0Len: groups[0]?.length,
+			group0Preview: groups[0]?.substring?.(0, 200) || String(groups[0]).substring(0, 200),
+		})
+
 		let result = computeReplacement(replaceStr, match, groups, trimList)
+
+		// ★ 调试日志：打印替换结果的关键信息
+		console.log('%c[displayRegex DEBUG] computeReplacement 结果', 'color: #0099ff; font-weight: bold', {
+			resultLen: result?.length,
+			resultPreview: result?.substring(0, 200),
+			hasStDataInjection: result?.includes('st-data-injection'),
+			hasDollar1Literal: result?.includes("'" + '$' + "'" + " + " + "'" + '1' + "'") || false,
+			// 检查 st-data-injection div 中的内容
+			injectionContent: (() => {
+				const m = result?.match(/id="st-data-injection"[^>]*>([\s\S]{0,300})/)
+				return m ? m[1].substring(0, 200) : '未找到'
+			})(),
+		})
 
 		// 剥离替换结果外层代码围栏
 		// 酒馆美化正则（JS-Slash-Runner 等）惯例：用 ``` 包裹 HTML 文档

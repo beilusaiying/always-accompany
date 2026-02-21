@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="imgs/icon.jpg" alt="always accompany" width="200">
+</p>
+
 # always accompany
 
 ### beilu

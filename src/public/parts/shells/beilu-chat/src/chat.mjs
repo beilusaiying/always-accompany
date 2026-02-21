@@ -1437,7 +1437,12 @@ export async function getInitialData(chatid) {
 		worldname: timeSlice.world_id,
 		personaname: timeSlice.player_id,
 		logLength: chatMetadata.chatLog.length,
-		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => x.toData(chatMetadata.username))),
+		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => {
+			if (typeof x?.toData === 'function') return x.toData(chatMetadata.username)
+			console.warn('[chat] getInitialData: chatLog entry missing toData, using fallback')
+			if (typeof x?.toJSON === 'function') return x.toJSON()
+			return x
+		})),
 		timeLineIndex: chatMetadata.timeLineIndex,
 		timeLinesCount: chatMetadata.timeLines.length,
 	}

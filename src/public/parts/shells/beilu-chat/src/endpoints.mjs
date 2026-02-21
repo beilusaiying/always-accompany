@@ -62,7 +62,12 @@ export function setEndpoints(router) {
 		const { params: { chatid }, query: { start, end } } = req
 		const { username } = await getUserByReq(req)
 		const log = await GetChatLog(chatid, parseInt(start, 10), parseInt(end, 10))
-		res.status(200).json(await Promise.all(log.map(entry => entry.toData(username))))
+		res.status(200).json(await Promise.all(log.map(entry => {
+			if (typeof entry?.toData === 'function') return entry.toData(username)
+			console.warn('[chat/endpoints] log entry missing toData, using fallback')
+			if (typeof entry?.toJSON === 'function') return entry.toJSON()
+			return entry
+		})))
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/log/length', authenticate, async (req, res) => {

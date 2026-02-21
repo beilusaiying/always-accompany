@@ -78,13 +78,21 @@ let isEditing = false         // 是否在编辑模式
 
 // ===== 数据加载 =====
 
-async function loadData() {
-	try {
-		currentData = await apiGet()
-	} catch (err) {
-		console.warn('[worldbook] 加载数据失败:', err)
-		currentData = { active_worldbook: '', worldbook_list: [], entries: [], entry_count: 0 }
+async function loadData(retries = 3) {
+	for (let i = 0; i < retries; i++) {
+		try {
+			currentData = await apiGet()
+			return // 成功则直接返回
+		} catch (err) {
+			console.warn(`[worldbook] 加载数据失败 (${i + 1}/${retries}):`, err.message || err)
+			if (i < retries - 1) {
+				// 等待后重试（插件可能还未加载完成）
+				await new Promise(r => setTimeout(r, 2000 * (i + 1)))
+			}
+		}
 	}
+	// 所有重试失败，使用空数据
+	currentData = { active_worldbook: '', worldbook_list: [], entries: [], entry_count: 0 }
 }
 
 // ===== 渲染 =====

@@ -777,7 +777,21 @@ try {
 	const partpath = `personas/${personaName}`
 
 	// 使用 Fount 的 uninstallPartBase 完整卸载
-	await uninstallPartBase(username, partpath)
+	// 加 try-catch 保护：trash 对中文路径可能失败，回退为 rmSync
+	try {
+		await uninstallPartBase(username, partpath)
+	} catch (uninstallErr) {
+		console.warn(`[beilu-home] uninstallPartBase(persona) 失败(${uninstallErr.message})，手动删除目录...`)
+		const userDir = getUserDictionary(username)
+		const personaDir = path.join(userDir, 'personas', personaName)
+		if (fs.existsSync(personaDir)) {
+			try {
+				fs.rmSync(personaDir, { recursive: true, force: true })
+			} catch (rmErr) {
+				console.error('[beilu-home] 手动删除人设目录也失败:', rmErr.message)
+			}
+		}
+	}
 
 	console.log(`[beilu-home] 人设已删除: "${personaName}" (user: ${username})`)
 	res.status(200).json({ success: true, name: personaName })

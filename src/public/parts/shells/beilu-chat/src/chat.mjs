@@ -447,8 +447,18 @@ class chatMetadata_t {
 	async toData() {
 		return {
 			username: this.username,
-			chatLog: await Promise.all(this.chatLog.map(async log => log.toData(this.username))),
-			timeLines: await Promise.all(this.timeLines.map(async entry => entry.toData(this.username))),
+			chatLog: await Promise.all(this.chatLog.map(async log => {
+				if (typeof log?.toData === 'function') return log.toData(this.username)
+				console.warn('[chat] chatLog entry missing toData method, using fallback')
+				if (typeof log?.toJSON === 'function') return log.toJSON()
+				return log
+			})),
+			timeLines: await Promise.all(this.timeLines.map(async entry => {
+				if (typeof entry?.toData === 'function') return entry.toData(this.username)
+				console.warn('[chat] timeLines entry missing toData method, using fallback')
+				if (typeof entry?.toJSON === 'function') return entry.toJSON()
+				return entry
+			})),
 			timeLineIndex: this.timeLineIndex,
 		}
 	}
@@ -932,7 +942,13 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 			payload: { index: idx, entry: await finalEntry.toData(chatMetadata.username) },
 		})
 
-		if (!isError) saveChat(chatid)
+		if (!isError) {
+			try {
+				await saveChat(chatid)
+			} catch (saveErr) {
+				console.error('[chat] saveChat failed in finalizeEntry:', saveErr.message)
+			}
+		}
 		return finalEntry
 	}
 

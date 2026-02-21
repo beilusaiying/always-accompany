@@ -21,10 +21,10 @@ English | [中文](README_CN.md)
 Get dedicated prompts (Chat AI, Memory AI, etc.), build the community together, and have fun!
 
 <p align="center">
-  <img src="imgs/screenshots/chat-ide.png" alt="Chat & IDE Interface" width="800">
+  <img src="imgs/screenshots/chat-interface.png" alt="Chat Interface" width="800">
 </p>
 
-<p align="center"><em>Chat interface with IDE-style file editor — fine-tuned rendering, beautification support, adjustable chat width</em></p>
+<p align="center"><em>Chat interface with fine-tuned controls, adaptable to various beautification styles</em></p>
 
 ---
 
@@ -295,87 +295,69 @@ This project would not be possible without the contributions of the following op
 ## Screenshots
 
 <details>
-<summary><strong>📁 IDE File Editor — AI-powered file operations with safety controls</strong></summary>
+<summary><strong>🖥️ IDE AI Editor — VSCode-inspired, easy to get started</strong></summary>
 
-AI file capabilities: 📖 Read / ✏️ Write / 🗑️ Delete / 🔄 Retry / 🔌 MCP / ❓ Questions / 📋 Todo
+IDE-style AI coding and file editing interface, inspired by VSCode for a familiar experience. Plugin integration and management coming soon.
 
-You can disable write and delete permissions for safety. For beginners unfamiliar with AI coding, we recommend using the designated sandbox space.
+If you're unfamiliar with AI coding or a beginner, please use the designated sandbox space for AI file capabilities: 📖 Read / ✏️ Write / 🗑️ Delete / 🔄 Retry / 🔌 MCP / ❓ Questions / 📋 Todo. You can disable write and delete for safety.
 
-![File Editor](imgs/screenshots/file-editor.png)
-
-</details>
-
-<details>
-<summary><strong>🧠 Memory File Browser — View and edit memory data in real-time</strong></summary>
-
-Browse the three-layer memory structure (hot/warm/cold), manually edit content anytime, and observe memory AI operations. You can also make requests to the memory AI directly.
-
-![Memory Browser](imgs/screenshots/memory-browser.png)
+![IDE Editor](imgs/screenshots/ide-editor.png)
 
 </details>
 
 <details>
-<summary><strong>🎨 Regex Script Editor — Sandbox & Free modes for beautification</strong></summary>
+<summary><strong>🧠 Memory Files — View and edit memory data in real-time</strong></summary>
 
-Manage regex rules at global, character, and preset levels. Sandbox mode protects against potentially malicious scripts from unknown character cards.
+Manually edit content anytime, observe memory AI operations in real-time. You can also make requests to the memory AI directly.
 
-> ⚠️ We cannot guarantee complete safety against all malicious scripts. Always review character card code before use. We are not responsible for any damages.
+![Memory Files](imgs/screenshots/memory-files.png)
+
+</details>
+
+<details>
+<summary><strong>🎨 Regex Editor — Sandbox & Free modes</strong></summary>
+
+Manage regex rules at different levels, modify conversations, with Sandbox and Free modes. Protects against potentially malicious scripts from unknown character cards.
+
+> ⚠️ We cannot guarantee effectiveness against all malicious scripts. Please review character card code for malicious content before use. We are not responsible for any damages.
 
 ![Regex Editor](imgs/screenshots/regex-editor.png)
 
 </details>
 
 <details>
-<summary><strong>📋 Preset Manager — Commander-level prompt control</strong></summary>
+<summary><strong>📋 Commander-Level Prompts — Full control over all sent content</strong></summary>
 
-Full control over all sent content at the commander level, maximizing prompt effectiveness. Drag-and-drop ordering, enable/disable toggles, and role assignment for each entry.
+Commander-level prompts that control all sent content, maximizing prompt effectiveness.
 
 ![Preset Manager](imgs/screenshots/preset-manager.png)
 
 </details>
 
 <details>
-<summary><strong>📊 Memory Table Editor — 10 customizable structured tables</strong></summary>
-
-Tables #0-#9 with configurable columns, insert/update/delete rules. Set P2 archive threshold for automatic compression. All table meanings are defined by prompts — zero hardcoded limitations.
-
-![Memory Tables](imgs/screenshots/memory-tables.png)
-
-</details>
-
-<details>
 <summary><strong>🧠 Memory Presets P1-P6 — Fully prompt-driven, zero technical barrier</strong></summary>
 
-Configure each memory AI's behavior, trigger mode, and API settings. P2-P6 behaviors can all be modified through prompts — no coding required, highly adaptable.
+P2-P6 behaviors can all be modified through prompts — no coding required, highly adaptable.
 
 ![Memory Presets](imgs/screenshots/memory-presets.png)
 
 </details>
 
 <details>
-<summary><strong>📖 System Viewer — Detailed documentation for quick onboarding</strong></summary>
+<summary><strong>📖 System Guide — Detailed documentation for quick onboarding</strong></summary>
 
-Built-in documentation covering macros, memory system, preset engine, world books, plugin system, and more. Get up to speed quickly without external guides.
+Detailed system documentation to help you get started quickly.
 
-![System Viewer](imgs/screenshots/system-viewer.png)
-
-</details>
-
-<details>
-<summary><strong>📦 SillyTavern Compatible — Import/export works seamlessly</strong></summary>
-
-Character cards, world books, personas, chat presets — import and export with full compatibility. It feels just like home for SillyTavern users.
-
-![ST Compatible](imgs/screenshots/st-compatible.png)
+![System Guide](imgs/screenshots/system-guide.png)
 
 </details>
 
 <details>
-<summary><strong>🔬 AI Diagnostics — Complete system self-diagnosis</strong></summary>
+<summary><strong>🔬 System Diagnostics — Faster error feedback</strong></summary>
 
-Real-time system status, P1 auto-trigger state, cache inspection, injection logs, and memory AI run logs. Faster feedback for troubleshooting errors and issues.
+Comprehensive system self-diagnosis for faster error reporting and troubleshooting.
 
-![AI Diagnostics](imgs/screenshots/ai-diagnostics.png)
+![System Diagnostics](imgs/screenshots/system-diagnostics.png)
 
 </details>
 

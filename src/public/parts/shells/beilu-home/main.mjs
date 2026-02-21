@@ -82,7 +82,15 @@ export default {
 
 				// 创建目录
 				fs.mkdirSync(charDir, { recursive: true })
-
+	
+				// 复制 beilu 角色卡模板 main.mjs（保持与导入角色卡结构一致）
+				const templateMain = path.join(CHAR_TEMPLATE_DIR, 'main.mjs')
+				if (fs.existsSync(templateMain)) {
+					fs.copyFileSync(templateMain, path.join(charDir, 'main.mjs'))
+				} else {
+					console.warn('[beilu-home] 角色卡模板 main.mjs 不存在，空白角色卡可能缺少 main.mjs')
+				}
+	
 				// 写入 fount.json
 				fs.writeFileSync(
 					path.join(charDir, 'fount.json'),
@@ -482,8 +490,10 @@ export default {
 				// 清理 5 层缓存：parts_set / parts_init / parts_config / parts_details_cache / parts_branch_cache
 				// 加 try-catch 保护：trash 对中文路径可能失败，回退为 rmSync
 				try {
-					await uninstallPartBase(username, partpath)
-				} catch (uninstallErr) {
+						await uninstallPartBase(username, partpath, undefined, undefined, {
+							pathGetter: () => charDir,
+						})
+					} catch (uninstallErr) {
 					console.warn(`[beilu-home] uninstallPartBase 失败(${uninstallErr.message})，手动删除目录...`)
 					if (fs.existsSync(charDir)) {
 						try {
@@ -514,7 +524,18 @@ export default {
 						await memPlugin.interfaces.config.SetData({ _action: 'clearCache', charName, username })
 					}
 				} catch (_) { /* 插件未加载时忽略 */ }
-console.log(`[beilu-home] 角色卡已删除（含缓存清理）: "${charName}" (user: ${username})`, cleanupResults)
+	
+				// 8. 保险：确保角色卡目录被彻底删除（防止 trash/rmSync 因路径或占用问题遗漏）
+				if (fs.existsSync(charDir)) {
+					try {
+						fs.rmSync(charDir, { recursive: true, force: true })
+						console.log(`[beilu-home] 保险清理：角色卡目录已删除: ${charDir}`)
+					} catch (e) {
+						console.error('[beilu-home] 保险清理失败:', e.message)
+					}
+				}
+	
+	console.log(`[beilu-home] 角色卡已删除（含缓存清理）: "${charName}" (user: ${username})`, cleanupResults)
 res.status(200).json({ success: true, name: charName, cleanup: cleanupResults })
 } catch (error) {
 console.error('[beilu-home] Error deleting char:', error)

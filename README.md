@@ -260,6 +260,31 @@ After launch, open your browser and navigate to `http://localhost:1314`
 3. **Configure memory presets**: Home → Memory Presets → Set up API for P1-P6 (Gemini 2.0 Flash recommended)
 4. **Start chatting**: Click a character card to enter the chat interface
 
+### 📥 Memory Preset Import (Recommended)
+
+The `presets/` directory includes a **ready-to-use memory preset file** with optimized P1-P6 prompts:
+
+```
+presets/beilu-presets_2026-02-21.json
+```
+
+**How to import:**
+1. Go to Home → Memory Presets
+2. Click "Import" and select the JSON file from the `presets/` directory
+3. Configure the API source and model for each preset (Gemini 2.0/2.5 Flash recommended)
+
+**What's included:**
+- **P1 Retrieval AI**: 7-step thinking chain for context-aware memory search
+- **P2 Archive AI**: Structured summarization with deduplication and noise filtering
+- **P3 Daily Summary AI**: 9-step end-of-day archival workflow
+- **P4 Hot→Warm AI**: Rule-based hot layer cleanup (quantity/weight/trigger thresholds)
+- **P5 Monthly Summary AI**: Theme extraction and relationship analysis for cold archival
+- **P6 Repair AI**: Full data integrity check with auto-fix capabilities
+- **INJ-1 Table Injection**: dataTable instructions for the Chat AI
+- **INJ-2 File Operations**: IDE-style file operation instructions (disabled by default)
+
+> ⚠️ **Security note**: This file contains **no API keys, tokens, or sensitive data**. The `api_config.source` field is intentionally left empty — you need to configure your own AI service source after import.
+
 ### Using the Memory System
 
 - **Automatic operation**: Memory tables are automatically maintained by the Chat AI (via `<tableEdit>` tags); Retrieval AI (P1) triggers automatically each turn

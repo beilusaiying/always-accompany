@@ -480,15 +480,46 @@ function Update-FountAndDeno {
 	}
 	else {
 		deno_upgrade
-		# beilu: 询问用户是否检查更新
+		# beilu: 先检查远程是否有新提交，有更新才询问用户
 		if (Get-Command git -ErrorAction SilentlyContinue) {
-			Write-Host ""
-			Write-Host "  检查 beilu-always accompany 更新..." -ForegroundColor Cyan
-			$answer = Read-Host "  是否检查并更新到最新版本? (Y/N, 默认N)"
-			if ($answer -eq 'Y' -or $answer -eq 'y') {
-				fount_upgrade
-			} else {
-				Write-Host "  已跳过更新检查。" -ForegroundColor Gray
+			if (Test-Path -Path "$FOUNT_DIR/.git") {
+				$BEILU_REPO_URL = "https://github.com/beilusaiying/always-accompany.git"
+				$BEILU_BRANCH = "main"
+
+				# 确保 origin 指向正确的仓库
+				$currentOrigin = git -C "$FOUNT_DIR" remote get-url origin 2>$null
+				if ($currentOrigin -and $currentOrigin -ne $BEILU_REPO_URL) {
+					git -C "$FOUNT_DIR" remote set-url origin $BEILU_REPO_URL
+				}
+
+				Write-Host ""
+				Write-Host "  检查 beilu-always accompany 更新..." -ForegroundColor Cyan
+
+				# 静默 fetch，检查是否有新提交
+				$fetchResult = git -C "$FOUNT_DIR" fetch origin $BEILU_BRANCH 2>&1
+				if ($LastExitCode -ne 0) {
+					Write-Host "  无法连接到更新服务器，已跳过更新检查。" -ForegroundColor Yellow
+				}
+				else {
+					$localCommit = git -C "$FOUNT_DIR" rev-parse HEAD 2>$null
+					$remoteCommit = git -C "$FOUNT_DIR" rev-parse "origin/$BEILU_BRANCH" 2>$null
+
+					if ($localCommit -and $remoteCommit -and $localCommit -ne $remoteCommit) {
+						# 计算新提交数量
+						$newCommits = git -C "$FOUNT_DIR" rev-list --count "$localCommit..$remoteCommit" 2>$null
+						if (-not $newCommits) { $newCommits = "若干" }
+						Write-Host "  发现 $newCommits 个新提交可用。" -ForegroundColor Green
+						$answer = Read-Host "  是否更新到最新版本? (Y/N, 默认N)"
+						if ($answer -eq 'Y' -or $answer -eq 'y') {
+							fount_upgrade
+						} else {
+							Write-Host "  已跳过更新。" -ForegroundColor Gray
+						}
+					}
+					else {
+						Write-Host "  已是最新版本。" -ForegroundColor Green
+					}
+				}
 			}
 		}
 	}

@@ -36,6 +36,9 @@
 # 构建产物 / 锁文件
 /desktop-eye/package-lock.json
 
+# 插件运行时数据（不被 git clean 删除）
+**/config_data.json
+
 # 备份文件
 *.bak
 *.import_bak

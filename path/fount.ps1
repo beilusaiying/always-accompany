@@ -905,7 +905,7 @@ function run {
 			# Could not read or parse, will use the default 100MB.
 		}
 	}
-	$v8Flags += ",--initial-heap-size=${heapSizeMB}"
+	$v8Flags += ",--initial-heap-size=${heapSizeMB},--max-old-space-size=8192"
 	if ($Script:is_debug) {
 		deno run --allow-scripts --allow-all --inspect-brk -c "$FOUNT_DIR/deno.json" --v8-flags="$v8Flags" "$FOUNT_DIR/src/server/index.mjs" @args
 	}

@@ -1452,7 +1452,7 @@ run() {
 			heap_size_mb=$calculated_mb
 		fi
 	fi
-	v8_flags="$v8_flags,--initial-heap-size=${heap_size_mb}"
+	v8_flags="$v8_flags,--initial-heap-size=${heap_size_mb},--max-old-space-size=8192"
 	if [[ $is_debug -eq 1 ]]; then
 		run_deno run --allow-scripts --allow-all --inspect-brk -c "$FOUNT_DIR/deno.json" --v8-flags="$v8_flags" "$FOUNT_DIR/src/server/index.mjs" "$@"
 	else

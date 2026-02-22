@@ -73,12 +73,31 @@
 	transform: translateY(-50%);
 	cursor: pointer;
 	opacity: 0;
-	transition: opacity 0.2s ease;
+	transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 	z-index: 10;
+	font-size: 1.3rem;
+	font-weight: bold;
+	width: 2rem;
+	height: 2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background-color: rgba(0, 0, 0, 0.35);
+	color: rgba(255, 255, 255, 0.9);
+	user-select: none;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	line-height: 1;
 }
 
 .chat-message:hover .arrow {
-	opacity: 0.8;
+	opacity: 0.9;
+}
+
+.chat-message .arrow:hover {
+	background-color: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	opacity: 1;
 }
 
 .chat-message .arrow.left {
@@ -3870,4 +3889,224 @@ body.font-size-large {
 .beilu-chat-api-banner-close:hover {
 	opacity: 1;
 	background-color: rgba(217,119,6,0.15);
+}
+
+/* ============================================================
+   淡色模式（乳白色/米白色）覆盖
+   ============================================================ */
+
+[data-theme="light"] {
+	/* daisyUI 基础色覆盖 — 米白色系，护眼柔和 */
+	--b1: 0.965 0.012 85;
+	--b2: 0.940 0.016 80;
+	--b3: 0.910 0.020 80;
+	--bc: 0.250 0.035 60;
+
+	/* beilu 主题色适配淡色模式（加深，保证对比度） */
+	--beilu-amber: #9b7b1e;
+	--beilu-amber-dark: #7a5e15;
+	--beilu-amber-light: #c4981a;
+	--beilu-bg-dark: #f5efe3;
+	--beilu-bg-card: #ede6d6;
+}
+
+/* ---- 箭头 — 浅色模式适配 ---- */
+
+[data-theme="light"] .chat-message .arrow {
+	background-color: rgba(60, 50, 30, 0.2);
+	color: rgba(60, 50, 30, 0.8);
+	text-shadow: none;
+}
+
+[data-theme="light"] .chat-message .arrow:hover {
+	background-color: rgba(60, 50, 30, 0.4);
+	color: rgba(40, 30, 15, 1);
+}
+
+/* ---- swipe 计数器 — 浅色模式 ---- */
+
+[data-theme="light"] .chat-message .swipe-counter {
+	color: rgba(120, 90, 20, 0.7);
+	background-color: rgba(60, 50, 30, 0.1);
+}
+
+[data-theme="light"] .chat-message:hover .swipe-counter {
+	color: var(--beilu-amber);
+}
+
+/* ---- 浮动窗口 — 浅色模式 ---- */
+
+[data-theme="light"] .floating-window {
+	background-color: #f0e9d8;
+	border-color: rgba(155, 123, 30, 0.3);
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(155, 123, 30, 0.1);
+	color: #3d3322;
+}
+
+[data-theme="light"] .floating-window.fw-dragging {
+	box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15), 0 0 0 2px rgba(155, 123, 30, 0.2);
+}
+
+[data-theme="light"] .floating-window-header {
+	background-color: rgba(155, 123, 30, 0.08);
+	border-color: rgba(155, 123, 30, 0.2);
+}
+
+/* ---- 文件选择器 — 浅色模式 ---- */
+
+[data-theme="light"] .fp-modal {
+	background-color: #f0e9d8;
+	border-color: rgba(155, 123, 30, 0.3);
+	color: #3d3322;
+}
+
+[data-theme="light"] .fp-header {
+	background-color: rgba(155, 123, 30, 0.08);
+	border-color: rgba(155, 123, 30, 0.2);
+}
+
+/* ---- IDE 菜单下拉 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-menu-dropdown {
+	background-color: #f0e9d8;
+	border-color: rgba(155, 123, 30, 0.25);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ---- 扩展菜单 — 浅色模式 ---- */
+
+[data-theme="light"] .extend-menu {
+	box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(155, 123, 30, 0.06);
+}
+
+/* ---- 思维链 — 浅色模式 ---- */
+
+[data-theme="light"] .thinking-fold .thinking-content {
+	color: rgba(50, 40, 25, 0.65);
+}
+
+[data-theme="light"] .thinking-toggle-content {
+	color: rgba(50, 40, 25, 0.55);
+}
+
+/* ---- 代码折叠 — 浅色模式 ---- */
+
+[data-theme="light"] .code-fold pre code {
+	color: rgba(50, 40, 25, 0.8);
+}
+
+/* ---- JSON/文本内容 — 浅色模式 ---- */
+
+[data-theme="light"] .mb-json-content,
+[data-theme="light"] .mb-text-content {
+	color: #4a3d28;
+	background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* ---- promptViewer — 浅色模式 ---- */
+
+[data-theme="light"] .pv-message-body {
+	color: #4a3d28;
+	background-color: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .pv-message-preview {
+	color: rgba(60, 50, 30, 0.6);
+}
+
+[data-theme="light"] .pv-placeholder {
+	color: rgba(60, 50, 30, 0.35);
+}
+
+[data-theme="light"] .pv-raw-json {
+	color: #4a3d28;
+}
+
+[data-theme="light"] .pv-param-value {
+	color: #3d3322;
+}
+
+[data-theme="light"] .pv-param-label {
+	color: rgba(60, 50, 30, 0.5);
+}
+
+[data-theme="light"] .pv-ctx-item-preview {
+	color: rgba(60, 50, 30, 0.55);
+}
+
+[data-theme="light"] .pv-ctx-item-body {
+	color: #4a3d28;
+	background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* ---- 输入框 — 浅色模式（去掉深色半透明背景） ---- */
+
+[data-theme="light"] .left-panel input[type="number"],
+[data-theme="light"] .right-panel input[type="text"],
+[data-theme="light"] .right-panel input[type="password"],
+[data-theme="light"] .right-panel select,
+[data-theme="light"] #detail-content,
+[data-theme="light"] .dt-template-input,
+[data-theme="light"] .fp-path-input,
+[data-theme="light"] .mb-editor-textarea,
+[data-theme="light"] #memory-json-editor,
+[data-theme="light"] #file-editor-textarea {
+	background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* ---- 编辑器区域 — 浅色模式 ---- */
+
+[data-theme="light"] #file-editor-area,
+[data-theme="light"] #memory-editor-area {
+	background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* ---- 记忆AI输出 — 浅色模式 ---- */
+
+[data-theme="light"] .memory-ai-output-entry.entry-content {
+	color: #4a3d28;
+}
+
+/* ---- IDE 活动栏 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-activity-bar {
+	background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* ---- IDE 状态栏 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-statusbar {
+	background-color: var(--beilu-amber);
+	color: rgba(255, 255, 255, 0.9);
+}
+
+/* ---- 滚动条 — 浅色模式 ---- */
+
+[data-theme="light"] #chat-messages::-webkit-scrollbar-thumb {
+	background-color: rgba(155, 123, 30, 0.2);
+}
+
+[data-theme="light"] #chat-messages::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(155, 123, 30, 0.35);
+}
+
+/* ---- 行号区 — 浅色模式 ---- */
+
+[data-theme="light"] .editor-line-numbers,
+[data-theme="light"] #editor-line-numbers {
+	color: rgba(155, 123, 30, 0.35);
+}
+
+/* ---- 对比度增强 — 浅色模式下低 opacity 元素 ---- */
+
+[data-theme="light"] .top-tab {
+	opacity: 0.65;
+}
+
+[data-theme="light"] .top-tab:hover {
+	opacity: 0.95;
+}
+
+[data-theme="light"] .top-tab-active {
+	opacity: 1;
 }

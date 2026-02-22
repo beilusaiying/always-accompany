@@ -1992,3 +1992,13 @@ html.font-size-mlarge {
 html.font-size-large {
 	font-size: 16px;
 }
+
+/* ===== 淡色模式覆盖 ===== */
+/* 琥珀色在浅色背景上对比度不足，加深处理 */
+[data-theme="light"] {
+	--beilu-amber: #9b7b1e;
+	--beilu-amber-light: #b8922a;
+	--beilu-amber-dark: #7a6118;
+	--beilu-amber-glow: rgba(155, 123, 30, 0.10);
+	--beilu-amber-border: rgba(155, 123, 30, 0.25);
+}

@@ -381,8 +381,23 @@ function createCharCard(key, details, summaries) {
 	})
 	card.appendChild(deleteBtn)
 
-	// 点击事件
-	card.addEventListener('click', () => {
+	// 点击事件（跳转前检查 API 配置）
+	card.addEventListener('click', async () => {
+		// 检查是否已配置 AI 服务源
+		try {
+			const apiList = await fetch('/api/parts/shells:serviceSourceManage/AI').then(r => r.json())
+			if (!Array.isArray(apiList) || apiList.length === 0) {
+				const goSetup = confirm('尚未配置 AI 服务源，对话将无法生成回复。\n\n是否前往「系统设置 → AI 服务源」进行配置？')
+				if (goSetup) {
+					// 切换到系统设置标签页
+					const systemTab = document.querySelector('[data-sub-tab="system"]')
+					if (systemTab) systemTab.click()
+					return
+				}
+				// 用户选择"取消"，仍然允许跳转（可查看历史记录等）
+			}
+		} catch { /* 网络错误不阻止跳转 */ }
+
 		if (lastChatId) {
 			// 有历史对话 → 跳转到最后一次对话
 			window.location.href = `/parts/shells:beilu-chat/#${lastChatId}`

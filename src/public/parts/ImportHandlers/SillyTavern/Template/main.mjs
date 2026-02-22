@@ -148,7 +148,7 @@ export default {
 			 */
 			GetReply: async args => {
 				if (!AIsource) return {
-					content: 'this character does not have an AI source, [set the AI source](/parts/shells:serviceSourceManage) first',
+					content: '该角色尚未配置 AI 服务源，请前往 [beilu 首页](/parts/shells:beilu-home/) 的「系统设置 → AI 服务源」进行配置。',
 				}
 				// 注入角色插件
 				args.plugins = Object.assign({}, plugins, args.plugins)

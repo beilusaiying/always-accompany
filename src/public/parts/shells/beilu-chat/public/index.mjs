@@ -1226,10 +1226,8 @@ charInfoSaveBtn?.addEventListener('click', async () => {
 		const newGreeting = charGreetingEdit?.value || ''
 
 		// 通过 beilu-files 的 API 更新角色卡 info.json
-		const infoPath = `chars/${charId}/info.json`
-		const detailsResp = await fetch(`/api/parts/details?part=${encodeURIComponent(`chars/${charId}`)}`)
-		if (!detailsResp.ok) throw new Error('无法读取角色卡信息')
-		const details = await detailsResp.json()
+		const details = await getPartDetails('chars/' + charId)
+		if (!details) throw new Error('无法读取角色卡信息')
 		const info = details?.info || {}
 
 		// 更新字段

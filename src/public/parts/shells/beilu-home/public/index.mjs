@@ -216,6 +216,46 @@ userNavItems.forEach(btn => {
 	})
 })
 
+// ===== API 未配置警告 banner =====
+const API_BASE = '/api/parts/shells:serviceSourceManage'
+
+async function checkApiAndShowBanner() {
+	const banner = document.getElementById('api-warning-banner')
+	if (!banner) return
+	try {
+		const list = await fetch(`${API_BASE}/AI`).then(r => r.json())
+		const hasApi = Array.isArray(list) && list.length > 0
+		banner.style.display = hasApi ? 'none' : 'flex'
+	} catch {
+		banner.style.display = 'flex'
+	}
+}
+
+// "前往配置"按钮 → 切换到系统设置 → AI 服务源
+document.getElementById('api-warning-goto')?.addEventListener('click', () => {
+	switchTab('system')
+	// 确保 AI 服务源面板激活
+	const apiNav = document.querySelector('.beilu-system-nav-item[data-sys-section="api"]')
+	if (apiNav) apiNav.click()
+	// 懒加载系统设置
+	if (!systemInitialized) {
+		systemInitialized = true
+		initSystem().catch(err => console.error('[beilu-home] 初始化系统设置失败:', err))
+	}
+})
+
+// 关闭按钮（本次会话隐藏，不 persist）
+document.getElementById('api-warning-close')?.addEventListener('click', () => {
+	const banner = document.getElementById('api-warning-banner')
+	if (banner) banner.style.display = 'none'
+})
+
+// 监听 API 变化事件（system.mjs 广播）刷新 banner 状态
+window.addEventListener('resource:api-changed', () => checkApiAndShowBanner())
+
+// 启动时检查
+checkApiAndShowBanner()
+
 // ===== 初始化各模块 =====
 let presetInitialized = false
 let worldbookInitialized = false

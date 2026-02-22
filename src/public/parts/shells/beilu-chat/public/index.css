@@ -3805,3 +3805,69 @@ body.font-size-large {
 .message-content {
 	font-size: var(--beilu-font-size);
 }
+
+/* ============================================================
+   API 未配置提示 banner（聊天页面顶部）
+   ============================================================ */
+
+.beilu-chat-api-banner {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.4rem 1rem;
+	background: linear-gradient(90deg, rgba(217,119,6,0.15), rgba(245,158,11,0.08));
+	border-bottom: 1px solid rgba(217,119,6,0.3);
+	font-size: 0.8rem;
+	color: #d97706;
+	flex-shrink: 0;
+	z-index: 25;
+	animation: chat-banner-in 0.3s ease;
+}
+
+@keyframes chat-banner-in {
+	from { opacity: 0; transform: translateY(-100%); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.beilu-chat-api-banner-icon {
+	flex-shrink: 0;
+}
+
+.beilu-chat-api-banner-text {
+	flex: 1;
+	font-size: 0.78rem;
+}
+
+.beilu-chat-api-banner-link {
+	color: #d97706;
+	font-weight: 600;
+	text-decoration: underline;
+	white-space: nowrap;
+	transition: color 0.15s ease;
+}
+
+.beilu-chat-api-banner-link:hover {
+	color: #b45309;
+}
+
+.beilu-chat-api-banner-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: none;
+	background: transparent;
+	color: #d97706;
+	font-size: 0.9rem;
+	cursor: pointer;
+	border-radius: 4px;
+	opacity: 0.6;
+	transition: all 0.12s ease;
+	flex-shrink: 0;
+}
+
+.beilu-chat-api-banner-close:hover {
+	opacity: 1;
+	background-color: rgba(217,119,6,0.15);
+}

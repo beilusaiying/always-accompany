@@ -32,6 +32,55 @@ import { createBufferedSyncPreviewUpdater, generateDiff } from './stream.mjs'
 const diag = createDiag('chat')
 
 // ============================================================
+// API 错误友好化 — 将原始异常分类为用户可读的中文提示
+// ============================================================
+
+function classifyApiError(e) {
+	const msg = (e.message || '').toLowerCase()
+	const status = e.status || e.statusCode || 0
+	const detail = e.message || String(e)
+
+	// 认证失败
+	if (status === 401 || status === 403
+		|| msg.includes('unauthorized') || msg.includes('authentication')
+		|| (msg.includes('invalid') && msg.includes('key'))
+		|| msg.includes('api key') || msg.includes('apikey')) {
+		return `⚠️ **API 认证失败**\n\nAPI 密钥无效或已过期，请在「系统设置 → AI 服务源」中检查密钥配置。\n\n---\n*错误信息: ${detail}*`
+	}
+
+	// 额度不足 / 频率限制
+	if (status === 429
+		|| msg.includes('quota') || msg.includes('rate limit') || msg.includes('rate_limit')
+		|| msg.includes('insufficient') || msg.includes('billing')
+		|| msg.includes('exceeded')) {
+		return `⚠️ **额度不足或请求过于频繁**\n\n请检查 API 账户余额，或稍后再试。\n\n---\n*错误信息: ${detail}*`
+	}
+
+	// 模型不存在
+	if (status === 404
+		|| (msg.includes('model') && (msg.includes('not found') || msg.includes('does not exist')))
+		|| msg.includes('no such model')) {
+		return `⚠️ **模型不可用**\n\n配置的模型名称可能有误或该模型不可用，请在「系统设置 → AI 服务源」中检查模型配置。\n\n---\n*错误信息: ${detail}*`
+	}
+
+	// 连接失败
+	if (msg.includes('econnrefused') || msg.includes('enotfound')
+		|| msg.includes('etimedout') || msg.includes('econnreset')
+		|| msg.includes('fetch failed') || msg.includes('network')
+		|| msg.includes('timeout') || msg.includes('socket hang up')) {
+		return `⚠️ **连接失败**\n\n无法连接到 API 服务器，请检查：\n- API 地址是否正确\n- 网络连接是否正常\n- 如使用代理，代理是否正常工作\n\n---\n*错误信息: ${detail}*`
+	}
+
+	// 服务器错误
+	if (status >= 500) {
+		return `⚠️ **API 服务器错误 (${status})**\n\n远端服务暂时不可用，请稍后再试。\n\n---\n*错误信息: ${detail}*`
+	}
+
+	// 通用错误（保留堆栈供调试）
+	return `⚠️ **生成失败**\n\n${detail}\n\n---\n\`\`\`\n${e.stack || detail}\n\`\`\``
+}
+
+// ============================================================
 // StreamManager — 流式生成任务管理（保留原样）
 // ============================================================
 
@@ -1056,7 +1105,7 @@ async function executeGeneration(chatid, request, stream, placeholderEntry, chat
 		} else {
 			console.error('[chat] executeGeneration error:', e.name, e.message)
 			stream.abort(e.message)
-			placeholderEntry.content = `\`\`\`\nError:\n${e.stack || e.message}\n\`\`\``
+			placeholderEntry.content = classifyApiError(e)
 			await finalizeEntry(placeholderEntry, true)
 		}
 	} finally {
@@ -1149,7 +1198,7 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
 				})
 			} catch (e) {
 				console.error('Greeting generation failed:', e)
-				newEntry.content = `\`\`\`\nError generating greeting:\n${e.message}\n\`\`\``
+				newEntry.content = classifyApiError(e)
 				newEntry.is_generating = false
 				newEntry.id = entry.id
 				newEntry.timeSlice = timeSlice

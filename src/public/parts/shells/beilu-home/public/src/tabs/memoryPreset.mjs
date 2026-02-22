@@ -916,12 +916,23 @@ function populateSourceSelect(currentValue) {
 
 	dom.apiSource.innerHTML = ''
 
+	// 移除旧的引导提示（如果有）
+	const oldHint = dom.apiSource.parentNode?.querySelector('.mp-no-source-hint')
+	if (oldHint) oldHint.remove()
+
 	if (aiSourceList.length === 0) {
 		// 没有服务源时给个提示
 		const opt = document.createElement('option')
 		opt.value = ''
 		opt.textContent = '（无可用服务源）'
 		dom.apiSource.appendChild(opt)
+
+		// 添加引导提示
+		const hint = document.createElement('div')
+		hint.className = 'mp-no-source-hint'
+		hint.style.cssText = 'font-size:0.7rem;color:#d97706;margin-top:4px;padding:4px 6px;background:rgba(217,119,6,0.08);border-radius:4px;border:1px dashed rgba(217,119,6,0.3);'
+		hint.innerHTML = '⚠️ 请先在 <a href="/parts/shells:beilu-home/#system" style="color:#d97706;text-decoration:underline;font-weight:500;">系统设置 → AI 服务源</a> 中添加服务源，记忆AI才能正常工作'
+		dom.apiSource.parentNode?.appendChild(hint)
 		return
 	}
 

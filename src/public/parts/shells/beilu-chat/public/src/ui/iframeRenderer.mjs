@@ -16,6 +16,49 @@
 import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
 
 // ============================================================
+// 全局：父页面音频管理器（单例）
+// ============================================================
+let _parentAudio = null
+
+function getParentAudio() {
+	if (!_parentAudio) {
+		_parentAudio = new Audio()
+		_parentAudio.loop = true
+	}
+	return _parentAudio
+}
+
+// 对外暴露播放状态（供 iframe 同步查询）
+window.__beiluAudioState = { playing: false, src: '', volume: 0.5 }
+
+function beiluAudioPlay(url, options = {}) {
+	const audio = getParentAudio()
+	if (options.loop !== undefined) audio.loop = options.loop
+	if (options.volume !== undefined) {
+		audio.volume = options.volume
+		window.__beiluAudioState.volume = options.volume
+	}
+	if (url && audio.src !== url) {
+		audio.src = url
+	}
+	audio.play().catch(e => console.warn('[beiluAudio] play failed:', e))
+	window.__beiluAudioState.playing = true
+	window.__beiluAudioState.src = url || audio.src
+}
+
+function beiluAudioPause() {
+	const audio = getParentAudio()
+	audio.pause()
+	window.__beiluAudioState.playing = false
+}
+
+function beiluAudioSetVolume(vol) {
+	const audio = getParentAudio()
+	audio.volume = vol
+	window.__beiluAudioState.volume = vol
+}
+
+// ============================================================
 // 全局：父页面 resize 监听（只注册一次）
 // ============================================================
 let resizeListenerRegistered = false
@@ -34,26 +77,21 @@ function ensureParentResizeListener() {
 		})
 	})
 
-	// ★ 父页面用户交互时，直接同步调用 iframe 内的音频恢复函数
-	// 关键：postMessage 不传递用户手势上下文，play() 仍被阻止
-	// 但 srcdoc iframe 与父页面同源，可以直接同步调用（保持用户手势调用栈）
-	const notifyIframesUserInteraction = () => {
-		document.querySelectorAll('.beilu-beauty-iframe').forEach(iframe => {
-			try {
-				// 直接同步调用：保持用户手势上下文，让 play() 被浏览器接受
-				if (iframe.contentWindow?.__beiluResumeAllAudio) {
-					iframe.contentWindow.__beiluResumeAllAudio()
-				}
-			} catch (e) {
-				// 跨域时 fallback 到 postMessage（Blob URL 模式）
-				try {
-					iframe.contentWindow?.postMessage({ type: 'beilu-user-interaction' }, '*')
-				} catch (e2) { /* ignore */ }
-			}
-		})
-	}
-	document.addEventListener('click', notifyIframesUserInteraction, true)
-	document.addEventListener('touchstart', notifyIframesUserInteraction, true)
+	// ★ 监听来自 iframe 的音频控制消息
+	window.addEventListener('message', (e) => {
+		if (!e.data) return
+		switch (e.data.type) {
+			case 'beilu-audio-play':
+				beiluAudioPlay(e.data.url, e.data.options || {})
+				break
+			case 'beilu-audio-pause':
+				beiluAudioPause()
+				break
+			case 'beilu-audio-volume':
+				beiluAudioSetVolume(e.data.volume)
+				break
+		}
+	})
 }
 
 /**
@@ -147,8 +185,8 @@ function replaceVhInContent(content) {
 /**
  * 创建注入到 iframe <head> 最前面的"早期脚本"
  * 在 Vue / GSAP 等库加载之前执行，用于：
- * 1. Monkey-patch Audio 构造函数，追踪所有 Audio 实例
- * 2. 用户首次交互后自动恢复被浏览器阻止的音频播放
+ * 1. 注入 SillyTavern 兼容 API
+ * 2. 注入 beiluAudio 桥接 API（音频播放由父页面管理）
  *
  * @returns {string} <script> 标签字符串
  */
@@ -164,63 +202,34 @@ function createEarlyScript(rawContentBase64 = '') {
 	window.getCurrentMessageId = function() { return 0; };
 	window.getChatMessages = function() { return _stChat; };
 
-	// ★ 追踪所有通过 new Audio() 创建的实例
-	var _OrigAudio = window.Audio;
-	var _trackedAudios = [];
-	window.__beiluTrackedAudios = _trackedAudios;
-
-	window.Audio = function(src) {
-		var inst = new _OrigAudio(src);
-		_trackedAudios.push(inst);
-		return inst;
-	};
-	// 保持 prototype 链兼容
-	window.Audio.prototype = _OrigAudio.prototype;
-	try {
-		Object.defineProperty(window.Audio, 'name', { value: 'Audio' });
-	} catch(e) {}
-
-	// ★ 恢复所有被阻止的音频（可重复调用）
-	function resumeAllAudio() {
-		// 1. 尝试 resume AudioContext（解除全局音频限制）
-		try {
-			var ctx = new (window.AudioContext || window.webkitAudioContext)();
-			if (ctx.state === 'suspended') {
-				ctx.resume().then(function() { ctx.close(); });
-			} else {
-				ctx.close();
-			}
-		} catch(e) {}
-
-		// 2. DOM 中的 <audio> 和 <video> 元素
-		document.querySelectorAll('audio,video').forEach(function(el) {
-			if (el.paused && el.src) {
-				el.play().catch(function(){});
-			}
-		});
-
-		// 3. JS new Audio() 创建的实例（不在 DOM 中）
-		_trackedAudios.forEach(function(a) {
-			if (a && a.paused && a.src) {
-				a.play().catch(function(){});
-			}
-		});
-	}
-
-	// ★ 暴露为全局函数，让父页面可以直接同步调用（保持用户手势上下文）
-	window.__beiluResumeAllAudio = resumeAllAudio;
-
-	// 监听 iframe 内部的用户交互事件（不用 once，因为可能有新的 Audio 实例）
-	['click', 'touchstart', 'keydown'].forEach(function(evt) {
-		document.addEventListener(evt, resumeAllAudio, { capture: true });
-	});
-
-	// 也监听来自父页面的 postMessage 通知（跨域 fallback）
-	window.addEventListener('message', function(e) {
-		if (e.data && e.data.type === 'beilu-user-interaction') {
-			resumeAllAudio();
+	// ★ 音频桥接 API：角色卡通过此 API 控制父页面的音频播放器
+	// Audio 对象在父页面，不在 iframe 内，彻底避免 autoplay 限制和控制冲突
+	window.beiluAudio = {
+		play: function(url, options) {
+			try {
+				window.parent.postMessage({
+					type: 'beilu-audio-play',
+					url: url,
+					options: options || {}
+				}, '*');
+			} catch(e) { console.warn('[beiluAudio] play postMessage failed:', e); }
+		},
+		pause: function() {
+			try {
+				window.parent.postMessage({ type: 'beilu-audio-pause' }, '*');
+			} catch(e) { console.warn('[beiluAudio] pause postMessage failed:', e); }
+		},
+		setVolume: function(vol) {
+			try {
+				window.parent.postMessage({ type: 'beilu-audio-volume', volume: vol }, '*');
+			} catch(e) { console.warn('[beiluAudio] setVolume postMessage failed:', e); }
+		},
+		isPlaying: function() {
+			try {
+				return window.parent.__beiluAudioState ? window.parent.__beiluAudioState.playing : false;
+			} catch(e) { return false; }
 		}
-	});
+	};
 })();
 </` + `script>`
 }
@@ -358,8 +367,8 @@ function createBridgeScript(messageId, rawContentBase64 = '') {
 	setInterval(requestMeasure, 2000);
 
 	// ============================================================
-	// 4. 音频恢复已移至 createEarlyScript()
-	//    在 <head> 最前面注入，确保在 Vue/Audio 之前就生效
+	// 4. 音频播放已移至父页面（通过 beiluAudio 桥接 API）
+	//    earlyScript 中注入了 window.beiluAudio 供角色卡使用
 	// ============================================================
 
 	// ============================================================
@@ -440,7 +449,7 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 	iframe.className = 'beilu-beauty-iframe'
 	iframe.sandbox = 'allow-scripts allow-same-origin allow-popups'
 	iframe.setAttribute('allowfullscreen', '')
-	iframe.setAttribute('allow', 'autoplay')  // ★ 支持音频自动播放
+	// Audio 已移至父页面，不再需要 iframe autoplay 权限
 
 	// 消息 ID
 	const messageId = messageElement.id || `msg-${Date.now()}`
@@ -458,7 +467,7 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 		console.warn('[iframeRenderer] base64 encode failed:', e)
 	}
 
-	// ★ 注入 early script（Audio 追踪 + 音频恢复 + ST API）到 <head> 最前面
+	// ★ 注入 early script（beiluAudio 桥接 API + ST API）到 <head> 最前面
 	const earlyScript = createEarlyScript(rawContentBase64)
 	if (modifiedHtml.includes('<head>')) {
 		modifiedHtml = modifiedHtml.replace('<head>', '<head>' + earlyScript)

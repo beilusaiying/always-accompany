@@ -561,6 +561,18 @@ export function initLayout() {
 	// 应用初始选项卡
 	switchTab(layoutState.activeTab)
 
+	// API 未配置提示 banner
+	checkChatApiBanner()
+
+	// 关闭按钮
+	document.getElementById('chat-api-warning-close')?.addEventListener('click', () => {
+		const banner = document.getElementById('chat-api-warning-banner')
+		if (banner) banner.style.display = 'none'
+	})
+
+	// 监听 API 变更事件（从右栏 API 保存/删除时触发）
+	window.addEventListener('resource:api-changed', () => checkChatApiBanner())
+
 	console.log('[beilu-chat] 布局已初始化（顶部选项卡 + IDE 模式）')
 }
 
@@ -899,6 +911,25 @@ function closeMobilePanel() {
 		rightPanel?.classList.add('collapsed')
 	}
 	mobileOverlay?.classList.remove('active')
+}
+
+// ============================================================
+// API 未配置 banner 检查
+// ============================================================
+
+/**
+ * 检查 AI 服务源是否已配置，控制顶部 banner 显示
+ */
+async function checkChatApiBanner() {
+	const banner = document.getElementById('chat-api-warning-banner')
+	if (!banner) return
+	try {
+		const list = await fetch('/api/parts/shells:serviceSourceManage/AI').then(r => r.json())
+		banner.style.display = (Array.isArray(list) && list.length > 0) ? 'none' : 'flex'
+	} catch {
+		// 网络错误时不显示 banner（避免误报）
+		banner.style.display = 'none'
+	}
 }
 
 // 绑定移动端关闭按钮事件（使用事件委托）

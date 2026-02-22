@@ -236,7 +236,7 @@ const charAPI_definition = {
 			 */
 			GetReply: async args => {
 				if (!AIsource) return {
-					content: 'This character does not have an AI source. Please [set the AI source](/parts/shells:serviceSourceManage) first.'
+					content: '该角色尚未配置 AI 服务源，请前往 [beilu 首页](/parts/shells:beilu-home/) 的「系统设置 → AI 服务源」进行配置。'
 				}
 				const env = getMacroEnv(args.UserCharname)
 				/**

@@ -1788,5 +1788,23 @@ export async function init() {
 	if (dom.loading) dom.loading.style.display = 'none'
 	if (dom.main) dom.main.style.display = ''
 
+	// ===== 监听资源变更事件，自动刷新相关数据 =====
+	window.addEventListener('resource:api-changed', async () => {
+		console.log('[memoryPreset] 检测到 API 配置变更，刷新服务源列表')
+		aiSourceList = await fetchAISourceList()
+		// 如果当前有选中的预设，刷新详情中的服务源下拉框
+		if (selectedPresetId) renderDetail()
+	})
+
+	window.addEventListener('resource:char-changed', async () => {
+		console.log('[memoryPreset] 检测到角色卡变更，刷新角色卡列表')
+		await loadCharList()
+	})
+
+	window.addEventListener('resource:preset-changed', async () => {
+		console.log('[memoryPreset] 检测到预设变更，刷新数据')
+		await refreshPresets()
+	})
+
 	console.log(`[memoryPreset] 加载了 ${presets.length} 个记忆预设`)
 }

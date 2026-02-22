@@ -159,6 +159,8 @@ async function handleSwitchPreset() {
 		selectedEntryId = null
 		dom.detail.style.display = 'none'
 		await loadPresetData()
+		// 广播资源变更事件
+		window.dispatchEvent(new CustomEvent('resource:preset-changed', { detail: { action: 'switch', name: selected } }))
 	} catch (err) {
 		showToast('切换失败: ' + err.message, 'error')
 	}
@@ -175,6 +177,8 @@ async function handleDeletePreset() {
 		selectedEntryId = null
 		dom.detail.style.display = 'none'
 		await loadPresetData()
+		// 广播资源变更事件
+		window.dispatchEvent(new CustomEvent('resource:preset-changed', { detail: { action: 'delete', name: selected } }))
 	} catch (err) {
 		showToast('删除失败: ' + err.message, 'error')
 	}
@@ -463,6 +467,8 @@ async function handleImport() {
 			selectedEntryId = null
 			dom.detail.style.display = 'none'
 			await loadPresetData()
+			// 广播资源变更事件
+			window.dispatchEvent(new CustomEvent('resource:preset-changed', { detail: { action: 'import', name: presetName } }))
 		} catch (err) {
 			showToast('导入失败: ' + err.message, 'error')
 		}

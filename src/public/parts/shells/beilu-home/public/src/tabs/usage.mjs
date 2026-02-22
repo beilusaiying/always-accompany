@@ -369,6 +369,8 @@ function createCharCard(key, details, summaries) {
 				const result = await res.json()
 				console.log(`[beilu-home] 角色卡已删除: ${key}`, result.cleanup)
 				await loadChars()
+				// 广播资源变更事件
+				window.dispatchEvent(new CustomEvent('resource:char-changed', { detail: { action: 'delete', name: key } }))
 			} else {
 				const err = await res.json().catch(() => ({}))
 				alert('删除失败: ' + (err.message || res.statusText))
@@ -515,6 +517,11 @@ async function handleImportFiles(files) {
 
 	// 刷新角色卡列表
 	await loadChars()
+
+	// 广播资源变更事件
+	if (!hasError || messages.some(m => !m.startsWith('❌'))) {
+		window.dispatchEvent(new CustomEvent('resource:char-changed', { detail: { action: 'import' } }))
+	}
 }
 
 // ===== 工具栏导入按钮 =====
@@ -553,9 +560,11 @@ function setupCreateChar() {
 			})
 
 			if (res.ok) {
-				console.log('[beilu-home] 角色卡创建成功')
-				await loadChars()
-			} else {
+					console.log('[beilu-home] 角色卡创建成功')
+					await loadChars()
+					// 广播资源变更事件
+					window.dispatchEvent(new CustomEvent('resource:char-changed', { detail: { action: 'create', name: name.trim() } }))
+				} else {
 				const err = await res.json().catch(() => ({}))
 				alert('创建失败: ' + (err.message || res.statusText))
 			}
@@ -777,6 +786,8 @@ async function openCharEditDialog(charKey, displayName, currentAvatarUrl) {
 				setTimeout(() => {
 					document.body.removeChild(overlay)
 					loadChars() // 刷新列表
+					// 广播资源变更事件
+					window.dispatchEvent(new CustomEvent('resource:char-changed', { detail: { action: 'update', name: charKey } }))
 				}, 800)
 			} else {
 				const err = await res.json().catch(() => ({}))

@@ -233,8 +233,8 @@ async function handleSave() {
 	try {
 		await saveApiSource(currentApiName, { generator, config: baseConfig })
 		showStatus('✅ 已保存', 'success')
-		// 重新加载列表以确保数据同步，但不重置当前选择
-		// await loadApiList() // 移除此行，避免列表刷新导致跳转
+		// 广播资源变更事件，通知其他面板（如记忆预设）刷新服务源列表
+		window.dispatchEvent(new CustomEvent('resource:api-changed', { detail: { action: 'save', name: currentApiName } }))
 	} catch (err) {
 		showStatus('❌ ' + err.message, 'error')
 	}
@@ -248,10 +248,13 @@ async function handleDelete() {
 	if (!currentApiName) return
 	if (!confirm(t('sys.api.confirmDelete', { name: currentApiName }))) return
 	try {
+		const deletedName = currentApiName
 		await deleteApiSource(currentApiName)
 		showStatus('已删除', 'success')
 		currentApiName = null
 		await loadApiList()
+		// 广播资源变更事件
+		window.dispatchEvent(new CustomEvent('resource:api-changed', { detail: { action: 'delete', name: deletedName } }))
 	} catch (err) {
 		showStatus('删除失败: ' + err.message, 'error')
 	}
@@ -279,6 +282,8 @@ async function handleNew() {
 		currentApiName = safeName
 		await loadApiList()
 		showStatus('✅ 已创建', 'success')
+		// 广播资源变更事件
+		window.dispatchEvent(new CustomEvent('resource:api-changed', { detail: { action: 'create', name: safeName } }))
 	} catch (err) {
 		showStatus('创建失败: ' + err.message, 'error')
 	}

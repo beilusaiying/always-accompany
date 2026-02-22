@@ -265,7 +265,7 @@ After launch, open your browser and navigate to `http://localhost:1314`
 
 | Component          | Technology                                          |
 | ------------------ | --------------------------------------------------- |
-| Runtime            | Fount (based on Deno)                               |
+| Runtime            | fount (based on Deno)                               |
 | Backend            | Node.js compatibility layer + Express-style routing |
 | Frontend           | Vanilla JavaScript (ESM modules)                    |
 | AI integration     | 14 ServiceGenerators                                |
@@ -278,7 +278,7 @@ After launch, open your browser and navigate to `http://localhost:1314`
 
 This project would not be possible without the contributions of the following open-source projects and communities:
 
-- **[Fount](https://github.com/steve02081504/fount)** — The foundational framework providing AI message handling, service source management, module loading, and other core infrastructure, saving significant development time on low-level implementation
+- **[fount](https://github.com/steve02081504/fount)** — The foundational framework providing AI message handling, service source management, module loading, and other core infrastructure, saving significant development time on low-level implementation
 - **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — The pioneering project in AI roleplay, whose preset format, character card specification, and world book system have become community standards. This project is fully compatible with its ecosystem
 - **SillyTavern Plugin Community** — Thanks to all open-source plugin authors for their exploration and sharing. Their work on rendering engines, memory enhancement, and feature extensions provided valuable references and inspiration for this project's design
 
@@ -357,4 +357,4 @@ Comprehensive system self-diagnosis for faster error reporting and troubleshooti
 
 ## License
 
-This project is built on the [Fount](https://github.com/steve02081504/fount) framework, with direct authorization from the original author.
+This project is built on the [fount](https://github.com/steve02081504/fount) framework, with direct authorization from the original author.

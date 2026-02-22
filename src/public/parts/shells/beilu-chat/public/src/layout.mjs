@@ -268,14 +268,19 @@ function switchTab(tabName) {
 		// 聊天/助手模式：恢复三栏
 		if (leftPanel) {
 			leftPanel.style.display = ''
-			applyLeftPanel()
+			// 移动端不恢复展开状态，保持折叠
+			if (!document.body.classList.contains('beilu-mobile')) {
+				applyLeftPanel()
+			}
 		}
 		if (rightPanel) {
 			rightPanel.style.display = ''
-			if (tabName === 'chat') {
-				layoutState.rightCollapsed = layoutState.rightCollapsedByUser
+			if (!document.body.classList.contains('beilu-mobile')) {
+				if (tabName === 'chat') {
+					layoutState.rightCollapsed = layoutState.rightCollapsedByUser
+				}
+				applyRightPanel()
 			}
-			applyRightPanel()
 		}
 	}
 
@@ -827,6 +832,21 @@ function handleMobileChange(e) {
 		if (leftPanel) leftPanel.classList.add('collapsed')
 		if (rightPanel) rightPanel.classList.add('collapsed')
 
+		// 移动端：取消所有 collapse 的默认展开
+		document.querySelectorAll('.left-panel .collapse input[type="checkbox"], .right-panel .collapse input[type="checkbox"]').forEach(cb => {
+			cb.checked = false
+		})
+
+		// 显示移动端关闭按钮
+		document.querySelectorAll('.mobile-panel-close-bar').forEach(el => el.classList.remove('hidden'))
+
+		// 动态计算顶部栏高度，设置 CSS 变量供 margin-top 使用
+		const topBar = document.getElementById('top-bar')
+		if (topBar) {
+			const h = topBar.offsetHeight
+			document.documentElement.style.setProperty('--top-bar-h', h + 'px')
+		}
+
 		// 替换 toggle 按钮的行为为 overlay 模式
 		leftToggle?.removeEventListener('click', toggleLeftPanel)
 		rightToggle?.removeEventListener('click', toggleRightPanel)
@@ -835,6 +855,13 @@ function handleMobileChange(e) {
 	} else {
 		// 恢复桌面模式
 		closeMobilePanel()
+
+		// 移除顶部栏高度 CSS 变量
+		document.documentElement.style.removeProperty('--top-bar-h')
+
+		// 隐藏移动端关闭按钮
+		document.querySelectorAll('.mobile-panel-close-bar').forEach(el => el.classList.add('hidden'))
+
 		leftToggle?.removeEventListener('click', toggleLeftMobile)
 		rightToggle?.removeEventListener('click', toggleRightMobile)
 		leftToggle?.addEventListener('click', toggleLeftPanel)
@@ -873,3 +900,10 @@ function closeMobilePanel() {
 	}
 	mobileOverlay?.classList.remove('active')
 }
+
+// 绑定移动端关闭按钮事件（使用事件委托）
+document.addEventListener('click', (e) => {
+	if (e.target.closest('[data-action="close-mobile-panel"]')) {
+		closeMobilePanel()
+	}
+})

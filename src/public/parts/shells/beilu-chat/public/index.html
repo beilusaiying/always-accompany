@@ -54,6 +54,10 @@
 
 		<!-- ====== 左栏: 预设 & 设置 ====== -->
 		<aside id="left-panel" class="left-panel border-r border-base-300 bg-base-200 shrink-0 overflow-hidden transition-all duration-300 ease-in-out flex flex-col">
+			<!-- 手机端关闭按钮 -->
+			<div class="mobile-panel-close-bar hidden">
+				<button class="mobile-panel-close-btn" data-action="close-mobile-panel">✕ 关闭</button>
+			</div>
 			<!-- ====== 聊天模式: 预设 & 设置 ====== -->
 			<div id="left-content-chat" class="left-panel-content p-3 space-y-2 overflow-y-auto flex-1">
 				<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
@@ -610,8 +614,12 @@
 
 		<!-- ====== 右栏: AI 设置 ====== -->
 		<aside id="right-panel" class="right-panel border-l border-base-300 bg-base-200 shrink-0 overflow-hidden transition-all duration-300 ease-in-out">
-			<div class="right-panel-content p-3 space-y-2 overflow-y-auto h-full">
-				<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
+		<!-- 手机端关闭按钮 -->
+		<div class="mobile-panel-close-bar hidden">
+			<button class="mobile-panel-close-btn" data-action="close-mobile-panel">✕ 关闭</button>
+		</div>
+		<div class="right-panel-content p-3 space-y-2 overflow-y-auto h-full">
+			<h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
 					<img src="https://api.iconify.design/mdi/robot-outline.svg" class="w-4 h-4 icon" />
 					AI 设置
 				</h3>
@@ -893,7 +901,7 @@
 		</aside>
 	</div>
 
-	<!-- ====== 保留: 左侧边栏 drawer（角色/世界/人设/插件管理） ====== -->
+	<!-- ====== 隐藏: 旧左侧边栏 drawer（CSS display:none，DOM 保留供 sidebar.mjs 使用） ====== -->
 	<div class="absolute top-0 left-0 z-40" id="left-drawer-container">
 		<div class="drawer h-full">
 			<input id="left-drawer" type="checkbox" class="drawer-toggle" />
@@ -973,7 +981,7 @@
 		</div>
 	</div>
 
-	<!-- ====== 保留: 右侧边栏（Part 描述） ====== -->
+	<!-- ====== 隐藏: 旧右侧边栏（CSS display:none，DOM 保留供 sidebar.mjs 使用） ====== -->
 	<div class="fixed top-0 right-0 z-40 w-80 h-full sidebar-hidden" id="right-sidebar-container">
 		<div class="bg-base-300 text-base-content border-l-2 border-base-content h-full" id="right-sidebar">
 			<div class="p-4 h-full overflow-y-auto">

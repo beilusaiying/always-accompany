@@ -3651,6 +3651,18 @@ input[type="checkbox"].checkbox:checked {
 }
 
 /* ============================================================
+   旧 drawer / 旧右侧边栏 — 隐藏（DOM 保留供 sidebar.mjs 使用）
+   ============================================================ */
+
+#left-drawer-container {
+	display: none !important;
+}
+
+#right-sidebar-container {
+	display: none !important;
+}
+
+/* ============================================================
    响应式
    ============================================================ */
 
@@ -3659,7 +3671,7 @@ input[type="checkbox"].checkbox:checked {
 	.left-panel {
 		position: fixed;
 		left: 0;
-		top: 0;
+		top: var(--top-bar-h, 42px);
 		bottom: 0;
 		z-index: 35;
 		box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
@@ -3672,7 +3684,7 @@ input[type="checkbox"].checkbox:checked {
 	.right-panel {
 		position: fixed;
 		right: 0;
-		top: 0;
+		top: var(--top-bar-h, 42px);
 		bottom: 0;
 		z-index: 35;
 		box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
@@ -3697,6 +3709,25 @@ input[type="checkbox"].checkbox:checked {
 		transform: translateX(0) !important;
 		width: 320px !important;
 	}
+
+	/* 顶部栏固定（fixed 而非 sticky，避免手机滚动/键盘弹出时消失） */
+	#top-bar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 40;
+	}
+
+	/* 三栏容器补偿顶部栏高度 */
+	#three-column {
+		margin-top: var(--top-bar-h, 42px);
+	}
+
+	/* 遮罩层 z-index 调整，低于面板(35)和顶栏(40) */
+	.mobile-overlay {
+		z-index: 34;
+	}
 }
 
 /* ============================================================
@@ -3719,6 +3750,33 @@ input[type="checkbox"].checkbox:checked {
 .mobile-overlay.active {
 	display: block;
 	opacity: 1;
+}
+
+/* ============================================================
+	  手机端面板关闭按钮
+	  ============================================================ */
+
+.mobile-panel-close-bar {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0.375rem 0.5rem;
+	border-bottom: 1px solid rgba(212, 160, 23, 0.15);
+	flex-shrink: 0;
+}
+
+.mobile-panel-close-btn {
+	padding: 0.25rem 0.75rem;
+	font-size: 0.75rem;
+	border: 1px solid rgba(212, 160, 23, 0.3);
+	border-radius: 0.25rem;
+	background: rgba(212, 160, 23, 0.08);
+	color: var(--beilu-amber);
+	cursor: pointer;
+	transition: background-color 0.12s ease;
+}
+
+.mobile-panel-close-btn:hover {
+	background: rgba(212, 160, 23, 0.2);
 }
 
 /* ============================================================

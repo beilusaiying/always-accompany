@@ -265,7 +265,7 @@ chmod +x run.sh
 
 | 组件     | 技术                              |
 | -------- | --------------------------------- |
-| 运行时   | Fount（基于 Deno）                |
+| 运行时   | fount（基于 Deno）                |
 | 后端     | Node.js 兼容层 + Express 风格路由 |
 | 前端     | 原生 JavaScript（ESM 模块）       |
 | AI 接入  | 14 种 ServiceGenerator            |
@@ -278,7 +278,7 @@ chmod +x run.sh
 
 本项目的诞生离不开以下开源项目和社区的贡献：
 
-- **[Fount](https://github.com/steve02081504/fount)** — 项目基础框架，提供了 AI 消息收发、服务源管理、模块加载等核心基础设施，为本项目节省了大量底层开发时间
+- **[fount](https://github.com/steve02081504/fount)** — 项目基础框架，提供了 AI 消息收发、服务源管理、模块加载等核心基础设施，为本项目节省了大量底层开发时间
 - **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — AI 角色扮演领域的先驱项目，其预设格式、角色卡规范和世界书系统已成为社区标准，本项目完全兼容其生态
 - **SillyTavern 插件社区** — 感谢所有开源插件作者的探索和分享，他们在渲染引擎、记忆增强、功能扩展等方面的实践，为本项目的功能设计提供了宝贵的参考和灵感
 
@@ -357,4 +357,4 @@ P2-P6 模式行为都可以用提示词修改，无技术门槛，适配性强�
 
 ## 许可证
 
-本项目基于 [Fount](https://github.com/steve02081504/fount) 框架开发，已与原作者直接沟通获得授权使用。
+本项目基于 [fount](https://github.com/steve02081504/fount) 框架开发，已与原作者直接沟通获得授权使用。

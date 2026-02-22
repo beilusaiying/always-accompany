@@ -199,7 +199,7 @@ Layered memory is not a temporary workaround for limited context windows — it 
 - Multi-AI collaboration engine (Memory AI + Reply AI)
 - IDE-style interface with file operations
 - Desktop screenshot system (beilu-eye)
-- Rendering engine (JS-Slash-Runner level)
+- Rendering engine
 - Memory table enhancement
 - Management home page i18n (Chinese / English / Japanese / Traditional Chinese)
 - 11 feature plugins

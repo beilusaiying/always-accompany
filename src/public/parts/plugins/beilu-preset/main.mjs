@@ -764,6 +764,15 @@ const pluginExport = {
 						console.log(`[beilu-preset] 上下文屏蔽: 保留最近 ${runtimeParams.context_msg_limit} 条消息（原 ${prompt_struct.chat_log?.length || 0} 条）`);
 					}
 	
+					// 聊天消息中的 {{user}}/{{char}} 宏替换
+					for (const msg of chatLog) {
+						if (msg.content) {
+							msg.content = msg.content
+								.replace(/{{user}}/gi, env.user)
+								.replace(/{{char}}/gi, env.char)
+						}
+					}
+	
 					// 调用引擎的 buildAllEntries
 					const { beforeChat, afterChat, injectionAbove, injectionBelow } = engine.buildAllEntries(
 						env, macroMemory, chatLog

@@ -50,7 +50,7 @@ const DOCS = [
 <tbody>
 <tr><td><code>{{random::a,b,c}}</code></td><td>从列表中随机选一个（每次不同）</td></tr>
 <tr><td><code>{{pick::a,b,c}}</code></td><td>从列表中确定性选一个（同位置固定）</td></tr>
-<tr><td><code>{{roll:1d6}}</code></td><td>掷骰子</td></tr>
+<tr><td><code>{{roll:1d6}}</code></td><td>掷骰子（支持 NdX、NdX+M、NdX-M，如 {{roll:2d6+3}}）</td></tr>
 <tr><td><code>{{reverse::text}}</code></td><td>反转文本</td></tr>
 <tr><td><code>{{timediff::time1::time2}}</code></td><td>计算两个时间的差值</td></tr>
 <tr><td><code>{{banned "word"}}</code></td><td>违禁词标记（会被清除）</td></tr>

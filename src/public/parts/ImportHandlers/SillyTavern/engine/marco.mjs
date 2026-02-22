@@ -209,7 +209,7 @@ function timeDiffReplace(input) {
  * @returns {any} 替换后的字符串。
  */
 function bannedWordsReplace(inText) {
-	return inText ? inText.replaceAll(/{{banned "(.*)"}}/gi, '') : ''
+	return inText ? inText.replaceAll(/{{banned "([^"]*)"}}/gi, '') : ''
 }
 
 /**

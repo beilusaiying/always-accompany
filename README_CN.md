@@ -2,7 +2,9 @@
   <img src="imgs/icon.jpg" alt="beilu-always accompany" width="200">
 </p>
 
-# beilu-always accompany
+# always accompany
+
+beilu
 
 > **让 AI 真正记住。**
 

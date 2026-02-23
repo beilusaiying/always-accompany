@@ -253,6 +253,9 @@ function cacheDom() {
 	dom.cfgSaveBtn = document.getElementById('mp-cfg-save-btn')
 	dom.cfgStatus = document.getElementById('mp-cfg-status')
 
+	// 冷却轮次
+	dom.cfgCooldownRounds = document.getElementById('mp-cfg-cooldown-rounds')
+
 	// 可用宏参考面板
 	dom.macroRefHeader = document.getElementById('mp-macro-ref-header')
 	dom.macroRefArrow = document.getElementById('mp-macro-ref-arrow')
@@ -278,6 +281,7 @@ let currentUsername = null
 let currentCharName = null
 let currentCharId = '' // 角色选择器选中的角色卡ID
 let currentCharDisplayName = '' // 角色选择器选中的角色卡显示名
+let availablePresets = [] // beilu-preset 中已配置的聊天预设列表（供P1预设切换管理使用）
 
 // ===== 触发方式的中文映射 =====
 
@@ -331,56 +335,59 @@ function renderDetail() {
 		dom.detail.style.display = 'none'
 		return
 	}
+dom.detail.style.display = ''
+dom.detailId.textContent = preset.id
+dom.detailName.textContent = preset.name
+dom.detailToggle.checked = preset.enabled
+dom.detailDesc.value = preset.description || ''
+dom.detailTrigger.value = preset.trigger || 'manual_button'
 
-	dom.detail.style.display = ''
-	dom.detailId.textContent = preset.id
-	dom.detailName.textContent = preset.name
-	dom.detailToggle.checked = preset.enabled
-	dom.detailDesc.value = preset.description || ''
-	dom.detailTrigger.value = preset.trigger || 'manual_button'
+// API 配置
+const api = preset.api_config || {}
+dom.apiCustom.checked = !!api.use_custom
+dom.apiFields.style.display = api.use_custom ? '' : 'none'
 
-	// API 配置
-	const api = preset.api_config || {}
-	dom.apiCustom.checked = !!api.use_custom
-	dom.apiFields.style.display = api.use_custom ? '' : 'none'
+// 动态填充服务源下拉框
+// 确保先填充选项，再设置选中值
+populateSourceSelect(api.source || '')
 
-	// 动态填充服务源下拉框
-	// 确保先填充选项，再设置选中值
-	populateSourceSelect(api.source || '')
-	
-	// 强制设置选中值，即使 populateSourceSelect 内部已经尝试设置
-	// 这是为了防止 populateSourceSelect 中的逻辑未能正确匹配
-	if (api.source) {
-		// 检查该值是否在选项中，如果不在（可能是自定义输入或未加载），添加一个临时选项
-		let optionExists = false
-		for (let i = 0; i < dom.apiSource.options.length; i++) {
-			if (dom.apiSource.options[i].value === api.source) {
-				optionExists = true
-				break
-			}
+// 强制设置选中值，即使 populateSourceSelect 内部已经尝试设置
+// 这是为了防止 populateSourceSelect 中的逻辑未能正确匹配
+if (api.source) {
+	// 检查该值是否在选项中，如果不在（可能是自定义输入或未加载），添加一个临时选项
+	let optionExists = false
+	for (let i = 0; i < dom.apiSource.options.length; i++) {
+		if (dom.apiSource.options[i].value === api.source) {
+			optionExists = true
+			break
 		}
-		if (!optionExists) {
-			const opt = document.createElement('option')
-			opt.value = api.source
-			opt.textContent = api.source + ' (未安装/未知)'
-			dom.apiSource.appendChild(opt)
-		}
-		dom.apiSource.value = api.source
 	}
-
-	dom.apiModel.value = api.model || ''
-	dom.apiTemperature.value = api.temperature ?? 0.3
-	dom.apiMaxTokens.value = api.max_tokens ?? 2000
-
-	// 尝试加载模型列表
-	if (api.use_custom && api.source) {
-		loadModelsForSource(api.source)
+	if (!optionExists) {
+		const opt = document.createElement('option')
+		opt.value = api.source
+		opt.textContent = api.source + ' (未安装/未知)'
+		dom.apiSource.appendChild(opt)
 	}
+	dom.apiSource.value = api.source
+}
 
-	// 提示词列表
-	renderPromptList(preset)
+dom.apiModel.value = api.model || ''
+dom.apiTemperature.value = api.temperature ?? 0.3
+dom.apiMaxTokens.value = api.max_tokens ?? 2000
 
-	// 清除状态
+// 尝试加载模型列表
+if (api.use_custom && api.source) {
+	loadModelsForSource(api.source)
+}
+
+// P1 专属：渲染预设切换管理区域
+renderPresetSwitchSection(preset)
+
+// 提示词列表
+renderPromptList(preset)
+
+// 清除状态
+showStatus('')
 	showStatus('')
 }
 
@@ -405,7 +412,7 @@ function renderPromptList(preset) {
 	preset.prompts.forEach((prompt, idx) => {
 		const identifier = prompt.identifier || `prompt_${idx}`
 		const isExpanded = expandedPrompts.has(identifier)
-		const isChatHistory = prompt.builtin && prompt.content === '{{chat_history}}'
+		const isBuiltinMacro = prompt.builtin && ['{{chat_history}}', '{{presetList}}'].includes(prompt.content)
 
 		// 角色emoji
 		const roleEmoji = prompt.role === 'system' ? '🔧' : prompt.role === 'user' ? '👤' : '🤖'
@@ -424,9 +431,9 @@ function renderPromptList(preset) {
 		const headerHTML = `
 			<span class="beilu-preset-entry-drag" title="拖拽排序">⠿</span>
 			<input type="checkbox" class="checkbox checkbox-xs checkbox-warning mp-prompt-toggle"
-				data-idx="${idx}" ${prompt.enabled ? 'checked' : ''} ${isChatHistory ? 'disabled' : ''} />
+				data-idx="${idx}" ${prompt.enabled ? 'checked' : ''} ${isBuiltinMacro ? 'disabled' : ''} />
 			<span class="beilu-preset-entry-role">${roleEmoji}</span>
-			<span class="beilu-preset-entry-name mp-prompt-title">${isChatHistory ? '{{chat_history}}' : (prompt.identifier || `条目 #${idx}`)}</span>
+			<span class="beilu-preset-entry-name mp-prompt-title">${isBuiltinMacro ? prompt.content : (prompt.identifier || `条目 #${idx}`)}</span>
 			<span class="beilu-preset-entry-type ${roleClass}">${prompt.role}</span>
 			${prompt.builtin ? '<span class="badge badge-xs badge-ghost">内置</span>' : ''}
 			<span class="mp-prompt-expand-arrow ${isExpanded ? 'expanded' : ''}">${isExpanded ? '▼' : '▶'}</span>
@@ -438,8 +445,12 @@ function renderPromptList(preset) {
 		contentDiv.className = 'mp-prompt-content-area'
 		contentDiv.style.display = isExpanded ? '' : 'none'
 
-		if (isChatHistory) {
-			contentDiv.innerHTML = '<div class="text-xs text-base-content/40 italic py-2 px-1">聊天记录注入占位符 — 此位置将插入实际对话记录，不可编辑</div>'
+		if (isBuiltinMacro) {
+			const builtinDescs = {
+				'{{chat_history}}': '聊天记录注入占位符 — 此位置将插入实际对话记录，不可编辑',
+				'{{presetList}}': '预设列表宏占位符 — 运行时将替换为可用预设的描述列表，不可编辑',
+			}
+			contentDiv.innerHTML = `<div class="text-xs text-base-content/40 italic py-2 px-1">${builtinDescs[prompt.content] || '内置宏占位符，不可编辑'}</div>`
 		} else {
 			contentDiv.innerHTML = `
 				<textarea class="textarea textarea-bordered w-full text-xs font-mono mp-prompt-content" data-idx="${idx}" rows="4"
@@ -1004,6 +1015,11 @@ async function refreshPresets() {
 		if (data.config) {
 			currentConfig = data.config
 		}
+
+		// 加载可用预设列表（用于P1预设切换管理）
+		if (data.available_presets) {
+			availablePresets = data.available_presets
+		}
 	}
 
 	renderInjectionList()
@@ -1109,7 +1125,7 @@ function bindEvents() {
 		showStatus('保存中...')
 
 		// 1. 保存预设元数据
-		const metaOk = await setPluginData({
+		const metaPayload = {
 			_action: 'updateMemoryPreset',
 			presetId: selectedPresetId,
 			enabled: dom.detailToggle.checked,
@@ -1122,14 +1138,34 @@ function bindEvents() {
 				temperature: parseFloat(dom.apiTemperature.value) || 0.3,
 				max_tokens: parseInt(dom.apiMaxTokens.value, 10) || 2000,
 			},
-		})
+		}
+
+		// P1 专属：追加预设切换配置
+		if (selectedPresetId === 'P1') {
+			const autoToggle = document.getElementById('mp-ps-auto-toggle')
+			if (autoToggle) metaPayload.preset_switch_auto = autoToggle.checked
+
+			// 收集预设切换条目
+			const entryRows = document.querySelectorAll('.mp-ps-entry-row')
+			const entries = []
+			entryRows.forEach(row => {
+				const name = row.dataset.presetName
+				const descInput = row.querySelector('.mp-ps-entry-desc')
+				if (name) {
+					entries.push({ preset_name: name, description: descInput?.value || '' })
+				}
+			})
+			metaPayload.preset_switch_entries = entries
+		}
+
+		const metaOk = await setPluginData(metaPayload)
 
 		// 2. 保存每个 prompt 的内容
 		let allOk = metaOk && metaOk.success !== false
 		for (let i = 0; i < preset.prompts.length; i++) {
 			const p = preset.prompts[i]
-			// 跳过内置的 {{chat_history}}
-			if (p.builtin && p.content === '{{chat_history}}') continue
+			// 跳过内置宏条目（{{chat_history}}、{{presetList}} 等）
+			if (p.builtin && ['{{chat_history}}', '{{presetList}}'].includes(p.content)) continue
 
 			const pOk = await setPluginData({
 					_action: 'updatePresetPrompt',
@@ -1385,9 +1421,13 @@ function bindEvents() {
 			timeout_ms: parseInt(dom.cfgTimeout?.value, 10) || 60000,
 		}
 
+		const preset_switch = {
+			cooldown_rounds: parseInt(dom.cfgCooldownRounds?.value, 10) || 5,
+		}
+
 		showCfgStatus('保存中...')
 		try {
-			const result = await setPluginData({ _action: 'updateConfig', retrieval })
+			const result = await setPluginData({ _action: 'updateConfig', retrieval, preset_switch })
 			if (result && result.success) {
 				currentConfig = result.config
 				showCfgStatus('✅ 配置已保存', 2000)
@@ -1398,6 +1438,11 @@ function bindEvents() {
 			showCfgStatus('❌ 保存出错: ' + e.message, 3000)
 		}
 	})
+
+	// ===== 可折叠面板 =====
+	setupCollapsiblePanel('mp-maintenance-header', 'mp-maintenance-arrow')
+	setupCollapsiblePanel('mp-injection-header', 'mp-injection-arrow')
+	setupCollapsiblePanel('mp-retrieval-header', 'mp-retrieval-arrow')
 
 	// ===== 可用宏参考面板折叠 =====
 
@@ -1447,6 +1492,34 @@ function renderRetrievalConfig() {
 	if (dom.cfgChatHistoryCount) dom.cfgChatHistoryCount.value = retrieval.chat_history_count ?? 5
 	if (dom.cfgMaxSearchRounds) dom.cfgMaxSearchRounds.value = retrieval.max_search_rounds ?? 5
 	if (dom.cfgTimeout) dom.cfgTimeout.value = retrieval.timeout_ms ?? 60000
+
+	// 预设切换冷却
+	const ps = currentConfig.preset_switch || {}
+	if (dom.cfgCooldownRounds) dom.cfgCooldownRounds.value = ps.cooldown_rounds ?? 5
+}
+
+/** 通用可折叠面板设置 */
+function setupCollapsiblePanel(headerId, arrowId) {
+	const header = document.getElementById(headerId)
+	const arrow = document.getElementById(arrowId)
+	if (!header) return
+
+	header.addEventListener('click', () => {
+		const panel = header.closest('.beilu-config-section')
+		if (!panel) return
+
+		const isCollapsing = arrow?.textContent === '▼'
+		let afterHeader = false
+
+		for (const child of panel.children) {
+			if (child === header) { afterHeader = true; continue }
+			if (afterHeader) {
+				child.style.display = isCollapsing ? 'none' : ''
+			}
+		}
+
+		if (arrow) arrow.textContent = isCollapsing ? '▶' : '▼'
+	})
 }
 
 function showCfgStatus(msg, autoClearMs = 0) {
@@ -1666,6 +1739,176 @@ function escapeHtml(str) {
 	return div.innerHTML
 }
 
+// ===== P1 预设切换管理区域 =====
+
+/**
+ * 渲染 P1 专属的"预设切换管理"区域
+ * 仅当选中的预设是 P1 时调用
+ * @param {object} preset - P1 预设对象
+ */
+function renderPresetSwitchSection(preset) {
+	// 清除旧的预设切换区域
+	const oldSection = document.getElementById('mp-preset-switch-section')
+	if (oldSection) oldSection.remove()
+
+	// 仅 P1 显示
+	if (preset.id !== 'P1') return
+
+	// 在提示词列表之前插入预设切换区域
+	const targetContainer = dom.promptList?.parentElement
+	if (!targetContainer) return
+
+	const section = document.createElement('div')
+	section.id = 'mp-preset-switch-section'
+	section.className = 'beilu-config-section mt-3 mb-3'
+	section.style.cssText = 'border: 1px solid oklch(var(--bc) / 0.1); border-radius: 8px; padding: 12px;'
+
+	const isAutoEnabled = preset.preset_switch_auto !== false // 默认 true
+	const entries = preset.preset_switch_entries || []
+
+	section.innerHTML = `
+		<div class="flex items-center justify-between mb-3 cursor-pointer" id="mp-ps-header">
+			<div class="flex items-center gap-2">
+				<span id="mp-ps-arrow" class="text-xs text-base-content/30">▼</span>
+				<span class="text-sm font-semibold">🔄 预设切换管理</span>
+				<span class="badge badge-xs badge-outline badge-warning">P1 专属</span>
+			</div>
+			<label class="cursor-pointer label gap-2 p-0" title="启用/禁用自动预设切换">
+				<span class="text-xs text-base-content/50">自动切换</span>
+				<input type="checkbox" id="mp-ps-auto-toggle" class="toggle toggle-xs toggle-warning" ${isAutoEnabled ? 'checked' : ''} />
+			</label>
+		</div>
+		<div id="mp-ps-body">
+			<p class="text-xs text-base-content/40 mb-2">
+				配置 P1 检索AI 可以切换的聊天预设。为每个预设编写描述，帮助AI判断何时切换。
+				<br/>关闭"自动切换"后，<code>{{presetList}}</code> 宏将不注入，AI不会输出切换标签。
+			</p>
+			<div id="mp-ps-entry-list" class="space-y-2"></div>
+			<div class="flex items-center gap-2 mt-2">
+				<select id="mp-ps-add-select" class="select select-xs select-bordered flex-grow">
+					<option value="" disabled selected>选择要添加的预设...</option>
+				</select>
+				<button id="mp-ps-add-btn" class="btn btn-xs btn-outline btn-warning">+ 添加</button>
+			</div>
+		</div>
+	`
+
+	// 插入到提示词标题之前
+	const promptHeader = targetContainer.querySelector('#mp-prompt-list')?.previousElementSibling
+	if (promptHeader) {
+		targetContainer.insertBefore(section, promptHeader)
+	} else {
+		targetContainer.insertBefore(section, dom.promptList)
+	}
+
+	// 渲染已有条目
+	const entryList = document.getElementById('mp-ps-entry-list')
+	for (const entry of entries) {
+		appendPresetSwitchEntryRow(entryList, entry.preset_name, entry.description)
+	}
+
+	// 填充可添加的预设下拉框（排除已添加的）
+	refreshPresetSwitchAddSelect(entries)
+
+	// 事件绑定
+	// 折叠/展开
+	document.getElementById('mp-ps-header')?.addEventListener('click', (e) => {
+		if (e.target.tagName.toLowerCase() === 'input') return // 跳过 toggle
+		const body = document.getElementById('mp-ps-body')
+		const arrow = document.getElementById('mp-ps-arrow')
+		if (!body) return
+		if (body.style.display === 'none') {
+			body.style.display = ''
+			if (arrow) arrow.textContent = '▼'
+		} else {
+			body.style.display = 'none'
+			if (arrow) arrow.textContent = '▶'
+		}
+	})
+
+	// 添加按钮
+	document.getElementById('mp-ps-add-btn')?.addEventListener('click', () => {
+		const select = document.getElementById('mp-ps-add-select')
+		const name = select?.value
+		if (!name) return
+
+		appendPresetSwitchEntryRow(entryList, name, '')
+		refreshPresetSwitchAddSelect()
+		select.value = ''
+	})
+}
+
+/**
+ * 往预设切换条目列表中追加一行
+ * @param {HTMLElement} container - 条目列表容器
+ * @param {string} presetName - 预设名称
+ * @param {string} description - 描述文本
+ */
+function appendPresetSwitchEntryRow(container, presetName, description) {
+	if (!container) return
+
+	// 检查是否已有同名条目（防重复）
+	if (container.querySelector(`.mp-ps-entry-row[data-preset-name="${presetName}"]`)) return
+
+	// 查看此预设是否是当前激活的
+	const ap = availablePresets.find(p => p.name === presetName)
+	const isActive = ap?.active
+
+	const row = document.createElement('div')
+	row.className = 'mp-ps-entry-row flex items-start gap-2 p-2 rounded-md'
+	row.dataset.presetName = presetName
+	row.style.cssText = 'background: oklch(var(--bc) / 0.03); border: 1px solid oklch(var(--bc) / 0.06);'
+
+	row.innerHTML = `
+		<div class="flex flex-col flex-grow gap-1">
+			<div class="flex items-center gap-2">
+				<span class="badge badge-xs ${isActive ? 'badge-success' : 'badge-outline'} font-mono">${escapeHtml(presetName)}</span>
+				${isActive ? '<span class="text-[10px] text-success/60">[当前]</span>' : ''}
+			</div>
+			<textarea class="textarea textarea-bordered textarea-xs w-full text-xs mp-ps-entry-desc" rows="2"
+				placeholder="为AI描述此预设的适用场景，如「日常聊天/轻松对话时使用」">${escapeHtml(description)}</textarea>
+		</div>
+		<button class="btn btn-xs btn-ghost btn-error mp-ps-entry-delete" title="移除">✕</button>
+	`
+
+	// 删除按钮
+	row.querySelector('.mp-ps-entry-delete')?.addEventListener('click', () => {
+		row.remove()
+		refreshPresetSwitchAddSelect()
+	})
+
+	container.appendChild(row)
+}
+
+/**
+ * 刷新"添加预设"下拉框（排除已在条目列表中的预设）
+ * @param {Array} [currentEntries] - 当前条目列表（省略时从 DOM 读取）
+ */
+function refreshPresetSwitchAddSelect(currentEntries) {
+	const select = document.getElementById('mp-ps-add-select')
+	if (!select) return
+
+	// 获取已有的预设名称
+	let existingNames
+	if (currentEntries) {
+		existingNames = new Set(currentEntries.map(e => e.preset_name))
+	} else {
+		existingNames = new Set()
+		document.querySelectorAll('.mp-ps-entry-row').forEach(row => {
+			existingNames.add(row.dataset.presetName)
+		})
+	}
+
+	select.innerHTML = '<option value="" disabled selected>选择要添加的预设...</option>'
+	for (const ap of availablePresets) {
+		if (existingNames.has(ap.name)) continue
+		const opt = document.createElement('option')
+		opt.value = ap.name
+		opt.textContent = ap.name + (ap.active ? ' [当前]' : '') + (ap.description ? ` - ${ap.description}` : '')
+		select.appendChild(opt)
+	}
+}
+
 // ===== 预设导出/导入 =====
 
 /** 导出 INJ + P1-P6 预设为 JSON 文件下载 */
@@ -1688,6 +1931,9 @@ function exportPresets() {
 				max_tokens: preset.api_config.max_tokens ?? 2000,
 			}
 		}
+		// 导出时清除预设切换配置（用户私有数据，不应带走）
+		delete preset.preset_switch_entries
+		delete preset.preset_switch_auto
 	}
 
 	const exportData = {

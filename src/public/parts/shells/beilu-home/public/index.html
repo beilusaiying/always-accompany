@@ -430,9 +430,12 @@
 								</div>
 							</div>
 							<div class="beilu-config-section mb-3" id="mp-maintenance-panel">
-								<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center justify-between mb-2 cursor-pointer" id="mp-maintenance-header">
 									<span class="text-sm font-medium" data-i18n="mp.maintenance">🔧 记忆维护</span>
-									<span id="mp-maintenance-status" class="text-xs text-base-content/40"></span>
+									<div class="flex items-center gap-2">
+										<span id="mp-maintenance-status" class="text-xs text-base-content/40"></span>
+										<span class="text-xs text-base-content/30" id="mp-maintenance-arrow">▼</span>
+									</div>
 								</div>
 								<div class="flex flex-wrap gap-2">
 									<button id="mp-end-day-btn" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="执行日终归档流程：汇总今日记忆→写入温层→清空临时表格" data-i18n="mp.maintenance.endDay">🌙 结束今天</button>
@@ -444,9 +447,12 @@
 							</div>
 							<!-- 聊天AI注入提示词面板 -->
 							<div class="beilu-config-section mb-3" id="mp-injection-panel">
-								<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center justify-between mb-2 cursor-pointer" id="mp-injection-header">
 									<span class="text-sm font-medium" data-i18n="mp.injection">📝 聊天AI注入提示词</span>
-									<span class="text-xs text-base-content/40" data-i18n="mp.injection.desc">控制注入到聊天AI对话中的记忆数据格式</span>
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-base-content/40" data-i18n="mp.injection.desc">控制注入到聊天AI对话中的记忆数据格式</span>
+										<span class="text-xs text-base-content/30" id="mp-injection-arrow">▼</span>
+									</div>
 								</div>
 								<div id="mp-injection-list" class="space-y-3">
 									<p class="text-xs text-base-content/40 text-center py-2" data-i18n="mp.injection.loading">加载中...</p>
@@ -454,9 +460,12 @@
 							</div>
 							<!-- 记忆检索配置面板 -->
 							<div class="beilu-config-section mb-3" id="mp-retrieval-config-panel">
-								<div class="flex items-center justify-between mb-2">
+								<div class="flex items-center justify-between mb-2 cursor-pointer" id="mp-retrieval-header">
 									<span class="text-sm font-medium" data-i18n="mp.retrieval">⚙️ 记忆检索配置</span>
-									<span class="text-xs text-base-content/40" data-i18n="mp.retrieval.desc">控制记忆检索AI的行为参数</span>
+									<div class="flex items-center gap-2">
+										<span class="text-xs text-base-content/40" data-i18n="mp.retrieval.desc">控制记忆检索AI的行为参数</span>
+										<span class="text-xs text-base-content/30" id="mp-retrieval-arrow">▼</span>
+									</div>
 								</div>
 								<div class="space-y-2">
 									<div class="beilu-config-row">
@@ -478,6 +487,11 @@
 										<div class="flex items-center gap-2">
 											<span class="text-xs text-base-content/50 shrink-0" data-i18n="mp.retrieval.timeout">超时(ms):</span>
 											<input type="number" id="mp-cfg-timeout" class="input input-xs input-bordered w-24" min="5000" max="300000" step="1000" value="60000" />
+										</div>
+										<div class="flex items-center gap-2">
+											<span class="text-xs text-base-content/50 shrink-0">预设切换冷却:</span>
+											<input type="number" id="mp-cfg-cooldown-rounds" class="input input-xs input-bordered w-20" min="0" max="50" value="5" title="AI切换预设后的冷却轮数（冷却期间系统忽略切换指令）" />
+											<span class="text-xs text-base-content/40">轮</span>
 										</div>
 									</div>
 								</div>
@@ -518,6 +532,10 @@
 										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
 											<code class="font-mono text-amber-500 shrink-0 select-all">{{chat_history}}</code>
 											<span class="text-base-content/60">— 最近 N 条聊天记录（N = 上方"聊天记录条数"配置值）</span>
+										</div>
+										<div class="flex gap-2 items-start p-1.5 rounded" style="background: oklch(var(--bc) / 0.03);">
+											<code class="font-mono text-amber-500 shrink-0 select-all">{{presetList}}</code>
+											<span class="text-base-content/60">— 所有预设名称及描述列表（用于AI自动判断预设切换）</span>
 										</div>
 									</div>
 									<div class="mt-2 p-2 rounded text-xs text-base-content/40" style="background: oklch(var(--bc) / 0.02); border: 1px dashed oklch(var(--bc) / 0.1);">
@@ -1624,10 +1642,39 @@
 								<div data-i18n="user.about.creator">由凛倾创造 💛</div>
 							</div>
 							<div class="mt-4 pt-4 border-t border-base-content/10">
-								<div class="text-xs text-base-content/30 font-mono" id="about-version" data-i18n="user.about.version">版本信息加载中...</div>
+								<div class="text-xs text-base-content/30 font-mono" id="about-version">v1.3</div>
+							</div>
+							</div>
+	
+							<!-- 社区 -->
+							<div class="beilu-about-card mt-4">
+								<div class="text-lg mb-2">🌐 加入我们的社区</div>
+								<div class="text-sm text-base-content/50 mb-3">欢迎来到贝露社区！在这里你可以分享角色卡、提示词预设、世界书，反馈问题，提出建议，或者一起参与项目建设。</div>
+								<div class="space-y-2">
+									<a href="https://discord.gg/agHeDq9bqU" target="_blank" rel="noopener noreferrer"
+										class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
+										style="background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1);"
+										onmouseover="this.style.background='oklch(var(--bc) / 0.1)'"
+										onmouseout="this.style.background='oklch(var(--bc) / 0.05)'">
+										<span style="font-size: 1.2em;">💬</span>
+										<span class="font-medium">Discord 社区</span>
+										<span class="text-xs text-base-content/40 ml-auto">discord.gg/agHeDq9bqU</span>
+									</a>
+									<a href="https://github.com/beilusaiying/always-accompany" target="_blank" rel="noopener noreferrer"
+										class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
+										style="background: oklch(var(--bc) / 0.05); border: 1px solid oklch(var(--bc) / 0.1);"
+										onmouseover="this.style.background='oklch(var(--bc) / 0.1)'"
+										onmouseout="this.style.background='oklch(var(--bc) / 0.05)'">
+										<span style="font-size: 1.2em;">📦</span>
+										<span class="font-medium">GitHub 仓库</span>
+										<span class="text-xs text-base-content/40 ml-auto">开源 · Star ⭐</span>
+									</a>
+								</div>
+								<div class="mt-3 text-xs text-base-content/30">
+									🃏 分享角色卡 · 📝 发布预设 · 🌍 贡献世界书 · 🐛 反馈Bug · 💡 提建议 · 🔧 贡献代码
+								</div>
 							</div>
 						</div>
-					</div>
 
 				</div>
 			</div>

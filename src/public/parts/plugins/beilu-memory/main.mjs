@@ -75,6 +75,7 @@ const DEFAULT_MEMORY_PRESETS = [
 		api_config: { use_custom: false, source: '', model: 'gemini-2.0-flash', temperature: 0.3, max_tokens: 2000 },
 		prompts: [
 			{ role: 'system', content: '', identifier: 'P1_system', enabled: true, builtin: false, deletable: true },
+			{ role: 'system', content: '{{presetList}}', identifier: 'P1_preset_list', enabled: true, builtin: true, deletable: false },
 			{ role: 'user', content: '{{chat_history}}', identifier: 'P1_chat_history', enabled: true, builtin: true, deletable: false },
 		],
 	},
@@ -181,7 +182,26 @@ function loadMemoryPresets(username, charName) {
 	const memDir = ensureMemoryDir(username, '_global')
 	const presetsPath = path.join(memDir, '_memory_presets.json')
 	const data = loadJsonFileIfExists(presetsPath, null)
-	if (data && data.presets) return data
+	if (data && data.presets) {
+		// 自动补全：检查 P1 是否缺少 P1_preset_list builtin 条目
+		const p1 = data.presets.find(p => p.id === 'P1')
+		if (p1 && p1.prompts) {
+			const hasPresetList = p1.prompts.some(p => p.builtin && p.content === '{{presetList}}')
+			if (!hasPresetList) {
+				// 在 {{chat_history}} 之前插入
+				const chatHistoryIdx = p1.prompts.findIndex(p => p.builtin && p.content === '{{chat_history}}')
+				const newEntry = { role: 'system', content: '{{presetList}}', identifier: 'P1_preset_list', enabled: true, builtin: true, deletable: false }
+				if (chatHistoryIdx >= 0) {
+					p1.prompts.splice(chatHistoryIdx, 0, newEntry)
+				} else {
+					p1.prompts.push(newEntry)
+				}
+				console.log('[beilu-memory] 自动补全: P1 添加了 P1_preset_list builtin 条目')
+				saveJsonFile(presetsPath, data)
+			}
+		}
+		return data
+	}
 
 	// 首次初始化：三级加载优先级
 	// 1. 用户已有 _memory_presets.json → 上面已 return
@@ -373,6 +393,12 @@ const DEFAULT_TABLES = [
 /** @type {Map<string, { tables: object, config: object, username: string }>} */
 const memoryCache = new Map()
 
+/**
+ * 预设切换冷却计数器: Map<"username/charName", remainingRounds>
+ * 每次 GetPrompt 调用递减 1，为 0 时允许切换，切换后重置
+ */
+const presetSwitchCooldown = new Map()
+
 // ============================================================
 // 文件系统操作
 // ============================================================
@@ -438,6 +464,7 @@ function ensureMemoryDir(username, charName) {
 			injection: { tables_token_budget: null, hot_memory_token_budget: 3000, warm_memory_token_budget: 2000, cold_search_enabled: true },
 			archive: { temp_memory_threshold: 50, auto_daily_archive: false, cold_archive_after_days: 30 },
 			retrieval: { auto_trigger: true, chat_history_count: 5, max_search_rounds: 5, timeout_ms: 60000 },
+			preset_switch: { cooldown_rounds: 5 },
 			pending_tasks: [],
 		})
 
@@ -2038,6 +2065,62 @@ function parseMemoryNoteTags(content, username, charName) {
 	return content.replace(/<memoryNote\s+type="\w+">[\s\S]*?<\/memoryNote>/gi, '').trim()
 }
 
+/**
+	* 读取 beilu-preset 插件的预设列表（用于 P1 检索AI 的 {{presetList}} 宏）
+	* 直接读取 config_data.json 文件，不依赖插件间 API
+	* @returns {string} 预设列表文本
+	*/
+/**
+ * 读取 beilu-preset 插件的预设列表（用于 P1 检索AI 的 {{presetList}} 宏）
+ * 优先使用 P1.preset_switch_entries 中的用户自定义描述
+ * @param {object} [p1Preset] - P1 预设对象（可选，用于读取 preset_switch_entries）
+ * @returns {string} 预设列表文本
+ */
+function getPresetListForP1(p1Preset) {
+	try {
+		const presetConfigPath = path.join(__pluginDir, '..', 'beilu-preset', 'config_data.json')
+		if (!fs.existsSync(presetConfigPath)) return '(无可用预设)'
+		const presetConfig = loadJsonFile(presetConfigPath)
+		if (!presetConfig?.presets) return '(无可用预设)'
+		const names = Object.keys(presetConfig.presets)
+		if (names.length === 0) return '(无可用预设)'
+
+		// 构建用户自定义描述映射（preset_switch_entries）
+		const customDescMap = {}
+		if (p1Preset?.preset_switch_entries && Array.isArray(p1Preset.preset_switch_entries)) {
+			for (const entry of p1Preset.preset_switch_entries) {
+				if (entry.preset_name && entry.description) {
+					customDescMap[entry.preset_name] = entry.description
+				}
+			}
+		}
+
+		return names.map(n => {
+			const active = n === presetConfig.active_preset ? ' [当前]' : ''
+			// 优先使用用户自定义描述，否则使用 config_data.json 中的描述
+			const desc = customDescMap[n] || presetConfig.presets[n]?.description
+			return `- ${n}${active}${desc ? ': ' + desc : ''}`
+		}).join('\n')
+	} catch (e) {
+		console.warn('[beilu-memory] 读取预设列表失败:', e.message)
+		return '(读取预设列表失败)'
+	}
+}
+
+/**
+	* 从 P1 AI 回复中提取 <presetSwitch> 标签
+	* @param {string} content
+	* @returns {{ presetName: string|null, cleanContent: string }}
+	*/
+function parsePresetSwitchTag(content) {
+	if (!content) return { presetName: null, cleanContent: content }
+	const match = content.match(/<presetSwitch>([\s\S]*?)<\/presetSwitch>/i)
+	if (!match) return { presetName: null, cleanContent: content }
+	const presetName = match[1].trim()
+	const cleanContent = content.replace(/<presetSwitch>[\s\S]*?<\/presetSwitch>/gi, '').trim()
+	return { presetName: presetName || null, cleanContent }
+}
+
 // ============================================================
 // T7: 记忆AI独立调用
 // ============================================================
@@ -2124,6 +2207,20 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 			continue
 		}
 
+		// {{presetList}} builtin 条目：替换为预设列表文本
+		if (prompt.builtin && content === '{{presetList}}') {
+			// 如果自动切换关闭，跳过此条目（不注入预设列表）
+			if (preset.preset_switch_auto === false) continue
+			const presetListText = getPresetListForP1(preset)
+			if (presetListText) {
+				messages.push({
+					role: 'system',
+					content: presetListText,
+				})
+			}
+			continue
+		}
+
 		// 提取最后一条用户消息（兼容酒馆 {{lastUserMessage}} 宏）
 		let lastUserMessage = options.lastUserMessage || ''
 		if (!lastUserMessage && chatHistory) {
@@ -2154,6 +2251,7 @@ async function runMemoryPresetAI(username, charName, preset, memData, displayCha
 			.replace(/\{\{idle_duration\}\}/g, _tm.idle_duration)
 			.replace(/\{\{lasttime\}\}/g, _tm.lasttime)
 			.replace(/\{\{lastdate\}\}/g, _tm.lastdate)
+			.replace(/\{\{presetList\}\}/g, preset.preset_switch_auto === false ? '' : getPresetListForP1(preset))
 
 		// 热记忆数据已通过 {{hotMemory}} 宏替换注入（L2267），不再硬追加
 
@@ -2581,6 +2679,24 @@ const pluginExport = {
 
 				const data = loadMemoryData(username, charName)
 				const presetsData = loadMemoryPresets(username, charName)
+				// 读取 beilu-preset 可用预设列表（供前端预设切换区域使用）
+				let availablePresets = []
+				try {
+					const presetConfigPath = path.join(__pluginDir, '..', 'beilu-preset', 'config_data.json')
+					if (fs.existsSync(presetConfigPath)) {
+						const presetConfig = loadJsonFile(presetConfigPath)
+						if (presetConfig?.presets) {
+							availablePresets = Object.keys(presetConfig.presets).map(n => ({
+								name: n,
+								description: presetConfig.presets[n]?.description || '',
+								active: n === presetConfig.active_preset,
+							}))
+						}
+					}
+				} catch (e) {
+					console.warn('[beilu-memory] GetData: 读取 beilu-preset 列表失败:', e.message)
+				}
+
 				return {
 					username, // 返回当前上下文信息
 					charName,
@@ -2589,6 +2705,7 @@ const pluginExport = {
 					config: data.config,
 					memory_presets: presetsData.presets,
 					injection_prompts: presetsData.injection_prompts || structuredClone(DEFAULT_INJECTION_PROMPTS),
+					available_presets: availablePresets,
 					_actions: [
 						'setEnabled', 'updateTable', 'addTable', 'removeTable', 'getTables',
 						'getMemoryPresets', 'updateMemoryPreset', 'updatePresetPrompt',
@@ -2696,6 +2813,9 @@ const pluginExport = {
 									...data.api_config,
 								}
 							}
+							// 预设切换配置（仅 P1 使用）
+							if (data.preset_switch_auto !== undefined) preset.preset_switch_auto = !!data.preset_switch_auto
+							if (data.preset_switch_entries !== undefined) preset.preset_switch_entries = data.preset_switch_entries
 							saveMemoryPresets(username, charName, presetsData)
 							break
 						}
@@ -3053,22 +3173,25 @@ const pluginExport = {
 
 				// 清洗 _memory_presets.json 中的敏感信息（api_config.source 泄露用户私有服务源名称）
 					function sanitizePresetsForExport(jsonStr) {
-						try {
-							const data = JSON.parse(jsonStr)
-							if (data.presets && Array.isArray(data.presets)) {
-								for (const preset of data.presets) {
-									if (preset.api_config) {
-										preset.api_config = {
-											use_custom: false,
-											source: '',
-											model: preset.api_config.model || '',
-											temperature: preset.api_config.temperature ?? 0.3,
-											max_tokens: preset.api_config.max_tokens ?? 2000,
+							try {
+								const data = JSON.parse(jsonStr)
+								if (data.presets && Array.isArray(data.presets)) {
+									for (const preset of data.presets) {
+										if (preset.api_config) {
+											preset.api_config = {
+												use_custom: false,
+												source: '',
+												model: preset.api_config.model || '',
+												temperature: preset.api_config.temperature ?? 0.3,
+												max_tokens: preset.api_config.max_tokens ?? 2000,
+											}
 										}
+										// 导出时清除预设切换配置（用户私有数据，不应带走）
+										delete preset.preset_switch_entries
+										delete preset.preset_switch_auto
 									}
 								}
-							}
-							return JSON.stringify(data, null, '\t') + '\n'
+								return JSON.stringify(data, null, '\t') + '\n'
 						} catch (e) {
 							console.warn('[beilu-memory] exportMemory: 清洗 _memory_presets.json 失败:', e.message)
 							return jsonStr // 解析失败则原样返回（不阻断导出）
@@ -3500,6 +3623,8 @@ const pluginExport = {
 								enabledInjections: injPromptsForDiag.filter(p => p.enabled).map(p => p.id),
 								injectionLog: [...injectionLog],
 								outputQueueLength: memoryAIOutputQueue.length,
+								presetSwitchCooldown: Object.fromEntries(presetSwitchCooldown),
+								cooldownConfig: memData.config?.preset_switch?.cooldown_rounds ?? 5,
 							}
 						}
 	
@@ -3530,6 +3655,12 @@ const pluginExport = {
 							}
 							if (data.enabled !== undefined) {
 								currentConfig.enabled = !!data.enabled
+							}
+							if (data.preset_switch !== undefined) {
+								currentConfig.preset_switch = {
+									...(currentConfig.preset_switch || {}),
+									...data.preset_switch,
+								}
 							}
 	
 							// 保存到磁盘
@@ -3601,7 +3732,21 @@ const pluginExport = {
 						const textEntries = []
 						// 按 depth 分组的注入条目（传递给 beilu-preset TweakPrompt）
 						const depthInjections = []
+						// P1 预设切换信号（传递给 beilu-preset TweakPrompt Round 1）
+						let _presetSwitchTarget = null
 	
+						// 预设切换冷却：每轮 GetPrompt 递减计数器
+						const _cooldownKey = `${username}/${charName}`
+						const _cooldownConfig = data.config?.preset_switch?.cooldown_rounds ?? 5
+						if (presetSwitchCooldown.has(_cooldownKey)) {
+							const remaining = presetSwitchCooldown.get(_cooldownKey) - 1
+							if (remaining <= 0) {
+								presetSwitchCooldown.delete(_cooldownKey)
+							} else {
+								presetSwitchCooldown.set(_cooldownKey, remaining)
+							}
+						}
+		
 						for (const inj of injectionPrompts) {
 							// 判断是否启用（结合 autoMode 和 filesActiveMode）
 							let shouldEnable = inj.enabled
@@ -3701,7 +3846,20 @@ const pluginExport = {
 										const _noResultKws = ['无需检索', '无相关记忆', '无关联记忆', '无内容', '无相关内容']
 										const _isP1NoResult = replyText.length < 5 || _noResultKws.some(kw => replyText.includes(kw))
 										if (!_isP1NoResult) {
-											const p1Content = `[记忆AI检索结果]\n${result.reply}\n[/记忆AI检索结果]`
+											// 解析预设切换标签
+											const { presetName: switchTarget, cleanContent: cleanedP1Reply } = parsePresetSwitchTag(result.reply)
+											if (switchTarget) {
+												// 冷却检查：系统阻滞 — AI 照常输出标签，但冷却期内不执行
+												const _cdRemaining = presetSwitchCooldown.get(_cooldownKey) || 0
+												if (_cdRemaining > 0) {
+													console.log(`[beilu-memory] P1 请求切换预设: "${switchTarget}" — 冷却中(剩余${_cdRemaining}轮)，已忽略`)
+												} else {
+													_presetSwitchTarget = switchTarget
+													presetSwitchCooldown.set(_cooldownKey, _cooldownConfig)
+													console.log(`[beilu-memory] P1 请求切换预设: "${switchTarget}"，冷却已重置为${_cooldownConfig}轮`)
+												}
+											}
+											const p1Content = `[记忆AI检索结果]\n${cleanedP1Reply}\n[/记忆AI检索结果]`
 											depthInjections.push({
 												id: 'P1_RETRIEVAL', role: 'system',
 												content: p1Content, depth: 0, order: 1,
@@ -3784,6 +3942,8 @@ const pluginExport = {
 							extension: {
 								// 传递给 beilu-preset TweakPrompt 的 depth 注入信息
 								memory_depth_injections: depthInjections,
+								// P1 检索AI 请求的预设切换（传递给 beilu-preset TweakPrompt Round 1）
+								preset_switch_to: _presetSwitchTarget,
 							},
 						}
 				} catch (e) {

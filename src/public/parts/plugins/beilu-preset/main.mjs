@@ -258,10 +258,17 @@ const pluginExport = {
 			 * 返回预设信息、条目列表、模型参数等供 UI 和其他插件使用
 			 */
 			GetData: async () => {
+				// 构建预设描述映射
+				const preset_descriptions = {};
+				for (const [name, preset] of Object.entries(configData.presets)) {
+					preset_descriptions[name] = preset.description || '';
+				}
+
 				return {
 					// 多预设管理
 					active_preset: configData.active_preset,
 					preset_list: Object.keys(configData.presets),
+					preset_descriptions,
 
 					// 当前激活预设的信息
 					preset_name: engine.presetName,
@@ -310,7 +317,7 @@ const pluginExport = {
 
 				// 导入预设（存入 presets，自动激活）
 				if (data.import_preset) {
-					let { json, name } = data.import_preset;
+					let { json, name, description } = data.import_preset;
 					const forceOverwrite = data.import_preset.force_overwrite || false;
 
 					// 重名检测：如果已存在同名预设且不是强制覆盖
@@ -326,11 +333,13 @@ const pluginExport = {
 					} else {
 						engine.load(json, name);
 
-						// 存入多预设结构
+						// 存入多预设结构（保留已有 description 或使用新传入的）
+						const existingDesc = configData.presets[name]?.description;
 						configData.presets[name] = {
 							preset_json: json,
 							model_params: { ...engine.modelParams },
 							macro_variables: {},
+							description: description || existingDesc || '',
 						};
 						configData.active_preset = name;
 
@@ -469,6 +478,7 @@ const pluginExport = {
 							preset_json: blankPreset,
 							model_params: {},
 							macro_variables: {},
+							description: data.create_preset.description || '',
 						};
 
 						// 如果没有激活预设，自动激活新建的
@@ -577,6 +587,15 @@ const pluginExport = {
 					syncActivePresetToConfig();
 				}
 
+				// 更新预设描述
+				if (data.update_preset_description) {
+					const { name, description } = data.update_preset_description;
+					if (name && configData.presets[name]) {
+						configData.presets[name].description = description || '';
+						console.log(`[beilu-preset] 预设描述已更新: "${name}"`);
+					}
+				}
+
 				// 清除当前预设（从列表移除）
 				if (data.clear_preset) {
 					const activeName = configData.active_preset;
@@ -637,8 +656,35 @@ const pluginExport = {
 				// Round 1 (detail_level=2): 收集所有模块内容到宏环境
 				// ================================================================
 				if (detail_level === 2) {
+					// ---- P1 预设切换信号检测 ----
+					// beilu-memory 的 GetPrompt 中 P1 检索AI 可能输出 <presetSwitch> 标签
+					// 通过 extension.preset_switch_to 传递切换信号到这里
+					const memoryExt = prompt_struct.plugin_prompts?.['beilu-memory']?.extension;
+					if (memoryExt?.preset_switch_to) {
+						const targetName = memoryExt.preset_switch_to;
+						const targetData = configData.presets[targetName];
+						if (targetData?.preset_json && targetName !== configData.active_preset) {
+							// 保存当前预设状态
+							syncActivePresetToConfig();
+							// 加载新预设到引擎
+							engine.load(targetData.preset_json, targetName);
+							if (targetData.model_params && Object.keys(targetData.model_params).length > 0) {
+								Object.assign(engine.modelParams, targetData.model_params);
+							}
+							macroMemory.variables = { ...(targetData.macro_variables || {}) };
+							configData.active_preset = targetName;
+							saveConfigToDisk();
+							console.log(`[beilu-preset] P1 触发预设切换: "${targetName}"`);
+						} else if (!targetData) {
+							console.warn(`[beilu-preset] P1 请求切换到不存在的预设: "${targetName}"`);
+						}
+					}
+
 					// 构建基础宏环境
 					const env = buildMacroEnvFromPromptStruct(prompt_struct);
+
+					// 构建 {{presetList}} 宏内容
+					env.presetList = buildPresetListText();
 
 					// 收集各模块内容到宏环境（同步块，保证原子性）
 					env.char_prompt = flattenPromptTexts(prompt_struct.char_prompt);
@@ -910,9 +956,13 @@ function syncActivePresetToConfig() {
 		configData.presets[name] = {};
 	}
 
-	configData.presets[name].preset_json = engine.toJSON();
-	configData.presets[name].model_params = { ...engine.modelParams };
-	configData.presets[name].macro_variables = { ...macroMemory.variables };
+	const existing = configData.presets[name];
+	configData.presets[name] = {
+		preset_json: engine.toJSON(),
+		model_params: { ...engine.modelParams },
+		macro_variables: { ...macroMemory.variables },
+		description: existing?.description || '',
+	};
 }
 
 /**
@@ -963,6 +1013,25 @@ function findLast(chatLog, role) {
 		}
 	}
 	return '';
+}
+
+// ============================================================
+// 预设列表宏构建
+// ============================================================
+
+/**
+ * 构建 {{presetList}} 宏内容
+ * 列出所有可用预设及其描述，当前激活的标记星号
+ * @returns {string}
+ */
+function buildPresetListText() {
+	const names = Object.keys(configData.presets);
+	if (names.length === 0) return '(无可用预设)';
+	return names.map(n => {
+		const active = n === configData.active_preset ? ' [当前]' : '';
+		const desc = configData.presets[n]?.description;
+		return `- ${n}${active}${desc ? ': ' + desc : ''}`;
+	}).join('\n');
 }
 
 // ============================================================

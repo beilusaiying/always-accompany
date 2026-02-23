@@ -537,6 +537,225 @@ beilu-memory_{角色ID}_{日期}.zip
 </div>
 </div>`,
 	},
+	{
+		id: 'memory-ai-commands',
+		category: '记忆系统',
+		icon: '🎯',
+		title: '记忆AI操作指令（通用）',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">记忆AI操作指令参考 — 通用（P1-P6 + 聊天AI）</h4>
+<p class="text-xs text-base-content/50 mb-3">以下操作标签可在所有记忆AI预设（P1-P6）和聊天AI注入（INJ-1/INJ-2）中使用。AI 在回复中输出这些标签，系统自动解析并执行。</p>
+
+<div class="space-y-4 text-xs">
+
+<div class="p-3 rounded border border-amber-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-amber-500">📊 &lt;tableEdit&gt; — 记忆表格操作</strong></div>
+<p class="text-base-content/50 mb-2">对 #0-#9 记忆表格进行增删改。表格编号、列编号均从 0 开始。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+&lt;tableEdit&gt;
+insertRow(表格编号, {列编号: "值", 列编号: "值", ...})
+updateRow(表格编号, 行编号, {列编号: "新值", ...})
+deleteRow(表格编号, 行编号)
+&lt;/tableEdit&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 示例：</strong>
+<pre class="font-mono mt-1">
+&lt;tableEdit&gt;
+insertRow(0, {0: "2026-02-18", 1: "20:00", 2: "贝露的房间", 3: "贝露, 凛倾"})
+updateRow(2, 0, {3: "85"})
+deleteRow(4, 5)
+&lt;/tableEdit&gt;</pre>
+</div>
+<div class="mt-2 text-base-content/40">
+<strong>规则：</strong>一个 &lt;tableEdit&gt; 标签内可以写多条操作（每行一条）。列编号对应表格列顺序（0=第一列）。行编号对应数据行序号（0=第一行）。
+</div>
+</div>
+
+<div class="p-3 rounded border border-green-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-green-500">📦 &lt;memoryArchive&gt; — 文件归档操作</strong></div>
+<p class="text-base-content/50 mb-2">对记忆文件系统（hot/warm/cold 三层）进行文件级操作。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+&lt;memoryArchive&gt;
+createFile("文件路径", {JSON内容})
+appendToFile("文件路径", [{条目1}, {条目2}])
+updateFile("文件路径", {完整JSON内容})
+updateIndex("索引路径", {索引数据})
+moveEntries("源文件", [行索引数组], "目标文件")
+moveEntries("源目录/", "目标目录/")
+clearTable(表格编号)
+&lt;/memoryArchive&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 示例：</strong>
+<pre class="font-mono mt-1">
+&lt;memoryArchive&gt;
+createFile("warm/2026/02/18_summary.json", {
+  "date": "2026-02-18",
+  "summary": "今天和凛倾一起看了星空...",
+  "mood": "幸福",
+  "key_events": ["看星空", "吃蛋糕"]
+})
+
+appendToFile("hot/forever.json", [
+  {"event": "第一次一起看星空", "date": "2026-02-18"}
+])
+
+updateIndex("hot/warm_monthly_index.json", {
+  "2026-02": {"days": ["18"], "event_count": 5}
+})
+
+moveEntries("hot/forever.json", [0, 3, 5], "warm/2026/02/overflow.json")
+
+clearTable(6)
+&lt;/memoryArchive&gt;</pre>
+</div>
+<div class="mt-2 text-base-content/40">
+<strong>规则：</strong>路径相对于角色记忆根目录。createFile 不会覆盖已有文件（已存在则追加）。clearTable 清空整个表格的所有行但保留结构。<br>
+<strong>⚠️ deleteFile 仅 P6 可用</strong>，其他预设调用会被安全策略阻止。
+</div>
+</div>
+
+<div class="p-3 rounded border border-purple-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-purple-500">📝 &lt;memoryNote&gt; — 备忘标签</strong></div>
+<p class="text-base-content/50 mb-2">记忆AI在执行中发现需要记录的问题或待办事项。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+&lt;memoryNote type="todo"&gt;待办事项描述&lt;/memoryNote&gt;
+&lt;memoryNote type="issue"&gt;发现的问题描述&lt;/memoryNote&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 示例：</strong>
+<pre class="font-mono mt-1">
+&lt;memoryNote type="todo"&gt;明天需要执行日终归档&lt;/memoryNote&gt;
+&lt;memoryNote type="issue"&gt;#4 临时记忆已有 48 条，接近阈值&lt;/memoryNote&gt;</pre>
+</div>
+</div>
+
+</div>
+
+<div class="mt-4 p-2 rounded text-xs border border-warning/30" style="background: oklch(var(--wa) / 0.05);">
+<strong>⚠️ 通用注意事项：</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li>所有标签必须成对闭合（&lt;tag&gt;...&lt;/tag&gt;）</li>
+<li>一条 AI 回复中可以包含多个不同类型的标签</li>
+<li>标签内的操作按顺序执行</li>
+<li>操作失败不会中断后续操作，但会记录错误日志</li>
+<li>聊天AI 通过 INJ-1 获得 &lt;tableEdit&gt; 能力，通过 INJ-2 获得文件操作能力</li>
+</ul>
+</div>`,
+	},
+	{
+		id: 'memory-p1-commands',
+		category: '记忆系统',
+		icon: '🔍',
+		title: 'P1 检索AI 专属指令',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">P1 检索AI 专属操作指令</h4>
+<p class="text-xs text-base-content/50 mb-3">以下操作标签<strong>主要由 P1 检索AI 使用</strong>。P1 在每条消息时自动触发，具备多轮检索和预设切换能力。P2-P6 也支持 &lt;memorySearch&gt; 多轮检索（代码层统一处理），但 &lt;presetSwitch&gt; 仅 P1 可用。</p>
+
+<div class="space-y-4 text-xs">
+
+<div class="p-3 rounded border border-blue-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-blue-500">🔍 &lt;memorySearch&gt; — 多轮检索</strong><span class="badge badge-xs badge-info">P1-P6 通用</span></div>
+<p class="text-base-content/50 mb-2">记忆AI 可以在温层/冷层文件系统中进行多轮检索（最多 5 轮）。每轮输出检索指令后，系统返回结果，AI 根据结果决定是否继续检索或结束。代码层面 <code>runMemoryPresetAI()</code> 对所有预设统一支持此标签。P1 在每条消息时自动触发，P2-P6 的提示词中也教授了 readFile/listDir 用法（P4、P6 甚至要求"先执行前置检索"）。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+&lt;memorySearch&gt;
+readFile("文件路径")
+listDir("目录路径")
+&lt;/memorySearch&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 检索流程示例：</strong>
+<pre class="font-mono mt-1">
+<strong>── 第 1 轮 ──</strong>
+P1 分析对话上下文，发现用户提到"上次生日"
+→ 输出：
+&lt;memorySearch&gt;
+listDir("warm/2026/02/")
+readFile("hot/warm_monthly_index.json")
+&lt;/memorySearch&gt;
+
+<strong>── 系统返回文件内容 ──</strong>
+
+<strong>── 第 2 轮 ──</strong>
+P1 根据索引找到相关日期
+→ 输出：
+&lt;memorySearch&gt;
+readFile("warm/2026/02/14_summary.json")
+readFile("warm/2026/02/14_details/batch_001.json")
+&lt;/memorySearch&gt;
+
+<strong>── 系统返回文件内容 ──</strong>
+
+<strong>── P1 结束检索，输出检索结果摘要 ──</strong></pre>
+</div>
+<div class="mt-2 text-base-content/40">
+<strong>规则：</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li>一个 &lt;memorySearch&gt; 标签内可写多条 readFile/listDir</li>
+<li>最多 5 轮检索交互，超过则强制结束</li>
+<li>路径相对于角色记忆根目录</li>
+<li>readFile 返回 JSON 文件内容；listDir 返回目录下的文件列表</li>
+<li>检索结果会注入到 P1 的下一轮对话上下文中</li>
+</ul>
+</div>
+</div>
+
+<div class="p-3 rounded border border-orange-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-orange-500">🔄 &lt;presetSwitch&gt; — 预设切换</strong><span class="badge badge-xs badge-info">P1 专属</span></div>
+<p class="text-base-content/50 mb-2">P1 可以在检索结束后请求切换到其他记忆AI预设继续执行任务。受冷却机制约束。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+&lt;presetSwitch&gt;预设名称&lt;/presetSwitch&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 示例：</strong>
+<pre class="font-mono mt-1">
+&lt;presetSwitch&gt;P3 每日总结AI&lt;/presetSwitch&gt;
+&lt;presetSwitch&gt;P2 表格总结/归档AI&lt;/presetSwitch&gt;</pre>
+</div>
+<div class="mt-2 text-base-content/40">
+<strong>规则：</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li>预设名称必须与系统中已配置的预设名完全匹配</li>
+<li>切换受冷却时间限制（默认 60 秒内同一预设不能重复触发）</li>
+<li>P1 可通过 <code>{{presetList}}</code> 宏获取当前可用的预设列表</li>
+<li>切换成功后，目标预设会在独立的 AI 调用中执行</li>
+</ul>
+</div>
+</div>
+
+<div class="p-3 rounded border border-cyan-500/30" style="background: oklch(var(--bc) / 0.03);">
+<div class="flex items-center gap-2 mb-2"><strong class="text-sm text-cyan-500">📋 {{presetList}} — 可用预设列表宏</strong><span class="badge badge-xs badge-info">P1 专属</span></div>
+<p class="text-base-content/50 mb-2">在 P1 的提示词中使用，自动展开为当前已启用的记忆AI预设列表（含预设名和描述），供 P1 决策切换目标。</p>
+<pre class="font-mono leading-relaxed p-2 rounded" style="background: oklch(var(--bc) / 0.06);">
+{{presetList}}
+
+<strong>展开后示例：</strong>
+可用预设：
+- P2 表格总结/归档AI — #4超阈值时压缩归档
+- P3 每日总结AI — 日终生成日总结
+- P4 热→温转移AI — 审查热层转移过时记忆
+- P5 月度总结/归档AI — 温层超30天归档到冷层
+- P6 格式检查/修复AI — 扫描修复格式问题</pre>
+</div>
+
+</div>
+
+<div class="mt-4 p-3 rounded text-xs border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>📌 P1 完整工作流程：</strong>
+<ol class="list-decimal pl-4 mt-1 space-y-1">
+<li><strong>分析阶段</strong> — 读取对话上下文 + 热层数据（{{hotMemory}}），判断是否需要检索</li>
+<li><strong>检索阶段</strong> — 通过 &lt;memorySearch&gt; 在温/冷层多轮检索（最多5轮）</li>
+<li><strong>输出阶段</strong> — 输出检索到的相关记忆摘要，注入到聊天AI的上下文中</li>
+<li><strong>表格维护</strong> — 可同时使用 &lt;tableEdit&gt; 更新表格</li>
+<li><strong>预设切换（可选）</strong> — 发现需要归档/总结时，通过 &lt;presetSwitch&gt; 触发其他预设</li>
+</ol>
+</div>
+
+<div class="mt-2 p-2 rounded text-xs border border-warning/30" style="background: oklch(var(--wa) / 0.05);">
+<strong>⚠️ P1 与其他预设的区别：</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li>P1 是<strong>唯一</strong>支持 &lt;presetSwitch&gt; 预设切换的预设</li>
+<li>P1 的触发方式是 <code>auto_on_message</code>（每条用户消息后自动触发）</li>
+<li>&lt;memorySearch&gt; 多轮检索对 P1-P6 <strong>统一可用</strong>（代码层 <code>runMemoryPresetAI()</code> 无预设ID限制）</li>
+<li>P2-P6 的输入数据通过 {{tableData}}、{{hotMemory}} 等宏注入热层+表格数据；同时可通过 &lt;memorySearch&gt; 的 readFile/listDir 主动检索温层和冷层文件</li>
+<li>P2-P6 的归档操作有两条并行通道：代码函数自动执行（archiveTempMemory 等）+ AI 通过 &lt;memoryArchive&gt; 标签手动操作</li>
+</ul>
+</div>`,
+	},
 ]
 
 // 分类列表（自动从 DOCS 中提取）

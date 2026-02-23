@@ -102,17 +102,29 @@ This means:
 
 The system has **7 built-in AI roles**, each with a dedicated responsibility:
 
-| AI                    | Role                                                                       | Trigger              |
-| --------------------- | -------------------------------------------------------------------------- | -------------------- |
-| Chat AI               | Conversation with users, file operations                                   | User sends a message |
-| P1 Retrieval AI       | Search relevant history from memory layers (up to 5 rounds of deep search) | Automatic per turn   |
-| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold             | Automatic            |
-| P3 Daily Summary AI   | Generate detailed daily summary                                            | Manual               |
-| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                              | Manual               |
-| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                             | Auto/Manual          |
-| P6 Repair AI          | Check and fix memory file format issues                                    | Manual               |
+| AI                    | Role                                                                                                    | Trigger              |
+| --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
+| Chat AI               | Conversation with users, file operations                                                                | User sends a message |
+| P1 Retrieval AI       | Search relevant history from memory layers (up to 5 rounds of deep search) + **Smart Preset Switching** | Automatic per turn   |
+| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold                                          | Automatic            |
+| P3 Daily Summary AI   | Generate detailed daily summary                                                                         | Manual               |
+| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                                                           | Manual               |
+| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                                                          | Auto/Manual          |
+| P6 Repair AI          | Check and fix memory file format issues                                                                 | Manual               |
 
 Retrieval AI is recommended to use **Gemini 2.0/2.5 Flash** (fast, low cost). Reply AI can use any model of your choice.
+
+### 🔄 Smart Preset Switching — AI Auto-Adapts to Interaction Modes
+
+**Major breakthrough**: P1 Retrieval AI doesn't just retrieve memories — it **analyzes conversation intent in real-time and automatically switches to the most suitable prompt preset**.
+
+- **Multi-mode adaptation**: Casual chat, roleplay, coding, prompt engineering… the AI automatically switches to the optimal preset based on conversation content, with prompts and COT (Chain of Thought) changing accordingly
+- **Seamless experience**: No manual intervention needed — just say "help me write code" and the AI's behavior mode adjusts in real-time
+- **Cooldown anti-oscillation**: Built-in cooldown counter prevents rapid repeated switching
+- **Fully customizable**: Switching logic is guided by COT in prompts; users can define their own switching conditions and strategies
+- **Manual quick switch**: Also supports one-click manual preset switching from the chat interface
+
+This means AI is no longer "one preset fits all" — it **dynamically adapts to the optimal behavior mode based on the current context**, making it a truly multi-mode intelligent agent.
 
 ### 🖥️ IDE-Style Interface
 
@@ -220,8 +232,9 @@ Layered memory is not a temporary workaround for limited context windows — it 
 
 ### ✅ Completed
 
-- Original three-layer memory algorithm (pure prompt-driven)
+- Original three-layer memory algorithm (pure prompt-driven) — **Permanent memory, theoretically unlimited**
 - Multi-AI collaboration engine (Memory AI + Reply AI)
+- **🆕 Smart Preset Switching System** — P1 real-time context analysis with auto preset switching, multi-mode adaptive COT
 - IDE-style interface with file operations
 - Desktop screenshot system (beilu-eye)
 - Rendering engine
@@ -299,6 +312,33 @@ After launch, open your browser and navigate to `http://localhost:1314`
 | AI integration     | 14 ServiceGenerators                                |
 | Desktop screenshot | Python (mss + tkinter + pystray)                    |
 | Storage            | Pure JSON file system                               |
+
+---
+
+## 🎁 Community & Resources
+
+### Ready-to-Use Memory Prompt Presets
+
+The project includes a carefully crafted **P1-P6 Memory AI prompt preset**, ready to use out of the box:
+
+📦 **[beilu-presets_2026-02-23.json](beilu-presets_2026-02-23.json)** — Complete prompt configurations for P1 Retrieval AI, P2 Archive AI, P3 Daily Summary AI, P4 Hot→Warm AI, P5 Monthly Summary AI, and P6 Repair AI
+
+**How to use**: Home → Memory Presets → Click "Import" → Select this JSON file to import all presets in one click.
+
+### Join the Community
+
+💬 **[Discord Community](https://discord.gg/agHeDq9bqU)** — Discussion, resource sharing, bug reports — come join us!
+
+We welcome everyone to participate in building this project! You can:
+
+- 🃏 **Share character cards** — Create and publish your character cards to enrich the community
+- 📝 **Publish prompt presets** — Share your tuned memory presets and chat presets to help others
+- 🌍 **Contribute world books** — Build world settings for other users to import
+- 🐛 **Report bugs** — Use the one-click log export feature and attach the diagnostic report
+- 💡 **Suggest features** — Feature requests, UI improvements, plugin ideas — all welcome
+- 🔧 **Contribute code** — Fork & PR, let's build together
+
+> The community has many more great prompts and character card resources — feel free to explore and share!
 
 ---
 

@@ -109,6 +109,7 @@ function createDefaultRule(overrides = {}) {
 		promptOnly: false,
 		scope: 'global',
 		boundCharName: '',
+		boundPresetName: '',
 		...overrides,
 	}
 }
@@ -225,7 +226,7 @@ function applyRegexRules(text, rules, placementFilter, options = {}) {
 	if (!rules || !Array.isArray(rules) || rules.length === 0) return text
 	if (!text || typeof text !== 'string') return text
 
-	const { messageDepth = 0, macroValues = {}, isEdit = false, currentCharName = '' } = options
+	const { messageDepth = 0, macroValues = {}, isEdit = false, currentCharName = '', currentPresetName = '' } = options
 
 	for (const rule of rules) {
 		if (rule.disabled) continue
@@ -235,6 +236,18 @@ function applyRegexRules(text, rules, placementFilter, options = {}) {
 		if (rule.scope === 'scoped' && rule.boundCharName && currentCharName) {
 			if (rule.boundCharName !== currentCharName) continue
 		}
+
+		// 作用域过滤：preset 规则只对绑定的预设生效
+		if (rule.scope === 'preset') {
+			const ruleBoundPreset = rule.boundPresetName || ''
+			if (ruleBoundPreset && currentPresetName && ruleBoundPreset !== currentPresetName) continue
+			// 如果 currentPresetName 为空但规则有绑定，跳过
+			if (ruleBoundPreset && !currentPresetName) continue
+		}
+
+		// 避免与角色卡 runRegex 重复执行：
+		// scoped 的 ai_output 规则由角色卡 runRegex 负责执行
+		if (rule.scope === 'scoped' && placementFilter === 'ai_output') continue
 
 		// 深度范围检查
 		const minD = rule.minDepth ?? -1
@@ -275,7 +288,7 @@ function testRule(input, rule, macroValues = {}) {
  * @param {'global'|'scoped'|'preset'} [scope='global'] - 导入到哪个作用域
  * @returns {RegexScript[]}
  */
-function importFromSTFormat(stScripts, scope = 'global', boundCharName = '') {
+function importFromSTFormat(stScripts, scope = 'global', boundCharName = '', boundPresetName = '') {
 	if (!Array.isArray(stScripts)) return []
 
 	return stScripts.map(script => {
@@ -319,6 +332,7 @@ function importFromSTFormat(stScripts, scope = 'global', boundCharName = '') {
 			promptOnly: script.promptOnly || false,
 			scope,
 			boundCharName,
+			boundPresetName,
 		})
 	})
 }
@@ -424,6 +438,7 @@ const pluginExport = {
 					'importST', 'exportRule', 'exportAll',
 					'toggleAll', 'duplicateRule', 'testRule',
 					'moveScope', 'batchToggle', 'removeByChar',
+					'removeByPreset', 'syncPresetRegex',
 					'setRenderMode',
 				],
 				_stats: {
@@ -473,6 +488,17 @@ const pluginExport = {
 							const rule = pluginData.rules.find(r => r.id === data.ruleId)
 							if (rule && data.newScope) {
 								rule.scope = data.newScope
+								// 联动清理/设置绑定字段
+								if (data.newScope === 'global') {
+									rule.boundCharName = ''
+									rule.boundPresetName = ''
+								} else if (data.newScope === 'scoped') {
+									rule.boundCharName = data.charName || rule.boundCharName || ''
+									rule.boundPresetName = ''
+								} else if (data.newScope === 'preset') {
+									rule.boundCharName = ''
+									rule.boundPresetName = data.presetName || rule.boundPresetName || ''
+								}
 							}
 							saveConfigToDisk()
 							break
@@ -480,10 +506,11 @@ const pluginExport = {
 						case 'importST': {
 							const scope = data.scope || 'global'
 							const boundCharName = data.boundCharName || ''
-							const imported = importFromSTFormat(data.scripts || [], scope, boundCharName)
+							const boundPresetName = data.boundPresetName || ''
+							const imported = importFromSTFormat(data.scripts || [], scope, boundCharName, boundPresetName)
 							pluginData.rules.push(...imported)
 							saveConfigToDisk()
-							console.log(`[beilu-regex] 导入 ${imported.length} 条 ST 正则脚本 (scope: ${scope}${boundCharName ? ', char: ' + boundCharName : ''})`)
+							console.log(`[beilu-regex] 导入 ${imported.length} 条 ST 正则脚本 (scope: ${scope}${boundCharName ? ', char: ' + boundCharName : ''}${boundPresetName ? ', preset: ' + boundPresetName : ''})`)
 							return { _result: { count: imported.length } }
 						}
 						case 'removeByChar': {
@@ -496,6 +523,46 @@ const pluginExport = {
 								return { _result: { removed: before - pluginData.rules.length } }
 							}
 							break
+						}
+						case 'removeByPreset': {
+							const presetName = data.presetName
+							if (presetName) {
+								const before = pluginData.rules.length
+								pluginData.rules = pluginData.rules.filter(r =>
+									!(r.scope === 'preset' && r.boundPresetName === presetName)
+								)
+								saveConfigToDisk()
+								const removed = before - pluginData.rules.length
+								console.log(`[beilu-regex] 已清理预设 "${presetName}" 绑定的 ${removed} 条正则规则`)
+								return { _result: { removed } }
+							}
+							break
+						}
+						case 'syncPresetRegex': {
+							// 一步完成：清除旧预设正则 + 导入新预设正则
+							const presetName = data.presetName
+							if (!presetName) {
+								console.warn('[beilu-regex] syncPresetRegex: 缺少 presetName')
+								break
+							}
+							// 1. 清除该预设名绑定的旧正则
+							const before = pluginData.rules.length
+							pluginData.rules = pluginData.rules.filter(r =>
+								!(r.scope === 'preset' && r.boundPresetName === presetName)
+							)
+							const removed = before - pluginData.rules.length
+	
+							// 2. 导入新正则
+							const scripts = data.scripts || []
+							let imported = []
+							if (scripts.length > 0) {
+								imported = importFromSTFormat(scripts, 'preset', '', presetName)
+								pluginData.rules.push(...imported)
+							}
+	
+							saveConfigToDisk()
+							console.log(`[beilu-regex] syncPresetRegex "${presetName}": 移除 ${removed} 条, 导入 ${imported.length} 条`)
+							return { _result: { removed, imported: imported.length } }
 						}
 						case 'exportRule': {
 							const rule = pluginData.rules.find(r => r.id === data.ruleId)
@@ -576,6 +643,14 @@ const pluginExport = {
 				// 构建宏替换值
 				const macroValues = {}
 				const currentCharName = prompt_struct?.Charname || ''
+
+				// 获取当前预设名（从 beilu-preset 的 extension 中读取）
+				let currentPresetName = ''
+				const presetPrompt = prompt_struct?.plugin_prompts?.['beilu-preset']
+				if (presetPrompt?.extension?.preset_name) {
+					currentPresetName = presetPrompt.extension.preset_name
+				}
+
 				if (prompt_struct) {
 					if (prompt_struct.Charname) macroValues.char = prompt_struct.Charname
 					if (prompt_struct.UserCharname) macroValues.user = prompt_struct.UserCharname
@@ -613,7 +688,7 @@ const pluginExport = {
 								content,
 								pluginData.rules,
 								'user_input',
-								{ messageDepth: depth, macroValues, currentCharName }
+								{ messageDepth: depth, macroValues, currentCharName, currentPresetName }
 							)
 						}
 
@@ -634,7 +709,7 @@ const pluginExport = {
 											t.content,
 											pluginData.rules,
 											'world_info',
-											{ macroValues, currentCharName }
+											{ macroValues, currentCharName, currentPresetName }
 										)
 								}
 							}
@@ -652,6 +727,14 @@ const pluginExport = {
 
 				const macroValues = {}
 				const currentCharName = args?.prompt_struct?.Charname || ''
+
+				// 获取当前预设名
+				let currentPresetName = ''
+				const presetPrompt = args?.prompt_struct?.plugin_prompts?.['beilu-preset']
+				if (presetPrompt?.extension?.preset_name) {
+					currentPresetName = presetPrompt.extension.preset_name
+				}
+
 				if (args?.prompt_struct) {
 					if (args.prompt_struct.Charname) macroValues.char = args.prompt_struct.Charname
 					if (args.prompt_struct.UserCharname) macroValues.user = args.prompt_struct.UserCharname
@@ -661,7 +744,7 @@ const pluginExport = {
 					reply.content,
 					pluginData.rules,
 					'ai_output',
-					{ messageDepth: 0, macroValues, currentCharName }
+					{ messageDepth: 0, macroValues, currentCharName, currentPresetName }
 				)
 
 				return false

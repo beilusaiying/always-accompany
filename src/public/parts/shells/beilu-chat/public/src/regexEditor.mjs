@@ -162,6 +162,14 @@ function getCurrentCharName() {
 }
 
 /**
+ * 获取当前预设名（从预设选择器读取）
+ * @returns {string}
+ */
+function getCurrentPresetName() {
+	return document.getElementById('preset-selector')?.value || ''
+}
+
+/**
  * 渲染单条规则的列表项 HTML
  * @param {object} rule - 规则对象
  * @param {string} colorClass - 颜色 class（如 'amber', 'blue', 'green'）
@@ -200,11 +208,16 @@ function renderRuleItemHTML(rule, colorClass, showCharLabel = false) {
  * @returns {string}
  */
 function renderGroupedRules(rules, currentCharName, colorClass, scope) {
+	// preset 规则按 boundPresetName 分组，scoped 规则按 boundCharName 分组
+	const groupField = scope === 'preset' ? 'boundPresetName' : 'boundCharName'
+	const currentName = scope === 'preset' ? getCurrentPresetName() : currentCharName
+	const emptyLabel = scope === 'scoped' ? '角色' : '预设'
+
 	if (!showAllScoped) {
-		// 只显示当前角色的规则
-		const currentRules = rules.filter(r => r.boundCharName === currentCharName)
+		// 只显示当前角色/预设的规则
+		const currentRules = rules.filter(r => r[groupField] === currentName)
 		if (currentRules.length === 0) {
-			return `<p class="text-center text-base-content/30 py-3 text-[11px]">当前角色无${scope === 'scoped' ? '角色' : '预设'}规则</p>`
+			return `<p class="text-center text-base-content/30 py-3 text-[11px]">当前${emptyLabel}无${emptyLabel}规则</p>`
 		}
 		let html = ''
 		for (const rule of currentRules) {
@@ -213,30 +226,30 @@ function renderGroupedRules(rules, currentCharName, colorClass, scope) {
 		return html
 	}
 
-	// 显示全部：按角色名分组折叠
-	const byChar = {}
+	// 显示全部：按分组字段折叠
+	const byGroup = {}
 	for (const rule of rules) {
-		const charName = rule.boundCharName || '(未绑定)'
-		if (!byChar[charName]) byChar[charName] = []
-		byChar[charName].push(rule)
+		const name = rule[groupField] || '(未绑定)'
+		if (!byGroup[name]) byGroup[name] = []
+		byGroup[name].push(rule)
 	}
 
-	if (Object.keys(byChar).length === 0) {
+	if (Object.keys(byGroup).length === 0) {
 		return `<p class="text-center text-base-content/30 py-3 text-[11px]">无规则</p>`
 	}
 
 	let html = ''
-	// 当前角色排最前
-	const sortedNames = Object.keys(byChar).sort((a, b) => {
-		if (a === currentCharName) return -1
-		if (b === currentCharName) return 1
+	// 当前角色/预设排最前
+	const sortedNames = Object.keys(byGroup).sort((a, b) => {
+		if (a === currentName) return -1
+		if (b === currentName) return 1
 		return a.localeCompare(b)
 	})
 
-	for (const charName of sortedNames) {
-		const charRules = byChar[charName]
-		const isCurrent = charName === currentCharName
-		const groupKey = `${scope}-${charName}`
+	for (const groupName of sortedNames) {
+		const groupRules = byGroup[groupName]
+		const isCurrent = groupName === currentName
+		const groupKey = `${scope}-${groupName}`
 		const isExpanded = isCurrent || expandedCharGroups.has(groupKey)
 
 		html += `
@@ -244,15 +257,15 @@ function renderGroupedRules(rules, currentCharName, colorClass, scope) {
 			<div class="px-3 py-1 bg-base-200/50 flex items-center justify-between cursor-pointer char-group-toggle"
 				data-group-key="${escapeHtml(groupKey)}">
 				<div class="flex items-center gap-1.5">
-					<span class="text-[10px] ${isCurrent ? `text-${colorClass}-600 font-bold` : 'text-base-content/50'}">${isCurrent ? '▸ ' : ''}${escapeHtml(charName)}</span>
-					<span class="badge badge-xs ${isCurrent ? `badge-${colorClass === 'blue' ? 'info' : 'success'}` : 'badge-ghost'}">${charRules.length}</span>
+					<span class="text-[10px] ${isCurrent ? `text-${colorClass}-600 font-bold` : 'text-base-content/50'}">${isCurrent ? '▸ ' : ''}${escapeHtml(groupName)}</span>
+					<span class="badge badge-xs ${isCurrent ? `badge-${colorClass === 'blue' ? 'info' : 'success'}` : 'badge-ghost'}">${groupRules.length}</span>
 					${isCurrent ? '<span class="text-[9px] text-base-content/40">当前</span>' : ''}
 				</div>
 				<span class="text-[10px] text-base-content/30">${isExpanded ? '▼' : '▶'}</span>
 			</div>
 			<div class="char-group-content" style="${isExpanded ? '' : 'display:none'}" data-group-key="${escapeHtml(groupKey)}">
 		`
-		for (const rule of charRules) {
+		for (const rule of groupRules) {
 			html += renderRuleItemHTML(rule, colorClass, false)
 		}
 		html += `</div></div>`
@@ -559,14 +572,24 @@ function renderEditorForm(rule) {
 		</div>
 	
 		<!-- 绑定角色（仅 scoped 规则生效） -->
-		<div class="form-control" id="bound-char-section" ${rule.scope !== 'scoped' ? 'style="display:none"' : ''}>
-			<label class="label py-0.5">
-				<span class="label-text text-xs font-medium">绑定角色名</span>
-				<span class="label-text-alt text-[10px] text-base-content/40">scoped 规则仅对此角色生效，留空则对所有角色生效</span>
-			</label>
-			<input type="text" id="edit-bound-char-name" value="${escapeAttr(rule.boundCharName || '')}"
-				class="input input-sm input-bordered w-full" placeholder="角色名称（如：贝露）" />
-		</div>
+			<div class="form-control" id="bound-char-section" ${rule.scope !== 'scoped' ? 'style="display:none"' : ''}>
+				<label class="label py-0.5">
+					<span class="label-text text-xs font-medium">绑定角色名</span>
+					<span class="label-text-alt text-[10px] text-base-content/40">scoped 规则仅对此角色生效，留空则对所有角色生效</span>
+				</label>
+				<input type="text" id="edit-bound-char-name" value="${escapeAttr(rule.boundCharName || '')}"
+					class="input input-sm input-bordered w-full" placeholder="角色名称（如：贝露）" />
+			</div>
+	
+		<!-- 绑定预设（仅 preset 规则生效） -->
+			<div class="form-control" id="bound-preset-section" ${rule.scope !== 'preset' ? 'style="display:none"' : ''}>
+				<label class="label py-0.5">
+					<span class="label-text text-xs font-medium">绑定预设名</span>
+					<span class="label-text-alt text-[10px] text-base-content/40">preset 规则仅在该预设激活时生效</span>
+				</label>
+				<input type="text" id="edit-bound-preset-name" value="${escapeAttr(rule.boundPresetName || '')}"
+					class="input input-sm input-bordered w-full" placeholder="预设名称" />
+			</div>
 	
 		<!-- 宏替换模式 -->
 	<div class="form-control">
@@ -784,6 +807,7 @@ function collectFormData() {
 		markdownOnly: form.querySelector('#edit-markdown-only')?.checked || false,
 		promptOnly: form.querySelector('#edit-prompt-only')?.checked || false,
 		boundCharName: form.querySelector('#edit-bound-char-name')?.value || '',
+		boundPresetName: form.querySelector('#edit-bound-preset-name')?.value || '',
 	}
 }
 
@@ -985,6 +1009,8 @@ async function addRule(scope) {
 		const rule = { scope, scriptName: '新规则' }
 		if (scope === 'scoped') {
 			rule.boundCharName = getCurrentCharName()
+		} else if (scope === 'preset') {
+			rule.boundPresetName = getCurrentPresetName()
 		}
 		const result = await setRegexData({
 			_action: 'addRule',

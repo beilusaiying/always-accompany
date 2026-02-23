@@ -11,6 +11,7 @@
  */
 
 const PRESET_PARTPATH = 'plugins/beilu-preset'
+const REGEX_API_SET = '/api/parts/plugins:beilu-regex/config/setdata'
 
 // ============================================================
 // API 通信层
@@ -173,6 +174,8 @@ async function handleDeletePreset() {
 
 	try {
 		await setPluginData(PRESET_PARTPATH, { delete_preset: { name: selected } })
+		// 清理该预设在 beilu-regex 中绑定的正则规则
+		await removePresetRegexFromPlugin(selected)
 		showToast(`预设 "${selected}" 已删除`, 'success')
 		selectedEntryId = null
 		dom.detail.style.display = 'none'
@@ -431,6 +434,32 @@ async function toggleEntry(identifier, enabled) {
 // 导入 / 导出
 // ============================================================
 
+async function syncPresetRegexToPlugin(presetName, presetJson) {
+	const scripts = presetJson?.extensions?.regex_scripts
+	if (!scripts || !Array.isArray(scripts) || scripts.length === 0) return
+	try {
+		await fetch(REGEX_API_SET, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ _action: 'syncPresetRegex', presetName, scripts }),
+		})
+	} catch (err) {
+		console.warn('[beilu-home/preset] 同步预设正则失败:', err)
+	}
+}
+
+async function removePresetRegexFromPlugin(presetName) {
+	try {
+		await fetch(REGEX_API_SET, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ _action: 'removeByPreset', presetName }),
+		})
+	} catch (err) {
+		console.warn('[beilu-home/preset] 清理预设正则失败:', err)
+	}
+}
+
 async function handleImport() {
 	const input = document.createElement('input')
 	input.type = 'file'
@@ -463,6 +492,9 @@ async function handleImport() {
 			} else {
 				showToast(`预设 "${file.name}" 导入成功`, 'success')
 			}
+
+			// 同步预设中的正则脚本到 beilu-regex 插件
+			await syncPresetRegexToPlugin(presetName, json)
 
 			selectedEntryId = null
 			dom.detail.style.display = 'none'

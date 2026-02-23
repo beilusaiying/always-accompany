@@ -28,6 +28,7 @@ import { getChatLogIndexByQueueIndex, getQueue } from './src/ui/virtualQueue.mjs
 
 const PRESET_API_GET = '/api/parts/plugins:beilu-preset/config/getdata'
 const PRESET_API_SET = '/api/parts/plugins:beilu-preset/config/setdata'
+const REGEX_API_SET = '/api/parts/plugins:beilu-regex/config/setdata'
 
 /**
  * 获取预设插件配置数据
@@ -58,6 +59,64 @@ async function setPresetData(data) {
 		throw new Error(err.message || err.error || `HTTP ${res.status}`)
 	}
 	return res.json()
+}
+
+// ============================================================
+// 预设正则联动 — 同步预设中的 regex_scripts 到 beilu-regex
+// ============================================================
+
+/**
+ * 将预设 JSON 中的正则脚本同步到 beilu-regex 插件
+ * 调用 syncPresetRegex action：先清除该预设旧的正则，再导入新正则
+ * @param {string} presetName - 预设名称
+ * @param {object} presetJson - 完整预设 JSON（含 extensions.regex_scripts）
+ */
+async function syncPresetRegexToPlugin(presetName, presetJson) {
+	const scripts = presetJson?.extensions?.regex_scripts
+	if (!scripts || !Array.isArray(scripts) || scripts.length === 0) {
+		console.log(`[beilu-chat] 预设 "${presetName}" 无正则脚本，跳过同步`)
+		return
+	}
+	try {
+		const resp = await fetch(REGEX_API_SET, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				_action: 'syncPresetRegex',
+				presetName,
+				scripts,
+			}),
+		})
+		if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+		const result = await resp.json()
+		const r = result?._result || result
+		console.log(`[beilu-chat] 预设 "${presetName}" 正则同步完成: 移除 ${r.removed || 0} 条, 导入 ${r.imported || 0} 条`)
+	} catch (err) {
+		console.warn(`[beilu-chat] 预设 "${presetName}" 正则同步失败:`, err.message)
+	}
+}
+
+/**
+ * 从 beilu-regex 插件移除指定预设的所有正则规则
+ * @param {string} presetName - 预设名称
+ */
+async function removePresetRegexFromPlugin(presetName) {
+	try {
+		const resp = await fetch(REGEX_API_SET, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				_action: 'removeByPreset',
+				presetName,
+			}),
+		})
+		if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+		const result = await resp.json()
+		const r = result?._result || result
+		console.log(`[beilu-chat] 预设 "${presetName}" 正则已清理: 移除 ${r.removed || 0} 条`)
+	} catch (err) {
+		console.warn(`[beilu-chat] 清理预设 "${presetName}" 正则失败:`, err.message)
+	}
 }
 
 // ============================================================
@@ -567,6 +626,9 @@ presetFileInput?.addEventListener('change', async (e) => {
 			showToast(`预设 "${file.name}" 导入成功`, 'success')
 		}
 
+		// 同步预设中的正则脚本到 beilu-regex 插件
+		await syncPresetRegexToPlugin(presetName_, json)
+
 		await loadPresetData()
 	} catch (err) {
 		showToast('导入失败: ' + err.message, 'error')
@@ -607,6 +669,8 @@ presetDeleteBtn?.addEventListener('click', async () => {
 	if (!confirm(`确定删除预设 "${name}" 吗？此操作不可撤销。`)) return
 	try {
 		await setPresetData({ delete_preset: { name } })
+		// 清理该预设在 beilu-regex 中绑定的正则规则
+		await removePresetRegexFromPlugin(name)
 		showToast(`预设 "${name}" 已删除`, 'success')
 		await loadPresetData()
 	} catch (err) {

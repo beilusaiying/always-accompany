@@ -6,7 +6,7 @@
  * 控制方式：
  * 1. 环境变量: BEILU_DIAG=* 或 BEILU_DIAG=chat,proxy
  * 2. 环境变量: BEILU_DIAG_LEVEL=debug
- * 3. API端点: /api/diag/enable, /api/diag/disable, /api/diag/status (需要在路由中注册)
+ * 3. API端点: /api/parts/shells:beilu-home/diag/enable, .../disable, .../status (在 beilu-home main.mjs 中注册)
  * 4. 运行时: import { diagControl } from './diagLogger.mjs'; diagControl.enable('*')
  *
  * 模块列表（后端）：

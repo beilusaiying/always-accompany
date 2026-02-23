@@ -842,8 +842,8 @@ try {
 		// ============================================================
 		const { diagControl } = await import('../../../../server/diagLogger.mjs')
 
-		// GET /api/diag/status — 获取后端诊断状态
-		router.get('/api/diag/status', (_req, res) => {
+		// GET /api/parts/shells:beilu-home/diag/status — 获取后端诊断状态
+		router.get('/api/parts/shells\\:beilu-home/diag/status', (_req, res) => {
 			try {
 				res.json(diagControl.getStatus())
 			} catch (err) {
@@ -851,8 +851,8 @@ try {
 			}
 		})
 
-		// POST /api/diag/enable — 启用后端诊断模块
-		router.post('/api/diag/enable', (req, res) => {
+		// POST /api/parts/shells:beilu-home/diag/enable — 启用后端诊断模块
+		router.post('/api/parts/shells\\:beilu-home/diag/enable', (req, res) => {
 			try {
 				const { modules } = req.body || {}
 				if (!modules) return res.status(400).json({ error: '缺少 modules 参数' })
@@ -863,8 +863,8 @@ try {
 			}
 		})
 
-		// POST /api/diag/disable — 禁用后端诊断模块
-		router.post('/api/diag/disable', (req, res) => {
+		// POST /api/parts/shells:beilu-home/diag/disable — 禁用后端诊断模块
+		router.post('/api/parts/shells\\:beilu-home/diag/disable', (req, res) => {
 			try {
 				const { modules } = req.body || {}
 				if (!modules) return res.status(400).json({ error: '缺少 modules 参数' })
@@ -875,8 +875,8 @@ try {
 			}
 		})
 
-		// POST /api/diag/level — 设置后端日志级别
-		router.post('/api/diag/level', (req, res) => {
+		// POST /api/parts/shells:beilu-home/diag/level — 设置后端日志级别
+		router.post('/api/parts/shells\\:beilu-home/diag/level', (req, res) => {
 			try {
 				const { level } = req.body || {}
 				if (!level) return res.status(400).json({ error: '缺少 level 参数' })
@@ -887,8 +887,8 @@ try {
 			}
 		})
 
-		// GET /api/diag/snapshots — 获取后端状态快照
-		router.get('/api/diag/snapshots', (req, res) => {
+		// GET /api/parts/shells:beilu-home/diag/snapshots — 获取后端状态快照
+		router.get('/api/parts/shells\\:beilu-home/diag/snapshots', (req, res) => {
 			try {
 				const count = parseInt(req.query.count) || 50
 				const module = req.query.module || null
@@ -898,8 +898,8 @@ try {
 			}
 		})
 
-		// POST /api/diag/clear-snapshots — 清空后端快照
-		router.post('/api/diag/clear-snapshots', (_req, res) => {
+		// POST /api/parts/shells:beilu-home/diag/clear-snapshots — 清空后端快照
+		router.post('/api/parts/shells\\:beilu-home/diag/clear-snapshots', (_req, res) => {
 			try {
 				diagControl.clearSnapshots()
 				res.json({ success: true })

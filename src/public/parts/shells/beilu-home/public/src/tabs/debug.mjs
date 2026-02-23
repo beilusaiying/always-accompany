@@ -11,7 +11,7 @@
 
 const STORAGE_KEY = 'beilu-diag-modules'
 const STORAGE_LEVEL_KEY = 'beilu-diag-level'
-const BACKEND_DIAG_API = '/api/diag'
+const BACKEND_DIAG_API = '/api/parts/shells:beilu-home/diag'
 
 // DOM 引用
 let dom = {}

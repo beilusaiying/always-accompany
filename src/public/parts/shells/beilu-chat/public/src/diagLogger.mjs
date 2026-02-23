@@ -84,6 +84,12 @@ const MODULE_COLORS = {
 const MAX_SNAPSHOTS = 200
 const snapshots = []
 
+// ============================================================
+// 日志缓冲区（用于一键打包导出）
+// ============================================================
+const MAX_LOGS = 500
+const logBuffer = []
+
 /**
  * 获取启用的模块集合
  * @returns {Set<string>|'*'}
@@ -377,6 +383,97 @@ function _summarize(obj) {
 	return `{${keys.length} keys: ${keys.slice(0, 5).join(', ')}...}`
 }
 
+/**
+ * 安全序列化（用于日志缓冲区，避免循环引用和巨大对象）
+ * @param {any} val
+ * @returns {string}
+ */
+function _safeStringify(val) {
+	if (val === null || val === undefined) return String(val)
+	if (typeof val === 'string') {
+		// 过滤 CSS 样式字符串（%c 格式化前缀产生的样式参数）
+		if (val.startsWith('color:') || val.startsWith('font-weight:') || val.startsWith('background:')) return ''
+		return val.length > 500 ? val.substring(0, 500) + '...[truncated]' : val
+	}
+	if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+	if (val instanceof Error) return `${val.name}: ${val.message}`
+	if (typeof val === 'object') {
+		try {
+			const json = JSON.stringify(val, (key, value) => {
+				if (typeof value === 'string' && value.length > 200) return value.substring(0, 200) + '...'
+				if (value instanceof HTMLElement) return `<${value.tagName.toLowerCase()} id="${value.id || ''}">`
+				return value
+			})
+			return json.length > 1000 ? json.substring(0, 1000) + '...[truncated]' : json
+		} catch {
+			return `[Object: ${Object.prototype.toString.call(val)}]`
+		}
+	}
+	if (typeof val === 'function') return `[Function: ${val.name || 'anonymous'}]`
+	return String(val)
+}
+
+// ============================================================
+// Console 拦截器（捕获所有 console 输出到日志缓冲区）
+// ============================================================
+
+let _consoleHookInstalled = false
+
+function installConsoleHook() {
+	if (_consoleHookInstalled) return
+	_consoleHookInstalled = true
+
+	const originalConsole = {
+		log: console.log.bind(console),
+		warn: console.warn.bind(console),
+		error: console.error.bind(console),
+		info: console.info.bind(console),
+	}
+
+	for (const [method, origFn] of Object.entries(originalConsole)) {
+		console[method] = function (...args) {
+			// 存入缓冲区
+			const serialized = args
+				.map(a => _safeStringify(a))
+				.filter(s => s.length > 0) // 过滤掉空的 CSS 样式参数
+				.join(' ')
+			if (serialized.length > 0) {
+				logBuffer.push({
+					t: Date.now(),
+					level: method,
+					msg: serialized,
+				})
+				if (logBuffer.length > MAX_LOGS) logBuffer.shift()
+			}
+			// 保持原始输出
+			origFn.apply(console, args)
+		}
+	}
+
+	// 捕获未处理的异常
+	window.addEventListener('error', (e) => {
+		logBuffer.push({
+			t: Date.now(),
+			level: 'uncaught_error',
+			msg: `${e.message} at ${e.filename || '?'}:${e.lineno || '?'}:${e.colno || '?'}`,
+		})
+		if (logBuffer.length > MAX_LOGS) logBuffer.shift()
+	})
+
+	// 捕获未处理的 Promise 拒绝
+	window.addEventListener('unhandledrejection', (e) => {
+		const reason = e.reason instanceof Error
+			? `${e.reason.name}: ${e.reason.message}`
+			: String(e.reason)
+		logBuffer.push({
+			t: Date.now(),
+			level: 'unhandled_promise',
+			msg: reason,
+		})
+		if (logBuffer.length > MAX_LOGS) logBuffer.shift()
+	})
+}
+
 // ============================================================
 // 全局控制 API（挂载到 window.beiluDiag）
 // ============================================================
@@ -559,6 +656,103 @@ const diagControl = {
 		return json
 	},
 
+	/**
+	 * 一键打包日志（前端 + 后端）
+	 *
+	 * 收集前端 console 日志缓冲区 + 快照 + 后端日志 + 后端快照，
+	 * 合并为一个 JSON 文件并触发浏览器下载。
+	 *
+	 * @param {object} [options] - 可选参数
+	 * @param {string} [options.backendApi] - 后端诊断 API 基础路径
+	 * @returns {Promise<object>} 打包的报告对象
+	 */
+	async pack(options = {}) {
+		const backendApi = options.backendApi || '/api/parts/shells:beilu-home/diag'
+
+		console.log('%c[beiluDiag] 📦 正在打包诊断日志...', 'color: #ff9800; font-weight: bold')
+
+		// 1. 收集前端数据
+		const frontendData = {
+			logs: logBuffer.slice(),
+			snapshots: snapshots.slice(-200),
+			diagConfig: {
+				modules: (() => {
+					const m = getEnabledModules()
+					return m === '*' ? '*' : Array.from(m)
+				})(),
+				level: Object.entries(LEVELS).find(([, v]) => v === getLevel())?.[0] || 'info',
+			},
+			localStorage: {
+				'beilu-diag-modules': localStorage.getItem(STORAGE_KEY),
+				'beilu-diag-level': localStorage.getItem(STORAGE_LEVEL_KEY),
+				'beilu-renderer-enabled': localStorage.getItem('beilu-renderer-enabled'),
+				'beilu-render-depth': localStorage.getItem('beilu-render-depth'),
+				'beilu-code-fold-enabled': localStorage.getItem('beilu-code-fold-enabled'),
+				'beilu-thinking-tags': localStorage.getItem('beilu-thinking-tags'),
+				'beilu-msg-load-limit': localStorage.getItem('beilu-msg-load-limit'),
+			},
+		}
+
+		// 2. 收集后端数据
+		let backendData = { logs: [], snapshots: [], status: null, error: null }
+		try {
+			const [logsRes, snapshotsRes, statusRes] = await Promise.allSettled([
+				fetch(`${backendApi}/logs`).then(r => r.ok ? r.json() : null),
+				fetch(`${backendApi}/snapshots?count=200`).then(r => r.ok ? r.json() : null),
+				fetch(`${backendApi}/status`).then(r => r.ok ? r.json() : null),
+			])
+			backendData.logs = logsRes.status === 'fulfilled' && logsRes.value?.logs ? logsRes.value.logs : []
+			backendData.snapshots = snapshotsRes.status === 'fulfilled' && snapshotsRes.value?.snapshots ? snapshotsRes.value.snapshots : []
+			backendData.status = statusRes.status === 'fulfilled' ? statusRes.value : null
+		} catch (err) {
+			backendData.error = `后端数据获取失败: ${err.message}`
+		}
+
+		// 3. 组装报告
+		const report = {
+			_type: 'beilu-diag-report',
+			_version: 2,
+			meta: {
+				timestamp: new Date().toISOString(),
+				userAgent: navigator.userAgent,
+				url: window.location.href,
+				viewport: `${window.innerWidth}x${window.innerHeight}`,
+				language: navigator.language,
+			},
+			frontend: frontendData,
+			backend: backendData,
+		}
+
+		// 4. 触发文件下载
+		const json = JSON.stringify(report, null, 2)
+		const blob = new Blob([json], { type: 'application/json' })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = `beilu-diag-${new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19)}.json`
+		document.body.appendChild(a)
+		a.click()
+		document.body.removeChild(a)
+		URL.revokeObjectURL(url)
+
+		console.log('%c[beiluDiag] ✅ 诊断日志已打包下载', 'color: #4caf50; font-weight: bold',
+			`前端日志: ${frontendData.logs.length} 条`,
+			`后端日志: ${backendData.logs.length} 条`,
+			`前端快照: ${frontendData.snapshots.length} 条`,
+			`后端快照: ${backendData.snapshots.length} 条`)
+
+		return report
+	},
+
+	/**
+	 * 获取前端日志缓冲区（供 debug 面板使用）
+	 * @param {number} [count=500]
+	 * @returns {Array}
+	 */
+	getLogBuffer(count = 500) {
+		return logBuffer.slice(-count)
+	},
+
 	/** 可用的模块列表 */
 	modules: Object.keys(MODULE_COLORS),
 
@@ -574,6 +768,9 @@ const diagControl = {
 
 // 挂载到 window
 if (typeof window !== 'undefined') {
+	// 安装 Console 拦截器（必须在挂载 beiluDiag 之前，确保捕获所有后续日志）
+	installConsoleHook()
+
 	window.beiluDiag = diagControl
 
 	// 检查 URL 参数
@@ -592,7 +789,8 @@ if (typeof window !== 'undefined') {
 		console.log('%c[beiluDiag] 🔬 诊断模式已激活', 'color: #ff9800; font-weight: bold',
 			'| 模块:', modules === '*' ? '*' : Array.from(modules).join(','),
 			'| 级别:', Object.entries(LEVELS).find(([, v]) => v === getLevel())?.[0] || 'info',
-			'| 输入 beiluDiag.status() 查看详情')
+			'| 输入 beiluDiag.status() 查看详情',
+			'| beiluDiag.pack() 一键打包日志')
 	}
 }
 

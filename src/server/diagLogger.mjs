@@ -125,6 +125,13 @@ const MAX_SNAPSHOTS = 200
 const snapshots = []
 
 // ============================================================
+// 日志缓冲区（用于一键打包导出）
+// ============================================================
+
+const MAX_LOGS = 500
+const logBuffer = []
+
+// ============================================================
 // createDiag — 创建模块专属日志器
 // ============================================================
 
@@ -267,6 +274,78 @@ export function createDiag(moduleName) {
 // 全局控制 API
 // ============================================================
 
+// ============================================================
+// 安全序列化（用于日志缓冲区）
+// ============================================================
+
+function _safeStringify(val) {
+	if (val === null || val === undefined) return String(val)
+	if (typeof val === 'string') {
+		// 过滤 ANSI 颜色码
+		const stripped = val.replace(/\x1b\[[0-9;]*m/g, '')
+		return stripped.length > 500 ? stripped.substring(0, 500) + '...[truncated]' : stripped
+	}
+	if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+	if (val instanceof Error) return `${val.name}: ${val.message}`
+	if (typeof val === 'object') {
+		try {
+			const json = JSON.stringify(val, (key, value) => {
+				if (typeof value === 'string' && value.length > 200) return value.substring(0, 200) + '...'
+				return value
+			})
+			return json.length > 1000 ? json.substring(0, 1000) + '...[truncated]' : json
+		} catch {
+			return `[Object: ${Object.prototype.toString.call(val)}]`
+		}
+	}
+	if (typeof val === 'function') return `[Function: ${val.name || 'anonymous'}]`
+	return String(val)
+}
+
+// ============================================================
+// Console 拦截器（捕获后端所有 console 输出到日志缓冲区）
+// ============================================================
+
+let _consoleHookInstalled = false
+
+function installConsoleHook() {
+	if (_consoleHookInstalled) return
+	_consoleHookInstalled = true
+
+	const originalConsole = {
+		log: console.log.bind(console),
+		warn: console.warn.bind(console),
+		error: console.error.bind(console),
+	}
+
+	for (const [method, origFn] of Object.entries(originalConsole)) {
+		console[method] = function (...args) {
+			// 存入缓冲区
+			const serialized = args
+				.map(a => _safeStringify(a))
+				.filter(s => s.length > 0)
+				.join(' ')
+			if (serialized.length > 0) {
+				logBuffer.push({
+					t: Date.now(),
+					level: method,
+					msg: serialized,
+				})
+				if (logBuffer.length > MAX_LOGS) logBuffer.shift()
+			}
+			// 保持原始输出
+			origFn.apply(console, args)
+		}
+	}
+}
+
+// 模块加载时立即安装拦截器
+installConsoleHook()
+
+// ============================================================
+// 全局控制 API
+// ============================================================
+
 export const diagControl = {
 	enable(modules) {
 		if (modules === '*') {
@@ -355,6 +434,20 @@ export const diagControl = {
 	/** 清空快照 */
 	clearSnapshots() {
 		snapshots.length = 0
+	},
+
+	/**
+	 * 获取日志缓冲区（用于 API 端点返回）
+	 * @param {number} [count=500]
+	 * @returns {Array}
+	 */
+	getLogs(count = 500) {
+		return logBuffer.slice(-count)
+	},
+
+	/** 清空日志缓冲区 */
+	clearLogs() {
+		logBuffer.length = 0
 	},
 
 	modules: Object.keys(ANSI_COLORS),

@@ -907,6 +907,26 @@ try {
 				res.status(500).json({ error: err.message })
 			}
 		})
+
+		// GET /api/parts/shells:beilu-home/diag/logs — 获取后端日志缓冲区
+		router.get('/api/parts/shells\\:beilu-home/diag/logs', (req, res) => {
+			try {
+				const count = parseInt(req.query.count) || 500
+				res.json({ logs: diagControl.getLogs(count) })
+			} catch (err) {
+				res.status(500).json({ error: err.message })
+			}
+		})
+
+		// POST /api/parts/shells:beilu-home/diag/clear-logs — 清空后端日志缓冲区
+		router.post('/api/parts/shells\\:beilu-home/diag/clear-logs', (_req, res) => {
+			try {
+				diagControl.clearLogs()
+				res.json({ success: true })
+			} catch (err) {
+				res.status(500).json({ error: err.message })
+			}
+		})
 	},
 	Unload: () => {},
 	interfaces: {

@@ -141,6 +141,31 @@ The management home page (beilu-home) supports 4 languages via a "translation ov
 - Dynamic content (JS-generated text) translated via `t(key)` function
 - Language switch triggers a `beilu-lang-change` event; all modules respond automatically
 
+### 🔬 System Diagnostics & One-Click Log Export
+
+Built-in full-stack diagnostic framework for rapid troubleshooting:
+
+- **Module-level toggle**: Enable/disable diagnostics per module (chat engine, memory, preset, etc.) — zero overhead when disabled
+- **Console interception**: Automatically captures all `console.log/warn/error/info` from both frontend (browser) and backend (Deno), stored in a 500-entry ring buffer without affecting normal output
+- **Error capture**: Automatically catches `window.onerror` and `unhandledrejection` events
+- **One-click log export**: Click " One-Click Pack Logs" in the Debug tab, or call `beiluDiag.pack()` from the browser console — generates a single JSON file containing:
+
+```
+beilu-diag-{timestamp}.json
+├── meta          — Timestamp, User-Agent, URL, report version
+├── frontend
+│   ├── logs        — Browser console buffer (last 500 entries)
+│   ├── snapshots   — Frontend diagnostic snapshots
+│   ├── diagConfig  — Module enable/disable status
+│   └── localStorage — Relevant local storage data
+└── backend
+    ├── logs        — Server console buffer (last 500 entries, ANSI stripped)
+    ├── snapshots   — Backend diagnostic snapshots
+    └── status      — Backend diagnostic module status
+```
+
+When reporting issues, attach this JSON file for complete context — no need to manually copy console output or describe steps.
+
 ### 📦 SillyTavern Ecosystem Compatible
 
 - Direct import of SillyTavern format character cards, presets, and world books
@@ -203,6 +228,7 @@ Layered memory is not a temporary workaround for limited context windows — it 
 - Memory table enhancement
 - Management home page i18n (Chinese / English / Japanese / Traditional Chinese)
 - 11 feature plugins
+- Full-stack diagnostic framework with one-click log export
 
 ### 🔜 Near-term
 
@@ -347,9 +373,9 @@ Detailed system documentation to help you get started quickly.
 </details>
 
 <details>
-<summary><strong>🔬 System Diagnostics — Faster error feedback</strong></summary>
+<summary><strong>🔬 System Diagnostics — One-click log export for rapid troubleshooting</strong></summary>
 
-Comprehensive system self-diagnosis for faster error reporting and troubleshooting.
+Comprehensive system self-diagnosis with one-click log packaging. Captures both browser console and server logs into a single JSON file — just attach it when reporting issues.
 
 ![System Diagnostics](imgs/screenshots/system-diagnostics.png)
 

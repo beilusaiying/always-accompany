@@ -160,40 +160,76 @@ function handleLevelChange(level) {
 	try { window.beiluDiag?.setLevel?.(level) } catch { /* */ }
 }
 
-function handleExport() {
+async function handleExport() {
 	try {
-		if (window.beiluDiag?.export) {
-			window.beiluDiag.export()
-			showToast('诊断报告已复制到剪贴板')
+		if (window.beiluDiag?.pack) {
+			// 使用 pack() 一键打包（前端+后端日志，文件下载）
+			showToast('正在打包诊断日志...')
+			await window.beiluDiag.pack({ backendApi: BACKEND_DIAG_API })
+			showToast('诊断日志已打包下载')
 		} else {
-			// 没有 beiluDiag，手动构建基础报告
+			// beiluDiag 不可用时，手动构建并下载
+			const frontendLogs = []
+			const frontendSnapshots = []
+
+			// 收集后端数据
+			let backendData = { logs: [], snapshots: [], status: null }
+			try {
+				const [logsRes, snapshotsRes, statusRes] = await Promise.allSettled([
+					fetch(`${BACKEND_DIAG_API}/logs`).then(r => r.ok ? r.json() : null),
+					fetch(`${BACKEND_DIAG_API}/snapshots?count=200`).then(r => r.ok ? r.json() : null),
+					fetch(`${BACKEND_DIAG_API}/status`).then(r => r.ok ? r.json() : null),
+				])
+				backendData.logs = logsRes.status === 'fulfilled' && logsRes.value?.logs ? logsRes.value.logs : []
+				backendData.snapshots = snapshotsRes.status === 'fulfilled' && snapshotsRes.value?.snapshots ? snapshotsRes.value.snapshots : []
+				backendData.status = statusRes.status === 'fulfilled' ? statusRes.value : null
+			} catch { /* 后端不可用 */ }
+
 			const report = {
-				timestamp: new Date().toISOString(),
-				userAgent: navigator.userAgent,
-				url: window.location.href,
+				_type: 'beilu-diag-report',
+				_version: 2,
+				meta: {
+					timestamp: new Date().toISOString(),
+					userAgent: navigator.userAgent,
+					url: window.location.href,
+					viewport: `${window.innerWidth}x${window.innerHeight}`,
+					language: navigator.language,
+				},
 				frontend: {
-					modules: (() => {
-						const m = getFrontendModules()
-						return m === '*' ? '*' : Array.from(m)
-					})(),
-					level: getFrontendLevel(),
+					logs: frontendLogs,
+					snapshots: frontendSnapshots,
+					diagConfig: {
+						modules: (() => {
+							const m = getFrontendModules()
+							return m === '*' ? '*' : Array.from(m)
+						})(),
+						level: getFrontendLevel(),
+					},
+					localStorage: {
+						'beilu-diag-modules': localStorage.getItem(STORAGE_KEY),
+						'beilu-diag-level': localStorage.getItem(STORAGE_LEVEL_KEY),
+					},
 				},
-				localStorage: {
-					'beilu-diag-modules': localStorage.getItem(STORAGE_KEY),
-					'beilu-diag-level': localStorage.getItem(STORAGE_LEVEL_KEY),
-				},
+				backend: backendData,
 			}
+
+			// 触发文件下载
 			const json = JSON.stringify(report, null, 2)
-			navigator.clipboard.writeText(json).then(() => {
-				showToast('诊断报告已复制到剪贴板')
-			}).catch(() => {
-				console.log('[diag] 报告:', json)
-				showToast('报告已输出到控制台')
-			})
+			const blob = new Blob([json], { type: 'application/json' })
+			const url = URL.createObjectURL(blob)
+			const a = document.createElement('a')
+			a.href = url
+			a.download = `beilu-diag-${new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19)}.json`
+			document.body.appendChild(a)
+			a.click()
+			document.body.removeChild(a)
+			URL.revokeObjectURL(url)
+
+			showToast('诊断日志已打包下载')
 		}
 	} catch (err) {
-		console.error('[diag] 导出失败:', err)
-		showToast('导出失败: ' + err.message)
+		console.error('[diag] 打包失败:', err)
+		showToast('打包失败: ' + err.message)
 	}
 }
 

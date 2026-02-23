@@ -12,6 +12,14 @@ beilu-always accompany is an **AI companion platform unifying companionship and 
 
 English | [中文](README_CN.md)
 
+<p align="center">
+  <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  &nbsp;
+  <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star%20⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+  &nbsp;
+  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Memory_Presets-Ready_to_Use-4CAF50?style=for-the-badge" alt="Memory Presets"></a>
+</p>
+
 > This entire project — design, architecture, and development — was completed independently by a university student, leveraging AI-assisted programming with skills spanning algorithm design, biomimicry principles, framework architecture, and logical thinking.
 
 <p align="center">
@@ -317,17 +325,21 @@ After launch, open your browser and navigate to `http://localhost:1314`
 
 ## 🎁 Community & Resources
 
-### Ready-to-Use Memory Prompt Presets
+### 💬 Join the Discord Community
+
+<a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Now-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+
+Discussion, resource sharing, prompt exchange, bug reports — come join us!
+
+### 📦 Ready-to-Use Memory Prompt Presets
 
 The project includes a carefully crafted **P1-P6 Memory AI prompt preset**, ready to use out of the box:
 
-📦 **[beilu-presets_2026-02-23.json](beilu-presets_2026-02-23.json)** — Complete prompt configurations for P1 Retrieval AI, P2 Archive AI, P3 Daily Summary AI, P4 Hot→Warm AI, P5 Monthly Summary AI, and P6 Repair AI
+**[beilu-presets_2026-02-23.json](beilu-presets_2026-02-23.json)** — Complete prompt configurations for P1 Retrieval AI, P2 Archive AI, P3 Daily Summary AI, P4 Hot→Warm AI, P5 Monthly Summary AI, and P6 Repair AI
 
 **How to use**: Home → Memory Presets → Click "Import" → Select this JSON file to import all presets in one click.
 
-### Join the Community
-
-💬 **[Discord Community](https://discord.gg/agHeDq9bqU)** — Discussion, resource sharing, bug reports — come join us!
+### 🤝 How to Contribute
 
 We welcome everyone to participate in building this project! You can:
 

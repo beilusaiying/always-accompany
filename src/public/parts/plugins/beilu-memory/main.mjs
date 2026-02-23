@@ -3734,18 +3734,11 @@ const pluginExport = {
 						const depthInjections = []
 						// P1 预设切换信号（传递给 beilu-preset TweakPrompt Round 1）
 						let _presetSwitchTarget = null
-	
-						// 预设切换冷却：每轮 GetPrompt 递减计数器
+						let _presetSwitchExecuted = false
+		
+						// 预设切换冷却配置（递减逻辑移至 P1 检索之后，避免 off-by-one）
 						const _cooldownKey = `${username}/${charName}`
 						const _cooldownConfig = data.config?.preset_switch?.cooldown_rounds ?? 5
-						if (presetSwitchCooldown.has(_cooldownKey)) {
-							const remaining = presetSwitchCooldown.get(_cooldownKey) - 1
-							if (remaining <= 0) {
-								presetSwitchCooldown.delete(_cooldownKey)
-							} else {
-								presetSwitchCooldown.set(_cooldownKey, remaining)
-							}
-						}
 		
 						for (const inj of injectionPrompts) {
 							// 判断是否启用（结合 autoMode 和 filesActiveMode）
@@ -3855,8 +3848,9 @@ const pluginExport = {
 													console.log(`[beilu-memory] P1 请求切换预设: "${switchTarget}" — 冷却中(剩余${_cdRemaining}轮)，已忽略`)
 												} else {
 													_presetSwitchTarget = switchTarget
-													presetSwitchCooldown.set(_cooldownKey, _cooldownConfig)
-													console.log(`[beilu-memory] P1 请求切换预设: "${switchTarget}"，冷却已重置为${_cooldownConfig}轮`)
+														_presetSwitchExecuted = true
+														presetSwitchCooldown.set(_cooldownKey, _cooldownConfig)
+														console.log(`[beilu-memory] P1 请求切换预设: "${switchTarget}"，冷却已重置为${_cooldownConfig}轮`)
 												}
 											}
 											const p1Content = `[记忆AI检索结果]\n${cleanedP1Reply}\n[/记忆AI检索结果]`
@@ -3887,6 +3881,17 @@ const pluginExport = {
 									}
 								}
 							}
+							// 预设切换冷却递减：在 P1 检索完成后执行
+							// 只在本轮没有执行切换时递减，避免刚设置的冷却值被立即消耗
+							if (!_presetSwitchExecuted && presetSwitchCooldown.has(_cooldownKey)) {
+								const remaining = presetSwitchCooldown.get(_cooldownKey) - 1
+								if (remaining <= 0) {
+									presetSwitchCooldown.delete(_cooldownKey)
+								} else {
+									presetSwitchCooldown.set(_cooldownKey, remaining)
+								}
+							}
+	
 							// 兼容：旧缓存结果注入（正常情况不会触发）
 							// 必须在 !isFakeSend 条件内，防止伪发送错误消费缓存
 							if (lastP1Result && !arg.isFakeSend) {

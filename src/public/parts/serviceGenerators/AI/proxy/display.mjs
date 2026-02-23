@@ -2,6 +2,22 @@
 
 let last_url = ''
 let last_apikey = ''
+
+/**
+ * 检测 URL 是否指向本地反代服务
+ * @param {string} url - API URL
+ * @returns {boolean}
+ */
+const isLocalProxy = (url) => {
+	if (!url) return false
+	try {
+		const hostname = new URL(url).hostname
+		return ['127.0.0.1', 'localhost', '0.0.0.0', '::1'].includes(hostname)
+			|| hostname.startsWith('192.168.')
+			|| hostname.startsWith('10.')
+	} catch { return false }
+}
+
 /**
  * 规范化 URL。
  * @param {string} url - URL。
@@ -49,6 +65,29 @@ return async ({ data, containers, editors }) => {
 	if (!url) {
 		console.log('[proxy/display] No URL provided')
 		return div.innerHTML = ''
+	}
+
+	// 本地反代引导提示
+	const localProxyTip = isLocalProxy(url) ? /* html */ `\
+<div style="background: #2563eb10; border: 1px solid #2563eb40; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+	 <div style="color: #2563eb; font-size: 13px; line-height: 1.5;">
+	   ℹ️ <b>本地反代配置</b> — 如使用 gcli2api 等反代工具：<br/>
+	   <span style="opacity: 0.85;">• 假流式：模型名后加 <code style="background:#2563eb15; padding:2px 4px; border-radius:3px;">-假流式</code>（如 <code style="background:#2563eb15; padding:2px 4px; border-radius:3px;">gemini-2.5-pro-假流式</code>）</span><br/>
+	   <span style="opacity: 0.85;">• 流式抗截断：模型名前加 <code style="background:#2563eb15; padding:2px 4px; border-radius:3px;">流式抗截断/</code></span><br/>
+	   <span style="opacity: 0.85;">• 无需其他额外配置，以上功能通过模型名控制</span>
+	 </div>
+</div>
+` : ''
+
+	// 注入提示到 div 顶部（在后续渲染前先设置）
+	if (localProxyTip) {
+		const tipId = 'beilu-local-proxy-tip'
+		if (!div.querySelector('#' + tipId)) {
+			const tipEl = document.createElement('div')
+			tipEl.id = tipId
+			tipEl.innerHTML = localProxyTip
+			div.prepend(tipEl)
+		}
 	}
 	const modelsUrl = normalizeUrl(url)
 	if (!modelsUrl) {

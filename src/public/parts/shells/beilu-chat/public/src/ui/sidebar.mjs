@@ -284,6 +284,8 @@ async function renderPluginDetails(pluginName) {
 		pluginData = await getPartDetails(`plugins/${pluginName}`)
 		if (!pluginData) return
 		const pluginCard = cachedDom.plugin[pluginName] = await renderTemplate('plugin_info_chat_view', {
+			name: pluginName,
+			description: '',
 			...pluginData.info,
 			avatar: pluginData.info?.avatar || 'https://api.iconify.design/mdi/puzzle-outline.svg',
 		})

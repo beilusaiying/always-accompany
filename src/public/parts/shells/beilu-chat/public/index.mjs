@@ -1225,28 +1225,18 @@ charInfoSaveBtn?.addEventListener('click', async () => {
 		const newDescription = charDescriptionEdit?.value || ''
 		const newGreeting = charGreetingEdit?.value || ''
 
-		// 通过 beilu-files 的 API 更新角色卡 info.json
-		const details = await getPartDetails('chars/' + charId)
-		if (!details) throw new Error('无法读取角色卡信息')
-		const info = details?.info || {}
-
-		// 更新字段
-		info.description = newDescription
-		info.description_markdown = newDescription
-
-		// 保存回后端（使用 parts API）
-		const saveResp = await fetch(`/api/parts/set-info`, {
-			method: 'POST',
+		// 通过 beilu-home 的 update-char API 更新角色卡 chardata.json
+		const saveResp = await fetch(`/api/parts/shells:beilu-home/update-char/${encodeURIComponent(charId)}`, {
+			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				part: `chars/${charId}`,
-				info,
+				description: newDescription,
 			}),
 		})
 
 		if (!saveResp.ok) {
 			const errData = await saveResp.json().catch(() => ({}))
-			throw new Error(errData.error || `HTTP ${saveResp.status}`)
+			throw new Error(errData.message || errData.error || `HTTP ${saveResp.status}`)
 		}
 
 		// 更新本地缓存

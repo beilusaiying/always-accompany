@@ -119,11 +119,12 @@ function createDefaultRule(overrides = {}) {
 // ============================================================
 
 const PLACEMENT_NUM_TO_STR = {
-	0: 'ai_output',
+	0: 'ai_output',    // MD_DISPLAY 已废弃，回退到 ai_output
 	1: 'user_input',
-	2: 'slash_command',
-	3: 'world_info',
-	4: 'reasoning',
+	2: 'ai_output',
+	3: 'slash_command',
+	4: 'world_info',
+	5: 'reasoning',
 }
 
 /**
@@ -245,10 +246,6 @@ function applyRegexRules(text, rules, placementFilter, options = {}) {
 			if (ruleBoundPreset && !currentPresetName) continue
 		}
 
-		// 避免与角色卡 runRegex 重复执行：
-		// scoped 的 ai_output 规则由角色卡 runRegex 负责执行
-		if (rule.scope === 'scoped' && placementFilter === 'ai_output') continue
-
 		// 深度范围检查
 		const minD = rule.minDepth ?? -1
 		const maxD = rule.maxDepth ?? 0
@@ -296,10 +293,16 @@ function importFromSTFormat(stScripts, scope = 'global', boundCharName = '', bou
 		let placement = ['ai_output']
 		if (script.placement !== undefined) {
 			if (Array.isArray(script.placement)) {
-				placement = script.placement
+				// ST 旧版格式: placement 是数字数组 [0, 1, 2]
+				// 需要将数字转换为字符串标识符
+				placement = script.placement.map(p => {
+					if (typeof p === 'number') {
+						return PLACEMENT_NUM_TO_STR[p] || 'ai_output'
+					}
+					return p // 已经是字符串，保留原样
+				})
 			} else if (typeof script.placement === 'number') {
-				const map = { 0: ['ai_output'], 1: ['user_input'], 2: ['slash_command'], 3: ['world_info'] }
-				placement = map[script.placement] || ['ai_output']
+				placement = [PLACEMENT_NUM_TO_STR[script.placement] || 'ai_output']
 			} else if (typeof script.placement === 'string') {
 				placement = [script.placement]
 			}
@@ -559,7 +562,7 @@ const pluginExport = {
 								imported = importFromSTFormat(scripts, 'preset', '', presetName)
 								pluginData.rules.push(...imported)
 							}
-	
+
 							saveConfigToDisk()
 							console.log(`[beilu-regex] syncPresetRegex "${presetName}": 移除 ${removed} 条, 导入 ${imported.length} 条`)
 							return { _result: { removed, imported: imported.length } }
@@ -751,6 +754,6 @@ const pluginExport = {
 			},
 		},
 	},
-	}
-	
-	export default pluginExport
+}
+
+export default pluginExport

@@ -45,7 +45,21 @@ export function setEndpoints(router) {
 
 	router.get('/api/parts/shells\\:chat/:chatid/initial-data', authenticate, async (req, res) => {
 		const { chatid } = req.params
-		res.status(200).json(await getInitialData(chatid))
+		try {
+			console.log(`[chat/endpoints] initial-data 请求: chatid=${chatid}`)
+			const data = await getInitialData(chatid)
+			console.log(`[chat/endpoints] initial-data 成功: chatid=${chatid}, logLength=${data?.logLength}, initialLog=${data?.initialLog?.length}, charlist=${data?.charlist?.join(',')}, pluginlist=${data?.pluginlist?.length}个`)
+			res.status(200).json(data)
+		} catch (err) {
+			console.error(`[chat/endpoints] ★ initial-data 失败: chatid=${chatid}`, err.stack || err.message)
+			console.error(`[chat/endpoints] 错误类型: ${err.constructor?.name}, 错误名: ${err.name}`)
+			// 返回详细错误信息以便前端 F12 看到
+			res.status(500).json({
+				error: err.message,
+				stack: err.stack,
+				_diag: 'initial-data endpoint caught error'
+			})
+		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/chars', authenticate, async (req, res) => {
@@ -62,28 +76,50 @@ export function setEndpoints(router) {
 		const { params: { chatid }, query: { start, end } } = req
 		const { username } = await getUserByReq(req)
 		const log = await GetChatLog(chatid, parseInt(start, 10), parseInt(end, 10))
-		res.status(200).json(await Promise.all(log.map(async entry => {
+		// ★ DIAG P0: 记录原始 log entries 的类型
+		console.log(`[chat/endpoints DIAG] /log chatid=${chatid} start=${start} end=${end} entries=${log.length}`)
+		for (let i = 0; i < log.length; i++) {
+			const e = log[i]
+			console.log(`  [${i}] constructor=${e?.constructor?.name} hasToData=${typeof e?.toData === 'function'} id=${e?.id} role=${e?.role}`)
+		}
+		const serialized = await Promise.all(log.map(async (entry, i) => {
+			let result
 			try {
-				if (typeof entry?.toData === 'function') return await entry.toData(username)
+				if (typeof entry?.toData === 'function') {
+					result = await entry.toData(username)
+				}
 			} catch (err) {
 				console.warn('[chat/endpoints] toData failed for log entry:', err.message)
 			}
-			try {
-				if (typeof entry?.toJSON === 'function') return entry.toJSON()
-			} catch (err2) {
-				console.warn('[chat/endpoints] toJSON also failed:', err2.message)
+			if (!result) {
+				console.warn(`[chat/endpoints] log entry[${i}] missing toData, using fallback. id=${entry?.id}`)
+				try {
+					if (typeof entry?.toJSON === 'function') result = entry.toJSON()
+				} catch (err2) {
+					console.warn('[chat/endpoints] toJSON also failed:', err2.message)
+				}
 			}
-			// 最终 fallback：确保至少有 id、content、role
-			return {
-				id: entry?.id || crypto.randomUUID(),
-				content: entry?.content || '',
-				role: entry?.role || 'char',
-				name: entry?.name || 'Unknown',
-				time_stamp: entry?.time_stamp || new Date(),
-				files: [],
-				timeSlice: { chars: [], plugins: [] },
+			if (!result) {
+				// 最终 fallback：确保至少有 id、content、role
+				result = {
+					id: entry?.id || crypto.randomUUID(),
+					content: entry?.content || '',
+					role: entry?.role || 'char',
+					name: entry?.name || 'Unknown',
+					time_stamp: entry?.time_stamp || new Date(),
+					files: [],
+					timeSlice: { chars: [], plugins: [] },
+				}
 			}
-		})))
+			// ★ DIAG P0: 检查序列化后是否有 id
+			if (!result.id) {
+				console.error(`[chat/endpoints DIAG] ★ 序列化后 entry[${i}] 缺少 id! keys:`, Object.keys(result).join(','))
+			}
+			return result
+		}))
+		// ★ DIAG P0: 最终响应检查
+		console.log(`[chat/endpoints DIAG] 响应 ${serialized.length} 条, ids:`, serialized.map(e => e.id).join(','))
+		res.status(200).json(serialized)
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/log/length', authenticate, async (req, res) => {

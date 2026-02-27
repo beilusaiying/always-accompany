@@ -98,14 +98,35 @@ export async function initializeChat() {
 
 	let refreshedData = null
 	try {
+		console.log('[beilu-chat] 第1次 getInitialData 开始...')
 		const initialData = await getInitialData()
+		console.log('[beilu-chat] 第1次 getInitialData 成功:', {
+			charlist: initialData?.charlist?.length,
+			pluginlist: initialData?.pluginlist?.length,
+			logLength: initialData?.logLength,
+			initialLog: initialData?.initialLog?.length,
+			worldname: initialData?.worldname,
+			personaname: initialData?.personaname,
+		})
 
 		// ⭐ beilu 特有: 自动注册 beilu 插件
 		await autoRegisterBeiluPlugins(initialData.pluginlist || [])
+
 		// 重新获取 pluginlist（因为可能新增了插件）
+		console.log('[beilu-chat] 第2次 getInitialData 开始...')
 		refreshedData = await getInitialData()
+		console.log('[beilu-chat] 第2次 getInitialData 成功:', {
+			charlist: refreshedData?.charlist?.length,
+			pluginlist: refreshedData?.pluginlist?.length,
+			logLength: refreshedData?.logLength,
+			initialLog: refreshedData?.initialLog?.length,
+		})
 	} catch (e) {
-		console.warn('[beilu-chat] getInitialData / autoRegister 失败:', e.message)
+		console.error('[beilu-chat] ★ getInitialData / autoRegister 失败:', e.message)
+		console.error('[beilu-chat]   完整错误:', e.stack || e)
+		// 如果有 error/stack 字段（来自后端 500 响应）
+		if (e.error) console.error('[beilu-chat]   后端 error:', e.error)
+		if (e.stack && e.stack !== e.message) console.error('[beilu-chat]   后端 stack:', e.stack)
 	}
 
 	// ⭐ beilu 特有: 预加载 display regex 规则（在插件注册之后，确保 beilu-regex 可用）

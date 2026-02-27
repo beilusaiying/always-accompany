@@ -178,10 +178,21 @@ export default {
 			 * 使用默认 AIsource + buildPromptStruct + 插件 ReplyHandler
 			 */
 			GetReply: async (args) => {
+				// 防御性重试：用户可能在看到提示后已配置 AI 源，但角色卡的变量仍为 null
+				if (!AIsource) {
+					try {
+						AIsource = await loadAnyPreferredDefaultPart(username, 'serviceSources/AI')
+					} catch (e) {
+						console.warn('[beilu-char] 重试加载 AI 源失败:', e.message)
+					}
+				}
+	
 				if (!AIsource) {
 					return {
-						content:
-							'请先配置 AI 源。[前往设置](/parts/shells:serviceSourceManage)',
+						content: '请先配置 AI 源，可在以下位置设置：\n'
+							+ '• [首页 → 系统设置 → AI 服务源](/parts/shells:beilu-home/#system)（创建和管理服务源）\n'
+							+ '• [聊天界面 → 右侧面板 → 对话AI设置](/parts/shells:beilu-chat/api-config/)（快速配置）\n'
+							+ '• [首页 → 记忆预设 → API 配置](/parts/shells:beilu-home/#memoryPreset)（记忆AI独立配置）',
 					}
 				}
 

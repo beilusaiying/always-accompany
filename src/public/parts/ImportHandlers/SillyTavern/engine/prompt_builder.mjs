@@ -49,7 +49,9 @@ export function promptBuilder(
 		GetActivedWorldInfoEntries(charData.character_book.entries, chatLog, env, arg.chat_scoped_char_memory) :
 		[]
 	if (charData?.extensions?.regex_scripts) {
-		const WI_regex_scripts = charData.extensions.regex_scripts.filter(e => e.placement.includes(regex_placement.WORLD_INFO))
+		const WI_regex_scripts = charData.extensions.regex_scripts.filter(e =>
+			e.placement.includes(regex_placement.WORLD_INFO) || e.placement.includes(regex_placement.WORLD_INFO_LEGACY)
+		)
 		for (const script of WI_regex_scripts) script.findRegex = parseRegexFromString(String(script.findRegex))
 		for (const e of WIs)
 			for (const script of WI_regex_scripts)

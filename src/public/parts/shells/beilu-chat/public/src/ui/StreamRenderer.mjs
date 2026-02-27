@@ -169,7 +169,7 @@ class StreamRenderer {
 						if (state.streamIframe?.isConnected) {
 							state.streamIframe.remove()
 						}
-						state.streamIframe = renderAsIframe(state.displayedContent, state.domElement)
+						state.streamIframe = await renderAsIframe(state.displayedContent, state.domElement)
 
 						// 显示内容区域
 						if (state.displayedContent.trim()) {

@@ -468,11 +468,9 @@ function applySingleRule(text, rule, placeholders) {
 		// 酒馆美化正则（JS-Slash-Runner 等）惯例：用 ``` 包裹 HTML 文档
 		result = stripOuterCodeFence(result)
 
-		// 安全防护：如果替换结果为空但原始匹配有内容，保留原始内容
-		// 这防止了美化正则因 replaceString 缺失/错误导致消息内容完全消失
-		if ((!result || result.trim() === '') && match.trim() !== '') {
-			console.warn(`[displayRegex] 规则 "${rule.scriptName || rule.findRegex}" 替换结果为空，保留原文（${match.length}字符）`)
-			return match
+		// 替换结果为空 → 直接删除匹配内容（这是合法用例，如"去除更新变量"正则）
+		if (!result || result.trim() === '') {
+			return ''
 		}
 
 		const trimmedResult = result.trim()

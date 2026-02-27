@@ -400,6 +400,9 @@ class timeSlice_t {
 	 * @returns {Promise<timeSlice_t>} 一个填充了完整数据的 timeSlice_t 实例。
 	 */
 	static async fromJSON(json, username) {
+		// 防御空值：system 消息等可能没有 timeSlice
+		if (!json) return new timeSlice_t()
+
 		const result = Object.assign(new timeSlice_t(), {
 			...json,
 			chars: Object.fromEntries(await Promise.all(
@@ -489,13 +492,41 @@ class chatLogEntry_t {
 	 * @returns {Promise<object>} 一个包含可序列化数据的 Promise。
 	 */
 	async toData(username) {
+		let timeSliceData
+		try {
+			timeSliceData = await this.timeSlice.toData()
+		} catch (tsErr) {
+			console.error(`[chat] chatLogEntry_t.toData timeSlice 序列化失败: id=${this.id}`, tsErr.message)
+			timeSliceData = { chars: [], plugins: [] }
+		}
+
+		let filesData = []
+		try {
+			filesData = await Promise.all(this.files.map(async (file, fi) => {
+				try {
+					return {
+						...file,
+						buffer: 'file:' + await addfile(username, file.buffer)
+					}
+				} catch (fileErr) {
+					console.error(`[chat] chatLogEntry_t.toData files[${fi}] addfile 失败: id=${this.id}`,
+						fileErr.message,
+						`| bufferType=${typeof file?.buffer}`,
+						`| isBuffer=${Buffer.isBuffer(file?.buffer)}`,
+						`| bufferLen=${file?.buffer?.length}`)
+					return null
+				}
+			}))
+			filesData = filesData.filter(Boolean)
+		} catch (filesErr) {
+			console.error(`[chat] chatLogEntry_t.toData files 整体失败: id=${this.id}`, filesErr.message)
+			filesData = []
+		}
+
 		return {
 			...this,
-			timeSlice: await this.timeSlice.toData(),
-			files: await Promise.all(this.files.map(async file => ({
-				...file,
-				buffer: 'file:' + await addfile(username, file.buffer)
-			})))
+			timeSlice: timeSliceData,
+			files: filesData,
 		}
 	}
 
@@ -507,13 +538,45 @@ class chatLogEntry_t {
 	 * @returns {Promise<chatLogEntry_t>} 一个填充了完整数据的 chatLogEntry_t 实例。
 	 */
 	static async fromJSON(json, username) {
+		// ★ DIAG: 详细记录每条 entry 的反序列化过程
+		let timeSliceResult
+		try {
+			timeSliceResult = await timeSlice_t.fromJSON(json.timeSlice, username)
+		} catch (tsErr) {
+			console.error(`[chat] ★ chatLogEntry_t.fromJSON timeSlice 反序列化失败:`, tsErr.message, `| entry.id=${json.id}, role=${json.role}`)
+			timeSliceResult = Object.assign(new timeSlice_t(), json.timeSlice || {})
+		}
+
+		let filesResult = []
+		try {
+			filesResult = await Promise.all((json.files || []).map(async (file, fi) => {
+				try {
+					return {
+						...file,
+						buffer: file.buffer.startsWith('file:')
+							? await getfile(username, file.buffer.slice(5))
+							: Buffer.from(file.buffer, 'base64')
+					}
+				} catch (fileErr) {
+					console.error(`[chat] ★ chatLogEntry_t.fromJSON files[${fi}] 加载失败:`,
+						fileErr.message,
+						`| bufferRef=${String(file.buffer).substring(0, 30)}`,
+						`| type=${file.type}`,
+						`| entry.id=${json.id}`)
+					// 跳过损坏的文件，不阻断整条消息
+					return null
+				}
+			}))
+			filesResult = filesResult.filter(Boolean) // 移除失败的文件
+		} catch (filesErr) {
+			console.error(`[chat] ★ chatLogEntry_t.fromJSON files 整体失败:`, filesErr.message)
+			filesResult = []
+		}
+
 		const instance = Object.assign(new chatLogEntry_t(), {
 			...json,
-			timeSlice: await timeSlice_t.fromJSON(json.timeSlice, username),
-			files: await Promise.all((json.files || []).map(async file => ({
-				...file,
-				buffer: file.buffer.startsWith('file:') ? await getfile(username, file.buffer.slice(5)) : Buffer.from(file.buffer, 'base64')
-			})))
+			timeSlice: timeSliceResult,
+			files: filesResult,
 		})
 		// 兼容旧数据
 		if (!instance.id)
@@ -596,22 +659,26 @@ class chatMetadata_t {
 	}
 
 	/**
-	 * 将聊天元数据转换为用于存储到文件的数据格式。
-	 * @returns {Promise<object>} 一个包含可序列化数据的 Promise。
-	 */
+		* 将聊天元数据转换为用于存储到文件的数据格式。
+		* @returns {Promise<object>} 一个包含可序列化数据的 Promise。
+		*/
 	async toData() {
+		// 保存前修复：确保所有 chatLog/timeLines 条目都是 chatLogEntry_t 实例
+		_repairChatLogEntries(this.chatLog)
+		_repairChatLogEntries(this.timeLines)
+
 		return {
 			username: this.username,
 			chatLog: await Promise.all(this.chatLog.map(async log => {
 				if (typeof log?.toData === 'function') return log.toData(this.username)
-				// 防御：chatLog 中混入了纯对象（非 chatLogEntry_t 实例）
-				console.warn('[chat] chatLog entry missing toData method, using fallback')
+				// 经过上面的修复后不应该走到这里，但保留防御
+				console.warn('[chat] chatLog entry missing toData method after repair, using fallback')
 				if (typeof log?.toJSON === 'function') return log.toJSON()
 				return log
 			})),
 			timeLines: await Promise.all(this.timeLines.map(async entry => {
 				if (typeof entry?.toData === 'function') return entry.toData(this.username)
-				console.warn('[chat] timeLines entry missing toData method, using fallback')
+				console.warn('[chat] timeLines entry missing toData method after repair, using fallback')
 				if (typeof entry?.toJSON === 'function') return entry.toJSON()
 				return entry
 			})),
@@ -625,8 +692,50 @@ class chatMetadata_t {
 	 * @returns {Promise<chatMetadata_t>} 一个填充了完整数据的 chatMetadata_t 实例。
 	 */
 	static async fromJSON(json) {
-		const chatLog = await Promise.all(json.chatLog.map(data => chatLogEntry_t.fromJSON(data, json.username)))
-		const timeLines = await Promise.all(json.timeLines.map(entry => chatLogEntry_t.fromJSON(entry, json.username)))
+		console.log(`[chat] chatMetadata_t.fromJSON 开始: username=${json.username}, chatLog=${json.chatLog?.length}条, timeLines=${json.timeLines?.length}条`)
+		const chatLog = []
+		for (let i = 0; i < (json.chatLog || []).length; i++) {
+			try {
+				const entry = await chatLogEntry_t.fromJSON(json.chatLog[i], json.username)
+				chatLog.push(entry)
+			} catch (err) {
+				console.error(`[chat] ★ chatLog[${i}] fromJSON 失败:`, err.message)
+				console.error(`[chat]   entry数据: role=${json.chatLog[i]?.role}, id=${json.chatLog[i]?.id}, content长度=${json.chatLog[i]?.content?.length}, files=${json.chatLog[i]?.files?.length}`)
+				console.error(`[chat]   files详情:`, json.chatLog[i]?.files?.map(f => `type=${f?.type},bufferType=${typeof f?.buffer},bufferStart=${String(f?.buffer)?.substring(0,20)}`))
+				console.error(`[chat]   完整错误:`, err.stack)
+				// 不跳过，尝试降级恢复
+				try {
+					const fallback = Object.assign(new chatLogEntry_t(), json.chatLog[i])
+					fallback.timeSlice = Object.assign(new timeSlice_t(), json.chatLog[i]?.timeSlice || {})
+					fallback.files = [] // 跳过文件加载
+					if (!fallback.id) fallback.id = crypto.randomUUID()
+					chatLog.push(fallback)
+					console.warn(`[chat]   chatLog[${i}] 降级恢复成功（跳过文件）: id=${fallback.id}`)
+				} catch (fallbackErr) {
+					console.error(`[chat]   chatLog[${i}] 降级恢复也失败:`, fallbackErr.message)
+				}
+			}
+		}
+
+		const timeLines = []
+		for (let i = 0; i < (json.timeLines || []).length; i++) {
+			try {
+				const entry = await chatLogEntry_t.fromJSON(json.timeLines[i], json.username)
+				timeLines.push(entry)
+			} catch (err) {
+				console.error(`[chat] ★ timeLines[${i}] fromJSON 失败:`, err.message)
+				try {
+					const fallback = Object.assign(new chatLogEntry_t(), json.timeLines[i])
+					fallback.timeSlice = Object.assign(new timeSlice_t(), json.timeLines[i]?.timeSlice || {})
+					fallback.files = []
+					if (!fallback.id) fallback.id = crypto.randomUUID()
+					timeLines.push(fallback)
+					console.warn(`[chat]   timeLines[${i}] 降级恢复成功: id=${fallback.id}`)
+				} catch (fallbackErr) {
+					console.error(`[chat]   timeLines[${i}] 降级恢复也失败:`, fallbackErr.message)
+				}
+			}
+		}
 
 		// Clean up any "stuck" generating messages from a previous crash
 		for (const entry of chatLog)
@@ -635,6 +744,7 @@ class chatMetadata_t {
 		for (const entry of timeLines)
 			if (entry.is_generating) entry.is_generating = false
 
+		console.log(`[chat] chatMetadata_t.fromJSON 完成: chatLog=${chatLog.length}条, timeLines=${timeLines.length}条`)
 		return Object.assign(new chatMetadata_t(), {
 			username: json.username,
 			chatLog,
@@ -650,6 +760,41 @@ class chatMetadata_t {
 	 */
 	copy() {
 		return chatMetadata_t.fromJSON(this.toJSON())
+	}
+}
+
+/**
+ * 修复 chatLog/timeLines 数组中的纯对象条目，确保它们是 chatLogEntry_t 实例。
+ * 世界书的 AddChatLogEntry 接口可能向 chatLog 注入纯对象，
+ * 这些纯对象缺少 toData/toJSON 方法，保存到磁盘后会导致刷新加载失败。
+ * @param {Array} entries - chatLog 或 timeLines 数组（原地修改）
+ */
+function _repairChatLogEntries(entries) {
+	if (!Array.isArray(entries)) return
+	for (let i = 0; i < entries.length; i++) {
+		const e = entries[i]
+		if (!e) continue
+		if (typeof e.toData !== 'function') {
+			const repaired = Object.assign(new chatLogEntry_t(), e)
+			if (!repaired.id) repaired.id = crypto.randomUUID()
+			// 确保 timeSlice 也是正确的实例
+			if (repaired.timeSlice && typeof repaired.timeSlice.toData !== 'function')
+				repaired.timeSlice = Object.assign(new timeSlice_t(), repaired.timeSlice)
+			// 确保 files 中的 buffer 是可序列化的
+			if (Array.isArray(repaired.files)) {
+				repaired.files = repaired.files.filter(f => f != null).map(f => {
+					// 如果 buffer 已经是 Buffer 对象或字符串，保持原样
+					// 如果是 { type: 'Buffer', data: [...] } 形式（JSON.parse 的 Buffer），转换回 Buffer
+					if (f.buffer && typeof f.buffer === 'object' && f.buffer.type === 'Buffer' && Array.isArray(f.buffer.data)) {
+						return { ...f, buffer: Buffer.from(f.buffer.data) }
+					}
+					return f
+				})
+			}
+			entries[i] = repaired
+		} else if (!e.id) {
+			e.id = crypto.randomUUID()
+		}
 	}
 }
 
@@ -733,8 +878,21 @@ export async function saveChat(chatid) {
 	const { username, chatMetadata } = chatData
 	const chatDir = getUserDictionary(username) + '/shells/chat/chats'
 	fs.mkdirSync(chatDir, { recursive: true })
-	saveJsonFile(chatDir + '/' + chatid + '.json', await chatMetadata.toData())
-	await updateChatSummary(chatid, chatMetadata)
+	try {
+		const data = await chatMetadata.toData()
+		saveJsonFile(chatDir + '/' + chatid + '.json', data)
+		await updateChatSummary(chatid, chatMetadata)
+	} catch (saveErr) {
+		console.error(`[chat] ★ saveChat 失败: chatid=${chatid}, user=${username}`, saveErr.stack || saveErr.message)
+		console.error(`[chat]   chatLog长度=${chatMetadata.chatLog?.length}, timeLines长度=${chatMetadata.timeLines?.length}`)
+		// 尝试定位是哪条 entry 导致的
+		for (let i = 0; i < (chatMetadata.chatLog || []).length; i++) {
+			const e = chatMetadata.chatLog[i]
+			if (typeof e?.toData !== 'function') {
+				console.error(`[chat]   chatLog[${i}] 缺少 toData: constructor=${e?.constructor?.name}, id=${e?.id}`)
+			}
+		}
+	}
 }
 
 /**
@@ -744,14 +902,29 @@ export async function saveChat(chatid) {
  */
 export async function loadChat(chatid) {
 	const chatData = chatMetadatas.get(chatid)
-	if (!chatData) return undefined
+	if (!chatData) {
+		console.warn(`[chat] loadChat: chatid=${chatid} 不在 chatMetadatas 中`)
+		return undefined
+	}
 
 	if (!chatData.chatMetadata) {
 		const { username } = chatData
 		const filepath = getUserDictionary(username) + '/shells/chat/chats/' + chatid + '.json'
-		if (!fs.existsSync(filepath)) return undefined
-		chatData.chatMetadata = await chatMetadata_t.fromJSON(loadJsonFile(filepath))
-		chatMetadatas.set(chatid, chatData)
+		if (!fs.existsSync(filepath)) {
+			console.warn(`[chat] loadChat: 文件不存在 ${filepath}`)
+			return undefined
+		}
+		console.log(`[chat] loadChat: 从磁盘加载 chatid=${chatid}, user=${username}, path=${filepath}`)
+		try {
+			const jsonData = loadJsonFile(filepath)
+			console.log(`[chat] loadChat: JSON 加载成功, chatLog=${jsonData?.chatLog?.length}条, timeLines=${jsonData?.timeLines?.length}条, username=${jsonData?.username}`)
+			chatData.chatMetadata = await chatMetadata_t.fromJSON(jsonData)
+			chatMetadatas.set(chatid, chatData)
+			console.log(`[chat] loadChat: fromJSON 完成, chatLog=${chatData.chatMetadata.chatLog.length}条`)
+		} catch (loadErr) {
+			console.error(`[chat] ★ loadChat 从磁盘加载失败: chatid=${chatid}`, loadErr.stack || loadErr.message)
+			throw loadErr
+		}
 	}
 	return chatData.chatMetadata
 }
@@ -1085,7 +1258,9 @@ export async function getPluginListOfChat(chatid) {
  */
 export async function GetChatLog(chatid, start, end) {
 	const chatMetadata = await loadChat(chatid)
-	return chatMetadata.chatLog.slice(start, end)
+	// ★ P0修复：过滤掉 role='system' 的世界书注入条目（与 getInitialData 一致）
+	const displayLog = chatMetadata.chatLog.filter(x => x?.role !== 'system')
+	return displayLog.slice(start, end)
 }
 
 /**
@@ -1095,7 +1270,8 @@ export async function GetChatLog(chatid, start, end) {
  */
 export async function GetChatLogLength(chatid) {
 	const chatMetadata = await loadChat(chatid)
-	return chatMetadata.chatLog.length
+	// ★ P0修复：只计算 user/char 消息长度（与 getInitialData 和 GetChatLog 一致）
+	return chatMetadata.chatLog.filter(x => x?.role !== 'system').length
 }
 
 /**
@@ -1952,22 +2128,77 @@ export async function editMessage(chatid, index, new_content) {
  * @returns {Promise<object>} 包含聊天状态和消息的心跳数据。
  */
 export async function getInitialData(chatid) {
+	console.log(`[chat] getInitialData 开始: chatid=${chatid}`)
 	const chatMetadata = await loadChat(chatid)
-	if (!chatMetadata) throw skip_report(new Error('Chat not found'))
+	if (!chatMetadata) {
+		console.error(`[chat] getInitialData: chatMetadata 为 null, chatid=${chatid}`)
+		throw skip_report(new Error('Chat not found'))
+	}
 	const timeSlice = chatMetadata.LastTimeSlice
+	console.log(`[chat] getInitialData: chatLog=${chatMetadata.chatLog?.length}条, chars=${Object.keys(timeSlice.chars || {}).join(',')}, plugins=${Object.keys(timeSlice.plugins || {}).length}个`)
+
+	// ★ P0修复：过滤掉 role='system' 的世界书注入条目
+	const displayLog = chatMetadata.chatLog.filter(x => x?.role !== 'system')
+	console.log(`[chat] getInitialData: displayLog=${displayLog.length}条 (过滤system后)`)
+
+	// ★ DIAG: 逐条序列化 initialLog，捕获每条的错误
+	const last20 = displayLog.slice(-20)
+	const initialLog = []
+	for (let i = 0; i < last20.length; i++) {
+		const x = last20[i]
+		try {
+			if (typeof x?.toData === 'function') {
+				initialLog.push(await x.toData(chatMetadata.username))
+			} else {
+				console.warn(`[chat] getInitialData: entry[${i}] 缺少 toData, id=${x?.id}, constructor=${x?.constructor?.name}`)
+				if (typeof x?.toJSON === 'function') initialLog.push(x.toJSON())
+				else initialLog.push(x)
+			}
+		} catch (entryErr) {
+			console.error(`[chat] ★ getInitialData entry[${i}] 序列化失败:`, entryErr.message)
+			console.error(`[chat]   entry详情: id=${x?.id}, role=${x?.role}, content长度=${x?.content?.length}, files=${x?.files?.length}`)
+			console.error(`[chat]   files详情:`, x?.files?.map((f, fi) => `[${fi}] type=${f?.type} bufferType=${typeof f?.buffer} isBuffer=${Buffer.isBuffer(f?.buffer)}`))
+			console.error(`[chat]   完整错误:`, entryErr.stack)
+			// 降级：跳过文件，手动序列化
+			try {
+				const fallbackEntry = {
+					id: x?.id || crypto.randomUUID(),
+					content: x?.content || '',
+					role: x?.role || 'char',
+					name: x?.name || 'Unknown',
+					time_stamp: x?.time_stamp || new Date(),
+					files: [],
+					timeSlice: typeof x?.timeSlice?.toData === 'function'
+						? await x.timeSlice.toData()
+						: { chars: Object.keys(x?.timeSlice?.chars || {}), plugins: Object.keys(x?.timeSlice?.plugins || {}) },
+				}
+				initialLog.push(fallbackEntry)
+				console.warn(`[chat]   entry[${i}] 降级序列化成功（跳过文件）`)
+			} catch (fallbackErr) {
+				console.error(`[chat]   entry[${i}] 降级序列化也失败:`, fallbackErr.message)
+				// 最终兜底
+				initialLog.push({
+					id: x?.id || crypto.randomUUID(),
+					content: `[消息加载失败: ${entryErr.message}]`,
+					role: x?.role || 'char',
+					name: x?.name || 'Unknown',
+					time_stamp: new Date(),
+					files: [],
+					timeSlice: { chars: [], plugins: [] },
+				})
+			}
+		}
+	}
+
+	console.log(`[chat] getInitialData 完成: initialLog=${initialLog.length}条`)
 	return {
 		charlist: Object.keys(timeSlice.chars),
 		pluginlist: Object.keys(timeSlice.plugins),
 		worldname: timeSlice.world_id,
 		personaname: timeSlice.player_id,
 		frequency_data: timeSlice.chars_speaking_frequency,
-		logLength: chatMetadata.chatLog.length,
-		initialLog: await Promise.all(chatMetadata.chatLog.slice(-20).map(x => {
-			if (typeof x?.toData === 'function') return x.toData(chatMetadata.username)
-			console.warn('[chat] getInitialData: chatLog entry missing toData, using fallback')
-			if (typeof x?.toJSON === 'function') return x.toJSON()
-			return x
-		})),
+		logLength: displayLog.length,
+		initialLog,
 		timeLineIndex: chatMetadata.timeLineIndex,
 		timeLinesCount: chatMetadata.timeLines.length,
 	}

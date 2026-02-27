@@ -112,18 +112,44 @@ async function generateFullHtmlForMessage(message, cache) {
  * @returns {Promise<HTMLElement>} - 渲染好的消息 DOM 元素。
  */
 export async function renderMessage(message) {
+	// 渲染入口记录（debug级别，不在生产中输出）
+	diag.debug('renderMessage entry', {
+		id: message?.id,
+		role: message?.role,
+		name: message?.name,
+		contentLen: message?.content?.length,
+	})
+
 	// ★ 全面防御：确保 message 对象完整性
 	if (!message || typeof message !== 'object') {
-		console.error('[messageList] renderMessage received invalid message:', message)
+		diag.error('renderMessage received invalid message:', message)
 		const div = document.createElement('div')
 		div.className = 'chat-message mb-3'
 		div.textContent = '[渲染错误：无效消息对象]'
 		return div
 	}
 
+	// ★ P0修复：过滤系统消息（世界书条目/注入的上下文）
+	// 这些消息是 world 的 AddChatLogEntry 注入的 AI 上下文，不应该在聊天界面显示
+	// 典型特征：role='system', name='world_info' 或类似
+	if (message.role === 'system') {
+		diag.log(`skipping system message (role=system, name=${message.name}), not rendering`)
+		const hidden = document.createElement('div')
+		hidden.style.display = 'none'
+		hidden.className = 'chat-message system-hidden'
+		hidden.id = message.id || ('msg-sys-' + Math.random().toString(36).substring(2, 10))
+		return hidden
+	}
+
 	if (!message.id) {
 		message.id = 'msg-' + Math.random().toString(36).substring(2, 15)
-		console.warn('[messageList] message missing id, generated fallback:', message.id)
+		diag.warn(`message missing id, generated fallback: ${message.id}`,
+			'| keys:', Object.keys(message).join(','),
+			'| role:', message.role,
+			'| name:', message.name,
+			'| contentLen:', message.content?.length,
+			'| hasTimeSlice:', !!message.timeSlice,
+			'| content_preview:', message.content?.substring?.(0, 100))
 	}
 
 
@@ -176,9 +202,14 @@ export async function renderMessage(message) {
 	const contentHasMedia = contentType === 'full-html' || /<(?:video|iframe)\b[^>]*>[\s\S]*?<\/(?:video|iframe)>/gi.test(renderedContent)
 
 	// 预处理 avatar：优先使用角色卡图片路径
-	let safeAvatar = message.avatar || DEFAULT_AVATAR;
+	// ★ P3修复：检测未替换的宏字符串（如 {{avatar}}），视为无效
+	let rawAvatar = message.avatar
+	if (rawAvatar && typeof rawAvatar === 'string' && /\{\{.*\}\}/.test(rawAvatar)) {
+		rawAvatar = null // 包含未替换宏的 avatar 视为无效
+	}
+	let safeAvatar = rawAvatar || DEFAULT_AVATAR;
 	// 如果 avatar 为空或是默认值，尝试从角色卡路径构建头像 URL
-	if (!message.avatar && message.role === 'char') {
+	if (!rawAvatar && message.role === 'char') {
 		// 优先使用 timeSlice.charname（角色卡目录名/key），比 message.name（可能是显示名）更可靠
 		const charKey = message.timeSlice?.charname || message.name
 		if (charKey) {
@@ -482,7 +513,7 @@ export async function renderMessage(message) {
 
 	// --- iframe 渲染（完整 HTML 文档 — 统一使用 iframe，无论 sandbox/free） ---
 	if (contentType === 'full-html') {
-		renderAsIframe(displayProcessed, messageElement, rawContent)
+		await renderAsIframe(displayProcessed, messageElement, rawContent)
 	}
 
 	// --- 激活 display regex 注入的脚本（非 full-html 模式） ---

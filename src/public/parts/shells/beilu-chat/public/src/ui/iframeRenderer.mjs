@@ -14,6 +14,10 @@
  */
 
 import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
+import { createDiag } from '../diagLogger.mjs'
+import { buildInjectionScript, detectNeeds } from './stCompat/index.mjs'
+
+const diag = createDiag('iframeRenderer')
 
 // ============================================================
 // 全局：父页面音频管理器（单例）
@@ -416,10 +420,10 @@ function createBridgeScript(messageId, rawContentBase64 = '') {
  * @param {string} [rawContent=''] - 原始消息文本（display regex 处理前），用于注入 ST API
  * @returns {HTMLIFrameElement|null} 创建的 iframe 元素
  */
-export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
+export async function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 	const contentEl = messageElement.querySelector('.message-content')
 	if (!contentEl) {
-		console.warn('[iframeRenderer] 未找到 .message-content 容器')
+		diag.warn('未找到 .message-content 容器')
 		return null
 	}
 
@@ -457,6 +461,48 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 	// ★ 预处理 HTML：vh 单位替换
 	let modifiedHtml = replaceVhInContent(htmlDocument)
 
+	// ★ 预处理 HTML：宏替换（必须在 srcdoc 设置之前，否则浏览器解析 HTML 时会尝试加载未替换的宏作为 URL）
+	// 典型场景：角色卡 HTML 中 src="{{avatar}}" 在 JS 运行之前就被浏览器当作相对 URL 请求 → 404
+	{
+		// 获取角色名/用户名（从消息元素或全局状态）
+		const charNameEl = document.getElementById('char-name-display')
+		const macroCharName = charNameEl?.textContent?.trim() || 'Character'
+		const macroUserName = document.querySelector('[data-user-name]')?.dataset?.userName || 'User'
+		// 角色卡头像 URL
+		const charId = charNameEl?.dataset?.charId
+		const macroAvatar = charId ? `/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charId)}/image.png` : ''
+
+		// 诊断：记录宏替换参数
+		const hasMacros = /\{\{(user|char|avatar)\}\}/i.test(modifiedHtml) || /%7B%7B(user|char|avatar)%7D%7D/i.test(modifiedHtml)
+		if (hasMacros) {
+			diag.log('宏替换:', {
+				user: macroUserName,
+				char: macroCharName,
+				avatar: macroAvatar ? '✓ ' + macroAvatar.substring(0, 60) : '✗ (empty — charId=' + (charId || 'null') + ')',
+				charNameElFound: !!charNameEl,
+			})
+		}
+
+		modifiedHtml = modifiedHtml
+			.replace(/\{\{user\}\}/gi, macroUserName)
+			.replace(/\{\{char\}\}/gi, macroCharName)
+			.replace(/\{\{avatar\}\}/gi, macroAvatar)
+			// P3修复：处理 URL 编码版本的宏（浏览器可能在解析 HTML 时将 { } 编码为 %7B %7D）
+			.replace(/%7B%7Buser%7D%7D/gi, macroUserName)
+			.replace(/%7B%7Bchar%7D%7D/gi, macroCharName)
+			.replace(/%7B%7Bavatar%7D%7D/gi, macroAvatar)
+
+		// 诊断：替换后检查是否仍有未替换的宏
+		const remainingMacros = modifiedHtml.match(/\{\{[^}]+\}\}/g)
+		if (remainingMacros) {
+			diag.warn('宏替换后仍有未处理的宏:', [...new Set(remainingMacros)])
+		}
+		const remainingEncodedMacros = modifiedHtml.match(/%7B%7B[^%]*%7D%7D/gi)
+		if (remainingEncodedMacros) {
+			diag.warn('宏替换后仍有 URL 编码的宏:', [...new Set(remainingEncodedMacros)])
+		}
+	}
+
 	// ★ 对原始消息做 base64 编码，注入到 earlyScript 中供 ST API 使用
 	let rawContentBase64 = ''
 	try {
@@ -464,7 +510,7 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 			rawContentBase64 = btoa(unescape(encodeURIComponent(rawContent)))
 		}
 	} catch (e) {
-		console.warn('[iframeRenderer] base64 encode failed:', e)
+		diag.warn('base64 encode failed:', e)
 	}
 
 	// ★ 注入 early script（beiluAudio 桥接 API + ST API）到 <head> 最前面
@@ -479,6 +525,40 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 	} else {
 		// 最后手段：直接在最前面插入
 		modifiedHtml = earlyScript + modifiedHtml
+	}
+
+	// ★ 新增：ST 兼容层注入（在 earlyScript 之后、bridgeScript 之前）
+	const { needsST, needsMVU, needsVue, needsEJS } = detectNeeds(htmlDocument)
+	diag.debug('ST 兼容层检测结果:', { needsST, needsMVU, needsVue, needsEJS, htmlLen: htmlDocument.length })
+	if (needsST || needsMVU || needsVue || needsEJS) {
+		diag.log(`ST 兼容层注入开始: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, msgId=${messageId}`)
+		const stCompatScript = await buildInjectionScript({
+			needsST,
+			needsMVU,
+			needsVue,
+			needsEJS,
+			messageId: parseInt(messageId.replace(/\D/g, '')) || 0,
+			// userName / charName 将在 STContextEnhancement 中使用
+		})
+		if (stCompatScript) {
+			// 插入到 earlyScript 之后（在 <head> 内，角色卡脚本之前）
+			if (modifiedHtml.includes('<head>')) {
+				// earlyScript 已经在 <head> 后面了，stCompat 追加到 earlyScript 之后
+				// 找到 earlyScript 的结束位置（第一个 </script> 之后）
+				const earlyScriptEnd = modifiedHtml.indexOf('</script>', modifiedHtml.indexOf('<head>'))
+				if (earlyScriptEnd !== -1) {
+					const insertPos = earlyScriptEnd + '</script>'.length
+					modifiedHtml = modifiedHtml.slice(0, insertPos) + stCompatScript + modifiedHtml.slice(insertPos)
+				} else {
+					// fallback: 在 </head> 前插入
+					modifiedHtml = modifiedHtml.replace('</head>', stCompatScript + '</head>')
+				}
+			} else {
+				// 没有 <head> 标签，直接在 earlyScript 后追加
+				modifiedHtml += stCompatScript
+			}
+			diag.log(`ST 兼容层注入完成: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, 脚本大小=${(stCompatScript.length / 1024).toFixed(1)}KB`)
+		}
 	}
 
 	// ★ 注入桥接脚本（在 </body> 或 </html> 前）
@@ -564,6 +644,6 @@ export function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
 		window.removeEventListener('message', handleMessage)
 	})
 
-	console.log(`[iframeRenderer] 消息 ${messageId} 已渲染为 iframe（${modifiedHtml.length} 字符）`)
+	diag.log(`消息 ${messageId} 已渲染为 iframe（${modifiedHtml.length} 字符）`)
 	return iframe
 }

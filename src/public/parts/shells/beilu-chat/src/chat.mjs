@@ -500,14 +500,24 @@ class chatMetadata_t {
 		return {
 			username: this.username,
 			chatLog: await Promise.all(this.chatLog.map(async (log, i) => {
-				if (typeof log?.toData === 'function') return log.toData(this.username)
-					// ★ DIAG: 追踪纯对象来源
-					diag.warn(`chatLog[${i}] missing toData method.`,
-						'constructor:', log?.constructor?.name,
-						'id:', log?.id,
-						'role:', log?.role,
-						'has toJSON:', typeof log?.toJSON === 'function',
-						'keys:', log ? Object.keys(log).join(',') : 'null')
+				if (typeof log?.toData === 'function') {
+					const result = await log.toData(this.username)
+					// ★ DIAG P0: 检查 toData 输出是否有 id
+					if (!result?.id) {
+						diag.error(`chatLog[${i}] toData() 输出缺少 id!`,
+							'input.id:', log?.id,
+							'input.constructor:', log?.constructor?.name,
+							'output keys:', result ? Object.keys(result).join(',') : 'null')
+					}
+					return result
+				}
+				// ★ DIAG: 追踪纯对象来源
+				diag.warn(`chatLog[${i}] missing toData method.`,
+					'constructor:', log?.constructor?.name,
+					'id:', log?.id,
+					'role:', log?.role,
+					'has toJSON:', typeof log?.toJSON === 'function',
+					'keys:', log ? Object.keys(log).join(',') : 'null')
 				if (typeof log?.toJSON === 'function') return log.toJSON()
 				return log
 			})),

@@ -1,0 +1,16 @@
+{
+	"zh-CN": {
+		"name": "beilu-mvu",
+		"description": "MVU 变量系统 — 变量注入AI上下文、AI输出变量解析、EJS模板渲染、变量持久化",
+		"version": "1.0.0",
+		"author": "凛倾",
+		"tags": ["mvu", "variables", "ejs", "compatibility"]
+	},
+	"en-UK": {
+		"name": "beilu-mvu",
+		"description": "MVU Variable System — Variable injection, AI output parsing, EJS template rendering, persistence",
+		"version": "1.0.0",
+		"author": "Linqing",
+		"tags": ["mvu", "variables", "ejs", "compatibility"]
+	}
+}

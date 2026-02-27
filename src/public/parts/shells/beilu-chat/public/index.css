@@ -589,6 +589,41 @@ input[type="checkbox"].checkbox:checked {
 }
 
 /* ============================================================
+   助手子选项卡（正则/变量管理器切换）
+   ============================================================ */
+
+.helper-sub-tab {
+	padding: 0.35rem 0.75rem;
+	font-size: 0.78rem;
+	border: none;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	transition: all 0.12s ease;
+	opacity: 0.55;
+	white-space: nowrap;
+	font-weight: 500;
+	border-bottom: 2px solid transparent;
+}
+
+.helper-sub-tab:hover {
+	opacity: 0.85;
+	background-color: rgba(212, 160, 23, 0.06);
+}
+
+.helper-sub-tab-active {
+	opacity: 1;
+	color: var(--beilu-amber);
+	font-weight: 600;
+	border-bottom-color: var(--beilu-amber);
+}
+
+/* 助手面板 */
+.helper-panel {
+	min-height: 0;
+}
+
+/* ============================================================
    三栏布局
    ============================================================ */
 

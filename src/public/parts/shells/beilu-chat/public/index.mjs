@@ -20,6 +20,12 @@ import { bindMemoryBrowserToChar, initMemoryBrowser } from './src/memoryBrowser.
 import { initMemoryPresetChat } from './src/memoryPresetChat.mjs'
 import { initPromptViewer, openPromptViewer } from './src/promptViewer.mjs'
 import { initRegexEditor } from './src/regexEditor.mjs'
+import { initSTCompat } from './src/ui/stCompat/index.mjs'
+import { initPluginManager } from './src/ui/stCompat/pluginManager.mjs'
+import { initScriptManager } from './src/ui/stCompat/scriptManager.mjs'
+import { loadCharacterScripts } from './src/ui/stCompat/scriptRunner.mjs'
+import { initVariableManager } from './src/ui/stCompat/variableManager.mjs'
+import { updateContext as updateVarContext } from './src/ui/stCompat/variableStore.mjs'
 import { getChatLogIndexByQueueIndex, getQueue } from './src/ui/virtualQueue.mjs'
 
 // ============================================================
@@ -131,6 +137,10 @@ const apiModelSelect = document.getElementById('api-model-select')
 const presetSelector = document.getElementById('preset-selector')
 const presetCreateBtn = document.getElementById('preset-create-btn')
 const presetDeleteBtn = document.getElementById('preset-delete-btn')
+
+// 右栏 — 预设快速切换
+const rightPresetQuickSelect = document.getElementById('right-preset-quick-select')
+const rightPresetDesc = document.getElementById('right-preset-desc')
 
 // 预设面板
 const presetName = document.getElementById('preset-name')
@@ -329,7 +339,15 @@ async function fetchModels() {
  * 将后端返回的预设数据应用到 UI
  * @param {object} data - getPresetData() 的返回值
  */
+/** 预设描述缓存（从 GetData 获取） */
+let presetDescriptions = {}
+
 function applyPresetData(data) {
+	// 缓存预设描述
+	if (data.preset_descriptions) {
+		presetDescriptions = data.preset_descriptions
+	}
+
 	// 填充预设选择器下拉框
 	if (presetSelector && data.preset_list) {
 		const prevValue = presetSelector.value
@@ -348,6 +366,28 @@ function applyPresetData(data) {
 			})
 		}
 		presetSelector.value = data.active_preset || prevValue || ''
+	}
+
+	// 填充右栏预设快速切换下拉框
+	if (rightPresetQuickSelect && data.preset_list) {
+		rightPresetQuickSelect.innerHTML = ''
+		if (data.preset_list.length === 0) {
+			const opt = document.createElement('option')
+			opt.value = ''
+			opt.textContent = '(无预设)'
+			rightPresetQuickSelect.appendChild(opt)
+		} else {
+			data.preset_list.forEach(name => {
+				const opt = document.createElement('option')
+				opt.value = name
+				const desc = presetDescriptions[name]
+				opt.textContent = desc ? `${name} — ${desc.substring(0, 30)}` : name
+				rightPresetQuickSelect.appendChild(opt)
+			})
+		}
+		rightPresetQuickSelect.value = data.active_preset || ''
+		// 更新描述显示
+		updateRightPresetDesc(data.active_preset)
 	}
 
 	presetName.textContent = data.preset_name || '未加载'
@@ -1321,6 +1361,11 @@ charInfoSaveBtn?.addEventListener('click', async () => {
 async function init() {
 	applyTheme()
 
+	// 初始化 ST 兼容层（EventBus + Globals + CDN 预加载）
+	try { initSTCompat() } catch (e) {
+		console.warn('[beilu-chat] initSTCompat 失败（非致命）:', e.message)
+	}
+
 	try { await initTranslations('chat') } catch (e) {
 		console.warn('[beilu-chat] initTranslations 失败（非致命）:', e.message)
 	}
@@ -1403,6 +1448,9 @@ async function init() {
 		console.warn('[beilu-chat] initMemoryOps 失败（非致命）:', e.message)
 	}
 
+	// 初始化右栏预设快速切换
+	initRightPresetQuickSwitch()
+
 	// 初始化记忆文件浏览器（侧边栏文件树 + 文件查看器）
 	try {
 		const memoryTreeEl = document.getElementById('memory-tree')
@@ -1427,7 +1475,6 @@ async function init() {
 	} catch (e) {
 		console.warn('[beilu-chat] initMemoryBrowser 失败（非致命）:', e.message)
 	}
-
 	// 初始化正则编辑器（前端助手选项卡）
 	try {
 		const regexContainer = document.getElementById('regex-editor-container')
@@ -1435,6 +1482,33 @@ async function init() {
 	} catch (e) {
 		console.warn('[beilu-chat] initRegexEditor 失败（非致命）:', e.message)
 	}
+
+	// 初始化变量管理器（前端助手选项卡 — 变量面板）
+	try {
+		const varContainer = document.getElementById('variable-manager-container')
+		if (varContainer) initVariableManager(varContainer)
+	} catch (e) {
+		console.warn('[beilu-chat] initVariableManager 失败（非致命）:', e.message)
+	}
+
+	// 初始化脚本管理器（前端助手选项卡 — 脚本面板）
+	try {
+		const scriptContainer = document.getElementById('script-manager-container')
+		if (scriptContainer) initScriptManager(scriptContainer)
+	} catch (e) {
+		console.warn('[beilu-chat] initScriptManager 失败（非致命）:', e.message)
+	}
+
+	// 初始化插件管理器（前端助手选项卡 — 插件面板）
+	try {
+		const pluginContainer = document.getElementById('plugin-manager-container')
+		if (pluginContainer) initPluginManager(pluginContainer)
+	} catch (e) {
+		console.warn('[beilu-chat] initPluginManager 失败（非致命）:', e.message)
+	}
+
+	// 初始化助手子选项卡切换
+	initHelperSubTabs()
 
 	// 初始化文件浏览器（IDE 侧边栏的文件资源管理器面板）
 	try {
@@ -1487,6 +1561,11 @@ async function init() {
 		console.warn('[beilu-chat] initMemoryPresetChat 失败（非致命）:', e.message)
 	}
 
+	// 初始化角色卡脚本系统（tavern_helper 脚本 iframe）
+	try { await initCharacterScriptSystem() } catch (e) {
+		console.warn('[beilu-chat] initCharacterScriptSystem 失败（非致命）:', e.message)
+	}
+
 	// 启动贝露的眼睛（桌面截图）主动发送轮询
 	try { startEyeActivePoll() } catch (e) {
 		console.warn('[beilu-chat] startEyeActivePoll 失败（非致命）:', e.message)
@@ -1530,6 +1609,42 @@ async function loadPresetDataWithRetry() {
 	// 所有重试都失败，回退到普通加载
 	console.warn('[beilu-chat] 预设加载重试耗尽，执行普通加载')
 	await loadPresetData()
+}
+
+// ============================================================
+// 右栏预设快速切换
+// ============================================================
+
+/**
+ * 更新右栏预设描述显示
+ * @param {string} presetName_ - 预设名称
+ */
+function updateRightPresetDesc(presetName_) {
+	if (!rightPresetDesc) return
+	const desc = presetDescriptions[presetName_] || ''
+	rightPresetDesc.textContent = desc || '(无描述)'
+}
+
+/**
+ * 初始化右栏预设快速切换下拉框事件
+ */
+function initRightPresetQuickSwitch() {
+	if (!rightPresetQuickSelect) return
+
+	rightPresetQuickSelect.addEventListener('change', async () => {
+		const name = rightPresetQuickSelect.value
+		if (!name) return
+		try {
+			await setPresetData({ switch_preset: { name } })
+			showToast(`已切换到预设: "${name}"`, 'success')
+			// 同步左栏
+			if (presetSelector) presetSelector.value = name
+			updateRightPresetDesc(name)
+			await loadPresetData()
+		} catch (err) {
+			showToast('切换预设失败: ' + err.message, 'error')
+		}
+	})
 }
 
 // ============================================================
@@ -2415,6 +2530,30 @@ function showChatManagerModal(chatList, filterCharName) {
 }
 
 // ============================================================
+// 助手子选项卡切换（正则 / 变量管理器）
+// ============================================================
+
+function initHelperSubTabs() {
+	const tabs = document.querySelectorAll('.helper-sub-tab')
+	if (tabs.length === 0) return
+
+	tabs.forEach(tab => {
+		tab.addEventListener('click', () => {
+			const targetTab = tab.dataset.helperTab
+			if (!targetTab) return
+
+			// 更新 tab 高亮
+			tabs.forEach(t => t.classList.toggle('helper-sub-tab-active', t.dataset.helperTab === targetTab))
+
+			// 切换面板
+			document.querySelectorAll('.helper-panel').forEach(panel => {
+				panel.style.display = panel.id === `helper-panel-${targetTab}` ? '' : 'none'
+			})
+		})
+	})
+}
+
+// ============================================================
 // 贝露的眼睛 — 桌面截图主动发送轮询
 // ============================================================
 
@@ -2482,6 +2621,88 @@ async function pollEyeStatus() {
 		}
 	} catch {
 		// 静默失败（后端可能未启动）
+	}
+}
+
+// ============================================================
+// 角色卡脚本系统（tavern_helper 脚本 iframe）
+// ============================================================
+
+/**
+ * 初始化角色卡脚本系统
+ * 从当前角色卡中提取 tavern_helper.scripts 并在隐藏 iframe 中执行
+ */
+async function initCharacterScriptSystem() {
+	const charId = getCurrentCharId()
+	if (!charId) {
+		// charList 可能还没加载好，延迟重试
+		const retryTimer = setInterval(async () => {
+			const id = getCurrentCharId()
+			if (id) {
+				clearInterval(retryTimer)
+				await _loadScriptsForChar(id)
+			}
+		}, 2000)
+		setTimeout(() => clearInterval(retryTimer), 30000)
+		return
+	}
+	await _loadScriptsForChar(charId)
+}
+
+/**
+ * 为指定角色卡加载脚本
+ * @param {string} charId - 角色卡 ID
+ */
+async function _loadScriptsForChar(charId) {
+	// 角色隔离：更新变量存储上下文，切换到该角色的 character 变量空间
+	try {
+		updateVarContext({ charId, chatId: currentChatId || '' })
+	} catch (e) {
+		console.warn('[beilu-chat] updateVarContext 失败（非致命）:', e.message)
+	}
+
+	try {
+		// 通过 beilu-home 的 char-data API 获取完整 chardata.json
+		// 不能用 getPartDetails()，因为它只返回展示信息（name/avatar/description），不含 chardata
+		const resp = await fetch(`/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charId)}`)
+		if (!resp.ok) {
+			console.warn(`[beilu-chat] 获取角色卡数据失败: ${charId} (HTTP ${resp.status})`)
+			return
+		}
+		const charData = await resp.json()
+		if (!charData || typeof charData !== 'object') return
+
+		const charName = charData.name || charId
+		const userName = personaName || 'User'
+
+		// 获取当前聊天消息队列，传入脚本 iframe 用于 SillyTavern.chat 初始化
+		// MVU variable_init 需要 chat 数组非空才能进行变量初始化
+		let chatMessages = []
+		try {
+			chatMessages = getQueue()
+			// 如果 queue 还没有数据（virtualList 异步加载中），等待一段时间重试
+			if (!chatMessages || chatMessages.length === 0) {
+				for (let retry = 0; retry < 5; retry++) {
+					await new Promise(r => setTimeout(r, 1000))
+					chatMessages = getQueue()
+					if (chatMessages && chatMessages.length > 0) break
+				}
+			}
+			console.log(`[beilu-chat] chatMessages for script system: ${chatMessages?.length || 0} messages`)
+		} catch (e) {
+			console.warn('[beilu-chat] getQueue failed for script system:', e.message)
+		}
+
+		await loadCharacterScripts(charData, {
+			userName,
+			charName,
+			charId,
+			chatId: currentChatId || '',
+			chatMessages,
+		})
+		console.log(`[beilu-chat] 角色卡脚本系统已加载: ${charId}`)
+	} catch (err) {
+		console.warn(`[beilu-chat] 加载角色卡脚本失败: ${charId}`, err.message)
 	}
 }
 

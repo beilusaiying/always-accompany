@@ -73,51 +73,12 @@
 					预设 & 设置
 				</h3>
 	
-					<!-- ====== 角色信息折叠组 ====== -->
-					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-						<input type="checkbox" />
-						<div class="collapse-title font-medium text-sm py-2 min-h-0">
-							🎭 角色信息
-						</div>
-						<div class="collapse-content px-2 pb-2">
-							<div class="flex items-start gap-3 mb-2">
-								<div id="char-avatar-display" class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
-									🎭
-								</div>
-								<div class="flex-1 min-w-0">
-									<div id="char-name-display" class="font-bold text-sm text-amber-700 truncate">未加载角色</div>
-									<div id="char-desc-short" class="text-xs text-base-content/60 line-clamp-2 mt-0.5"></div>
-								</div>
+						<!-- ====== 预设管理折叠组 ====== -->
+							<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+							<input type="checkbox" data-collapse-id="left-preset-manage" />
+							<div class="collapse-title font-medium text-sm py-2 min-h-0">
+								📋 预设管理
 							</div>
-							<!-- 开场白 -->
-							<div class="form-control mb-2">
-								<label class="label py-0.5">
-									<span class="label-text text-xs">开场白</span>
-								</label>
-								<textarea id="char-greeting-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="3" readonly placeholder="加载中..."></textarea>
-							</div>
-							<!-- 角色描述 -->
-							<div class="form-control mb-2">
-								<label class="label py-0.5">
-									<span class="label-text text-xs">角色描述</span>
-								</label>
-								<textarea id="char-description-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="4" readonly placeholder="加载中..."></textarea>
-							</div>
-							<!-- 操作按钮 -->
-							<div class="flex justify-end gap-1">
-								<button id="char-info-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
-								<button id="char-info-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden">💾 保存</button>
-								<button id="char-info-cancel-btn" class="btn btn-xs btn-ghost hidden">取消</button>
-							</div>
-						</div>
-					</div>
-	
-					<!-- ====== 预设管理折叠组 ====== -->
-					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" checked />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						📋 预设管理
-					</div>
 					<div class="collapse-content px-2 pb-2">
 						<!-- 预设选择器 -->
 						<div class="flex items-center gap-1 mb-2">
@@ -153,11 +114,11 @@
 				</div>
 
 				<!-- ====== 模型参数折叠组 ====== -->
-				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						⚙️ 模型参数
-					</div>
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="left-model-params" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							⚙️ 模型参数
+						</div>
 					<div class="collapse-content px-2 pb-2">
 						<div class="space-y-2">
 							<!-- Temperature -->
@@ -265,11 +226,11 @@
 				</div>
 
 				<!-- ====== 预设条目折叠组 ====== -->
-				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" checked />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						📝 预设条目
-					</div>
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="left-preset-entries" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							📝 预设条目
+						</div>
 					<div class="collapse-content px-2 pb-2">
 						<!-- 搜索 -->
 						<div class="form-control mb-2">
@@ -326,11 +287,11 @@
 				<div class="divider my-1 opacity-30"></div>
 
 				<!-- ====== 世界书绑定折叠组 ====== -->
-				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						📖 世界书绑定
-					</div>
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="left-world-binding" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							📖 世界书绑定
+						</div>
 					<div class="collapse-content px-2 pb-2">
 						<div class="flex items-center gap-1 mb-1">
 							<select id="left-world-select" class="select select-xs select-bordered flex-1 text-xs"></select>
@@ -343,23 +304,62 @@
 				</div>
 	
 				<!-- ====== 用户人设选择折叠组 ====== -->
-				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						👤 用户人设
-					</div>
-					<div class="collapse-content px-2 pb-2">
-						<div class="flex items-center gap-1 mb-1">
-							<select id="left-persona-select" class="select select-xs select-bordered flex-1 text-xs"></select>
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="left-persona" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							👤 用户人设
 						</div>
-						<div class="flex items-center justify-between">
-							<span class="text-xs text-base-content/50">当前:</span>
-							<span id="left-persona-status" class="text-xs font-bold text-amber-700 truncate max-w-[140px]">默认</span>
+						<div class="collapse-content px-2 pb-2">
+							<div class="flex items-center gap-1 mb-1">
+								<select id="left-persona-select" class="select select-xs select-bordered flex-1 text-xs"></select>
+							</div>
+							<div class="flex items-center justify-between">
+								<span class="text-xs text-base-content/50">当前:</span>
+								<span id="left-persona-status" class="text-xs font-bold text-amber-700 truncate max-w-[140px]">默认</span>
+							</div>
+							<div id="left-persona-desc" class="text-xs text-base-content/40 mt-1 line-clamp-2"></div>
 						</div>
-						<div id="left-persona-desc" class="text-xs text-base-content/40 mt-1 line-clamp-2"></div>
 					</div>
+	
+					<!-- ====== 角色信息折叠组（位于最下方） ====== -->
+						<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+							<input type="checkbox" data-collapse-id="left-char-info" />
+							<div class="collapse-title font-medium text-sm py-2 min-h-0">
+								🎭 角色信息
+							</div>
+							<div class="collapse-content px-2 pb-2">
+								<div class="flex items-start gap-3 mb-2">
+									<div id="char-avatar-display" class="w-12 h-12 rounded-full bg-base-300 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+										🎭
+									</div>
+									<div class="flex-1 min-w-0">
+										<div id="char-name-display" class="font-bold text-sm text-amber-700 truncate">未加载角色</div>
+										<div id="char-desc-short" class="text-xs text-base-content/60 line-clamp-2 mt-0.5"></div>
+									</div>
+								</div>
+								<!-- 开场白 -->
+								<div class="form-control mb-2">
+									<label class="label py-0.5">
+										<span class="label-text text-xs">开场白</span>
+									</label>
+									<textarea id="char-greeting-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="3" readonly placeholder="加载中..."></textarea>
+								</div>
+								<!-- 角色描述 -->
+								<div class="form-control mb-2">
+									<label class="label py-0.5">
+										<span class="label-text text-xs">角色描述</span>
+									</label>
+									<textarea id="char-description-edit" class="textarea textarea-bordered textarea-xs w-full text-xs" rows="4" readonly placeholder="加载中..."></textarea>
+								</div>
+								<!-- 操作按钮 -->
+								<div class="flex justify-end gap-1">
+									<button id="char-info-edit-btn" class="btn btn-xs btn-outline">✏️ 编辑</button>
+									<button id="char-info-save-btn" class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden">💾 保存</button>
+									<button id="char-info-cancel-btn" class="btn btn-xs btn-ghost hidden">取消</button>
+								</div>
+							</div>
+						</div>
 				</div>
-			</div>
 
 				<!-- ====== 聊天停靠区（文件/记忆模式时聊天移到这里） ====== -->
 			<div id="chat-dock" class="chat-dock border-t border-amber-700/30 hidden">
@@ -612,10 +612,34 @@
 				</div>
 			</div>
 
-			<!-- ====== 前端助手选项卡（正则 + 脚本） ====== -->
+			<!-- ====== 前端助手选项卡（正则 + 变量管理器） ====== -->
 			<div id="center-tab-helper" class="center-tab-content flex-1 hidden flex-col overflow-hidden">
-				<!-- 正则编辑器将由 regexEditor.mjs 动态渲染到此容器 -->
-				<div id="regex-editor-container" class="flex-1 flex flex-col overflow-hidden">
+				<!-- 助手子选项卡栏 -->
+				<div id="helper-sub-tabs" class="flex items-center gap-0 border-b border-base-300 shrink-0 bg-base-200/50">
+					<button class="helper-sub-tab helper-sub-tab-active" data-helper-tab="regex">🔤 正则编辑器</button>
+					<button class="helper-sub-tab" data-helper-tab="variables">📊 变量管理器</button>
+					<button class="helper-sub-tab" data-helper-tab="scripts">📜 脚本管理器</button>
+					<button class="helper-sub-tab" data-helper-tab="plugins">🧩 插件管理</button>
+				</div>
+				<!-- 正则编辑器面板 -->
+				<div id="helper-panel-regex" class="helper-panel flex-1 flex flex-col overflow-hidden">
+					<div id="regex-editor-container" class="flex-1 flex flex-col overflow-hidden">
+					</div>
+				</div>
+				<!-- 变量管理器面板 -->
+				<div id="helper-panel-variables" class="helper-panel flex-1 flex flex-col overflow-hidden" style="display:none;">
+					<div id="variable-manager-container" class="flex-1 overflow-hidden">
+					</div>
+				</div>
+				<!-- 脚本管理器面板 -->
+				<div id="helper-panel-scripts" class="helper-panel flex-1 flex flex-col overflow-hidden" style="display:none;">
+					<div id="script-manager-container" class="flex-1 overflow-hidden">
+					</div>
+				</div>
+				<!-- 插件管理器面板 -->
+				<div id="helper-panel-plugins" class="helper-panel flex-1 flex flex-col overflow-hidden" style="display:none;">
+					<div id="plugin-manager-container" class="flex-1 overflow-hidden">
+					</div>
 				</div>
 			</div>
 		</main>
@@ -632,12 +656,26 @@
 					AI 设置
 				</h3>
 
-				<!-- ====== 对话AI设置折叠组 ====== -->
-				<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-					<input type="checkbox" checked />
-					<div class="collapse-title font-medium text-sm py-2 min-h-0">
-						🔌 对话AI设置
+				<!-- ====== 预设快速切换区域 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="right-preset-switch" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							🔀 预设切换
+						</div>
+						<div class="collapse-content px-2 pb-2">
+							<div class="flex items-center gap-1 mb-2">
+								<select id="right-preset-quick-select" class="select select-xs select-bordered flex-1 text-xs"></select>
+							</div>
+							<div id="right-preset-desc" class="text-xs text-base-content/40 mt-1 line-clamp-3"></div>
+						</div>
 					</div>
+	
+				<!-- ====== 对话AI设置折叠组 ====== -->
+					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+						<input type="checkbox" data-collapse-id="right-ai-settings" />
+						<div class="collapse-title font-medium text-sm py-2 min-h-0">
+							🔌 对话AI设置
+						</div>
 					<div class="collapse-content px-2 pb-2">
 						<!-- API 选择 -->
 						<div class="flex items-center gap-1 mb-2">
@@ -775,11 +813,11 @@
 				</div>
 
 				<!-- ====== 记忆AI操作折叠组 ====== -->
-					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-						<input type="checkbox" />
-						<div class="collapse-title font-medium text-sm py-2 min-h-0">
-							🧠 记忆AI操作
-						</div>
+						<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+							<input type="checkbox" data-collapse-id="right-memory-ops" />
+							<div class="collapse-title font-medium text-sm py-2 min-h-0">
+								🧠 记忆AI操作
+							</div>
 						<div class="collapse-content px-2 pb-2">
 							<div class="space-y-1.5">
 								<button id="mem-op-P2" class="btn btn-xs btn-block btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white justify-start gap-1" data-preset="P2">
@@ -805,11 +843,11 @@
 				<div class="divider my-1 opacity-30"></div>
 
 				<!-- ====== 插件管理折叠组 ====== -->
-					<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
-						<input type="checkbox" checked />
-						<div class="collapse-title font-medium text-sm py-2 min-h-0">
-							🧩 功能开关
-						</div>
+						<div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+							<input type="checkbox" data-collapse-id="right-feature-toggles" />
+							<div class="collapse-title font-medium text-sm py-2 min-h-0">
+								🧩 功能开关
+							</div>
 						<div class="collapse-content px-2 pb-2">
 							<div class="space-y-1.5">
 									<!-- 正则处理器开关 -->

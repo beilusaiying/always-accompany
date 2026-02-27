@@ -573,7 +573,63 @@ export function initLayout() {
 	// 监听 API 变更事件（从右栏 API 保存/删除时触发）
 	window.addEventListener('resource:api-changed', () => checkChatApiBanner())
 
+	// 初始化折叠组状态持久化（data-collapse-id）
+	initCollapsePersistence()
+
 	console.log('[beilu-chat] 布局已初始化（顶部选项卡 + IDE 模式）')
+}
+
+// ============================================================
+// 折叠组状态持久化（localStorage）
+// ============================================================
+
+const COLLAPSE_STORAGE_KEY = 'beilu-chat-collapse-states'
+
+/**
+	* 初始化折叠组状态持久化
+	* 所有带 data-collapse-id 的 checkbox 都会记住展开/闭合状态
+	* 首次访问时默认闭合（HTML 中不带 checked）
+	*/
+function initCollapsePersistence() {
+	let savedStates = {}
+	try {
+		const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY)
+		if (raw) savedStates = JSON.parse(raw)
+	} catch { /* ignore */ }
+
+	const checkboxes = document.querySelectorAll('input[type="checkbox"][data-collapse-id]')
+	checkboxes.forEach(cb => {
+		const id = cb.dataset.collapseId
+		if (!id) return
+
+		// 恢复保存的状态（如果有）
+		if (savedStates[id] !== undefined) {
+			cb.checked = savedStates[id]
+		}
+		// 否则保持 HTML 默认值（不带 checked = 闭合）
+
+		// 监听变化，保存状态
+		cb.addEventListener('change', () => {
+			saveCollapseState(id, cb.checked)
+		})
+	})
+}
+
+/**
+	* 保存单个折叠组的状态
+	* @param {string} id - collapse ID
+	* @param {boolean} isOpen - 是否展开
+	*/
+function saveCollapseState(id, isOpen) {
+	let states = {}
+	try {
+		const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY)
+		if (raw) states = JSON.parse(raw)
+	} catch { /* ignore */ }
+	states[id] = isOpen
+	try {
+		localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(states))
+	} catch { /* ignore */ }
 }
 
 // ============================================================

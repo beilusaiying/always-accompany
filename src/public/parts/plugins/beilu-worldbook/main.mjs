@@ -5,6 +5,78 @@ import { fileURLToPath } from 'node:url';
 const extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };
 const world_info_position = { before: 0, after: 1, ANTop: 2, ANBottom: 3, atDepth: 4, EMTop: 5, EMBottom: 6 };
 
+// ============================================================
+// 世界书动态注入标记处理（Phase 2E）
+// ============================================================
+
+/** 匹配 [GENERATE:identifier] 标记 */
+const GENERATE_TAG_RE = /\[GENERATE:([^\]]+)\]/gi;
+
+/** 匹配 [RENDER:identifier] 标记 */
+const RENDER_TAG_RE = /\[RENDER:([^\]]+)\]/gi;
+
+/**
+ * 从内容中移除所有阶段标记
+ * @param {string} content
+ * @returns {string}
+ */
+function stripPhaseTags(content) {
+	if (!content) return content;
+	return content
+		.replace(GENERATE_TAG_RE, '')
+		.replace(RENDER_TAG_RE, '')
+		.trim();
+}
+
+/**
+ * 根据当前阶段过滤世界书条目
+ *
+ * 条目的 key 或 content 中包含 [GENERATE:*] 的仅在 generate 阶段注入。
+ * 包含 [RENDER:*] 的仅在 render 阶段注入。
+ * 不含任何标记的条目在所有阶段注入。
+ *
+ * @param {Array<object>} entries - 世界书条目列表
+ * @param {string} phase - 'generate' | 'render' | 'all'
+ * @returns {Array<object>}
+ */
+function filterEntriesByPhase(entries, phase = 'all') {
+	if (!entries || !Array.isArray(entries) || phase === 'all') return entries || [];
+
+	const result = [];
+	let filtered = 0;
+
+	for (const entry of entries) {
+		const keyStr = Array.isArray(entry.key) ? entry.key.join(' ') : (entry.key || '');
+		const content = entry.content || '';
+		const combined = keyStr + ' ' + content;
+
+		GENERATE_TAG_RE.lastIndex = 0;
+		const hasGenerateTag = GENERATE_TAG_RE.test(combined);
+
+		RENDER_TAG_RE.lastIndex = 0;
+		const hasRenderTag = RENDER_TAG_RE.test(combined);
+
+		if (!hasGenerateTag && !hasRenderTag) {
+			result.push(entry);
+			continue;
+		}
+
+		if (phase === 'generate' && hasGenerateTag) {
+			result.push({ ...entry, content: stripPhaseTags(content) });
+		} else if (phase === 'render' && hasRenderTag) {
+			result.push({ ...entry, content: stripPhaseTags(content) });
+		} else {
+			filtered++;
+		}
+	}
+
+	if (filtered > 0) {
+		console.log(`[beilu-worldbook] 世界书过滤: ${entries.length} 条目, ${phase} 阶段, 过滤 ${filtered} 条`);
+	}
+
+	return result;
+}
+
 // 注意: GetActivedWorldInfoEntries 仍依赖 Fount 内部模块
 // 路径: 从 plugins/beilu-worldbook/ 退两级到 parts/，再进入 ImportHandlers/
 // 如果 Fount 更新重构了 ImportHandlers 路径，需要同步调整
@@ -273,6 +345,88 @@ const pluginExport = {
 			}
 		});
 
+		// ---- Lorebook API 端点（供前端 stCompat 世界书 polyfill 使用） ----
+		// 支持两种查询方式：
+		//   ?book=世界书名称  — 按名称查找
+		//   ?charName=角色名  — 按角色绑定查找（优先，更可靠）
+		router.get('/api/parts/plugins\\:beilu-worldbook/lorebook/entries', async (req, res) => {
+			try {
+				const bookName = req.query.book;
+				const charName = req.query.charName;
+
+				let wb = null;
+				let resolvedName = '';
+
+				// 策略1：通过角色名查绑定的世界书（最可靠）
+				if (charName) {
+					for (const [name, candidate] of Object.entries(configData.worldbooks)) {
+						if (candidate.boundCharName === charName) {
+							wb = candidate;
+							resolvedName = name;
+							console.log(`[beilu-worldbook] lorebook/entries: 通过角色 "${charName}" 找到绑定世界书 "${name}"`);
+							break;
+						}
+					}
+				}
+
+				// 策略2：精确名称匹配
+				if (!wb && bookName) {
+					wb = configData.worldbooks[bookName];
+					if (wb) resolvedName = bookName;
+				}
+
+				// 策略3：模糊名称匹配（角色卡中的 world 名称可能与导入的世界书名不同）
+				if (!wb && bookName) {
+					const allNames = Object.keys(configData.worldbooks);
+					const fuzzyMatch = allNames.find(name =>
+						name.includes(bookName) || bookName.includes(name) ||
+						name.replace(/[\s世界书]/g, '').includes(bookName.replace(/[\d.]/g, '')) ||
+						bookName.replace(/[\d.]/g, '').includes(name.replace(/[\s世界书]/g, ''))
+					);
+					if (fuzzyMatch) {
+						console.log(`[beilu-worldbook] lorebook/entries: 模糊匹配 "${bookName}" → "${fuzzyMatch}"`);
+						wb = configData.worldbooks[fuzzyMatch];
+						resolvedName = fuzzyMatch;
+					}
+				}
+
+				if (!wb) {
+					const queryDesc = charName ? `角色="${charName}"` : `名称="${bookName}"`;
+					console.warn(`[beilu-worldbook] lorebook/entries: 未找到世界书 (${queryDesc})，可用: [${Object.keys(configData.worldbooks).join(', ')}]`);
+					return res.json({ entries: [], resolvedName: '' });
+				}
+
+				// 返回所有条目（含禁用条目），MVU 需要读取 [initvar] 条目（通常是禁用的）
+				const entries = wb.entries ? Object.values(wb.entries) : [];
+				// 按 displayIndex 排序
+				entries.sort((a, b) => (a.displayIndex ?? 0) - (b.displayIndex ?? 0));
+				console.log(`[beilu-worldbook] lorebook/entries: "${resolvedName}" → ${entries.length} 条目`);
+				res.json({ entries, resolvedName });
+			} catch (err) {
+				console.error('[beilu-worldbook] lorebook/entries error:', err);
+				res.status(500).json({ error: err.message });
+			}
+		});
+
+		router.get('/api/parts/plugins\\:beilu-worldbook/lorebook/char-books', async (req, res) => {
+			try {
+				const charName = req.query.charName;
+				const result = { primary: '', books: [] };
+				if (charName) {
+					for (const [name, wb] of Object.entries(configData.worldbooks)) {
+						if (wb.boundCharName === charName) {
+							result.books.push(name);
+							if (!result.primary) result.primary = name;
+						}
+					}
+				}
+				res.json(result);
+			} catch (err) {
+				console.error('[beilu-worldbook] lorebook/char-books error:', err);
+				res.status(500).json({ error: err.message });
+			}
+		});
+
 		router.post('/api/parts/plugins\\:beilu-worldbook/config/setdata', async (req, res) => {
 			try {
 				await pluginExport.interfaces.config.SetData(req.body);
@@ -527,11 +681,17 @@ const pluginExport = {
 			 */
 			GetPrompt: (arg) => {
 				const currentCharName = arg?.Charname || '';
-				const entryArray = getAllEnabledEntries(currentCharName);
+				let entryArray = getAllEnabledEntries(currentCharName);
 				if (entryArray.length === 0) {
 					return { text: [], additional_chat_log: [], extension: {} };
 				}
-
+	
+				// Phase 2E: 按阶段过滤条目（GetPrompt 在生成阶段调用）
+				entryArray = filterEntriesByPhase(entryArray, 'generate');
+				if (entryArray.length === 0) {
+					return { text: [], additional_chat_log: [], extension: {} };
+				}
+	
 				// 将 ST 格式的 key/keysecondary 转换为引擎期望的格式
 				const wiEntries = entryArray.map(e => ({
 					...e,

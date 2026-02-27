@@ -581,6 +581,25 @@ router.put('/api/parts/shells\\:beilu-home/update-char/:charName', authenticate,
 				changed = true
 			}
 		}
+
+		// extensions 深度合并更新（支持修改 tavern_helper.scripts 等嵌套字段）
+		if (updates.extensions && typeof updates.extensions === 'object') {
+			if (!chardata.extensions || typeof chardata.extensions !== 'object') {
+				chardata.extensions = {}
+			}
+			// 递归浅合并第一层 key（如 tavern_helper）
+			for (const [extKey, extVal] of Object.entries(updates.extensions)) {
+				if (extVal && typeof extVal === 'object' && !Array.isArray(extVal)) {
+					if (!chardata.extensions[extKey] || typeof chardata.extensions[extKey] !== 'object') {
+						chardata.extensions[extKey] = {}
+					}
+					Object.assign(chardata.extensions[extKey], extVal)
+				} else {
+					chardata.extensions[extKey] = extVal
+				}
+			}
+			changed = true
+		}
 		// alternate_greetings 数组（兼容 FormData 字符串传输）
 		let altGreetings = updates.alternate_greetings
 		if (typeof altGreetings === 'string') {

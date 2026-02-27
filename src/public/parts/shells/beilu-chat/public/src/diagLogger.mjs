@@ -59,6 +59,7 @@ const MODULE_COLORS = {
 	virtualQueue: '#00bcd4',
 	websocket: '#e91e63',
 	iframeRenderer: '#607d8b',
+	stCompat: '#00897b',
 	// ── UI ──
 	sidebar: '#ff5722',
 	fileExplorer: '#8bc34a',
@@ -559,7 +560,7 @@ const diagControl = {
 
 		// 模块分组显示
 		const groups = {
-			'聊天引擎': ['template', 'displayRegex', 'messageList', 'streamRenderer', 'virtualQueue', 'websocket', 'iframeRenderer'],
+			'聊天引擎': ['template', 'displayRegex', 'messageList', 'streamRenderer', 'virtualQueue', 'websocket', 'iframeRenderer', 'stCompat'],
 			'UI': ['sidebar', 'fileExplorer', 'layout'],
 			'系统': ['config', 'api', 'dom', 'perf'],
 			'后端标记': ['chat', 'proxy', 'preset', 'memory', 'worldbook', 'files', 'regex'],

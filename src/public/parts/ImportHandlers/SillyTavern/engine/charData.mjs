@@ -26,8 +26,10 @@ const regex_placement = {
 	USER_INPUT: 1,
 	AI_OUTPUT: 2,
 	SLASH_COMMAND: 3,
-	// 4 - sendAs (legacy)
-	WORLD_INFO: 5,
+	WORLD_INFO: 4,
+	/** @deprecated 旧版 SillyTavern 使用 5 表示 WORLD_INFO，保留用于兼容 */
+	WORLD_INFO_LEGACY: 5,
+	REASONING: 5,
 }
 /** @enum {number} */
 const wi_anchor_position = {
@@ -529,7 +531,5 @@ function GetV2CharDataFromV1(data) {
 /**
  * Exported modules
  */
-export {
-	v2CharData, v1CharData, GetV1CharDataFromV2, GetV2CharDataFromV1, WorldInfoBook, WorldInfoEntry,
-	regex_placement, world_info_logic, world_info_position, wi_anchor_position, extension_prompt_roles, regex_script_info
-}
+export { extension_prompt_roles, GetV1CharDataFromV2, GetV2CharDataFromV1, regex_placement, regex_script_info, v1CharData, v2CharData, wi_anchor_position, world_info_logic, world_info_position, WorldInfoBook, WorldInfoEntry }
+

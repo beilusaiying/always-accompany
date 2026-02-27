@@ -137,6 +137,15 @@ export async function initializeVirtualQueue(initialData) {
 		fetchData: async (offset, limit) => {
 			const actualOffset = offset + offsetShift
 			const items = await getChatLog(actualOffset, actualOffset + limit)
+			// ★ DIAG P0: 检查前端收到的数据
+			diag.warn('fetchData', { offset, actualOffset, limit, itemCount: items?.length, effectiveTotal })
+			if (items?.length > 0) {
+				for (let i = 0; i < Math.min(items.length, 3); i++) {
+					const m = items[i]
+					diag.warn('  fetchData item', { i, id: m?.id, role: m?.role, name: m?.name, contentLen: m?.content?.length, hasTimeSlice: !!m?.timeSlice, keys: m ? Object.keys(m).join(',') : 'null' })
+				}
+				if (items.length > 3) diag.warn('  ... more items:', items.length - 3)
+			}
 			return { items, total: effectiveTotal }
 		},
 		renderItem: renderMessage,

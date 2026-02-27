@@ -236,7 +236,7 @@ async function handleExport() {
 function getAllFrontendModules() {
 	return [
 		'template', 'displayRegex', 'messageList', 'streamRenderer',
-		'virtualQueue', 'websocket', 'iframeRenderer',
+		'virtualQueue', 'websocket', 'iframeRenderer', 'stCompat',
 		'sidebar', 'fileExplorer', 'layout',
 		'config', 'api', 'dom', 'perf',
 	]

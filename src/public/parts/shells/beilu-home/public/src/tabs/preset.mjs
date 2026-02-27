@@ -53,7 +53,6 @@ let contentMap = {}
 let presetList = []
 /** 当前激活预设名 */
 let activePreset = ''
-
 // DOM 引用（init 时获取）
 let dom = {}
 

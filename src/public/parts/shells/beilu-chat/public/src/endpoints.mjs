@@ -12,15 +12,31 @@ export let currentChatId = null
  * @returns {Promise<any>} - 响应数据。
  */
 async function callApi(endpoint, method = 'POST', body) {
-	const response = await fetch(`/api/parts/shells:chat/${currentChatId}/${endpoint}`,
-		{
+	const url = `/api/parts/shells:chat/${currentChatId}/${endpoint}`
+	console.log(`[callApi] ${method} ${url}`, body ? '(有body)' : '')
+
+	let response
+	try {
+		response = await fetch(url, {
 			method,
 			headers: { 'Content-Type': 'application/json' },
 			body: body ? JSON.stringify(body) : undefined,
 		})
+	} catch (fetchErr) {
+		console.error(`[callApi] ★ fetch 网络错误: ${method} ${url}`, fetchErr.message)
+		throw fetchErr
+	}
 
-	if (!response.ok)
-		throw Object.assign(new Error(`API request failed with status ${response.status}`), await response.json().catch(() => { }), { response })
+	if (!response.ok) {
+		let errorBody = {}
+		try {
+			errorBody = await response.json()
+		} catch (_) { /* response 可能不是 JSON */ }
+		console.error(`[callApi] ★ 请求失败: ${method} ${url} → ${response.status}`, errorBody)
+		if (errorBody?.error) console.error(`[callApi]   error: ${errorBody.error}`)
+		if (errorBody?.stack) console.error(`[callApi]   stack: ${errorBody.stack}`)
+		throw Object.assign(new Error(`API request failed with status ${response.status}`), errorBody, { response })
+	}
 
 	return response.json()
 }

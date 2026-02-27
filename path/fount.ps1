@@ -147,7 +147,11 @@ if (!(Get-Command fount.ps1 -ErrorAction SilentlyContinue)) {
 		$UserPath += "$FOUNT_DIR\path"
 	}
 	$UserPath = $UserPath -join ';'
-	[System.Environment]::SetEnvironmentVariable('PATH', $UserPath, [System.EnvironmentVariableTarget]::User)
+	try {
+		[System.Environment]::SetEnvironmentVariable('PATH', $UserPath, [System.EnvironmentVariableTarget]::User)
+	} catch {
+		# 受限环境中可能无权修改用户环境变量，仅设置进程级 PATH
+	}
 	$env:PATH = $path
 }
 
@@ -829,46 +833,113 @@ function fount_upgrade {
 		else {
 			Write-Host (Get-I18n -key 'git.alreadyUpToDate')
 		}
-	}
-}
-
-
-# Deno 安装
-if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-	if (Test-Path "$HOME/.deno/bin/deno.exe") {
-		$env:PATH = $env:PATH + ";$HOME/.deno/bin"
-		[System.Environment]::SetEnvironmentVariable("PATH", [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";$HOME/.deno/bin", [System.EnvironmentVariableTarget]::User)
-	}
-}
-if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-	Write-Host (Get-I18n -key 'deno.missing')
-	Invoke-RestMethod https://deno.land/install.ps1 | Invoke-Expression
+	# Deno 安装
+	# 1. 便携版 runtime 目录自动发现（适配 exe 启动器环境）
 	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-		RefreshPath
-	}
-	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-		Write-Host (Get-I18n -key 'deno.installFailedFallback')
-		$url = "https://github.com/denoland/deno/releases/latest/download/deno-" + $(if ($IsWindows) {
-				"x86_64-pc-windows-msvc.zip"
+		# exe 启动器结构: .../exe文件/project/beilu-always accompany/ → 向上两级找 runtime/
+		$portableRuntimeDir = Join-Path (Split-Path -Parent (Split-Path -Parent $FOUNT_DIR)) "runtime"
+		$portableDenoExe = Join-Path $portableRuntimeDir "deno/deno.exe"
+		if (Test-Path $portableDenoExe) {
+			$denoDir = Join-Path $portableRuntimeDir "deno"
+			$env:PATH = "$denoDir;$env:PATH"
+			Write-Host "  [OK] Deno: portable runtime" -ForegroundColor Yellow
+	
+			# 同时检查便携版 Git/Node/Python
+			$portableGitExe = Join-Path $portableRuntimeDir "git/cmd/git.exe"
+			if ((Test-Path $portableGitExe) -and !(Get-Command git -ErrorAction SilentlyContinue)) {
+				$env:PATH = "$(Join-Path $portableRuntimeDir 'git/cmd');$env:PATH"
 			}
-			elseif ($IsMacOS) {
-				if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
-					"aarch64-apple-darwin.zip"
+			$portableNodeExe = Join-Path $portableRuntimeDir "node/node.exe"
+			if ((Test-Path $portableNodeExe) -and !(Get-Command node -ErrorAction SilentlyContinue)) {
+				$env:PATH = "$(Join-Path $portableRuntimeDir 'node');$env:PATH"
+			}
+			$portablePythonExe = Join-Path $portableRuntimeDir "python/python.exe"
+			if ((Test-Path $portablePythonExe) -and !(Get-Command python -ErrorAction SilentlyContinue)) {
+				$env:PATH = "$(Join-Path $portableRuntimeDir 'python');$env:PATH"
+			}
+		}
+	}
+	
+	# 2. 检查 $HOME/.deno/bin（用户级 Deno 安装）
+	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
+		if (Test-Path "$HOME/.deno/bin/deno.exe") {
+			$env:PATH = $env:PATH + ";$HOME/.deno/bin"
+			try {
+				[System.Environment]::SetEnvironmentVariable("PATH", [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";$HOME/.deno/bin", [System.EnvironmentVariableTarget]::User)
+			} catch {
+				# 受限环境中可能无权修改用户环境变量
+			}
+		}
+	}
+	
+	# 3. 在线安装（回退方案）
+	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
+		Write-Host (Get-I18n -key 'deno.missing')
+	
+		# 方案A: 直接下载 zip 用 Expand-Archive 解压（不依赖 tar.exe）
+		$denoInstalled = $false
+		try {
+			$url = "https://github.com/denoland/deno/releases/latest/download/deno-" + $(if ($IsWindows) {
+					"x86_64-pc-windows-msvc.zip"
 				}
-				else {
-					"x86_64-apple-darwin.zip"
+				elseif ($IsMacOS) {
+					if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64-apple-darwin.zip" }
+					else { "x86_64-apple-darwin.zip" }
+				}
+				else { "x86_64-unknown-linux-gnu.zip" })
+	
+			Write-Host "  Downloading Deno from GitHub..." -ForegroundColor Cyan
+			$denoZipPath = Join-Path $env:TEMP "deno-install.zip"
+			Invoke-WebRequest -Uri $url -OutFile $denoZipPath -UseBasicParsing
+			if (Test-Path $denoZipPath) {
+				$denoInstallDir = "$HOME/.deno/bin"
+				New-Item -ItemType Directory -Force -Path $denoInstallDir | Out-Null
+				Expand-Archive -Path $denoZipPath -DestinationPath $denoInstallDir -Force
+				Remove-Item -Path $denoZipPath -Force -ErrorAction SilentlyContinue
+				$env:PATH = "$denoInstallDir;$env:PATH"
+				try {
+					[System.Environment]::SetEnvironmentVariable("PATH", [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";$denoInstallDir", [System.EnvironmentVariableTarget]::User)
+				} catch { }
+				if (Get-Command deno -ErrorAction SilentlyContinue) {
+					Write-Host "  [OK] Deno installed via GitHub release" -ForegroundColor Green
+					$denoInstalled = $true
 				}
 			}
-			else {
-				"x86_64-unknown-linux-gnu.zip"
-			})
-		Invoke-WebRequest -Uri $url -OutFile "$env:TEMP/deno.zip"
-		Expand-Archive -Path "$env:TEMP/deno.zip" -DestinationPath "$FOUNT_DIR/path"
-		Remove-Item -Path "$env:TEMP/deno.zip" -Force
+		} catch {
+			Write-Host "  [!!] GitHub download failed: $($_.Exception.Message)" -ForegroundColor Yellow
+		}
+	
+		# 方案B: 尝试 deno.land 官方安装脚本（可能依赖 tar.exe）
+		if (-not $denoInstalled) {
+			try {
+				Invoke-RestMethod https://deno.land/install.ps1 | Invoke-Expression
+				if (!(Get-Command deno -ErrorAction SilentlyContinue)) { RefreshPath }
+			} catch {
+				Write-Host "  [!!] deno.land install script failed" -ForegroundColor Yellow
+			}
+		}
+	
+		# 方案C: 解压到项目 path/ 目录作为最后手段
+		if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
+			try {
+				Write-Host (Get-I18n -key 'deno.installFailedFallback')
+				$denoZipPath2 = Join-Path $env:TEMP "deno-fallback.zip"
+				$url2 = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+				Invoke-WebRequest -Uri $url2 -OutFile $denoZipPath2 -UseBasicParsing
+				Expand-Archive -Path $denoZipPath2 -DestinationPath "$FOUNT_DIR/path" -Force
+				Remove-Item -Path $denoZipPath2 -Force -ErrorAction SilentlyContinue
+			} catch {
+				Write-Host "  [XX] All Deno installation methods failed" -ForegroundColor Red
+			}
+		}
+	
+		New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
+		Set-Content "$FOUNT_DIR/data/installer/auto_installed_deno" '1'
+		if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
+			Write-Host (Get-I18n -key 'deno.isRequired')
+			exit 1
+		}
 	}
-	New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
-	Set-Content "$FOUNT_DIR/data/installer/auto_installed_deno" '1'
-	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
 		Write-Host (Get-I18n -key 'deno.isRequired')
 		exit 1
 	}

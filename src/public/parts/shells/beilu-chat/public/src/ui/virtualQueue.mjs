@@ -38,6 +38,9 @@ function notifyDeletionListeners() {
 
 /**
  * 更新最后一个 'char' 消息的左右箭头和滑动功能。
+ *
+ * ★ 修复：不完全依赖 virtualList.getQueue()（可能因时序问题返回空），
+ *   当 queue 为空时回退到从 DOM 中直接查找最后一个 char 消息元素。
  */
 function updateLastCharMessageArrows() {
 	// 移除旧箭头、滑动功能和计数器
@@ -48,48 +51,64 @@ function updateLastCharMessageArrows() {
 		currentSwipableElement = null
 	}
 
-	const queue = virtualList.getQueue()
-	if (!queue.length) return
+	// 策略1：从 virtualList queue 获取最后一条 char 消息
+	const queue = virtualList ? virtualList.getQueue() : []
+	let lastMessageElement = null
 
-	const lastMessageIndexInQueue = queue.length - 1
-	const lastMessage = queue[lastMessageIndexInQueue]
-
-	if (lastMessage && lastMessage.role === 'char' && !lastMessage.is_generating) {
-		// Use the unique ID to find the element
-		const lastMessageElement = document.getElementById(lastMessage.id)
-
-		if (lastMessageElement) {
-			currentSwipableElement = lastMessageElement
-			const messageContent = lastMessageElement.querySelector('.message-content')
-
-			if (messageContent) {
-				enableSwipe(lastMessageElement)
-
-				const leftArrow = document.createElement('div')
-				leftArrow.classList.add('arrow', 'left')
-				leftArrow.textContent = '❮'
-				messageContent.after(leftArrow)
-
-				const rightArrow = document.createElement('div')
-				rightArrow.classList.add('arrow', 'right')
-				rightArrow.textContent = '❯'
-				leftArrow.after(rightArrow)
-
-				// Swipe 计数器（显示当前时间线索引 / 总数）
-				const counter = document.createElement('div')
-				counter.classList.add('swipe-counter')
-				counter.textContent = `${currentTimeLineInfo.timeLineIndex + 1}/${currentTimeLineInfo.timeLinesCount}`
-				counter.style.opacity = currentTimeLineInfo.timeLinesCount > 1 ? '1' : '0.3'
-				rightArrow.after(counter)
-
-				/**
-				 * 移除左右箭头和计数器
-				 */
-				const removeArrows = () => { leftArrow.remove(); rightArrow.remove(); counter.remove() }
-				leftArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(-1) })
-				rightArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(1) })
-			}
+	if (queue.length > 0) {
+		const lastMessage = queue[queue.length - 1]
+		if (lastMessage && lastMessage.role === 'char' && !lastMessage.is_generating) {
+			lastMessageElement = document.getElementById(lastMessage.id)
 		}
+	}
+
+	// 策略2（fallback）：queue 为空时，从 DOM 中查找最后一个可见 chat-message 元素
+	// 这解决了 virtualList.state.queue 因时序问题为空、但 DOM 中已渲染消息的情况
+	if (!lastMessageElement) {
+		const allMessages = chatMessagesContainer.querySelectorAll('.chat-message:not(.system-hidden)')
+		if (allMessages.length > 0) {
+			const lastEl = allMessages[allMessages.length - 1]
+			// 在 DOM fallback 模式下，无法精确判断角色类型（模板未设置 data-role）
+			// 但开场白场景中最后一条消息必然是 char，且 timeLinesCount > 1 时总需要箭头
+			// 因此只要找到可见消息元素就尝试显示箭头
+			lastMessageElement = lastEl
+			diag.log('updateLastCharMessageArrows: 使用 DOM fallback，找到最后消息元素', lastEl.id)
+		}
+	}
+
+	if (!lastMessageElement) return
+
+	currentSwipableElement = lastMessageElement
+	// ★ 修复：在 iframe 渲染模式下，.message-content 可能有 iframe-content class
+	// 无论是否是 iframe 模式，都尝试查找 .message-content 作为箭头的插入锚点
+	const messageContent = lastMessageElement.querySelector('.message-content')
+
+	if (messageContent) {
+		enableSwipe(lastMessageElement)
+
+		const leftArrow = document.createElement('div')
+		leftArrow.classList.add('arrow', 'left')
+		leftArrow.textContent = '❮'
+		messageContent.after(leftArrow)
+
+		const rightArrow = document.createElement('div')
+		rightArrow.classList.add('arrow', 'right')
+		rightArrow.textContent = '❯'
+		leftArrow.after(rightArrow)
+
+		// Swipe 计数器（显示当前时间线索引 / 总数）
+		const counter = document.createElement('div')
+		counter.classList.add('swipe-counter')
+		counter.textContent = `${currentTimeLineInfo.timeLineIndex + 1}/${currentTimeLineInfo.timeLinesCount}`
+		counter.style.opacity = currentTimeLineInfo.timeLinesCount > 1 ? '1' : '0.3'
+		rightArrow.after(counter)
+
+		/**
+		 * 移除左右箭头和计数器
+		 */
+		const removeArrows = () => { leftArrow.remove(); rightArrow.remove(); counter.remove() }
+		leftArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(-1) })
+		rightArrow.addEventListener('click', async () => { removeArrows(); await modifyTimeLine(1) })
 	}
 }
 

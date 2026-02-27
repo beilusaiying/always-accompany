@@ -2676,22 +2676,37 @@ async function _loadScriptsForChar(charId) {
 		const userName = personaName || 'User'
 
 		// 获取当前聊天消息队列，传入脚本 iframe 用于 SillyTavern.chat 初始化
-		// MVU variable_init 需要 chat 数组非空才能进行变量初始化
-		let chatMessages = []
-		try {
-			chatMessages = getQueue()
-			// 如果 queue 还没有数据（virtualList 异步加载中），等待一段时间重试
-			if (!chatMessages || chatMessages.length === 0) {
-				for (let retry = 0; retry < 5; retry++) {
-					await new Promise(r => setTimeout(r, 1000))
-					chatMessages = getQueue()
-					if (chatMessages && chatMessages.length > 0) break
+			// MVU variable_init 需要 chat 数组非空才能进行变量初始化
+			let chatMessages = []
+			try {
+				chatMessages = getQueue()
+				// 如果 queue 还没有数据（virtualList 异步加载中），等待一段时间重试
+				if (!chatMessages || chatMessages.length === 0) {
+					for (let retry = 0; retry < 5; retry++) {
+						await new Promise(r => setTimeout(r, 1000))
+						chatMessages = getQueue()
+						if (chatMessages && chatMessages.length > 0) break
+					}
 				}
+				// ★ 修复：如果 getQueue() 始终为空（virtualList 时序问题），
+				// 直接从后端 API 获取 chatLog 作为 fallback
+				if (!chatMessages || chatMessages.length === 0) {
+					console.warn('[beilu-chat] getQueue() 仍为空，尝试从后端 API 获取 chatLog...')
+					try {
+						const { getChatLog, getChatLogLength } = await import('./src/endpoints.mjs')
+						const logLen = await getChatLogLength()
+						if (logLen > 0) {
+							chatMessages = await getChatLog(0, logLen)
+							console.log(`[beilu-chat] 从后端 API 获取到 ${chatMessages.length} 条消息（fallback）`)
+						}
+					} catch (apiErr) {
+						console.warn('[beilu-chat] 后端 API fallback 也失败:', apiErr.message)
+					}
+				}
+				console.log(`[beilu-chat] chatMessages for script system: ${chatMessages?.length || 0} messages`)
+			} catch (e) {
+				console.warn('[beilu-chat] getQueue failed for script system:', e.message)
 			}
-			console.log(`[beilu-chat] chatMessages for script system: ${chatMessages?.length || 0} messages`)
-		} catch (e) {
-			console.warn('[beilu-chat] getQueue failed for script system:', e.message)
-		}
 
 		await loadCharacterScripts(charData, {
 			userName,

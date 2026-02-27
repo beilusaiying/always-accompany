@@ -2,7 +2,8 @@
  * @module virtualList
  * @description 提供一个通用的虚拟滚动列表解决方案，用于高效渲染大量数据。
  */
-import { onElementRemoved } from './onElementRemoved.mjs'
+// onElementRemoved 已移除：layout 切换标签页时容器会被移动（非删除），
+// MutationObserver 误判为"元素被移除"导致 destroy() 清空已渲染内容
 
 /**
  * 创建一个哨兵元素，用于 IntersectionObserver。
@@ -41,7 +42,7 @@ function createSentinel(id) {
  *   getChatLogIndexByQueueIndex: function(number): number
  * }} - 一个包含控制方法的虚拟列表实例。
  */
-export function createVirtualList({
+export async function createVirtualList({
 	container,
 	fetchData,
 	renderItem,
@@ -432,9 +433,8 @@ export function createVirtualList({
 	})
 	state.resizeObserver.observe(container)
 
-	// 初始刷新
-	refresh()
-	onElementRemoved(container, destroy)
+	// 初始刷新（必须 await，确保渲染完成后再返回实例）
+	await refresh()
 
 	return {
 		destroy,

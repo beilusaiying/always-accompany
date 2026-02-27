@@ -126,7 +126,7 @@ export async function initializeVirtualQueue(initialData) {
 		effectiveTotal = msgLoadLimit
 	}
 
-	virtualList = createVirtualList({
+	virtualList = await createVirtualList({
 		container: chatMessagesContainer,
 		/**
 		 * 异步函数，用于获取数据块。

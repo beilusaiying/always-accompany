@@ -130,10 +130,15 @@ export async function initializeChat() {
 	}
 
 	// ⭐ beilu 特有: 预加载 display regex 规则（在插件注册之后，确保 beilu-regex 可用）
-	loadDisplayRules().catch(err => console.warn('[beilu-chat] display regex 加载失败:', err))
+	// ⚠️ 必须 await：确保渲染消息前规则已加载完成，否则 full-html 检测会因规则缺失导致空白
+	try {
+		await loadDisplayRules()
+	} catch (err) {
+		console.warn('[beilu-chat] display regex 加载失败:', err)
+	}
 
 	if (refreshedData) {
-		try { initializeVirtualQueue(refreshedData) } catch (e) {
+		try { await initializeVirtualQueue(refreshedData) } catch (e) {
 			console.warn('[beilu-chat] initializeVirtualQueue 失败（非致命）:', e.message)
 		}
 

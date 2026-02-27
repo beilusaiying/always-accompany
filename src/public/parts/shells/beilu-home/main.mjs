@@ -409,30 +409,70 @@ export default {
 						}
 					}
 	
-					// 3. 聊天记录 — 根据用户选择（直接操作文件系统）
+					// 3. 聊天记录 — 根据用户选择
+					// 策略：优先通过 beilu-chat 接口（知道正确的存储路径，无论新旧），
+					//       手动磁盘删除作为 fallback
 					if (options.deleteChats) {
 						try {
-							// 直接删除 chars/{charName}/chats/ 目录下的所有聊天文件
+							const chatShell = parts_set[username]?.['shells/beilu-chat']
+							let chatIdsToDelete = []
+	
+							// 方式1：通过 beilu-chat 接口获取该角色的所有 chatId，然后统一删除
+							if (chatShell?.interfaces?.chat?.getChatIdsByCharName && chatShell?.interfaces?.chat?.deleteChat) {
+								chatIdsToDelete = chatShell.interfaces.chat.getChatIdsByCharName(username, charName)
+								if (chatIdsToDelete.length > 0) {
+									const results = await chatShell.interfaces.chat.deleteChat(chatIdsToDelete, username)
+									const successCount = results.filter(r => r.success).length
+									cleanupResults.chats = successCount
+									console.log(`[beilu-home] 通过 beilu-chat 接口删除 ${successCount}/${chatIdsToDelete.length} 个聊天`)
+								}
+							}
+	
+							// 方式2（fallback）：直接删除 chars/{charName}/chats/ 目录下的文件
+							// 处理 beilu-chat 未加载、或接口未找到所有文件的情况
 							const chatsDir = path.join(charDir, 'chats')
 							if (fs.existsSync(chatsDir)) {
 								const chatFiles = fs.readdirSync(chatsDir).filter(f => f.endsWith('.json'))
 								for (const file of chatFiles) {
-									try {
-										fs.unlinkSync(path.join(chatsDir, file))
-										cleanupResults.chats++
-									} catch (e) {
-										console.warn(`[beilu-home] 删除聊天文件 ${file} 失败:`, e.message)
+									const chatid = file.replace('.json', '')
+									if (!chatIdsToDelete.includes(chatid)) {
+										// 接口未覆盖到的文件，手动删除
+										try {
+											fs.unlinkSync(path.join(chatsDir, file))
+											cleanupResults.chats++
+											console.log(`[beilu-home] fallback 删除聊天文件: ${file}`)
+										} catch (e) {
+											console.warn(`[beilu-home] 删除聊天文件 ${file} 失败:`, e.message)
+										}
 									}
 								}
 							}
-							// 同时清理 summaries cache 中该角色的聊天
+	
+							// 方式3（兼容旧路径）：检查 shells/chat/chats/ 下是否有该角色的聊天文件
+							const oldChatsDir = path.join(userDir, 'shells', 'chat', 'chats')
+							if (fs.existsSync(oldChatsDir)) {
+								const oldChatFiles = fs.readdirSync(oldChatsDir).filter(f => f.endsWith('.json'))
+								for (const file of oldChatFiles) {
+									try {
+										const raw = JSON.parse(fs.readFileSync(path.join(oldChatsDir, file), 'utf-8'))
+										const lastEntry = raw.chatLog?.[raw.chatLog.length - 1]
+										const chars = lastEntry?.timeSlice?.chars || []
+										if (Array.isArray(chars) && chars.includes(charName)) {
+											fs.unlinkSync(path.join(oldChatsDir, file))
+											cleanupResults.chats++
+											console.log(`[beilu-home] 删除旧路径聊天文件: ${file}`)
+										}
+									} catch (_) { /* 解析失败跳过 */ }
+								}
+							}
+	
+							// 清理 summaries cache 中该角色的聊天
 							try {
 								const cachePath = path.join(userDir, 'shells', 'chat', 'chat_summaries_cache.json')
 								if (fs.existsSync(cachePath)) {
 									const cache = JSON.parse(fs.readFileSync(cachePath, 'utf-8'))
 									let changed = false
 									for (const [chatid, summary] of Object.entries(cache)) {
-										// 通过 chars 字段判断是否属于该角色
 										if (summary?.chars?.includes?.(charName)) {
 											delete cache[chatid]
 											changed = true

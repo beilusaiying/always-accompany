@@ -208,6 +208,20 @@ export async function renderMessage(message) {
 		rawAvatar = null // 包含未替换宏的 avatar 视为无效
 	}
 	let safeAvatar = rawAvatar || DEFAULT_AVATAR;
+	// ★ 修复：相对文件名（如 "avatar.png"）转为 /parts/ 静态文件 URL
+	if (rawAvatar && !rawAvatar.startsWith('/') && !rawAvatar.startsWith('http') && rawAvatar !== DEFAULT_AVATAR) {
+		if (message.role === 'user') {
+			const personaId = message.timeSlice?.player_id || message.timeSlice?.player
+			if (personaId) {
+				safeAvatar = `/parts/personas:${encodeURIComponent(personaId)}/${rawAvatar}`
+			}
+		} else if (message.role === 'char') {
+			const charKey = message.timeSlice?.charname || message.name
+			if (charKey) {
+				safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/${rawAvatar}`
+			}
+		}
+	}
 	// 如果 avatar 为空或是默认值，尝试从角色卡路径构建头像 URL
 	if (!rawAvatar && message.role === 'char') {
 		// 优先使用 timeSlice.charname（角色卡目录名/key），比 message.name（可能是显示名）更可靠

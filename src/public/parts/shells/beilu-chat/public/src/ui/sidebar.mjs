@@ -133,7 +133,12 @@ async function renderPersonaDetails(personaName) {
 	if (!cachedDom.persona[personaName]) {
 		personaData = await getPartDetails(`personas/${personaName}`)
 		if (!personaData) return
-		const personaCard = cachedDom.persona[personaName] = await renderTemplate('persona_info_chat_view', { ...personaData.info, avatar: personaData.info?.avatar || 'https://api.iconify.design/mdi/account.svg' })
+		// 头像：相对文件名转为 /parts/ 静态文件 URL
+		const rawAvatar = personaData.info?.avatar || ''
+		const avatarSrc = rawAvatar
+			? (rawAvatar.startsWith('http') || rawAvatar.startsWith('/') ? rawAvatar : `/parts/personas:${encodeURIComponent(personaName)}/${rawAvatar}`)
+			: 'https://api.iconify.design/mdi/account.svg'
+		const personaCard = cachedDom.persona[personaName] = await renderTemplate('persona_info_chat_view', { ...personaData.info, avatar: avatarSrc })
 		addCardEventListeners(personaCard, personaData)
 	}
 

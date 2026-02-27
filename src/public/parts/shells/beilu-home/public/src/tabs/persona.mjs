@@ -22,19 +22,26 @@ const dialogDesc = document.getElementById('persona-edit-desc')
 const dialogSave = document.getElementById('persona-dialog-save')
 const dialogCancel = document.getElementById('persona-dialog-cancel')
 const dialogStatus = document.getElementById('persona-dialog-status')
+const dialogAvatar = document.getElementById('persona-edit-avatar')
+const avatarPreview = document.getElementById('persona-avatar-preview')
+const avatarPlaceholder = document.getElementById('persona-avatar-placeholder')
 
 // ===== 状态 =====
-let personas = [] // { name, description }[]
+let personas = [] // { name, displayName, description, avatarUrl }[]
 let editingName = null // 编辑模式时为人设名称，新建时为 null
 
 // ===== API 调用 =====
 const API_BASE = '/api/parts/shells:beilu-home'
 
-async function apiCreatePersona(name, description) {
+async function apiCreatePersona(name, description, avatarFile) {
+	const formData = new FormData()
+	formData.append('name', name)
+	formData.append('description', description)
+	if (avatarFile) formData.append('avatar', avatarFile)
+
 	const res = await fetch(`${API_BASE}/create-persona`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ name, description }),
+		body: formData,
 	})
 	if (!res.ok) {
 		const data = await res.json().catch(() => ({}))
@@ -43,11 +50,14 @@ async function apiCreatePersona(name, description) {
 	return res.json()
 }
 
-async function apiUpdatePersona(name, description) {
+async function apiUpdatePersona(name, description, avatarFile) {
+	const formData = new FormData()
+	formData.append('description', description)
+	if (avatarFile) formData.append('avatar', avatarFile)
+
 	const res = await fetch(`${API_BASE}/update-persona/${encodeURIComponent(name)}`, {
 		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ description }),
+		body: formData,
 	})
 	if (!res.ok) {
 		const data = await res.json().catch(() => ({}))
@@ -82,9 +92,14 @@ async function loadPersonas() {
 		personas = []
 		for (const name of allNames) {
 			const details = cachedDetails[name] || null
-			const desc = details?.description || ''
-			const displayName = details?.name || name
-			personas.push({ name, displayName, description: desc })
+			const info = details?.info || details || {}
+			const desc = info?.description || ''
+			const rawName = info?.name
+			const displayName = (typeof rawName === 'string' ? rawName : rawName?.['zh-CN'] || rawName?.['en-UK'] || '') || name
+			// 头像URL：如果 info.avatar 有值，拼接 /parts/ 静态文件 URL
+			const avatar = info?.avatar || ''
+			const avatarUrl = avatar ? `/parts/personas:${encodeURIComponent(name)}/${avatar}?t=${Date.now()}` : ''
+			personas.push({ name, displayName, description: desc, avatarUrl })
 		}
 
 		renderList()
@@ -117,10 +132,14 @@ function renderList(filter = '') {
 	for (const persona of filtered) {
 		const card = document.createElement('div')
 		card.className = 'beilu-persona-card'
+		const avatarContent = persona.avatarUrl
+			? `<img src="${escapeAttr(persona.avatarUrl)}" alt="${escapeAttr(persona.displayName)}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display=''">`
+				+ `<span class="text-3xl" style="display:none">👤</span>`
+			: `<span class="text-3xl">👤</span>`
 		card.innerHTML = `
 			<div class="beilu-persona-avatar-area">
 				<div class="beilu-persona-avatar">
-					<span class="text-3xl">👤</span>
+					${avatarContent}
 				</div>
 			</div>
 			<div class="flex-grow min-w-0">
@@ -145,6 +164,16 @@ function renderList(filter = '') {
 }
 
 // ===== 对话框操作 =====
+function resetAvatarPreview(avatarUrl) {
+	if (dialogAvatar) dialogAvatar.value = ''
+	if (!avatarPreview) return
+	if (avatarUrl) {
+		avatarPreview.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="头像" class="w-full h-full object-cover" onerror="this.style.display='none';this.parentElement.querySelector('.avatar-fallback').style.display=''"><span class="text-2xl avatar-fallback" style="display:none">👤</span>`
+	} else {
+		avatarPreview.innerHTML = `<span class="text-2xl">👤</span>`
+	}
+}
+
 function openCreateDialog() {
 	editingName = null
 	dialogTitle.textContent = '新建人设'
@@ -152,6 +181,7 @@ function openCreateDialog() {
 	dialogName.disabled = false
 	dialogDesc.value = ''
 	dialogStatus.textContent = ''
+	resetAvatarPreview('')
 	dialog.showModal()
 }
 
@@ -165,12 +195,14 @@ function openEditDialog(name) {
 	dialogName.disabled = true // 编辑模式不允许改名
 	dialogDesc.value = persona.description
 	dialogStatus.textContent = ''
+	resetAvatarPreview(persona.avatarUrl)
 	dialog.showModal()
 }
 
 async function handleSave() {
 	const name = dialogName.value.trim()
 	const description = dialogDesc.value.trim()
+	const avatarFile = dialogAvatar?.files?.[0] || null
 
 	if (!name) {
 		dialogStatus.textContent = '⚠️ 名称不能为空'
@@ -185,28 +217,18 @@ async function handleSave() {
 	try {
 		if (editingName) {
 			// 编辑模式
-			await apiUpdatePersona(editingName, description)
+			await apiUpdatePersona(editingName, description, avatarFile)
 			dialogStatus.textContent = '✅ 已更新'
-
-			// 直接更新本地数据（避免缓存未刷新导致显示旧值）
-			const p = personas.find(p => p.name === editingName)
-			if (p) p.description = description
 		} else {
 			// 新建模式
-			await apiCreatePersona(name, description)
+			await apiCreatePersona(name, description, avatarFile)
 			dialogStatus.textContent = '✅ 已创建'
 		}
 
-		// 刷新列表
+		// 刷新列表（上传了头像需要完整刷新以获取新URL）
 		setTimeout(() => {
 			dialog.close()
-			if (editingName) {
-				// 编辑模式直接用本地数据重渲染
-				renderList(searchInput.value)
-			} else {
-				// 新建模式需要重新加载获取新条目
-				loadPersonas()
-			}
+			loadPersonas()
 		}, 500)
 	} catch (err) {
 		dialogStatus.textContent = `❌ ${err.message}`
@@ -252,6 +274,25 @@ export async function init() {
 	// 对话框按钮
 	dialogSave.addEventListener('click', handleSave)
 	dialogCancel.addEventListener('click', () => dialog.close())
+
+	// 头像文件选择：实时预览
+	if (dialogAvatar) {
+		dialogAvatar.addEventListener('change', () => {
+			const file = dialogAvatar.files?.[0]
+			if (file && avatarPreview) {
+				const reader = new FileReader()
+				reader.onload = (e) => {
+					avatarPreview.innerHTML = `<img src="${e.target.result}" alt="头像预览" class="w-full h-full object-cover">`
+				}
+				reader.readAsDataURL(file)
+			}
+		})
+	}
+
+	// 点击头像预览区域触发文件选择
+	if (avatarPreview && dialogAvatar) {
+		avatarPreview.addEventListener('click', () => dialogAvatar.click())
+	}
 
 	// 加载列表
 	await loadPersonas()

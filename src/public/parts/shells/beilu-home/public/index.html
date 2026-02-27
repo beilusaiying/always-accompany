@@ -295,6 +295,18 @@
 										<input type="text" id="persona-edit-name" class="input input-sm input-bordered w-full" placeholder="人设名称" data-i18n="personas.dialog.name.placeholder" data-i18n-attr="placeholder" />
 									</div>
 									<div class="form-control mb-3">
+										<label class="label py-1"><span class="label-text text-sm font-medium" data-i18n="personas.dialog.avatar">头像</span></label>
+										<div class="flex items-center gap-3">
+											<div id="persona-avatar-preview" class="w-16 h-16 rounded-full bg-base-300 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer border-2 border-base-content/10 hover:border-amber-500 transition-colors" title="点击选择图片">
+												<span class="text-2xl" id="persona-avatar-placeholder">👤</span>
+											</div>
+											<div class="flex flex-col gap-1">
+												<input type="file" id="persona-edit-avatar" accept="image/*" class="file-input file-input-sm file-input-bordered w-full max-w-xs" />
+												<span class="text-xs text-base-content/40" data-i18n="personas.dialog.avatar.hint">支持 JPG/PNG/GIF，建议正方形图片</span>
+											</div>
+										</div>
+									</div>
+									<div class="form-control mb-3">
 										<label class="label py-1"><span class="label-text text-sm font-medium" data-i18n="personas.dialog.desc">个人描述</span></label>
 										<textarea id="persona-edit-desc" class="textarea textarea-bordered w-full text-sm" rows="6"
 											placeholder="简要描述这个人设，AI 会参考这段描述来认识你..." data-i18n="personas.dialog.desc.placeholder" data-i18n-attr="placeholder"></textarea>

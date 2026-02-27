@@ -715,8 +715,9 @@ router.get('/api/parts/shells\\:beilu-home/char-data/:charName', authenticate, a
 })
 
 // ============================================================
+// ============================================================
 // POST /api/parts/shells:beilu-home/create-persona
-// 创建新用户人设
+// 创建新用户人设（支持头像上传）
 // ============================================================
 router.post('/api/parts/shells\\:beilu-home/create-persona', authenticate, async (req, res) => {
 try {
@@ -758,18 +759,28 @@ try {
 		'utf-8'
 	)
 
+	// 处理头像上传
+	let avatarFileName = ''
+	const avatarFile = req.files?.avatar
+	if (avatarFile) {
+		const publicDir = path.join(personaDir, 'public')
+		fs.mkdirSync(publicDir, { recursive: true })
+		avatarFileName = 'avatar.png'
+		fs.writeFileSync(path.join(publicDir, avatarFileName), avatarFile.data)
+	}
+
 	// 写入 info.json
 	const infoData = {
 		'zh-CN': {
 			name: personaName,
-			avatar: '',
+			avatar: avatarFileName,
 			description: description || '',
 			version: '0.1.0',
 			author: username,
 		},
 		'en-UK': {
 			name: personaName,
-			avatar: '',
+			avatar: avatarFileName,
 			description: description || '',
 			version: '0.1.0',
 			author: username,
@@ -795,10 +806,9 @@ try {
 	res.status(500).json({ message: error.message })
 }
 })
-
 // ============================================================
 // PUT /api/parts/shells:beilu-home/update-persona/:name
-// 更新用户人设（名称 / 描述）
+// 更新用户人设（描述 + 可选头像上传）
 // ============================================================
 router.put('/api/parts/shells\\:beilu-home/update-persona/:name', authenticate, async (req, res) => {
 try {
@@ -817,6 +827,16 @@ try {
 		return res.status(404).json({ message: `人设 "${personaName}" 不存在` })
 	}
 
+	// 处理头像上传
+	const avatarFile = req.files?.avatar
+	let avatarFileName = undefined // undefined = 不更新 avatar 字段
+	if (avatarFile) {
+		const publicDir = path.join(personaDir, 'public')
+		fs.mkdirSync(publicDir, { recursive: true })
+		avatarFileName = 'avatar.png'
+		fs.writeFileSync(path.join(publicDir, avatarFileName), avatarFile.data)
+	}
+
 	// 读取并更新 info.json
 	const infoPath = path.join(personaDir, 'info.json')
 	let infoData = {}
@@ -824,17 +844,18 @@ try {
 		infoData = JSON.parse(fs.readFileSync(infoPath, 'utf-8'))
 	}
 
-	// 更新所有语言的 description
+	// 更新所有语言的 description 和 avatar
 	for (const lang of Object.keys(infoData)) {
 		if (typeof infoData[lang] === 'object') {
 			if (description !== undefined) infoData[lang].description = description
+			if (avatarFileName !== undefined) infoData[lang].avatar = avatarFileName
 		}
 	}
 	// 如果 info.json 为空或没有语言键，创建默认结构
 	if (Object.keys(infoData).length === 0) {
 		infoData = {
-			'zh-CN': { name: personaName, description: description || '', avatar: '' },
-			'en-UK': { name: personaName, description: description || '', avatar: '' },
+			'zh-CN': { name: personaName, description: description || '', avatar: avatarFileName || '' },
+			'en-UK': { name: personaName, description: description || '', avatar: avatarFileName || '' },
 		}
 	}
 

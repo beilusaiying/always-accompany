@@ -945,7 +945,7 @@ function is_VividChat(chatMetadata) {
  * @returns {Promise<import('../decl/chatLog.ts').chatReplyRequest_t>} 为角色准备的请求对象。
  * @throws {Error} 如果聊天未找到。
  */
-async function getChatRequest(chatid, charname) {
+async function getChatRequest(chatid, charname, options = {}) {
 	const chatMetadata = await loadChat(chatid)
 	if (!chatMetadata) throw new Error('Chat not found')
 
@@ -960,6 +960,7 @@ async function getChatRequest(chatid, charname) {
 
 	/** @type {import('../decl/chatLog.ts').chatReplyRequest_t} */
 	const result = {
+		isFakeSend: !!options.isFakeSend,
 		supported_functions: {
 			markdown: true,
 			mathjax: true,
@@ -2226,8 +2227,8 @@ export async function fakeSend(chatid) {
 	const charname = charnames[0]
 	if (!charname) throw new Error('No character in this chat')
 
-	// 构建 request
-	const request = await getChatRequest(chatid, charname)
+	// 构建 request（标记 isFakeSend，插件据此跳过耗时操作如 P1 检索）
+	const request = await getChatRequest(chatid, charname, { isFakeSend: true })
 
 	// 构建 prompt_struct（触发 TweakPrompt 三轮，包括 beilu-preset 的 injection）
 	const { buildPromptStruct, structPromptToSingleNoChatLog, margeStructPromptChatLog } = await import('./prompt_struct.mjs')

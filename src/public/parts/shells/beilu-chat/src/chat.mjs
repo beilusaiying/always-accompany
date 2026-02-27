@@ -688,7 +688,7 @@ export async function loadChat(chatid) {
 // 请求构建（简化：去掉 world.GetChatLogForCharname 劫持）
 // ============================================================
 
-async function getChatRequest(chatid, charname) {
+async function getChatRequest(chatid, charname, options = {}) {
 	const chatMetadata = await loadChat(chatid)
 	if (!chatMetadata) throw new Error('Chat not found')
 
@@ -703,6 +703,7 @@ async function getChatRequest(chatid, charname) {
 
 	/** @type {import('../decl/chatLog.ts').chatReplyRequest_t} */
 	const result = {
+		isFakeSend: !!options.isFakeSend,
 		supported_functions: {
 			markdown: true,
 			mathjax: true,
@@ -1629,9 +1630,8 @@ export async function buildFakeSendRequest(chatid, charname) {
 		charname = chars[0]
 	}
 
-	// 步骤 1：构建 chatReplyRequest_t
-	const request = await getChatRequest(chatid, charname)
-	request.isFakeSend = true // 标记为伪发送，插件可据此跳过耗时操作（如 P1 检索）
+	// 步骤 1：构建 chatReplyRequest_t（传入 isFakeSend 标记，插件据此跳过耗时操作如 P1 检索）
+	const request = await getChatRequest(chatid, charname, { isFakeSend: true })
 
 	// 步骤 2：构建 prompt_struct
 	const prompt_struct = await buildPromptStruct(request)

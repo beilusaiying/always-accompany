@@ -3979,43 +3979,49 @@ const pluginExport = {
 				if (!username || !charName) return false
 
 				try {
-					let content = reply.content
-
-					// 1. 解析 <tableEdit>
-					const { operations, cleanContent: afterTableEdit } = parseTableEditTags(content)
-					content = afterTableEdit
-
-					if (operations.length > 0) {
-						const data = loadMemoryData(username, charName)
-						const successCount = executeTableOperations(data.tables, operations)
-						if (successCount > 0) {
-							saveTablesData(username, charName)
-							console.log(`[beilu-memory] 执行了 ${successCount}/${operations.length} 个表格操作 (${charName})`)
+						// ★ 防止重复处理：ReplyHandler 会在 GetReply 内部和 executeGeneration 外层各调用一次
+						if (reply._memory_tags_processed) return false
+		
+						let content = reply.content
+		
+						// 1. 解析 <tableEdit>
+						const { operations, cleanContent: afterTableEdit } = parseTableEditTags(content)
+						content = afterTableEdit
+		
+						if (operations.length > 0) {
+							const data = loadMemoryData(username, charName)
+							const successCount = executeTableOperations(data.tables, operations)
+							if (successCount > 0) {
+								saveTablesData(username, charName)
+								console.log(`[beilu-memory] 执行了 ${successCount}/${operations.length} 个表格操作 (${charName})`)
+							}
 						}
-					}
-
-					// 2. 解析 <memoryArchive> 并执行文件操作
-					const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(content)
-					content = afterArchive
-					if (archiveOps.length > 0) {
-						const replyMemData = loadMemoryData(username, charName)
-						const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, replyMemData.tables)
-						const archiveOkCount = archiveResults.filter(r => r.status === 'ok').length
-						if (archiveOkCount > 0) {
-							saveTablesData(username, charName)
+		
+						// 2. 解析 <memoryArchive> 并执行文件操作
+						const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(content)
+						content = afterArchive
+						if (archiveOps.length > 0) {
+							const replyMemData = loadMemoryData(username, charName)
+							const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, replyMemData.tables)
+							const archiveOkCount = archiveResults.filter(r => r.status === 'ok').length
+							if (archiveOkCount > 0) {
+								saveTablesData(username, charName)
+							}
+							console.log(`[beilu-memory] ReplyHandler: memoryArchive ${archiveOkCount}/${archiveResults.length} 操作成功 (${charName})`)
 						}
-						console.log(`[beilu-memory] ReplyHandler: memoryArchive ${archiveOkCount}/${archiveResults.length} 操作成功 (${charName})`)
-					}
-
-					// 3. 解析 <memorySearch>（Phase 2 完善）
-					const { cleanContent: afterSearch } = parseMemorySearchTags(content)
-					content = afterSearch
-
-					// 4. 解析 <memoryNote>
-					content = parseMemoryNoteTags(content, username, charName)
-
-					// 更新回复内容（清除所有记忆标签）
-					reply.content = content
+		
+						// 3. 解析 <memorySearch>（Phase 2 完善）
+						const { cleanContent: afterSearch } = parseMemorySearchTags(content)
+						content = afterSearch
+		
+						// 4. 解析 <memoryNote>
+						content = parseMemoryNoteTags(content, username, charName)
+		
+						// ★ 新方案：不修改 reply.content（保留原始内容含记忆标签）
+						// 清理后的内容存到 content_for_show（前端渲染时优先使用）
+						// 这样用户点击编辑按钮时能看到完整的 AI 原始输出（含 <tableEdit> 等标签）
+						reply.content_for_show = content
+						reply._memory_tags_processed = true
 	
 					// 5. 自动检查是否需要触发归档
 					autoCheckArchiveTriggers(username, charName)
@@ -4025,8 +4031,8 @@ const pluginExport = {
 	
 				} catch (e) {
 					console.error('[beilu-memory] ReplyHandler error:', e.message)
-					// 错误降级：不阻塞对话，但清除标签
-					reply.content = reply.content
+					// 错误降级：不阻塞对话，清除标签存到 content_for_show（不修改 content，保留原始内容）
+					reply.content_for_show = reply.content
 						.replace(/<tableEdit>[\s\S]*?<\/tableEdit>/gi, '')
 						.replace(/<memoryArchive>[\s\S]*?<\/memoryArchive>/gi, '')
 						.replace(/<memorySearch>[\s\S]*?<\/memorySearch>/gi, '')

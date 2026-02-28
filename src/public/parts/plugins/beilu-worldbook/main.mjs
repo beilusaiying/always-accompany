@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createDiag } from '../../../../server/diagLogger.mjs';
+
+const diag = createDiag('worldbook');
+
 // ST 枚举常量（内联，消除对 Fount 内部 charData.mjs 的依赖）
 const extension_prompt_roles = { SYSTEM: 0, USER: 1, ASSISTANT: 2 };
 const world_info_position = { before: 0, after: 1, ANTop: 2, ANBottom: 3, atDepth: 4, EMTop: 5, EMBottom: 6 };
@@ -89,6 +93,8 @@ import info from './info.json' with { type: 'json' };
 
 const __pluginDir = dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = join(__pluginDir, 'config_data.json');
+// 项目根目录（从 plugins/beilu-worldbook/ 向上5级到项目根）
+const __projectRoot = join(__pluginDir, '..', '..', '..', '..', '..');
 
 function saveConfigToDisk() {
 	try {
@@ -170,6 +176,14 @@ function createBlankEntry(uid) {
 		displayIndex: uid,
 		outletName: '',
 		characterFilter: { isExclude: false, names: [], tags: [] },
+		activationMode: 'regex',
+		dynamicConfig: {
+			columnName: '',
+			matchType: 'range',
+			rangeMin: 0,
+			rangeMax: 0,
+			exactValue: '',
+		},
 	};
 }
 
@@ -216,6 +230,15 @@ function convertSTEntry(raw, fallbackUid = 0) {
 		sticky: raw.sticky ?? ext.sticky ?? 0,
 		cooldown: raw.cooldown ?? ext.cooldown ?? 0,
 		delay: raw.delay ?? ext.delay ?? 0,
+		// 激活模式：保留已有值，或根据 constant 推断
+		activationMode: raw.activationMode || (raw.constant ? 'constant' : 'regex'),
+		dynamicConfig: raw.dynamicConfig || {
+			columnName: '',
+			matchType: 'range',
+			rangeMin: 0,
+			rangeMax: 0,
+			exactValue: '',
+		},
 	};
 }
 
@@ -286,6 +309,61 @@ function getNextUid(entries) {
 }
 
 // ============================================================
+// 动态提示词：读取记忆表格数据
+// ============================================================
+
+/**
+ * 加载指定角色的记忆表格数据
+ * @param {string} username - 用户名
+ * @param {string} charName - 角色名
+ * @returns {Array|null} 表格数组，失败返回 null
+ */
+function loadTablesForDynamic(username, charName) {
+	if (!charName) return null;
+	const user = username || '_default';
+	const tablesPath = join(__projectRoot, 'data', 'users', user, 'chars', charName, 'memory', 'tables.json');
+	try {
+		if (!fs.existsSync(tablesPath)) {
+			diag.debug('动态模式: tables.json 不存在:', tablesPath);
+			return null;
+		}
+		const raw = JSON.parse(fs.readFileSync(tablesPath, 'utf-8'));
+		return raw?.tables || null;
+	} catch (e) {
+		diag.warn('动态模式: 读取 tables.json 失败:', e.message);
+		return null;
+	}
+}
+
+/**
+ * 检查动态条目是否应该激活
+ * @param {object} entry - 世界书条目（含 dynamicConfig）
+ * @param {Array} tables - 记忆表格数组
+ * @returns {boolean}
+ */
+function checkDynamicEntry(entry, tables) {
+	const config = entry.dynamicConfig;
+	if (!config?.columnName) return false;
+	for (const table of tables) {
+		if (table.enabled === false) continue;
+		const colIndex = (table.columns || []).indexOf(config.columnName);
+		if (colIndex === -1) continue;
+		for (const row of (table.rows || [])) {
+			const cellValue = row[colIndex];
+			if (cellValue == null || cellValue === '') continue;
+			if (config.matchType === 'exact') {
+				if (String(cellValue).trim() === String(config.exactValue).trim()) return true;
+			} else {
+				// range 模式
+				const numVal = parseFloat(cellValue);
+				if (!isNaN(numVal) && numVal >= config.rangeMin && numVal <= config.rangeMax) return true;
+			}
+		}
+	}
+	return false;
+}
+
+// ============================================================
 // beilu-worldbook 插件
 // ============================================================
 
@@ -314,10 +392,28 @@ const pluginExport = {
 					const needsMigration = Array.isArray(wb.entries) ||
 						(entriesValues.length > 0 && entriesValues[0].uid === undefined && entriesValues[0].id !== undefined);
 					if (needsMigration) {
-						console.log(`[beilu-worldbook] 迁移世界书 "${name}" 的条目格式 (ST → beilu)...`);
-						wb.entries = convertSTEntries(wb.entries);
-						migrated = true;
-					}
+							diag.log(`迁移世界书 "${name}" 的条目格式 (ST → beilu)...`);
+							wb.entries = convertSTEntries(wb.entries);
+							migrated = true;
+						}
+						// 数据迁移：为旧条目添加 activationMode 字段
+						if (wb.entries) {
+							for (const entry of Object.values(wb.entries)) {
+								if (!entry.activationMode) {
+									entry.activationMode = entry.constant ? 'constant' : 'regex';
+									migrated = true;
+								}
+								if (!entry.dynamicConfig) {
+									entry.dynamicConfig = {
+										columnName: '',
+										matchType: 'range',
+										rangeMin: 0, rangeMax: 0,
+										exactValue: '',
+									};
+									migrated = true;
+								}
+							}
+						}
 				}
 				if (migrated) {
 					saveConfigToDisk();
@@ -326,6 +422,14 @@ const pluginExport = {
 				const count = Object.keys(configData.worldbooks).length;
 				const active = configData.active_worldbook;
 				const activeEntryCount = getActiveEntries() ? Object.keys(getActiveEntries()).length : 0;
+				// 统计各模式分布
+				const allEntries = Object.values(configData.worldbooks).flatMap(wb => wb.entries ? Object.values(wb.entries) : []);
+				const modeStats = { constant: 0, regex: 0, dynamic: 0 };
+				for (const e of allEntries) {
+					const m = e.activationMode || (e.constant ? 'constant' : 'regex');
+					modeStats[m] = (modeStats[m] || 0) + 1;
+				}
+				diag.log(`初始化完成: ${count} 个世界书, 激活: "${active}" (${activeEntryCount} 条目), 模式分布: 常驻=${modeStats.constant} 正则=${modeStats.regex} 动态=${modeStats.dynamic}`);
 				console.log(`[beilu-worldbook] 已恢复 ${count} 个世界书, 激活: "${active}" (${activeEntryCount} 条目)`);
 			} else {
 				console.log('[beilu-worldbook] 无已保存世界书，等待导入');
@@ -591,63 +695,66 @@ const pluginExport = {
 							console.log(`[beilu-worldbook] 已清理角色 "${charName}" 绑定的 ${toRemove.length} 个世界书: ${toRemove.join(', ')}`);
 						}
 					}
-				}
-
-				// 切换条目启用/禁用
-				if (data.toggle_entry) {
-					const { uid, disabled } = data.toggle_entry;
-					const entries = getActiveEntries();
-					if (entries) {
-						const key = String(uid);
-						if (entries[key]) {
-							entries[key].disable = disabled;
-						}
 					}
-				}
-
-				// 修改条目
-				if (data.update_entry) {
-					const { uid, props } = data.update_entry;
-					const entries = getActiveEntries();
-					if (entries && props) {
-						const key = String(uid);
-						if (entries[key]) {
-							// 逐个字段更新，防止覆盖整个条目
-							for (const [prop, value] of Object.entries(props)) {
-								entries[key][prop] = value;
+	
+					// 切换条目启用/禁用
+					if (data.toggle_entry) {
+						const { uid, disabled } = data.toggle_entry;
+						const entries = getActiveEntries();
+						if (entries) {
+							const key = String(uid);
+							if (entries[key]) {
+								entries[key].disable = disabled;
+								diag.log(`条目${disabled ? '禁用' : '启用'}: uid=${uid}, "${entries[key].comment || ''}"`);
 							}
 						}
 					}
-				}
-
-				// 新增条目
-				if (data.add_entry) {
-					const entries = getActiveEntries();
-					if (entries) {
-						const uid = getNextUid(entries);
-						const newEntry = createBlankEntry(uid);
-						// 合并自定义属性
-						if (data.add_entry.props) {
-							Object.assign(newEntry, data.add_entry.props);
-							newEntry.uid = uid; // 确保 uid 不被覆盖
-						}
-						entries[String(uid)] = newEntry;
-						console.log(`[beilu-worldbook] 新条目已添加: uid=${uid}`);
-					}
-				}
-
-				// 删除条目
-				if (data.delete_entry) {
-					const { uid } = data.delete_entry;
-					const entries = getActiveEntries();
-					if (entries) {
-						const key = String(uid);
-						if (entries[key]) {
-							delete entries[key];
-							console.log(`[beilu-worldbook] 条目已删除: uid=${uid}`);
+	
+					// 修改条目
+					if (data.update_entry) {
+						const { uid, props } = data.update_entry;
+						const entries = getActiveEntries();
+						if (entries && props) {
+							const key = String(uid);
+							if (entries[key]) {
+								// 逐个字段更新，防止覆盖整个条目
+								for (const [prop, value] of Object.entries(props)) {
+									entries[key][prop] = value;
+								}
+								diag.log(`条目更新: uid=${uid}, 字段=[${Object.keys(props).join(',')}]`);
+							}
 						}
 					}
-				}
+	
+					// 新增条目
+					if (data.add_entry) {
+						const entries = getActiveEntries();
+						if (entries) {
+							const uid = getNextUid(entries);
+							const newEntry = createBlankEntry(uid);
+							// 合并自定义属性
+							if (data.add_entry.props) {
+								Object.assign(newEntry, data.add_entry.props);
+								newEntry.uid = uid; // 确保 uid 不被覆盖
+							}
+							entries[String(uid)] = newEntry;
+							diag.log(`条目新增: uid=${uid}, "${newEntry.comment || ''}"`);
+						}
+					}
+	
+					// 删除条目
+					if (data.delete_entry) {
+						const { uid } = data.delete_entry;
+						const entries = getActiveEntries();
+						if (entries) {
+							const key = String(uid);
+							if (entries[key]) {
+								const comment = entries[key].comment || '';
+								delete entries[key];
+								diag.log(`条目删除: uid=${uid}, "${comment}"`);
+							}
+						}
+					}
 
 				// 重排序条目（更新 displayIndex）
 				if (data.reorder_entries) {
@@ -672,124 +779,174 @@ const pluginExport = {
 			/**
 			 * GetPrompt — 将所有启用的世界书条目构建为提示词
 			 *
-			 * 常驻条目（constant=true）直接注入
-			 * 关键词匹配条目由 world_info.mjs 引擎处理
+			 * 3种激活模式：
+			 * - constant: 常驻条目，直接注入
+			 * - regex: 关键词匹配，由 world_info.mjs 引擎处理
+			 * - dynamic: 动态提示词，检测记忆表格数据决定是否激活
+			 *
 			 * 支持多世界书并行：遍历所有 enabled=true 且角色匹配的世界书
 			 *
 			 * @param {object} arg - chatReplyRequest_t
 			 * @returns {object} single_part_prompt_t
 			 */
 			GetPrompt: (arg) => {
-				const currentCharName = arg?.Charname || '';
-				let entryArray = getAllEnabledEntries(currentCharName);
+			 // char_id 是 part 目录名（用于路径和绑定匹配），Charname 是显示名
+			 const charId = arg?.char_id || '';
+			 const username = arg?.username || '_default';
+			 let entryArray = getAllEnabledEntries(charId);
 				if (entryArray.length === 0) {
 					return { text: [], additional_chat_log: [], extension: {} };
 				}
-	
+
 				// Phase 2E: 按阶段过滤条目（GetPrompt 在生成阶段调用）
 				entryArray = filterEntriesByPhase(entryArray, 'generate');
 				if (entryArray.length === 0) {
 					return { text: [], additional_chat_log: [], extension: {} };
 				}
-	
-				// 将 ST 格式的 key/keysecondary 转换为引擎期望的格式
-				const wiEntries = entryArray.map(e => ({
-					...e,
-					keys: Array.isArray(e.key) ? [...e.key] : (e.key ? [e.key] : []),
-					secondary_keys: Array.isArray(e.keysecondary) ? [...e.keysecondary] : (e.keysecondary ? [e.keysecondary] : []),
-					enabled: !e.disable,
-					extensions: {
-						position: e.position,
-						role: e.role ?? extension_prompt_roles.SYSTEM,
-						selectiveLogic: e.selectiveLogic ?? 0,
-						case_sensitive: e.caseSensitive,
-						match_whole_words: e.matchWholeWords,
-						exclude_recursion: e.excludeRecursion,
-						prevent_recursion: e.preventRecursion,
-						delay_until_recursion: e.delayUntilRecursion ? 1 : 0,
-						delay: e.delay,
-						sticky: e.sticky,
-						cooldown: e.cooldown,
-						useProbability: e.useProbability,
-						probability: e.probability,
-					},
-				}));
 
-				// 构建环境变量
-				const chatLog = arg.chat_log || [];
-				const env = {
-					user: arg.UserCharname || 'User',
-					char: arg.Charname || 'Character',
-				};
+				// ---- 3模式分流 ----
+				const constantEntries = [];
+				const regexEntries = [];
+				const dynamicEntries = [];
 
-				// 使用聊天级别的内存
-				const memory = arg.extension?.worldbook_memory || {};
-
-				try {
-					// 调用 ST 世界书激活引擎
-					const activated = GetActivedWorldInfoEntries(wiEntries, chatLog, env, memory);
-
-					// 保存内存状态
-					if (arg.extension) {
-						arg.extension.worldbook_memory = memory;
+				for (const entry of entryArray) {
+					const mode = entry.activationMode || (entry.constant ? 'constant' : 'regex');
+					if (mode === 'constant') {
+						constantEntries.push(entry);
+					} else if (mode === 'dynamic') {
+						dynamicEntries.push(entry);
+					} else {
+						regexEntries.push(entry);
 					}
+				}
 
-					if (activated.length === 0) {
-						return { text: [], additional_chat_log: [], extension: {} };
-					}
+				diag.debug(`GetPrompt 3模式分流: charId="${charId}", constant=${constantEntries.length}, regex=${regexEntries.length}, dynamic=${dynamicEntries.length}`);
 
-					// 按 position 分类构建提示词
-					const textEntries = [];
-					const chatLogInjections = [];
-					const charInjections = []; // before/after 角色描述的条目
-	
-					for (const entry of activated) {
-						const pos = entry.extensions?.position ?? entry.position ?? world_info_position.before;
-						const role = entry.extensions?.role ?? extension_prompt_roles.SYSTEM;
-						const depth = entry.depth ?? 4;
-						const order = entry.order ?? 100;
-	
-						const roleMap = {
-							[extension_prompt_roles.SYSTEM]: 'system',
-							[extension_prompt_roles.USER]: 'user',
-							[extension_prompt_roles.ASSISTANT]: 'assistant',
-						};
-	
-						if (pos === 4) {
-							// @depth 注入到聊天记录中
-							chatLogInjections.push({
-								content: entry.content,
-								role: roleMap[role] || 'system',
-								depth: depth,
-							});
-						} else if (pos === world_info_position.before || pos === world_info_position.after) {
-							// 角色之前 / 角色之后：通过 TweakPrompt 注入到 char_prompt.text
-							charInjections.push({
-								content: entry.content,
-								position: pos,
-								order: order,
-							});
-						} else {
-							// 其他位置（ANTop, ANBottom 等）：作为插件文本
-							textEntries.push({
-								content: entry.content,
-								important: 0,
-							});
-						}
-					}
-	
-					return {
-						text: textEntries,
-						additional_chat_log: [],
-						extension: {
-							worldbook_injections: chatLogInjections,
-							worldbook_char_injections: charInjections,
+				// ---- 常驻条目：直接激活 ----
+				const activated = [...constantEntries];
+				if (constantEntries.length > 0) {
+					diag.debug(`常驻条目激活: ${constantEntries.length} 条 [${constantEntries.map(e => e.comment || e.uid).join(', ')}]`);
+				}
+
+				// ---- 正则条目：送入 ST 世界书激活引擎 ----
+				if (regexEntries.length > 0) {
+					const wiEntries = regexEntries.map(e => ({
+						...e,
+						keys: Array.isArray(e.key) ? [...e.key] : (e.key ? [e.key] : []),
+						secondary_keys: Array.isArray(e.keysecondary) ? [...e.keysecondary] : (e.keysecondary ? [e.keysecondary] : []),
+						enabled: !e.disable,
+						constant: false, // 强制关闭，常驻模式已在上方处理
+						extensions: {
+							position: e.position,
+							role: e.role ?? extension_prompt_roles.SYSTEM,
+							selectiveLogic: e.selectiveLogic ?? 0,
+							case_sensitive: e.caseSensitive,
+							match_whole_words: e.matchWholeWords,
+							exclude_recursion: e.excludeRecursion,
+							prevent_recursion: e.preventRecursion,
+							delay_until_recursion: e.delayUntilRecursion ? 1 : 0,
+							delay: e.delay,
+							sticky: e.sticky,
+							cooldown: e.cooldown,
+							useProbability: e.useProbability,
+							probability: e.probability,
 						},
+					}));
+
+					const chatLog = arg.chat_log || [];
+					const env = {
+						user: arg.UserCharname || 'User',
+						char: arg.Charname || 'Character',
 					};
-				} catch (err) {
-					console.error('[beilu-worldbook] GetPrompt error:', err);
+					const memory = arg.extension?.worldbook_memory || {};
+
+					try {
+						const regexActivated = GetActivedWorldInfoEntries(wiEntries, chatLog, env, memory);
+						if (arg.extension) {
+							arg.extension.worldbook_memory = memory;
+						}
+						activated.push(...regexActivated);
+						diag.debug(`正则引擎激活: ${regexActivated.length} 条`);
+					} catch (err) {
+						diag.error('正则引擎错误:', err);
+					}
+				}
+
+				// ---- 动态条目：检查记忆表格 ----
+				if (dynamicEntries.length > 0) {
+					diag.time('dynamicCheck');
+					const tables = loadTablesForDynamic(username, charId);
+					if (tables) {
+						for (const entry of dynamicEntries) {
+							if (checkDynamicEntry(entry, tables)) {
+								activated.push(entry);
+								diag.debug(`动态条目激活: "${entry.comment}" (列: ${entry.dynamicConfig?.columnName})`);
+							}
+						}
+					} else {
+						diag.debug('动态模式: 无法加载表格数据，跳过动态条目');
+					}
+					diag.timeEnd('dynamicCheck');
+				}
+
+				if (activated.length === 0) {
 					return { text: [], additional_chat_log: [], extension: {} };
 				}
+
+				diag.log(`GetPrompt 总激活: ${activated.length} 条`);
+	
+				// 按 position 分类构建提示词
+				const textEntries = [];
+				const chatLogInjections = [];
+				const charInjections = [];
+				let beforeCount = 0, afterCount = 0, depthCount = 0, otherCount = 0;
+
+				for (const entry of activated) {
+					const pos = entry.extensions?.position ?? entry.position ?? world_info_position.before;
+					const role = entry.extensions?.role ?? extension_prompt_roles.SYSTEM;
+					const depth = entry.depth ?? 4;
+					const order = entry.order ?? 100;
+
+					const roleMap = {
+						[extension_prompt_roles.SYSTEM]: 'system',
+						[extension_prompt_roles.USER]: 'user',
+						[extension_prompt_roles.ASSISTANT]: 'assistant',
+					};
+
+					if (pos === 4) {
+						chatLogInjections.push({
+							content: entry.content,
+							role: roleMap[role] || 'system',
+							depth: depth,
+						});
+						depthCount++;
+					} else if (pos === world_info_position.before || pos === world_info_position.after) {
+						charInjections.push({
+							content: entry.content,
+							position: pos,
+							order: order,
+						});
+						if (pos === world_info_position.before) beforeCount++;
+						else afterCount++;
+					} else {
+						textEntries.push({
+							content: entry.content,
+							important: 0,
+						});
+						otherCount++;
+					}
+				}
+
+				diag.debug(`注入构建: before=${beforeCount}, after=${afterCount}, @depth=${depthCount}, other=${otherCount}`);
+	
+				return {
+					text: textEntries,
+					additional_chat_log: [],
+					extension: {
+						worldbook_injections: chatLogInjections,
+						worldbook_char_injections: charInjections,
+					},
+				};
 			},
 
 			/**
@@ -816,20 +973,21 @@ const pluginExport = {
 							important: important,
 						});
 					}
+					diag.debug(`TweakPrompt char注入: ${charInjections.length} 条 (before/after → char_prompt.text)`);
 				}
 	
 				// ---- 2. @depth 聊天记录注入 ----
 				const injections = my_prompt?.extension?.worldbook_injections;
 				if (!injections || !Array.isArray(injections) || injections.length === 0) return;
 				if (!prompt_struct?.chat_log) return;
-	
+		
 				const chatLog = prompt_struct.chat_log;
-	
+		
 				for (const injection of injections) {
 					const depth = injection.depth ?? 4;
 					// 计算注入位置：从末尾往前数 depth 条
 					const insertIndex = Math.max(0, chatLog.length - depth);
-	
+		
 					chatLog.splice(insertIndex, 0, {
 						role: injection.role || 'system',
 						content: injection.content,
@@ -837,6 +995,7 @@ const pluginExport = {
 						extension: { ephemeral: true },
 					});
 				}
+				diag.debug(`TweakPrompt @depth注入: ${injections.length} 条 → chat_log (共${chatLog.length}条)`);
 			},
 		},
 	},

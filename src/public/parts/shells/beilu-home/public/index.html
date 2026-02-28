@@ -194,17 +194,57 @@
 												<label class="label py-0.5"><span class="label-text text-xs text-base-content/50" data-i18n="worlds.detail.keys2">辅助关键字（逗号分隔）</span></label>
 												<input type="text" id="wb-detail-keys2" class="input input-xs input-bordered w-full font-mono" placeholder="辅助关键词" data-i18n="worlds.detail.keys2.placeholder" data-i18n-attr="placeholder" readonly />
 											</div>
-											<div class="flex flex-wrap gap-x-4 gap-y-2">
+											<!-- 激活模式选择 -->
+											<div class="flex flex-wrap gap-x-4 gap-y-2 items-center">
+												<span class="text-base-content/50 shrink-0">激活模式:</span>
 												<label class="cursor-pointer label gap-1 p-0">
-													<input type="checkbox" id="wb-detail-constant" class="checkbox checkbox-xs checkbox-warning" disabled />
-													<span class="label-text text-xs" data-i18n="worlds.detail.constant">必须有（常驻）</span>
+													<input type="radio" name="wb-activation-mode" id="wb-mode-constant" value="constant" class="radio radio-xs radio-warning" disabled />
+													<span class="label-text text-xs">⭐ 常驻</span>
 												</label>
+												<label class="cursor-pointer label gap-1 p-0">
+													<input type="radio" name="wb-activation-mode" id="wb-mode-regex" value="regex" class="radio radio-xs radio-warning" checked disabled />
+													<span class="label-text text-xs">🔑 正则</span>
+												</label>
+												<label class="cursor-pointer label gap-1 p-0">
+													<input type="radio" name="wb-activation-mode" id="wb-mode-dynamic" value="dynamic" class="radio radio-xs radio-warning" disabled />
+													<span class="label-text text-xs">📊 动态</span>
+												</label>
+											</div>
+											<!-- 正则模式选项（仅正则模式可见） -->
+											<div id="wb-regex-options" class="flex flex-wrap gap-x-4 gap-y-2">
 												<div class="flex items-center gap-1">
 													<span class="text-base-content/50 shrink-0" data-i18n="worlds.detail.logic">匹配逻辑:</span>
 													<select id="wb-detail-logic" class="select select-xs select-bordered w-24" disabled>
 														<option value="0" data-i18n="worlds.detail.logic.any">与任意 (ANY)</option>
 														<option value="1" data-i18n="worlds.detail.logic.all">与所有 (ALL)</option>
 													</select>
+												</div>
+											</div>
+											<!-- 动态模式配置（仅动态模式可见） -->
+											<div id="wb-dynamic-config" class="space-y-2 p-2 rounded-md" style="display:none; background: oklch(var(--bc) / 0.03); border: 1px solid oklch(var(--bc) / 0.08);">
+												<div class="text-xs font-medium text-base-content/60">📊 动态检测规则（检测记忆表格数据）</div>
+												<div class="flex flex-wrap gap-x-3 gap-y-2">
+													<div class="flex items-center gap-1">
+														<span class="text-base-content/50 shrink-0 text-xs">列名:</span>
+														<input type="text" id="wb-dyn-column" class="input input-xs input-bordered w-28 font-mono" placeholder="好感度" disabled />
+													</div>
+													<div class="flex items-center gap-1">
+														<span class="text-base-content/50 shrink-0 text-xs">匹配:</span>
+														<select id="wb-dyn-match-type" class="select select-xs select-bordered w-24" disabled>
+															<option value="range">范围</option>
+															<option value="exact">精确</option>
+														</select>
+													</div>
+												</div>
+												<div id="wb-dyn-range-fields" class="flex items-center gap-2">
+													<span class="text-base-content/50 shrink-0 text-xs">范围:</span>
+													<input type="number" id="wb-dyn-range-min" class="input input-xs input-bordered w-16" placeholder="最小" disabled />
+													<span class="text-xs text-base-content/30">~</span>
+													<input type="number" id="wb-dyn-range-max" class="input input-xs input-bordered w-16" placeholder="最大" disabled />
+												</div>
+												<div id="wb-dyn-exact-fields" class="flex items-center gap-2" style="display:none;">
+													<span class="text-base-content/50 shrink-0 text-xs">精确值:</span>
+													<input type="text" id="wb-dyn-exact-value" class="input input-xs input-bordered w-32" placeholder="匹配值" disabled />
 												</div>
 											</div>
 											<div class="flex flex-wrap gap-x-4 gap-y-2">

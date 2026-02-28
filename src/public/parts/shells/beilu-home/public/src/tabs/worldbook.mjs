@@ -53,7 +53,6 @@ const dom = {
 	detailToggle: () => document.getElementById('wb-detail-toggle'),
 	detailKeys: () => document.getElementById('wb-detail-keys'),
 	detailKeys2: () => document.getElementById('wb-detail-keys2'),
-	detailConstant: () => document.getElementById('wb-detail-constant'),
 	detailExcludeRecursion: () => document.getElementById('wb-detail-exclude-recursion'),
 	detailPreventRecursion: () => document.getElementById('wb-detail-prevent-recursion'),
 	detailLogic: () => document.getElementById('wb-detail-logic'),
@@ -68,6 +67,19 @@ const dom = {
 	detailEditBtn: () => document.getElementById('wb-detail-edit-btn'),
 	detailSaveBtn: () => document.getElementById('wb-detail-save-btn'),
 	detailCancelBtn: () => document.getElementById('wb-detail-cancel-btn'),
+	// 激活模式
+	modeConstant: () => document.getElementById('wb-mode-constant'),
+	modeRegex: () => document.getElementById('wb-mode-regex'),
+	modeDynamic: () => document.getElementById('wb-mode-dynamic'),
+	regexOptions: () => document.getElementById('wb-regex-options'),
+	dynamicConfig: () => document.getElementById('wb-dynamic-config'),
+	dynColumn: () => document.getElementById('wb-dyn-column'),
+	dynMatchType: () => document.getElementById('wb-dyn-match-type'),
+	dynRangeMin: () => document.getElementById('wb-dyn-range-min'),
+	dynRangeMax: () => document.getElementById('wb-dyn-range-max'),
+	dynRangeFields: () => document.getElementById('wb-dyn-range-fields'),
+	dynExactFields: () => document.getElementById('wb-dyn-exact-fields'),
+	dynExactValue: () => document.getElementById('wb-dyn-exact-value'),
 }
 
 // ===== 状态 =====
@@ -131,8 +143,11 @@ function renderStats() {
 	const entries = currentData.entries
 	const total = entries.length
 	const enabled = entries.filter(e => !e.disable).length
-	const constant = entries.filter(e => e.constant && !e.disable).length
-	const keyword = entries.filter(e => !e.constant && !e.disable && e.key && e.key.length > 0).length
+	const constant = entries.filter(e => (e.activationMode === 'constant' || (!e.activationMode && e.constant)) && !e.disable).length
+	const keyword = entries.filter(e => {
+		const mode = e.activationMode || (e.constant ? 'constant' : 'regex')
+		return mode === 'regex' && !e.disable
+	}).length
 
 	dom.statTotal().textContent = total
 	dom.statEnabled().textContent = enabled
@@ -141,6 +156,11 @@ function renderStats() {
 	statsEl.style.display = ''
 }
 
+/**
+ * 按注入位置分组渲染条目列表
+ * 分3组：📌角色之前(position=0) / 📎角色之后(position=1) / 📍@深度(position=4)
+ * 组内按 order 升序排列
+ */
 function renderEntryList(filter = '') {
 	const listEl = dom.entryList()
 	if (!listEl || !currentData) return
@@ -163,73 +183,115 @@ function renderEntryList(filter = '') {
 		})
 		: entries
 
-	listEl.innerHTML = ''
+	// 按注入位置分组
+	const groups = [
+		{ key: 0, icon: '📌', label: '角色描述前', entries: [] },
+		{ key: 1, icon: '📎', label: '角色描述后', entries: [] },
+		{ key: 4, icon: '📍', label: '聊天记录中 (@depth)', entries: [] },
+	]
 
 	for (const entry of filtered) {
-		const item = document.createElement('div')
-		item.className = 'beilu-preset-entry-item'
-		if (entry.uid === selectedUid) item.classList.add('selected')
-		if (entry.disable) item.classList.add('opacity-40')
-
-		// 标题行
-		const titleRow = document.createElement('div')
-		titleRow.className = 'flex items-center gap-1'
-
-		// 状态标记（使用 badge-info 避免与 active 的 amber 样式混淆）
-		if (entry.constant) {
-			const badge = document.createElement('span')
-			badge.className = 'badge badge-xs badge-info'
-			badge.textContent = '常驻'
-			titleRow.appendChild(badge)
-		}
-
-		// 位置标记
-		const posBadge = document.createElement('span')
 		const pos = entry.position ?? 0
-		if (pos === 4) {
-			posBadge.className = 'badge badge-xs badge-info badge-outline'
-			posBadge.textContent = `D${entry.depth ?? 4}`
-		} else if (pos === 0) {
-			posBadge.className = 'badge badge-xs badge-ghost badge-outline'
-			posBadge.textContent = '前'
-		} else {
-			posBadge.className = 'badge badge-xs badge-ghost badge-outline'
-			posBadge.textContent = '后'
-		}
-		titleRow.appendChild(posBadge)
+		const group = groups.find(g => g.key === pos) || groups[0]
+		group.entries.push(entry)
+	}
 
-		const titleSpan = document.createElement('span')
-		titleSpan.className = 'text-sm font-medium truncate flex-grow'
-		titleSpan.textContent = entry.comment || `条目 #${entry.uid}`
-		titleRow.appendChild(titleSpan)
+	// 组内按 order 升序
+	for (const group of groups) {
+		group.entries.sort((a, b) => (a.order ?? 100) - (b.order ?? 100))
+	}
 
-		// 启用/禁用指示
-		const statusDot = document.createElement('span')
-		statusDot.className = `w-2 h-2 rounded-full shrink-0 ${entry.disable ? 'bg-base-content/20' : 'bg-success'}`
-		titleRow.appendChild(statusDot)
+	listEl.innerHTML = ''
 
-		item.appendChild(titleRow)
+	for (const group of groups) {
+		if (group.entries.length === 0) continue
 
-		// 关键词摘要
-		if (entry.key && entry.key.length > 0) {
-			const keysDiv = document.createElement('div')
-			keysDiv.className = 'text-xs text-base-content/40 truncate mt-0.5'
-			keysDiv.textContent = entry.key.join(', ')
-			item.appendChild(keysDiv)
-		}
+		// 分组标题
+		const header = document.createElement('div')
+		header.className = 'wb-group-header'
+		header.innerHTML = `<span class="wb-group-icon">${group.icon}</span> ${group.label} <span class="wb-group-count">(${group.entries.length})</span>`
+		listEl.appendChild(header)
 
-		// 点击选中
-		item.addEventListener('click', () => {
-			if (isEditing) {
-				if (!confirm('有未保存的修改，是否放弃？')) return
-				exitEditMode()
+		// 组内条目
+		for (const entry of group.entries) {
+			const item = document.createElement('div')
+			item.className = 'beilu-preset-entry-item'
+			if (entry.uid === selectedUid) item.classList.add('selected')
+			if (entry.disable) item.classList.add('opacity-40')
+
+			// 标题行
+			const titleRow = document.createElement('div')
+			titleRow.className = 'flex items-center gap-1'
+
+			// 激活模式 badge
+			const mode = entry.activationMode || (entry.constant ? 'constant' : 'regex')
+			const modeBadge = document.createElement('span')
+			modeBadge.className = 'wb-mode-badge'
+			if (mode === 'constant') {
+				modeBadge.classList.add('mode-constant')
+				modeBadge.textContent = '常驻'
+			} else if (mode === 'dynamic') {
+				modeBadge.classList.add('mode-dynamic')
+				modeBadge.textContent = '动态'
+			} else {
+				modeBadge.classList.add('mode-regex')
+				modeBadge.textContent = '正则'
 			}
-			selectedUid = entry.uid
-			renderEntryList(dom.entrySearch()?.value || '')
-			renderDetail(entry)
-		})
+			titleRow.appendChild(modeBadge)
 
-		listEl.appendChild(item)
+			// @depth 位置标记
+			if ((entry.position ?? 0) === 4) {
+				const depthBadge = document.createElement('span')
+				depthBadge.className = 'badge badge-xs badge-info badge-outline'
+				depthBadge.textContent = `D${entry.depth ?? 4}`
+				titleRow.appendChild(depthBadge)
+			}
+
+			const titleSpan = document.createElement('span')
+			titleSpan.className = 'text-sm font-medium truncate flex-grow'
+			titleSpan.textContent = entry.comment || `条目 #${entry.uid}`
+			titleRow.appendChild(titleSpan)
+
+			// 启用/禁用指示
+			const statusDot = document.createElement('span')
+			statusDot.className = `w-2 h-2 rounded-full shrink-0 ${entry.disable ? 'bg-base-content/20' : 'bg-success'}`
+			titleRow.appendChild(statusDot)
+
+			item.appendChild(titleRow)
+
+			// 关键词摘要（仅正则模式显示）
+			if (mode === 'regex' && entry.key && entry.key.length > 0) {
+				const keysDiv = document.createElement('div')
+				keysDiv.className = 'text-xs text-base-content/40 truncate mt-0.5'
+				keysDiv.textContent = entry.key.join(', ')
+				item.appendChild(keysDiv)
+			}
+			// 动态条件摘要
+			if (mode === 'dynamic' && entry.dynamicConfig?.columnName) {
+				const dynDiv = document.createElement('div')
+				dynDiv.className = 'text-xs text-base-content/40 truncate mt-0.5'
+				const cfg = entry.dynamicConfig
+				if (cfg.matchType === 'exact') {
+					dynDiv.textContent = `📊 ${cfg.columnName} = "${cfg.exactValue}"`
+				} else {
+					dynDiv.textContent = `📊 ${cfg.columnName} ∈ [${cfg.rangeMin}, ${cfg.rangeMax}]`
+				}
+				item.appendChild(dynDiv)
+			}
+
+			// 点击选中
+			item.addEventListener('click', () => {
+				if (isEditing) {
+					if (!confirm('有未保存的修改，是否放弃？')) return
+					exitEditMode()
+				}
+				selectedUid = entry.uid
+				renderEntryList(dom.entrySearch()?.value || '')
+				renderDetail(entry)
+			})
+
+			listEl.appendChild(item)
+		}
 	}
 }
 
@@ -249,7 +311,6 @@ function renderDetail(entry) {
 	dom.detailToggle().checked = !entry.disable
 	dom.detailKeys().value = (entry.key || []).join(', ')
 	dom.detailKeys2().value = (entry.keysecondary || []).join(', ')
-	dom.detailConstant().checked = !!entry.constant
 	dom.detailExcludeRecursion().checked = !!entry.excludeRecursion
 	dom.detailPreventRecursion().checked = !!entry.preventRecursion
 	dom.detailLogic().value = String(entry.selectiveLogic ?? 0)
@@ -259,11 +320,79 @@ function renderDetail(entry) {
 	dom.detailRole().value = entry.role != null ? String(entry.role) : '0'
 	dom.detailContent().value = entry.content || ''
 
+	// 激活模式
+	const mode = entry.activationMode || (entry.constant ? 'constant' : 'regex')
+	const modeRadio = document.querySelector(`input[name="wb-activation-mode"][value="${mode}"]`)
+	if (modeRadio) modeRadio.checked = true
+	updateActivationModeVisibility(mode)
+
+	// 动态配置
+	const dynCfg = entry.dynamicConfig || {}
+	const dynCol = dom.dynColumn()
+	if (dynCol) dynCol.value = dynCfg.columnName || ''
+	const dynMT = dom.dynMatchType()
+	if (dynMT) dynMT.value = dynCfg.matchType || 'range'
+	const dynRMin = dom.dynRangeMin()
+	if (dynRMin) dynRMin.value = dynCfg.rangeMin ?? 0
+	const dynRMax = dom.dynRangeMax()
+	if (dynRMax) dynRMax.value = dynCfg.rangeMax ?? 0
+	const dynEV = dom.dynExactValue()
+	if (dynEV) dynEV.value = dynCfg.exactValue || ''
+	updateDynMatchTypeVisibility()
+
 	// 位置联动：只在 @深度 时显示深度和角色
 	updatePositionVisibility()
 
 	// 确保在查看模式
 	exitEditMode()
+}
+
+/**
+ * 根据激活模式更新相关面板的显隐
+ */
+function updateActivationModeVisibility(mode) {
+	const regexOpts = dom.regexOptions()
+	const dynConfig = dom.dynamicConfig()
+	const keysEl = dom.detailKeys()
+	const keys2El = dom.detailKeys2()
+	const keysSection = keysEl?.closest('.form-control')
+	const keys2Section = keys2El?.closest('.form-control')
+
+	if (mode === 'constant') {
+		// 常驻：隐藏关键词、正则选项、动态配置
+		if (regexOpts) regexOpts.style.display = 'none'
+		if (dynConfig) dynConfig.style.display = 'none'
+		if (keysSection) keysSection.style.display = 'none'
+		if (keys2Section) keys2Section.style.display = 'none'
+	} else if (mode === 'dynamic') {
+		// 动态：隐藏关键词和正则选项，显示动态配置
+		if (regexOpts) regexOpts.style.display = 'none'
+		if (dynConfig) dynConfig.style.display = ''
+		if (keysSection) keysSection.style.display = 'none'
+		if (keys2Section) keys2Section.style.display = 'none'
+	} else {
+		// 正则：显示关键词和正则选项，隐藏动态配置
+		if (regexOpts) regexOpts.style.display = ''
+		if (dynConfig) dynConfig.style.display = 'none'
+		if (keysSection) keysSection.style.display = ''
+		if (keys2Section) keys2Section.style.display = ''
+	}
+}
+
+/**
+ * 根据动态匹配类型更新范围/精确字段显隐
+ */
+function updateDynMatchTypeVisibility() {
+	const matchType = dom.dynMatchType()?.value
+	const rangeFields = dom.dynRangeFields()
+	const exactFields = dom.dynExactFields()
+	if (matchType === 'exact') {
+		if (rangeFields) rangeFields.style.display = 'none'
+		if (exactFields) exactFields.style.display = ''
+	} else {
+		if (rangeFields) rangeFields.style.display = ''
+		if (exactFields) exactFields.style.display = 'none'
+	}
 }
 
 /**
@@ -289,8 +418,12 @@ function enterEditMode() {
 	fields.forEach(f => { if (f) f.removeAttribute('readonly') })
 
 	const controls = [
-		dom.detailConstant(), dom.detailExcludeRecursion(), dom.detailPreventRecursion(),
+		dom.detailExcludeRecursion(), dom.detailPreventRecursion(),
 		dom.detailLogic(), dom.detailPosition(), dom.detailDepth(), dom.detailOrder(), dom.detailRole(),
+		// 激活模式 radio
+		dom.modeConstant(), dom.modeRegex(), dom.modeDynamic(),
+		// 动态配置
+		dom.dynColumn(), dom.dynMatchType(), dom.dynRangeMin(), dom.dynRangeMax(), dom.dynExactValue(),
 	]
 	controls.forEach(f => { if (f) f.removeAttribute('disabled') })
 
@@ -309,8 +442,12 @@ function exitEditMode() {
 	fields.forEach(f => { if (f) f.setAttribute('readonly', '') })
 
 	const controls = [
-		dom.detailConstant(), dom.detailExcludeRecursion(), dom.detailPreventRecursion(),
+		dom.detailExcludeRecursion(), dom.detailPreventRecursion(),
 		dom.detailLogic(), dom.detailPosition(), dom.detailDepth(), dom.detailOrder(), dom.detailRole(),
+		// 激活模式 radio
+		dom.modeConstant(), dom.modeRegex(), dom.modeDynamic(),
+		// 动态配置
+		dom.dynColumn(), dom.dynMatchType(), dom.dynRangeMin(), dom.dynRangeMax(), dom.dynExactValue(),
 	]
 	controls.forEach(f => { if (f) f.setAttribute('disabled', '') })
 
@@ -331,13 +468,17 @@ async function handleSave() {
 	const posVal = parseInt(dom.detailPosition().value) || 0
 	const roleVal = dom.detailRole().value
 
+	// 获取选中的激活模式
+	const selectedMode = document.querySelector('input[name="wb-activation-mode"]:checked')?.value || 'regex'
+
 	const props = {
 		comment: dom.detailComment().value,
 		key: keysStr ? keysStr.split(',').map(k => k.trim()).filter(Boolean) : [],
 		keysecondary: keys2Str ? keys2Str.split(',').map(k => k.trim()).filter(Boolean) : [],
 		content: dom.detailContent().value,
-		constant: dom.detailConstant().checked,
-		selective: true, // 始终启用选择性匹配
+		constant: selectedMode === 'constant', // 保持向后兼容
+		activationMode: selectedMode,
+		selective: true,
 		excludeRecursion: dom.detailExcludeRecursion().checked,
 		preventRecursion: dom.detailPreventRecursion().checked,
 		selectiveLogic: parseInt(dom.detailLogic().value) || 0,
@@ -345,6 +486,14 @@ async function handleSave() {
 		depth: posVal === 4 ? (parseInt(dom.detailDepth().value) ?? 4) : 4,
 		order: parseInt(dom.detailOrder().value) || 100,
 		role: posVal === 4 ? (parseInt(roleVal) ?? 0) : null,
+		// 动态配置
+		dynamicConfig: {
+			columnName: dom.dynColumn()?.value || '',
+			matchType: dom.dynMatchType()?.value || 'range',
+			rangeMin: parseFloat(dom.dynRangeMin()?.value) || 0,
+			rangeMax: parseFloat(dom.dynRangeMax()?.value) || 0,
+			exactValue: dom.dynExactValue()?.value || '',
+		},
 	}
 
 	try {
@@ -568,4 +717,17 @@ export async function init() {
 	dom.detailToggle()?.addEventListener('change', handleToggle)
 	dom.detailDeleteBtn()?.addEventListener('click', handleDeleteEntry)
 	dom.detailPosition()?.addEventListener('change', handlePositionChange)
+
+	// 激活模式 radio 切换
+	document.querySelectorAll('input[name="wb-activation-mode"]').forEach(radio => {
+		radio.addEventListener('change', () => {
+			const selectedMode = document.querySelector('input[name="wb-activation-mode"]:checked')?.value || 'regex'
+			updateActivationModeVisibility(selectedMode)
+		})
+	})
+
+	// 动态匹配类型切换
+	dom.dynMatchType()?.addEventListener('change', () => {
+		updateDynMatchTypeVisibility()
+	})
 }

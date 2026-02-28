@@ -712,6 +712,60 @@
 	min-height: 200px;
 }
 
+/* ===== 世界书条目列表分组标题 ===== */
+.wb-group-header {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.375rem 0.625rem;
+	margin-top: 0.25rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: oklch(var(--bc) / 0.45);
+	text-transform: none;
+	letter-spacing: 0.02em;
+	border-bottom: 1px solid oklch(var(--bc) / 0.06);
+}
+
+.wb-group-header:first-child {
+	margin-top: 0;
+}
+
+.wb-group-header .wb-group-icon {
+	font-size: 0.85rem;
+}
+
+.wb-group-header .wb-group-count {
+	font-size: 0.65rem;
+	color: oklch(var(--bc) / 0.3);
+	font-weight: 400;
+}
+
+/* ===== 世界书激活模式 badge ===== */
+.wb-mode-badge {
+	font-size: 0.6rem;
+	padding: 0.05rem 0.3rem;
+	border-radius: 0.2rem;
+	font-weight: 500;
+	flex-shrink: 0;
+	line-height: 1.4;
+}
+
+.wb-mode-badge.mode-constant {
+	background: oklch(var(--in) / 0.15);
+	color: oklch(var(--in));
+}
+
+.wb-mode-badge.mode-regex {
+	background: oklch(var(--su) / 0.15);
+	color: oklch(var(--su));
+}
+
+.wb-mode-badge.mode-dynamic {
+	background: oklch(0.6 0.15 300 / 0.15);
+	color: oklch(0.6 0.15 300);
+}
+
 /* 世界书统计栏 */
 .beilu-wb-stats {
 	display: flex;

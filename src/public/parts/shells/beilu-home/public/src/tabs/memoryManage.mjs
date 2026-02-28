@@ -1,13 +1,18 @@
 /**
- * memoryManage.mjs — 记忆管理 Tab（Phase 4.1: 表格可视化编辑器）
+ * memoryManage.mjs — 记忆管理 Tab（增强版）
  *
  * 职责：
  * - 角色卡选择器（从 parts 系统获取角色卡列表）
  * - 表格标签页 #0-#9（或更多）
- * - 表格网格渲染（列头 + 数据行）
- * - 单元格双击内联编辑
- * - 行增删
- * - 保存到后端
+ * - 表格网格渲染（列头可编辑 + 数据行）
+ * - 单元格单击内联编辑
+ * - 列头可编辑（点击修改列名，可增删列）
+ * - 表格名称可双击编辑
+ * - 规则可点击编辑（insert/update/delete）
+ * - 表格启用/禁用 toggle（禁用后不注入AI）
+ * - 行增删 + 表格新增/删除
+ * - 查看 JSON 数据
+ * - 保存完整数据到后端（name + columns + rules + enabled + rows）
  */
 
 import { getAllCachedPartDetails } from '/scripts/parts.mjs'
@@ -35,8 +40,15 @@ function cacheDom() {
 	dom.tableId = document.getElementById('mm-table-id')
 	dom.tableName = document.getElementById('mm-table-name')
 	dom.tableDirty = document.getElementById('mm-table-dirty')
+	dom.enabledToggle = document.getElementById('mm-enabled-toggle')
+	dom.enabledCheckbox = document.getElementById('mm-enabled-checkbox')
+	dom.enabledLabel = document.getElementById('mm-enabled-label')
 	dom.rowCount = document.getElementById('mm-row-count')
 	dom.addRowBtn = document.getElementById('mm-add-row-btn')
+	dom.addColBtn = document.getElementById('mm-add-col-btn')
+	dom.addTableBtn = document.getElementById('mm-add-table-btn')
+	dom.delTableBtn = document.getElementById('mm-del-table-btn')
+	dom.viewJsonBtn = document.getElementById('mm-view-json-btn')
 	dom.saveBtn = document.getElementById('mm-save-btn')
 	dom.ruleInsert = document.getElementById('mm-rule-insert')
 	dom.ruleUpdate = document.getElementById('mm-rule-update')
@@ -44,6 +56,11 @@ function cacheDom() {
 	dom.gridHead = document.getElementById('mm-grid-head')
 	dom.gridBody = document.getElementById('mm-grid-body')
 	dom.status = document.getElementById('mm-status')
+	// JSON 查看面板
+	dom.jsonPanel = document.getElementById('mm-json-panel')
+	dom.jsonContent = document.getElementById('mm-json-content')
+	dom.jsonCopy = document.getElementById('mm-json-copy')
+	dom.jsonClose = document.getElementById('mm-json-close')
 	// 归档配置面板
 	dom.archiveConfig = document.getElementById('mm-archive-config')
 	dom.threshold = document.getElementById('mm-threshold')
@@ -53,9 +70,6 @@ function cacheDom() {
 
 // ===== API 调用 =====
 
-/**
- * 从后端获取记忆数据
- */
 async function fetchMemoryData(username, charId) {
 	const url = `/api/parts/plugins:beilu-memory/config/getdata?username=${encodeURIComponent(username)}&char_id=${encodeURIComponent(charId)}`
 	const res = await fetch(url)
@@ -63,9 +77,6 @@ async function fetchMemoryData(username, charId) {
 	return res.json()
 }
 
-/**
- * 保存表格数据到后端
- */
 async function saveTableToBackend(username, charId, tableIndex, tableData) {
 	const url = `/api/parts/plugins:beilu-memory/config/setdata?username=${encodeURIComponent(username)}&char_id=${encodeURIComponent(charId)}`
 	const res = await fetch(url, {
@@ -77,15 +88,16 @@ async function saveTableToBackend(username, charId, tableIndex, tableData) {
 			charName: charId,
 			tableIndex,
 			rows: tableData.rows,
+			columns: tableData.columns,
+			rules: tableData.rules,
+			name: tableData.name,
+			enabled: tableData.enabled,
 		}),
 	})
 	if (!res.ok) throw new Error(`保存表格失败: ${res.status}`)
 	return res.json()
 }
 
-/**
- * 保存归档配置到后端
- */
 async function saveArchiveConfig(username, charId, archiveConfig) {
 	const url = `/api/parts/plugins:beilu-memory/config/setdata?username=${encodeURIComponent(username)}&char_id=${encodeURIComponent(charId)}`
 	const res = await fetch(url, {
@@ -104,9 +116,6 @@ async function saveArchiveConfig(username, charId, archiveConfig) {
 
 // ===== 角色卡选择器 =====
 
-/**
- * 获取角色卡列表并填充下拉框
- */
 async function loadCharList() {
 	try {
 		const result = await getAllCachedPartDetails('chars')
@@ -114,12 +123,10 @@ async function loadCharList() {
 		const uncachedNames = result?.uncachedNames || []
 		const charKeys = [...Object.keys(cachedDetails), ...uncachedNames]
 
-		// 清空并重新填充
 		dom.charSelect.innerHTML = '<option value="">选择角色卡...</option>'
 		for (const key of charKeys) {
 			const opt = document.createElement('option')
 			opt.value = key
-			// 尝试取显示名
 			const details = cachedDetails[key]
 			const displayName = details?.info?.display_name || details?.DisplayName || key
 			opt.textContent = displayName
@@ -133,9 +140,6 @@ async function loadCharList() {
 	}
 }
 
-/**
- * 角色卡选择变化
- */
 async function onCharSelected() {
 	const charId = dom.charSelect.value
 	if (!charId) {
@@ -147,7 +151,6 @@ async function onCharSelected() {
 		return
 	}
 
-	// 获取当前用户名（从 URL 参数或默认值）
 	const urlParams = new URLSearchParams(window.location.search)
 	currentUsername = urlParams.get('username') || 'linqing'
 	currentCharId = charId
@@ -155,17 +158,11 @@ async function onCharSelected() {
 	await loadTablesForChar(currentUsername, charId)
 }
 
-/**
-	* 角色卡选择清空时隐藏归档配置
-	*/
 function hideArchiveConfig() {
 	if (dom.archiveConfig) dom.archiveConfig.style.display = 'none'
 	memoryConfig = null
 }
 
-/**
- * 加载指定角色卡的表格数据
- */
 async function loadTablesForChar(username, charId) {
 	dom.noChar.style.display = 'none'
 	dom.editor.style.display = 'none'
@@ -175,16 +172,15 @@ async function loadTablesForChar(username, charId) {
 		const data = await fetchMemoryData(username, charId)
 		tables = data.tables || []
 		memoryConfig = data.config || {}
+		// 兼容旧数据：补全 enabled 字段
+		for (const t of tables) {
+			if (t.enabled === undefined) t.enabled = true
+		}
 		isDirty = false
 		updateDirtyIndicator()
 
-		// 渲染统计
 		renderStats()
-
-		// 渲染归档配置
 		renderArchiveConfig()
-
-		// 渲染
 		renderTableTabs()
 		switchTable(0)
 
@@ -229,7 +225,6 @@ async function onSaveArchiveConfig() {
 			temp_memory_threshold: threshold,
 		})
 
-		// 更新本地缓存
 		if (!memoryConfig.archive) memoryConfig.archive = {}
 		memoryConfig.archive.temp_memory_threshold = threshold
 
@@ -253,8 +248,8 @@ function renderStats() {
 	}
 
 	const totalRows = tables.reduce((sum, t) => sum + (t.rows?.length || 0), 0)
-	const nonEmptyCount = tables.filter(t => t.rows?.length > 0).length
-	dom.stats.textContent = `${tables.length} 表格 · ${totalRows} 行 · ${nonEmptyCount} 非空`
+	const enabledCount = tables.filter(t => t.enabled !== false).length
+	dom.stats.textContent = `${tables.length} 表格 · ${totalRows} 行 · ${enabledCount} 启用`
 }
 
 // ===== 表格标签页 =====
@@ -263,10 +258,11 @@ function renderTableTabs() {
 	dom.tableTabs.innerHTML = ''
 	for (let i = 0; i < tables.length; i++) {
 		const tab = document.createElement('button')
-		tab.className = 'mm-table-tab' + (i === currentTableIndex ? ' active' : '')
+		const isDisabled = tables[i].enabled === false
+		tab.className = 'mm-table-tab' + (i === currentTableIndex ? ' active' : '') + (isDisabled ? ' mm-tab-disabled' : '')
 		tab.dataset.index = i
 		tab.textContent = `#${tables[i].id}`
-		tab.title = tables[i].name || `表格 #${tables[i].id}`
+		tab.title = (isDisabled ? '[已禁用] ' : '') + (tables[i].name || `表格 #${tables[i].id}`)
 		tab.addEventListener('click', () => switchTable(i))
 		dom.tableTabs.appendChild(tab)
 	}
@@ -278,7 +274,9 @@ function switchTable(index) {
 
 	// 更新标签页高亮
 	dom.tableTabs.querySelectorAll('.mm-table-tab').forEach((tab, i) => {
+		const isDisabled = tables[i]?.enabled === false
 		tab.classList.toggle('active', i === index)
+		tab.classList.toggle('mm-tab-disabled', isDisabled)
 	})
 
 	const table = tables[index]
@@ -288,12 +286,37 @@ function switchTable(index) {
 	dom.tableName.textContent = table.name || '(未命名)'
 	dom.rowCount.textContent = `${table.rows.length} 行 · ${table.columns.length} 列`
 
+	// 启用/禁用 toggle
+	const isEnabled = table.enabled !== false
+	if (dom.enabledCheckbox) {
+		dom.enabledCheckbox.checked = isEnabled
+		dom.enabledLabel.textContent = isEnabled ? '已启用' : '已禁用'
+		// required 表格锁定启用
+		if (table.required) {
+			dom.enabledCheckbox.disabled = true
+			dom.enabledToggle.title = '必需表格，不可禁用'
+			dom.enabledToggle.style.opacity = '0.5'
+		} else {
+			dom.enabledCheckbox.disabled = false
+			dom.enabledToggle.title = '启用/禁用此表格（禁用后不注入AI）'
+			dom.enabledToggle.style.opacity = '1'
+		}
+	}
+
 	// 更新规则
 	if (table.rules) {
 		dom.ruleInsert.textContent = table.rules.insert || '-'
 		dom.ruleUpdate.textContent = table.rules.update || '-'
 		dom.ruleDelete.textContent = table.rules.delete || '-'
 	}
+
+	// 显示/隐藏删除表格按钮（required 表格不可删除）
+	if (dom.delTableBtn) {
+		dom.delTableBtn.style.display = table.required ? 'none' : ''
+	}
+
+	// 隐藏 JSON 面板
+	if (dom.jsonPanel) dom.jsonPanel.style.display = 'none'
 
 	// 渲染网格
 	renderGrid(table)
@@ -312,12 +335,36 @@ function renderGrid(table) {
 	thIdx.textContent = '#'
 	headerRow.appendChild(thIdx)
 
-	// 数据列
+	// 数据列（可编辑列名 + 删除列按钮）
 	for (let c = 0; c < table.columns.length; c++) {
 		const th = document.createElement('th')
 		th.className = 'mm-cell mm-cell-header'
-		th.textContent = table.columns[c]
-		th.title = table.columns[c]
+		th.style.position = 'relative'
+		th.style.cursor = 'pointer'
+
+		const nameSpan = document.createElement('span')
+		nameSpan.textContent = table.columns[c]
+		nameSpan.title = `点击编辑列名「${table.columns[c]}」`
+		th.appendChild(nameSpan)
+
+		// 删除列按钮（至少保留1列）
+		if (table.columns.length > 1) {
+			const delBtn = document.createElement('button')
+			delBtn.style.cssText = 'position:absolute;top:-2px;right:-2px;font-size:0.55rem;cursor:pointer;opacity:0;transition:opacity 0.15s;background:rgba(239,68,68,0.8);color:white;border:none;border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;padding:0;'
+			delBtn.textContent = '×'
+			delBtn.title = `删除列「${table.columns[c]}」`
+			delBtn.addEventListener('click', (e) => {
+				e.stopPropagation()
+				deleteColumn(c)
+			})
+			th.appendChild(delBtn)
+			th.addEventListener('mouseenter', () => { delBtn.style.opacity = '1' })
+			th.addEventListener('mouseleave', () => { delBtn.style.opacity = '0' })
+		}
+
+		// 点击编辑列名
+		nameSpan.addEventListener('click', () => startColumnNameEdit(th, nameSpan, c))
+
 		headerRow.appendChild(th)
 	}
 
@@ -351,7 +398,6 @@ function renderGrid(table) {
 			td.title = val || '(空，点击编辑)'
 			td.dataset.row = r
 			td.dataset.col = c
-			// 单击即可编辑（双击在某些环境下不稳定）
 			td.addEventListener('click', () => startCellEdit(td, r, c))
 			tr.appendChild(td)
 		}
@@ -382,6 +428,177 @@ function renderGrid(table) {
 	}
 }
 
+// ===== 列名编辑 =====
+
+function startColumnNameEdit(th, nameSpan, colIdx) {
+	if (th.classList.contains('mm-cell-editing')) return
+
+	const table = tables[currentTableIndex]
+	const currentValue = table.columns[colIdx] || ''
+
+	th.classList.add('mm-cell-editing')
+	const input = document.createElement('input')
+	input.type = 'text'
+	input.className = 'input input-xs input-bordered w-full font-bold'
+	input.value = currentValue
+	nameSpan.textContent = ''
+	nameSpan.appendChild(input)
+	input.focus()
+	input.select()
+
+	const finishEdit = () => {
+		const newValue = input.value.trim() || currentValue
+		th.classList.remove('mm-cell-editing')
+		nameSpan.textContent = newValue
+		nameSpan.title = `点击编辑列名「${newValue}」`
+
+		if (newValue !== currentValue) {
+			table.columns[colIdx] = newValue
+			markDirty()
+		}
+	}
+
+	input.addEventListener('blur', finishEdit)
+	input.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') { e.preventDefault(); input.blur() }
+		if (e.key === 'Escape') { input.value = currentValue; input.blur() }
+	})
+}
+
+// ===== 列操作 =====
+
+function addColumn() {
+	const table = tables[currentTableIndex]
+	if (!table) return
+
+	const name = prompt('请输入新列名:')
+	if (!name?.trim()) return
+
+	table.columns.push(name.trim())
+	for (const row of table.rows) {
+		row.push('')
+	}
+
+	markDirty()
+	renderGrid(table)
+	dom.rowCount.textContent = `${table.rows.length} 行 · ${table.columns.length} 列`
+	setStatus(`已添加列「${name.trim()}」`)
+}
+
+function deleteColumn(colIdx) {
+	const table = tables[currentTableIndex]
+	if (!table || table.columns.length <= 1) return
+
+	const colName = table.columns[colIdx]
+	if (!confirm(`确定删除列「${colName}」？该列所有数据将丢失。`)) return
+
+	table.columns.splice(colIdx, 1)
+	for (const row of table.rows) {
+		if (colIdx < row.length) {
+			row.splice(colIdx, 1)
+		}
+	}
+
+	markDirty()
+	renderGrid(table)
+	dom.rowCount.textContent = `${table.rows.length} 行 · ${table.columns.length} 列`
+	setStatus(`已删除列「${colName}」`)
+}
+
+// ===== 表格名称编辑 =====
+
+function startTableNameEdit() {
+	const table = tables[currentTableIndex]
+	if (!table) return
+
+	const nameEl = dom.tableName
+	if (nameEl.classList.contains('mm-cell-editing')) return
+
+	const currentValue = table.name || ''
+
+	nameEl.classList.add('mm-cell-editing')
+	const input = document.createElement('input')
+	input.type = 'text'
+	input.className = 'input input-sm input-bordered font-medium'
+	input.style.width = '200px'
+	input.value = currentValue
+	nameEl.textContent = ''
+	nameEl.appendChild(input)
+	input.focus()
+	input.select()
+
+	const finishEdit = () => {
+		const newValue = input.value.trim() || currentValue
+		nameEl.classList.remove('mm-cell-editing')
+		nameEl.textContent = newValue
+
+		if (newValue !== currentValue) {
+			table.name = newValue
+			markDirty()
+			renderTableTabs()
+		}
+	}
+
+	input.addEventListener('blur', finishEdit)
+	input.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') { e.preventDefault(); input.blur() }
+		if (e.key === 'Escape') { input.value = currentValue; input.blur() }
+	})
+}
+
+// ===== 规则编辑 =====
+
+function startRuleEdit(ruleSpan, ruleKey) {
+	const table = tables[currentTableIndex]
+	if (!table?.rules) return
+	if (ruleSpan.classList.contains('mm-cell-editing')) return
+
+	const currentValue = table.rules[ruleKey] || ''
+
+	ruleSpan.classList.add('mm-cell-editing')
+	const input = document.createElement('input')
+	input.type = 'text'
+	input.className = 'input input-xs input-bordered font-mono'
+	input.style.width = '250px'
+	input.value = currentValue
+	ruleSpan.textContent = ''
+	ruleSpan.appendChild(input)
+	input.focus()
+	input.select()
+
+	const finishEdit = () => {
+		const newValue = input.value.trim()
+		ruleSpan.classList.remove('mm-cell-editing')
+		ruleSpan.textContent = newValue || '-'
+
+		if (newValue !== currentValue) {
+			table.rules[ruleKey] = newValue
+			markDirty()
+		}
+	}
+
+	input.addEventListener('blur', finishEdit)
+	input.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter') { e.preventDefault(); input.blur() }
+		if (e.key === 'Escape') { input.value = currentValue; input.blur() }
+	})
+}
+
+// ===== 启用/禁用 toggle =====
+
+function toggleTableEnabled() {
+	const table = tables[currentTableIndex]
+	if (!table || table.required) return
+
+	table.enabled = dom.enabledCheckbox.checked
+	dom.enabledLabel.textContent = table.enabled ? '已启用' : '已禁用'
+
+	markDirty()
+	renderTableTabs()
+	renderStats()
+	setStatus(`表格 #${table.id} 已${table.enabled ? '启用' : '禁用'}`)
+}
+
 // ===== 单元格内联编辑 =====
 
 function startCellEdit(td, rowIdx, colIdx) {
@@ -407,7 +624,6 @@ function startCellEdit(td, rowIdx, colIdx) {
 		td.title = newValue || '(空)'
 
 		if (newValue !== currentValue) {
-			// 确保行数组足够长
 			while (table.rows[rowIdx].length <= colIdx) {
 				table.rows[rowIdx].push('')
 			}
@@ -429,7 +645,6 @@ function startCellEdit(td, rowIdx, colIdx) {
 		if (e.key === 'Tab') {
 			e.preventDefault()
 			input.blur()
-			// Tab 跳转到下一个单元格
 			const nextCol = colIdx + 1
 			if (nextCol < table.columns.length) {
 				const nextTd = dom.gridBody.querySelector(`td[data-row="${rowIdx}"][data-col="${nextCol}"]`)
@@ -452,7 +667,6 @@ function addRow() {
 	dom.rowCount.textContent = `${table.rows.length} 行 · ${table.columns.length} 列`
 	renderStats()
 
-	// 滚动到底部
 	const container = document.getElementById('mm-grid-container')
 	if (container) container.scrollTop = container.scrollHeight
 
@@ -471,6 +685,107 @@ function deleteRow(rowIdx) {
 	dom.rowCount.textContent = `${table.rows.length} 行 · ${table.columns.length} 列`
 	renderStats()
 	setStatus(`已删除第 ${rowIdx} 行`)
+}
+
+// ===== 表格管理（新增/删除） =====
+
+async function addNewTable() {
+	if (!currentUsername || !currentCharId) {
+		setStatus('请先选择角色卡')
+		return
+	}
+
+	const name = prompt('请输入新表格名称:')
+	if (!name?.trim()) return
+
+	const colsStr = prompt('请输入列名（逗号分隔）:', '列1,列2,列3')
+	if (!colsStr?.trim()) return
+	const columns = colsStr.split(',').map(s => s.trim()).filter(Boolean)
+	if (columns.length === 0) return
+
+	setStatus('正在创建表格...')
+
+	try {
+		const url = `/api/parts/plugins:beilu-memory/config/setdata?username=${encodeURIComponent(currentUsername)}&char_id=${encodeURIComponent(currentCharId)}`
+		const res = await fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				_action: 'addTable',
+				username: currentUsername,
+				charName: currentCharId,
+				name: name.trim(),
+				columns,
+			}),
+		})
+		if (!res.ok) throw new Error(`创建失败: ${res.status}`)
+
+		await loadTablesForChar(currentUsername, currentCharId)
+		switchTable(tables.length - 1)
+		setStatus(`表格「${name.trim()}」已创建`)
+	} catch (err) {
+		console.error('[memoryManage] 创建表格失败:', err)
+		setStatus(`创建失败: ${err.message}`)
+	}
+}
+
+async function deleteCurrentTable() {
+	if (!currentUsername || !currentCharId) return
+
+	const table = tables[currentTableIndex]
+	if (!table) return
+	if (table.required) {
+		setStatus('必需表格不可删除')
+		return
+	}
+
+	if (!confirm(`确定删除表格「#${table.id} ${table.name}」？此操作不可撤销。`)) return
+
+	setStatus('正在删除表格...')
+
+	try {
+		const url = `/api/parts/plugins:beilu-memory/config/setdata?username=${encodeURIComponent(currentUsername)}&char_id=${encodeURIComponent(currentCharId)}`
+		const res = await fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				_action: 'removeTable',
+				username: currentUsername,
+				charName: currentCharId,
+				tableIndex: currentTableIndex,
+			}),
+		})
+		if (!res.ok) throw new Error(`删除失败: ${res.status}`)
+
+		await loadTablesForChar(currentUsername, currentCharId)
+		setStatus(`表格已删除`)
+	} catch (err) {
+		console.error('[memoryManage] 删除表格失败:', err)
+		setStatus(`删除失败: ${err.message}`)
+	}
+}
+
+// ===== JSON 查看 =====
+
+function showJsonPanel() {
+	const table = tables[currentTableIndex]
+	if (!table || !dom.jsonPanel) return
+
+	dom.jsonContent.textContent = JSON.stringify(table, null, 2)
+	dom.jsonPanel.style.display = ''
+}
+
+function hideJsonPanel() {
+	if (dom.jsonPanel) dom.jsonPanel.style.display = 'none'
+}
+
+function copyJson() {
+	const text = dom.jsonContent?.textContent || ''
+	navigator.clipboard.writeText(text).then(() => {
+		setStatus('JSON 已复制到剪贴板')
+	}).catch(() => {
+		setStatus('复制失败')
+	})
 }
 
 // ===== 保存 =====
@@ -512,7 +827,6 @@ function markDirty() {
 function updateDirtyIndicator() {
 	dom.tableDirty.style.display = isDirty ? '' : 'none'
 
-	// 在标签页上标记
 	const activeTab = dom.tableTabs.querySelector('.mm-table-tab.active')
 	if (activeTab) {
 		const baseText = `#${tables[currentTableIndex]?.id ?? ''}`
@@ -541,6 +855,25 @@ function bindEvents() {
 	dom.saveBtn.addEventListener('click', saveCurrentTable)
 	if (dom.saveConfigBtn) dom.saveConfigBtn.addEventListener('click', onSaveArchiveConfig)
 
+	// 新功能按钮
+	if (dom.addColBtn) dom.addColBtn.addEventListener('click', addColumn)
+	if (dom.addTableBtn) dom.addTableBtn.addEventListener('click', addNewTable)
+	if (dom.delTableBtn) dom.delTableBtn.addEventListener('click', deleteCurrentTable)
+	if (dom.viewJsonBtn) dom.viewJsonBtn.addEventListener('click', showJsonPanel)
+	if (dom.jsonClose) dom.jsonClose.addEventListener('click', hideJsonPanel)
+	if (dom.jsonCopy) dom.jsonCopy.addEventListener('click', copyJson)
+
+	// 表格名称双击编辑
+	if (dom.tableName) dom.tableName.addEventListener('dblclick', startTableNameEdit)
+
+	// 启用/禁用 toggle
+	if (dom.enabledCheckbox) dom.enabledCheckbox.addEventListener('change', toggleTableEnabled)
+
+	// 规则编辑
+	if (dom.ruleInsert) dom.ruleInsert.addEventListener('click', () => startRuleEdit(dom.ruleInsert, 'insert'))
+	if (dom.ruleUpdate) dom.ruleUpdate.addEventListener('click', () => startRuleEdit(dom.ruleUpdate, 'update'))
+	if (dom.ruleDelete) dom.ruleDelete.addEventListener('click', () => startRuleEdit(dom.ruleDelete, 'delete'))
+
 	// 离开前提示未保存
 	window.addEventListener('beforeunload', (e) => {
 		if (isDirty) {
@@ -553,7 +886,7 @@ function bindEvents() {
 // ===== 初始化 =====
 
 export async function init() {
-	console.log('[memoryManage] 初始化记忆管理模块')
+	console.log('[memoryManage] 初始化记忆管理模块（增强版）')
 	cacheDom()
 	bindEvents()
 

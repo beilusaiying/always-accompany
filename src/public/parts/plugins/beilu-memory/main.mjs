@@ -3,9 +3,15 @@ import path, { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'npm:jszip'
 
+import { createDiag } from '../../../../server/diagLogger.mjs'
 import { loadAnyPreferredDefaultPart, loadPart } from '../../../../server/parts_loader.mjs'
 
 import info from './info.json' with { type: 'json' }
+
+// ============================================================
+// 后端诊断日志器
+// ============================================================
+const diag = createDiag('memory')
 
 // ============================================================
 // 内联工具函数（避免跨目录 import 导致 Deno 模块重复加载）
@@ -266,6 +272,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 1,
@@ -279,6 +286,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 2,
@@ -292,6 +300,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 3,
@@ -305,6 +314,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 4,
@@ -318,6 +328,7 @@ const DEFAULT_TABLES = [
 		},
 		required: true,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 5,
@@ -331,6 +342,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 6,
@@ -344,6 +356,7 @@ const DEFAULT_TABLES = [
 		},
 		required: true,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 7,
@@ -357,6 +370,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 8,
@@ -370,6 +384,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 	{
 		id: 9,
@@ -383,6 +398,7 @@ const DEFAULT_TABLES = [
 		},
 		required: false,
 		user_customizable: true,
+		enabled: true,
 	},
 ]
 
@@ -494,6 +510,23 @@ function loadMemoryData(username, charName) {
 	const configData = loadJsonFileIfExists(path.join(memDir, '_config.json'), { enabled: true })
 
 	const data = { tables: tablesData.tables || [], config: configData, username }
+
+	// 诊断: 数据加载完整性检查
+	diag.debug(`loadMemoryData: ${cacheKey}, ${data.tables.length} 表格`)
+	for (let i = 0; i < data.tables.length; i++) {
+		const t = data.tables[i]
+		diag.guard(t, ['id', 'name', 'columns', 'rows', 'rules'], `loadMemoryData.table[${i}]`)
+		if (t.enabled === undefined) {
+			diag.warn(`loadMemoryData: table[${i}](#${t.id}) 缺少 enabled 字段, 兼容补全为 true`)
+			t.enabled = true
+		}
+	}
+	const enabledCount = data.tables.filter(t => t.enabled !== false).length
+	const disabledCount = data.tables.length - enabledCount
+	if (disabledCount > 0) {
+		diag.debug(`loadMemoryData: ${enabledCount} 启用, ${disabledCount} 禁用`)
+	}
+
 	memoryCache.set(cacheKey, data)
 	return data
 }
@@ -516,6 +549,17 @@ function saveTablesData(username, charName) {
 	if (fs.existsSync(tablesPath)) {
 		try { fs.copyFileSync(tablesPath, bakPath) } catch (e) { /* ignore */ }
 	}
+
+	// 诊断: 保存前数据校验
+	diag.debug(`saveTablesData: ${cacheKey}, ${data.tables.length} 表格`)
+	const totalRows = data.tables.reduce((sum, t) => sum + (t.rows?.length || 0), 0)
+	diag.snapshot('saveTablesData', {
+		cacheKey,
+		tableCount: data.tables.length,
+		totalRows,
+		enabledCount: data.tables.filter(t => t.enabled !== false).length,
+		tableSummary: data.tables.map(t => `#${t.id}(${t.name}):${t.rows?.length || 0}r/${t.columns?.length || 0}c/${t.enabled !== false ? 'on' : 'off'}`),
+	})
 
 	saveJsonFile(tablesPath, { tables: data.tables })
 }
@@ -1250,17 +1294,26 @@ function parseObjectLiteral(str) {
 function executeTableOperations(tables, operations) {
 	let successCount = 0
 
+	diag.debug(`executeTableOperations: ${operations.length} 个操作待执行`)
+
 	for (const op of operations) {
 		const parsed = parseOperationArgs(op.type, op.rawArgs)
 		if (!parsed) {
+			diag.warn(`executeTableOperations: 无法解析操作: ${op.type}(${op.rawArgs})`)
 			console.warn(`[beilu-memory] 无法解析操作: ${op.type}(${op.rawArgs})`)
 			continue
 		}
 
 		const table = tables[parsed.tableIndex]
 		if (!table) {
+			diag.warn(`executeTableOperations: 表格 #${parsed.tableIndex} 不存在 (共${tables.length}个表格)`)
 			console.warn(`[beilu-memory] 表格 #${parsed.tableIndex} 不存在`)
 			continue
+		}
+
+		// 诊断: 检查目标表格是否禁用
+		if (table.enabled === false) {
+			diag.warn(`executeTableOperations: 操作目标表格 #${parsed.tableIndex}(${table.name}) 已禁用，操作仍执行（数据层不阻止）`)
 		}
 
 		try {
@@ -1274,38 +1327,49 @@ function executeTableOperations(tables, operations) {
 						}
 					}
 					table.rows.push(newRow)
+					diag.debug(`executeTableOperations: insertRow(#${parsed.tableIndex}) → row[${table.rows.length - 1}], ${Object.keys(parsed.values).length} 列`)
 					successCount++
 					break
 				}
 				case 'updateRow': {
 					if (parsed.rowIndex < 0 || parsed.rowIndex >= table.rows.length) {
+						diag.warn(`executeTableOperations: updateRow 行 #${parsed.rowIndex} 不存在于表格 #${parsed.tableIndex} (共${table.rows.length}行)`)
 						console.warn(`[beilu-memory] 行 #${parsed.rowIndex} 不存在于表格 #${parsed.tableIndex}`)
 						break
 					}
+					const updatedCols = []
 					for (const [colIdx, value] of Object.entries(parsed.values)) {
 						const idx = parseInt(colIdx, 10)
 						if (idx >= 0 && idx < table.columns.length) {
+							const oldVal = table.rows[parsed.rowIndex][idx]
 							table.rows[parsed.rowIndex][idx] = value
+							updatedCols.push(`col${idx}: "${(oldVal || '').substring(0, 20)}" → "${value.substring(0, 20)}"`)
 						}
 					}
+					diag.debug(`executeTableOperations: updateRow(#${parsed.tableIndex}, row${parsed.rowIndex}): ${updatedCols.join(', ')}`)
 					successCount++
 					break
 				}
 				case 'deleteRow': {
 					if (parsed.rowIndex < 0 || parsed.rowIndex >= table.rows.length) {
+						diag.warn(`executeTableOperations: deleteRow 行 #${parsed.rowIndex} 不存在于表格 #${parsed.tableIndex} (共${table.rows.length}行)`)
 						console.warn(`[beilu-memory] 行 #${parsed.rowIndex} 不存在于表格 #${parsed.tableIndex}`)
 						break
 					}
+					const deletedRow = table.rows[parsed.rowIndex]
+					diag.debug(`executeTableOperations: deleteRow(#${parsed.tableIndex}, row${parsed.rowIndex}): ${JSON.stringify(deletedRow).substring(0, 100)}`)
 					table.rows.splice(parsed.rowIndex, 1)
 					successCount++
 					break
 				}
 			}
 		} catch (e) {
+			diag.error(`executeTableOperations: ${op.type} 异常:`, e.message)
 			console.error(`[beilu-memory] 执行 ${op.type} 失败:`, e.message)
 		}
 	}
 
+	diag.debug(`executeTableOperations: 完成 ${successCount}/${operations.length} 成功`)
 	return successCount
 }
 
@@ -1321,9 +1385,13 @@ function executeTableOperations(tables, operations) {
  * @returns {string}
  */
 function tablesToPromptText(tables, charName, userName) {
+	// 过滤掉禁用的表格（enabled 为 false 的不注入 prompt）
+	const enabledTables = tables.filter(t => t.enabled !== false)
+	const disabledIds = tables.filter(t => t.enabled === false).map(t => `#${t.id}`)
+	diag.debug(`tablesToPromptText: ${enabledTables.length}/${tables.length} 表格注入 prompt${disabledIds.length ? `, 禁用: ${disabledIds.join(',')}` : ''}`)
 	const lines = ['[记忆表格]']
 
-	for (const table of tables) {
+	for (const table of enabledTables) {
 		const name = table.name
 			.replace(/\{\{char\}\}/g, charName)
 			.replace(/\{\{user\}\}/g, userName)
@@ -1346,7 +1414,7 @@ function tablesToPromptText(tables, charName, userName) {
 	lines.push('\n[表格操作规则]')
 	lines.push('当满足以下条件时，在回复末尾使用 <tableEdit> 标签进行操作：')
 
-	for (const table of tables) {
+	for (const table of enabledTables) {
 		const name = table.name
 			.replace(/\{\{char\}\}/g, charName)
 			.replace(/\{\{user\}\}/g, userName)
@@ -1377,9 +1445,13 @@ function tablesToPromptText(tables, charName, userName) {
 	* @returns {string}
 	*/
 function generateTableDataOnly(tables, charName, userName) {
+	// 过滤掉禁用的表格（enabled 为 false 的不注入）
+	const enabledTables = tables.filter(t => t.enabled !== false)
+	const disabledIds = tables.filter(t => t.enabled === false).map(t => `#${t.id}`)
+	diag.debug(`generateTableDataOnly: ${enabledTables.length}/${tables.length} 表格输出${disabledIds.length ? `, 禁用: ${disabledIds.join(',')}` : ''}`)
 	const lines = []
 
-	for (const table of tables) {
+	for (const table of enabledTables) {
 		const name = table.name
 			.replace(/\{\{char\}\}/g, charName)
 			.replace(/\{\{user\}\}/g, userName)
@@ -2745,43 +2817,82 @@ const pluginExport = {
 						console.log(`[beilu-memory] 已清除缓存: ${cacheKey}`)
 						return { success: true }
 					}
-					case 'updateTable': {
-						// 更新指定表格的 rows/columns/rules
-						const tableIdx = data.tableIndex
-						if (tableIdx >= 0 && tableIdx < memData.tables.length) {
-							if (data.rows !== undefined) memData.tables[tableIdx].rows = data.rows
-							if (data.columns !== undefined) memData.tables[tableIdx].columns = data.columns
-							if (data.rules !== undefined) memData.tables[tableIdx].rules = data.rules
-							if (data.name !== undefined) memData.tables[tableIdx].name = data.name
+						case 'updateTable': {
+							// 更新指定表格的 rows/columns/rules/name/enabled
+							const tableIdx = data.tableIndex
+							if (tableIdx >= 0 && tableIdx < memData.tables.length) {
+								const targetTable = memData.tables[tableIdx]
+								const changes = []
+								if (data.rows !== undefined) {
+									const oldRowCount = targetTable.rows?.length || 0
+									targetTable.rows = data.rows
+									changes.push(`rows: ${oldRowCount}→${data.rows.length}`)
+								}
+								if (data.columns !== undefined) {
+									const oldCols = targetTable.columns?.join(',') || ''
+									targetTable.columns = data.columns
+									changes.push(`columns: [${oldCols}]→[${data.columns.join(',')}]`)
+								}
+								if (data.rules !== undefined) {
+									targetTable.rules = data.rules
+									changes.push('rules updated')
+								}
+								if (data.name !== undefined) {
+									const oldName = targetTable.name
+									targetTable.name = data.name
+									if (oldName !== data.name) changes.push(`name: "${oldName}"→"${data.name}"`)
+								}
+								if (data.enabled !== undefined) {
+									const oldEnabled = targetTable.enabled
+									// required 表格不允许禁用
+									if (targetTable.required) {
+										targetTable.enabled = true
+										if (!data.enabled) changes.push(`enabled: 拒绝禁用(required)`)
+									} else {
+										targetTable.enabled = !!data.enabled
+										if (oldEnabled !== targetTable.enabled) changes.push(`enabled: ${oldEnabled}→${targetTable.enabled}`)
+									}
+								}
+								if (changes.length > 0) {
+									diag.log(`updateTable: #${targetTable.id}(${targetTable.name}) by ${username}/${charName}: ${changes.join(', ')}`)
+								}
+								saveTablesData(username, charName)
+							}
+							break
+						}
+						case 'addTable': {
+							const newId = memData.tables.length
+							const newName = data.name || `自定义表格 #${newId}`
+							const newCols = data.columns || ['列1', '列2']
+							memData.tables.push({
+								id: newId,
+								name: newName,
+								columns: newCols,
+								rows: [],
+								rules: data.rules || { insert: '', update: '', delete: '' },
+								required: false,
+								user_customizable: true,
+								enabled: true,
+							})
+							diag.log(`addTable: #${newId}(${newName}), ${newCols.length} 列, by ${username}/${charName}`)
 							saveTablesData(username, charName)
 						}
-						break
-					}
-					case 'addTable': {
-						const newId = memData.tables.length
-						memData.tables.push({
-							id: newId,
-							name: data.name || `自定义表格 #${newId}`,
-							columns: data.columns || ['列1', '列2'],
-							rows: [],
-							rules: data.rules || { insert: '', update: '', delete: '' },
-							required: false,
-							user_customizable: true,
-						})
-						saveTablesData(username, charName)
-						break
-					}
-					case 'removeTable': {
-						const idx = data.tableIndex
-						if (idx >= 0 && idx < memData.tables.length) {
-							if (memData.tables[idx].required) break // 不能删除必须的表格
-							memData.tables.splice(idx, 1)
-							// 重新编号
-							memData.tables.forEach((t, i) => t.id = i)
-							saveTablesData(username, charName)
+						case 'removeTable': {
+							const idx = data.tableIndex
+							if (idx >= 0 && idx < memData.tables.length) {
+								const removedTable = memData.tables[idx]
+								if (removedTable.required) {
+									diag.warn(`removeTable: 拒绝删除 required 表格 #${removedTable.id}(${removedTable.name})`)
+									break // 不能删除必须的表格
+								}
+								diag.log(`removeTable: #${removedTable.id}(${removedTable.name}), ${removedTable.rows?.length || 0} 行数据, by ${username}/${charName}`)
+								memData.tables.splice(idx, 1)
+								// 重新编号
+								memData.tables.forEach((t, i) => t.id = i)
+								saveTablesData(username, charName)
+							}
+							break
 						}
-						break
-					}
 					case 'getTables': {
 						// 仅用于强制重新加载
 						const cacheKey = `${username}/${charName}`

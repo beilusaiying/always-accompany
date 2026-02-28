@@ -758,23 +758,44 @@
 									<div class="flex items-center justify-between mb-2">
 										<div class="flex items-center gap-2">
 											<span id="mm-table-id" class="badge badge-sm badge-outline badge-warning font-mono">#0</span>
-											<span id="mm-table-name" class="text-sm font-medium" data-i18n="mm.tableName">表格名称</span>
+											<span id="mm-table-name" class="text-sm font-medium cursor-pointer" title="双击编辑表格名称" data-i18n="mm.tableName">表格名称</span>
 											<span id="mm-table-dirty" class="badge badge-xs badge-error" style="display:none;" data-i18n="mm.unsaved">未保存</span>
+											<!-- 启用/禁用 toggle -->
+											<label id="mm-enabled-toggle" class="cursor-pointer label gap-1 p-0 ml-2" title="启用/禁用此表格（禁用后不注入AI）">
+												<input type="checkbox" id="mm-enabled-checkbox" class="toggle toggle-xs toggle-warning" checked />
+												<span id="mm-enabled-label" class="label-text text-xs">已启用</span>
+											</label>
 										</div>
 										<div class="flex items-center gap-2">
 											<span id="mm-row-count" class="text-xs text-base-content/40">0 行</span>
 											<button id="mm-add-row-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" data-i18n="mm.addRow">➕ 添加行</button>
+											<button id="mm-add-col-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="添加新列">📏 添加列</button>
+											<button id="mm-add-table-btn" class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white" title="新增表格">📊 新增表格</button>
+											<button id="mm-del-table-btn" class="btn btn-xs btn-outline btn-error" title="删除当前表格" style="display:none;">🗑️ 删除表格</button>
+											<button id="mm-view-json-btn" class="btn btn-xs btn-outline" title="查看原始JSON数据">📋 查看</button>
 											<button id="mm-save-btn" class="btn btn-xs bg-amber-700 hover:bg-amber-800 text-white border-amber-700" data-i18n="mm.save">💾 保存</button>
 										</div>
 									</div>
-									<!-- 规则显示 -->
+									<!-- 规则显示（可编辑） -->
 									<div id="mm-rules" class="mm-rules">
 										<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/40">
-											<span>📥 插入: <span id="mm-rule-insert" class="text-base-content/60">-</span></span>
-											<span>✏️ 更新: <span id="mm-rule-update" class="text-base-content/60">-</span></span>
-											<span>🗑️ 删除: <span id="mm-rule-delete" class="text-base-content/60">-</span></span>
+											<span>📥 插入: <span id="mm-rule-insert" class="text-base-content/60 cursor-pointer hover:text-amber-500" style="border-bottom:1px dashed currentColor;padding:0 2px;" title="点击编辑插入规则">-</span></span>
+											<span>✏️ 更新: <span id="mm-rule-update" class="text-base-content/60 cursor-pointer hover:text-amber-500" style="border-bottom:1px dashed currentColor;padding:0 2px;" title="点击编辑更新规则">-</span></span>
+											<span>🗑️ 删除: <span id="mm-rule-delete" class="text-base-content/60 cursor-pointer hover:text-amber-500" style="border-bottom:1px dashed currentColor;padding:0 2px;" title="点击编辑删除规则">-</span></span>
 										</div>
 									</div>
+								</div>
+
+								<!-- JSON 查看面板 -->
+								<div id="mm-json-panel" style="display:none;" class="mb-3">
+									<div class="flex items-center justify-between mb-1">
+										<span class="text-xs font-medium text-base-content/50">📋 当前表格 JSON 数据</span>
+										<div class="flex gap-1">
+											<button id="mm-json-copy" class="btn btn-xs btn-ghost" title="复制JSON">📋</button>
+											<button id="mm-json-close" class="btn btn-xs btn-ghost" title="关闭">✕</button>
+										</div>
+									</div>
+									<pre id="mm-json-content" class="text-xs font-mono whitespace-pre-wrap p-3 rounded-md max-h-64 overflow-y-auto" style="background: oklch(var(--bc) / 0.04); border: 1px solid oklch(var(--bc) / 0.08);"></pre>
 								</div>
 
 								<!-- 表格网格 -->

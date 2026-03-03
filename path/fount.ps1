@@ -364,6 +364,7 @@ function Set-FountFileAttributes {
 
 function New-FountShortcut {
 	$shell = New-Object -ComObject WScript.Shell
+	$shortcutName = "beilu-always accompany"
 
 	$shortcutTargetPath = "powershell.exe"
 	$shortcutArguments = "-noprofile -nologo -ExecutionPolicy Bypass -File `"$FOUNT_DIR\path\fount.ps1`" open keepalive"
@@ -374,22 +375,27 @@ function New-FountShortcut {
 	$shortcutIconLocation = "$FOUNT_DIR\src\public\pages\favicon.ico"
 
 	$desktopPath = [Environment]::GetFolderPath("Desktop")
+	# 清理旧的 fount.lnk 快捷方式
 	Remove-Item -Force "$desktopPath\fount.lnk" -ErrorAction Ignore
-	$desktopShortcut = $shell.CreateShortcut("$desktopPath\fount.lnk")
+	Remove-Item -Force "$desktopPath\$shortcutName.lnk" -ErrorAction Ignore
+	$desktopShortcut = $shell.CreateShortcut("$desktopPath\$shortcutName.lnk")
 	$desktopShortcut.TargetPath = $shortcutTargetPath
 	$desktopShortcut.Arguments = $shortcutArguments
 	$desktopShortcut.IconLocation = $shortcutIconLocation
+	$desktopShortcut.WorkingDirectory = $FOUNT_DIR
 	$desktopShortcut.Save()
-	Write-Host (Get-I18n -key 'shortcut.desktopShortcutCreated' -params @{path = "$desktopPath\fount.lnk" })
+	Write-Host (Get-I18n -key 'shortcut.desktopShortcutCreated' -params @{path = "$desktopPath\$shortcutName.lnk" })
 
 	$startMenuPath = [Environment]::GetFolderPath("StartMenu")
 	Remove-Item -Force "$startMenuPath\fount.lnk" -ErrorAction Ignore
-	$startMenuShortcut = $shell.CreateShortcut("$startMenuPath\fount.lnk")
+	Remove-Item -Force "$startMenuPath\$shortcutName.lnk" -ErrorAction Ignore
+	$startMenuShortcut = $shell.CreateShortcut("$startMenuPath\$shortcutName.lnk")
 	$startMenuShortcut.TargetPath = $shortcutTargetPath
 	$startMenuShortcut.Arguments = $shortcutArguments
 	$startMenuShortcut.IconLocation = $shortcutIconLocation
+	$startMenuShortcut.WorkingDirectory = $FOUNT_DIR
 	$startMenuShortcut.Save()
-	Write-Host (Get-I18n -key 'shortcut.startMenuShortcutCreated' -params @{path = "$startMenuPath\fount.lnk" })
+	Write-Host (Get-I18n -key 'shortcut.startMenuShortcutCreated' -params @{path = "$startMenuPath\$shortcutName.lnk" })
 }
 
 function Register-FountProtocol {
@@ -936,8 +942,6 @@ function fount_upgrade {
 		New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
 		Set-Content "$FOUNT_DIR/data/installer/auto_installed_deno" '1'
 		if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-			Write-Host (Get-I18n -key 'deno.isRequired')
-			exit 1
 		}
 	}
 		Write-Host (Get-I18n -key 'deno.isRequired')
@@ -1241,27 +1245,20 @@ elseif ($args[0] -eq 'remove') {
 		Remove-Item -Path $WTjsonDirPath -Force -Recurse
 		Write-Host (Get-I18n -key 'remove.terminalProfileRemoved')
 	}
-	else {
-		Write-Host (Get-I18n -key 'remove.terminalProfileNotFound')
-	}
-
 	# Remove Desktop Shortcut
 	Write-Host (Get-I18n -key 'remove.removingDesktopShortcut')
-	$desktopShortcutPath = [Environment]::GetFolderPath("Desktop") + "\fount.lnk"
-	if (Test-Path $desktopShortcutPath) {
-		Remove-Item -Path $desktopShortcutPath -Force
-		Write-Host (Get-I18n -key 'remove.desktopShortcutRemoved')
-	}
-	else {
-		Write-Host (Get-I18n -key 'remove.desktopShortcutNotFound')
-	}
+	$desktopPath = [Environment]::GetFolderPath("Desktop")
+	# 清理旧名和新名的快捷方式
+	Remove-Item -Force "$desktopPath\fount.lnk" -ErrorAction Ignore
+	Remove-Item -Force "$desktopPath\beilu-always accompany.lnk" -ErrorAction Ignore
+	Write-Host (Get-I18n -key 'remove.desktopShortcutRemoved')
 
 	# Remove Start Menu Shortcut
 	Write-Host (Get-I18n -key 'remove.removingStartMenuShortcut')
-	$startMenuShortcutPath = [Environment]::GetFolderPath("StartMenu") + "\fount.lnk"
-	if (Test-Path $startMenuShortcutPath) {
-		Remove-Item -Path $startMenuShortcutPath -Force
-		Write-Host (Get-I18n -key 'remove.startMenuShortcutRemoved')
+	$startMenuPath = [Environment]::GetFolderPath("StartMenu")
+	Remove-Item -Force "$startMenuPath\fount.lnk" -ErrorAction Ignore
+	Remove-Item -Force "$startMenuPath\beilu-always accompany.lnk" -ErrorAction Ignore
+	Write-Host (Get-I18n -key 'remove.startMenuShortcutRemoved')
 	}
 	else {
 		Write-Host (Get-I18n -key 'remove.startMenuShortcutNotFound')

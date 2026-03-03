@@ -839,6 +839,8 @@ function fount_upgrade {
 		else {
 			Write-Host (Get-I18n -key 'git.alreadyUpToDate')
 		}
+	}
+
 	# Deno 安装
 	# 1. 便携版 runtime 目录自动发现（适配 exe 启动器环境）
 	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
@@ -849,7 +851,7 @@ function fount_upgrade {
 			$denoDir = Join-Path $portableRuntimeDir "deno"
 			$env:PATH = "$denoDir;$env:PATH"
 			Write-Host "  [OK] Deno: portable runtime" -ForegroundColor Yellow
-	
+
 			# 同时检查便携版 Git/Node/Python
 			$portableGitExe = Join-Path $portableRuntimeDir "git/cmd/git.exe"
 			if ((Test-Path $portableGitExe) -and !(Get-Command git -ErrorAction SilentlyContinue)) {
@@ -865,7 +867,7 @@ function fount_upgrade {
 			}
 		}
 	}
-	
+
 	# 2. 检查 $HOME/.deno/bin（用户级 Deno 安装）
 	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
 		if (Test-Path "$HOME/.deno/bin/deno.exe") {
@@ -877,11 +879,11 @@ function fount_upgrade {
 			}
 		}
 	}
-	
+
 	# 3. 在线安装（回退方案）
 	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
 		Write-Host (Get-I18n -key 'deno.missing')
-	
+
 		# 方案A: 直接下载 zip 用 Expand-Archive 解压（不依赖 tar.exe）
 		$denoInstalled = $false
 		try {
@@ -893,7 +895,7 @@ function fount_upgrade {
 					else { "x86_64-apple-darwin.zip" }
 				}
 				else { "x86_64-unknown-linux-gnu.zip" })
-	
+
 			Write-Host "  Downloading Deno from GitHub..." -ForegroundColor Cyan
 			$denoZipPath = Join-Path $env:TEMP "deno-install.zip"
 			Invoke-WebRequest -Uri $url -OutFile $denoZipPath -UseBasicParsing
@@ -914,7 +916,7 @@ function fount_upgrade {
 		} catch {
 			Write-Host "  [!!] GitHub download failed: $($_.Exception.Message)" -ForegroundColor Yellow
 		}
-	
+
 		# 方案B: 尝试 deno.land 官方安装脚本（可能依赖 tar.exe）
 		if (-not $denoInstalled) {
 			try {
@@ -924,7 +926,7 @@ function fount_upgrade {
 				Write-Host "  [!!] deno.land install script failed" -ForegroundColor Yellow
 			}
 		}
-	
+
 		# 方案C: 解压到项目 path/ 目录作为最后手段
 		if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
 			try {
@@ -938,17 +940,16 @@ function fount_upgrade {
 				Write-Host "  [XX] All Deno installation methods failed" -ForegroundColor Red
 			}
 		}
-	
+
 		New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
 		Set-Content "$FOUNT_DIR/data/installer/auto_installed_deno" '1'
-		if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
-		}
 	}
+
+	if (!(Get-Command deno -ErrorAction SilentlyContinue)) {
 		Write-Host (Get-I18n -key 'deno.isRequired')
 		exit 1
 	}
 }
-
 if ($args.Count -eq 0 -or $args[0] -ne 'shutdown') {
 	Update-FountAndDeno
 }
@@ -1259,10 +1260,6 @@ elseif ($args[0] -eq 'remove') {
 	Remove-Item -Force "$startMenuPath\fount.lnk" -ErrorAction Ignore
 	Remove-Item -Force "$startMenuPath\beilu-always accompany.lnk" -ErrorAction Ignore
 	Write-Host (Get-I18n -key 'remove.startMenuShortcutRemoved')
-	}
-	else {
-		Write-Host (Get-I18n -key 'remove.startMenuShortcutNotFound')
-	}
 
 	# Remove Installed pwsh modules
 	Write-Host (Get-I18n -key 'remove.removingInstalledPwshModules')

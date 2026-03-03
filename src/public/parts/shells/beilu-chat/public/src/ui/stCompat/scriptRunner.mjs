@@ -29,10 +29,10 @@
  *   loadCharacterScripts(newCharData, context)
  */
 
-import { createDiag } from '../../diagLogger.mjs'
-import { buildInjectionScript } from './index.mjs'
+import { createDiag } from "../../diagLogger.mjs";
+import { buildInjectionScript } from "./index.mjs";
 
-const diag = createDiag('stCompat')
+const diag = createDiag("stCompat");
 
 // ============================================================
 // 状态管理
@@ -47,13 +47,13 @@ const diag = createDiag('stCompat')
  */
 
 /** @type {RunningScript[]} 当前运行的脚本列表（逻辑记录，所有脚本共享一个 iframe） */
-let _runningScripts = []
+let _runningScripts = [];
 
 /** @type {HTMLIFrameElement|null} 共享脚本 iframe */
-let _sharedIframe = null
+let _sharedIframe = null;
 
 /** @type {Function|null} 父页面 message 监听器（用于清理） */
-let _messageHandler = null
+let _messageHandler = null;
 
 // ============================================================
 // 公开接口
@@ -70,116 +70,144 @@ let _messageHandler = null
  * @param {Array<object>} [context.chatMessages=[]] - 当前聊天消息队列（beilu 格式）
  */
 export async function loadCharacterScripts(charData, context = {}) {
-	const { userName = 'User', charName = 'Character', charId = '', chatId = '', chatMessages = [] } = context
+  const {
+    userName = "User",
+    charName = "Character",
+    charId = "",
+    chatId = "",
+    chatMessages = [],
+  } = context;
 
-	// 先卸载之前的脚本
-	unloadCharacterScripts()
+  // 先卸载之前的脚本
+  unloadCharacterScripts();
 
-	// 提取 tavern_helper.scripts
-	// 兼容两种格式：
-	// 1. 已解包的 chardata.json（beilu 导入时 charDataRaw.data || charDataRaw）
-	//    → charData.extensions.tavern_helper.scripts
-	// 2. 完整 V3 格式（外层包含 data 字段）
-	//    → charData.data.extensions.tavern_helper.scripts
-	const scripts = charData?.extensions?.tavern_helper?.scripts
-		|| charData?.data?.extensions?.tavern_helper?.scripts
-	if (!scripts || !Array.isArray(scripts) || scripts.length === 0) {
-		diag.debug('角色卡无 tavern_helper 脚本')
-		return
-	}
+  // 提取 tavern_helper.scripts
+  // 兼容两种格式：
+  // 1. 已解包的 chardata.json（beilu 导入时 charDataRaw.data || charDataRaw）
+  //    → charData.extensions.tavern_helper.scripts
+  // 2. 完整 V3 格式（外层包含 data 字段）
+  //    → charData.data.extensions.tavern_helper.scripts
+  const scripts =
+    charData?.extensions?.tavern_helper?.scripts ||
+    charData?.data?.extensions?.tavern_helper?.scripts;
+  if (!scripts || !Array.isArray(scripts) || scripts.length === 0) {
+    diag.debug("角色卡无 tavern_helper 脚本");
+    return;
+  }
 
-	const enabledScripts = scripts.filter(s => s.enabled && s.type === 'script')
-	if (enabledScripts.length === 0) {
-		diag.debug('角色卡有脚本但全部禁用:', scripts.length, '个')
-		return
-	}
+  const enabledScripts = scripts.filter(
+    (s) => s.enabled && s.type === "script",
+  );
+  if (enabledScripts.length === 0) {
+    diag.debug("角色卡有脚本但全部禁用:", scripts.length, "个");
+    return;
+  }
 
-	diag.log(`开始加载角色卡脚本: ${enabledScripts.length} 个启用 / ${scripts.length} 个总计`)
+  diag.log(
+    `开始加载角色卡脚本: ${enabledScripts.length} 个启用 / ${scripts.length} 个总计`,
+  );
 
-	// 注册父页面 postMessage 监听器（处理脚本 iframe 的通信）
-	_setupMessageHandler()
+  // 注册父页面 postMessage 监听器（处理脚本 iframe 的通信）
+  _setupMessageHandler();
 
-	// 提取角色卡关联的主世界书名称（供 getCurrentCharPrimaryLorebook() 使用）
-	let primaryLorebook = charData?.extensions?.world
-		|| charData?.data?.extensions?.world
-		|| ''
+  // 提取角色卡关联的主世界书名称（供 getCurrentCharPrimaryLorebook() 使用）
+  let primaryLorebook =
+    charData?.extensions?.world || charData?.data?.extensions?.world || "";
 
-	// 如果角色卡没有指定世界书，尝试从 beilu-worldbook 查询角色绑定的世界书
-	if (!primaryLorebook && charName) {
-		try {
-			const res = await fetch(`/api/parts/plugins:beilu-worldbook/lorebook/char-books?charName=${encodeURIComponent(charName)}`)
-			if (res.ok) {
-				const data = await res.json()
-				primaryLorebook = data.primary || ''
-				if (primaryLorebook) {
-					diag.log(`角色卡无 extensions.world，从 beilu-worldbook 绑定关系获取到主世界书: "${primaryLorebook}"`)
-				}
-			}
-		} catch { /* ignore */ }
-	}
+  // 如果角色卡没有指定世界书，尝试从 beilu-worldbook 查询角色绑定的世界书
+  if (!primaryLorebook && charName) {
+    try {
+      const res = await fetch(
+        `/api/parts/plugins:beilu-worldbook/lorebook/char-books?charName=${encodeURIComponent(charName)}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        primaryLorebook = data.primary || "";
+        if (primaryLorebook) {
+          diag.log(
+            `角色卡无 extensions.world，从 beilu-worldbook 绑定关系获取到主世界书: "${primaryLorebook}"`,
+          );
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
-	diag.log(`脚本 iframe primaryLorebook: "${primaryLorebook}"`)
+  diag.log(`脚本 iframe primaryLorebook: "${primaryLorebook}"`);
 
-	// 检测所有脚本是否需要 Vue / jQuery
-	// bundle.js 依赖 Vue 作为 external，脚本中的 $() 需要 jQuery
-	const allContent = enabledScripts.map(s => s.content || '').join('\n')
-	const needsVue = /MagVarUpdate|bundle\.js|Vue\b/.test(allContent)
-	const needsjQuery = /\$\s*\(|\bjQuery\b/.test(allContent)
+  // 检测所有脚本是否需要 Vue / jQuery
+  // bundle.js 依赖 Vue 作为 external，脚本中的 $() 需要 jQuery
+  const allContent = enabledScripts.map((s) => s.content || "").join("\n");
+  const needsVue = /MagVarUpdate|bundle\.js|Vue\b/.test(allContent);
+  const needsjQuery = /\$\s*\(|\bjQuery\b/.test(allContent);
 
-	// 构建 ST 兼容层注入脚本
-	// 注意：不注入 Zod UMD（needsMVU: false for script iframe）
-	// MVU bundle.js 自带 Zod 4.x 并注册全局 z，我们注入 Zod 3.x 会覆盖它导致 .prefault() 不可用
-	const stCompatScript = await buildInjectionScript({
-		needsST: true,
-		needsMVU: false, // ★ 不注入 Zod UMD + MVU polyfill，让 bundle.js 自己管理
-		needsVue: needsVue,
-		needsEJS: false,
-		messageId: -1, // 脚本 iframe 不关联消息
-		userName,
-		charName,
-	})
+  // 构建 ST 兼容层注入脚本
+  // 注意：不注入 Zod UMD（needsMVU: false for script iframe）
+  // MVU bundle.js 自带 Zod 4.x 并注册全局 z，我们注入 Zod 3.x 会覆盖它导致 .prefault() 不可用
+  const stCompatScript = await buildInjectionScript({
+    needsST: true,
+    needsMVU: false, // ★ 不注入 Zod UMD + MVU polyfill，让 bundle.js 自己管理
+    needsVue: needsVue,
+    needsEJS: false,
+    messageId: -1, // 脚本 iframe 不关联消息
+    userName,
+    charName,
+  });
 
-	// ★ 所有脚本合并到一个共享 iframe 中执行（模拟酒馆行为）
-	try {
-		await _createSharedScriptIframe(enabledScripts, stCompatScript, {
-			userName, charName, charId, chatId, needsjQuery, primaryLorebook, chatMessages,
-		})
-	} catch (err) {
-		diag.error('脚本共享 iframe 创建失败:', err.message)
-	}
+  // ★ 所有脚本合并到一个共享 iframe 中执行（模拟酒馆行为）
+  try {
+    await _createSharedScriptIframe(enabledScripts, stCompatScript, {
+      userName,
+      charName,
+      charId,
+      chatId,
+      needsjQuery,
+      primaryLorebook,
+      chatMessages,
+    });
+  } catch (err) {
+    diag.error("脚本共享 iframe 创建失败:", err.message);
+  }
 
-	diag.log(`角色卡脚本加载完成: ${_runningScripts.length} 个脚本在共享 iframe 中运行`)
-	diag.snapshot('loadCharacterScripts', {
-		total: scripts.length,
-		enabled: enabledScripts.length,
-		running: _runningScripts.length,
-		scriptNames: _runningScripts.map(s => s.name),
-		sharedIframe: !!_sharedIframe,
-	})
+  diag.log(
+    `角色卡脚本加载完成: ${_runningScripts.length} 个脚本在共享 iframe 中运行`,
+  );
+  diag.snapshot("loadCharacterScripts", {
+    total: scripts.length,
+    enabled: enabledScripts.length,
+    running: _runningScripts.length,
+    scriptNames: _runningScripts.map((s) => s.name),
+    sharedIframe: !!_sharedIframe,
+  });
 }
 
 /**
  * 销毁当前角色卡的所有脚本 iframe
  */
 export function unloadCharacterScripts() {
-	if (_runningScripts.length === 0 && !_sharedIframe) return
+  if (_runningScripts.length === 0 && !_sharedIframe) return;
 
-	const count = _runningScripts.length
-	_runningScripts = []
+  const count = _runningScripts.length;
+  _runningScripts = [];
 
-	// 销毁共享 iframe
-	if (_sharedIframe) {
-		try { _sharedIframe.remove() } catch { /* ignore */ }
-		_sharedIframe = null
-	}
+  // 销毁共享 iframe
+  if (_sharedIframe) {
+    try {
+      _sharedIframe.remove();
+    } catch {
+      /* ignore */
+    }
+    _sharedIframe = null;
+  }
 
-	// 移除 message 监听器
-	if (_messageHandler) {
-		window.removeEventListener('message', _messageHandler)
-		_messageHandler = null
-	}
+  // 移除 message 监听器
+  if (_messageHandler) {
+    window.removeEventListener("message", _messageHandler);
+    _messageHandler = null;
+  }
 
-	diag.log(`脚本 iframe 销毁: ${count} 个脚本，1 个共享 iframe`)
+  diag.log(`脚本 iframe 销毁: ${count} 个脚本，1 个共享 iframe`);
 }
 
 /**
@@ -188,12 +216,12 @@ export function unloadCharacterScripts() {
  * @returns {Array<{id: string, name: string, enabled: boolean, buttons: Array}>}
  */
 export function getRunningScripts() {
-	return _runningScripts.map(s => ({
-		id: s.id,
-		name: s.name,
-		enabled: s.enabled,
-		buttons: s.buttons,
-	}))
+  return _runningScripts.map((s) => ({
+    id: s.id,
+    name: s.name,
+    enabled: s.enabled,
+    buttons: s.buttons,
+  }));
 }
 
 /**
@@ -203,20 +231,22 @@ export function getRunningScripts() {
  * @param {string} buttonName - 按钮名称
  */
 export function triggerScriptButton(scriptId, buttonName) {
-	const eventName = `script_button_${scriptId}_${buttonName}`
-	// 通过父页面 EventBus 广播事件（所有脚本 iframe 都能收到）
-	if (window.__beiluEventBus) {
-		const listeners = window.__beiluEventBus._listeners
-		if (listeners && listeners.has(eventName)) {
-			const cbs = listeners.get(eventName)
-			cbs.forEach(cb => {
-				try { cb() } catch (e) {
-					diag.error(`脚本按钮事件执行失败: ${eventName}`, e.message)
-				}
-			})
-		}
-	}
-	diag.debug(`脚本按钮触发: ${eventName}`)
+  const eventName = `script_button_${scriptId}_${buttonName}`;
+  // 通过父页面 EventBus 广播事件（所有脚本 iframe 都能收到）
+  if (window.__beiluEventBus) {
+    const listeners = window.__beiluEventBus._listeners;
+    if (listeners && listeners.has(eventName)) {
+      const cbs = listeners.get(eventName);
+      cbs.forEach((cb) => {
+        try {
+          cb();
+        } catch (e) {
+          diag.error(`脚本按钮事件执行失败: ${eventName}`, e.message);
+        }
+      });
+    }
+  }
+  diag.debug(`脚本按钮触发: ${eventName}`);
 }
 
 // ============================================================
@@ -238,25 +268,25 @@ export function triggerScriptButton(scriptId, buttonName) {
  * @returns {{ bareUrls: string[], remainingCode: string }}
  */
 function _convertImports(content) {
-	if (!content) return { bareUrls: [], remainingCode: '' }
+  if (!content) return { bareUrls: [], remainingCode: "" };
 
-	const bareUrls = []
-	// 只提取裸导入（import 'url' 或 import "url"，不带任何绑定符号）
-	// 带 { } / * as / default 绑定的 import 保留在代码中
-	const cleaned = content.replace(
-		/^\s*import\s+['"]([^'"]+)['"]\s*;?\s*$/gm,
-		(_match, url) => {
-			bareUrls.push(url)
-			return '' // 裸导入移除，转为 <script src>
-		},
-	)
+  const bareUrls = [];
+  // 只提取裸导入（import 'url' 或 import "url"，不带任何绑定符号）
+  // 带 { } / * as / default 绑定的 import 保留在代码中
+  const cleaned = content.replace(
+    /^\s*import\s+['"]([^'"]+)['"]\s*;?\s*$/gm,
+    (_match, url) => {
+      bareUrls.push(url);
+      return ""; // 裸导入移除，转为 <script src>
+    },
+  );
 
-	if (bareUrls.length > 0) {
-		diag.debug(`裸 import 转换: ${bareUrls.length} 个 URL`, bareUrls)
-	}
+  if (bareUrls.length > 0) {
+    diag.debug(`裸 import 转换: ${bareUrls.length} 个 URL`, bareUrls);
+  }
 
-	// 命名/默认导入保留在 remainingCode 中（<script type="module"> 天然支持）
-	return { bareUrls, remainingCode: cleaned.trim() }
+  // 命名/默认导入保留在 remainingCode 中（<script type="module"> 天然支持）
+  return { bareUrls, remainingCode: cleaned.trim() };
 }
 
 /**
@@ -269,66 +299,78 @@ function _convertImports(content) {
  * @returns {string} 完整的 HTML 文档
  */
 function _buildSharedScriptHtml(scripts, stCompatScript, context) {
-	const { userName = 'User', charName = 'Character', charId = '', needsjQuery = false, primaryLorebook = '', chatMessages = [] } = context
+  const {
+    userName = "User",
+    charName = "Character",
+    charId = "",
+    needsjQuery = false,
+    primaryLorebook = "",
+    chatMessages = [],
+  } = context;
 
-	// 收集所有脚本的裸导入 URL（去重）和内联代码
-	const allBareUrls = []
-	const allInlineBlocks = []
-	const seenUrls = new Set()
+  // 收集所有脚本的裸导入 URL（去重）和内联代码
+  const allBareUrls = [];
+  const allInlineBlocks = [];
+  const seenUrls = new Set();
 
-	for (const script of scripts) {
-		const { bareUrls, remainingCode } = _convertImports(script.content || '')
+  for (const script of scripts) {
+    const { bareUrls, remainingCode } = _convertImports(script.content || "");
 
-		// 裸导入去重
-		for (const url of bareUrls) {
-			if (!seenUrls.has(url)) {
-				seenUrls.add(url)
-				allBareUrls.push(url)
-			}
-		}
+    // 裸导入去重
+    for (const url of bareUrls) {
+      if (!seenUrls.has(url)) {
+        seenUrls.add(url);
+        allBareUrls.push(url);
+      }
+    }
 
-		// 内联代码块（每个脚本独立的 module，保留 import from 语句）
-		if (remainingCode) {
-			allInlineBlocks.push({
-				scriptName: script.name,
-				scriptId: script.id,
-				code: remainingCode,
-			})
-		}
-	}
+    // 内联代码块（每个脚本独立的 module，保留 import from 语句）
+    if (remainingCode) {
+      allInlineBlocks.push({
+        scriptName: script.name,
+        scriptId: script.id,
+        code: remainingCode,
+      });
+    }
+  }
 
-	// 第一个脚本的 API 信息（用于 getScriptId 等基础 API）
-	const firstScript = scripts[0]
-	const scriptApiCode = _generateScriptApiCode(firstScript)
+  // 第一个脚本的 API 信息（用于 getScriptId 等基础 API）
+  const firstScript = scripts[0];
+  const scriptApiCode = _generateScriptApiCode(firstScript);
 
-	// 裸导入 URL 转为 <script type="module" src> 标签
-	const importScriptTags = allBareUrls.map(url =>
-		`<script type="module" src="${url}"></` + `script>`,
-	).join('\n    ')
+  // 裸导入 URL 转为 <script type="module" src> 标签
+  const importScriptTags = allBareUrls
+    .map((url) => `<script type="module" src="${url}"></` + `script>`)
+    .join("\n    ");
 
-	// 内联代码块转为 <script type="module"> 标签
-	const inlineScripts = allInlineBlocks.map(block =>
-		`<!-- 脚本: ${_escapeHtml(block.scriptName)} (${block.scriptId}) -->
+  // 内联代码块转为 <script type="module"> 标签
+  const inlineScripts = allInlineBlocks
+    .map(
+      (block) =>
+        `<!-- 脚本: ${_escapeHtml(block.scriptName)} (${block.scriptId}) -->
     <script type="module">
 ${block.code}
     </` + `script>`,
-	).join('\n    ')
+    )
+    .join("\n    ");
 
-	// jQuery 注入（如果需要）— 必须在脚本之前同步加载
-	const jqueryTag = needsjQuery
-		? `<!-- jQuery 3.7.1 -->
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></` + `script>`
-		: ''
+  // jQuery 注入（如果需要）— 必须在脚本之前同步加载
+  const jqueryTag = needsjQuery
+    ? `<!-- jQuery 3.7.1 -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></` +
+      `script>`
+    : "";
 
-	// 将 beilu 消息队列转换为酒馆 SillyTavern.chat 格式
-	// 酒馆格式: { message_id, name, role('system'|'assistant'|'user'), is_hidden, message, data, extra }
-	// beilu 格式: { id, role('user'|'char'|'system'), name, content, ... }
-	const stChatArray = _convertToSTChatFormat(chatMessages, userName, charName)
-	// 注意：JSON.stringify 不转义 </，但在 <script> 内嵌 JSON 时，
-	// </script> 会被 HTML 解析器提前闭合。替换 </ 为 <\/ 防止此问题。
-	const stChatJson = JSON.stringify(stChatArray).replace(/<\//g, '<\\/')
+  // 将 beilu 消息队列转换为酒馆 SillyTavern.chat 格式
+  // 酒馆格式: { message_id, name, role('system'|'assistant'|'user'), is_hidden, message, data, extra }
+  // beilu 格式: { id, role('user'|'char'|'system'), name, content, ... }
+  const stChatArray = _convertToSTChatFormat(chatMessages, userName, charName);
+  // 注意：JSON.stringify 不转义 </，但在 <script> 内嵌 JSON 时，
+  // </script> 会被 HTML 解析器提前闭合。替换 </ 为 <\/ 防止此问题。
+  const stChatJson = JSON.stringify(stChatArray).replace(/<\//g, "<\\/");
 
-	return `<!DOCTYPE html>
+  return (
+    `<!DOCTYPE html>
 <html>
 <head>
 	   <meta charset="utf-8">
@@ -346,7 +388,8 @@ ${block.code}
 	       window.getLastMessageId = function() { return window.SillyTavern.chat.length > 0 ? window.SillyTavern.chat.length - 1 : -1; };
 	       console.log('[scriptRunner earlyScript] SillyTavern.chat initialized with', window.SillyTavern.chat.length, 'messages');
 	   })();
-	   </` + `script>
+	   </` +
+    `script>
 	   
 	   ${jqueryTag}
 	   <!-- toastr stub（bundle.js 中 Me() 等函数使用 toastr.error/info/success） -->
@@ -361,7 +404,8 @@ ${block.code}
 	           remove: function() {},
 	       };
 	   }
-	   </` + `script>
+	   </` +
+    `script>
 	   
 	   <!-- predefine: 全局对象预注入（仿酒馆助手 predefine.js + third_party_object.ts） -->
 	   <!--
@@ -413,7 +457,8 @@ ${block.code}
 	           console.warn('[scriptRunner predefine] parent access failed:', e.message);
 	       }
 	   })();
-	   </` + `script>
+	   </` +
+    `script>
 	   
 	   <!-- ★ ST 兼容层注入（lodash CDN + 事件系统 + 变量系统 + TavernHelper 等） -->
 	   ${stCompatScript}
@@ -447,21 +492,24 @@ ${block.code}
 	   } else {
 	       console.log('[scriptRunner] Zod already available from parent, version check:', typeof window.z.object);
 	   }
-	   </` + `script>
+	   </` +
+    `script>
 	   
 	   <!-- 脚本 API（第一个脚本） -->
 	   <script>
 	   ${scriptApiCode}
-	   </` + `script>
+	   </` +
+    `script>
+	   
+	   <!-- 裸导入的外部脚本（放在 head 中，保证在 Zod 加载完成后按文档顺序执行） -->
+	   ${importScriptTags}
 </head>
 <body>
-	   <!-- 裸导入的外部脚本（所有脚本共享，已去重） -->
-	   ${importScriptTags}
-	   
 	   <!-- 各脚本的内联代码 -->
 	   ${inlineScripts}
 </body>
 </html>`
+  );
 }
 
 /**
@@ -472,18 +520,18 @@ ${block.code}
  * @returns {string} JavaScript 代码字符串
  */
 function _generateScriptApiCode(script) {
-	const buttons = script.button?.buttons || []
-	const buttonsJson = JSON.stringify(buttons)
-	const scriptDataJson = JSON.stringify(script.data || {})
+  const buttons = script.button?.buttons || [];
+  const buttonsJson = JSON.stringify(buttons);
+  const scriptDataJson = JSON.stringify(script.data || {});
 
-	return `
+  return `
 /* === ST Compat: Script API for "${_escapeJs(script.name)}" === */
 (function() {
     var _scriptId = '${_escapeJs(script.id)}';
     var _scriptName = '${_escapeJs(script.name)}';
     var _scriptButtons = ${buttonsJson};
     var _scriptData = ${scriptDataJson};
-    var _scriptInfo = ${JSON.stringify(script.info || '')};
+    var _scriptInfo = ${JSON.stringify(script.info || "")};
 
     // 脚本标识
     window.getScriptId = function() { return _scriptId; };
@@ -518,7 +566,7 @@ function _generateScriptApiCode(script) {
         }, '*');
     };
 })();
-`
+`;
 }
 
 /**
@@ -529,38 +577,41 @@ function _generateScriptApiCode(script) {
  * @param {object} context - 运行上下文
  */
 async function _createSharedScriptIframe(scripts, stCompatScript, context) {
-	diag.log(`共享脚本 iframe 创建: ${scripts.length} 个脚本`)
+  diag.log(`共享脚本 iframe 创建: ${scripts.length} 个脚本`);
 
-	// 构建合并的 iframe HTML
-	const html = _buildSharedScriptHtml(scripts, stCompatScript, context)
+  // 构建合并的 iframe HTML
+  const html = _buildSharedScriptHtml(scripts, stCompatScript, context);
 
-	// 创建隐藏 iframe
-	const iframe = document.createElement('iframe')
-	iframe.className = 'beilu-script-iframe'
-	iframe.style.cssText = 'display:none!important;width:0;height:0;border:none;position:absolute;'
-	iframe.sandbox = 'allow-scripts allow-same-origin'
-	iframe.srcdoc = html
+  // 创建隐藏 iframe
+  const iframe = document.createElement("iframe");
+  iframe.className = "beilu-script-iframe";
+  iframe.style.cssText =
+    "display:none!important;width:0;height:0;border:none;position:absolute;";
+  iframe.sandbox = "allow-scripts allow-same-origin";
+  iframe.srcdoc = html;
 
-	// 添加到 DOM
-	document.body.appendChild(iframe)
-	_sharedIframe = iframe
+  // 添加到 DOM
+  document.body.appendChild(iframe);
+  _sharedIframe = iframe;
 
-	// 记录所有脚本到运行列表
-	for (const script of scripts) {
-		const buttons = (script.button?.buttons || []).map(b => ({
-			name: b.name || '',
-			visible: b.visible !== false,
-		}))
+  // 记录所有脚本到运行列表
+  for (const script of scripts) {
+    const buttons = (script.button?.buttons || []).map((b) => ({
+      name: b.name || "",
+      visible: b.visible !== false,
+    }));
 
-		_runningScripts.push({
-			id: script.id,
-			name: script.name,
-			enabled: script.enabled,
-			buttons,
-		})
-	}
+    _runningScripts.push({
+      id: script.id,
+      name: script.name,
+      enabled: script.enabled,
+      buttons,
+    });
+  }
 
-	diag.log(`共享脚本 iframe 已创建: ${scripts.length} 个脚本，总按钮: ${_runningScripts.reduce((n, s) => n + s.buttons.length, 0)}`)
+  diag.log(
+    `共享脚本 iframe 已创建: ${scripts.length} 个脚本，总按钮: ${_runningScripts.reduce((n, s) => n + s.buttons.length, 0)}`,
+  );
 }
 
 /**
@@ -568,65 +619,75 @@ async function _createSharedScriptIframe(scripts, stCompatScript, context) {
  * 处理来自脚本 iframe 的通信请求
  */
 function _setupMessageHandler() {
-	if (_messageHandler) return
+  if (_messageHandler) return;
 
-	_messageHandler = (e) => {
-		if (!e.data || !e.data.type) return
+  _messageHandler = (e) => {
+    if (!e.data || !e.data.type) return;
 
-		switch (e.data.type) {
-			case 'beilu-script-reload': {
-				// 脚本请求重新加载共享 iframe
-				if (_sharedIframe) {
-					diag.log('脚本 iframe 重载（共享 iframe）')
-					const currentSrcdoc = _sharedIframe.srcdoc
-					_sharedIframe.srcdoc = ''
-					setTimeout(() => { _sharedIframe.srcdoc = currentSrcdoc }, 50)
-				}
-				break
-			}
+    switch (e.data.type) {
+      case "beilu-script-reload": {
+        // 脚本请求重新加载共享 iframe
+        if (_sharedIframe) {
+          diag.log("脚本 iframe 重载（共享 iframe）");
+          const currentSrcdoc = _sharedIframe.srcdoc;
+          _sharedIframe.srcdoc = "";
+          setTimeout(() => {
+            _sharedIframe.srcdoc = currentSrcdoc;
+          }, 50);
+        }
+        break;
+      }
 
-			case 'beilu-event-emit': {
-				// 脚本 iframe 内触发事件 → 广播到父页面 EventBus → 所有 iframe 收到
-				const eventName = e.data.eventName
-				const args = e.data.args || []
-				if (window.__beiluEventBus && window.__beiluEventBus._listeners) {
-					const listeners = window.__beiluEventBus._listeners.get(eventName)
-					if (listeners) {
-						listeners.forEach(cb => {
-							try { cb(...args) } catch (err) {
-								diag.error(`EventBus 事件处理失败: ${eventName}`, err.message)
-							}
-						})
-					}
-				}
-				break
-			}
+      case "beilu-event-emit": {
+        // 脚本 iframe 内触发事件 → 广播到父页面 EventBus → 所有 iframe 收到
+        const eventName = e.data.eventName;
+        const args = e.data.args || [];
+        if (window.__beiluEventBus && window.__beiluEventBus._listeners) {
+          const listeners = window.__beiluEventBus._listeners.get(eventName);
+          if (listeners) {
+            listeners.forEach((cb) => {
+              try {
+                cb(...args);
+              } catch (err) {
+                diag.error(`EventBus 事件处理失败: ${eventName}`, err.message);
+              }
+            });
+          }
+        }
+        break;
+      }
 
-			case 'beilu-event-on': {
-				// 脚本 iframe 注册事件监听 → 存储在父页面 EventBus
-				const eventName = e.data.eventName
-				const source = e.source // 发送消息的 iframe window
-				if (!window.__beiluEventBus) window.__beiluEventBus = { _listeners: new Map() }
-				const listeners = window.__beiluEventBus._listeners
-				if (!listeners.has(eventName)) listeners.set(eventName, [])
+      case "beilu-event-on": {
+        // 脚本 iframe 注册事件监听 → 存储在父页面 EventBus
+        const eventName = e.data.eventName;
+        const source = e.source; // 发送消息的 iframe window
+        if (!window.__beiluEventBus)
+          window.__beiluEventBus = { _listeners: new Map() };
+        const listeners = window.__beiluEventBus._listeners;
+        if (!listeners.has(eventName)) listeners.set(eventName, []);
 
-				// 创建桥接回调：当事件触发时，通过 postMessage 通知原 iframe
-				const bridgeCallback = (...args) => {
-					try {
-						source.postMessage({
-							type: 'beilu-event-callback',
-							eventName,
-							args,
-						}, '*')
-					} catch { /* iframe 可能已销毁 */ }
-				}
-				listeners.get(eventName).push(bridgeCallback)
-				break
-			}
-		}
-	}
+        // 创建桥接回调：当事件触发时，通过 postMessage 通知原 iframe
+        const bridgeCallback = (...args) => {
+          try {
+            source.postMessage(
+              {
+                type: "beilu-event-callback",
+                eventName,
+                args,
+              },
+              "*",
+            );
+          } catch {
+            /* iframe 可能已销毁 */
+          }
+        };
+        listeners.get(eventName).push(bridgeCallback);
+        break;
+      }
+    }
+  };
 
-	window.addEventListener('message', _messageHandler)
+  window.addEventListener("message", _messageHandler);
 }
 
 // ============================================================
@@ -645,44 +706,48 @@ function _setupMessageHandler() {
  * @returns {Array<object>} 酒馆格式的 chat 数组
  */
 function _convertToSTChatFormat(beiluMessages, userName, charName) {
-	if (!beiluMessages || !Array.isArray(beiluMessages) || beiluMessages.length === 0) {
-		return []
-	}
+  if (
+    !beiluMessages ||
+    !Array.isArray(beiluMessages) ||
+    beiluMessages.length === 0
+  ) {
+    return [];
+  }
 
-	return beiluMessages
-		.filter(msg => msg && msg.role !== 'system') // 过滤 system 消息（酒馆 chat 数组通常不含 system）
-		.map((msg, index) => {
-			// beilu role → 酒馆 role
-			let stRole = 'assistant'
-			if (msg.role === 'user') stRole = 'user'
-			else if (msg.role === 'char') stRole = 'assistant'
+  return beiluMessages
+    .filter((msg) => msg && msg.role !== "system") // 过滤 system 消息（酒馆 chat 数组通常不含 system）
+    .map((msg, index) => {
+      // beilu role → 酒馆 role
+      let stRole = "assistant";
+      if (msg.role === "user") stRole = "user";
+      else if (msg.role === "char") stRole = "assistant";
 
-			// 名字
-			const name = msg.name || (stRole === 'user' ? userName : charName)
+      // 名字
+      const name = msg.name || (stRole === "user" ? userName : charName);
 
-			const msgText = msg.content || ''
-			return {
-				// === 酒馆助手 API 字段 ===
-				message_id: index,
-				name: name,
-				role: stRole,
-				is_hidden: false,
-				is_user: stRole === 'user',
-				message: msgText,
-				data: {},
-				extra: {},
-				// === 酒馆内部字段（setChatMessages / getVariables 依赖） ===
-				is_system: false,
-				mes: msgText,
-				swipe_id: 0,
-				swipes: [msgText],
-				// ★ MVU 变量映射：extension.mvu_variables → variables[swipe_id]
-				// 对标 JS-Slash-Runner: chat_message.variables[swipe_id]
-				// beilu-mvu 后端将变量快照存储在 chatLogEntry.extension.mvu_variables
-				variables: [msg.extension?.mvu_variables || {}],
-				swipe_info: [{}],
-			}
-		})
+      const msgText = msg.content || "";
+      return {
+        // === 酒馆助手 API 字段 ===
+        message_id: index,
+        name: name,
+        role: stRole,
+        is_hidden: false,
+        is_user: stRole === "user",
+        message: msgText,
+        data: {},
+        extra: {},
+        // === 酒馆内部字段（setChatMessages / getVariables 依赖） ===
+        is_system: false,
+        mes: msgText,
+        swipe_id: 0,
+        swipes: [msgText],
+        // ★ MVU 变量映射：extension.mvu_variables → variables[swipe_id]
+        // 对标 JS-Slash-Runner: chat_message.variables[swipe_id]
+        // beilu-mvu 后端将变量快照存储在 chatLogEntry.extension.mvu_variables
+        variables: [msg.extension?.mvu_variables || {}],
+        swipe_info: [{}],
+      };
+    });
 }
 
 /**
@@ -691,12 +756,12 @@ function _convertToSTChatFormat(beiluMessages, userName, charName) {
  * @returns {string}
  */
 function _escapeHtml(str) {
-	return String(str)
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#039;')
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 /**
@@ -705,11 +770,11 @@ function _escapeHtml(str) {
  * @returns {string}
  */
 function _escapeJs(str) {
-	return String(str)
-		.replace(/\\/g, '\\\\')
-		.replace(/'/g, "\\'")
-		.replace(/"/g, '\\"')
-		.replace(/\n/g, '\\n')
-		.replace(/\r/g, '\\r')
-		.replace(/<\//g, '<\\/')
+  return String(str)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/<\//g, "<\\/");
 }

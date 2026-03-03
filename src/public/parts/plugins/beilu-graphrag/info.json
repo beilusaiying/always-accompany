@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "Beilu GraphRAG",
+		"avatar": "https://api.iconify.design/mdi/graph-outline.svg",
+		"description": "Knowledge graph powered retrieval using LightRAG.",
+		"description_markdown": "**Beilu GraphRAG** uses LightRAG to build knowledge graphs from memory files, enabling entity-relation aware retrieval.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["graph", "rag", "knowledge", "lightrag", "beilu"]
+	},
+	"zh-CN": {
+		"name": "贝露的知识图谱",
+		"avatar": "https://api.iconify.design/mdi/graph-outline.svg",
+		"description": "基于 LightRAG 的知识图谱增强检索",
+		"description_markdown": "**贝露的知识图谱** 使用 LightRAG 从记忆文件中构建知识图谱，实现基于实体-关系的智能检索。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["图谱", "RAG", "知识", "lightrag", "贝露"]
+	},
+	"emoji": {
+		"name": "🕸️🧠",
+		"avatar": "https://api.iconify.design/mdi/graph-outline.svg",
+		"description": "🕸️📚➡️🧠✨",
+		"description_markdown": "🕸️ ➡️ 🧠\n📚 ➡️ ✨",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["🕸️", "🧠", "📚", "⛲"]
+	}
+}

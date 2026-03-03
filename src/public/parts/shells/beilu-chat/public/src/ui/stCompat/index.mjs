@@ -217,6 +217,10 @@ export async function buildInjectionScript(options = {}) {
 		externalScripts.push(_cdnScriptTag(CDN_URLS.lodash, 'lodash 4.17.21'))
 		diag.debug('已添加: lodash CDN script tag')
 
+		// 1a2. jQuery — 外部加载（多数酒馆角色卡使用 $() 操作 DOM）
+		externalScripts.push(_cdnScriptTag(CDN_URLS.jquery, 'jQuery 3.7.1'))
+		diag.debug('已添加: jQuery CDN script tag')
+
 		// 1b. 事件系统（内联 shim）
 		inlineParts.push(generateEventSystemScript())
 

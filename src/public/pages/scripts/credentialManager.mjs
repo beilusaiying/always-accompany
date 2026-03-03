@@ -4,7 +4,7 @@
  * @param {string} secret 用于派生密钥的密钥（例如，fount UUID）。
  * @returns {Promise<CryptoKey>} 派生的 CryptoKey。
  */
-import CryptoJS from 'https://esm.sh/crypto-js'
+import CryptoJS from '../vendor/crypto-js.bundle.mjs'
 
 /**
  * 获取用于加密/解密的密钥。

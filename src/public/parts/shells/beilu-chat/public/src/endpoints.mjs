@@ -12,6 +12,11 @@ export let currentChatId = null
  * @returns {Promise<any>} - 响应数据。
  */
 async function callApi(endpoint, method = 'POST', body) {
+	if (!currentChatId) {
+		const err = new Error(`[callApi] currentChatId 为空，无法调用 ${method} ${endpoint}`)
+		console.warn(err.message)
+		throw err
+	}
 	const url = `/api/parts/shells:chat/${currentChatId}/${endpoint}`
 	console.log(`[callApi] ${method} ${url}`, body ? '(有body)' : '')
 
@@ -32,9 +37,10 @@ async function callApi(endpoint, method = 'POST', body) {
 		try {
 			errorBody = await response.json()
 		} catch (_) { /* response 可能不是 JSON */ }
-		console.error(`[callApi] ★ 请求失败: ${method} ${url} → ${response.status}`, errorBody)
-		if (errorBody?.error) console.error(`[callApi]   error: ${errorBody.error}`)
-		if (errorBody?.stack) console.error(`[callApi]   stack: ${errorBody.stack}`)
+		// 404 Chat not found 不需要刷屏 — 属于正常业务场景（用户打开已删除的聊天 URL）
+		if (response.status !== 404) {
+			console.error(`[callApi] ★ 请求失败: ${method} ${url} → ${response.status}`, errorBody)
+		}
 		throw Object.assign(new Error(`API request failed with status ${response.status}`), errorBody, { response })
 	}
 

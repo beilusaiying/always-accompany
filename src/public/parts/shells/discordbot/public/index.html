@@ -1,0 +1,313 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="darkreader-lock" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      property="og:title"
+      content="Digital Emissaries: Weaving fount into Discord's Tapestry"
+    />
+    <meta
+      property="og:url"
+      content="https://steve02081504.github.io/fount/protocol?url=fount://page/parts/shells:discordbot/"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:description"
+      content="Give your fount companions a voice in the bustling halls of Discord. Configure their presence, manage their operations, and let them bridge worlds, one server at a time."
+    />
+    <meta
+      name="description"
+      content="Give your fount companions a voice in the bustling halls of Discord. Configure their presence, manage their operations, and let them bridge worlds, one server at a time."
+    />
+    <meta
+      property="og:image"
+      content="https://repository-images.githubusercontent.com/862251163/0ac90205-ae40-4fc6-af67-1e28d074c76b"
+    />
+    <title data-i18n="discord_bots.title"></title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.json" />
+    <script blocking="render" type="module" src="/preload.mjs"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui/daisyui.css"
+      rel="stylesheet"
+      type="text/css"
+      crossorigin="anonymous"
+    />
+    <link
+      href="/base.css"
+      rel="stylesheet"
+      type="text/css"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"
+      crossorigin="anonymous"
+    ></script>
+    <script type="module" src="/base.mjs"></script>
+    <link rel="stylesheet" href="./index.css" type="text/css" />
+  </head>
+
+  <body class="flex justify-center items-start h-screen p-4">
+    <main class="container mx-auto w-full lg:w-2/3">
+      <div class="card bg-base-100 shadow-xl mb-4">
+        <div class="card-body">
+          <h2 class="card-title mb-4" data-i18n="discord_bots.cardTitle"></h2>
+          <div class="flex flex-col lg:flex-row gap-4 mt-4">
+            <div
+              id="bot-list-dropdown"
+              class="w-full"
+              data-i18n="discord_bots.botSelectDropdown"
+            >
+              <input type="text" data-i18n="discord_bots.botSearch" />
+            </div>
+            <button
+              id="new-bot"
+              class="btn btn-accent w-full lg:w-auto"
+              data-i18n="discord_bots.buttons.newBot"
+            ></button>
+            <button
+              id="delete-bot"
+              class="btn btn-error w-full lg:w-auto"
+              data-i18n="discord_bots.buttons.deleteBot"
+            ></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2
+            class="card-title mb-4"
+            data-i18n="discord_bots.configCard.title"
+          ></h2>
+          <div class="mb-4">
+            <label for="char-select" class="label">
+              <span
+                class="label-text"
+                data-i18n="discord_bots.configCard.labels.character"
+              ></span>
+            </label>
+            <div
+              id="char-select-dropdown"
+              class="w-full"
+              data-i18n="discord_bots.charSelectDropdown"
+            >
+              <input type="text" data-i18n="discord_bots.charSearch" />
+            </div>
+          </div>
+          <div class="mb-4">
+            <label for="token-input" class="label">
+              <span
+                class="label-text"
+                data-i18n="discord_bots.configCard.labels.apiKey"
+              ></span>
+            </label>
+            <div class="relative">
+              <input
+                id="token-input"
+                type="password"
+                class="input input-bordered w-full pr-10"
+                data-i18n="discord_bots.configCard.apiKeyInput"
+              />
+              <button
+                id="toggle-token"
+                type="button"
+                class="absolute top-0 right-0 h-full px-4"
+                data-i18n="discord_bots.configCard.toggleApiKeyButton"
+              >
+                <img
+                  src="https://api.iconify.design/line-md/watch-off.svg"
+                  class="text-icon"
+                  data-i18n="discord_bots.configCard.toggleApiKeyIcon"
+                />
+              </button>
+            </div>
+          </div>
+          <!-- 可视化配置表单 -->
+          <div id="visual-config" class="mb-4 space-y-3">
+            <div class="text-sm font-semibold opacity-70 mb-2">
+              🔧 Bot 行为配置
+            </div>
+            <!-- 所有者用户名 -->
+            <div class="form-control">
+              <label class="label py-1">
+                <span class="label-text">所有者用户名（Discord）</span>
+              </label>
+              <input
+                id="cfg-owner"
+                type="text"
+                class="input input-bordered input-sm w-full"
+                placeholder="your_discord_username"
+              />
+            </div>
+            <!-- 数字配置 -->
+            <div class="flex gap-4">
+              <div class="form-control flex-1">
+                <label class="label py-1">
+                  <span class="label-text">最大历史深度</span>
+                </label>
+                <input
+                  id="cfg-max-depth"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value="20"
+                  class="input input-bordered input-sm w-full"
+                />
+              </div>
+              <div class="form-control flex-1">
+                <label class="label py-1">
+                  <span class="label-text">最大拉取数</span>
+                </label>
+                <input
+                  id="cfg-max-fetch"
+                  type="number"
+                  min="1"
+                  max="200"
+                  value="30"
+                  class="input input-bordered input-sm w-full"
+                />
+              </div>
+            </div>
+            <!-- 触发模式 -->
+            <div class="divider text-xs opacity-60 my-1">触发模式</div>
+            <div class="flex flex-col gap-2">
+              <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  id="cfg-trigger-mention"
+                  type="checkbox"
+                  class="toggle toggle-sm toggle-primary"
+                  checked
+                />
+                <span class="label-text">@触发（被@时回复）</span>
+              </label>
+              <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  id="cfg-trigger-message"
+                  type="checkbox"
+                  class="toggle toggle-sm toggle-primary"
+                />
+                <span class="label-text"
+                  >消息触发（白名单频道所有消息都回复）</span
+                >
+              </label>
+              <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  id="cfg-reply-all"
+                  type="checkbox"
+                  class="toggle toggle-sm toggle-warning"
+                />
+                <span class="label-text">回复所有消息（旧模式，全回复）</span>
+              </label>
+              <label class="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  id="cfg-private-chat"
+                  type="checkbox"
+                  class="toggle toggle-sm toggle-primary"
+                  checked
+                />
+                <span class="label-text">允许私聊</span>
+              </label>
+            </div>
+            <!-- 触发频道白名单 -->
+            <div class="form-control">
+              <label class="label py-1">
+                <span class="label-text"
+                  >触发频道白名单（频道ID，逗号分隔，空=所有频道）</span
+                >
+              </label>
+              <input
+                id="cfg-trigger-channels"
+                type="text"
+                class="input input-bordered input-sm w-full"
+                placeholder="频道ID1, 频道ID2..."
+              />
+            </div>
+          </div>
+          <!-- 高级 JSON 配置（折叠） -->
+          <div class="collapse collapse-arrow bg-base-200 rounded-lg mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-sm font-medium opacity-70">
+              ⚙️ 高级配置（JSON 编辑器）
+            </div>
+            <div class="collapse-content">
+              <div
+                id="config-editor"
+                class="jsoneditor-container"
+                style="height: 300px; overflow: auto"
+              ></div>
+            </div>
+          </div>
+          <div class="flex justify-end gap-4 items-center flex-wrap">
+            <button
+              id="clear-context"
+              class="btn btn-warning btn-outline"
+              title="清除所有频道的聊天上下文（保留记忆表格）"
+            >
+              🗑️ 清除上下文
+            </button>
+            <button id="save-config" class="btn btn-primary">
+              <img id="saveStatusIcon" src="" class="w-6 h-6 mr-2 hidden" />
+              <span
+                id="saveStatusText"
+                data-i18n="discord_bots.configCard.buttons.saveConfig"
+              ></span>
+            </button>
+            <button id="start-stop-bot" class="btn btn-success">
+              <img
+                id="startStopStatusIcon"
+                src=""
+                class="w-6 h-6 mr-2 hidden"
+              />
+              <span
+                id="startStopStatusText"
+                data-i18n="discord_bots.configCard.buttons.startBot"
+              ></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 消息日志面板 -->
+      <div class="card bg-base-100 shadow-xl mt-4">
+        <div class="card-body">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="card-title">📋 消息日志</h2>
+            <div class="flex items-center gap-2">
+              <span class="text-sm opacity-60">最大条数:</span>
+              <input
+                id="log-size-input"
+                type="number"
+                min="1"
+                max="200"
+                value="20"
+                class="input input-bordered input-sm w-20"
+              />
+              <div id="log-status" class="badge badge-ghost">未连接</div>
+            </div>
+          </div>
+          <!-- 活跃频道 -->
+          <div id="active-channels" class="mb-3 hidden">
+            <div class="text-sm font-semibold mb-1 opacity-70">活跃频道</div>
+            <div id="active-channels-list" class="flex flex-wrap gap-1"></div>
+          </div>
+          <!-- 日志列表 -->
+          <div
+            id="message-log-container"
+            class="msg-log-container bg-base-200 rounded-lg p-3 overflow-y-auto"
+            style="max-height: 500px; min-height: 200px"
+          >
+            <div id="message-log-empty" class="text-center opacity-40 py-8">
+              Bot 运行后，消息将在此显示
+            </div>
+            <div id="message-log-list"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="./index.mjs"></script>
+  </body>
+</html>

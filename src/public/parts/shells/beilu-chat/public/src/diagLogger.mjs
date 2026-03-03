@@ -35,6 +35,10 @@
  * - worldbook       世界书（标记用）
  * - files           文件操作（标记用）
  * - regex           正则插件（标记用）
+ * - browser         网页快照插件（标记用）
+ * - vectordb        向量数据库插件（标记用）
+ * - graphrag        知识图谱插件（标记用）
+ * - discord         Discord Bot（标记用）
  */
 
 const STORAGE_KEY = 'beilu-diag-modules'
@@ -77,6 +81,10 @@ const MODULE_COLORS = {
 	worldbook: '#26a69a',
 	files: '#5c6bc0',
 	regex: '#ef5350',
+	browser: '#ff6d00',
+	vectordb: '#00b8d4',
+	graphrag: '#ce93d8',
+	discord: '#5865f2',
 }
 
 // ============================================================
@@ -563,7 +571,7 @@ const diagControl = {
 			'聊天引擎': ['template', 'displayRegex', 'messageList', 'streamRenderer', 'virtualQueue', 'websocket', 'iframeRenderer', 'stCompat'],
 			'UI': ['sidebar', 'fileExplorer', 'layout'],
 			'系统': ['config', 'api', 'dom', 'perf'],
-			'后端标记': ['chat', 'proxy', 'preset', 'memory', 'worldbook', 'files', 'regex'],
+			'后端标记': ['chat', 'proxy', 'preset', 'memory', 'worldbook', 'files', 'regex', 'browser', 'vectordb', 'graphrag', 'discord'],
 		}
 
 		for (const [groupName, groupModules] of Object.entries(groups)) {

@@ -1,20 +1,20 @@
-import { fromHtml } from 'https://esm.sh/hast-util-from-html'
-import { toHtml } from 'https://esm.sh/hast-util-to-html'
-import { h } from 'https://esm.sh/hastscript'
-import languageMap from 'https://esm.sh/lang-map'
-import md5 from 'https://esm.sh/md5'
-import rehypeKatex from 'https://esm.sh/rehype-katex'
-import rehypeMermaid from 'https://esm.sh/rehype-mermaid'
-import rehypePrettyCode from 'https://esm.sh/rehype-pretty-code'
-import rehypeStringify from 'https://esm.sh/rehype-stringify'
-import remarkBreaks from 'https://esm.sh/remark-breaks'
-import remarkGfm from 'https://esm.sh/remark-gfm'
-import remarkMath from 'https://esm.sh/remark-math'
-import remarkParse from 'https://esm.sh/remark-parse'
-import remarkRehype from 'https://esm.sh/remark-rehype'
-import { createHighlighter } from 'https://esm.sh/shiki'
-import { unified } from 'https://esm.sh/unified'
-import { visit } from 'https://esm.sh/unist-util-visit'
+import { fromHtml } from '/esm-cache/hast-util-from-html'
+import { toHtml } from '/esm-cache/hast-util-to-html'
+import { h } from '/esm-cache/hastscript'
+import languageMap from '/esm-cache/lang-map'
+import md5 from '/esm-cache/md5'
+import rehypeKatex from '/esm-cache/rehype-katex'
+import rehypeMermaid from '/esm-cache/rehype-mermaid'
+import rehypePrettyCode from '/esm-cache/rehype-pretty-code'
+import rehypeStringify from '/esm-cache/rehype-stringify'
+import remarkBreaks from '/esm-cache/remark-breaks'
+import remarkGfm from '/esm-cache/remark-gfm'
+import remarkMath from '/esm-cache/remark-math'
+import remarkParse from '/esm-cache/remark-parse'
+import remarkRehype from '/esm-cache/remark-rehype'
+import { createHighlighter } from '/esm-cache/shiki'
+import { unified } from '/esm-cache/unified'
+import { visit } from '/esm-cache/unist-util-visit'
 
 import { geti18n } from './i18n.mjs'
 import { onThemeChange } from './theme.mjs'
@@ -235,7 +235,7 @@ const languageExecutors = {
 	 */
 	js: async (code) => {
 		try {
-			const { async_eval } = await import('https://esm.sh/@steve02081504/async-eval')
+			const { async_eval } = await import('/esm-cache/@steve02081504/async-eval')
 			return await async_eval(code)
 		} catch (error) { return { error } }
 	},
@@ -314,8 +314,8 @@ $stderr = StringIO.new
 	 */
 	lisp: async (code) => {
 		try {
-			const { exec } = await import('https://esm.sh/lips')
-			const { VirtualConsole } = await import('https://esm.sh/@steve02081504/virtual-console')
+			const { exec } = await import('/esm-cache/lips')
+			const { VirtualConsole } = await import('/esm-cache/@steve02081504/virtual-console')
 			const vc = new VirtualConsole()
 
 			const result = await vc.hookAsyncContext(() => new Promise((resolve, reject) => {
@@ -374,7 +374,7 @@ $stderr = StringIO.new
 	 */
 	lua: async (code) => {
 		try {
-			const { LuaFactory } = await import('https://esm.sh/wasmoon')
+			const { LuaFactory } = await import('/esm-cache/wasmoon')
 			const factory = new LuaFactory()
 			const lua = await factory.createEngine()
 
@@ -397,7 +397,7 @@ $stderr = StringIO.new
 	 */
 	sql: async (code) => {
 		try {
-			const { default: initSqlJs } = await import('https://esm.sh/sql.js')
+			const { default: initSqlJs } = await import('/esm-cache/sql.js')
 			const SQL = await initSqlJs({
 				/**
 				 * 定位 SQL.js 文件。
@@ -436,7 +436,7 @@ $stderr = StringIO.new
 	 */
 	b: async (code) => {
 		try {
-			const { default: Brainfuck } = await import('https://esm.sh/brainfuck-node')
+			const { default: Brainfuck } = await import('/esm-cache/brainfuck-node')
 			const brainfuck = new Brainfuck()
 			const result = brainfuck.execute(code)
 			return { output: result.output }
@@ -601,7 +601,7 @@ navigator.clipboard.writeText(decodeURIComponent('\${encoded}')).then(() => {
 
 ;(${executor.toString()})(document.querySelector('#${uniqueId} pre').innerText).then(async result => {
 	result = result || {}
-	const { AnsiUp } = await import('https://esm.sh/ansi-up')
+	const { AnsiUp } = await import('/esm-cache/ansi-up')
 	const ansi_up = new AnsiUp()
 	const escapeHtml = (str) => ansi_up.ansi_to_html(str)
 

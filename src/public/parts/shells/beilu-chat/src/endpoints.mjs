@@ -46,30 +46,39 @@ export function setEndpoints(router) {
 	router.get('/api/parts/shells\\:chat/:chatid/initial-data', authenticate, async (req, res) => {
 		const { chatid } = req.params
 		try {
-			console.log(`[chat/endpoints] initial-data 请求: chatid=${chatid}`)
 			const data = await getInitialData(chatid)
-			console.log(`[chat/endpoints] initial-data 成功: chatid=${chatid}, logLength=${data?.logLength}, initialLog=${data?.initialLog?.length}, charlist=${data?.charlist?.join(',')}, pluginlist=${data?.pluginlist?.length}个`)
 			res.status(200).json(data)
 		} catch (err) {
-			console.error(`[chat/endpoints] ★ initial-data 失败: chatid=${chatid}`, err.stack || err.message)
-			console.error(`[chat/endpoints] 错误类型: ${err.constructor?.name}, 错误名: ${err.name}`)
-			// 返回详细错误信息以便前端 F12 看到
+			// Chat not found → 404（不是 500），前端可据此清除无效 chatid
+			if (err.message === 'Chat not found') {
+				return res.status(404).json({ error: 'Chat not found', chatid })
+			}
+			console.error(`[chat/endpoints] ★ initial-data 失败: chatid=${chatid}`, err.message)
 			res.status(500).json({
 				error: err.message,
-				stack: err.stack,
 				_diag: 'initial-data endpoint caught error'
 			})
 		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/chars', authenticate, async (req, res) => {
-		const { chatid } = req.params
-		res.status(200).json(await getCharListOfChat(chatid))
+		try {
+			const { chatid } = req.params
+			res.status(200).json(await getCharListOfChat(chatid))
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/plugins', authenticate, async (req, res) => {
-		const { chatid } = req.params
-		res.status(200).json(await getPluginListOfChat(chatid))
+		try {
+			const { chatid } = req.params
+			res.status(200).json(await getPluginListOfChat(chatid))
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/log', authenticate, async (req, res) => {
@@ -123,24 +132,45 @@ export function setEndpoints(router) {
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/log/length', authenticate, async (req, res) => {
-		const { chatid } = req.params
-		res.status(200).json(await GetChatLogLength(chatid))
+		try {
+			const { chatid } = req.params
+			res.status(200).json(await GetChatLogLength(chatid))
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/persona', authenticate, async (req, res) => {
-		const { chatid } = req.params
-		res.status(200).json(await GetUserPersonaName(chatid))
+		try {
+			const { chatid } = req.params
+			res.status(200).json(await GetUserPersonaName(chatid))
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.get('/api/parts/shells\\:chat/:chatid/world', authenticate, async (req, res) => {
-		const { chatid } = req.params
-		res.status(200).json(await GetWorldName(chatid))
+		try {
+			const { chatid } = req.params
+			res.status(200).json(await GetWorldName(chatid))
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.put('/api/parts/shells\\:chat/:chatid/timeline', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { delta, absoluteIndex } } = req
-		const entry = await modifyTimeLine(chatid, delta, absoluteIndex)
-		res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
+		try {
+			const { params: { chatid }, body: { delta, absoluteIndex } } = req
+			const entry = await modifyTimeLine(chatid, delta, absoluteIndex)
+			res.status(200).json({ success: true, entry: await entry.toData((await getUserByReq(req)).username) })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/timeline] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.delete('/api/parts/shells\\:chat/:chatid/message/:index', authenticate, async (req, res) => {
@@ -199,39 +229,75 @@ export function setEndpoints(router) {
 	})
 
 	router.put('/api/parts/shells\\:chat/:chatid/world', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { worldname } } = req
-		await setWorld(chatid, worldname)
-		res.status(200).json({ success: true })
+		try {
+			const { params: { chatid }, body: { worldname } } = req
+			await setWorld(chatid, worldname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/setWorld] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.put('/api/parts/shells\\:chat/:chatid/persona', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { personaname } } = req
-		await setPersona(chatid, personaname)
-		res.status(200).json({ success: true })
+		try {
+			const { params: { chatid }, body: { personaname } } = req
+			await setPersona(chatid, personaname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/setPersona] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.post('/api/parts/shells\\:chat/:chatid/char', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { charname } } = req
-		await addchar(chatid, charname)
-		res.status(200).json({ success: true })
+		try {
+			const { params: { chatid }, body: { charname } } = req
+			await addchar(chatid, charname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/addchar] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.delete('/api/parts/shells\\:chat/:chatid/char/:charname', authenticate, async (req, res) => {
-		const { chatid, charname } = req.params
-		await removechar(chatid, charname)
-		res.status(200).json({ success: true })
+		try {
+			const { chatid, charname } = req.params
+			await removechar(chatid, charname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/removechar] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.post('/api/parts/shells\\:chat/:chatid/plugin', authenticate, async (req, res) => {
-		const { params: { chatid }, body: { pluginname } } = req
-		await addplugin(chatid, pluginname)
-		res.status(200).json({ success: true })
+		try {
+			const { params: { chatid }, body: { pluginname } } = req
+			await addplugin(chatid, pluginname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/addplugin] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.delete('/api/parts/shells\\:chat/:chatid/plugin/:pluginname', authenticate, async (req, res) => {
-		const { chatid, pluginname } = req.params
-		await removeplugin(chatid, pluginname)
-		res.status(200).json({ success: true })
+		try {
+			const { chatid, pluginname } = req.params
+			await removeplugin(chatid, pluginname)
+			res.status(200).json({ success: true })
+		} catch (err) {
+			if (err.message === 'Chat not found') return res.status(404).json({ error: 'Chat not found' })
+			console.error('[chat/removeplugin] Error:', err.message)
+			res.status(500).json({ error: err.message })
+		}
 	})
 
 	router.post('/api/parts/shells\\:chat/new', authenticate, async (req, res) => {

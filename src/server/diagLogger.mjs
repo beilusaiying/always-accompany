@@ -22,6 +22,10 @@
  * - server          HTTP服务器/路由
  * - parts           部件加载器
  * - stream          流式输出（buffer, diff, 广播）
+ * - browser         浏览器页面感知（快照接收, 页面注入）
+ * - vectordb        向量数据库（Orama索引, embedding, 语义搜索）
+ * - graphrag        知识图谱（LightRAG, Python子进程, 图谱查询）
+ * - discord         Discord Bot（消息处理, 平台标签过滤）
  */
 
 // ============================================================
@@ -53,6 +57,10 @@ const ANSI_COLORS = {
 	server: '\x1b[96m',     // 亮青
 	parts: '\x1b[92m',      // 亮绿
 	stream: '\x1b[90m',     // 灰色
+	browser: '\x1b[38;5;208m',  // 橙色
+	vectordb: '\x1b[38;5;39m',  // 天蓝
+	graphrag: '\x1b[38;5;141m', // 淡紫
+	discord: '\x1b[38;5;99m',   // 靛蓝
 }
 const ANSI_RESET = '\x1b[0m'
 const ANSI_BOLD = '\x1b[1m'

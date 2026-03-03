@@ -291,6 +291,8 @@ function hideVariableCommands(content) {
 	cleaned = cleaned.replace(/<JSONPatch>[\s\S]*?<\/JSONPatch>/g, '');
 	// 隐藏 _.set(...) 命令
 	cleaned = cleaned.replace(/_.set\s*\(\s*['"][^'"]+['"]\s*,\s*[\s\S]+?\s*\)\s*/g, '');
+	// ★ Phase 3.2：清除 StatusPlaceHolderImpl（前端会自动注入，不需要保留在存储内容中）
+	cleaned = cleaned.replace(/<StatusPlaceHolderImpl\s*\/?>/gi, '');
 	// 清理多余空行
 	cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
 	return cleaned;

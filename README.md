@@ -8,7 +8,7 @@ beilu
 
 > **Make AI truly remember.**
 
-beilu-always accompany is an **AI companion platform unifying companionship and productivity**, combining an **IDE editing environment**, a **multi-AI collaboration engine**, an **original layered memory algorithm**, and a **chat system compatible with the SillyTavern ecosystem**. It addresses the two fundamental bottlenecks of current LLMs head-on: **limited context windows** and **attention degradation as context grows**.
+beilu-always accompany is an **AI companion platform unifying companionship and productivity**, combining an **IDE editing environment**, a **multi-AI collaboration engine**, an **original layered memory algorithm**, a **semantic retrieval system**, and a **chat system compatible with the SillyTavern ecosystem**. It addresses the two fundamental bottlenecks of current LLMs head-on: **limited context windows** and **attention degradation as context grows**.
 
 English | [中文](README_CN.md)
 
@@ -75,7 +75,7 @@ Designed after the human hippocampus memory formation mechanism and the Ebbingha
    Monthly summaries / Historical daily summaries / Yearly index
 ```
 
-Additionally, an **L0 Memory Table Layer** (10 customizable tables, fully injected every turn as CSV) provides structured immediate context.
+Additionally, an **L0 Memory Table Layer** (10 highly customizable tables, fully injected every turn as CSV) provides structured immediate context.
 
 #### Key Metrics
 
@@ -83,6 +83,8 @@ Additionally, an **L0 Memory Table Layer** (10 customizable tables, fully inject
 | ------------------------------------ | --------------------------------------------------------------------- |
 | Hot layer injection per turn         | **~7,000-11,000 tokens** (only 5-9% of a 128K window)                 |
 | Retrieval AI context                 | **<5,000 tokens** (100% attention focused on retrieval)               |
+| P1 retrieval efficiency              | **Max 3 rounds** to hit target (BM25 pre-filtering + regex exact match) |
+| Retrieval tech stack                 | **BM25 + Regex Search** (dual-engine collaboration, zero external deps) |
 | Storage cost                         | **Zero** (pure JSON files, no database dependency)                    |
 | Single-character sustained operation | **12+ years** (at 5,000 files)                                        |
 | Theoretical duration                 | **260+ years** (at 100,000 files; NTFS/ext4 support far exceeds this) |
@@ -106,21 +108,80 @@ This means:
 - **Zero technical barrier for migration**: Users can edit prompts themselves to adapt to different scenarios (roleplay / coding assistant / game NPC) without programming skills
 - **Naturally avoids technical debt**: No complex parsers or state machines to maintain — the AI itself is the most flexible "parser"
 
-### 🤖 Multi-AI Collaboration Engine
+### 📊 Highly Customizable Memory Tables — Perfectly Solves the AI RP God's-Eye Problem
 
-The system has **7 built-in AI roles**, each with a dedicated responsibility:
+**10 fully customizable structured tables**, injected every turn as CSV. Table meanings and purposes are **entirely defined by prompts** — change the prompt descriptions and the same table system serves completely different scenarios:
 
-| AI                    | Role                                                                                                    | Trigger              |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
-| Chat AI               | Conversation with users, file operations                                                                | User sends a message |
-| P1 Retrieval AI       | Search relevant history from memory layers (up to 5 rounds of deep search) + **Smart Preset Switching** | Automatic per turn   |
-| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold                                          | Automatic            |
-| P3 Daily Summary AI   | Generate detailed daily summary                                                                         | Manual               |
-| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                                                           | Manual               |
-| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                                                          | Auto/Manual          |
-| P6 Repair AI          | Check and fix memory file format issues                                                                 | Manual               |
+| Scenario         | Example Table Usage                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------------------- |
+| **AI Roleplay**  | Space-time settings / Character status / Social relations / Quest progress / Inventory — **AI only knows what's recorded in the tables, perfectly solving the god's-eye problem** |
+| **Programming**  | Architecture decisions / Code conventions / Module dependencies / Bug tracking / TODO lists               |
+| **Work Management** | Project progress / Meeting notes / Contacts / To-do items / Knowledge accumulation                    |
+| **Gaming**       | Character attributes / Equipment list / Skill trees / World state / NPC relationships                    |
 
-Retrieval AI is recommended to use **Gemini 2.0/2.5 Flash** (fast, low cost). Reply AI can use any model of your choice.
+Table contents are automatically maintained by the Chat AI via `<tableEdit>` tags — the AI autonomously decides when to update which data during conversation, with no manual intervention needed.
+
+**Why does this solve the god's-eye problem?** In traditional AI RP, the AI can "see" all conversation history, including information the character shouldn't know. With the table system, the AI acts only based on information explicitly recorded in the tables — if something isn't recorded in the character's cognition table, the AI simply doesn't "know" it. This is an **information isolation mechanism** that makes AI behavior more authentic and immersive.
+
+### 🌍 World Book Dynamic Injection — Conditional Triggers Based on Table Data
+
+World book entries support **dynamic injection** — deciding whether to inject a world setting based on real-time data from memory tables:
+
+```
+World book entry trigger conditions can read values and states from tables:
+  → When affection > 80 in Table #1 "Character Status", inject "Special dialogue unlocked" setting
+  → When main quest = "Chapter 3" in Table #4 "Quest Progress", inject corresponding world description
+  → When a specific item exists in Table #5 "Inventory", inject the item's usage effects
+```
+
+This **table-driven dynamic world-building** mechanism is easy to learn and turns world settings from static text into a living system that evolves with conversation progress and character state.
+
+### 🔍 Smart Retrieval System — BM25 + Regex Search Dual Engine
+
+**Newly introduced dual-engine retrieval capability** for fast and precise information finding:
+
+#### BM25 Semantic Retrieval
+- **Classic & efficient**: TF-IDF-based statistical algorithm that quickly filters the most relevant candidates from massive memory files
+- **Pure JS implementation**: Zero external dependencies — no vector database or Embedding API needed, ready out of the box
+
+#### Regex Exact Search
+- **Precise matching**: After BM25 coarse filtering, regex provides exact targeting — supports pattern matching, keyword combinations, fuzzy search
+- **Cross-file search**: A single search scans all memory files and project files, rapidly locating target content
+- **IDE deep integration**: Regex search is available directly in the file editing environment for quick project-wide file and content search
+
+#### Retrieval Performance
+- **P1 Retrieval AI dramatically enhanced**: BM25 pre-filtering + regex exact matching dual-engine collaboration reduces retrieval rounds from **5 to max 3** — 40% faster, 40% cheaper on API costs
+- **Significantly higher accuracy**: Regex search compensates for pure semantic retrieval's weakness in exact matching — keywords, dates, names and other structured info can be found in one shot
+
+### 🤖 Multi-AI Collaboration Engine — Cost-Effective Intelligence
+
+The system has **7 built-in AI roles**, each with a dedicated responsibility. **Each conversation only calls 2 AIs** (Retrieval AI + Chat AI); the rest trigger on demand — no need to worry about usage:
+
+| AI                    | Role                                                                                     | Trigger                            | Usage Notes                      |
+| --------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------- |
+| Chat AI               | Conversation with users, file operations                                                 | User sends a message               | Called every conversation         |
+| P1 Retrieval AI       | Search relevant history from memory (up to 3 rounds) + **Smart Preset Switching**        | Automatic per turn                 | Called every turn, **can use free AI** |
+| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold                           | **~50 conversations per trigger**  | Extremely infrequent             |
+| P3 Daily Summary AI   | Generate detailed daily summary                                                          | **Manual trigger**                 | Only when user clicks            |
+| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                                            | **Manual trigger**                 | Only when user clicks            |
+| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                                           | **Manual trigger**                 | Only when user clicks            |
+| P6 Repair AI          | Check and fix memory file format issues                                                  | **Manual trigger**                 | Only when user clicks            |
+
+#### 💰 AI Usage & Cost Analysis
+
+**Key insight**: The Retrieval AI (P1) only needs to "find memories" — it doesn't require a high-intelligence model. **It can run entirely on free or ultra-low-cost AI** (e.g., Gemini 2.0/2.5 Flash free tier).
+
+```
+AI calls per conversation:
+  ① P1 Retrieval AI — Find memories + determine preset switching (can use free AI like Gemini Flash)
+  ② Chat AI         — Generate reply based on selected memories (use any model you prefer)
+
+Infrequent AI:
+  ③ P2 Archive    — Triggers roughly once per 50 conversations, barely noticeable
+  ④ P3-P6         — All manual trigger, zero usage unless you click
+```
+
+**Bottom line**: If P1 uses free AI (Gemini Flash free tier is more than enough), then the actual cost per conversation = **only one Chat AI call**. The memory system runs at virtually zero cost.
 
 ### 🔄 Smart Preset Switching — AI Auto-Adapts to Interaction Modes
 
@@ -134,6 +195,16 @@ Retrieval AI is recommended to use **Gemini 2.0/2.5 Flash** (fast, low cost). Re
 
 This means AI is no longer "one preset fits all" — it **dynamically adapts to the optimal behavior mode based on the current context**, making it a truly multi-mode intelligent agent.
 
+### 🤖 Discord Bot — Your AI Serving You on Other Platforms
+
+**Fully implemented cross-platform Bot capability**: Deploy your AI companion to Discord channels and chat with your AI anytime, anywhere:
+
+- **Full memory access**: The Discord Bot shares the local memory system — your AI remembers your history even on Discord
+- **Visual management panel**: Bot Token, Owner, message depth and other common settings displayed as form controls — no manual JSON editing needed
+- **Real-time message log**: View Bot's sent/received messages in real-time on the management interface (user messages / AI replies / error logs)
+- **Multi-channel support**: Bot can work in multiple Discord channels simultaneously, maintaining independent context per channel
+- **One-click context clear**: Clear Bot's channel chat memory anytime to start fresh
+
 ### 🖥️ IDE-Style Interface
 
 VSCode-style three-panel layout:
@@ -142,9 +213,11 @@ VSCode-style three-panel layout:
 - **Center panel**: Chat / File editor / Memory management — three-tab switching
 - **Right panel**: Character info / Feature toggles / Memory AI operation panel
 
-### 🔌 11 Feature Plugins
+IDE includes built-in **BM25 + Regex Search** dual-engine file retrieval — enter keywords or regex expressions to search across all project files instantly.
 
-Preset engine / Memory system / File operations / Desktop screenshot / Logger / Feature toggles / Multi-AI collaboration / Regex beautification / World book / Web search / System info
+### 🔌 12 Feature Plugins
+
+Preset engine / Memory system / File operations / Desktop screenshot / Logger / Feature toggles / Multi-AI collaboration / Regex beautification / World book / Web search / System info / Browser awareness
 
 ### 🌐 Multi-Language Support (i18n)
 
@@ -168,21 +241,7 @@ Built-in full-stack diagnostic framework for rapid troubleshooting:
 - **Module-level toggle**: Enable/disable diagnostics per module (chat engine, memory, preset, etc.) — zero overhead when disabled
 - **Console interception**: Automatically captures all `console.log/warn/error/info` from both frontend (browser) and backend (Deno), stored in a 500-entry ring buffer without affecting normal output
 - **Error capture**: Automatically catches `window.onerror` and `unhandledrejection` events
-- **One-click log export**: Click " One-Click Pack Logs" in the Debug tab, or call `beiluDiag.pack()` from the browser console — generates a single JSON file containing:
-
-```
-beilu-diag-{timestamp}.json
-├── meta          — Timestamp, User-Agent, URL, report version
-├── frontend
-│   ├── logs        — Browser console buffer (last 500 entries)
-│   ├── snapshots   — Frontend diagnostic snapshots
-│   ├── diagConfig  — Module enable/disable status
-│   └── localStorage — Relevant local storage data
-└── backend
-    ├── logs        — Server console buffer (last 500 entries, ANSI stripped)
-    ├── snapshots   — Backend diagnostic snapshots
-    └── status      — Backend diagnostic module status
-```
+- **One-click log export**: Click "📦 One-Click Pack Logs" in the Debug tab, or call `beiluDiag.pack()` from the browser console — generates a single JSON file
 
 When reporting issues, attach this JSON file for complete context — no need to manually copy console output or describe steps.
 
@@ -198,12 +257,13 @@ When reporting issues, attach this JSON file for complete context — no need to
 
 ### vs AI Chat Applications (ChatGPT / Claude / Gemini)
 
-| Dimension      | ChatGPT etc.                            | beilu-always accompany                                           |
-| -------------- | --------------------------------------- | ---------------------------------------------------------------- |
-| Memory         | Simple summaries / conversation history | Three-layer graded + multi-AI retrieval, theoretically unlimited |
-| Attention      | Degrades as context grows               | Retrieval AI pre-filters; Reply AI attention stays focused       |
-| Customization  | Limited System Prompt                   | Full preset system + 10 customizable memory tables               |
-| Data ownership | Server-side storage                     | Local JSON files, fully self-owned                               |
+| Dimension      | ChatGPT etc.                            | beilu-always accompany                                                       |
+| -------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| Memory         | Simple summaries / conversation history | Three-layer graded + BM25/Regex dual-engine retrieval + multi-AI collaboration, theoretically unlimited |
+| Attention      | Degrades as context grows               | Retrieval AI pre-filters; Reply AI attention stays focused                   |
+| Customization  | Limited System Prompt                   | Full preset system + 10 customizable memory tables + dynamic world book injection |
+| Data ownership | Server-side storage                     | Local JSON files, fully self-owned                                           |
+| Cross-platform | Official clients only                   | Web + Discord Bot, AI serves you on multiple platforms                       |
 
 ### vs AI Coding Tools (Cursor / Copilot / Windsurf)
 
@@ -212,15 +272,18 @@ When reporting issues, attach this JSON file for complete context — no need to
 | Project memory         | Based on current file context   | Cross-session persistent memory (architecture decisions, code conventions, historical discussions) |
 | Multi-AI collaboration | Single model                    | 7 AIs with dedicated roles; retrieval/summary/reply separated                                      |
 | Memory cost            | Relies on large context windows | ~10K tokens covers the hot layer                                                                   |
+| File search            | IDE built-in                    | BM25 + Regex Search dual engine + IDE file tree                                                    |
 
 ### vs AI Roleplay Platforms (SillyTavern)
 
-| Dimension            | SillyTavern               | beilu-always accompany                                       |
-| -------------------- | ------------------------- | ------------------------------------------------------------ |
-| Memory               | No built-in memory system | Original three-layer memory + 6 auxiliary AIs                |
-| File operations      | None                      | Built-in IDE file management + AI file operations            |
-| Desktop capability   | None                      | beilu-eye desktop screenshot → AI recognition                |
-| Preset compatibility | Native                    | Fully compatible with ST presets/character cards/world books |
+| Dimension            | SillyTavern               | beilu-always accompany                                                    |
+| -------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| Memory               | No built-in memory system | Original three-layer memory + BM25/Regex dual-engine retrieval + 6 auxiliary AIs |
+| God's-eye problem    | No solution               | Memory table information isolation — AI only knows what's in the tables   |
+| File operations      | None                      | Built-in IDE file management + AI file operations                         |
+| Desktop capability   | None                      | beilu-eye desktop screenshot → AI recognition                             |
+| Cross-platform       | Web only                  | Web + Discord Bot                                                         |
+| Preset compatibility | Native                    | Fully compatible with ST presets/character cards/world books              |
 
 ---
 
@@ -242,24 +305,22 @@ Layered memory is not a temporary workaround for limited context windows — it 
 
 - Original three-layer memory algorithm (pure prompt-driven) — **Permanent memory, theoretically unlimited**
 - Multi-AI collaboration engine (Memory AI + Reply AI)
-- **🆕 Smart Preset Switching System** — P1 real-time context analysis with auto preset switching, multi-mode adaptive COT
-- IDE-style interface with file operations
+- Smart Preset Switching System — P1 real-time context analysis with auto preset switching, multi-mode adaptive COT
+- **🆕 Smart Retrieval System** — BM25 + Regex Search dual engine, P1 retrieval from 5 rounds down to max 3 (40% faster, 40% cheaper), IDE file quick search
+- **🆕 Discord Bot** — Cross-platform AI service with visual management panel + real-time message log
+- **🆕 Browser Page Awareness** — Passive + on-demand architecture, userscript monitors DOM changes and reports page snapshots
+- IDE-style interface with file operations (including BM25 + Regex Search dual-engine file retrieval)
+- Highly customizable memory tables (10 tables, adaptable to RP / coding / work / gaming and any scenario)
+- World book dynamic injection (conditional triggers based on table data)
 - Desktop screenshot system (beilu-eye)
 - Rendering engine
-- Memory table enhancement
 - Management home page i18n (Chinese / English / Japanese / Traditional Chinese)
-- 11 feature plugins
+- 12 feature plugins
 - Full-stack diagnostic framework with one-click log export
 
 ### 🔜 Near-term
 
-- APT entry switching enhancement
-- Vector DB / RAG semantic retrieval
-- Embedding API (OpenAI)
-
-### 🔮 Long-term Vision
-
-- **Cross-platform Bot integration** (Discord, etc.)
+- More platform Bot integrations
 - **Plugin ecosystem** (Workshop-style high extensibility)
 - **Live2D integration** + AI-controlled models
 - **AI game engine** (chat interface = game interface, code-compatible, userscript-friendly)
@@ -298,7 +359,7 @@ After launch, open your browser and navigate to `http://localhost:1314`
 
 1. **Configure AI source**: Home → System Settings → Add AI service source (proxy / gemini, etc.)
 2. **Import character card**: Home → Usage → Import (supports SillyTavern PNG/JSON format)
-3. **Configure memory presets**: Home → Memory Presets → Set up API for P1-P6 (Gemini 2.0 Flash recommended)
+3. **Configure memory presets**: Home → Memory Presets → Set up API for P1-P6 (recommend P1 using Gemini Flash free tier)
 4. **Start chatting**: Click a character card to enter the chat interface
 
 ### Using the Memory System
@@ -307,6 +368,12 @@ After launch, open your browser and navigate to `http://localhost:1314`
 - **Manual operations**: Chat interface right panel → Memory AI Operations → P2-P6 manual buttons
 - **Daily archival**: At the end of each day, click the "End Today" button to trigger the 9-step daily archival process
 - **Memory browsing**: Chat interface → Memory Tab → Browse/edit/import/export memory files
+
+### Discord Bot Setup
+
+1. Create a Bot application on [Discord Developer Portal](https://discord.com/developers/applications)
+2. In beilu-chat interface → Bot tab at the top → Enter Bot Token and Owner username
+3. Click "Start Bot" → @your Bot in a Discord channel to start chatting
 
 ---
 
@@ -318,7 +385,9 @@ After launch, open your browser and navigate to `http://localhost:1314`
 | Backend            | Node.js compatibility layer + Express-style routing |
 | Frontend           | Vanilla JavaScript (ESM modules)                    |
 | AI integration     | 14 ServiceGenerators                                |
+| Smart retrieval    | BM25 + Regex Search dual engine (pure JS, zero deps) |
 | Desktop screenshot | Python (mss + tkinter + pystray)                    |
+| Cross-platform     | discord.js v14                                      |
 | Storage            | Pure JSON file system                               |
 
 ---

@@ -191,20 +191,36 @@ function replaceVhInContent(content) {
  * 在 Vue / GSAP 等库加载之前执行，用于：
  * 1. 注入 SillyTavern 兼容 API
  * 2. 注入 beiluAudio 桥接 API（音频播放由父页面管理）
+ * 3. 注入 MVU 变量数据到 SillyTavern.chat[0].variables
  *
+ * @param {string} rawContentBase64 - 原始消息内容的 base64 编码
+ * @param {string} mvuVariablesJson - MVU 变量的 JSON 字符串（直接内联）
  * @returns {string} <script> 标签字符串
  */
-function createEarlyScript(rawContentBase64 = '') {
+function createEarlyScript(rawContentBase64 = '', mvuVariablesJson = '{}') {
 	return `<script>
 (function() {
 	// ★ 提前注入 SillyTavern 兼容 API（必须在角色卡 Vue 脚本之前执行！）
 	var _rawMsg = '';
 	try { _rawMsg = '${rawContentBase64}' ? decodeURIComponent(escape(atob('${rawContentBase64}'))) : ''; } catch(e) { console.warn('[earlyScript] base64 decode failed:', e); }
-	var _stChat = _rawMsg ? [{ message: _rawMsg }] : [];
+
+	// ★ MVU 变量数据注入
+	var _mvuVars = {};
+	try { _mvuVars = ${mvuVariablesJson}; } catch(e) { console.warn('[earlyScript] mvuVars parse failed:', e); }
+
+	// ★ 构造包含 variables 的 chat 条目（供 getAllVariables 读取）
+	var _stChat = _rawMsg ? [{ message: _rawMsg, variables: [_mvuVars], swipe_id: 0 }] : [];
 	window.__beiluStChat = _stChat;
 	window.SillyTavern = { chat: _stChat };
 	window.getCurrentMessageId = function() { return 0; };
 	window.getChatMessages = function() { return _stChat; };
+
+	// ★ 同时更新父页面 __beiluVarStore.chat（使 variableSystem 的回退路径也能读到）
+	try {
+		if (window.parent.__beiluVarStore && _mvuVars && Object.keys(_mvuVars).length > 0) {
+			Object.assign(window.parent.__beiluVarStore.chat, _mvuVars);
+		}
+	} catch(e) { /* cross-origin or missing */ }
 
 	// ★ 音频桥接 API：角色卡通过此 API 控制父页面的音频播放器
 	// Audio 对象在父页面，不在 iframe 内，彻底避免 autoplay 限制和控制冲突
@@ -418,9 +434,11 @@ function createBridgeScript(messageId, rawContentBase64 = '') {
  * @param {string} htmlDocument - 完整的 HTML 文档字符串
  * @param {HTMLElement} messageElement - 消息 DOM 元素（需包含 .message-content）
  * @param {string} [rawContent=''] - 原始消息文本（display regex 处理前），用于注入 ST API
+ * @param {object} [options={}] - 额外选项
+ * @param {object} [options.mvuVariables] - MVU 累积变量对象，注入到 iframe 中供状态栏读取
  * @returns {HTMLIFrameElement|null} 创建的 iframe 元素
  */
-export async function renderAsIframe(htmlDocument, messageElement, rawContent = '') {
+export async function renderAsIframe(htmlDocument, messageElement, rawContent = '', options = {}) {
 	const contentEl = messageElement.querySelector('.message-content')
 	if (!contentEl) {
 		diag.warn('未找到 .message-content 容器')
@@ -513,8 +531,23 @@ export async function renderAsIframe(htmlDocument, messageElement, rawContent = 
 		diag.warn('base64 encode failed:', e)
 	}
 
-	// ★ 注入 early script（beiluAudio 桥接 API + ST API）到 <head> 最前面
-	const earlyScript = createEarlyScript(rawContentBase64)
+	// ★ 序列化 MVU 变量为 JSON（用于 earlyScript 注入）
+	let mvuVariablesJson = '{}'
+	if (options.mvuVariables && typeof options.mvuVariables === 'object' && Object.keys(options.mvuVariables).length > 0) {
+		try {
+			mvuVariablesJson = JSON.stringify(options.mvuVariables)
+			// 安全检查：超大变量对象可能导致 srcdoc 膨胀
+			if (mvuVariablesJson.length > 50 * 1024) {
+				diag.warn(`MVU 变量数据过大 (${(mvuVariablesJson.length / 1024).toFixed(1)}KB)，可能影响 iframe 加载性能`)
+			}
+		} catch (e) {
+			diag.warn('MVU 变量 JSON 序列化失败:', e)
+			mvuVariablesJson = '{}'
+		}
+	}
+
+	// ★ 注入 early script（beiluAudio 桥接 API + ST API + MVU 变量）到 <head> 最前面
+	const earlyScript = createEarlyScript(rawContentBase64, mvuVariablesJson)
 	if (modifiedHtml.includes('<head>')) {
 		modifiedHtml = modifiedHtml.replace('<head>', '<head>' + earlyScript)
 	} else if (modifiedHtml.includes('<HEAD>')) {

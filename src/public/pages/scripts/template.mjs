@@ -1,4 +1,4 @@
-import { async_eval } from 'https://esm.sh/@steve02081504/async-eval'
+import { async_eval } from '../vendor/async-eval.bundle.mjs'
 
 import { base_dir } from '../base.mjs'
 

@@ -347,7 +347,7 @@ deleteRow(表格编号, 行编号)
 		icon: '📁',
 		title: 'beilu-files 文件系统',
 		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">beilu-files 文件操作插件</h4>
-<p class="text-xs text-base-content/50 mb-3">让 AI 具备类似 Cursor IDE 的文件读写能力。</p>
+<p class="text-xs text-base-content/50 mb-3">让 AI 具备类似 Cursor IDE 的文件读写和搜索能力。</p>
 <div class="space-y-2 text-xs">
 <div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
 <strong>文件操作标签</strong>
@@ -357,16 +357,131 @@ deleteRow(表格编号, 行编号)
 &lt;file_op type="create" path="路径"&gt;内容&lt;/file_op&gt;
 &lt;file_op type="delete" path="路径"&gt;&lt;/file_op&gt;
 &lt;file_op type="list" path="目录"&gt;&lt;/file_op&gt;
-&lt;file_op type="move" path="原路径" dest="新路径"&gt;&lt;/file_op&gt;</pre>
+&lt;file_op type="move" path="原路径" dest="新路径"&gt;&lt;/file_op&gt;
+&lt;file_op type="search" path="目录" query="关键词"&gt;&lt;/file_op&gt;
+&lt;file_op type="search" path="目录" regex="正则"&gt;&lt;/file_op&gt;</pre>
+</div>
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>搜索功能</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><code>query</code> — 关键词搜索（大小写不敏感）</li>
+<li><code>regex</code> — 正则表达式搜索</li>
+<li>递归搜索目录，自动跳过 node_modules/.git</li>
+<li>每文件最多 10 处匹配，总计最多 50 处</li>
+<li>跳过超过 100KB 的文件</li>
+</ul>
 </div>
 <div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
 <strong>安全控制</strong>
 <ul class="list-disc pl-4 mt-1 space-y-0.5">
 <li>路径白名单/黑名单控制</li>
-<li>读取操作可自动批准</li>
+<li>读取/搜索操作可自动批准</li>
 <li>写入/删除操作需用户确认</li>
 <li>命令执行 (exec) 独立开关</li>
 </ul>
+</div>
+</div>`,
+	},
+	{
+		id: 'browser-plugin',
+		category: '插件系统',
+		icon: '🌐',
+		title: 'beilu-browser 浏览器感知',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">beilu-browser 浏览器页面感知插件</h4>
+<p class="text-xs text-base-content/50 mb-3">通过油猴脚本获取浏览器当前页面内容，注入 AI 上下文，让 AI "看到" 主人正在浏览的网页。</p>
+<div class="space-y-2 text-xs">
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>工作原理</strong>
+<ol class="list-decimal pl-4 mt-1 space-y-0.5">
+<li>安装 Tampermonkey 油猴脚本（插件提供模板）</li>
+<li>油猴脚本自动采集当前页面的标题、URL、主要文本内容</li>
+<li>选中文本时自动推送选中内容</li>
+<li>页面快照通过 API 推送到 beilu-browser 插件</li>
+<li>插件在 GetPrompt 时自动注入最新页面内容到 AI 上下文</li>
+</ol>
+</div>
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>配置选项</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><strong>注入模式</strong>：latest（只注入最新页面）或 all（注入缓冲区所有页面）</li>
+<li><strong>缓冲区大小</strong>：环形缓冲区，保留最近 5 个页面快照</li>
+<li><strong>过期时间</strong>：30 分钟后页面快照自动过期不注入</li>
+<li><strong>内容截断</strong>：超长页面内容自动截断（防止 token 爆炸）</li>
+</ul>
+</div>
+<div class="p-2 rounded border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 与 beilu-eye 的区别：</strong>beilu-eye 是<strong>截图</strong>注入（图片），beilu-browser 是<strong>页面文本内容</strong>注入（结构化文本）。两者互补：eye 适合"看到屏幕"，browser 适合"理解网页内容"。
+</div>
+</div>`,
+	},
+	{
+		id: 'vectordb-plugin',
+		category: '插件系统',
+		icon: '🧠',
+		title: 'beilu-vectordb 语义搜索',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">beilu-vectordb 语义搜索插件</h4>
+<p class="text-xs text-base-content/50 mb-3">基于 Orama 向量数据库，提供语义搜索能力。按"意思"而非"关键词"搜索记忆。</p>
+<div class="space-y-2 text-xs">
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>核心功能</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><strong>Embedding 索引</strong>：将记忆文件文本分块，调用 Embedding API 生成向量后存入 Orama 索引</li>
+<li><strong>语义搜索</strong>：输入自然语言查询，按语义相似度匹配记忆</li>
+<li><strong>三种搜索模式</strong>：fulltext（全文）、vector（向量）、hybrid（混合）</li>
+<li><strong>索引重建</strong>：遍历记忆目录重建完整索引</li>
+<li><strong>持久化</strong>：索引数据保存到文件，重启不丢失</li>
+</ul>
+</div>
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>Embedding 配置</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li>使用 OpenAI 兼容的 <code>/v1/embeddings</code> 端点</li>
+<li>API URL、Key、Model、Dimensions 均可配置</li>
+<li>不锁定特定 AI 服务商，支持自定义源</li>
+</ul>
+</div>
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>技术选型</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><strong>Orama</strong>（npm:@orama/orama）— 纯 JS 实现，Deno 原生支持</li>
+<li>零 native 依赖，无需编译</li>
+<li>支持全文搜索 + 向量搜索 + 混合搜索</li>
+</ul>
+</div>
+<div class="p-2 rounded border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 与 searchKeyword 的区别：</strong>searchKeyword 是<strong>精确关键词匹配</strong>（搜"游泳"只找"游泳"这两个字）。vectordb 是<strong>语义匹配</strong>（搜"水上运动"也能找到"游泳"相关记忆）。
+</div>
+</div>`,
+	},
+	{
+		id: 'graphrag-plugin',
+		category: '插件系统',
+		icon: '🕸️',
+		title: 'beilu-graphrag 知识图谱',
+		content: `<h4 class="text-sm font-bold text-amber-700 mb-2">beilu-graphrag 知识图谱插件</h4>
+<p class="text-xs text-base-content/50 mb-3">基于 LightRAG 构建知识图谱，实现基于实体-关系的智能检索。</p>
+<div class="space-y-2 text-xs">
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>核心功能</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><strong>知识图谱构建</strong>：从记忆文件中自动提取实体（人物、地点、事件）和关系</li>
+<li><strong>增量更新</strong>：新增记忆时增量更新图谱，无需全量重建</li>
+<li><strong>四种查询模式</strong>：local（局部子图）、global（全局概览）、hybrid（混合）、naive（朴素匹配）</li>
+<li><strong>批量索引</strong>：一键索引整个记忆目录</li>
+<li><strong>图谱统计</strong>：查看实体数量、关系数量等</li>
+</ul>
+</div>
+<div class="p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>技术架构</strong>
+<ul class="list-disc pl-4 mt-1 space-y-0.5">
+<li><strong>LightRAG</strong>（pip install lightrag-hku）— Python 端知识图谱引擎</li>
+<li>Deno 后端通过 Python 子进程管理（复用 beilu-eye 模式）</li>
+<li>stdin/stdout JSON-line 协议通信</li>
+<li>自动安装 Python 依赖</li>
+</ul>
+</div>
+<div class="p-2 rounded border border-info/30" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 与 vectordb 的区别：</strong>vectordb 按<strong>文本语义相似度</strong>搜索。graphrag 理解<strong>实体之间的关系</strong>（如"贝露-喜欢-凛倾"、"凛倾-去过-海边"），能回答"谁和谁有什么关系"这类问题。
 </div>
 </div>`,
 	},
@@ -657,7 +772,23 @@ clearTable(6)
 &lt;memorySearch&gt;
 readFile("文件路径")
 listDir("目录路径")
+searchKeyword("关键词")
+searchRegex("正则表达式")
+getStats()
 &lt;/memorySearch&gt;</pre>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--bc) / 0.04);">
+<strong>5 种操作说明：</strong>
+<table class="beilu-doc-table mt-1">
+<thead><tr><th>操作</th><th>说明</th><th>示例</th></tr></thead>
+<tbody>
+<tr><td><code>readFile("路径")</code></td><td>读取指定记忆文件的 JSON 内容</td><td><code>readFile("hot/forever.json")</code></td></tr>
+<tr><td><code>listDir("路径")</code></td><td>列出目录下的文件和子目录</td><td><code>listDir("warm/2026/02/")</code></td></tr>
+<tr><td><code>searchKeyword("词")</code></td><td>在整个记忆目录中递归搜索包含该关键词的文件（大小写不敏感，每文件最多5处，总计最多30处）</td><td><code>searchKeyword("游泳")</code></td></tr>
+<tr><td><code>searchRegex("正则")</code></td><td>用正则表达式搜索记忆文件内容，比 searchKeyword 更强大</td><td><code>searchRegex("游泳|swimming")</code></td></tr>
+<tr><td><code>getStats()</code></td><td>获取记忆系统统计概览（文件数、大小、各层状态、表格摘要）</td><td><code>getStats()</code></td></tr>
+</tbody>
+</table>
+</div>
 <div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
 <strong>💡 检索流程示例：</strong>
 <pre class="font-mono mt-1">
@@ -665,14 +796,14 @@ listDir("目录路径")
 P1 分析对话上下文，发现用户提到"上次生日"
 → 输出：
 &lt;memorySearch&gt;
-listDir("warm/2026/02/")
+searchKeyword("生日")
 readFile("hot/warm_monthly_index.json")
 &lt;/memorySearch&gt;
 
-<strong>── 系统返回文件内容 ──</strong>
+<strong>── 系统返回搜索结果 + 文件内容 ──</strong>
 
 <strong>── 第 2 轮 ──</strong>
-P1 根据索引找到相关日期
+P1 根据搜索结果找到相关日期
 → 输出：
 &lt;memorySearch&gt;
 readFile("warm/2026/02/14_summary.json")
@@ -683,13 +814,25 @@ readFile("warm/2026/02/14_details/batch_001.json")
 
 <strong>── P1 结束检索，输出检索结果摘要 ──</strong></pre>
 </div>
+<div class="mt-2 p-2 rounded" style="background: oklch(var(--in) / 0.05);">
+<strong>💡 searchKeyword 返回格式示例：</strong>
+<pre class="font-mono mt-1">
+🔍 searchKeyword("游泳"):
+  找到 3 个文件匹配
+  📄 warm/2026/02/15_summary.json (2处匹配):
+    L12: "主人提到小时候学游泳..."
+    L45: "约定以后一起去游泳池..."
+  📄 hot/forever.json (1处匹配):
+    L8: "喜欢的运动: 游泳、散步"</pre>
+</div>
 <div class="mt-2 text-base-content/40">
 <strong>规则：</strong>
 <ul class="list-disc pl-4 mt-1 space-y-0.5">
-<li>一个 &lt;memorySearch&gt; 标签内可写多条 readFile/listDir</li>
+<li>一个 &lt;memorySearch&gt; 标签内可写多条操作（readFile/listDir/searchKeyword/searchRegex/getStats）</li>
 <li>最多 5 轮检索交互，超过则强制结束</li>
 <li>路径相对于角色记忆根目录</li>
 <li>readFile 返回 JSON 文件内容；listDir 返回目录下的文件列表</li>
+<li>searchKeyword/searchRegex 跨文件搜索，跳过超过 50KB 的文件</li>
 <li>检索结果会注入到 P1 的下一轮对话上下文中</li>
 </ul>
 </div>

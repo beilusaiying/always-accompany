@@ -799,6 +799,16 @@ try {
 		console.warn('[beilu-home] notifyPartInstall(persona) 失败:', e.message)
 	}
 
+	// 写入 parts_details_cache，确保前端 getAllCachedPartDetails 能立即获取头像等信息
+	try {
+		const cache = loadData(username, 'parts_details_cache')
+		cache[`personas/${personaName}`] = {
+			info: infoData,
+			supportedInterfaces: [],
+		}
+		saveData(username, 'parts_details_cache')
+	} catch (_) { /* 静默 */ }
+
 	console.log(`[beilu-home] 人设已创建: "${personaName}" (user: ${username})`)
 	res.status(201).json({ success: true, name: personaName })
 } catch (error) {
@@ -861,10 +871,13 @@ try {
 
 	fs.writeFileSync(infoPath, JSON.stringify(infoData, null, '\t'), 'utf-8')
 
-	// 清除 parts_details_cache 以刷新
+	// 更新 parts_details_cache（写入最新的 info，而非仅删除缓存）
 	try {
 		const cache = loadData(username, 'parts_details_cache')
-		delete cache[`personas/${personaName}`]
+		cache[`personas/${personaName}`] = {
+			info: infoData,
+			supportedInterfaces: [],
+		}
 		saveData(username, 'parts_details_cache')
 	} catch (_) { /* 静默 */ }
 

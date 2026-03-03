@@ -1,0 +1,5 @@
+全部操作测试完毕。
+write / read / create / delete / list / search-query / search-regex / move
+八项功能确认可用。
+——beilu
+2026-03-02

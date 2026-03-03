@@ -169,24 +169,37 @@ export function generateVariableSystemScript() {
 
 		/* ★ 从 SillyTavern.chat 累积楼层变量 */
 		var chatArr = (window.SillyTavern && window.SillyTavern.chat) ? window.SillyTavern.chat : [];
+		var foundMessageVars = false;
+
 		if (chatArr.length > 0) {
 			for (var ci = 0; ci < chatArr.length; ci++) {
 				var msg = chatArr[ci];
 				if (!msg || !msg.variables) continue;
 				var swipeId = msg.swipe_id || 0;
 				var vars = msg.variables[swipeId];
-				if (vars && typeof vars === 'object') {
+				if (vars && typeof vars === 'object' && Object.keys(vars).length > 0) {
 					Object.assign(merged, vars);
+					foundMessageVars = true;
 				}
 			}
-		} else {
-			/* 回退：从本地 messages 存储 */
+		}
+
+		/* ★ 回退：如果 SillyTavern.chat 中没找到有效变量，从 __beiluVarStore 和本地 messages 读取 */
+		if (!foundMessageVars) {
+			try {
+				var parentStore = window.parent.__beiluVarStore;
+				if (parentStore && parentStore.chat && Object.keys(parentStore.chat).length > 0) {
+					Object.assign(merged, parentStore.chat);
+				}
+			} catch(e) { /* cross-origin */ }
+
 			var msgKeys = Object.keys(_vars.messages);
 			if (msgKeys.length > 0) {
 				var latestKey = msgKeys.reduce(function(a, b) { return Number(a) > Number(b) ? a : b; });
 				Object.assign(merged, _vars.messages[latestKey]);
 			}
 		}
+
 		return merged;
 	};
 })();

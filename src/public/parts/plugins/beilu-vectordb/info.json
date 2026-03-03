@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "Beilu Vector DB",
+		"avatar": "https://api.iconify.design/mdi/vector-combine.svg",
+		"description": "Semantic search powered by Orama vector database.",
+		"description_markdown": "**Beilu Vector DB** provides semantic search capabilities using Orama. Index memory files and search by meaning, not just keywords.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["vector", "semantic", "search", "orama", "beilu"]
+	},
+	"zh-CN": {
+		"name": "贝露的语义搜索",
+		"avatar": "https://api.iconify.design/mdi/vector-combine.svg",
+		"description": "基于 Orama 向量数据库的语义搜索能力",
+		"description_markdown": "**贝露的语义搜索** 使用 Orama 提供语义搜索能力。索引记忆文件后可按语义检索，不限于关键词匹配。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["向量", "语义", "搜索", "orama", "贝露"]
+	},
+	"emoji": {
+		"name": "🧠🔍",
+		"avatar": "https://api.iconify.design/mdi/vector-combine.svg",
+		"description": "🧠📚➡️🔍✨",
+		"description_markdown": "🧠 ➡️ 📊\n🔍 ➡️ ✨",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["🧠", "🔍", "📊", "⛲"]
+	}
+}

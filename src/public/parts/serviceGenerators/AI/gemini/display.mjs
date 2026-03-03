@@ -46,7 +46,7 @@ return async ({ data, containers }) => {
 	div.innerHTML = proxyWarning + /* html */ '<div data-i18n="serviceSource_manager.common_config_interface.loadingModels"></div>'
 
 	try {
-		const { GoogleGenAI } = await import('https://esm.sh/@google/genai')
+		const { GoogleGenAI } = await import('/esm-cache/@google/genai')
 
 		const ai = new GoogleGenAI({
 			apiKey: apikey,

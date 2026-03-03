@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "Beilu Browser Sense",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "Browser page awareness — inject page content into AI context.",
+		"description_markdown": "**Beilu Browser Sense** receives browser page snapshots from a userscript and injects them as context for the AI.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["browser", "page", "awareness", "beilu"]
+	},
+	"zh-CN": {
+		"name": "贝露的浏览器感知",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "浏览器页面感知 — 将页面内容注入 AI 上下文",
+		"description_markdown": "**贝露的浏览器感知** 接收来自油猴脚本的浏览器页面快照，作为上下文注入给 AI。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["浏览器", "页面", "感知", "贝露"]
+	},
+	"emoji": {
+		"name": "🌐👀",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "🌐📄➡️🤖",
+		"description_markdown": "🌐 ➡️ 📄\n🖥️ ➡️ 🤖",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["🌐", "📄", "👀", "⛲"]
+	}
+}

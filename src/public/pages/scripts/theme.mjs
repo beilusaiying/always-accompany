@@ -1,4 +1,4 @@
-import { async_eval } from 'https://esm.sh/@steve02081504/async-eval'
+import { async_eval } from '../vendor/async-eval.bundle.mjs'
 
 import { svgInliner } from './svgInliner.mjs'
 
@@ -539,7 +539,7 @@ window.addEventListener('focus', async () => {
 	// 预先插入 daisyUI 官方主题 CSS
 	const daisyui_theme_style = document.createElement('link')
 	daisyui_theme_style.rel = 'stylesheet'
-	daisyui_theme_style.href = 'https://cdn.jsdelivr.net/npm/daisyui/themes.css'
+	daisyui_theme_style.href = 'https://cdn.jsdelivr.net/npm/daisyui/themes.css' // jsdelivr 大陆通常可用，保留外部加载
 	daisyui_theme_style.crossorigin = 'anonymous'
 	document.head.prepend(daisyui_theme_style)
 }
@@ -549,4 +549,4 @@ window.addEventListener('focus', async () => {
  * 从 CDN 动态导入。
  * @type {Promise<string[]>}
  */
-export const builtin_themes = await import('https://cdn.jsdelivr.net/npm/daisyui/functions/themeOrder.js').then(m => m.default).catch(() => ['dark', 'light'])
+export const builtin_themes = await import('../vendor/daisyui-themeOrder.mjs').then(m => m.default).catch(() => ['dark', 'light'])

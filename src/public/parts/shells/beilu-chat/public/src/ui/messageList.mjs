@@ -1,24 +1,49 @@
-import { confirmI18n, geti18n, main_locale } from '../../../../../scripts/i18n.mjs'
-import { renderMarkdownAsStandAloneHtmlString, renderMarkdownAsString } from '../../../../../scripts/markdown.mjs'
-import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
-import { renderTemplate, renderTemplateAsHtmlString, renderTemplateNoScriptActivation } from '../../../../../scripts/template.mjs'
-import { showToast, showToastI18n } from '../../../../../scripts/toast.mjs'
-import { stopGeneration } from '../chat.mjs'
-import { createDiag } from '../diagLogger.mjs'
-import { activateScriptsInElement, applyBuiltinProcessors, applyDisplayRules, detectContentType, extractThinkingContent, getRenderDepth, getRenderMode, restorePlaceholders } from '../displayRegex.mjs'
 import {
-  deleteMessage,
-  editMessage,
-  modifyTimeLine,
-} from '../endpoints.mjs'
-import { handleFilesSelect, renderAttachmentPreview } from '../fileHandling.mjs'
-import { getfile } from '../files.mjs'
-import { createShareLink } from '../share.mjs'
-import { DEFAULT_AVATAR, SWIPE_THRESHOLD, TRANSITION_DURATION, arrayBufferToBase64 } from '../utils.mjs'
-const diag = createDiag('messageList')
+  confirmI18n,
+  geti18n,
+  main_locale,
+} from "../../../../../scripts/i18n.mjs";
+import {
+  renderMarkdownAsStandAloneHtmlString,
+  renderMarkdownAsString,
+} from "../../../../../scripts/markdown.mjs";
+import { onElementRemoved } from "../../../../../scripts/onElementRemoved.mjs";
+import {
+  renderTemplate,
+  renderTemplateAsHtmlString,
+  renderTemplateNoScriptActivation,
+} from "../../../../../scripts/template.mjs";
+import { showToast, showToastI18n } from "../../../../../scripts/toast.mjs";
+import { stopGeneration } from "../chat.mjs";
+import { createDiag } from "../diagLogger.mjs";
+import {
+  activateScriptsInElement,
+  applyBuiltinProcessors,
+  applyDisplayRules,
+  detectContentType,
+  extractThinkingContent,
+  getRenderDepth,
+  getRenderMode,
+  restorePlaceholders,
+} from "../displayRegex.mjs";
+import { deleteMessage, editMessage, modifyTimeLine } from "../endpoints.mjs";
+import {
+  handleFilesSelect,
+  renderAttachmentPreview,
+} from "../fileHandling.mjs";
+import { getfile } from "../files.mjs";
+import { createShareLink } from "../share.mjs";
+import {
+  DEFAULT_AVATAR,
+  SWIPE_THRESHOLD,
+  TRANSITION_DURATION,
+  arrayBufferToBase64,
+} from "../utils.mjs";
+const diag = createDiag("messageList");
 
-import { addDragAndDropSupport } from './dragAndDrop.mjs'
-import { renderAsIframe } from './iframeRenderer.mjs'
+// ★ Phase 1.2 + Phase 2：MVU 变量桥接 + 混合内容分段渲染
+import { addDragAndDropSupport } from "./dragAndDrop.mjs";
+import { renderAsIframe } from "./iframeRenderer.mjs";
 import {
   addDeletionListener,
   getChatLogIndexByQueueIndex,
@@ -26,17 +51,17 @@ import {
   getQueue,
   getQueueIndex,
   replaceMessageInQueue,
-} from './virtualQueue.mjs'
+} from "./virtualQueue.mjs";
 
 // 用于存储滑动事件监听器的 Map
-const swipeListenersMap = new WeakMap()
-const deletionQueue = []
+const swipeListenersMap = new WeakMap();
+const deletionQueue = [];
 
 /**
  * 为每个消息对象存储其专属的 markdown 渲染缓存
  * @type {WeakMap<object, object>}
  */
-const messageRenderCacheMap = new WeakMap()
+const messageRenderCacheMap = new WeakMap();
 
 /**
  * 获取或创建消息的渲染缓存对象
@@ -44,43 +69,129 @@ const messageRenderCacheMap = new WeakMap()
  * @returns {object} 缓存对象
  */
 function getMessageCache(message) {
-	let cache = messageRenderCacheMap.get(message)
-	if (!cache) messageRenderCacheMap.set(message, cache = {})
-	return cache
+  let cache = messageRenderCacheMap.get(message);
+  if (!cache) messageRenderCacheMap.set(message, (cache = {}));
+  return cache;
+}
+
+// ============================================================
+// ★ Phase 1.2：MVU 变量查找与桥接
+// ============================================================
+
+/**
+ * 从消息队列中向后查找最近的 mvu_variables
+ * 用于：当前消息没有 mvu_variables 时，使用最近的累积状态
+ * @param {Array} queue - 消息队列
+ * @returns {object|null} 最近的 mvu_variables 或 null
+ */
+function findLatestMvuVariables(queue) {
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const vars = queue[i]?.extension?.mvu_variables;
+    if (vars && typeof vars === "object" && Object.keys(vars).length > 0) {
+      return vars;
+    }
+  }
+  return null;
+}
+
+/**
+ * 获取用于渲染的 MVU 变量数据
+ * 优先使用当前消息的 mvu_variables，回退到队列中最近的
+ * @param {object} message - 当前消息对象
+ * @returns {object} MVU 变量对象（可能为空对象）
+ */
+function getMvuVariablesForRendering(message) {
+  // 优先使用当前消息自身的 mvu_variables
+  if (
+    message.extension?.mvu_variables &&
+    typeof message.extension.mvu_variables === "object" &&
+    Object.keys(message.extension.mvu_variables).length > 0
+  ) {
+    return message.extension.mvu_variables;
+  }
+  // 回退：从队列中查找最近的
+  return findLatestMvuVariables(getQueue()) || {};
+}
+
+// ============================================================
+// ★ Phase 2.1：混合内容分段检测
+// ============================================================
+
+/**
+ * 检测 display regex 处理后的内容是否为混合类型
+ * （正文 markdown + 嵌入的 full-html 文档）
+ *
+ * 只在内容同时包含普通文本和完整 HTML 文档时才拆分。
+ * 如果整个内容就是一个 HTML 文档（如 <game_text> 替换结果），不拆分。
+ *
+ * @param {string} text - display regex 处理后的文本
+ * @returns {Array<{type: 'markdown'|'full-html', content: string}>|null}
+ *   返回分段数组，如果无需拆分则返回 null
+ */
+function splitMixedContent(text) {
+  const htmlDocPattern = /(<!DOCTYPE[\s\S]*?<\/html\s*>)/gi;
+  const matches = [...text.matchAll(htmlDocPattern)];
+
+  if (matches.length === 0) return null;
+
+  // 整个内容就是一个 HTML 文档 → 不拆分（<game_text> 场景）
+  const trimmed = text.trim();
+  if (
+    matches.length === 1 &&
+    trimmed.indexOf(matches[0][0]) === 0 &&
+    matches[0][0].length >= trimmed.length - 5
+  ) {
+    // 允许尾部有少量空白
+    return null;
+  }
+
+  const segments = [];
+  let lastIndex = 0;
+
+  for (const match of matches) {
+    const before = text.slice(lastIndex, match.index).trim();
+    if (before) segments.push({ type: "markdown", content: before });
+    segments.push({ type: "full-html", content: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+
+  const after = text.slice(lastIndex).trim();
+  if (after) segments.push({ type: "markdown", content: after });
+
+  return segments.length > 1 ? segments : null;
 }
 
 /**
  * 按顺序处理删除队列。
  */
 async function processDeletionQueue() {
-	const messageElement = deletionQueue.shift()
-	if (!messageElement) return
-	try {
-		const queueIndex = getQueueIndex(messageElement)
-		if (queueIndex === -1) return
-		const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex)
-		const uiUpdated = new Promise(resolve => addDeletionListener(resolve))
-		await deleteMessage(chatLogIndex)
-		await uiUpdated
-	}
-	catch (error) {
-		console.error('Error processing deletion:', error)
-		showToast('error', error.stack || error.message || error)
-	}
+  const messageElement = deletionQueue.shift();
+  if (!messageElement) return;
+  try {
+    const queueIndex = getQueueIndex(messageElement);
+    if (queueIndex === -1) return;
+    const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
+    const uiUpdated = new Promise((resolve) => addDeletionListener(resolve));
+    await deleteMessage(chatLogIndex);
+    await uiUpdated;
+  } catch (error) {
+    console.error("Error processing deletion:", error);
+    showToast("error", error.stack || error.message || error);
+  }
 }
 setTimeout(async () => {
-	while (true) {
-		await processDeletionQueue()
-		await new Promise(resolve => setTimeout(resolve, 1000))
-	}
-})
+  while (true) {
+    await processDeletionQueue();
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+});
 
 /**
  * 将消息元素添加到删除队列。
  * @param {HTMLElement} messageElement - 要删除的消息元素。
  */
 function enqueueDeletion(messageElement) {
-	deletionQueue.push(messageElement)
+  deletionQueue.push(messageElement);
 }
 
 /**
@@ -91,19 +202,20 @@ function enqueueDeletion(messageElement) {
  * @returns {Promise<string>} 完整的 HTML 字符串。
  */
 async function generateFullHtmlForMessage(message, cache) {
-	return renderTemplateAsHtmlString('standalone_message', {
-		main_locale,
-		message,
-		/**
-		 * 渲染 Markdown 为 HTML 字符串（带缓存复用）
-		 * @param {string} markdown - Markdown 文本
-		 * @returns {Promise<string>} HTML 字符串
-		 */
-		renderMarkdownAsStandAloneHtmlString: markdown => renderMarkdownAsStandAloneHtmlString(markdown, cache),
-		geti18n,
-		getfile,
-		arrayBufferToBase64,
-	})
+  return renderTemplateAsHtmlString("standalone_message", {
+    main_locale,
+    message,
+    /**
+     * 渲染 Markdown 为 HTML 字符串（带缓存复用）
+     * @param {string} markdown - Markdown 文本
+     * @returns {Promise<string>} HTML 字符串
+     */
+    renderMarkdownAsStandAloneHtmlString: (markdown) =>
+      renderMarkdownAsStandAloneHtmlString(markdown, cache),
+    geti18n,
+    getfile,
+    arrayBufferToBase64,
+  });
 }
 
 /**
@@ -112,452 +224,675 @@ async function generateFullHtmlForMessage(message, cache) {
  * @returns {Promise<HTMLElement>} - 渲染好的消息 DOM 元素。
  */
 export async function renderMessage(message) {
-	// 渲染入口记录（debug级别，不在生产中输出）
-	diag.debug('renderMessage entry', {
-		id: message?.id,
-		role: message?.role,
-		name: message?.name,
-		contentLen: message?.content?.length,
-	})
+  // 渲染入口记录（debug级别，不在生产中输出）
+  diag.debug("renderMessage entry", {
+    id: message?.id,
+    role: message?.role,
+    name: message?.name,
+    contentLen: message?.content?.length,
+  });
 
-	// ★ 全面防御：确保 message 对象完整性
-	if (!message || typeof message !== 'object') {
-		diag.error('renderMessage received invalid message:', message)
-		const div = document.createElement('div')
-		div.className = 'chat-message mb-3'
-		div.textContent = '[渲染错误：无效消息对象]'
-		return div
-	}
+  // ★ 全面防御：确保 message 对象完整性
+  if (!message || typeof message !== "object") {
+    diag.error("renderMessage received invalid message:", message);
+    const div = document.createElement("div");
+    div.className = "chat-message mb-3";
+    div.textContent = "[渲染错误：无效消息对象]";
+    return div;
+  }
 
-	// ★ P0修复：过滤系统消息（世界书条目/注入的上下文）
-	// 这些消息是 world 的 AddChatLogEntry 注入的 AI 上下文，不应该在聊天界面显示
-	// 典型特征：role='system', name='world_info' 或类似
-	if (message.role === 'system') {
-		diag.log(`skipping system message (role=system, name=${message.name}), not rendering`)
-		const hidden = document.createElement('div')
-		hidden.style.display = 'none'
-		hidden.className = 'chat-message system-hidden'
-		hidden.id = message.id || ('msg-sys-' + Math.random().toString(36).substring(2, 10))
-		return hidden
-	}
+  // ★ P0修复：过滤系统消息（世界书条目/注入的上下文）
+  // 这些消息是 world 的 AddChatLogEntry 注入的 AI 上下文，不应该在聊天界面显示
+  // 典型特征：role='system', name='world_info' 或类似
+  if (message.role === "system") {
+    diag.log(
+      `skipping system message (role=system, name=${message.name}), not rendering`,
+    );
+    const hidden = document.createElement("div");
+    hidden.style.display = "none";
+    hidden.className = "chat-message system-hidden";
+    hidden.id =
+      message.id || "msg-sys-" + Math.random().toString(36).substring(2, 10);
+    return hidden;
+  }
 
-	if (!message.id) {
-		message.id = 'msg-' + Math.random().toString(36).substring(2, 15)
-		diag.warn(`message missing id, generated fallback: ${message.id}`,
-			'| keys:', Object.keys(message).join(','),
-			'| role:', message.role,
-			'| name:', message.name,
-			'| contentLen:', message.content?.length,
-			'| hasTimeSlice:', !!message.timeSlice,
-			'| content_preview:', message.content?.substring?.(0, 100))
-	}
+  // ★ 感知消息隐藏：以 [beilu-eye-screenshot] 或 [beilu-browser-page] 开头的用户消息
+  // 默认前端不显示在聊天界面（视觉隐藏），但 AI 仍能看到（通过 addUserReply 发送）
+  // 用户可以通过"显示感知消息"开关（localStorage: beilu-show-sense-messages）控制是否显示
+  if (
+    message.role === "user" &&
+    typeof message.content === "string" &&
+    (message.content.startsWith("[beilu-eye-screenshot]") ||
+      message.content.startsWith("[beilu-browser-page]"))
+  ) {
+    const showSenseMessages =
+      localStorage.getItem("beilu-show-sense-messages") === "true";
+    if (!showSenseMessages) {
+      const senseType = message.content.startsWith("[beilu-eye-screenshot]")
+        ? "eye"
+        : "browser";
+      diag.log(`hiding beilu-${senseType} sense message (id=${message.id})`);
+      const hidden = document.createElement("div");
+      hidden.style.display = "none";
+      hidden.className = `chat-message beilu-${senseType}-hidden`;
+      hidden.id =
+        message.id ||
+        `msg-${senseType}-` + Math.random().toString(36).substring(2, 10);
+      return hidden;
+    }
+    // 开关开启时，继续正常渲染（不隐藏）
+    const senseType = message.content.startsWith("[beilu-eye-screenshot]")
+      ? "eye"
+      : "browser";
+    diag.log(
+      `showing beilu-${senseType} sense message (id=${message.id}, toggle=on)`,
+    );
+  }
 
+  if (!message.id) {
+    message.id = "msg-" + Math.random().toString(36).substring(2, 15);
+    diag.warn(
+      `message missing id, generated fallback: ${message.id}`,
+      "| keys:",
+      Object.keys(message).join(","),
+      "| role:",
+      message.role,
+      "| name:",
+      message.name,
+      "| contentLen:",
+      message.content?.length,
+      "| hasTimeSlice:",
+      !!message.timeSlice,
+      "| content_preview:",
+      message.content?.substring?.(0, 100),
+    );
+  }
 
-	const cache = getMessageCache(message)
+  const cache = getMessageCache(message);
 
-	// 获取原始内容
-	const rawContent = message.content_for_show || message.content
+  // 获取原始内容
+  const rawContent = message.content_for_show || message.content;
 
-	// ★ 提取思维链内容（从正文中剥离，后续渲染到独立 UI 组件）
-	const { cleanText: thinkingCleanText, thinkingText } = extractThinkingContent(rawContent)
+  // ★ 提取思维链内容（从正文中剥离，后续渲染到独立 UI 组件）
+  const { cleanText: thinkingCleanText, thinkingText } =
+    extractThinkingContent(rawContent);
 
-	// 对剥离思维链后的正文应用内置处理器（代码折叠等），再应用 display regex
-	const builtinProcessed = applyBuiltinProcessors(thinkingCleanText)
-	// 传入消息角色，用户消息不应用 display regex（防止内容消失）
-	const messageRole = message.role || (message.is_user ? 'user' : '')
-	const { text: displayProcessed, placeholders } = applyDisplayRules(builtinProcessed, { role: messageRole, charName: message.name || '' })
+  // ★ Phase 3.1：最新 char 消息自动注入状态栏占位符
+  let contentForProcessing = thinkingCleanText;
+  const queueForAutoInject = getQueue();
+  const isLastCharMessage =
+    message.role === "char" &&
+    queueForAutoInject.length > 0 &&
+    queueForAutoInject[queueForAutoInject.length - 1]?.id === message.id;
+  // 检查队列中是否有任何消息带 mvu_variables（说明 MVU 已启用）
+  const mvuEnabled = queueForAutoInject.some((m) => m.extension?.mvu_variables);
 
-	// ★ 渲染深度检查：超出深度的旧消息不做 full-html 渲染
-	const renderDepth = getRenderDepth()
-	const queueForDepth = getQueue()
-	const depthIndex = queueForDepth.findIndex(m => m.id === message.id)
-	const distanceFromEnd = depthIndex >= 0 ? (queueForDepth.length - 1 - depthIndex) : 0
-	const isWithinRenderDepth = renderDepth <= 0 || distanceFromEnd < renderDepth
+  if (
+    isLastCharMessage &&
+    mvuEnabled &&
+    !contentForProcessing.includes("<StatusPlaceHolderImpl/>")
+  ) {
+    contentForProcessing += "\n<StatusPlaceHolderImpl/>";
+    diag.debug("MVU 状态栏自动注入: 已追加 <StatusPlaceHolderImpl/>");
+  }
 
-	// ★ 内容类型检测：决定走哪条渲染路径
-	let contentType = detectContentType(displayProcessed)
-	// 超出渲染深度的消息强制走 markdown
-	if (contentType === 'full-html' && !isWithinRenderDepth) {
-		contentType = 'markdown'
-	}
-	const currentRenderMode = getRenderMode()
+  // 对剥离思维链后的正文应用内置处理器（代码折叠等），再应用 display regex
+  const builtinProcessed = applyBuiltinProcessors(contentForProcessing);
+  // 传入消息角色，用户消息不应用 display regex（防止内容消失）
+  const messageRole = message.role || (message.is_user ? "user" : "");
+  const { text: displayProcessed, placeholders } = applyDisplayRules(
+    builtinProcessed,
+    { role: messageRole, charName: message.name || "" },
+  );
 
-	let renderedContent
-	if (contentType === 'full-html') {
-		// full-html 统一用 iframe 渲染（无论 sandbox/free 模式）
-		// 自由模式直接 innerHTML 注入完整 HTML 文档会导致：
-		// 1. 浏览器无法在 div 内嵌套 <!doctype>/<html>/<head>/<body>
-		// 2. 文档内的全局 CSS 覆盖页面样式，导致内容不可见
-		renderedContent = '<div class="iframe-placeholder">正在加载美化视图...</div>'
-	} else {
-		// 普通 markdown 或脚本片段 → 走原有 markdown 管线
-		renderedContent = await renderMarkdownAsString(displayProcessed, cache)
-		if (placeholders.size > 0) {
-			renderedContent = restorePlaceholders(renderedContent, placeholders)
-		}
-	}
+  // ★ 渲染深度检查：超出深度的旧消息不做 full-html 渲染
+  const renderDepth = getRenderDepth();
+  const queueForDepth = getQueue();
+  const depthIndex = queueForDepth.findIndex((m) => m.id === message.id);
+  const distanceFromEnd =
+    depthIndex >= 0 ? queueForDepth.length - 1 - depthIndex : 0;
+  const isWithinRenderDepth = renderDepth <= 0 || distanceFromEnd < renderDepth;
 
-	// ★ 预计算 media 判断，避免在模板中对 content 做 match（模板引擎会解析 content 中的 ${} 导致卡死）
-	// full-html 内容一定包含媒体（iframe），强制为 true 确保气泡获得 w-full 类
-	const contentHasMedia = contentType === 'full-html' || /<(?:video|iframe)\b[^>]*>[\s\S]*?<\/(?:video|iframe)>/gi.test(renderedContent)
+  // ★ Phase 2.2：分段检测 + 内容类型决策
+  const segments = splitMixedContent(displayProcessed);
+  let contentType;
+  let renderedContent;
+  const currentRenderMode = getRenderMode();
 
-	// 预处理 avatar：优先使用角色卡图片路径
-	// ★ P3修复：检测未替换的宏字符串（如 {{avatar}}），视为无效
-	let rawAvatar = message.avatar
-	if (rawAvatar && typeof rawAvatar === 'string' && /\{\{.*\}\}/.test(rawAvatar)) {
-		rawAvatar = null // 包含未替换宏的 avatar 视为无效
-	}
-	let safeAvatar = rawAvatar || DEFAULT_AVATAR;
-	// ★ 修复：相对文件名（如 "avatar.png"）转为 /parts/ 静态文件 URL
-	if (rawAvatar && !rawAvatar.startsWith('/') && !rawAvatar.startsWith('http') && rawAvatar !== DEFAULT_AVATAR) {
-		if (message.role === 'user') {
-			const personaId = message.timeSlice?.player_id || message.timeSlice?.player
-			if (personaId) {
-				safeAvatar = `/parts/personas:${encodeURIComponent(personaId)}/${rawAvatar}`
-			}
-		} else if (message.role === 'char') {
-			const charKey = message.timeSlice?.charname || message.name
-			if (charKey) {
-				safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/${rawAvatar}`
-			}
-		}
-	}
-	// 如果 avatar 为空或是默认值，尝试从角色卡路径构建头像 URL
-	if (!rawAvatar && message.role === 'char') {
-		// 优先使用 timeSlice.charname（角色卡目录名/key），比 message.name（可能是显示名）更可靠
-		const charKey = message.timeSlice?.charname || message.name
-		if (charKey) {
-			safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/image.png`;
-		}
-	}
-	// 简单的转义，防止模板注入
-	if (typeof safeAvatar === 'string') {
-		safeAvatar = safeAvatar.replace(/"/g, '"');
-	}
+  if (segments) {
+    // ★ 混合内容（正文 markdown + 嵌入的 full-html 状态栏）：分段渲染
+    contentType = "mixed";
+    diag.debug("splitMixedContent: 检测到混合内容", {
+      segmentCount: segments.length,
+      types: segments.map((s) => s.type),
+    });
 
-	// 计算楼层号（从 virtualQueue 获取消息在队列中的位置）
-	const queueForFloor = getQueue()
-	const floorIndex = queueForFloor.findIndex(m => m.id === message.id)
-	const floorNumber = floorIndex >= 0 ? `#${floorIndex}` : ''
+    renderedContent = "";
+    for (const seg of segments) {
+      if (seg.type === "markdown") {
+        const md = await renderMarkdownAsString(seg.content, cache);
+        const restored =
+          placeholders.size > 0 ? restorePlaceholders(md, placeholders) : md;
+        renderedContent += `<div class="segment-markdown">${restored}</div>`;
+      } else {
+        // full-html 段：base64 编码存入 data 属性，后续创建 iframe
+        const b64 = btoa(unescape(encodeURIComponent(seg.content)));
+        renderedContent += `<div class="segment-iframe" data-segment-html="${b64}"></div>`;
+      }
+    }
+  } else {
+    // 原有逻辑：纯 markdown 或纯 full-html
+    contentType = detectContentType(displayProcessed);
+    // 超出渲染深度的消息强制走 markdown
+    if (contentType === "full-html" && !isWithinRenderDepth) {
+      contentType = "markdown";
+    }
 
-	const preprocessedMessage = {
-		...message,
-		avatar: safeAvatar,
-		floor: floorNumber,
-		time_stamp: new Date(message.time_stamp).toLocaleString(),
-		content: '',              // ★ 空占位：不通过模板 ${content} 传递，避免模板引擎解析 HTML 中的 ${}
-		contentHasMedia,          // ★ 预计算的 media 标志，供模板判断 w-full class
-	}
+    if (contentType === "full-html") {
+      // full-html 统一用 iframe 渲染（无论 sandbox/free 模式）
+      // 自由模式直接 innerHTML 注入完整 HTML 文档会导致：
+      // 1. 浏览器无法在 div 内嵌套 <!doctype>/<html>/<head>/<body>
+      // 2. 文档内的全局 CSS 覆盖页面样式，导致内容不可见
+      renderedContent =
+        '<div class="iframe-placeholder">正在加载美化视图...</div>';
+    } else {
+      // 普通 markdown 或脚本片段 → 走原有 markdown 管线
+      renderedContent = await renderMarkdownAsString(displayProcessed, cache);
+      if (placeholders.size > 0) {
+        renderedContent = restorePlaceholders(renderedContent, placeholders);
+      }
+    }
+  }
 
-	if (message.is_generating) {
-		const messageElement = await renderTemplateNoScriptActivation('message_generating_view', preprocessedMessage)
-		// Add stop button listener
-		const stopButton = messageElement.querySelector('.stop-generating-button')
-		if (stopButton)
-			stopButton.addEventListener('click', () => {
-				stopGeneration(message.id)
-			})
+  // ★ 预计算 media 判断，避免在模板中对 content 做 match（模板引擎会解析 content 中的 ${} 导致卡死）
+  // full-html 内容一定包含媒体（iframe），强制为 true 确保气泡获得 w-full 类
+  const contentHasMedia =
+    contentType === "full-html" ||
+    /<(?:video|iframe)\b[^>]*>[\s\S]*?<\/(?:video|iframe)>/gi.test(
+      renderedContent,
+    );
 
-		const skeleton = messageElement.querySelector('.skeleton-loader')
-		const contentEl = messageElement.querySelector('.message-content')
-		if (skeleton && contentEl) {
-			if (!renderedContent || !renderedContent.trim()) {
-				skeleton.classList.remove('hidden')
-				contentEl.classList.add('hidden')
-			} else {
-				skeleton.classList.add('hidden')
-				contentEl.classList.remove('hidden')
-			}
-		}
+  // 预处理 avatar：优先使用角色卡图片路径
+  // ★ P3修复：检测未替换的宏字符串（如 {{avatar}}），视为无效
+  let rawAvatar = message.avatar;
+  if (
+    rawAvatar &&
+    typeof rawAvatar === "string" &&
+    /\{\{.*\}\}/.test(rawAvatar)
+  ) {
+    rawAvatar = null; // 包含未替换宏的 avatar 视为无效
+  }
+  let safeAvatar = rawAvatar || DEFAULT_AVATAR;
+  // ★ 修复：相对文件名（如 "avatar.png"）转为 /parts/ 静态文件 URL
+  if (
+    rawAvatar &&
+    !rawAvatar.startsWith("/") &&
+    !rawAvatar.startsWith("http") &&
+    rawAvatar !== DEFAULT_AVATAR
+  ) {
+    if (message.role === "user") {
+      const personaId =
+        message.timeSlice?.player_id || message.timeSlice?.player;
+      if (personaId) {
+        safeAvatar = `/parts/personas:${encodeURIComponent(personaId)}/${rawAvatar}`;
+      }
+    } else if (message.role === "char") {
+      const charKey = message.timeSlice?.charname || message.name;
+      if (charKey) {
+        safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/${rawAvatar}`;
+      }
+    }
+  }
+  // 如果 avatar 为空或是默认值，尝试从角色卡路径构建头像 URL
+  if (!rawAvatar && message.role === "char") {
+    // 优先使用 timeSlice.charname（角色卡目录名/key），比 message.name（可能是显示名）更可靠
+    const charKey = message.timeSlice?.charname || message.name;
+    if (charKey) {
+      safeAvatar = `/parts/chars:${encodeURIComponent(charKey)}/image.png`;
+    }
+  }
+  // 简单的转义，防止模板注入
+  if (typeof safeAvatar === "string") {
+    safeAvatar = safeAvatar.replace(/"/g, '"');
+  }
 
-		// ★ 通过 DOM 注入内容，绕过模板引擎
-		if (contentEl && renderedContent) {
-			contentEl.innerHTML = renderedContent
-		}
+  // 计算楼层号（从 virtualQueue 获取消息在队列中的位置）
+  const queueForFloor = getQueue();
+  const floorIndex = queueForFloor.findIndex((m) => m.id === message.id);
+  const floorNumber = floorIndex >= 0 ? `#${floorIndex}` : "";
 
-		return messageElement
-	}
+  const preprocessedMessage = {
+    ...message,
+    avatar: safeAvatar,
+    floor: floorNumber,
+    time_stamp: new Date(message.time_stamp).toLocaleString(),
+    content: "", // ★ 空占位：不通过模板 ${content} 传递，避免模板引擎解析 HTML 中的 ${}
+    contentHasMedia, // ★ 预计算的 media 标志，供模板判断 w-full class
+  };
 
-	const messageElement = await renderTemplate('message_view', preprocessedMessage)
-	const messageContentElement = messageElement.querySelector('.message-content')
-	// ★ 通过 DOM 注入内容，绕过模板引擎的 ${} 解析器
-	if (messageContentElement && renderedContent) {
-		messageContentElement.innerHTML = renderedContent
-	}
+  if (message.is_generating) {
+    const messageElement = await renderTemplateNoScriptActivation(
+      "message_generating_view",
+      preprocessedMessage,
+    );
+    // Add stop button listener
+    const stopButton = messageElement.querySelector(".stop-generating-button");
+    if (stopButton)
+      stopButton.addEventListener("click", () => {
+        stopGeneration(message.id);
+      });
 
-	// ★ 注入思维链内容到独立组件
-	const thinkingEl = messageElement.querySelector('.thinking-toggle')
-	if (thinkingEl && thinkingText) {
-		thinkingEl.classList.remove('hidden')
-		const thinkingContentEl = thinkingEl.querySelector('.thinking-toggle-content')
-		if (thinkingContentEl) thinkingContentEl.textContent = thinkingText
+    const skeleton = messageElement.querySelector(".skeleton-loader");
+    const contentEl = messageElement.querySelector(".message-content");
+    if (skeleton && contentEl) {
+      if (!renderedContent || !renderedContent.trim()) {
+        skeleton.classList.remove("hidden");
+        contentEl.classList.add("hidden");
+      } else {
+        skeleton.classList.add("hidden");
+        contentEl.classList.remove("hidden");
+      }
+    }
 
-		// 绑定折叠/展开事件
-		const toggleBtn = thinkingEl.querySelector('.thinking-toggle-btn')
-		if (toggleBtn) {
-			toggleBtn.addEventListener('click', () => {
-				const contentDiv = thinkingEl.querySelector('.thinking-toggle-content')
-				const iconEl = thinkingEl.querySelector('.thinking-toggle-icon')
-				const isHidden = contentDiv.classList.toggle('hidden')
-				if (iconEl) iconEl.textContent = isHidden ? '▶' : '▼'
-			})
-		}
-	}
-	const messageMarkdownContent = message.content_for_show || message.content
+    // ★ 通过 DOM 注入内容，绕过模板引擎
+    if (contentEl && renderedContent) {
+      contentEl.innerHTML = renderedContent;
+    }
 
-	// --- 拖放下载功能 ---
-	// ★ 延迟生成 standaloneMessage：standalone_message 模板含 ${messageHtml}，
-	//   如果消息内容含 ${ 字符，模板引擎会无限循环。改为按需生成，不阻塞消息渲染。
-	let standaloneMessageUrl = ''
-	let standaloneGenerated = false
+    // ★ 头像 404 回退：图片加载失败时显示默认头像
+    _addAvatarFallback(messageElement);
 
-	/**
-	 * 按需生成 standalone HTML（仅在拖拽/下载/分享时才调用）
-	 * @returns {Promise<string>} blob URL
-	 */
-	async function ensureStandaloneUrl() {
-		if (standaloneGenerated) return standaloneMessageUrl
-		standaloneGenerated = true
-		try {
-			const html = await generateFullHtmlForMessage(message, cache)
-			standaloneMessageUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
-		} catch (err) {
-			console.warn('[messageList] generateFullHtmlForMessage failed:', err.message)
-		}
-		return standaloneMessageUrl
-	}
+    return messageElement;
+  }
 
-	onElementRemoved(messageElement, () => {
-		if (standaloneMessageUrl) URL.revokeObjectURL(standaloneMessageUrl)
-	})
+  const messageElement = await renderTemplate(
+    "message_view",
+    preprocessedMessage,
+  );
+  const messageContentElement =
+    messageElement.querySelector(".message-content");
+  // ★ 通过 DOM 注入内容，绕过模板引擎的 ${} 解析器
+  if (messageContentElement && renderedContent) {
+    messageContentElement.innerHTML = renderedContent;
+  }
 
-	messageElement.addEventListener('mousedown', e => {
-		// If the mousedown is on an interactive part, don't make the message draggable.
-		// This allows text selection, button clicks, etc.
-		if (e.target.closest('.message-content, textarea'))
-			messageElement.draggable = false
-		else // Otherwise, allow dragging the whole message.
-			messageElement.draggable = true
-	})
+  // ★ 注入思维链内容到独立组件
+  const thinkingEl = messageElement.querySelector(".thinking-toggle");
+  if (thinkingEl && thinkingText) {
+    thinkingEl.classList.remove("hidden");
+    const thinkingContentEl = thinkingEl.querySelector(
+      ".thinking-toggle-content",
+    );
+    if (thinkingContentEl) thinkingContentEl.textContent = thinkingText;
 
-	/**
-	 * 清理可拖拽状态以防止意外行为。
-	 * @returns {void}
-	 */
-	const cleanupDraggable = () => { messageElement.draggable = false }
-	messageElement.addEventListener('mouseup', cleanupDraggable)
-	messageElement.addEventListener('mouseleave', cleanupDraggable)
-	messageElement.addEventListener('dragend', cleanupDraggable)
+    // 绑定折叠/展开事件
+    const toggleBtn = thinkingEl.querySelector(".thinking-toggle-btn");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        const contentDiv = thinkingEl.querySelector(".thinking-toggle-content");
+        const iconEl = thinkingEl.querySelector(".thinking-toggle-icon");
+        const isHidden = contentDiv.classList.toggle("hidden");
+        if (iconEl) iconEl.textContent = isHidden ? "▶" : "▼";
+      });
+    }
+  }
+  const messageMarkdownContent = message.content_for_show || message.content;
 
-	messageElement.addEventListener('dragstart', async event => {
-		const fileName = `message-${message.id}.html`
-		const url = await ensureStandaloneUrl()
+  // --- 拖放下载功能 ---
+  // ★ 延迟生成 standaloneMessage：standalone_message 模板含 ${messageHtml}，
+  //   如果消息内容含 ${ 字符，模板引擎会无限循环。改为按需生成，不阻塞消息渲染。
+  let standaloneMessageUrl = "";
+  let standaloneGenerated = false;
 
-		event.dataTransfer.setData('DownloadURL', `text/html:${fileName}:${url}`)
-		event.dataTransfer.effectAllowed = 'copy'
+  /**
+   * 按需生成 standalone HTML（仅在拖拽/下载/分享时才调用）
+   * @returns {Promise<string>} blob URL
+   */
+  async function ensureStandaloneUrl() {
+    if (standaloneGenerated) return standaloneMessageUrl;
+    standaloneGenerated = true;
+    try {
+      const html = await generateFullHtmlForMessage(message, cache);
+      standaloneMessageUrl = URL.createObjectURL(
+        new Blob([html], { type: "text/html" }),
+      );
+    } catch (err) {
+      console.warn(
+        "[messageList] generateFullHtmlForMessage failed:",
+        err.message,
+      );
+    }
+    return standaloneMessageUrl;
+  }
 
-		event.dataTransfer.setData('text/plain', messageContentElement.textContent.trim())
-		event.dataTransfer.setData('text/markdown', message.content)
-		event.dataTransfer.setData('text/html', renderedContent)
-	})
+  onElementRemoved(messageElement, () => {
+    if (standaloneMessageUrl) URL.revokeObjectURL(standaloneMessageUrl);
+  });
 
-	// --- 删除按钮 ---
-	const deleteButtons = messageElement.querySelectorAll('.delete-button')
-	deleteButtons.forEach(deleteButton => {
-		deleteButton.addEventListener('click', () => {
-			// Count lines in the message content
-			const lineCount = messageMarkdownContent.split('\n').length
-			// Skip confirmation for messages with less than 30 lines
-			const needsConfirmation = lineCount >= 30
+  messageElement.addEventListener("mousedown", (e) => {
+    // If the mousedown is on an interactive part, don't make the message draggable.
+    // This allows text selection, button clicks, etc.
+    if (e.target.closest(".message-content, textarea"))
+      messageElement.draggable = false; // Otherwise, allow dragging the whole message.
+    else messageElement.draggable = true;
+  });
 
-			if (!needsConfirmation || confirmI18n('chat.messageList.confirmDeleteMessage')) {
-				deleteButtons.forEach(btn => btn.disabled = true)
-				enqueueDeletion(messageElement)
-			}
-		})
-	})
+  /**
+   * 清理可拖拽状态以防止意外行为。
+   * @returns {void}
+   */
+  const cleanupDraggable = () => {
+    messageElement.draggable = false;
+  };
+  messageElement.addEventListener("mouseup", cleanupDraggable);
+  messageElement.addEventListener("mouseleave", cleanupDraggable);
+  messageElement.addEventListener("dragend", cleanupDraggable);
 
-	// --- Shift key detection for button visibility ---
-	const buttonGroup = messageElement.querySelector('.button-group')
-	const normalButtons = buttonGroup.querySelector('.normal-buttons')
-	const shiftButtons = buttonGroup.querySelector('.shift-buttons')
+  messageElement.addEventListener("dragstart", async (event) => {
+    const fileName = `message-${message.id}.html`;
+    const url = await ensureStandaloneUrl();
 
-	let isShiftPressed = false
+    event.dataTransfer.setData("DownloadURL", `text/html:${fileName}:${url}`);
+    event.dataTransfer.effectAllowed = "copy";
 
-	/**
-	 * 更新按钮可见性
-	 */
-	const updateButtonVisibility = () => {
-		if (isShiftPressed) {
-			normalButtons.style.display = 'none'
-			shiftButtons.style.display = 'flex'
-		} else {
-			normalButtons.style.display = 'flex'
-			shiftButtons.style.display = 'none'
-		}
-	}
+    event.dataTransfer.setData(
+      "text/plain",
+      messageContentElement.textContent.trim(),
+    );
+    event.dataTransfer.setData("text/markdown", message.content);
+    event.dataTransfer.setData("text/html", renderedContent);
+  });
 
-	/**
-	 * 处理按下 Shift 键
-	 * @param {KeyboardEvent} e 事件
-	 */
-	const handleKeyDown = (e) => {
-		if (e.key === 'Shift' && !isShiftPressed) {
-			isShiftPressed = true
-			updateButtonVisibility()
-		}
-	}
+  // --- 删除按钮 ---
+  const deleteButtons = messageElement.querySelectorAll(".delete-button");
+  deleteButtons.forEach((deleteButton) => {
+    deleteButton.addEventListener("click", () => {
+      // Count lines in the message content
+      const lineCount = messageMarkdownContent.split("\n").length;
+      // Skip confirmation for messages with less than 30 lines
+      const needsConfirmation = lineCount >= 30;
 
-	/**
-	 * 处理松开 Shift 键
-	 * @param {KeyboardEvent} e 事件
-	 */
-	const handleKeyUp = (e) => {
-		if (e.key === 'Shift' && isShiftPressed) {
-			isShiftPressed = false
-			updateButtonVisibility()
-		}
-	}
+      if (
+        !needsConfirmation ||
+        confirmI18n("chat.messageList.confirmDeleteMessage")
+      ) {
+        deleteButtons.forEach((btn) => (btn.disabled = true));
+        enqueueDeletion(messageElement);
+      }
+    });
+  });
 
-	// Add keyboard event listeners
-	document.addEventListener('keydown', handleKeyDown)
-	document.addEventListener('keyup', handleKeyUp)
+  // --- Shift key detection for button visibility ---
+  const buttonGroup = messageElement.querySelector(".button-group");
+  const normalButtons = buttonGroup.querySelector(".normal-buttons");
+  const shiftButtons = buttonGroup.querySelector(".shift-buttons");
 
-	// Clean up listeners when element is removed
-	onElementRemoved(messageElement, () => {
-		document.removeEventListener('keydown', handleKeyDown)
-		document.removeEventListener('keyup', handleKeyUp)
-	})
+  let isShiftPressed = false;
 
-	// Initialize button visibility
-	updateButtonVisibility()
+  /**
+   * 更新按钮可见性
+   */
+  const updateButtonVisibility = () => {
+    if (isShiftPressed) {
+      normalButtons.style.display = "none";
+      shiftButtons.style.display = "flex";
+    } else {
+      normalButtons.style.display = "flex";
+      shiftButtons.style.display = "none";
+    }
+  };
 
-	// --- Direct Download HTML button (shift mode) ---
-	const downloadHtmlButtonDirect = messageElement.querySelector('.download-html-button-direct')
-	downloadHtmlButtonDirect.addEventListener('click', async () => {
-		try {
-			const url = await ensureStandaloneUrl()
-			const a = document.createElement('a')
-			a.href = url
-			a.download = `message-${message.id}.html`
-			document.body.appendChild(a)
-			a.click()
-			document.body.removeChild(a)
-		}
-		catch (error) {
-			showToast('error', error.stack || error.message || error)
-		}
-	})
+  /**
+   * 处理按下 Shift 键
+   * @param {KeyboardEvent} e 事件
+   */
+  const handleKeyDown = (e) => {
+    if (e.key === "Shift" && !isShiftPressed) {
+      isShiftPressed = true;
+      updateButtonVisibility();
+    }
+  };
 
-	// 获取 dropdown 菜单元素
-	const dropdownMenu = messageElement.querySelector('.dropdown')
-	messageElement.addEventListener('mouseleave', () => dropdownMenu.hidePopover())
+  /**
+   * 处理松开 Shift 键
+   * @param {KeyboardEvent} e 事件
+   */
+  const handleKeyUp = (e) => {
+    if (e.key === "Shift" && isShiftPressed) {
+      isShiftPressed = false;
+      updateButtonVisibility();
+    }
+  };
 
-	// 获取 dropdown items
-	dropdownMenu.querySelector('.copy-markdown-button').addEventListener('click', async () => {
-		try {
-			await navigator.clipboard.writeText(messageMarkdownContent)
-		} catch (error) { showToast('error', error.stack || error.message || error) }
-		dropdownMenu.hidePopover()
-	})
-	dropdownMenu.querySelector('.copy-text-button').addEventListener('click', async () => {
-		try {
-			await navigator.clipboard.writeText(messageContentElement.textContent.trim())
-		} catch (error) { showToast('error', error.stack || error.message || error) }
-		dropdownMenu.hidePopover()
-	})
-	dropdownMenu.querySelector('.copy-html-button').addEventListener('click', async () => {
-		try {
-			const fullHtml = await generateFullHtmlForMessage(message)
-			await navigator.clipboard.writeText(fullHtml)
-		} catch (error) { showToast('error', error.stack || error.message || error) }
-		dropdownMenu.hidePopover()
-	})
+  // Add keyboard event listeners
+  document.addEventListener("keydown", handleKeyDown);
+  document.addEventListener("keyup", handleKeyUp);
 
-	// --- Download as HTML button ---
-	const downloadHtmlButton = dropdownMenu.querySelector('.download-html-button')
-	downloadHtmlButton.addEventListener('click', async () => {
-		try {
-			const url = await ensureStandaloneUrl()
-			const a = document.createElement('a')
-			a.href = url
-			a.download = `message-${message.id}.html`
-			document.body.appendChild(a)
-			a.click()
-			document.body.removeChild(a)
-		}
-		catch (error) {
-			showToast('error', error.stack || error.message || error)
-		}
-		dropdownMenu.hidePopover()
-	})
+  // Clean up listeners when element is removed
+  onElementRemoved(messageElement, () => {
+    document.removeEventListener("keydown", handleKeyDown);
+    document.removeEventListener("keyup", handleKeyUp);
+  });
 
-	// --- Share buttons ---
-	const shareButtons = dropdownMenu.querySelectorAll('.share-button')
-	shareButtons.forEach(button => {
-		button.addEventListener('click', async () => {
-			try {
-				const { time } = button.dataset
-				showToastI18n('info', 'chat.messageView.share.uploading')
-				const blob = new Blob([await generateFullHtmlForMessage(message)], { type: 'text/html' })
-				const link = await createShareLink(blob, `message-${message.id}.html`, time)
+  // Initialize button visibility
+  updateButtonVisibility();
 
-				await navigator.clipboard.writeText(link)
-				showToastI18n('success', 'chat.messageView.share.success', {
-					provider: 'litterbox.moe',
-					sponsorLink: 'https://store.catbox.moe/'
-				})
-			}
-			catch (error) {
-				showToast('error', error.stack || error.message || error)
-			}
-			dropdownMenu.hidePopover()
-		})
-	})
+  // --- Direct Download HTML button (shift mode) ---
+  const downloadHtmlButtonDirect = messageElement.querySelector(
+    ".download-html-button-direct",
+  );
+  downloadHtmlButtonDirect.addEventListener("click", async () => {
+    try {
+      const url = await ensureStandaloneUrl();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `message-${message.id}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error) {
+      showToast("error", error.stack || error.message || error);
+    }
+  });
 
-	// --- 编辑按钮 ---
-	const editButton = messageElement.querySelector('.edit-button')
-	editButton.addEventListener('click', async () => {
-		const queueIndex = getQueueIndex(messageElement)
-		if (queueIndex === -1) return
-		const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex)
-		if (chatLogIndex === -1) return
-		await editMessageStart(message, queueIndex, chatLogIndex) // 显示编辑界面
-	})
+  // 获取 dropdown 菜单元素
+  const dropdownMenu = messageElement.querySelector(".dropdown");
+  messageElement.addEventListener("mouseleave", () =>
+    dropdownMenu.hidePopover(),
+  );
 
-	// --- iframe 渲染（完整 HTML 文档 — 统一使用 iframe，无论 sandbox/free） ---
-	if (contentType === 'full-html') {
-		await renderAsIframe(displayProcessed, messageElement, rawContent)
-	}
+  // 获取 dropdown items
+  dropdownMenu
+    .querySelector(".copy-markdown-button")
+    .addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(messageMarkdownContent);
+      } catch (error) {
+        showToast("error", error.stack || error.message || error);
+      }
+      dropdownMenu.hidePopover();
+    });
+  dropdownMenu
+    .querySelector(".copy-text-button")
+    .addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(
+          messageContentElement.textContent.trim(),
+        );
+      } catch (error) {
+        showToast("error", error.stack || error.message || error);
+      }
+      dropdownMenu.hidePopover();
+    });
+  dropdownMenu
+    .querySelector(".copy-html-button")
+    .addEventListener("click", async () => {
+      try {
+        const fullHtml = await generateFullHtmlForMessage(message);
+        await navigator.clipboard.writeText(fullHtml);
+      } catch (error) {
+        showToast("error", error.stack || error.message || error);
+      }
+      dropdownMenu.hidePopover();
+    });
 
-	// --- 激活 display regex 注入的脚本（非 full-html 模式） ---
-	if (contentType !== 'full-html' && displayProcessed !== rawContent) {
-		// display regex 做了替换，可能注入了 <script> 标签
-		const messageContentElement2 = messageElement.querySelector('.message-content')
-		if (messageContentElement2) {
-			await activateScriptsInElement(messageContentElement2)
-		}
-	}
+  // --- Download as HTML button ---
+  const downloadHtmlButton = dropdownMenu.querySelector(
+    ".download-html-button",
+  );
+  downloadHtmlButton.addEventListener("click", async () => {
+    try {
+      const url = await ensureStandaloneUrl();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `message-${message.id}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error) {
+      showToast("error", error.stack || error.message || error);
+    }
+    dropdownMenu.hidePopover();
+  });
 
-	// --- 渲染附件 ---
-	if (message.files?.length) {
-		const attachmentsContainer = messageElement.querySelector('.attachments')
-		if (attachmentsContainer) {
-			if (message.files.length === 1)
-				attachmentsContainer.classList.add('is-single-attachment')
+  // --- Share buttons ---
+  const shareButtons = dropdownMenu.querySelectorAll(".share-button");
+  shareButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        const { time } = button.dataset;
+        showToastI18n("info", "chat.messageView.share.uploading");
+        const blob = new Blob([await generateFullHtmlForMessage(message)], {
+          type: "text/html",
+        });
+        const link = await createShareLink(
+          blob,
+          `message-${message.id}.html`,
+          time,
+        );
 
-			attachmentsContainer.innerHTML = ''
-			const attachmentPromises = message.files.map((file, index) =>
-				renderAttachmentPreview(file, index, null)
-			)
-			const renderedAttachments = await Promise.all(attachmentPromises)
-			renderedAttachments.forEach(attachmentElement => {
-				if (attachmentElement) attachmentsContainer.appendChild(attachmentElement)
-			})
-		}
-	}
+        await navigator.clipboard.writeText(link);
+        showToastI18n("success", "chat.messageView.share.success", {
+          provider: "litterbox.moe",
+          sponsorLink: "https://store.catbox.moe/",
+        });
+      } catch (error) {
+        showToast("error", error.stack || error.message || error);
+      }
+      dropdownMenu.hidePopover();
+    });
+  });
 
-	return messageElement
+  // --- 编辑按钮 ---
+  const editButton = messageElement.querySelector(".edit-button");
+  editButton.addEventListener("click", async () => {
+    const queueIndex = getQueueIndex(messageElement);
+    if (queueIndex === -1) return;
+    const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
+    if (chatLogIndex === -1) return;
+    await editMessageStart(message, queueIndex, chatLogIndex); // 显示编辑界面
+  });
+
+  // --- iframe 渲染 ---
+  if (contentType === "full-html") {
+    // ★ Phase 1.2：纯 full-html（如 <game_text> 整块替换），注入 MVU 变量
+    const mvuVars = getMvuVariablesForRendering(message);
+    await renderAsIframe(displayProcessed, messageElement, rawContent, {
+      mvuVariables: mvuVars,
+    });
+  }
+
+  // ★ Phase 2.2：mixed 类型 — 为每个 iframe 段创建独立 iframe
+  if (contentType === "mixed") {
+    const mvuVars = getMvuVariablesForRendering(message);
+    const slots = messageElement.querySelectorAll(".segment-iframe");
+    for (const slot of slots) {
+      const b64 = slot.dataset.segmentHtml;
+      if (!b64) continue;
+      let segmentHtml;
+      try {
+        segmentHtml = decodeURIComponent(escape(atob(b64)));
+      } catch (e) {
+        diag.warn("segment-iframe base64 解码失败:", e);
+        continue;
+      }
+
+      // 创建 iframe 容器替换占位 div
+      const container = document.createElement("div");
+      container.className = "segment-iframe-container";
+      const wrapper = document.createElement("div");
+      wrapper.id = `${message.id}-iframe-${Math.random().toString(36).slice(2, 8)}`;
+      wrapper.className = "chat-message"; // renderAsIframe 需要 .message-content 子元素
+      const contentDiv = document.createElement("div");
+      contentDiv.className = "message-content";
+      contentDiv.innerHTML =
+        '<div class="iframe-placeholder">正在加载状态栏...</div>';
+      wrapper.appendChild(contentDiv);
+      container.appendChild(wrapper);
+
+      slot.replaceWith(container);
+
+      await renderAsIframe(segmentHtml, wrapper, "", { mvuVariables: mvuVars });
+    }
+  }
+
+  // --- 激活 display regex 注入的脚本（非 full-html / mixed 模式） ---
+  if (
+    contentType !== "full-html" &&
+    contentType !== "mixed" &&
+    displayProcessed !== rawContent
+  ) {
+    // display regex 做了替换，可能注入了 <script> 标签
+    const messageContentElement2 =
+      messageElement.querySelector(".message-content");
+    if (messageContentElement2) {
+      await activateScriptsInElement(messageContentElement2);
+    }
+  }
+
+  // --- 渲染附件 ---
+  if (message.files?.length) {
+    const attachmentsContainer = messageElement.querySelector(".attachments");
+    if (attachmentsContainer) {
+      if (message.files.length === 1)
+        attachmentsContainer.classList.add("is-single-attachment");
+
+      attachmentsContainer.innerHTML = "";
+      const attachmentPromises = message.files.map((file, index) =>
+        renderAttachmentPreview(file, index, null),
+      );
+      const renderedAttachments = await Promise.all(attachmentPromises);
+      renderedAttachments.forEach((attachmentElement) => {
+        if (attachmentElement)
+          attachmentsContainer.appendChild(attachmentElement);
+      });
+    }
+  }
+
+  // ★ 头像 404 回退：图片加载失败时显示默认头像
+  _addAvatarFallback(messageElement);
+
+  return messageElement;
+}
+
+/**
+ * 为消息元素中的头像图片添加加载失败回退
+ * 当角色卡被删除或没有照片时，显示默认头像图标
+ * @param {HTMLElement} el - 消息 DOM 元素
+ */
+function _addAvatarFallback(el) {
+  const imgs = el.querySelectorAll(
+    'img[src*="/parts/"], img[src*="image.png"], img[src*="avatar.png"]',
+  );
+  for (const img of imgs) {
+    if (img.dataset.fallbackBound) continue;
+    img.dataset.fallbackBound = "1";
+    img.addEventListener("error", () => {
+      if (img.src !== DEFAULT_AVATAR) {
+        img.src = DEFAULT_AVATAR;
+      }
+    });
+  }
 }
 
 /**
@@ -567,84 +902,103 @@ export async function renderMessage(message) {
  * @param {number} chatLogIndex - 在聊天记录中的绝对索引。
  */
 export async function editMessageStart(message, queueIndex, chatLogIndex) {
-	const selectedFiles = [...message.files || []] // 文件副本
-	const editRenderedMessage = {
-		...message,
-		avatar: message.avatar || DEFAULT_AVATAR,
-		time_stamp: new Date(message.time_stamp).toLocaleString(),
-		content_for_edit: message.content_for_edit || message.content, // 编辑专用内容
-	}
+  const selectedFiles = [...(message.files || [])]; // 文件副本
+  const editRenderedMessage = {
+    ...message,
+    avatar: message.avatar || DEFAULT_AVATAR,
+    time_stamp: new Date(message.time_stamp).toLocaleString(),
+    content_for_edit: message.content_for_edit || message.content, // 编辑专用内容
+  };
 
-	const messageElement = await getMessageElementByQueueIndex(queueIndex)
-	if (!messageElement) return
+  const messageElement = await getMessageElementByQueueIndex(queueIndex);
+  if (!messageElement) return;
 
-	// 平滑过渡：淡出
-	messageElement.style.transition = `opacity ${TRANSITION_DURATION / 1000}s ease-in-out`
-	messageElement.style.opacity = '0'
-	await new Promise(resolve => setTimeout(resolve, TRANSITION_DURATION))
+  // 平滑过渡：淡出
+  messageElement.style.transition = `opacity ${TRANSITION_DURATION / 1000}s ease-in-out`;
+  messageElement.style.opacity = "0";
+  await new Promise((resolve) => setTimeout(resolve, TRANSITION_DURATION));
 
-	// 渲染编辑视图并替换
-	const editViewHtml = await renderTemplateAsHtmlString('message_edit_view', editRenderedMessage)
-	messageElement.innerHTML = editViewHtml
+  // 渲染编辑视图并替换
+  const editViewHtml = await renderTemplateAsHtmlString(
+    "message_edit_view",
+    editRenderedMessage,
+  );
+  messageElement.innerHTML = editViewHtml;
 
-	// 获取编辑视图元素
-	const fileEditInput = messageElement.querySelector(`#file-edit-input-${message.id}`)
-	const attachmentPreview = messageElement.querySelector(`#attachment-edit-preview-${message.id}`)
-	const editInput = messageElement.querySelector(`#edit-input-${message.id}`)
-	const confirmButton = messageElement.querySelector(`#confirm-button-${message.id}`)
-	const cancelButton = messageElement.querySelector(`#cancel-button-${message.id}`)
-	const uploadButton = messageElement.querySelector(`#upload-edit-button-${message.id}`)
+  // 获取编辑视图元素
+  const fileEditInput = messageElement.querySelector(
+    `#file-edit-input-${message.id}`,
+  );
+  const attachmentPreview = messageElement.querySelector(
+    `#attachment-edit-preview-${message.id}`,
+  );
+  const editInput = messageElement.querySelector(`#edit-input-${message.id}`);
+  const confirmButton = messageElement.querySelector(
+    `#confirm-button-${message.id}`,
+  );
+  const cancelButton = messageElement.querySelector(
+    `#cancel-button-${message.id}`,
+  );
+  const uploadButton = messageElement.querySelector(
+    `#upload-edit-button-${message.id}`,
+  );
 
-	// 添加拖拽上传支持
-	addDragAndDropSupport(editInput, selectedFiles, attachmentPreview)
+  // 添加拖拽上传支持
+  addDragAndDropSupport(editInput, selectedFiles, attachmentPreview);
 
-	// keyboard shortcuts for editing
-	editInput.addEventListener('keydown', event => {
-		if (event.key === 'Enter' && event.ctrlKey) {
-			event.preventDefault() // Prevent newline
-			event.stopPropagation() // Prevent bubbling
-			confirmButton.click()
-		}
-		else if (event.key === 'Escape') {
-			event.preventDefault() // Prevent default action
-			event.stopPropagation() // Prevent bubbling
-			cancelButton.click()
-		}
-	})
+  // keyboard shortcuts for editing
+  editInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.ctrlKey) {
+      event.preventDefault(); // Prevent newline
+      event.stopPropagation(); // Prevent bubbling
+      confirmButton.click();
+    } else if (event.key === "Escape") {
+      event.preventDefault(); // Prevent default action
+      event.stopPropagation(); // Prevent bubbling
+      cancelButton.click();
+    }
+  });
 
-	// --- 确认编辑 ---
-	confirmButton.addEventListener('click', async () => {
-		const newMessage = { ...message, content: editInput.value, files: selectedFiles }
-		await editMessage(chatLogIndex, newMessage) // 后端编辑
-	})
+  // --- 确认编辑 ---
+  confirmButton.addEventListener("click", async () => {
+    const newMessage = {
+      ...message,
+      content: editInput.value,
+      files: selectedFiles,
+    };
+    await editMessage(chatLogIndex, newMessage); // 后端编辑
+  });
 
-	// --- 取消编辑 ---
-	cancelButton.addEventListener('click', async () => {
-		await replaceMessageInQueue(queueIndex, message) // 恢复原始消息视图
-	})
+  // --- 取消编辑 ---
+  cancelButton.addEventListener("click", async () => {
+    await replaceMessageInQueue(queueIndex, message); // 恢复原始消息视图
+  });
 
-	// --- 渲染编辑状态的附件 ---
-	attachmentPreview.innerHTML = ''
-	const attachmentPromises = selectedFiles.map((file, i) =>
-		renderAttachmentPreview(file, i, selectedFiles) // 传入 selectedFiles 以支持删除
-	)
-	const renderedAttachments = await Promise.all(attachmentPromises)
-	renderedAttachments.forEach(el => { if (el) attachmentPreview.appendChild(el) })
+  // --- 渲染编辑状态的附件 ---
+  attachmentPreview.innerHTML = "";
+  const attachmentPromises = selectedFiles.map(
+    (file, i) => renderAttachmentPreview(file, i, selectedFiles), // 传入 selectedFiles 以支持删除
+  );
+  const renderedAttachments = await Promise.all(attachmentPromises);
+  renderedAttachments.forEach((el) => {
+    if (el) attachmentPreview.appendChild(el);
+  });
 
-	// --- 编辑状态上传按钮 ---
-	uploadButton.addEventListener('click', () => fileEditInput.click())
+  // --- 编辑状态上传按钮 ---
+  uploadButton.addEventListener("click", () => fileEditInput.click());
 
-	// --- 文件选择处理 ---
-	fileEditInput.addEventListener('change', event =>
-		handleFilesSelect(event, selectedFiles, attachmentPreview) // 更新 selectedFiles 和预览
-	)
+  // --- 文件选择处理 ---
+  fileEditInput.addEventListener(
+    "change",
+    (event) => handleFilesSelect(event, selectedFiles, attachmentPreview), // 更新 selectedFiles 和预览
+  );
 
-	// 平滑过渡：淡入
-	messageElement.style.opacity = '1'
+  // 平滑过渡：淡入
+  messageElement.style.opacity = "1";
 
-	// 自动聚焦并移动光标到末尾
-	editInput.focus()
-	editInput.setSelectionRange(editInput.value.length, editInput.value.length)
+  // 自动聚焦并移动光标到末尾
+  editInput.focus();
+  editInput.setSelectionRange(editInput.value.length, editInput.value.length);
 }
 
 /**
@@ -653,7 +1007,7 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
  * @param {object} message - 新消息对象。
  */
 export async function replaceMessage(index, message) {
-	await replaceMessageInQueue(index, message)
+  await replaceMessageInQueue(index, message);
 }
 
 /**
@@ -661,78 +1015,102 @@ export async function replaceMessage(index, message) {
  * @param {HTMLElement} messageElement - 需要启用滑动的消息 DOM 元素。
  */
 export function enableSwipe(messageElement) {
-	if (swipeListenersMap.has(messageElement)) disableSwipe(messageElement) // 防重复添加
+  if (swipeListenersMap.has(messageElement)) disableSwipe(messageElement); // 防重复添加
 
-	let touchStartX = 0, touchStartY = 0, isDragging = false, swipeHandled = false
+  let touchStartX = 0,
+    touchStartY = 0,
+    isDragging = false,
+    swipeHandled = false;
 
-	// --- 定义命名的监听器函数 ---
-	/**
-	 * 处理触摸开始事件。
-	 * @param {TouchEvent} event - 触摸事件对象。
-	 */
-	const handleTouchStart = event => {
-		if (event.touches.length !== 1) return
-		touchStartX = event.touches[0].clientX
-		touchStartY = event.touches[0].clientY
-		isDragging = true
-		swipeHandled = false
-	}
-	/**
-	 * 处理触摸移动事件。
-	 * @param {TouchEvent} event - 触摸事件对象。
-	 */
-	const handleTouchMove = event => {
-		if (!isDragging || event.touches.length !== 1) return
-		const deltaX = event.touches[0].clientX - touchStartX
-		const deltaY = event.touches[0].clientY - touchStartY
-		if (Math.abs(deltaY) > Math.abs(deltaX)) isDragging = false // 垂直滚动优先
-	}
-	/**
-	 * 处理触摸结束事件。
-	 * @param {TouchEvent} event - 触摸事件对象。
-	 */
-	const handleTouchEnd = async event => {
-		if (!isDragging || swipeHandled || event.changedTouches.length !== 1) { isDragging = false; return }
-		const deltaX = event.changedTouches[0].clientX - touchStartX
-		const deltaY = event.changedTouches[0].clientY - touchStartY
-		isDragging = false
+  // --- 定义命名的监听器函数 ---
+  /**
+   * 处理触摸开始事件。
+   * @param {TouchEvent} event - 触摸事件对象。
+   */
+  const handleTouchStart = (event) => {
+    if (event.touches.length !== 1) return;
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+    isDragging = true;
+    swipeHandled = false;
+  };
+  /**
+   * 处理触摸移动事件。
+   * @param {TouchEvent} event - 触摸事件对象。
+   */
+  const handleTouchMove = (event) => {
+    if (!isDragging || event.touches.length !== 1) return;
+    const deltaX = event.touches[0].clientX - touchStartX;
+    const deltaY = event.touches[0].clientY - touchStartY;
+    if (Math.abs(deltaY) > Math.abs(deltaX)) isDragging = false; // 垂直滚动优先
+  };
+  /**
+   * 处理触摸结束事件。
+   * @param {TouchEvent} event - 触摸事件对象。
+   */
+  const handleTouchEnd = async (event) => {
+    if (!isDragging || swipeHandled || event.changedTouches.length !== 1) {
+      isDragging = false;
+      return;
+    }
+    const deltaX = event.changedTouches[0].clientX - touchStartX;
+    const deltaY = event.changedTouches[0].clientY - touchStartY;
+    isDragging = false;
 
-		if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY)) {
-			const targetElement = event.target
-			if (checkForHorizontalScrollbar(targetElement)) return // 忽略带水平滚动的元素
+    if (
+      Math.abs(deltaX) > SWIPE_THRESHOLD &&
+      Math.abs(deltaX) > Math.abs(deltaY)
+    ) {
+      const targetElement = event.target;
+      if (checkForHorizontalScrollbar(targetElement)) return; // 忽略带水平滚动的元素
 
-			swipeHandled = true
-			const direction = deltaX > 0 ? -1 : 1 // 右滑-1(后退), 左滑+1(前进)
-			await modifyTimeLine(direction)
-		}
-	}
-	/**
-	 * 处理触摸取消事件。
-	 */
-	const handleTouchCancel = () => { isDragging = false }
-	/**
-	 * 检查元素是否包含水平滚动条。
-	 * @param {HTMLElement} element - 要检查的 DOM 元素。
-	 * @returns {boolean} 如果元素包含水平滚动条则为 true，否则为 false。
-	 */
-	function checkForHorizontalScrollbar(element) {
-		if (!element || !element.scrollWidth || !element.clientWidth) return false
-		if (element.scrollWidth > element.clientWidth) return true
-		for (let i = 0; i < element.children.length; i++)
-			if (checkForHorizontalScrollbar(element.children[i])) return true
+      swipeHandled = true;
+      const direction = deltaX > 0 ? -1 : 1; // 右滑-1(后退), 左滑+1(前进)
+      await modifyTimeLine(direction);
+    }
+  };
+  /**
+   * 处理触摸取消事件。
+   */
+  const handleTouchCancel = () => {
+    isDragging = false;
+  };
+  /**
+   * 检查元素是否包含水平滚动条。
+   * @param {HTMLElement} element - 要检查的 DOM 元素。
+   * @returns {boolean} 如果元素包含水平滚动条则为 true，否则为 false。
+   */
+  function checkForHorizontalScrollbar(element) {
+    if (!element || !element.scrollWidth || !element.clientWidth) return false;
+    if (element.scrollWidth > element.clientWidth) return true;
+    for (let i = 0; i < element.children.length; i++)
+      if (checkForHorizontalScrollbar(element.children[i])) return true;
 
-		return false
-	}
-	// --- 监听器定义结束 ---
+    return false;
+  }
+  // --- 监听器定义结束 ---
 
-	const listeners = { touchstart: handleTouchStart, touchmove: handleTouchMove, touchend: handleTouchEnd, touchcancel: handleTouchCancel }
-	swipeListenersMap.set(messageElement, listeners) // 存储监听器引用
+  const listeners = {
+    touchstart: handleTouchStart,
+    touchmove: handleTouchMove,
+    touchend: handleTouchEnd,
+    touchcancel: handleTouchCancel,
+  };
+  swipeListenersMap.set(messageElement, listeners); // 存储监听器引用
 
-	// 添加事件监听
-	messageElement.addEventListener('touchstart', listeners.touchstart, { passive: true })
-	messageElement.addEventListener('touchmove', listeners.touchmove, { passive: true })
-	messageElement.addEventListener('touchend', listeners.touchend, { passive: true })
-	messageElement.addEventListener('touchcancel', listeners.touchcancel, { passive: true })
+  // 添加事件监听
+  messageElement.addEventListener("touchstart", listeners.touchstart, {
+    passive: true,
+  });
+  messageElement.addEventListener("touchmove", listeners.touchmove, {
+    passive: true,
+  });
+  messageElement.addEventListener("touchend", listeners.touchend, {
+    passive: true,
+  });
+  messageElement.addEventListener("touchcancel", listeners.touchcancel, {
+    passive: true,
+  });
 }
 
 /**
@@ -740,12 +1118,12 @@ export function enableSwipe(messageElement) {
  * @param {HTMLElement} messageElement - 需要禁用滑动的消息 DOM 元素。
  */
 export function disableSwipe(messageElement) {
-	const listeners = swipeListenersMap.get(messageElement)
-	if (!listeners) return
-	// 移除事件监听
-	messageElement.removeEventListener('touchstart', listeners.touchstart)
-	messageElement.removeEventListener('touchmove', listeners.touchmove)
-	messageElement.removeEventListener('touchend', listeners.touchend)
-	messageElement.removeEventListener('touchcancel', listeners.touchcancel)
-	swipeListenersMap.delete(messageElement) // 清除引用
+  const listeners = swipeListenersMap.get(messageElement);
+  if (!listeners) return;
+  // 移除事件监听
+  messageElement.removeEventListener("touchstart", listeners.touchstart);
+  messageElement.removeEventListener("touchmove", listeners.touchmove);
+  messageElement.removeEventListener("touchend", listeners.touchend);
+  messageElement.removeEventListener("touchcancel", listeners.touchcancel);
+  swipeListenersMap.delete(messageElement); // 清除引用
 }

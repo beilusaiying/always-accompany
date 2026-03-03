@@ -1,5 +1,5 @@
-import { zxcvbn, zxcvbnOptions } from 'https://esm.sh/@zxcvbn-ts/core'
-import * as zxcvbnCommonPackage from 'https://esm.sh/@zxcvbn-ts/language-common'
+import { zxcvbn, zxcvbnOptions } from '/esm-cache/@zxcvbn-ts/core'
+import * as zxcvbnCommonPackage from '/esm-cache/@zxcvbn-ts/language-common'
 
 import { geti18n, i18nElement, setLocalizeLogic } from './i18n.mjs'
 

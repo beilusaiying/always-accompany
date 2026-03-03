@@ -7,9 +7,8 @@ import { createDiag } from "../../../../server/diagLogger.mjs";
 import {
   loadAnyPreferredDefaultPart,
   loadPart,
+  setDefaultPart,
 } from "../../../../server/parts_loader.mjs";
-
-import info from "./info.json" with { type: "json" };
 
 // ============================================================
 // 后端诊断日志器
@@ -4052,8 +4051,17 @@ function pushMemoryAIOutput(output) {
 // ============================================================
 
 const pluginExport = {
-  info,
-  Load: async ({ router }) => {
+  Load: async ({ router, username }) => {
+    // 自动注册为默认插件，确保 GetPrompt/ReplyHandler 会被 chat.mjs 调用
+    if (username) {
+      setDefaultPart(username, "plugins", "beilu-memory");
+      console.log("[beilu-memory] 已自动注册为默认插件 (plugins/beilu-memory)");
+    } else {
+      console.warn(
+        "[beilu-memory] Load: username 未提供，无法注册为默认插件！",
+      );
+    }
+
     // 动态加载 auth 模块以获取真实用户名（解决 _default 路径问题）
     let _getUserByReq;
     try {
@@ -5465,6 +5473,17 @@ const pluginExport = {
             presetsData.injection_prompts ||
             structuredClone(DEFAULT_INJECTION_PROMPTS);
 
+          // [DIAG] 诊断点1：INJ 条目加载结果
+          console.log(
+            `[beilu-memory][DIAG] GetPrompt: injection_prompts 加载 ${injectionPrompts.length} 条:`,
+            injectionPrompts
+              .map(
+                (p) =>
+                  `${p.id}(enabled=${p.enabled},autoMode=${p.autoMode},contentLen=${(p.content || "").length})`,
+              )
+              .join(", "),
+          );
+
           // 获取 beilu-files 的 activeMode（用于 autoMode 判断）
           let filesActiveMode = "chat";
           try {
@@ -5516,6 +5535,11 @@ const pluginExport = {
             }
             // 'manual': 只看 enabled 字段（默认行为，不需要额外逻辑）
 
+            // [DIAG] 诊断点2：每个 INJ 的 shouldEnable 判断结果
+            console.log(
+              `[beilu-memory][DIAG] GetPrompt: ${inj.id} shouldEnable=${shouldEnable} (enabled=${inj.enabled}, autoMode=${inj.autoMode}, filesActiveMode=${filesActiveMode})`,
+            );
+
             if (!shouldEnable) continue;
 
             let content = inj.content;
@@ -5560,6 +5584,11 @@ const pluginExport = {
               .replace(/\{\{idle_duration\}\}/g, _tmINJ.idle_duration)
               .replace(/\{\{lasttime\}\}/g, _tmINJ.lasttime)
               .replace(/\{\{lastdate\}\}/g, _tmINJ.lastdate);
+
+            // [DIAG] 诊断点3：宏替换后的 content 状态
+            console.log(
+              `[beilu-memory][DIAG] GetPrompt: ${inj.id} 宏替换后 content=${content.length}字符, isEmpty=${!content.trim()}, preview="${content.substring(0, 120).replace(/\n/g, "\\n")}"`,
+            );
 
             // 收集到 depthInjections（带 depth/order 元信息）
             depthInjections.push({
@@ -5743,6 +5772,22 @@ const pluginExport = {
                 );
               }
             }
+          }
+
+          // [DIAG] 诊断点4：textEntries 和 depthInjections 最终汇总
+          console.log(
+            `[beilu-memory][DIAG] GetPrompt 最终汇总: textEntries=${textEntries.length}条, depthInjections=${depthInjections.length}条`,
+          );
+          if (depthInjections.length > 0) {
+            console.log(
+              `[beilu-memory][DIAG] depthInjections 详情:`,
+              depthInjections
+                .map(
+                  (d) =>
+                    `${d.id}(depth=${d.depth},order=${d.order},content=${d.content.length}字符)`,
+                )
+                .join(", "),
+            );
           }
 
           // 如果没有任何注入条目启用（且 P1 也无结果），回退到旧方式（表格+热记忆）

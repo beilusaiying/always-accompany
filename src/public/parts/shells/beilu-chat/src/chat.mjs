@@ -1338,9 +1338,11 @@ async function executeGeneration(
     }
 
     // 调用插件的 ReplyHandler（如 beilu-files 解析 <file_op> 标签）
-    const timeSlice = placeholderEntry.timeSlice;
-    if (timeSlice.plugins) {
-      for (const [pluginName, plugin] of Object.entries(timeSlice.plugins)) {
+    // ★ 使用 request.plugins（mergedPlugins）而非 timeSlice.plugins
+    // 确保通过 setDefaultPart 注册的新插件在旧聊天中也能被调用
+    const replyPlugins = request.plugins || placeholderEntry.timeSlice.plugins;
+    if (replyPlugins) {
+      for (const [pluginName, plugin] of Object.entries(replyPlugins)) {
         if (plugin?.interfaces?.chat?.ReplyHandler) {
           try {
             await plugin.interfaces.chat.ReplyHandler(result, request);

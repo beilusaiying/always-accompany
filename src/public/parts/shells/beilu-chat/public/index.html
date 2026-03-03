@@ -71,18 +71,41 @@
       </div>
       <!-- 顶部选项卡（从中栏移到这里） -->
       <div id="top-tabs" class="top-tabs flex items-center gap-1">
-        <button class="top-tab top-tab-active" data-top-tab="chat"
-          data-i18n="chat.beiluChat.topTabs.chat">
+        <button
+          class="top-tab top-tab-active"
+          data-top-tab="chat"
+          data-i18n="chat.beiluChat.topTabs.chat"
+        >
           💬 聊天
         </button>
-        <button class="top-tab" data-top-tab="bot"
-          data-i18n="chat.beiluChat.topTabs.bot">🤖 Bot</button>
-        <button class="top-tab" data-top-tab="files"
-          data-i18n="chat.beiluChat.topTabs.files">📁 文件</button>
-        <button class="top-tab" data-top-tab="memory"
-          data-i18n="chat.beiluChat.topTabs.memory">🧠 记忆</button>
-        <button class="top-tab" data-top-tab="helper"
-          data-i18n="chat.beiluChat.topTabs.helper">🛠️ 助手</button>
+        <button
+          class="top-tab"
+          data-top-tab="bot"
+          data-i18n="chat.beiluChat.topTabs.bot"
+        >
+          🤖 Bot
+        </button>
+        <button
+          class="top-tab"
+          data-top-tab="files"
+          data-i18n="chat.beiluChat.topTabs.files"
+        >
+          📁 文件
+        </button>
+        <button
+          class="top-tab"
+          data-top-tab="memory"
+          data-i18n="chat.beiluChat.topTabs.memory"
+        >
+          🧠 记忆
+        </button>
+        <button
+          class="top-tab"
+          data-top-tab="helper"
+          data-i18n="chat.beiluChat.topTabs.helper"
+        >
+          🛠️ 助手
+        </button>
       </div>
       <div class="flex items-center gap-1">
         <!-- 右栏折叠按钮 -->
@@ -107,7 +130,8 @@
       style="display: none"
     >
       <span class="beilu-chat-api-banner-icon">⚠️</span>
-      <span class="beilu-chat-api-banner-text"
+      <span
+        class="beilu-chat-api-banner-text"
         data-i18n="chat.beiluChat.apiBanner.text"
         >尚未配置 AI 服务源，发送消息将无法获得回复。</span
       >
@@ -148,14 +172,18 @@
               src="https://api.iconify.design/mdi/tune-variant.svg"
               class="w-4 h-4 icon"
             />
-            <span data-i18n="chat.beiluChat.leftPanel.heading">预设 & 设置</span>
+            <span data-i18n="chat.beiluChat.leftPanel.heading"
+              >预设 & 设置</span
+            >
           </h3>
 
           <!-- ====== 预设管理折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-preset-manage" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.presetManage.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.presetManage.heading"
+            >
               📋 预设管理
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -206,7 +234,11 @@
                 class="hidden"
               />
               <div class="flex items-center justify-between">
-                <span class="text-xs text-base-content/50" data-i18n="chat.beiluChat.presetManage.current">当前:</span>
+                <span
+                  class="text-xs text-base-content/50"
+                  data-i18n="chat.beiluChat.presetManage.current"
+                  >当前:</span
+                >
                 <span
                   id="preset-name"
                   class="text-xs font-bold text-amber-700 truncate max-w-[120px]"
@@ -236,8 +268,10 @@
           <!-- ====== 模型参数折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-model-params" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.modelParams.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.modelParams.heading"
+            >
               ⚙️ 模型参数
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -355,7 +389,11 @@
                 <!-- Stream -->
                 <div class="form-control">
                   <label class="label py-0.5 cursor-pointer">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.modelParams.stream">流式输出</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.stream"
+                      >流式输出</span
+                    >
                     <input
                       type="checkbox"
                       id="param-stream"
@@ -367,14 +405,19 @@
                 <!-- 通用预填充开关 -->
                 <div class="form-control">
                   <label class="label py-0.5 cursor-pointer">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.modelParams.prefill">通用预填充</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.prefill"
+                      >通用预填充</span
+                    >
                     <input
                       type="checkbox"
                       id="param-prefill-toggle"
                       class="toggle toggle-xs toggle-warning"
                     />
                   </label>
-                  <span class="text-[9px] text-base-content/30 pl-1"
+                  <span
+                    class="text-[9px] text-base-content/30 pl-1"
                     data-i18n="chat.beiluChat.modelParams.prefillHint"
                     >开启：预设尾部条目以 assistant 身份发送（预填充）</span
                   >
@@ -382,14 +425,19 @@
                 <!-- Claude 预填充开关 -->
                 <div class="form-control">
                   <label class="label py-0.5 cursor-pointer">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.modelParams.claudePrefill">Claude 预填充</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.claudePrefill"
+                      >Claude 预填充</span
+                    >
                     <input
                       type="checkbox"
                       id="param-claude-prefill-toggle"
                       class="toggle toggle-xs toggle-warning"
                     />
                   </label>
-                  <span class="text-[9px] text-base-content/30 pl-1"
+                  <span
+                    class="text-[9px] text-base-content/30 pl-1"
                     data-i18n="chat.beiluChat.modelParams.claudePrefillHint"
                     >启用时自动开启严格角色模式</span
                   >
@@ -397,22 +445,43 @@
                 <!-- 提示词后处理 -->
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.modelParams.postProcessing">提示词后处理</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.postProcessing"
+                      >提示词后处理</span
+                    >
                   </label>
                   <select
                     id="param-post-processing"
                     class="select select-xs select-bordered w-full text-xs"
                   >
-                    <option value="none" data-i18n="chat.beiluChat.modelParams.ppNone">无</option>
-                    <option value="merge" data-i18n="chat.beiluChat.modelParams.ppMerge">合并相同角色连续发言</option>
-                    <option value="semi" data-i18n="chat.beiluChat.modelParams.ppSemi">
+                    <option
+                      value="none"
+                      data-i18n="chat.beiluChat.modelParams.ppNone"
+                    >
+                      无
+                    </option>
+                    <option
+                      value="merge"
+                      data-i18n="chat.beiluChat.modelParams.ppMerge"
+                    >
+                      合并相同角色连续发言
+                    </option>
+                    <option
+                      value="semi"
+                      data-i18n="chat.beiluChat.modelParams.ppSemi"
+                    >
                       半严格（合并+system转user交替）
                     </option>
-                    <option value="strict" data-i18n="chat.beiluChat.modelParams.ppStrict">
+                    <option
+                      value="strict"
+                      data-i18n="chat.beiluChat.modelParams.ppStrict"
+                    >
                       严格（合并+user在前+system仅一条）
                     </option>
                   </select>
-                  <span class="text-[9px] text-base-content/30 pl-1"
+                  <span
+                    class="text-[9px] text-base-content/30 pl-1"
                     data-i18n="chat.beiluChat.modelParams.postProcessingHint"
                     >部分API要求严格角色交替，按需选择</span
                   >
@@ -420,14 +489,19 @@
                 <!-- 继续预填充 -->
                 <div class="form-control">
                   <label class="label py-0.5 cursor-pointer">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.modelParams.continuePrefill">继续预填充</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.continuePrefill"
+                      >继续预填充</span
+                    >
                     <input
                       type="checkbox"
                       id="param-continue-prefill"
                       class="toggle toggle-xs toggle-warning"
                     />
                   </label>
-                  <span class="text-[9px] text-base-content/30 pl-1"
+                  <span
+                    class="text-[9px] text-base-content/30 pl-1"
                     data-i18n="chat.beiluChat.modelParams.continuePrefillHint"
                     >继续时以 assistant 身份发送最后消息</span
                   >
@@ -436,7 +510,9 @@
                   id="model-params-save"
                   class="btn btn-xs btn-block bg-amber-700 hover:bg-amber-800 text-white border-amber-700 mt-1"
                 >
-                  <span data-i18n="chat.beiluChat.modelParams.save">💾 保存参数</span>
+                  <span data-i18n="chat.beiluChat.modelParams.save"
+                    >💾 保存参数</span
+                  >
                 </button>
                 <div
                   id="model-params-status"
@@ -449,8 +525,10 @@
           <!-- ====== 预设条目折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-preset-entries" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.presetEntries.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.presetEntries.heading"
+            >
               📝 预设条目
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -469,8 +547,10 @@
                 id="entry-list"
                 class="space-y-0.5 max-h-64 overflow-y-auto preset-entry-list"
               >
-                <p class="text-xs text-base-content/50 text-center py-3"
-                  data-i18n="chat.beiluChat.presetEntries.importHint">
+                <p
+                  class="text-xs text-base-content/50 text-center py-3"
+                  data-i18n="chat.beiluChat.presetEntries.importHint"
+                >
                   请先导入一个 ST 预设文件
                 </p>
               </div>
@@ -562,8 +642,10 @@
           <!-- ====== 世界书绑定折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-world-binding" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.worldBinding.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.worldBinding.heading"
+            >
               📖 世界书绑定
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -574,7 +656,11 @@
                 ></select>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-xs text-base-content/50" data-i18n="chat.beiluChat.worldBinding.current">当前:</span>
+                <span
+                  class="text-xs text-base-content/50"
+                  data-i18n="chat.beiluChat.worldBinding.current"
+                  >当前:</span
+                >
                 <span
                   id="left-world-status"
                   class="text-xs font-bold text-amber-700 truncate max-w-[140px]"
@@ -588,8 +674,10 @@
           <!-- ====== 用户人设选择折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-persona" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.persona.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.persona.heading"
+            >
               👤 用户人设
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -600,7 +688,11 @@
                 ></select>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-xs text-base-content/50" data-i18n="chat.beiluChat.persona.current">当前:</span>
+                <span
+                  class="text-xs text-base-content/50"
+                  data-i18n="chat.beiluChat.persona.current"
+                  >当前:</span
+                >
                 <span
                   id="left-persona-status"
                   class="text-xs font-bold text-amber-700 truncate max-w-[140px]"
@@ -618,8 +710,10 @@
           <!-- ====== 角色信息折叠组（位于最下方） ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="left-char-info" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.charInfo.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.charInfo.heading"
+            >
               🎭 角色信息
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -635,7 +729,9 @@
                     id="char-name-display"
                     class="font-bold text-sm text-amber-700 truncate"
                   >
-                    <span data-i18n="chat.beiluChat.charInfo.notLoaded">未加载角色</span>
+                    <span data-i18n="chat.beiluChat.charInfo.notLoaded"
+                      >未加载角色</span
+                    >
                   </div>
                   <div
                     id="char-desc-short"
@@ -646,7 +742,11 @@
               <!-- 开场白 -->
               <div class="form-control mb-2">
                 <label class="label py-0.5">
-                  <span class="label-text text-xs" data-i18n="chat.beiluChat.charInfo.greeting">开场白</span>
+                  <span
+                    class="label-text text-xs"
+                    data-i18n="chat.beiluChat.charInfo.greeting"
+                    >开场白</span
+                  >
                 </label>
                 <textarea
                   id="char-greeting-edit"
@@ -659,7 +759,11 @@
               <!-- 角色描述 -->
               <div class="form-control mb-2">
                 <label class="label py-0.5">
-                  <span class="label-text text-xs" data-i18n="chat.beiluChat.charInfo.description">角色描述</span>
+                  <span
+                    class="label-text text-xs"
+                    data-i18n="chat.beiluChat.charInfo.description"
+                    >角色描述</span
+                  >
                 </label>
                 <textarea
                   id="char-description-edit"
@@ -1066,22 +1170,44 @@
 
                   <!-- 清理设置 -->
                   <div class="bg-base-300/50 rounded-lg p-2 space-y-1.5">
-                    <p class="text-xs font-medium text-amber-700 mb-1"
-                      data-i18n="chat.beiluChat.ideCleanup.heading">
+                    <p
+                      class="text-xs font-medium text-amber-700 mb-1"
+                      data-i18n="chat.beiluChat.ideCleanup.heading"
+                    >
                       🧹 上下文清理
                     </p>
                     <div class="flex items-center justify-between">
-                      <span class="text-xs" data-i18n="chat.beiluChat.ideCleanup.modeSwitchLabel">模式切换清理</span>
+                      <span
+                        class="text-xs"
+                        data-i18n="chat.beiluChat.ideCleanup.modeSwitchLabel"
+                        >模式切换清理</span
+                      >
                       <select
                         id="ide-cleanup-mode"
                         class="select select-xs select-bordered w-24 text-[10px]"
                       >
-                        <option value="auto" data-i18n="chat.beiluChat.ideCleanup.auto">自动清理</option>
-                        <option value="ask" data-i18n="chat.beiluChat.ideCleanup.ask">每次询问</option>
-                        <option value="off" data-i18n="chat.beiluChat.ideCleanup.off">关闭</option>
+                        <option
+                          value="auto"
+                          data-i18n="chat.beiluChat.ideCleanup.auto"
+                        >
+                          自动清理
+                        </option>
+                        <option
+                          value="ask"
+                          data-i18n="chat.beiluChat.ideCleanup.ask"
+                        >
+                          每次询问
+                        </option>
+                        <option
+                          value="off"
+                          data-i18n="chat.beiluChat.ideCleanup.off"
+                        >
+                          关闭
+                        </option>
                       </select>
                     </div>
-                    <span class="text-[9px] text-base-content/30"
+                    <span
+                      class="text-[9px] text-base-content/30"
                       data-i18n="chat.beiluChat.ideCleanup.hint"
                       >退出文件/记忆模式时是否清理对话消息</span
                     >
@@ -1185,7 +1311,11 @@
                 class="ide-menubar flex items-center shrink-0"
               >
                 <div class="ide-menu-item" data-menu="file">
-                  <span class="ide-menu-label" data-i18n="chat.beiluChat.ideMenu.file">文件</span>
+                  <span
+                    class="ide-menu-label"
+                    data-i18n="chat.beiluChat.ideMenu.file"
+                    >文件</span
+                  >
                   <div class="ide-menu-dropdown hidden">
                     <div class="ide-menu-action" data-action="new-file">
                       📄 新建文件
@@ -1273,38 +1403,37 @@
               <div
                 class="flex items-center shrink-0 border-b border-base-300/30"
               >
-              <div
-                id="ide-editor-tabs"
-                class="ide-editor-tabs flex items-center flex-1 overflow-x-auto"
-              >
-                <!-- 打开的文件标签将由 JS 动态生成 -->
-                <span
-                  class="ide-tabs-placeholder text-xs text-base-content/30 px-3"
-                  data-i18n="chat.beiluChat.editorToolbar.noFileOpen"
-                  >未打开文件</span
+                <div
+                  id="ide-editor-tabs"
+                  class="ide-editor-tabs flex items-center flex-1 overflow-x-auto"
                 >
-              </div>
-              <!-- 编辑器工具栏按钮 -->
-              <div class="flex items-center gap-0.5 px-1 shrink-0">
-                <button
-                  id="file-save-btn"
-                  class="btn btn-xs btn-ghost"
-                  data-i18n="chat.beiluChat.editorToolbar.save"
-                  title="保存 (Ctrl+S)"
-                  disabled
-                >
-                  💾
-                </button>
-                <button
-                  id="file-reload-btn"
-                  class="btn btn-xs btn-ghost"
-                  data-i18n="chat.beiluChat.editorToolbar.reload"
-                  title="重新加载文件"
-                  disabled
-                >
-                  🔄
-                </button>
-              </div>
+                  <!-- 打开的文件标签将由 JS 动态生成 -->
+                  <span
+                    class="ide-tabs-placeholder text-xs text-base-content/30 px-3"
+                    data-i18n="chat.beiluChat.editorToolbar.noFileOpen"
+                    >未打开文件</span
+                  >
+                </div>
+                <!-- 编辑器工具栏按钮 -->
+                <div class="flex items-center gap-0.5 px-1 shrink-0">
+                  <button
+                    id="file-save-btn"
+                    class="btn btn-xs btn-ghost"
+                    data-i18n="chat.beiluChat.editorToolbar.save"
+                    title="保存 (Ctrl+S)"
+                    disabled
+                  >
+                    💾
+                  </button>
+                  <button
+                    id="file-reload-btn"
+                    class="btn btn-xs btn-ghost"
+                    data-i18n="chat.beiluChat.editorToolbar.reload"
+                    title="重新加载文件"
+                    disabled
+                  >
+                    🔄
+                  </button>
                 </div>
               </div>
               <!-- 编辑器内容区 -->
@@ -1545,10 +1674,12 @@
         >
           <!-- Discord Bot 面板 -->
           <div
-           id="bot-panel-discord"
-           class="bot-panel flex-1 flex flex-col overflow-y-auto"
-         >
-           <div class="p-4 space-y-3 max-w-2xl mx-auto w-full flex-1 flex flex-col">
+            id="bot-panel-discord"
+            class="bot-panel flex-1 flex flex-col overflow-y-auto"
+          >
+            <div
+              class="p-4 space-y-3 max-w-2xl mx-auto w-full flex-1 flex flex-col"
+            >
               <!-- 顶部操作栏：Bot 选择 + 新建/删除 -->
               <div class="flex items-center gap-2">
                 <select
@@ -1575,12 +1706,11 @@
               </div>
 
               <!-- Bot 配置卡片 -->
-              <div
-                id="dc-config-card"
-                class="space-y-2.5 hidden"
-              >
+              <div id="dc-config-card" class="space-y-2.5 hidden">
                 <!-- 状态指示 + 启动/停止 -->
-                <div class="flex items-center justify-between bg-base-300/50 rounded-lg px-3 py-2">
+                <div
+                  class="flex items-center justify-between bg-base-300/50 rounded-lg px-3 py-2"
+                >
                   <div class="flex items-center gap-2">
                     <span
                       id="dc-status-dot"
@@ -1613,7 +1743,9 @@
                 <!-- ====== 配置区（可折叠） ====== -->
                 <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
                   <input type="checkbox" id="dc-config-collapse" checked />
-                  <div class="collapse-title text-xs py-2 min-h-0 font-semibold">
+                  <div
+                    class="collapse-title text-xs py-2 min-h-0 font-semibold"
+                  >
                     🔧 Bot 配置
                   </div>
                   <div class="collapse-content px-3 pb-3 space-y-2.5">
@@ -1665,47 +1797,111 @@
                       <!-- 所有者用户名 -->
                       <div class="form-control">
                         <label class="label py-0.5">
-                          <span class="label-text text-xs">所有者用户名（Discord）</span>
+                          <span class="label-text text-xs"
+                            >所有者用户名（Discord）</span
+                          >
                         </label>
-                        <input id="dc-cfg-owner" type="text" class="input input-xs input-bordered w-full" placeholder="your_discord_username" />
+                        <input
+                          id="dc-cfg-owner"
+                          type="text"
+                          class="input input-xs input-bordered w-full"
+                          placeholder="your_discord_username"
+                        />
                       </div>
                       <!-- 数字配置 -->
                       <div class="flex gap-2">
                         <div class="form-control flex-1">
-                          <label class="label py-0.5"><span class="label-text text-xs">最大历史深度</span></label>
-                          <input id="dc-cfg-max-depth" type="number" min="1" max="100" value="20" class="input input-xs input-bordered w-full" />
+                          <label class="label py-0.5"
+                            ><span class="label-text text-xs"
+                              >最大历史深度</span
+                            ></label
+                          >
+                          <input
+                            id="dc-cfg-max-depth"
+                            type="number"
+                            min="1"
+                            max="100"
+                            value="20"
+                            class="input input-xs input-bordered w-full"
+                          />
                         </div>
                         <div class="form-control flex-1">
-                          <label class="label py-0.5"><span class="label-text text-xs">最大拉取数</span></label>
-                          <input id="dc-cfg-max-fetch" type="number" min="1" max="200" value="30" class="input input-xs input-bordered w-full" />
+                          <label class="label py-0.5"
+                            ><span class="label-text text-xs"
+                              >最大拉取数</span
+                            ></label
+                          >
+                          <input
+                            id="dc-cfg-max-fetch"
+                            type="number"
+                            min="1"
+                            max="200"
+                            value="30"
+                            class="input input-xs input-bordered w-full"
+                          />
                         </div>
                       </div>
                       <!-- 触发模式 -->
                       <div class="text-[10px] opacity-40 mt-1">触发模式</div>
                       <div class="flex flex-col gap-1">
-                        <label class="label cursor-pointer justify-start gap-2 py-0.5">
-                          <input id="dc-cfg-trigger-mention" type="checkbox" class="toggle toggle-xs toggle-primary" checked />
+                        <label
+                          class="label cursor-pointer justify-start gap-2 py-0.5"
+                        >
+                          <input
+                            id="dc-cfg-trigger-mention"
+                            type="checkbox"
+                            class="toggle toggle-xs toggle-primary"
+                            checked
+                          />
                           <span class="label-text text-xs">@触发</span>
                         </label>
-                        <label class="label cursor-pointer justify-start gap-2 py-0.5">
-                          <input id="dc-cfg-trigger-message" type="checkbox" class="toggle toggle-xs toggle-primary" />
-                          <span class="label-text text-xs">消息触发（白名单频道）</span>
+                        <label
+                          class="label cursor-pointer justify-start gap-2 py-0.5"
+                        >
+                          <input
+                            id="dc-cfg-trigger-message"
+                            type="checkbox"
+                            class="toggle toggle-xs toggle-primary"
+                          />
+                          <span class="label-text text-xs"
+                            >消息触发（白名单频道）</span
+                          >
                         </label>
-                        <label class="label cursor-pointer justify-start gap-2 py-0.5">
-                          <input id="dc-cfg-reply-all" type="checkbox" class="toggle toggle-xs toggle-warning" />
+                        <label
+                          class="label cursor-pointer justify-start gap-2 py-0.5"
+                        >
+                          <input
+                            id="dc-cfg-reply-all"
+                            type="checkbox"
+                            class="toggle toggle-xs toggle-warning"
+                          />
                           <span class="label-text text-xs">回复所有消息</span>
                         </label>
-                        <label class="label cursor-pointer justify-start gap-2 py-0.5">
-                          <input id="dc-cfg-private-chat" type="checkbox" class="toggle toggle-xs toggle-primary" checked />
+                        <label
+                          class="label cursor-pointer justify-start gap-2 py-0.5"
+                        >
+                          <input
+                            id="dc-cfg-private-chat"
+                            type="checkbox"
+                            class="toggle toggle-xs toggle-primary"
+                            checked
+                          />
                           <span class="label-text text-xs">允许私聊</span>
                         </label>
                       </div>
                       <!-- 触发频道 -->
                       <div class="form-control">
                         <label class="label py-0.5">
-                          <span class="label-text text-xs">触发频道白名单（频道ID，逗号分隔）</span>
+                          <span class="label-text text-xs"
+                            >触发频道白名单（频道ID，逗号分隔）</span
+                          >
                         </label>
-                        <input id="dc-cfg-trigger-channels" type="text" class="input input-xs input-bordered w-full" placeholder="频道ID1, 频道ID2..." />
+                        <input
+                          id="dc-cfg-trigger-channels"
+                          type="text"
+                          class="input input-xs input-bordered w-full"
+                          placeholder="频道ID1, 频道ID2..."
+                        />
                       </div>
                     </div>
 
@@ -1745,13 +1941,27 @@
 
                 <!-- ====== 运行信息区（始终显示，flex-1 撑满剩余空间） ====== -->
                 <!-- 消息日志面板 -->
-                <div class="bg-base-300/50 rounded-lg p-3 flex-1 flex flex-col min-h-0">
-                  <div class="flex items-center justify-between mb-1.5 shrink-0">
-                    <div class="text-xs font-semibold opacity-60">📋 消息日志</div>
-                    <span id="dc-log-status" class="text-[10px] opacity-40">未连接</span>
+                <div
+                  class="bg-base-300/50 rounded-lg p-3 flex-1 flex flex-col min-h-0"
+                >
+                  <div
+                    class="flex items-center justify-between mb-1.5 shrink-0"
+                  >
+                    <div class="text-xs font-semibold opacity-60">
+                      📋 消息日志
+                    </div>
+                    <span id="dc-log-status" class="text-[10px] opacity-40"
+                      >未连接</span
+                    >
                   </div>
-                  <div id="dc-message-log" class="bg-base-200/50 rounded p-2 overflow-y-auto text-xs space-y-1 flex-1" style="min-height:120px;">
-                    <div id="dc-log-empty" class="text-center opacity-30 py-8">Bot 运行后消息将在此显示</div>
+                  <div
+                    id="dc-message-log"
+                    class="bg-base-200/50 rounded p-2 overflow-y-auto text-xs space-y-1 flex-1"
+                    style="min-height: 120px"
+                  >
+                    <div id="dc-log-empty" class="text-center opacity-30 py-8">
+                      Bot 运行后消息将在此显示
+                    </div>
                     <div id="dc-log-list"></div>
                   </div>
                 </div>
@@ -1759,7 +1969,9 @@
                 <!-- INJ-3 Discord Bot 提示词快捷入口 -->
                 <div class="bg-base-300/50 rounded-lg p-3 shrink-0">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs font-semibold opacity-60">📝 Discord Bot 提示词 (INJ-3)</div>
+                    <div class="text-xs font-semibold opacity-60">
+                      📝 Discord Bot 提示词 (INJ-3)
+                    </div>
                     <button
                       id="dc-edit-inj3"
                       class="btn btn-xs btn-ghost text-amber-700 opacity-70 hover:opacity-100"
@@ -1768,7 +1980,10 @@
                       ✏️ 编辑
                     </button>
                   </div>
-                  <div id="dc-inj3-preview" class="text-[10px] opacity-40 mt-1 max-h-16 overflow-hidden">
+                  <div
+                    id="dc-inj3-preview"
+                    class="text-[10px] opacity-40 mt-1 max-h-16 overflow-hidden"
+                  >
                     点击编辑可修改 Discord Bot 的系统提示词
                   </div>
                 </div>
@@ -1896,8 +2111,10 @@
           <!-- ====== 对话AI设置折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-ai-settings" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.aiSettings.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.aiSettings.heading"
+            >
               🔌 对话AI设置
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -1918,7 +2135,11 @@
               <div class="space-y-2">
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.aiSettings.configName">配置名称</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.aiSettings.configName"
+                      >配置名称</span
+                    >
                   </label>
                   <input
                     type="text"
@@ -1930,14 +2151,28 @@
 
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.aiSettings.apiType">API 类型</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.aiSettings.apiType"
+                      >API 类型</span
+                    >
                   </label>
                   <select
                     id="api-type"
                     class="select select-xs select-bordered w-full"
                   >
-                    <option value="proxy" data-i18n="chat.beiluChat.aiSettings.openaiCompat">OpenAI 兼容</option>
-                    <option value="gemini" data-i18n="chat.beiluChat.aiSettings.gemini">Google Gemini</option>
+                    <option
+                      value="proxy"
+                      data-i18n="chat.beiluChat.aiSettings.openaiCompat"
+                    >
+                      OpenAI 兼容
+                    </option>
+                    <option
+                      value="gemini"
+                      data-i18n="chat.beiluChat.aiSettings.gemini"
+                    >
+                      Google Gemini
+                    </option>
                   </select>
                 </div>
 
@@ -1957,7 +2192,11 @@
 
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.aiSettings.model">模型</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.aiSettings.model"
+                      >模型</span
+                    >
                   </label>
                   <input
                     type="password"
@@ -1969,7 +2208,11 @@
 
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs" data-i18n="chat.beiluChat.aiSettings.model">模型</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.aiSettings.model"
+                      >模型</span
+                    >
                   </label>
                   <div class="flex gap-1">
                     <input
@@ -1990,7 +2233,14 @@
                     id="api-model-select"
                     class="select select-xs select-bordered w-full mt-1 hidden"
                   >
-                    <option value="" disabled selected data-i18n="chat.beiluChat.aiSettings.selectModel">选择模型...</option>
+                    <option
+                      value=""
+                      disabled
+                      selected
+                      data-i18n="chat.beiluChat.aiSettings.selectModel"
+                    >
+                      选择模型...
+                    </option>
                   </select>
                 </div>
               </div>
@@ -2020,7 +2270,11 @@
               <!-- 聊天宽度 -->
               <div class="form-control">
                 <label class="label py-0.5">
-                  <span class="label-text text-xs" data-i18n="chat.beiluChat.aiSettings.chatWidth">聊天宽度</span>
+                  <span
+                    class="label-text text-xs"
+                    data-i18n="chat.beiluChat.aiSettings.chatWidth"
+                    >聊天宽度</span
+                  >
                   <span
                     id="chat-width-value"
                     class="label-text-alt font-mono text-xs"
@@ -2052,8 +2306,10 @@
           <!-- ====== 记忆AI操作折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-memory-ops" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.memoryOps.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.memoryOps.heading"
+            >
               🧠 记忆AI操作
             </div>
             <div class="collapse-content px-2 pb-2">
@@ -2106,14 +2362,18 @@
           <!-- ====== 注入提示词管理折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-injection-prompts" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.injectionPrompts.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.injectionPrompts.heading"
+            >
               📝 注入提示词
             </div>
             <div class="collapse-content px-2 pb-2">
               <div class="space-y-1.5">
-                <p class="text-xs text-base-content/50"
-                  data-i18n="chat.beiluChat.injectionPrompts.desc">
+                <p
+                  class="text-xs text-base-content/50"
+                  data-i18n="chat.beiluChat.injectionPrompts.desc"
+                >
                   管理发送给 AI 的注入提示词条目。
                 </p>
                 <!-- 注入提示词列表（由 JS 动态渲染） -->
@@ -2228,21 +2488,27 @@
                   </button>
                 </div>
               </div>
-              </div>
             </div>
-  
-            <!-- ====== 显示设置折叠组 ====== -->
+          </div>
+
+          <!-- ====== 显示设置折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-display-toggles" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.displaySettings.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.displaySettings.heading"
+            >
               📝 显示设置
             </div>
             <div class="collapse-content px-2 pb-2">
               <div class="space-y-1.5">
                 <!-- 正则处理器开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.regexProcessor">🔤 正则处理器</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.regexProcessor"
+                    >🔤 正则处理器</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-regex"
@@ -2252,7 +2518,11 @@
                 </label>
                 <!-- 思维链折叠开关 + 标签配置 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.thinkingFold">💭 思维链折叠</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.thinkingFold"
+                    >💭 思维链折叠</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-thinking-fold"
@@ -2270,14 +2540,19 @@
                     data-i18n="chat.beiluChat.displaySettings.thinkingFoldTags"
                     title="逗号分隔的XML标签名"
                   />
-                  <span class="text-[9px] text-base-content/30"
+                  <span
+                    class="text-[9px] text-base-content/30"
                     data-i18n="chat.beiluChat.displaySettings.thinkingFoldTagsHint"
                     >自定义折叠标签（逗号分隔）</span
                   >
                 </div>
                 <!-- 角色名显示开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.showCharNames">👤 显示角色名</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.showCharNames"
+                    >👤 显示角色名</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-char-names"
@@ -2287,7 +2562,11 @@
                 </label>
                 <!-- 联网搜索开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.webSearch">🌐 联网搜索</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.webSearch"
+                    >🌐 联网搜索</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-web-search"
@@ -2297,7 +2576,11 @@
                 </label>
                 <!-- 系统信息开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.sysInfo">🖥️ 系统信息</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.sysInfo"
+                    >🖥️ 系统信息</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-sysinfo"
@@ -2307,7 +2590,11 @@
                 </label>
                 <!-- 条目控制开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.entryControl">🔄 条目控制</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.entryControl"
+                    >🔄 条目控制</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-entry-control"
@@ -2316,17 +2603,37 @@
                 </label>
                 <!-- 模式切换清理设置 -->
                 <div class="flex items-center justify-between mt-1">
-                  <span class="text-xs" data-i18n="chat.beiluChat.displaySettings.modeSwitchCleanup">🧹 模式切换清理</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.displaySettings.modeSwitchCleanup"
+                    >🧹 模式切换清理</span
+                  >
                   <select
                     id="cleanup-mode-select"
                     class="select select-xs select-bordered w-24 text-[10px]"
                   >
-                    <option value="auto" data-i18n="chat.beiluChat.displaySettings.cleanupAuto">自动清理</option>
-                    <option value="ask" data-i18n="chat.beiluChat.displaySettings.cleanupAsk">每次询问</option>
-                    <option value="off" data-i18n="chat.beiluChat.displaySettings.cleanupOff">关闭</option>
+                    <option
+                      value="auto"
+                      data-i18n="chat.beiluChat.displaySettings.cleanupAuto"
+                    >
+                      自动清理
+                    </option>
+                    <option
+                      value="ask"
+                      data-i18n="chat.beiluChat.displaySettings.cleanupAsk"
+                    >
+                      每次询问
+                    </option>
+                    <option
+                      value="off"
+                      data-i18n="chat.beiluChat.displaySettings.cleanupOff"
+                    >
+                      关闭
+                    </option>
                   </select>
                 </div>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.displaySettings.cleanupHint"
                   >退出文件/记忆模式时是否清理对话消息</span
                 >
@@ -2337,15 +2644,21 @@
           <!-- ====== 渲染设置折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-render-toggles" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.renderSettings.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.renderSettings.heading"
+            >
               🎨 渲染设置
             </div>
             <div class="collapse-content px-2 pb-2">
               <div class="space-y-1.5">
                 <!-- 渲染器开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.renderSettings.enableRenderer">🎨 启用渲染器</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.renderSettings.enableRenderer"
+                    >🎨 启用渲染器</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-renderer"
@@ -2353,14 +2666,19 @@
                     checked
                   />
                 </label>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.renderSettings.enableRendererHint"
                   >启用后，符合条件的代码将被渲染为美化界面</span
                 >
 
                 <!-- 代码折叠 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.renderSettings.codeFold">📦 代码折叠</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.renderSettings.codeFold"
+                    >📦 代码折叠</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-code-fold"
@@ -2372,12 +2690,22 @@
                     id="code-fold-mode"
                     class="select select-xs select-bordered w-full text-[10px]"
                   >
-                    <option value="all" data-i18n="chat.beiluChat.renderSettings.foldAll">折叠所有代码块</option>
-                    <option value="frontend" selected data-i18n="chat.beiluChat.renderSettings.foldFrontend">
+                    <option
+                      value="all"
+                      data-i18n="chat.beiluChat.renderSettings.foldAll"
+                    >
+                      折叠所有代码块
+                    </option>
+                    <option
+                      value="frontend"
+                      selected
+                      data-i18n="chat.beiluChat.renderSettings.foldFrontend"
+                    >
                       仅前端（HTML/CSS/JS）
                     </option>
                   </select>
-                  <span class="text-[9px] text-base-content/30"
+                  <span
+                    class="text-[9px] text-base-content/30"
                     data-i18n="chat.beiluChat.renderSettings.codeFoldHint"
                     >折叠可渲染但未被渲染的代码块</span
                   >
@@ -2385,21 +2713,30 @@
 
                 <!-- 流式渲染 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.renderSettings.streamRender">⚡ 流式渲染</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.renderSettings.streamRender"
+                    >⚡ 流式渲染</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-stream-render"
                     class="toggle toggle-xs"
                   />
                 </label>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.renderSettings.streamRenderHint"
                   >AI流式输出时即时渲染美化界面</span
                 >
 
                 <!-- 渲染深度 -->
                 <div class="flex items-center justify-between mt-1">
-                  <span class="text-xs" data-i18n="chat.beiluChat.renderSettings.renderDepth">🔍 渲染深度</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.renderSettings.renderDepth"
+                    >🔍 渲染深度</span
+                  >
                   <input
                     type="number"
                     id="render-depth"
@@ -2411,7 +2748,8 @@
                     title="0=全部渲染"
                   />
                 </div>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.renderSettings.renderDepthHint"
                   >只渲染最近N层的美化（0=全部）</span
                 >
@@ -2422,15 +2760,21 @@
           <!-- ====== 消息设置折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-message-toggles" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.messageSettings.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.messageSettings.heading"
+            >
               📜 消息设置
             </div>
             <div class="collapse-content px-2 pb-2">
               <div class="space-y-1.5">
                 <!-- 消息加载限制 -->
                 <div class="flex items-center justify-between">
-                  <span class="text-xs" data-i18n="chat.beiluChat.messageSettings.msgLoadLimit">📜 消息加载数</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.messageSettings.msgLoadLimit"
+                    >📜 消息加载数</span
+                  >
                   <input
                     type="number"
                     id="msg-load-limit"
@@ -2442,14 +2786,19 @@
                     title="0=不限制"
                   />
                 </div>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.messageSettings.msgLoadLimitHint"
                   >限制DOM中加载的消息数（0=全部）</span
                 >
 
                 <!-- 上下文屏蔽 -->
                 <div class="flex items-center justify-between mt-1">
-                  <span class="text-xs" data-i18n="chat.beiluChat.messageSettings.contextMsgLimit">🚫 上下文消息数</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.messageSettings.contextMsgLimit"
+                    >🚫 上下文消息数</span
+                  >
                   <input
                     type="number"
                     id="context-msg-limit"
@@ -2461,7 +2810,8 @@
                     title="0=不限制"
                   />
                 </div>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.messageSettings.contextMsgLimitHint"
                   >发送给AI的最大消息条数（0=全部，瞬时）</span
                 >
@@ -2472,14 +2822,20 @@
           <!-- ====== 浏览器感知折叠组 ====== -->
           <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
             <input type="checkbox" data-collapse-id="right-browser-sense" />
-            <div class="collapse-title font-medium text-sm py-2 min-h-0"
-              data-i18n="chat.beiluChat.browserSense.heading">
+            <div
+              class="collapse-title font-medium text-sm py-2 min-h-0"
+              data-i18n="chat.beiluChat.browserSense.heading"
+            >
               👁 浏览器感知
             </div>
             <div class="collapse-content px-2 pb-2">
               <div class="space-y-1.5">
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.browserSense.enableSense">👁 启用感知</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.browserSense.enableSense"
+                    >👁 启用感知</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-browser-sense"
@@ -2489,20 +2845,26 @@
                 </label>
                 <!-- 感知消息显示开关 -->
                 <label class="flex items-center justify-between cursor-pointer">
-                  <span class="text-xs" data-i18n="chat.beiluChat.browserSense.showMessages">💬 显示感知消息</span>
+                  <span
+                    class="text-xs"
+                    data-i18n="chat.beiluChat.browserSense.showMessages"
+                    >💬 显示感知消息</span
+                  >
                   <input
                     type="checkbox"
                     id="toggle-sense-messages"
                     class="toggle toggle-xs"
                   />
                 </label>
-                <span class="text-[9px] text-base-content/30 pl-4"
+                <span
+                  class="text-[9px] text-base-content/30 pl-4"
                   data-i18n="chat.beiluChat.browserSense.showMessagesHint"
                   >开启后，截图消息将在聊天界面显示</span
                 >
                 <div class="pl-4 space-y-1">
                   <div class="flex items-center justify-between">
-                    <span class="text-[10px] text-base-content/40"
+                    <span
+                      class="text-[10px] text-base-content/40"
                       data-i18n="chat.beiluChat.browserSense.snapshotLabel"
                       >快照: <span id="browser-snapshot-count">0</span>/5</span
                     >
@@ -2525,7 +2887,8 @@
                   >
                     📋 复制油猴脚本
                   </button>
-                  <span class="text-[9px] text-base-content/30"
+                  <span
+                    class="text-[9px] text-base-content/30"
                     data-i18n="chat.beiluChat.browserSense.copyScriptHint"
                     >复制后在篡改猴中「添加新脚本」→ 粘贴 → 保存</span
                   >

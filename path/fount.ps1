@@ -335,6 +335,42 @@ function Get-FountPort {
 	return $port
 }
 
+# beilu: 用户配置数据备份/恢复（保护 git reset --hard 不删除用户预设、世界书、正则等）
+function Backup-UserConfigData {
+	$backupDir = Join-Path $env:TEMP "beilu-config-backup"
+	$configFiles = Get-ChildItem -Path "$FOUNT_DIR/src" -Filter "config_data.json" -Recurse -ErrorAction SilentlyContinue
+	if ($configFiles.Count -gt 0) {
+		New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
+		foreach ($f in $configFiles) {
+			$relativePath = $f.FullName.Substring($FOUNT_DIR.Length + 1)
+			$destPath = Join-Path $backupDir $relativePath
+			$destDir = Split-Path $destPath -Parent
+			New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+			Copy-Item -Path $f.FullName -Destination $destPath -Force
+		}
+		Write-Host "  ✓ 已备份 $($configFiles.Count) 个用户配置文件" -ForegroundColor Green
+	}
+}
+function Restore-UserConfigData {
+	$backupDir = Join-Path $env:TEMP "beilu-config-backup"
+	if (Test-Path $backupDir) {
+		$backupFiles = Get-ChildItem -Path $backupDir -Filter "config_data.json" -Recurse -ErrorAction SilentlyContinue
+		foreach ($f in $backupFiles) {
+			$relativePath = $f.FullName.Substring($backupDir.Length + 1)
+			$destPath = Join-Path $FOUNT_DIR $relativePath
+			$destDir = Split-Path $destPath -Parent
+			New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+			Copy-Item -Path $f.FullName -Destination $destPath -Force
+		}
+		# 确保恢复的文件不被 git 跟踪
+		git -C "$FOUNT_DIR" rm --cached --ignore-unmatch -r -- "**/config_data.json" 2>$null | Out-Null
+		Remove-Item -Path $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+		if ($backupFiles.Count -gt 0) {
+			Write-Host "  ✓ 已恢复 $($backupFiles.Count) 个用户配置文件" -ForegroundColor Green
+		}
+	}
+}
+
 function New-InstallerDir {
 	New-Item -Path "$FOUNT_DIR/data/installer" -ItemType Directory -Force | Out-Null
 }
@@ -784,8 +820,10 @@ function fount_upgrade {
 			Write-Host (Get-I18n -key 'git.backupSavedTo' -params @{path = '' }) -ForegroundColor Green -NoNewline
 			Write-Host $diffFilePath -ForegroundColor Cyan
 		}
+		Backup-UserConfigData
 		git -C "$FOUNT_DIR" clean -fd
 		git -C "$FOUNT_DIR" reset --hard "origin/$BEILU_BRANCH"
+		Restore-UserConfigData
 	}
 
 	if (!(Test-Path -Path "$FOUNT_DIR/.git")) {
@@ -802,8 +840,10 @@ function fount_upgrade {
 		$currentBranch = git -C "$FOUNT_DIR" rev-parse --abbrev-ref HEAD
 		if ($currentBranch -eq 'HEAD') {
 			Write-Host (Get-I18n -key 'git.notOnBranch')
+			Backup-UserConfigData
 			git -C "$FOUNT_DIR" clean -fd
 			git -C "$FOUNT_DIR" reset --hard "origin/$BEILU_BRANCH"
+			Restore-UserConfigData
 			git -C "$FOUNT_DIR" checkout $BEILU_BRANCH
 			$currentBranch = git -C "$FOUNT_DIR" rev-parse --abbrev-ref HEAD
 		}
@@ -824,16 +864,20 @@ function fount_upgrade {
 		if ($localCommit -ne $remoteCommit) {
 			if ($mergeBase -eq $localCommit) {
 				Write-Host (Get-I18n -key 'git.updatingFromRemote')
+				Backup-UserConfigData
 				git -C "$FOUNT_DIR" fetch origin
 				git -C "$FOUNT_DIR" reset --hard $remoteBranch
+				Restore-UserConfigData
 			}
 			elseif ($mergeBase -eq $remoteCommit) {
 				Write-Host (Get-I18n -key 'git.localBranchAhead')
 			}
 			else {
 				Write-Host (Get-I18n -key 'git.branchesDiverged')
+				Backup-UserConfigData
 				git -C "$FOUNT_DIR" fetch origin
 				git -C "$FOUNT_DIR" reset --hard $remoteBranch
+				Restore-UserConfigData
 			}
 		}
 		else {
@@ -1025,9 +1069,11 @@ function run {
 if (!(Test-Path -Path "$FOUNT_DIR/node_modules") -or $args[0] -eq 'init') {
 	if (!(Test-Path -Path "$FOUNT_DIR/.noupdate")) {
 		if (Get-Command git -ErrorAction Ignore) {
+			Backup-UserConfigData
 			git -C "$FOUNT_DIR" config core.autocrlf false
 			git -C "$FOUNT_DIR" clean -fd
 			git -C "$FOUNT_DIR" reset --hard "origin/main" 2>$null
+			Restore-UserConfigData
 			git -C "$FOUNT_DIR" gc --aggressive --prune=now --force
 		}
 	}

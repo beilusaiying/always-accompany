@@ -361,23 +361,35 @@ export async function renderMessage(message) {
 
   if (segments) {
     // ★ 混合内容（正文 markdown + 嵌入的 full-html 状态栏）：分段渲染
-    contentType = "mixed";
-    diag.debug("splitMixedContent: 检测到混合内容", {
-      segmentCount: segments.length,
-      types: segments.map((s) => s.type),
-    });
+    // ★ 深度检查：超出渲染深度时，mixed 内容中的 full-html 段也降级为 markdown
+    if (!isWithinRenderDepth) {
+      contentType = "markdown";
+      diag.debug("splitMixedContent: 超出渲染深度，mixed 降级为纯 markdown");
+      // 所有段落统一走 markdown 渲染
+      let combinedText = segments.map((s) => s.content).join("\n\n");
+      renderedContent = await renderMarkdownAsString(combinedText, cache);
+      if (placeholders.size > 0) {
+        renderedContent = restorePlaceholders(renderedContent, placeholders);
+      }
+    } else {
+      contentType = "mixed";
+      diag.debug("splitMixedContent: 检测到混合内容", {
+        segmentCount: segments.length,
+        types: segments.map((s) => s.type),
+      });
 
-    renderedContent = "";
-    for (const seg of segments) {
-      if (seg.type === "markdown") {
-        const md = await renderMarkdownAsString(seg.content, cache);
-        const restored =
-          placeholders.size > 0 ? restorePlaceholders(md, placeholders) : md;
-        renderedContent += `<div class="segment-markdown">${restored}</div>`;
-      } else {
-        // full-html 段：base64 编码存入 data 属性，后续创建 iframe
-        const b64 = btoa(unescape(encodeURIComponent(seg.content)));
-        renderedContent += `<div class="segment-iframe" data-segment-html="${b64}"></div>`;
+      renderedContent = "";
+      for (const seg of segments) {
+        if (seg.type === "markdown") {
+          const md = await renderMarkdownAsString(seg.content, cache);
+          const restored =
+            placeholders.size > 0 ? restorePlaceholders(md, placeholders) : md;
+          renderedContent += `<div class="segment-markdown">${restored}</div>`;
+        } else {
+          // full-html 段：base64 编码存入 data 属性，后续创建 iframe
+          const b64 = btoa(unescape(encodeURIComponent(seg.content)));
+          renderedContent += `<div class="segment-iframe" data-segment-html="${b64}"></div>`;
+        }
       }
     }
   } else {

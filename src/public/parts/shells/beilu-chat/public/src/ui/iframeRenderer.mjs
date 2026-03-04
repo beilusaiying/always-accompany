@@ -13,89 +13,117 @@
  *       JS-Slash-Runner/src/iframe/adjust_viewport.js
  */
 
-import { onElementRemoved } from '../../../../../scripts/onElementRemoved.mjs'
-import { createDiag } from '../diagLogger.mjs'
-import { buildInjectionScript, detectNeeds } from './stCompat/index.mjs'
+import { onElementRemoved } from "../../../../../scripts/onElementRemoved.mjs";
+import { createDiag } from "../diagLogger.mjs";
+import { buildInjectionScript, detectNeeds } from "./stCompat/index.mjs";
 
-const diag = createDiag('iframeRenderer')
+const diag = createDiag("iframeRenderer");
 
 // ============================================================
 // 全局：父页面音频管理器（单例）
 // ============================================================
-let _parentAudio = null
+let _parentAudio = null;
 
 function getParentAudio() {
-	if (!_parentAudio) {
-		_parentAudio = new Audio()
-		_parentAudio.loop = true
-	}
-	return _parentAudio
+  if (!_parentAudio) {
+    _parentAudio = new Audio();
+    _parentAudio.loop = true;
+  }
+  return _parentAudio;
 }
 
 // 对外暴露播放状态（供 iframe 同步查询）
-window.__beiluAudioState = { playing: false, src: '', volume: 0.5 }
+window.__beiluAudioState = { playing: false, src: "", volume: 0.5 };
 
 function beiluAudioPlay(url, options = {}) {
-	const audio = getParentAudio()
-	if (options.loop !== undefined) audio.loop = options.loop
-	if (options.volume !== undefined) {
-		audio.volume = options.volume
-		window.__beiluAudioState.volume = options.volume
-	}
-	if (url && audio.src !== url) {
-		audio.src = url
-	}
-	audio.play().catch(e => console.warn('[beiluAudio] play failed:', e))
-	window.__beiluAudioState.playing = true
-	window.__beiluAudioState.src = url || audio.src
+  const audio = getParentAudio();
+  if (options.loop !== undefined) audio.loop = options.loop;
+  if (options.volume !== undefined) {
+    audio.volume = options.volume;
+    window.__beiluAudioState.volume = options.volume;
+  }
+
+  // ★ 修复：使用 URL 对象规范化比较（audio.src 总是绝对 URL，角色卡传入可能是相对路径）
+  let isSameUrl = false;
+  if (url) {
+    try {
+      const normalizedNew = new URL(url, location.href).href;
+      isSameUrl = audio.src === normalizedNew;
+    } catch (e) {
+      isSameUrl = audio.src === url;
+    }
+  } else {
+    // url 为空时视为"继续播放当前曲目"
+    isSameUrl = true;
+  }
+
+  if (!isSameUrl && url) {
+    audio.src = url;
+  }
+
+  // ★ 修复：如果同一首曲目已在播放中，不重复调用 play()
+  // 这样角色卡的 pause() 控制就不会被 iframe 重渲染覆盖
+  // 角色卡如需强制重播，可先 pause() 再 play()，或传 options.force = true
+  if (isSameUrl && !audio.paused && !options.force) {
+    return;
+  }
+
+  audio.play().catch((e) => console.warn("[beiluAudio] play failed:", e));
+  window.__beiluAudioState.playing = true;
+  window.__beiluAudioState.src = url || audio.src;
 }
 
 function beiluAudioPause() {
-	const audio = getParentAudio()
-	audio.pause()
-	window.__beiluAudioState.playing = false
+  const audio = getParentAudio();
+  audio.pause();
+  window.__beiluAudioState.playing = false;
 }
 
 function beiluAudioSetVolume(vol) {
-	const audio = getParentAudio()
-	audio.volume = vol
-	window.__beiluAudioState.volume = vol
+  const audio = getParentAudio();
+  audio.volume = vol;
+  window.__beiluAudioState.volume = vol;
 }
 
 // ============================================================
 // 全局：父页面 resize 监听（只注册一次）
 // ============================================================
-let resizeListenerRegistered = false
+let resizeListenerRegistered = false;
 
 function ensureParentResizeListener() {
-	if (resizeListenerRegistered) return
-	resizeListenerRegistered = true
+  if (resizeListenerRegistered) return;
+  resizeListenerRegistered = true;
 
-	window.addEventListener('resize', () => {
-		// 通知所有 iframe 更新视口高度变量 + 重新测量高度
-		document.querySelectorAll('.beilu-beauty-iframe').forEach(iframe => {
-			try {
-				iframe.contentWindow?.postMessage({ type: 'beilu-update-viewport' }, '*')
-				iframe.contentWindow?.postMessage({ type: 'beilu-remeasure' }, '*')
-			} catch (e) { /* ignore */ }
-		})
-	})
+  window.addEventListener("resize", () => {
+    // 通知所有 iframe 更新视口高度变量 + 重新测量高度
+    document.querySelectorAll(".beilu-beauty-iframe").forEach((iframe) => {
+      try {
+        iframe.contentWindow?.postMessage(
+          { type: "beilu-update-viewport" },
+          "*",
+        );
+        iframe.contentWindow?.postMessage({ type: "beilu-remeasure" }, "*");
+      } catch (e) {
+        /* ignore */
+      }
+    });
+  });
 
-	// ★ 监听来自 iframe 的音频控制消息
-	window.addEventListener('message', (e) => {
-		if (!e.data) return
-		switch (e.data.type) {
-			case 'beilu-audio-play':
-				beiluAudioPlay(e.data.url, e.data.options || {})
-				break
-			case 'beilu-audio-pause':
-				beiluAudioPause()
-				break
-			case 'beilu-audio-volume':
-				beiluAudioSetVolume(e.data.volume)
-				break
-		}
-	})
+  // ★ 监听来自 iframe 的音频控制消息
+  window.addEventListener("message", (e) => {
+    if (!e.data) return;
+    switch (e.data.type) {
+      case "beilu-audio-play":
+        beiluAudioPlay(e.data.url, e.data.options || {});
+        break;
+      case "beilu-audio-pause":
+        beiluAudioPause();
+        break;
+      case "beilu-audio-volume":
+        beiluAudioSetVolume(e.data.volume);
+        break;
+    }
+  });
 }
 
 /**
@@ -103,19 +131,27 @@ function ensureParentResizeListener() {
  * 解决 tab 切换后黑屏/高度归零的问题
  */
 function observeIframeVisibility(iframe) {
-	if (typeof IntersectionObserver === 'undefined') return
+  if (typeof IntersectionObserver === "undefined") return;
 
-	const observer = new IntersectionObserver((entries) => {
-		entries.forEach(entry => {
-			if (entry.isIntersecting) {
-				try {
-					iframe.contentWindow?.postMessage({ type: 'beilu-update-viewport' }, '*')
-					iframe.contentWindow?.postMessage({ type: 'beilu-remeasure' }, '*')
-				} catch (e) { /* ignore */ }
-			}
-		})
-	}, { threshold: 0.01 })
-	observer.observe(iframe)
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          try {
+            iframe.contentWindow?.postMessage(
+              { type: "beilu-update-viewport" },
+              "*",
+            );
+            iframe.contentWindow?.postMessage({ type: "beilu-remeasure" }, "*");
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      });
+    },
+    { threshold: 0.01 },
+  );
+  observer.observe(iframe);
 }
 
 // ============================================================
@@ -135,51 +171,51 @@ function observeIframeVisibility(iframe) {
  * @returns {string} 处理后的 HTML
  */
 function replaceVhInContent(content) {
-	const hasVh = /\d+(?:\.\d+)?vh/gi.test(content)
-	if (!hasVh) return content
+  const hasVh = /\d+(?:\.\d+)?vh/gi.test(content);
+  if (!hasVh) return content;
 
-	const convertVh = (value) =>
-		value.replace(/(\d+(?:\.\d+)?)vh\b/gi, (match, num) => {
-			const parsed = parseFloat(num)
-			if (!isFinite(parsed)) return match
-			const VARIABLE = 'var(--beilu-viewport-height)'
-			if (parsed === 100) return VARIABLE
-			return `calc(${VARIABLE} * ${parsed / 100})`
-		})
+  const convertVh = (value) =>
+    value.replace(/(\d+(?:\.\d+)?)vh\b/gi, (match, num) => {
+      const parsed = parseFloat(num);
+      if (!isFinite(parsed)) return match;
+      const VARIABLE = "var(--beilu-viewport-height)";
+      if (parsed === 100) return VARIABLE;
+      return `calc(${VARIABLE} * ${parsed / 100})`;
+    });
 
-	// CSS 声明块中所有属性的 vh（匹配 属性名: 含vh的值; 或 }）
-	content = content.replace(
-		/([\w-]+\s*:\s*)([^;{}]*?\d+(?:\.\d+)?vh[^;{}]*)(?=\s*[;}])/gi,
-		(match, prefix, value) => {
-			// 跳过不在 CSS 上下文中的误匹配（如 JS 变量名）
-			if (/^\s*(\/\/|var\s|let\s|const\s|function\s)/.test(match)) return match
-			return `${prefix}${convertVh(value)}`
-		}
-	)
+  // CSS 声明块中所有属性的 vh（匹配 属性名: 含vh的值; 或 }）
+  content = content.replace(
+    /([\w-]+\s*:\s*)([^;{}]*?\d+(?:\.\d+)?vh[^;{}]*)(?=\s*[;}])/gi,
+    (match, prefix, value) => {
+      // 跳过不在 CSS 上下文中的误匹配（如 JS 变量名）
+      if (/^\s*(\/\/|var\s|let\s|const\s|function\s)/.test(match)) return match;
+      return `${prefix}${convertVh(value)}`;
+    },
+  );
 
-	// 行内 style="..." 中的 vh（覆盖所有属性）
-	content = content.replace(
-		/(style\s*=\s*(["']))([^"']*?)(\2)/gi,
-		(match, prefix, _q, styleContent, suffix) => {
-			if (!/\d+(?:\.\d+)?vh/i.test(styleContent)) return match
-			const replaced = styleContent.replace(
-				/([\w-]+\s*:\s*)([^;]*?\d+(?:\.\d+)?vh[^;]*)/gi,
-				(_, p1, p2) => `${p1}${convertVh(p2)}`
-			)
-			return `${prefix}${replaced}${suffix}`
-		}
-	)
+  // 行内 style="..." 中的 vh（覆盖所有属性）
+  content = content.replace(
+    /(style\s*=\s*(["']))([^"']*?)(\2)/gi,
+    (match, prefix, _q, styleContent, suffix) => {
+      if (!/\d+(?:\.\d+)?vh/i.test(styleContent)) return match;
+      const replaced = styleContent.replace(
+        /([\w-]+\s*:\s*)([^;]*?\d+(?:\.\d+)?vh[^;]*)/gi,
+        (_, p1, p2) => `${p1}${convertVh(p2)}`,
+      );
+      return `${prefix}${replaced}${suffix}`;
+    },
+  );
 
-	// JS: element.style.xxx = "...vh"（覆盖所有 style 属性赋值）
-	content = content.replace(
-		/(\.style\.\w+\s*=\s*(["']))([\s\S]*?)(\2)/gi,
-		(match, prefix, _q, val, suffix) => {
-			if (!/\b\d+(?:\.\d+)?vh\b/i.test(val)) return match
-			return `${prefix}${convertVh(val)}${suffix}`
-		}
-	)
+  // JS: element.style.xxx = "...vh"（覆盖所有 style 属性赋值）
+  content = content.replace(
+    /(\.style\.\w+\s*=\s*(["']))([\s\S]*?)(\2)/gi,
+    (match, prefix, _q, val, suffix) => {
+      if (!/\b\d+(?:\.\d+)?vh\b/i.test(val)) return match;
+      return `${prefix}${convertVh(val)}${suffix}`;
+    },
+  );
 
-	return content
+  return content;
 }
 
 // ============================================================
@@ -197,8 +233,9 @@ function replaceVhInContent(content) {
  * @param {string} mvuVariablesJson - MVU 变量的 JSON 字符串（直接内联）
  * @returns {string} <script> 标签字符串
  */
-function createEarlyScript(rawContentBase64 = '', mvuVariablesJson = '{}') {
-	return `<script>
+function createEarlyScript(rawContentBase64 = "", mvuVariablesJson = "{}") {
+  return (
+    `<script>
 (function() {
 	// ★ 提前注入 SillyTavern 兼容 API（必须在角色卡 Vue 脚本之前执行！）
 	var _rawMsg = '';
@@ -252,6 +289,7 @@ function createEarlyScript(rawContentBase64 = '', mvuVariablesJson = '{}') {
 	};
 })();
 </` + `script>`
+  );
 }
 
 /**
@@ -267,8 +305,8 @@ function createEarlyScript(rawContentBase64 = '', mvuVariablesJson = '{}') {
  * @param {string} [rawContentBase64=''] - 原始消息内容的 base64 编码（用于 ST API 兼容）
  * @returns {string} <script> 标签字符串
  */
-function createBridgeScript(messageId, rawContentBase64 = '') {
-	return `<script>
+function createBridgeScript(messageId, rawContentBase64 = "") {
+  return `<script>
 (function() {
 	// ============================================================
 	// 1. CSS Reset：限制宽度溢出，但允许纵向自然滚动
@@ -421,7 +459,7 @@ function createBridgeScript(messageId, rawContentBase64 = '') {
 		}, '*');
 	};
 })();
-</script>`
+</script>`;
 }
 
 // ============================================================
@@ -438,245 +476,304 @@ function createBridgeScript(messageId, rawContentBase64 = '') {
  * @param {object} [options.mvuVariables] - MVU 累积变量对象，注入到 iframe 中供状态栏读取
  * @returns {HTMLIFrameElement|null} 创建的 iframe 元素
  */
-export async function renderAsIframe(htmlDocument, messageElement, rawContent = '', options = {}) {
-	const contentEl = messageElement.querySelector('.message-content')
-	if (!contentEl) {
-		diag.warn('未找到 .message-content 容器')
-		return null
-	}
+export async function renderAsIframe(
+  htmlDocument,
+  messageElement,
+  rawContent = "",
+  options = {},
+) {
+  const contentEl = messageElement.querySelector(".message-content");
+  if (!contentEl) {
+    diag.warn("未找到 .message-content 容器");
+    return null;
+  }
 
-	// 确保父页面 resize 监听已注册
-	ensureParentResizeListener()
+  // 确保父页面 resize 监听已注册
+  ensureParentResizeListener();
 
-	// 移除 markdown-body 类（避免样式干扰）
-	contentEl.classList.remove('markdown-body')
-	contentEl.classList.add('iframe-content')
-	contentEl.innerHTML = ''
+  // 移除 markdown-body 类（避免样式干扰）
+  contentEl.classList.remove("markdown-body");
+  contentEl.classList.add("iframe-content");
+  contentEl.innerHTML = "";
 
-	// ★ 强制覆盖 daisyUI .chat-bubble 的宽度约束
-	// daisyUI 设置了 width: fit-content; max-inline-size: 90% 导致 iframe 无法全宽
-	const chatBubble = contentEl.closest('.chat-bubble')
-	if (chatBubble) {
-		chatBubble.style.cssText += ';margin-left:0!important;width:100%!important;max-width:100%!important;max-inline-size:100%!important;padding:0!important;'
-	}
+  // ★ 强制覆盖 daisyUI .chat-bubble 的宽度约束
+  // daisyUI 设置了 width: fit-content; max-inline-size: 90% 导致 iframe 无法全宽
+  const chatBubble = contentEl.closest(".chat-bubble");
+  if (chatBubble) {
+    chatBubble.style.cssText +=
+      ";margin-left:0!important;width:100%!important;max-width:100%!important;max-inline-size:100%!important;padding:0!important;";
+  }
 
-	// ★ 让消息容器也全宽
-	const chatMessage = contentEl.closest('.chat-message')
-	if (chatMessage) {
-		chatMessage.style.cssText += ';max-width:100%!important;'
-	}
+  // ★ 让消息容器也全宽
+  const chatMessage = contentEl.closest(".chat-message");
+  if (chatMessage) {
+    chatMessage.style.cssText += ";max-width:100%!important;";
+  }
 
-	// 创建 iframe
-	const iframe = document.createElement('iframe')
-	iframe.className = 'beilu-beauty-iframe'
-	iframe.sandbox = 'allow-scripts allow-same-origin allow-popups'
-	iframe.setAttribute('allowfullscreen', '')
-	// Audio 已移至父页面，不再需要 iframe autoplay 权限
+  // 创建 iframe
+  const iframe = document.createElement("iframe");
+  iframe.className = "beilu-beauty-iframe";
+  iframe.sandbox = "allow-scripts allow-same-origin allow-popups";
+  iframe.setAttribute("allowfullscreen", "");
+  // Audio 已移至父页面，不再需要 iframe autoplay 权限
 
-	// 消息 ID
-	const messageId = messageElement.id || `msg-${Date.now()}`
+  // 消息 ID
+  const messageId = messageElement.id || `msg-${Date.now()}`;
 
-	// ★ 预处理 HTML：vh 单位替换
-	let modifiedHtml = replaceVhInContent(htmlDocument)
+  // ★ 预处理 HTML：vh 单位替换
+  let modifiedHtml = replaceVhInContent(htmlDocument);
 
-	// ★ 预处理 HTML：宏替换（必须在 srcdoc 设置之前，否则浏览器解析 HTML 时会尝试加载未替换的宏作为 URL）
-	// 典型场景：角色卡 HTML 中 src="{{avatar}}" 在 JS 运行之前就被浏览器当作相对 URL 请求 → 404
-	{
-		// 获取角色名/用户名（从消息元素或全局状态）
-		const charNameEl = document.getElementById('char-name-display')
-		const macroCharName = charNameEl?.textContent?.trim() || 'Character'
-		const macroUserName = document.querySelector('[data-user-name]')?.dataset?.userName || 'User'
-		// 角色卡头像 URL
-		const charId = charNameEl?.dataset?.charId
-		const macroAvatar = charId ? `/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charId)}/image.png` : ''
+  // ★ 预处理 HTML：宏替换（必须在 srcdoc 设置之前，否则浏览器解析 HTML 时会尝试加载未替换的宏作为 URL）
+  // 典型场景：角色卡 HTML 中 src="{{avatar}}" 在 JS 运行之前就被浏览器当作相对 URL 请求 → 404
+  {
+    // 获取角色名/用户名（从消息元素或全局状态）
+    const charNameEl = document.getElementById("char-name-display");
+    const macroCharName = charNameEl?.textContent?.trim() || "Character";
+    const macroUserName =
+      document.querySelector("[data-user-name]")?.dataset?.userName || "User";
+    // 角色卡头像 URL
+    const charId = charNameEl?.dataset?.charId;
+    const macroAvatar = charId
+      ? `/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charId)}/image.png`
+      : "";
 
-		// 诊断：记录宏替换参数
-		const hasMacros = /\{\{(user|char|avatar)\}\}/i.test(modifiedHtml) || /%7B%7B(user|char|avatar)%7D%7D/i.test(modifiedHtml)
-		if (hasMacros) {
-			diag.log('宏替换:', {
-				user: macroUserName,
-				char: macroCharName,
-				avatar: macroAvatar ? '✓ ' + macroAvatar.substring(0, 60) : '✗ (empty — charId=' + (charId || 'null') + ')',
-				charNameElFound: !!charNameEl,
-			})
-		}
+    // 诊断：记录宏替换参数
+    const hasMacros =
+      /\{\{(user|char|avatar)\}\}/i.test(modifiedHtml) ||
+      /%7B%7B(user|char|avatar)%7D%7D/i.test(modifiedHtml);
+    if (hasMacros) {
+      diag.log("宏替换:", {
+        user: macroUserName,
+        char: macroCharName,
+        avatar: macroAvatar
+          ? "✓ " + macroAvatar.substring(0, 60)
+          : "✗ (empty — charId=" + (charId || "null") + ")",
+        charNameElFound: !!charNameEl,
+      });
+    }
 
-		modifiedHtml = modifiedHtml
-			.replace(/\{\{user\}\}/gi, macroUserName)
-			.replace(/\{\{char\}\}/gi, macroCharName)
-			.replace(/\{\{avatar\}\}/gi, macroAvatar)
-			// P3修复：处理 URL 编码版本的宏（浏览器可能在解析 HTML 时将 { } 编码为 %7B %7D）
-			.replace(/%7B%7Buser%7D%7D/gi, macroUserName)
-			.replace(/%7B%7Bchar%7D%7D/gi, macroCharName)
-			.replace(/%7B%7Bavatar%7D%7D/gi, macroAvatar)
+    modifiedHtml = modifiedHtml
+      .replace(/\{\{user\}\}/gi, macroUserName)
+      .replace(/\{\{char\}\}/gi, macroCharName)
+      .replace(/\{\{avatar\}\}/gi, macroAvatar)
+      // P3修复：处理 URL 编码版本的宏（浏览器可能在解析 HTML 时将 { } 编码为 %7B %7D）
+      .replace(/%7B%7Buser%7D%7D/gi, macroUserName)
+      .replace(/%7B%7Bchar%7D%7D/gi, macroCharName)
+      .replace(/%7B%7Bavatar%7D%7D/gi, macroAvatar);
 
-		// 诊断：替换后检查是否仍有未替换的宏
-		const remainingMacros = modifiedHtml.match(/\{\{[^}]+\}\}/g)
-		if (remainingMacros) {
-			diag.warn('宏替换后仍有未处理的宏:', [...new Set(remainingMacros)])
-		}
-		const remainingEncodedMacros = modifiedHtml.match(/%7B%7B[^%]*%7D%7D/gi)
-		if (remainingEncodedMacros) {
-			diag.warn('宏替换后仍有 URL 编码的宏:', [...new Set(remainingEncodedMacros)])
-		}
-	}
+    // 诊断：替换后检查是否仍有未替换的宏
+    const remainingMacros = modifiedHtml.match(/\{\{[^}]+\}\}/g);
+    if (remainingMacros) {
+      diag.warn("宏替换后仍有未处理的宏:", [...new Set(remainingMacros)]);
+    }
+    const remainingEncodedMacros = modifiedHtml.match(/%7B%7B[^%]*%7D%7D/gi);
+    if (remainingEncodedMacros) {
+      diag.warn("宏替换后仍有 URL 编码的宏:", [
+        ...new Set(remainingEncodedMacros),
+      ]);
+    }
+  }
 
-	// ★ 对原始消息做 base64 编码，注入到 earlyScript 中供 ST API 使用
-	let rawContentBase64 = ''
-	try {
-		if (rawContent) {
-			rawContentBase64 = btoa(unescape(encodeURIComponent(rawContent)))
-		}
-	} catch (e) {
-		diag.warn('base64 encode failed:', e)
-	}
+  // ★ 对原始消息做 base64 编码，注入到 earlyScript 中供 ST API 使用
+  let rawContentBase64 = "";
+  try {
+    if (rawContent) {
+      rawContentBase64 = btoa(unescape(encodeURIComponent(rawContent)));
+    }
+  } catch (e) {
+    diag.warn("base64 encode failed:", e);
+  }
 
-	// ★ 序列化 MVU 变量为 JSON（用于 earlyScript 注入）
-	let mvuVariablesJson = '{}'
-	if (options.mvuVariables && typeof options.mvuVariables === 'object' && Object.keys(options.mvuVariables).length > 0) {
-		try {
-			mvuVariablesJson = JSON.stringify(options.mvuVariables)
-			// 安全检查：超大变量对象可能导致 srcdoc 膨胀
-			if (mvuVariablesJson.length > 50 * 1024) {
-				diag.warn(`MVU 变量数据过大 (${(mvuVariablesJson.length / 1024).toFixed(1)}KB)，可能影响 iframe 加载性能`)
-			}
-		} catch (e) {
-			diag.warn('MVU 变量 JSON 序列化失败:', e)
-			mvuVariablesJson = '{}'
-		}
-	}
+  // ★ 序列化 MVU 变量为 JSON（用于 earlyScript 注入）
+  let mvuVariablesJson = "{}";
+  if (
+    options.mvuVariables &&
+    typeof options.mvuVariables === "object" &&
+    Object.keys(options.mvuVariables).length > 0
+  ) {
+    try {
+      mvuVariablesJson = JSON.stringify(options.mvuVariables);
+      // 安全检查：超大变量对象可能导致 srcdoc 膨胀
+      if (mvuVariablesJson.length > 50 * 1024) {
+        diag.warn(
+          `MVU 变量数据过大 (${(mvuVariablesJson.length / 1024).toFixed(1)}KB)，可能影响 iframe 加载性能`,
+        );
+      }
+    } catch (e) {
+      diag.warn("MVU 变量 JSON 序列化失败:", e);
+      mvuVariablesJson = "{}";
+    }
+  }
 
-	// ★ 注入 early script（beiluAudio 桥接 API + ST API + MVU 变量）到 <head> 最前面
-	const earlyScript = createEarlyScript(rawContentBase64, mvuVariablesJson)
-	if (modifiedHtml.includes('<head>')) {
-		modifiedHtml = modifiedHtml.replace('<head>', '<head>' + earlyScript)
-	} else if (modifiedHtml.includes('<HEAD>')) {
-		modifiedHtml = modifiedHtml.replace('<HEAD>', '<HEAD>' + earlyScript)
-	} else if (/<!doctype|<!DOCTYPE/i.test(modifiedHtml)) {
-		// 没有 <head> 标签，在 <html> 后插入
-		modifiedHtml = modifiedHtml.replace(/<html[^>]*>/i, '$&<head>' + earlyScript + '</head>')
-	} else {
-		// 最后手段：直接在最前面插入
-		modifiedHtml = earlyScript + modifiedHtml
-	}
+  // ★ 注入 early script（beiluAudio 桥接 API + ST API + MVU 变量）到 <head> 最前面
+  const earlyScript = createEarlyScript(rawContentBase64, mvuVariablesJson);
+  if (modifiedHtml.includes("<head>")) {
+    modifiedHtml = modifiedHtml.replace("<head>", "<head>" + earlyScript);
+  } else if (modifiedHtml.includes("<HEAD>")) {
+    modifiedHtml = modifiedHtml.replace("<HEAD>", "<HEAD>" + earlyScript);
+  } else if (/<!doctype|<!DOCTYPE/i.test(modifiedHtml)) {
+    // 没有 <head> 标签，在 <html> 后插入
+    modifiedHtml = modifiedHtml.replace(
+      /<html[^>]*>/i,
+      "$&<head>" + earlyScript + "</head>",
+    );
+  } else {
+    // 最后手段：直接在最前面插入
+    modifiedHtml = earlyScript + modifiedHtml;
+  }
 
-	// ★ 新增：ST 兼容层注入（在 earlyScript 之后、bridgeScript 之前）
-	const { needsST, needsMVU, needsVue, needsEJS } = detectNeeds(htmlDocument)
-	diag.debug('ST 兼容层检测结果:', { needsST, needsMVU, needsVue, needsEJS, htmlLen: htmlDocument.length })
-	if (needsST || needsMVU || needsVue || needsEJS) {
-		diag.log(`ST 兼容层注入开始: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, msgId=${messageId}`)
-		const stCompatScript = await buildInjectionScript({
-			needsST,
-			needsMVU,
-			needsVue,
-			needsEJS,
-			messageId: parseInt(messageId.replace(/\D/g, '')) || 0,
-			// userName / charName 将在 STContextEnhancement 中使用
-		})
-		if (stCompatScript) {
-			// 插入到 earlyScript 之后（在 <head> 内，角色卡脚本之前）
-			if (modifiedHtml.includes('<head>')) {
-				// earlyScript 已经在 <head> 后面了，stCompat 追加到 earlyScript 之后
-				// 找到 earlyScript 的结束位置（第一个 </script> 之后）
-				const earlyScriptEnd = modifiedHtml.indexOf('</script>', modifiedHtml.indexOf('<head>'))
-				if (earlyScriptEnd !== -1) {
-					const insertPos = earlyScriptEnd + '</script>'.length
-					modifiedHtml = modifiedHtml.slice(0, insertPos) + stCompatScript + modifiedHtml.slice(insertPos)
-				} else {
-					// fallback: 在 </head> 前插入
-					modifiedHtml = modifiedHtml.replace('</head>', stCompatScript + '</head>')
-				}
-			} else {
-				// 没有 <head> 标签，直接在 earlyScript 后追加
-				modifiedHtml += stCompatScript
-			}
-			diag.log(`ST 兼容层注入完成: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, 脚本大小=${(stCompatScript.length / 1024).toFixed(1)}KB`)
-		}
-	}
+  // ★ 新增：ST 兼容层注入（在 earlyScript 之后、bridgeScript 之前）
+  const { needsST, needsMVU, needsVue, needsEJS } = detectNeeds(htmlDocument);
+  diag.debug("ST 兼容层检测结果:", {
+    needsST,
+    needsMVU,
+    needsVue,
+    needsEJS,
+    htmlLen: htmlDocument.length,
+  });
+  if (needsST || needsMVU || needsVue || needsEJS) {
+    diag.log(
+      `ST 兼容层注入开始: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, msgId=${messageId}`,
+    );
+    const stCompatScript = await buildInjectionScript({
+      needsST,
+      needsMVU,
+      needsVue,
+      needsEJS,
+      messageId: parseInt(messageId.replace(/\D/g, "")) || 0,
+      // userName / charName 将在 STContextEnhancement 中使用
+    });
+    if (stCompatScript) {
+      // 插入到 earlyScript 之后（在 <head> 内，角色卡脚本之前）
+      if (modifiedHtml.includes("<head>")) {
+        // earlyScript 已经在 <head> 后面了，stCompat 追加到 earlyScript 之后
+        // 找到 earlyScript 的结束位置（第一个 </script> 之后）
+        const earlyScriptEnd = modifiedHtml.indexOf(
+          "</script>",
+          modifiedHtml.indexOf("<head>"),
+        );
+        if (earlyScriptEnd !== -1) {
+          const insertPos = earlyScriptEnd + "</script>".length;
+          modifiedHtml =
+            modifiedHtml.slice(0, insertPos) +
+            stCompatScript +
+            modifiedHtml.slice(insertPos);
+        } else {
+          // fallback: 在 </head> 前插入
+          modifiedHtml = modifiedHtml.replace(
+            "</head>",
+            stCompatScript + "</head>",
+          );
+        }
+      } else {
+        // 没有 <head> 标签，直接在 earlyScript 后追加
+        modifiedHtml += stCompatScript;
+      }
+      diag.log(
+        `ST 兼容层注入完成: Layer1=${needsST}, Layer2/MVU=${needsMVU}, Vue=${needsVue}, EJS=${needsEJS}, 脚本大小=${(stCompatScript.length / 1024).toFixed(1)}KB`,
+      );
+    }
+  }
 
-	// ★ 注入桥接脚本（在 </body> 或 </html> 前）
-	const bridgeScript = createBridgeScript(messageId)
-	if (modifiedHtml.includes('</body>')) {
-		modifiedHtml = modifiedHtml.replace('</body>', bridgeScript + '</body>')
-	} else if (modifiedHtml.includes('</html>')) {
-		modifiedHtml = modifiedHtml.replace('</html>', bridgeScript + '</html>')
-	} else {
-		modifiedHtml += bridgeScript
-	}
+  // ★ 注入桥接脚本（在 </body> 或 </html> 前）
+  const bridgeScript = createBridgeScript(messageId);
+  if (modifiedHtml.includes("</body>")) {
+    modifiedHtml = modifiedHtml.replace("</body>", bridgeScript + "</body>");
+  } else if (modifiedHtml.includes("</html>")) {
+    modifiedHtml = modifiedHtml.replace("</html>", bridgeScript + "</html>");
+  } else {
+    modifiedHtml += bridgeScript;
+  }
 
-	// ★ 使用 srcdoc 加载（与父页面同源，继承 autoplay 权限）
-	// 参考 JS-Slash-Runner：默认使用 srcdoc，不使用 Blob URL
-	// Blob URL 的 origin 是 null（opaque），不继承父页面的 Media Engagement Index
-	// srcdoc + sandbox="allow-same-origin" → iframe 与父页面同源 → 音频自动播放可继承
-	iframe.srcdoc = modifiedHtml
+  // ★ 使用 srcdoc 加载（与父页面同源，继承 autoplay 权限）
+  // 参考 JS-Slash-Runner：默认使用 srcdoc，不使用 Blob URL
+  // Blob URL 的 origin 是 null（opaque），不继承父页面的 Media Engagement Index
+  // srcdoc + sandbox="allow-same-origin" → iframe 与父页面同源 → 音频自动播放可继承
+  iframe.srcdoc = modifiedHtml;
 
-	// 初始高度（后续由桥接脚本 frameElement.style.height 覆盖）
-	iframe.style.height = '600px'
+  // 初始高度（后续由桥接脚本 frameElement.style.height 覆盖）
+  iframe.style.height = "600px";
 
-	contentEl.appendChild(iframe)
+  contentEl.appendChild(iframe);
 
-	// ★ 监听 iframe 可见性变化（解决 tab 切换后黑屏问题）
-	observeIframeVisibility(iframe)
+  // ★ 监听 iframe 可见性变化（解决 tab 切换后黑屏问题）
+  observeIframeVisibility(iframe);
 
-	// ★ 监听 fallback postMessage（frameElement 不可用时的后备）
-	const handleMessage = (e) => {
-		if (!e.data || e.data.id !== messageId) return
+  // ★ 监听 fallback postMessage（frameElement 不可用时的后备）
+  const handleMessage = (e) => {
+    if (!e.data || e.data.id !== messageId) return;
 
-		switch (e.data.type) {
-			case 'beilu-iframe-resize': {
-				// fallback：postMessage 方式调整高度
-				const newHeight = Math.max(100, e.data.height)
-				iframe.style.height = newHeight + 'px'
-				break
-			}
-			case 'beilu-swipe-switch': {
-				import('../endpoints.mjs').then(({ setTimeLineAbsolute }) => {
-					const targetIndex = e.data.index || 0
-					setTimeLineAbsolute(targetIndex)
-				}).catch(err => console.warn('[iframeRenderer] swipe switch failed:', err))
-				break
-			}
-			case 'beilu-chat-message': {
-				// ★ P0 修复：iframe 请求发送消息（如选择框选项点击）
-				import('../endpoints.mjs').then(async ({ addUserReply, triggerCharacterReply }) => {
-					const msgs = e.data.messages || []
-					for (const msg of msgs) {
-						if (msg.message) {
-							await addUserReply(msg.message)
-						}
-					}
-					// 发送完用户消息后，触发 AI 回复
-					await triggerCharacterReply()
-				}).catch(err => console.warn('[iframeRenderer] chat-message failed:', err))
-				break
-			}
-			case 'beilu-slash-command': {
-				// ★ P0 修复：iframe 请求执行斜杠命令
-				const cmd = e.data.command || ''
-				const sendMatch = cmd.match(/^\/send\s+([\s\S]+)/)
-				if (sendMatch) {
-					import('../endpoints.mjs').then(async ({ addUserReply, triggerCharacterReply }) => {
-						await addUserReply(sendMatch[1])
-						await triggerCharacterReply()
-					}).catch(err => console.warn('[iframeRenderer] /send failed:', err))
-				} else if (cmd.trim() === '/trigger') {
-					import('../endpoints.mjs').then(({ triggerCharacterReply }) => {
-						triggerCharacterReply()
-					}).catch(err => console.warn('[iframeRenderer] /trigger failed:', err))
-				} else {
-					console.warn('[iframeRenderer] 未知斜杠命令:', cmd)
-				}
-				break
-			}
-		}
-	}
-	window.addEventListener('message', handleMessage)
+    switch (e.data.type) {
+      case "beilu-iframe-resize": {
+        // fallback：postMessage 方式调整高度
+        const newHeight = Math.max(100, e.data.height);
+        iframe.style.height = newHeight + "px";
+        break;
+      }
+      case "beilu-swipe-switch": {
+        import("../endpoints.mjs")
+          .then(({ setTimeLineAbsolute }) => {
+            const targetIndex = e.data.index || 0;
+            setTimeLineAbsolute(targetIndex);
+          })
+          .catch((err) =>
+            console.warn("[iframeRenderer] swipe switch failed:", err),
+          );
+        break;
+      }
+      case "beilu-chat-message": {
+        // ★ P0 修复：iframe 请求发送消息（如选择框选项点击）
+        import("../endpoints.mjs")
+          .then(async ({ addUserReply, triggerCharacterReply }) => {
+            const msgs = e.data.messages || [];
+            for (const msg of msgs) {
+              if (msg.message) {
+                await addUserReply(msg.message);
+              }
+            }
+            // 发送完用户消息后，触发 AI 回复
+            await triggerCharacterReply();
+          })
+          .catch((err) =>
+            console.warn("[iframeRenderer] chat-message failed:", err),
+          );
+        break;
+      }
+      case "beilu-slash-command": {
+        // ★ P0 修复：iframe 请求执行斜杠命令
+        const cmd = e.data.command || "";
+        const sendMatch = cmd.match(/^\/send\s+([\s\S]+)/);
+        if (sendMatch) {
+          import("../endpoints.mjs")
+            .then(async ({ addUserReply, triggerCharacterReply }) => {
+              await addUserReply(sendMatch[1]);
+              await triggerCharacterReply();
+            })
+            .catch((err) =>
+              console.warn("[iframeRenderer] /send failed:", err),
+            );
+        } else if (cmd.trim() === "/trigger") {
+          import("../endpoints.mjs")
+            .then(({ triggerCharacterReply }) => {
+              triggerCharacterReply();
+            })
+            .catch((err) =>
+              console.warn("[iframeRenderer] /trigger failed:", err),
+            );
+        } else {
+          console.warn("[iframeRenderer] 未知斜杠命令:", cmd);
+        }
+        break;
+      }
+    }
+  };
+  window.addEventListener("message", handleMessage);
 
-	// 元素移除时清理
-	onElementRemoved(messageElement, () => {
-		window.removeEventListener('message', handleMessage)
-	})
+  // 元素移除时清理
+  onElementRemoved(messageElement, () => {
+    window.removeEventListener("message", handleMessage);
+  });
 
-	diag.log(`消息 ${messageId} 已渲染为 iframe（${modifiedHtml.length} 字符）`)
-	return iframe
+  diag.log(`消息 ${messageId} 已渲染为 iframe（${modifiedHtml.length} 字符）`);
+  return iframe;
 }

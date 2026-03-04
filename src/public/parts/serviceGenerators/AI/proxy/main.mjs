@@ -370,11 +370,9 @@ async function GetSource(config, { SaveConfig }) {
         );
 
         if (retryConfig.urlSuffix) {
-          console.warn(
-            `[proxy] URL 自动修正: ${config.url} → ${currentConfig.url}`,
+          console.info(
+            `[proxy] URL 临时追加后缀成功: ${config.url} + ${retryConfig.urlSuffix} → ${currentConfig.url}（不改写配置）`,
           );
-          Object.assign(config, currentConfig);
-          SaveConfig();
         }
 
         return result;

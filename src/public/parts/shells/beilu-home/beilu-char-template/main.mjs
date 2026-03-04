@@ -15,240 +15,272 @@
  * @typedef {import('../../../../../src/decl/pluginAPI.ts').PluginAPI_t} PluginAPI_t
  */
 
-import fs from 'node:fs'
-import path from 'node:path'
+import fs from "node:fs";
+import path from "node:path";
 
-import { buildPromptStruct } from '../../../../../src/public/parts/shells/chat/src/prompt_struct.mjs'
-import { loadAnyPreferredDefaultPart, loadPart } from '../../../../../src/server/parts_loader.mjs'
+import { buildPromptStruct } from "../../../../../src/public/parts/shells/chat/src/prompt_struct.mjs";
+import {
+  loadAnyPreferredDefaultPart,
+  loadPart,
+} from "../../../../../src/server/parts_loader.mjs";
 
 /** @type {import('../../../../../src/decl/AIsource.ts').AIsource_t} */
-let AIsource = null
+let AIsource = null;
 /** @type {Record<string, PluginAPI_t>} */
-let plugins = {}
-let username = ''
+let plugins = {};
+let username = "";
 
-const chardir = import.meta.dirname
-const charjson = path.join(chardir, 'chardata.json')
-const charurl = `/parts/chars:${encodeURIComponent(path.basename(chardir))}`
+const chardir = import.meta.dirname;
+const charjson = path.join(chardir, "chardata.json");
+const charurl = `/parts/chars:${encodeURIComponent(path.basename(chardir))}`;
 
 // 读取角色卡数据
-let chardata = {}
+let chardata = {};
 try {
-	chardata = JSON.parse(fs.readFileSync(charjson, 'utf-8'))
+  chardata = JSON.parse(fs.readFileSync(charjson, "utf-8"));
 } catch (e) {
-	console.warn('[beilu-char] 读取 chardata.json 失败:', e.message)
+  console.warn("[beilu-char] 读取 chardata.json 失败:", e.message);
 }
 
 /** @type {CharAPI_t} */
 export default {
-	info: {
-		'': {
-			name: chardata.name || path.basename(chardir),
-			avatar: fs.existsSync(path.join(chardir, 'public', 'image.png'))
-				? charurl + '/image.png'
-				: '',
-			description: (chardata.creator_notes || chardata.description || '').split('\n')[0] || '',
-			description_markdown: chardata.creator_notes || chardata.description || '',
-			version: chardata.character_version || '1.0',
-			author: chardata.creator || '',
-			tags: chardata.tags || [],
-		},
-	},
+  info: {
+    "": {
+      name: chardata.name || path.basename(chardir),
+      avatar: fs.existsSync(path.join(chardir, "public", "image.png"))
+        ? charurl + "/image.png"
+        : "",
+      description:
+        (chardata.creator_notes || chardata.description || "").split("\n")[0] ||
+        "",
+      description_markdown:
+        chardata.creator_notes || chardata.description || "",
+      version: chardata.character_version || "1.0",
+      author: chardata.creator || "",
+      tags: chardata.tags || [],
+    },
+  },
 
-	Load: (stat) => {
-		username = stat.username
-	},
+  Load: (stat) => {
+    username = stat.username;
+  },
 
-	interfaces: {
-		config: {
-			GetData: () => ({
-				AIsource: AIsource?.filename || '',
-				plugins: Object.keys(plugins),
-				chardata,
-			}),
-			SetData: async (data) => {
-				if (data.AIsource)
-					AIsource = await loadPart(username, 'serviceSources/AI/' + data.AIsource)
-				else
-					AIsource = await loadAnyPreferredDefaultPart(username, 'serviceSources/AI')
-				if (data.plugins)
-					plugins = Object.fromEntries(
-						await Promise.all(data.plugins.map(async (x) => [x, await loadPart(username, 'plugins/' + x)]))
-					)
-			},
-		},
-		chat: {
-			/**
-			 * 开场白 — 原样返回 first_mes / alternate_greetings
-			 * display regex 由前端 beilu-chat 负责美化渲染
-			 */
-			GetGreeting: (_args, index) => {
-					const greetings = [
-						chardata.first_mes,
-						...(chardata.alternate_greetings || []),
-					].filter((x) => x)
-					if (!greetings.length) return { content: '' }
-					if (index >= greetings.length) throw new Error('Invalid index')
-					return { content: greetings[index] }
-				},
+  interfaces: {
+    config: {
+      GetData: () => ({
+        AIsource: AIsource?.filename || "",
+        plugins: Object.keys(plugins),
+        chardata,
+      }),
+      SetData: async (data) => {
+        if (data.AIsource)
+          AIsource = await loadPart(
+            username,
+            "serviceSources/AI/" + data.AIsource,
+          );
+        else
+          AIsource = await loadAnyPreferredDefaultPart(
+            username,
+            "serviceSources/AI",
+          );
+        if (data.plugins)
+          plugins = Object.fromEntries(
+            await Promise.all(
+              data.plugins.map(async (x) => [
+                x,
+                await loadPart(username, "plugins/" + x),
+              ]),
+            ),
+          );
+      },
+    },
+    chat: {
+      /**
+       * 开场白 — 原样返回 first_mes / alternate_greetings
+       * display regex 由前端 beilu-chat 负责美化渲染
+       */
+      GetGreeting: (_args, index) => {
+        const greetings = [
+          chardata.first_mes,
+          ...(chardata.alternate_greetings || []),
+        ].filter((x) => x);
+        if (!greetings.length) return { content: "" };
+        if (index >= greetings.length) throw new Error("Invalid index");
+        return { content: greetings[index] };
+      },
 
-			GetGroupGreeting: (_args, index) => {
-				const greetings = [
-					...(chardata.extensions?.group_greetings || []),
-					...(chardata.group_only_greetings || []),
-				].filter((x) => x)
-				if (index >= greetings.length) throw new Error('Invalid index')
-				return { content: greetings[index] }
-			},
+      GetGroupGreeting: (_args, index) => {
+        const greetings = [
+          ...(chardata.extensions?.group_greetings || []),
+          ...(chardata.group_only_greetings || []),
+        ].filter((x) => x);
+        if (index >= greetings.length) throw new Error("Invalid index");
+        return { content: greetings[index] };
+      },
 
-			/**
-			 * GetPrompt — 将角色卡数据作为 text[] 输出
-			 * beilu-preset 司令员模式会在 TweakPrompt 中接管这些内容
-			 */
-			GetPrompt: (_args) => {
-				const texts = []
+      /**
+       * GetPrompt — 将角色卡数据作为 text[] 输出
+       * beilu-preset 司令员模式会在 TweakPrompt 中接管这些内容
+       */
+      GetPrompt: (_args) => {
+        const texts = [];
 
-				if (chardata.system_prompt) {
-					texts.push({
-						content: chardata.system_prompt,
-						important: 3,
-						description: 'system_prompt',
-					})
-				}
+        if (chardata.system_prompt) {
+          texts.push({
+            content: chardata.system_prompt,
+            important: 3,
+            description: "system_prompt",
+          });
+        }
 
-				if (chardata.description) {
-					texts.push({
-						content: chardata.description,
-						important: 2,
-						description: 'char_description',
-					})
-				}
+        if (chardata.description) {
+          texts.push({
+            content: chardata.description,
+            important: 2,
+            description: "char_description",
+          });
+        }
 
-				if (chardata.personality) {
-					texts.push({
-						content: chardata.personality,
-						important: 2,
-						description: 'personality',
-					})
-				}
+        if (chardata.personality) {
+          texts.push({
+            content: chardata.personality,
+            important: 2,
+            description: "personality",
+          });
+        }
 
-				if (chardata.scenario) {
-					texts.push({
-						content: chardata.scenario,
-						important: 1,
-						description: 'scenario',
-					})
-				}
+        if (chardata.scenario) {
+          texts.push({
+            content: chardata.scenario,
+            important: 1,
+            description: "scenario",
+          });
+        }
 
-				if (chardata.mes_example) {
-					texts.push({
-						content: chardata.mes_example,
-						important: -1,
-						description: 'mes_examples',
-					})
-				}
+        if (chardata.mes_example) {
+          texts.push({
+            content: chardata.mes_example,
+            important: -1,
+            description: "mes_examples",
+          });
+        }
 
-				if (chardata.post_history_instructions) {
-					texts.push({
-						content: chardata.post_history_instructions,
-						important: 0,
-						description: 'post_history_instructions',
-					})
-				}
+        if (chardata.post_history_instructions) {
+          texts.push({
+            content: chardata.post_history_instructions,
+            important: 0,
+            description: "post_history_instructions",
+          });
+        }
 
-				// depth_prompt（如果有）
-				const dp = chardata.extensions?.depth_prompt
-				if (dp?.prompt) {
-					texts.push({
-						content: dp.prompt,
-						important: 0,
-						description: `depth_prompt_d${dp.depth || 4}`,
-					})
-				}
+        // depth_prompt（如果有）
+        const dp = chardata.extensions?.depth_prompt;
+        if (dp?.prompt) {
+          texts.push({
+            content: dp.prompt,
+            important: 0,
+            description: `depth_prompt_d${dp.depth || 4}`,
+          });
+        }
 
-				return {
-					text: texts,
-					additional_chat_log: [],
-					extension: {},
-				}
-			},
+        return {
+          text: texts,
+          additional_chat_log: [],
+          extension: {},
+        };
+      },
 
-			/**
-			 * GetReply — 标准 beilu 模式
-			 * 使用默认 AIsource + buildPromptStruct + 插件 ReplyHandler
-			 */
-			GetReply: async (args) => {
-				// 防御性重试：用户可能在看到提示后已配置 AI 源，但角色卡的变量仍为 null
-				if (!AIsource) {
-					try {
-						AIsource = await loadAnyPreferredDefaultPart(username, 'serviceSources/AI')
-					} catch (e) {
-						console.warn('[beilu-char] 重试加载 AI 源失败:', e.message)
-					}
-				}
-	
-				if (!AIsource) {
-					return {
-						content: '请先配置 AI 源，可在以下位置设置：\n'
-							+ '• [首页 → 系统设置 → AI 服务源](/parts/shells:beilu-home/#system)（创建和管理服务源）\n'
-							+ '• [聊天界面 → 右侧面板 → 对话AI设置](/parts/shells:beilu-chat/api-config/)（快速配置）\n'
-							+ '• [首页 → 记忆预设 → API 配置](/parts/shells:beilu-home/#memoryPreset)（记忆AI独立配置）',
-					}
-				}
+      /**
+       * GetReply — 标准 beilu 模式
+       * 使用默认 AIsource + buildPromptStruct + 插件 ReplyHandler
+       */
+      GetReply: async (args) => {
+        // 防御性重试：用户可能在看到提示后已配置 AI 源，但角色卡的变量仍为 null
+        if (!AIsource) {
+          try {
+            AIsource = await loadAnyPreferredDefaultPart(
+              username,
+              "serviceSources/AI",
+            );
+          } catch (e) {
+            console.warn("[beilu-char] 重试加载 AI 源失败:", e.message);
+          }
+        }
 
-				// 注入角色插件
-				args.plugins = Object.assign({}, plugins, args.plugins)
+        if (!AIsource) {
+          return {
+            content:
+              "请先配置 AI 源，可在以下位置设置：\n" +
+              "• [首页 → 系统设置 → AI 服务源](/parts/shells:beilu-home/#system)（创建和管理服务源）\n" +
+              "• [聊天界面 → 右侧面板 → 对话AI设置](/parts/shells:beilu-chat/api-config/)（快速配置）\n" +
+              "• [首页 → 记忆预设 → API 配置](/parts/shells:beilu-home/#memoryPreset)（记忆AI独立配置）",
+          };
+        }
 
-				// 构建提示词结构
-				const prompt_struct = await buildPromptStruct(args)
+        // 注入角色插件
+        args.plugins = Object.assign({}, plugins, args.plugins);
 
-				/** @type {import('../../../../../src/public/parts/shells/chat/decl/chatLog.ts').chatReply_t} */
-				const result = {
-					content: '',
-					logContextBefore: [],
-					logContextAfter: [],
-					files: [],
-					extension: {},
-				}
+        // 构建提示词结构
+        const prompt_struct = await buildPromptStruct(args);
 
-				function AddLongTimeLog(entry) {
-					entry.charVisibility = [args.char_id]
-					result?.logContextBefore?.push?.(entry)
-					prompt_struct.char_prompt.additional_chat_log.push(entry)
-				}
+        /** @type {import('../../../../../src/public/parts/shells/chat/decl/chatLog.ts').chatReply_t} */
+        const result = {
+          content: "",
+          logContextBefore: [],
+          logContextAfter: [],
+          files: [],
+          extension: {},
+        };
 
-				// 构建更新预览管线
-				args.generation_options ??= {}
-				const oriReplyPreviewUpdater = args.generation_options?.replyPreviewUpdater
-				let replyPreviewUpdater = (_args, r) => oriReplyPreviewUpdater?.(r)
-				for (const GetReplyPreviewUpdater of [
-					...Object.values(args.plugins)
-						.map((plugin) => plugin.interfaces?.chat?.GetReplyPreviewUpdater)
-						.filter(Boolean),
-				])
-					replyPreviewUpdater = GetReplyPreviewUpdater(replyPreviewUpdater)
+        function AddLongTimeLog(entry) {
+          entry.charVisibility = [args.char_id];
+          result?.logContextBefore?.push?.(entry);
+          prompt_struct.char_prompt.additional_chat_log.push(entry);
+        }
 
-				args.generation_options.replyPreviewUpdater = (r) =>
-					replyPreviewUpdater(args, r)
+        // 构建更新预览管线
+        args.generation_options ??= {};
+        const oriReplyPreviewUpdater =
+          args.generation_options?.replyPreviewUpdater;
+        let replyPreviewUpdater = (_args, r) => oriReplyPreviewUpdater?.(r);
+        for (const GetReplyPreviewUpdater of [
+          ...Object.values(args.plugins)
+            .map((plugin) => plugin.interfaces?.chat?.GetReplyPreviewUpdater)
+            .filter(Boolean),
+        ])
+          replyPreviewUpdater = GetReplyPreviewUpdater(replyPreviewUpdater);
 
-				// 重新生成循环
-				regen: while (true) {
-					args.generation_options.base_result = result
-					await AIsource.StructCall(prompt_struct, args.generation_options)
-					let continue_regen = false
-					for (const replyHandler of [
-						...Object.values(args.plugins)
-							.map((plugin) => plugin.interfaces?.chat?.ReplyHandler)
-							.filter(Boolean),
-					])
-						if (await replyHandler(result, { ...args, prompt_struct, AddLongTimeLog }))
-							continue_regen = true
-					if (continue_regen) continue regen
-					break
-				}
+        args.generation_options.replyPreviewUpdater = (r) =>
+          replyPreviewUpdater(args, r);
 
-				return result
-			},
-		},
-	},
-}
+        // 重新生成循环
+        regen: while (true) {
+          args.generation_options.base_result = result;
+          await AIsource.StructCall(prompt_struct, args.generation_options);
+          // beilu: 保存AI原始输出（含思维链、表格操作等内部标签）
+          // ReplyHandler 会修改 result.content（移除已处理的标签）
+          // content_for_show 保留完整原始内容供调试查看
+          result.content_for_show = result.content;
+          let continue_regen = false;
+          for (const replyHandler of [
+            ...Object.values(args.plugins)
+              .map((plugin) => plugin.interfaces?.chat?.ReplyHandler)
+              .filter(Boolean),
+          ])
+            if (
+              await replyHandler(result, {
+                ...args,
+                prompt_struct,
+                AddLongTimeLog,
+              })
+            )
+              continue_regen = true;
+          if (continue_regen) continue regen;
+          break;
+        }
+
+        return result;
+      },
+    },
+  },
+};

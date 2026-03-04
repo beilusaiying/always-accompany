@@ -9,11 +9,40 @@ import {
 
 import info from "./info.json" with { type: "json" };
 
+const pluginDir = import.meta.dirname;
+
 /**
  *
  */
 export default {
   info,
+  /**
+   * 加载 plugins 容器时，自动扫描并注册所有内置插件为默认插件。
+   * @param {object} root0 - 参数对象。
+   * @param {string} root0.username - 用户名。
+   */
+  Load: async ({ username }) => {
+    if (!username) return;
+    // beilu: 扫描所有子插件目录，自动注册为默认插件
+    // 解决"先有鸡还是先有蛋"问题：插件需要先注册才能被 getAllDefaultParts 发现
+    try {
+      const entries = fs.readdirSync(pluginDir);
+      const registered = [];
+      for (const entry of entries) {
+        if (fs.existsSync(path.join(pluginDir, entry, "main.mjs"))) {
+          setDefaultPart(username, "plugins", entry);
+          registered.push(entry);
+        }
+      }
+      if (registered.length) {
+        console.log(
+          `[plugins] 已自动注册 ${registered.length} 个默认插件: ${registered.join(", ")}`,
+        );
+      }
+    } catch (e) {
+      console.warn("[plugins] 扫描子插件目录失败:", e.message);
+    }
+  },
   /**
    *
    */

@@ -317,8 +317,7 @@ function Wait-AndOpenBrowser {
 			Start-Sleep -Seconds 1
 			$elapsed++
 		}
-		# 超时兜底
-		Start-Process "http://localhost:$p"
+		# 超时：服务未就绪，不打开浏览器
 	} -ArgumentList $Port | Out-Null
 }
 
@@ -688,6 +687,15 @@ elseif ($args[0] -eq 'open') {
 	# beilu: 启动前检查必须依赖
 	Test-RequiredDependencies
 	$port = Get-FountPort
+
+	# beilu: 检查服务是否已在运行，避免重复启动
+	try {
+		$r = Invoke-WebRequest -Uri "http://localhost:$port/api/ping" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+		if ($r.StatusCode -eq 200) {
+			Start-Process "http://localhost:$port"
+			exit 0
+		}
+	} catch { }
 
 	if (Test-Path -Path "$FOUNT_DIR/data") {
 		Invoke-DockerPassthrough -CurrentArgs $args
@@ -1197,6 +1205,13 @@ elseif ($args[0] -eq 'keepalive') {
 	while ($LastExitCode) {
 		if ($LastExitCode -eq 130) { exit 130 } # ctrl+c
 		if ($LastExitCode -ne 131) {
+			# beilu: 首次崩溃时检查项目文件完整性
+			$indexPath = Join-Path $FOUNT_DIR 'src/server/index.mjs'
+			if (!(Test-Path $indexPath)) {
+				Write-Error "项目文件不完整（缺少 src/server/index.mjs），请检查网络后重新安装"
+				exit 1
+			}
+
 			$elapsedTime = (Get-Date) - $startTime
 			if ($elapsedTime.TotalMinutes -lt 3 -and $initAttempted) {
 				Write-Error (Get-I18n -key 'keepalive.failedToStart')

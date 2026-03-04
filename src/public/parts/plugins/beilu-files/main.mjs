@@ -751,6 +751,14 @@ function savePersistedSettings() {
       for (const key of PERSIST_KEYS) {
         toSave[key] = pluginData[key];
       }
+      // 确保 data/ 目录存在（首次运行时可能不存在）
+      const dir = PERSIST_FILE.replace(/\\/g, "/")
+        .split("/")
+        .slice(0, -1)
+        .join("/");
+      if (dir) {
+        await Deno.mkdir(dir, { recursive: true }).catch(() => {});
+      }
       await Deno.writeTextFile(PERSIST_FILE, JSON.stringify(toSave, null, 2));
     } catch (err) {
       console.warn("[beilu-files] 持久化设置失败:", err.message);

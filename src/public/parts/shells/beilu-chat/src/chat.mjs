@@ -440,7 +440,13 @@ class timeSlice_t {
         await Promise.all(
           (json.chars || []).map(async (charname) => [
             charname,
-            await loadPart(username, "chars/" + charname).catch(() => {}),
+            await loadPart(username, "chars/" + charname).catch((e) => {
+              console.warn(
+                `[chat] loadPart failed: chars/${charname}`,
+                e?.message || String(e),
+              );
+              return undefined;
+            }),
           ]),
         ),
       ),
@@ -448,17 +454,35 @@ class timeSlice_t {
         await Promise.all(
           (json.plugins || []).map(async (plugin) => [
             plugin,
-            await loadPart(username, "plugins/" + plugin).catch(() => {}),
+            await loadPart(username, "plugins/" + plugin).catch((e) => {
+              console.warn(
+                `[chat] loadPart failed: plugins/${plugin}`,
+                e?.message || String(e),
+              );
+              return undefined;
+            }),
           ]),
         ),
       ),
       world_id: json.world,
       world: json.world
-        ? await loadPart(username, "worlds/" + json.world).catch(() => {})
+        ? await loadPart(username, "worlds/" + json.world).catch((e) => {
+            console.warn(
+              `[chat] loadPart failed: worlds/${json.world}`,
+              e?.message || String(e),
+            );
+            return undefined;
+          })
         : undefined,
       player_id: json.player,
       player: json.player
-        ? await loadPart(username, "personas/" + json.player).catch(() => {})
+        ? await loadPart(username, "personas/" + json.player).catch((e) => {
+            console.warn(
+              `[chat] loadPart failed: personas/${json.player}`,
+              e?.message || String(e),
+            );
+            return undefined;
+          })
         : undefined,
     });
   }
@@ -888,7 +912,13 @@ async function getChatRequest(chatid, charname, options = {}) {
       );
     },
     world: timeSlice.world,
-    char: timeSlice.chars[charname],
+    char:
+      timeSlice.chars[charname] ??
+      (() => {
+        throw new Error(
+          `Char "${charname}" failed to load or not found in timeSlice`,
+        );
+      })(),
     user: timeSlice.player,
     other_chars,
     chat_scoped_char_memory: (timeSlice.chars_memories[charname] ??= {}),
@@ -1375,8 +1405,12 @@ async function executeGeneration(
       };
       await finalizeEntry(placeholderEntry, false);
     } else {
-      console.error("[chat] executeGeneration error:", e.name, e.message);
-      stream.abort(e.message);
+      console.error(
+        "[chat] executeGeneration error:",
+        e?.name || "Unknown",
+        e?.message || String(e),
+      );
+      stream.abort(e?.message || String(e));
       placeholderEntry.content = classifyApiError(e);
       await finalizeEntry(placeholderEntry, true);
     }

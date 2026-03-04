@@ -1498,7 +1498,7 @@ async function triggerP2Summary(username, charName) {
       `[beilu-memory] P2 总结完成 (${result.totalRounds || 1}轮, ${result.totalTimeMs}ms)`,
     );
   } catch (e) {
-    console.error(`[beilu-memory] P2 总结失败:`, e.message);
+    console.error(`[beilu-memory] P2 总结失败:`, e?.message || String(e));
     pushMemoryAIOutput({
       presetId: "P2",
       presetName: p2Preset.name,
@@ -1506,7 +1506,7 @@ async function triggerP2Summary(username, charName) {
       thinking: "",
       operations: [],
       status: "error",
-      error: e.message,
+      error: e?.message || String(e),
     });
   }
 }
@@ -3495,6 +3495,13 @@ async function runMemoryPresetAI(
     }
   }
 
+  // aiSource null 检查：loadPart / loadAnyPreferredDefaultPart 可能返回 undefined
+  if (!options.dryRun && !aiSource) {
+    throw new Error(
+      `AI 服务源加载结果为空 (source="${configSourceName || "(默认)"}")，请检查服务源配置`,
+    );
+  }
+
   // 2. 组装初始 prompt messages
   const tableDataText = generateTableDataOnly(
     memData.tables,
@@ -3971,7 +3978,7 @@ async function triggerP1Retrieval(
       `[beilu-memory] P1 检索结果已缓存 (${result.reply.length}字符, ${result.totalRounds || 1}轮)`,
     );
   } catch (e) {
-    console.error(`[beilu-memory] P1 检索失败:`, e.message);
+    console.error(`[beilu-memory] P1 检索失败:`, e?.message || String(e));
     // 推送错误状态
     pushMemoryAIOutput({
       presetId: "P1",
@@ -3980,7 +3987,7 @@ async function triggerP1Retrieval(
       thinking: "",
       operations: [],
       status: "error",
-      error: e.message,
+      error: e?.message || String(e),
     });
   } finally {
     isP1Running = false;
@@ -5709,7 +5716,10 @@ const pluginExport = {
                     totalTimeMs: result.totalTimeMs,
                   });
                 } catch (e) {
-                  console.error(`[beilu-memory] P1 检索失败:`, e.message);
+                  console.error(
+                    `[beilu-memory] P1 检索失败:`,
+                    e?.message || String(e),
+                  );
                   pushMemoryAIOutput({
                     presetId: "P1",
                     presetName: "检索AI",
@@ -5717,7 +5727,7 @@ const pluginExport = {
                     thinking: "",
                     operations: [],
                     status: "error",
-                    error: e.message,
+                    error: e?.message || String(e),
                   });
                 }
               }

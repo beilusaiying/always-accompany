@@ -79,15 +79,15 @@ Additionally, an **L0 Memory Table Layer** (10 highly customizable tables, fully
 
 #### Key Metrics
 
-| Metric                               | Value                                                                 |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| Hot layer injection per turn         | **~7,000-11,000 tokens** (only 5-9% of a 128K window)                 |
-| Retrieval AI context                 | **<5,000 tokens** (100% attention focused on retrieval)               |
+| Metric                               | Value                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| Hot layer injection per turn         | **~7,000-11,000 tokens** (only 5-9% of a 128K window)                   |
+| Retrieval AI context                 | **<5,000 tokens** (100% attention focused on retrieval)                 |
 | P1 retrieval efficiency              | **Max 3 rounds** to hit target (BM25 pre-filtering + regex exact match) |
 | Retrieval tech stack                 | **BM25 + Regex Search** (dual-engine collaboration, zero external deps) |
-| Storage cost                         | **Zero** (pure JSON files, no database dependency)                    |
-| Single-character sustained operation | **12+ years** (at 5,000 files)                                        |
-| Theoretical duration                 | **260+ years** (at 100,000 files; NTFS/ext4 support far exceeds this) |
+| Storage cost                         | **Zero** (pure JSON files, no database dependency)                      |
+| Single-character sustained operation | **12+ years** (at 5,000 files)                                          |
+| Theoretical duration                 | **260+ years** (at 100,000 files; NTFS/ext4 support far exceeds this)   |
 
 #### Memory Decay Formula
 
@@ -112,12 +112,12 @@ This means:
 
 **10 fully customizable structured tables**, injected every turn as CSV. Table meanings and purposes are **entirely defined by prompts** — change the prompt descriptions and the same table system serves completely different scenarios:
 
-| Scenario         | Example Table Usage                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------------------- |
-| **AI Roleplay**  | Space-time settings / Character status / Social relations / Quest progress / Inventory — **AI only knows what's recorded in the tables, perfectly solving the god's-eye problem** |
-| **Programming**  | Architecture decisions / Code conventions / Module dependencies / Bug tracking / TODO lists               |
-| **Work Management** | Project progress / Meeting notes / Contacts / To-do items / Knowledge accumulation                    |
-| **Gaming**       | Character attributes / Equipment list / Skill trees / World state / NPC relationships                    |
+| Scenario            | Example Table Usage                                                                                                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AI Roleplay**     | Space-time settings / Character status / Social relations / Quest progress / Inventory — **AI only knows what's recorded in the tables, perfectly solving the god's-eye problem** |
+| **Programming**     | Architecture decisions / Code conventions / Module dependencies / Bug tracking / TODO lists                                                                                       |
+| **Work Management** | Project progress / Meeting notes / Contacts / To-do items / Knowledge accumulation                                                                                                |
+| **Gaming**          | Character attributes / Equipment list / Skill trees / World state / NPC relationships                                                                                             |
 
 Table contents are automatically maintained by the Chat AI via `<tableEdit>` tags — the AI autonomously decides when to update which data during conversation, with no manual intervention needed.
 
@@ -141,15 +141,18 @@ This **table-driven dynamic world-building** mechanism is easy to learn and turn
 **Newly introduced dual-engine retrieval capability** for fast and precise information finding:
 
 #### BM25 Semantic Retrieval
+
 - **Classic & efficient**: TF-IDF-based statistical algorithm that quickly filters the most relevant candidates from massive memory files
 - **Pure JS implementation**: Zero external dependencies — no vector database or Embedding API needed, ready out of the box
 
 #### Regex Exact Search
+
 - **Precise matching**: After BM25 coarse filtering, regex provides exact targeting — supports pattern matching, keyword combinations, fuzzy search
 - **Cross-file search**: A single search scans all memory files and project files, rapidly locating target content
 - **IDE deep integration**: Regex search is available directly in the file editing environment for quick project-wide file and content search
 
 #### Retrieval Performance
+
 - **P1 Retrieval AI dramatically enhanced**: BM25 pre-filtering + regex exact matching dual-engine collaboration reduces retrieval rounds from **5 to max 3** — 40% faster, 40% cheaper on API costs
 - **Significantly higher accuracy**: Regex search compensates for pure semantic retrieval's weakness in exact matching — keywords, dates, names and other structured info can be found in one shot
 
@@ -157,15 +160,15 @@ This **table-driven dynamic world-building** mechanism is easy to learn and turn
 
 The system has **7 built-in AI roles**, each with a dedicated responsibility. **Each conversation only calls 2 AIs** (Retrieval AI + Chat AI); the rest trigger on demand — no need to worry about usage:
 
-| AI                    | Role                                                                                     | Trigger                            | Usage Notes                      |
-| --------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------- |
-| Chat AI               | Conversation with users, file operations                                                 | User sends a message               | Called every conversation         |
-| P1 Retrieval AI       | Search relevant history from memory (up to 3 rounds) + **Smart Preset Switching**        | Automatic per turn                 | Called every turn, **can use free AI** |
-| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold                           | **~50 conversations per trigger**  | Extremely infrequent             |
-| P3 Daily Summary AI   | Generate detailed daily summary                                                          | **Manual trigger**                 | Only when user clicks            |
-| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                                            | **Manual trigger**                 | Only when user clicks            |
-| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                                           | **Manual trigger**                 | Only when user clicks            |
-| P6 Repair AI          | Check and fix memory file format issues                                                  | **Manual trigger**                 | Only when user clicks            |
+| AI                    | Role                                                                              | Trigger                           | Usage Notes                            |
+| --------------------- | --------------------------------------------------------------------------------- | --------------------------------- | -------------------------------------- |
+| Chat AI               | Conversation with users, file operations                                          | User sends a message              | Called every conversation              |
+| P1 Retrieval AI       | Search relevant history from memory (up to 3 rounds) + **Smart Preset Switching** | Automatic per turn                | Called every turn, **can use free AI** |
+| P2 Archive AI         | Summarize and archive when temporary memories exceed threshold                    | **~50 conversations per trigger** | Extremely infrequent                   |
+| P3 Daily Summary AI   | Generate detailed daily summary                                                   | **Manual trigger**                | Only when user clicks                  |
+| P4 Hot→Warm AI        | Move expired hot-layer memories to warm layer                                     | **Manual trigger**                | Only when user clicks                  |
+| P5 Monthly Summary AI | Warm→Cold archival, generate monthly summaries                                    | **Manual trigger**                | Only when user clicks                  |
+| P6 Repair AI          | Check and fix memory file format issues                                           | **Manual trigger**                | Only when user clicks                  |
 
 #### 💰 AI Usage & Cost Analysis
 
@@ -257,13 +260,13 @@ When reporting issues, attach this JSON file for complete context — no need to
 
 ### vs AI Chat Applications (ChatGPT / Claude / Gemini)
 
-| Dimension      | ChatGPT etc.                            | beilu-always accompany                                                       |
-| -------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| Dimension      | ChatGPT etc.                            | beilu-always accompany                                                                                  |
+| -------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | Memory         | Simple summaries / conversation history | Three-layer graded + BM25/Regex dual-engine retrieval + multi-AI collaboration, theoretically unlimited |
-| Attention      | Degrades as context grows               | Retrieval AI pre-filters; Reply AI attention stays focused                   |
-| Customization  | Limited System Prompt                   | Full preset system + 10 customizable memory tables + dynamic world book injection |
-| Data ownership | Server-side storage                     | Local JSON files, fully self-owned                                           |
-| Cross-platform | Official clients only                   | Web + Discord Bot, AI serves you on multiple platforms                       |
+| Attention      | Degrades as context grows               | Retrieval AI pre-filters; Reply AI attention stays focused                                              |
+| Customization  | Limited System Prompt                   | Full preset system + 10 customizable memory tables + dynamic world book injection                       |
+| Data ownership | Server-side storage                     | Local JSON files, fully self-owned                                                                      |
+| Cross-platform | Official clients only                   | Web + Discord Bot, AI serves you on multiple platforms                                                  |
 
 ### vs AI Coding Tools (Cursor / Copilot / Windsurf)
 
@@ -276,14 +279,14 @@ When reporting issues, attach this JSON file for complete context — no need to
 
 ### vs AI Roleplay Platforms (SillyTavern)
 
-| Dimension            | SillyTavern               | beilu-always accompany                                                    |
-| -------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| Dimension            | SillyTavern               | beilu-always accompany                                                           |
+| -------------------- | ------------------------- | -------------------------------------------------------------------------------- |
 | Memory               | No built-in memory system | Original three-layer memory + BM25/Regex dual-engine retrieval + 6 auxiliary AIs |
-| God's-eye problem    | No solution               | Memory table information isolation — AI only knows what's in the tables   |
-| File operations      | None                      | Built-in IDE file management + AI file operations                         |
-| Desktop capability   | None                      | beilu-eye desktop screenshot → AI recognition                             |
-| Cross-platform       | Web only                  | Web + Discord Bot                                                         |
-| Preset compatibility | Native                    | Fully compatible with ST presets/character cards/world books              |
+| God's-eye problem    | No solution               | Memory table information isolation — AI only knows what's in the tables          |
+| File operations      | None                      | Built-in IDE file management + AI file operations                                |
+| Desktop capability   | None                      | beilu-eye desktop screenshot → AI recognition                                    |
+| Cross-platform       | Web only                  | Web + Discord Bot                                                                |
+| Preset compatibility | Native                    | Fully compatible with ST presets/character cards/world books                     |
 
 ---
 
@@ -379,16 +382,16 @@ After launch, open your browser and navigate to `http://localhost:1314`
 
 ## Tech Stack
 
-| Component          | Technology                                          |
-| ------------------ | --------------------------------------------------- |
-| Runtime            | fount (based on Deno)                               |
-| Backend            | Node.js compatibility layer + Express-style routing |
-| Frontend           | Vanilla JavaScript (ESM modules)                    |
-| AI integration     | 14 ServiceGenerators                                |
+| Component          | Technology                                           |
+| ------------------ | ---------------------------------------------------- |
+| Runtime            | Deno (with fount module system)                      |
+| Backend            | Node.js compatibility layer + Express-style routing  |
+| Frontend           | Vanilla JavaScript (ESM modules)                     |
+| AI integration     | 14 ServiceGenerators                                 |
 | Smart retrieval    | BM25 + Regex Search dual engine (pure JS, zero deps) |
-| Desktop screenshot | Python (mss + tkinter + pystray)                    |
-| Cross-platform     | discord.js v14                                      |
-| Storage            | Pure JSON file system                               |
+| Desktop screenshot | Python (mss + tkinter + pystray)                     |
+| Cross-platform     | discord.js v14                                       |
+| Storage            | Pure JSON file system                                |
 
 ---
 

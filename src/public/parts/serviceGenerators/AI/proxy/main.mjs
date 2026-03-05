@@ -76,11 +76,32 @@ async function GetSource(config, { SaveConfig }) {
     { signal, previewUpdater, result },
   ) {
     let imgIndex = 0;
+
+    // reasoning_effort 兼容映射：不同 API 提供商使用不同的值名称
+    // Gemini 原生: none/min/low/medium/high/max
+    // OpenAI 兼容反代: low/medium/high (部分只支持 low/high)
+    const normalizedModelArgs = { ...(config.model_arguments || {}) };
+    if (normalizedModelArgs.reasoning_effort) {
+      const effortMap = {
+        none: "low",
+        min: "low",
+        max: "high",
+      };
+      const original = normalizedModelArgs.reasoning_effort;
+      const mapped = effortMap[original];
+      if (mapped) {
+        console.log(
+          `[proxy/fetchChatCompletion] reasoning_effort 映射: "${original}" → "${mapped}"`,
+        );
+        normalizedModelArgs.reasoning_effort = mapped;
+      }
+    }
+
     const requestBody = JSON.stringify({
       model: config.model,
       messages,
       stream: config.use_stream,
-      ...config.model_arguments,
+      ...normalizedModelArgs,
     });
     const requestBodySize = new TextEncoder().encode(requestBody).length;
     console.log(

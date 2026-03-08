@@ -1169,6 +1169,41 @@ const pluginExport = {
             );
           }
 
+          // bug2 修复兜底：如果 persona 已收集但未进入最终消息，则自动补一条系统消息
+          {
+            const userPromptLen = (env.user_prompt || "").length;
+            if (userPromptLen > 0) {
+              const allMsgs = [
+                ...beforeChat,
+                ...afterChat,
+                ...injectionAbove,
+                ...injectionBelow,
+              ];
+              const personaFound = allMsgs.some(
+                (m) =>
+                  m.identifier === "personaDescription" ||
+                  m.identifier === "personaDescription_fallback" ||
+                  (m.content &&
+                    m.content.includes(env.user_prompt.substring(0, 50))),
+              );
+
+              if (!personaFound) {
+                beforeChat.push({
+                  role: "system",
+                  name: "Persona Description (Fallback)",
+                  identifier: "personaDescription_fallback",
+                  content: env.user_prompt,
+                  is_marker: false,
+                  order: 95,
+                });
+                console.warn(
+                  `[beilu-preset] bug2 fallback: persona 内容已自动补注入（${userPromptLen}字符）`,
+                  `原因：预设未产出 personaDescription，可检查 marker/宏配置`,
+                );
+              }
+            }
+          }
+
           // 将结果写入 extension（供 Gemini/Proxy StructCall 读取）
           // beforeChat: chatHistory marker 之前的预设条目（头部，system only）
           // afterChat: chatHistory marker 之后的预设条目（尾部，system only）
@@ -1196,6 +1231,39 @@ const pluginExport = {
             claude_prefill_enabled: runtimeParams.claude_prefill_enabled,
             continue_prefill: runtimeParams.continue_prefill,
           };
+
+          // [DIAG] Phase 0: 用户设定（persona）注入断言
+          {
+            const userPromptLen = (env.user_prompt || "").length;
+            const allMsgs = [
+              ...beforeChat,
+              ...afterChat,
+              ...injectionAbove,
+              ...injectionBelow,
+            ];
+            const personaFound = allMsgs.some(
+              (m) =>
+                m.identifier === "personaDescription" ||
+                m.identifier === "personaDescription_fallback" ||
+                (m.content &&
+                  userPromptLen > 0 &&
+                  m.content.includes(env.user_prompt.substring(0, 50))),
+            );
+            console.log(
+              `[beilu-preset][DIAG] Round 2 persona 断言:`,
+              `player_id="${prompt_struct.user_prompt ? "有user_prompt模块" : "无user_prompt模块"}",`,
+              `env.user_prompt=${userPromptLen}字符,`,
+              `persona在最终消息中=${personaFound},`,
+              `beforeChat=${beforeChat.length}, afterChat=${afterChat.length},`,
+              `injAbove=${injectionAbove.length}, injBelow=${injectionBelow.length}`,
+            );
+            if (userPromptLen > 0 && !personaFound) {
+              console.warn(
+                `[beilu-preset][DIAG] ⚠️ persona 内容已收集(${userPromptLen}字符)但未出现在最终消息中！`,
+                `预设条目中可能缺少引用 personaDescription marker 或 {{personaDescription}} 宏`,
+              );
+            }
+          }
 
           return;
         }

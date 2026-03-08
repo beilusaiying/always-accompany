@@ -31,6 +31,9 @@
   </head>
 
   <body class="flex flex-col h-screen h-dvh m-0 w-full">
+    <!-- ====== 背景图层（C3: 自定义聊天背景） ====== -->
+    <div id="bg1"></div>
+
     <!-- ====== 顶部栏 ====== -->
     <header
       id="top-bar"
@@ -90,7 +93,7 @@
           data-top-tab="files"
           data-i18n="chat.beiluChat.topTabs.files"
         >
-          📁 文件
+          📁 AI文件编辑
         </button>
         <button
           class="top-tab"
@@ -104,7 +107,7 @@
           data-top-tab="helper"
           data-i18n="chat.beiluChat.topTabs.helper"
         >
-          🛠️ 助手
+          🛠️ 正则和脚本
         </button>
       </div>
       <div class="flex items-center gap-1">
@@ -359,7 +362,11 @@
                 <!-- Max Context -->
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs">Max Context</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.maxContext"
+                      >最大上下文</span
+                    >
                   </label>
                   <input
                     type="number"
@@ -374,7 +381,11 @@
                 <!-- Max Tokens -->
                 <div class="form-control">
                   <label class="label py-0.5">
-                    <span class="label-text text-xs">Max Tokens</span>
+                    <span
+                      class="label-text text-xs"
+                      data-i18n="chat.beiluChat.modelParams.maxTokens"
+                      >最大生成Token</span
+                    >
                   </label>
                   <input
                     type="number"
@@ -609,12 +620,23 @@
                       />
                     </div>
                   </div>
-                  <textarea
-                    id="detail-content"
-                    class="textarea textarea-bordered w-full text-xs font-mono"
-                    rows="6"
-                    readonly
-                  ></textarea>
+                  <div class="relative expandable-container">
+                    <textarea
+                      id="detail-content"
+                      class="textarea textarea-bordered w-full text-xs font-mono"
+                      rows="6"
+                      readonly
+                      data-expandable
+                      data-expand-title="预设条目内容"
+                    ></textarea>
+                    <button
+                      class="expand-btn"
+                      data-expand-target="detail-content"
+                      title="放大编辑"
+                    >
+                      ⛶
+                    </button>
+                  </div>
                   <div class="flex justify-end gap-1">
                     <button id="detail-edit-btn" class="btn btn-xs btn-outline">
                       ✏️ 编辑
@@ -668,6 +690,26 @@
                   >未绑定</span
                 >
               </div>
+
+              <div class="divider my-1 text-[10px] opacity-30">额外世界书</div>
+              <div
+                id="extra-worldbook-list"
+                class="space-y-0.5 max-h-32 overflow-y-auto text-xs"
+              >
+                <p class="text-[10px] text-base-content/30 text-center py-1">
+                  加载中...
+                </p>
+              </div>
+              <!-- 世界书条目编辑按钮 -->
+              <div class="mt-1.5">
+                <button
+                  id="wb-edit-entries-btn"
+                  class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white btn-block"
+                  title="打开世界书条目编辑器"
+                >
+                  📖 编辑条目
+                </button>
+              </div>
             </div>
           </div>
 
@@ -700,10 +742,45 @@
                   >默认</span
                 >
               </div>
-              <div
-                id="left-persona-desc"
-                class="text-xs text-base-content/40 mt-1 line-clamp-2"
-              ></div>
+              <!-- 人设描述编辑 -->
+              <div class="form-control mt-1">
+                <div class="relative expandable-container">
+                  <textarea
+                    id="left-persona-desc"
+                    class="textarea textarea-bordered textarea-xs w-full text-xs"
+                    rows="3"
+                    readonly
+                    placeholder="选择人设后显示描述..."
+                    data-expandable
+                    data-expand-title="用户人设描述"
+                  ></textarea>
+                  <button
+                    class="expand-btn"
+                    data-expand-target="left-persona-desc"
+                    title="放大编辑"
+                  >
+                    ⛶
+                  </button>
+                </div>
+              </div>
+              <!-- 人设操作按钮 -->
+              <div class="flex justify-end gap-1 mt-1">
+                <button id="persona-edit-btn" class="btn btn-xs btn-outline">
+                  ✏️ 编辑
+                </button>
+                <button
+                  id="persona-save-btn"
+                  class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden"
+                >
+                  💾 保存
+                </button>
+                <button
+                  id="persona-cancel-btn"
+                  class="btn btn-xs btn-ghost hidden"
+                >
+                  取消
+                </button>
+              </div>
             </div>
           </div>
 
@@ -748,13 +825,24 @@
                     >开场白</span
                   >
                 </label>
-                <textarea
-                  id="char-greeting-edit"
-                  class="textarea textarea-bordered textarea-xs w-full text-xs"
-                  rows="3"
-                  readonly
-                  placeholder="加载中..."
-                ></textarea>
+                <div class="relative expandable-container">
+                  <textarea
+                    id="char-greeting-edit"
+                    class="textarea textarea-bordered textarea-xs w-full text-xs"
+                    rows="3"
+                    readonly
+                    placeholder="加载中..."
+                    data-expandable
+                    data-expand-title="角色开场白"
+                  ></textarea>
+                  <button
+                    class="expand-btn"
+                    data-expand-target="char-greeting-edit"
+                    title="放大编辑"
+                  >
+                    ⛶
+                  </button>
+                </div>
               </div>
               <!-- 角色描述 -->
               <div class="form-control mb-2">
@@ -765,13 +853,24 @@
                     >角色描述</span
                   >
                 </label>
-                <textarea
-                  id="char-description-edit"
-                  class="textarea textarea-bordered textarea-xs w-full text-xs"
-                  rows="4"
-                  readonly
-                  placeholder="加载中..."
-                ></textarea>
+                <div class="relative expandable-container">
+                  <textarea
+                    id="char-description-edit"
+                    class="textarea textarea-bordered textarea-xs w-full text-xs"
+                    rows="4"
+                    readonly
+                    placeholder="加载中..."
+                    data-expandable
+                    data-expand-title="角色描述"
+                  ></textarea>
+                  <button
+                    class="expand-btn"
+                    data-expand-target="char-description-edit"
+                    title="放大编辑"
+                  >
+                    ⛶
+                  </button>
+                </div>
               </div>
               <!-- 操作按钮 -->
               <div class="flex justify-end gap-1">
@@ -815,6 +914,9 @@
           </div>
         </div>
       </aside>
+
+      <!-- 左栏拖拽手柄 -->
+      <div id="left-panel-resize" class="panel-resize-handle"></div>
 
       <!-- ====== 中栏: 聊天 + 选项卡 ====== -->
       <main
@@ -893,12 +995,23 @@
                 </button>
               </div>
               <div class="px-3 py-2">
-                <textarea
-                  id="single-inject"
-                  class="textarea textarea-bordered textarea-xs w-full font-mono text-xs"
-                  rows="2"
-                  placeholder="下次发送时附加的临时提示词，发送后自动清空..."
-                ></textarea>
+                <div class="relative expandable-container">
+                  <textarea
+                    id="single-inject"
+                    class="textarea textarea-bordered textarea-xs w-full font-mono text-xs"
+                    rows="2"
+                    placeholder="下次发送时附加的临时提示词，发送后自动清空..."
+                    data-expandable
+                    data-expand-title="单次注入提示词"
+                  ></textarea>
+                  <button
+                    class="expand-btn"
+                    data-expand-target="single-inject"
+                    title="放大编辑"
+                  >
+                    ⛶
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2085,6 +2198,9 @@
         </div>
       </main>
 
+      <!-- 右栏拖拽手柄 -->
+      <div id="right-panel-resize" class="panel-resize-handle"></div>
+
       <!-- ====== 右栏: AI 设置 ====== -->
       <aside
         id="right-panel"
@@ -2161,11 +2277,13 @@
                     id="api-type"
                     class="select select-xs select-bordered w-full"
                   >
+                    <option value="openai">OpenAI</option>
+                    <option value="deepseek">DeepSeek</option>
                     <option
                       value="proxy"
                       data-i18n="chat.beiluChat.aiSettings.openaiCompat"
                     >
-                      OpenAI 兼容
+                      OpenAI 兼容（自定义）
                     </option>
                     <option
                       value="gemini"
@@ -2452,11 +2570,22 @@
                       <label class="label py-0"
                         ><span class="label-text text-[11px]">内容</span></label
                       >
-                      <textarea
-                        id="inj-edit-content"
-                        class="textarea textarea-bordered textarea-xs w-full font-mono text-xs"
-                        rows="5"
-                      ></textarea>
+                      <div class="relative expandable-container">
+                        <textarea
+                          id="inj-edit-content"
+                          class="textarea textarea-bordered textarea-xs w-full font-mono text-xs"
+                          rows="5"
+                          data-expandable
+                          data-expand-title="注入条目内容"
+                        ></textarea>
+                        <button
+                          class="expand-btn"
+                          data-expand-target="inj-edit-content"
+                          title="放大编辑"
+                        >
+                          ⛶
+                        </button>
+                      </div>
                     </div>
                     <div class="flex justify-end gap-1">
                       <button
@@ -2637,6 +2766,98 @@
                   data-i18n="chat.beiluChat.displaySettings.cleanupHint"
                   >退出文件/记忆模式时是否清理对话消息</span
                 >
+
+                <!-- ---- C3: 聊天背景设置 ---- -->
+                <div class="divider my-1 text-[9px] opacity-40">
+                  🖼️ 聊天背景
+                </div>
+
+                <!-- 上传背景图 -->
+                <div class="flex items-center gap-1.5">
+                  <button
+                    id="bg-upload-btn"
+                    class="btn btn-xs btn-ghost flex-1 justify-start text-[10px]"
+                    title="从本地上传背景图片"
+                  >
+                    📁 上传图片
+                  </button>
+                  <input
+                    type="file"
+                    id="bg-upload-input"
+                    accept="image/*"
+                    class="hidden"
+                  />
+                  <button
+                    id="bg-reset-btn"
+                    class="btn btn-xs btn-ghost text-[10px] text-error/60"
+                    title="清除背景图，恢复默认纯色"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <!-- 图片URL输入 -->
+                <div class="mt-1">
+                  <input
+                    type="text"
+                    id="bg-url-input"
+                    class="input input-xs input-bordered w-full text-[10px]"
+                    placeholder="输入图片URL（可选）"
+                    title="粘贴图片链接作为背景"
+                  />
+                </div>
+
+                <!-- 缩放模式 -->
+                <div class="flex items-center justify-between mt-1">
+                  <span class="text-[10px]">缩放模式</span>
+                  <select
+                    id="bg-fit-mode"
+                    class="select select-xs select-bordered w-24 text-[10px]"
+                  >
+                    <option value="cover">铺满 (Cover)</option>
+                    <option value="contain">适应 (Contain)</option>
+                    <option value="stretch">拉伸 (Stretch)</option>
+                    <option value="center">居中 (Center)</option>
+                  </select>
+                </div>
+
+                <!-- 对话区透明度 -->
+                <div class="mt-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px]">对话区透明度</span>
+                    <span id="bg-opacity-value" class="text-[9px] opacity-50"
+                      >30%</span
+                    >
+                  </div>
+                  <input
+                    type="range"
+                    id="bg-opacity-slider"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value="30"
+                    class="range range-xs w-full mt-0.5"
+                  />
+                </div>
+
+                <!-- 模糊强度 -->
+                <div class="mt-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px]">模糊强度</span>
+                    <span id="bg-blur-value" class="text-[9px] opacity-50"
+                      >10px</span
+                    >
+                  </div>
+                  <input
+                    type="range"
+                    id="bg-blur-slider"
+                    min="0"
+                    max="20"
+                    step="1"
+                    value="10"
+                    class="range range-xs w-full mt-0.5"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -2901,6 +3122,68 @@
                     🗑️ 清除快照
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ====== 桌面截图（贝露的眼睛）状态折叠组 ====== -->
+          <div class="collapse collapse-arrow bg-base-300/50 rounded-lg">
+            <input type="checkbox" data-collapse-id="right-eye-status" />
+            <div class="collapse-title font-medium text-sm py-2 min-h-0">
+              👁️‍🗨️ 桌面截图
+            </div>
+            <div class="collapse-content px-2 pb-2">
+              <div class="space-y-1.5">
+                <!-- 状态行：状态点 + 文字 -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <span
+                      id="eye-status-dot"
+                      class="w-2 h-2 rounded-full bg-base-content/20 inline-block"
+                    ></span>
+                    <span
+                      id="eye-status-text"
+                      class="text-xs text-base-content/50"
+                      >未运行</span
+                    >
+                  </div>
+                  <span class="text-[10px] text-base-content/40"
+                    >快照: <span id="eye-snapshot-count">0</span></span
+                  >
+                </div>
+                <!-- 错误信息（默认隐藏） -->
+                <div
+                  id="eye-error-row"
+                  class="text-[10px] text-error truncate hidden"
+                  title=""
+                ></div>
+                <!-- 操作按钮 -->
+                <div class="flex gap-1">
+                  <button
+                    id="eye-restart-btn"
+                    class="btn btn-xs btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white flex-1 text-[10px]"
+                    title="重启桌面截图服务"
+                  >
+                    🔄 重启
+                  </button>
+                  <button
+                    id="eye-stop-btn"
+                    class="btn btn-xs btn-outline flex-1 text-[10px]"
+                    title="停止桌面截图服务"
+                  >
+                    ⏹ 停止
+                  </button>
+                  <button
+                    id="eye-clear-btn"
+                    class="btn btn-xs btn-ghost text-[10px]"
+                    title="清除待注入截图"
+                  >
+                    🗑️
+                  </button>
+                </div>
+                <span class="text-[9px] text-base-content/30"
+                  >Python 截图服务状态，截图通过轮询自动发送给 AI</span
+                >
               </div>
             </div>
           </div>
@@ -3173,6 +3456,263 @@
       <!-- 缩放手柄 -->
       <div class="fw-resize-handle" id="pv-resize-handle"></div>
     </div>
+
+    <!-- ====== 世界书条目编辑器弹窗（可拖拽+可缩放） ====== -->
+    <div id="wb-editor-window" class="floating-window hidden">
+      <!-- 标题栏（可拖动） -->
+      <div class="floating-window-header" id="wb-editor-header">
+        <div class="fw-title">
+          <span>📖 世界书条目编辑器</span>
+          <span id="wb-editor-wb-name" class="fw-status"></span>
+        </div>
+        <div class="fw-controls">
+          <button class="fw-ctrl-btn" id="wb-editor-minimize" title="最小化">
+            ─
+          </button>
+          <button class="fw-ctrl-btn" id="wb-editor-maximize" title="最大化">
+            □
+          </button>
+          <button
+            class="fw-ctrl-btn fw-ctrl-close"
+            id="wb-editor-close"
+            title="关闭"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      <!-- 工具栏 -->
+      <div class="fw-toolbar">
+        <input
+          type="text"
+          id="wb-editor-search"
+          class="input input-xs input-bordered flex-1 text-xs"
+          placeholder="搜索条目..."
+        />
+        <button id="wb-editor-add" class="dt-btn dt-btn-primary dt-btn-sm">
+          ➕ 新增
+        </button>
+        <button id="wb-editor-refresh" class="dt-btn dt-btn-sm">🔄 刷新</button>
+      </div>
+      <!-- 内容区：双栏布局 -->
+      <div class="fw-body wb-editor-body">
+        <!-- 左栏：条目列表 -->
+        <div class="wb-editor-list-panel">
+          <div id="wb-editor-list" class="wb-editor-list">
+            <p class="text-xs text-base-content/40 text-center py-4">
+              加载中...
+            </p>
+          </div>
+        </div>
+        <!-- 右栏：条目详情编辑 -->
+        <div
+          class="wb-editor-detail-panel"
+          id="wb-editor-detail"
+          style="display: none"
+        >
+          <div class="wb-editor-detail-scroll">
+            <!-- 名称(comment) -->
+            <div class="form-control mb-1.5">
+              <label class="label py-0"
+                ><span class="label-text text-[11px]"
+                  >名称 (comment)</span
+                ></label
+              >
+              <input
+                type="text"
+                id="wb-ed-comment"
+                class="input input-xs input-bordered w-full text-xs"
+                readonly
+              />
+            </div>
+            <!-- 启用/禁用 -->
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs text-base-content/60">启用</span>
+              <input
+                type="checkbox"
+                id="wb-ed-toggle"
+                class="toggle toggle-xs toggle-warning"
+              />
+            </div>
+            <!-- 激活模式 -->
+            <div class="form-control mb-1.5">
+              <label class="label py-0"
+                ><span class="label-text text-[11px]">激活模式</span></label
+              >
+              <select
+                id="wb-ed-activation"
+                class="select select-xs select-bordered w-full text-xs"
+                disabled
+              >
+                <option value="regex">关键词/正则</option>
+                <option value="constant">常驻</option>
+                <option value="dynamic">动态</option>
+              </select>
+            </div>
+            <!-- 关键词 -->
+            <div class="form-control mb-1.5" id="wb-ed-keys-group">
+              <label class="label py-0"
+                ><span class="label-text text-[11px]"
+                  >主关键词（逗号分隔）</span
+                ></label
+              >
+              <input
+                type="text"
+                id="wb-ed-keys"
+                class="input input-xs input-bordered w-full text-xs font-mono"
+                readonly
+                placeholder="key1, key2, ..."
+              />
+            </div>
+            <div class="form-control mb-1.5" id="wb-ed-keys2-group">
+              <label class="label py-0"
+                ><span class="label-text text-[11px]"
+                  >副关键词（逗号分隔）</span
+                ></label
+              >
+              <input
+                type="text"
+                id="wb-ed-keys2"
+                class="input input-xs input-bordered w-full text-xs font-mono"
+                readonly
+                placeholder="key1, key2, ..."
+              />
+            </div>
+            <!-- 注入位置 -->
+            <div class="flex gap-1.5 mb-1.5">
+              <div class="form-control flex-1">
+                <label class="label py-0"
+                  ><span class="label-text text-[11px]">位置</span></label
+                >
+                <select
+                  id="wb-ed-position"
+                  class="select select-xs select-bordered w-full text-xs"
+                  disabled
+                >
+                  <option value="0">📌 角色描述前</option>
+                  <option value="1">📎 角色描述后</option>
+                  <option value="4">📍 @深度</option>
+                </select>
+              </div>
+              <div class="form-control w-16" id="wb-ed-depth-group">
+                <label class="label py-0"
+                  ><span class="label-text text-[11px]">深度</span></label
+                >
+                <input
+                  type="number"
+                  id="wb-ed-depth"
+                  class="input input-xs input-bordered w-full font-mono text-xs"
+                  min="0"
+                  max="999"
+                  value="4"
+                  disabled
+                />
+              </div>
+            </div>
+            <!-- 排序 + 角色 -->
+            <div class="flex gap-1.5 mb-1.5">
+              <div class="form-control flex-1">
+                <label class="label py-0"
+                  ><span class="label-text text-[11px]">排序</span></label
+                >
+                <input
+                  type="number"
+                  id="wb-ed-order"
+                  class="input input-xs input-bordered w-full font-mono text-xs"
+                  value="100"
+                  disabled
+                />
+              </div>
+              <div class="form-control flex-1" id="wb-ed-role-group">
+                <label class="label py-0"
+                  ><span class="label-text text-[11px]">角色</span></label
+                >
+                <select
+                  id="wb-ed-role"
+                  class="select select-xs select-bordered w-full text-xs"
+                  disabled
+                >
+                  <option value="0">system</option>
+                  <option value="1">user</option>
+                  <option value="2">assistant</option>
+                </select>
+              </div>
+            </div>
+            <!-- 内容 -->
+            <div class="form-control mb-1.5">
+              <label class="label py-0"
+                ><span class="label-text text-[11px]">内容</span></label
+              >
+              <div class="relative expandable-container">
+                <textarea
+                  id="wb-ed-content"
+                  class="textarea textarea-bordered textarea-xs w-full font-mono text-xs"
+                  rows="8"
+                  readonly
+                  data-expandable
+                  data-expand-title="世界书条目内容"
+                ></textarea>
+                <button
+                  class="expand-btn"
+                  data-expand-target="wb-ed-content"
+                  title="放大编辑"
+                >
+                  ⛶
+                </button>
+              </div>
+            </div>
+            <!-- 操作按钮 -->
+            <div class="flex justify-end gap-1">
+              <button
+                id="wb-ed-delete-btn"
+                class="btn btn-xs btn-outline btn-error"
+              >
+                🗑️ 删除
+              </button>
+              <button id="wb-ed-edit-btn" class="btn btn-xs btn-outline">
+                ✏️ 编辑
+              </button>
+              <button
+                id="wb-ed-save-btn"
+                class="btn btn-xs btn-primary bg-amber-700 border-amber-700 hidden"
+              >
+                💾 保存
+              </button>
+              <button id="wb-ed-cancel-btn" class="btn btn-xs btn-ghost hidden">
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 缩放手柄 -->
+      <div class="fw-resize-handle" id="wb-editor-resize-handle"></div>
+    </div>
+
+    <!-- ====== 放大编辑器 Modal ====== -->
+    <dialog id="expand-editor-modal" class="expand-editor-modal">
+      <div class="expand-editor-container">
+        <div class="expand-editor-header">
+          <span id="expand-editor-title" class="expand-editor-title">编辑</span>
+          <div class="expand-editor-controls">
+            <button
+              id="expand-editor-save"
+              class="btn btn-sm bg-amber-700 hover:bg-amber-800 text-white border-amber-700"
+            >
+              💾 保存
+            </button>
+            <button id="expand-editor-cancel" class="btn btn-sm btn-ghost">
+              ✕ 关闭
+            </button>
+          </div>
+        </div>
+        <textarea
+          id="expand-editor-textarea"
+          class="expand-editor-textarea"
+          spellcheck="false"
+        ></textarea>
+      </div>
+    </dialog>
 
     <script type="module" src="./index.mjs"></script>
   </body>

@@ -958,9 +958,9 @@
       "topTabs": {
         "chat": "💬 聊天",
         "bot": "🤖 Bot",
-        "files": "📁 檔案",
+        "files": "📁 AI檔案編輯",
         "memory": "🧠 記憶",
-        "helper": "🛠️ 助手"
+        "helper": "🛠️ 正則和腳本"
       },
       "apiBanner": {
         "text": "尚未設定 AI 服務源，發送訊息將無法獲得回覆。",

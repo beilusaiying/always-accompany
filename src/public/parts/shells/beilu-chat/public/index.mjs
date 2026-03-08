@@ -27,6 +27,7 @@ import {
   setPersona,
   triggerCharacterReply,
 } from "./src/endpoints.mjs";
+import { initExpandEditor } from "./src/expandEditor.mjs";
 import { initFileExplorer } from "./src/fileExplorer.mjs";
 import { initLayout } from "./src/layout.mjs";
 import {
@@ -933,9 +934,98 @@ function fallbackToast(message, type) {
 
 const leftWorldSelect = document.getElementById("left-world-select");
 const leftWorldStatus = document.getElementById("left-world-status");
+const extraWorldbookList = document.getElementById("extra-worldbook-list");
 
 const WB_API_GET = "/api/parts/plugins:beilu-worldbook/config/getdata";
 const WB_API_SET = "/api/parts/plugins:beilu-worldbook/config/setdata";
+
+/**
+ * 渲染额外世界书列表（多选启用/禁用）
+ * @param {string} primaryWb - 当前主世界书（下拉框选中的绑定世界书）
+ * @param {string} currentCharId - 当前角色 ID
+ */
+async function renderExtraWorldbooks(primaryWb = "", currentCharId = "") {
+  if (!extraWorldbookList) return;
+
+  extraWorldbookList.innerHTML =
+    '<p class="text-[10px] text-base-content/30 text-center py-1">加载中...</p>';
+
+  try {
+    const res = await fetch(WB_API_GET);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const wbList = data.worldbook_list || [];
+    const wbDetails = data.worldbook_details || {};
+    const extraList = wbList.filter((name) => name !== primaryWb);
+
+    if (extraList.length === 0) {
+      extraWorldbookList.innerHTML =
+        '<p class="text-[10px] text-base-content/30 text-center py-1">无额外世界书</p>';
+      return;
+    }
+
+    extraWorldbookList.innerHTML = "";
+
+    extraList.forEach((name) => {
+      const detail = wbDetails[name] || {};
+      const enabled = detail.enabled !== false;
+      const boundCharName = detail.boundCharName || "";
+      const entryCount = detail.entry_count || 0;
+
+      const label = document.createElement("label");
+      label.className =
+        "flex items-center gap-1.5 py-0.5 px-1 rounded cursor-pointer hover:bg-base-300/50";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "checkbox checkbox-xs checkbox-warning";
+      checkbox.checked = enabled;
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "flex-1 truncate";
+      nameEl.textContent = name;
+
+      const metaEl = document.createElement("span");
+      metaEl.className = "text-[10px] text-base-content/30 shrink-0";
+      const bindText = boundCharName
+        ? boundCharName === currentCharId
+          ? "[当前角色]"
+          : `[${boundCharName}]`
+        : "";
+      metaEl.textContent = `${entryCount}条${bindText}`;
+
+      checkbox.addEventListener("change", async () => {
+        try {
+          const setRes = await fetch(WB_API_SET, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              toggle_worldbook: { name, enabled: checkbox.checked },
+            }),
+          });
+          if (!setRes.ok) throw new Error(`HTTP ${setRes.status}`);
+          showToast(
+            `世界书 "${name}" 已${checkbox.checked ? "启用" : "禁用"}`,
+            "info",
+          );
+        } catch (err) {
+          checkbox.checked = !checkbox.checked;
+          showToast("切换世界书失败: " + err.message, "error");
+        }
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(nameEl);
+      label.appendChild(metaEl);
+      extraWorldbookList.appendChild(label);
+    });
+  } catch (err) {
+    console.warn("[beilu-chat] renderExtraWorldbooks 失败:", err);
+    extraWorldbookList.innerHTML =
+      '<p class="text-[10px] text-error text-center py-1">额外世界书加载失败</p>';
+  }
+}
 
 /**
  * 初始化世界书绑定下拉框
@@ -981,6 +1071,9 @@ async function initWorldBinding() {
     const currentWb = boundWb || activeWb;
     leftWorldSelect.value = currentWb || "";
     leftWorldStatus.textContent = currentWb || "未绑定";
+
+    // 初始渲染额外世界书
+    await renderExtraWorldbooks(currentWb || "", charId || "");
 
     // 如果找到角色卡绑定的世界书且不是当前激活的，自动激活
     if (boundWb && boundWb !== activeWb) {
@@ -1044,9 +1137,13 @@ async function initWorldBinding() {
           leftWorldStatus.textContent = "未绑定";
           showToast("世界书已取消绑定", "info");
         }
+
+        // 刷新额外世界书（使用最新主世界书）
+        await renderExtraWorldbooks(newName, charName);
       } catch (err) {
         showToast("设置世界书失败: " + err.message, "error");
         leftWorldSelect.value = currentWb || "";
+        await renderExtraWorldbooks(currentWb || "", charName);
       }
     });
   } catch (err) {
@@ -1063,9 +1160,625 @@ async function initWorldBinding() {
       });
       leftWorldSelect.value = worldName || "";
       leftWorldStatus.textContent = worldName || "未绑定";
+      if (extraWorldbookList) {
+        extraWorldbookList.innerHTML =
+          '<p class="text-[10px] text-base-content/30 text-center py-1">插件模式不可用</p>';
+      }
     } catch {
-      /* 静默 */
+      if (extraWorldbookList) {
+        extraWorldbookList.innerHTML =
+          '<p class="text-[10px] text-base-content/30 text-center py-1">无额外世界书</p>';
+      }
     }
+  }
+}
+
+// ============================================================
+// 世界书条目编辑器（floating-window 弹窗）
+// ============================================================
+
+/** 世界书编辑器状态 */
+let _wbEdEntries = [];
+let _wbEdSelectedEntry = null;
+let _wbEdIsEditing = false;
+let _wbEdIsMaximized = false;
+let _wbEdSavedPosition = null;
+
+/**
+ * 初始化世界书条目编辑器
+ * 绑定按钮事件 + 拖拽/缩放 + 搜索
+ */
+function initWbEditor() {
+  // 打开按钮
+  document
+    .getElementById("wb-edit-entries-btn")
+    ?.addEventListener("click", openWbEditor);
+
+  // 窗口控制按钮
+  document
+    .getElementById("wb-editor-minimize")
+    ?.addEventListener("click", () => closeWbEditor());
+  document
+    .getElementById("wb-editor-maximize")
+    ?.addEventListener("click", toggleWbEditorMaximize);
+  document
+    .getElementById("wb-editor-close")
+    ?.addEventListener("click", () => closeWbEditor());
+
+  // 工具栏按钮
+  document
+    .getElementById("wb-editor-add")
+    ?.addEventListener("click", addWbEntry);
+  document
+    .getElementById("wb-editor-refresh")
+    ?.addEventListener("click", loadWbEntries);
+
+  // 搜索框
+  document.getElementById("wb-editor-search")?.addEventListener("input", () => {
+    const filter = document.getElementById("wb-editor-search")?.value || "";
+    renderWbEntryList(_wbEdEntries, filter);
+  });
+
+  // 详情面板按钮
+  document
+    .getElementById("wb-ed-edit-btn")
+    ?.addEventListener("click", enterWbEditMode);
+  document
+    .getElementById("wb-ed-save-btn")
+    ?.addEventListener("click", saveWbEntry);
+  document
+    .getElementById("wb-ed-cancel-btn")
+    ?.addEventListener("click", cancelWbEdit);
+  document
+    .getElementById("wb-ed-delete-btn")
+    ?.addEventListener("click", deleteWbEntry);
+
+  // 启用/禁用切换
+  document
+    .getElementById("wb-ed-toggle")
+    ?.addEventListener("change", async () => {
+      if (!_wbEdSelectedEntry) return;
+      const toggle = document.getElementById("wb-ed-toggle");
+      await toggleWbEntry(_wbEdSelectedEntry.uid, !toggle.checked);
+    });
+
+  // 位置变化 → 控制深度显示
+  document.getElementById("wb-ed-position")?.addEventListener("change", () => {
+    const pos = document.getElementById("wb-ed-position")?.value;
+    const depthGroup = document.getElementById("wb-ed-depth-group");
+    if (depthGroup) {
+      depthGroup.style.display = pos === "4" ? "" : "none";
+    }
+  });
+
+  // 激活模式变化 → 控制关键词显示
+  document
+    .getElementById("wb-ed-activation")
+    ?.addEventListener("change", () => {
+      const mode = document.getElementById("wb-ed-activation")?.value;
+      const keysGroup = document.getElementById("wb-ed-keys-group");
+      const keys2Group = document.getElementById("wb-ed-keys2-group");
+      if (mode === "constant") {
+        if (keysGroup) keysGroup.style.display = "none";
+        if (keys2Group) keys2Group.style.display = "none";
+      } else {
+        if (keysGroup) keysGroup.style.display = "";
+        if (keys2Group) keys2Group.style.display = "";
+      }
+    });
+
+  // 初始化拖拽
+  _initWbEditorDrag();
+  // 初始化缩放
+  _initWbEditorResize();
+
+  console.log("[beilu-chat] 世界书条目编辑器已初始化");
+}
+
+/** 初始化拖拽 */
+function _initWbEditorDrag() {
+  const el = document.getElementById("wb-editor-window");
+  const hdr = document.getElementById("wb-editor-header");
+  if (!el || !hdr) return;
+
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+
+  hdr.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".fw-controls")) return;
+    if (_wbEdIsMaximized) return;
+    isDragging = true;
+    el.classList.add("fw-dragging");
+    const rect = el.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+    el.style.transform = "none";
+    el.style.left = startLeft + "px";
+    el.style.top = startTop + "px";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    el.style.left = startLeft + dx + "px";
+    el.style.top = startTop + dy + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (isDragging) {
+      isDragging = false;
+      el.classList.remove("fw-dragging");
+    }
+  });
+}
+
+/** 初始化缩放 */
+function _initWbEditorResize() {
+  const el = document.getElementById("wb-editor-window");
+  const handle = document.getElementById("wb-editor-resize-handle");
+  if (!el || !handle) return;
+
+  let isResizing = false;
+  let startX, startY, startW, startH;
+
+  handle.addEventListener("mousedown", (e) => {
+    if (_wbEdIsMaximized) return;
+    isResizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startW = el.offsetWidth;
+    startH = el.offsetHeight;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const newW = Math.max(400, startW + (e.clientX - startX));
+    const newH = Math.max(350, startH + (e.clientY - startY));
+    el.style.width = newW + "px";
+    el.style.height = newH + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    isResizing = false;
+  });
+}
+
+/** 打开世界书编辑器弹窗 */
+async function openWbEditor() {
+  const el = document.getElementById("wb-editor-window");
+  if (!el) return;
+  el.classList.remove("hidden");
+  // 居中定位
+  if (!_wbEdIsMaximized && !el.style.left) {
+    el.style.transform = "translate(-50%, -50%)";
+    el.style.top = "50%";
+    el.style.left = "50%";
+  }
+  // 显示当前世界书名
+  const wbNameEl = document.getElementById("wb-editor-wb-name");
+  const wbStatus = document.getElementById("left-world-status");
+  if (wbNameEl && wbStatus) {
+    wbNameEl.textContent = wbStatus.textContent || "";
+  }
+  await loadWbEntries();
+}
+
+/** 关闭世界书编辑器弹窗 */
+function closeWbEditor() {
+  const el = document.getElementById("wb-editor-window");
+  if (el) el.classList.add("hidden");
+}
+
+/** 最大化/还原 */
+function toggleWbEditorMaximize() {
+  const el = document.getElementById("wb-editor-window");
+  if (!el) return;
+
+  if (_wbEdIsMaximized) {
+    el.classList.remove("fw-maximized");
+    if (_wbEdSavedPosition) {
+      el.style.left = _wbEdSavedPosition.left;
+      el.style.top = _wbEdSavedPosition.top;
+      el.style.width = _wbEdSavedPosition.width;
+      el.style.height = _wbEdSavedPosition.height;
+      el.style.transform = _wbEdSavedPosition.transform;
+    }
+    _wbEdIsMaximized = false;
+  } else {
+    _wbEdSavedPosition = {
+      left: el.style.left,
+      top: el.style.top,
+      width: el.style.width,
+      height: el.style.height,
+      transform: el.style.transform,
+    };
+    el.classList.add("fw-maximized");
+    _wbEdIsMaximized = true;
+  }
+}
+
+/**
+ * 从后端加载世界书条目列表
+ */
+async function loadWbEntries() {
+  const listEl = document.getElementById("wb-editor-list");
+  if (!listEl) return;
+
+  listEl.innerHTML =
+    '<p class="text-xs text-base-content/40 text-center py-4">加载中...</p>';
+
+  try {
+    const res = await fetch(WB_API_GET);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    _wbEdEntries = data.entries || [];
+    const filter = document.getElementById("wb-editor-search")?.value || "";
+    renderWbEntryList(_wbEdEntries, filter);
+
+    // 更新世界书名
+    const wbNameEl = document.getElementById("wb-editor-wb-name");
+    if (wbNameEl) {
+      wbNameEl.textContent = data.active_worldbook
+        ? `[${data.active_worldbook}] ${_wbEdEntries.length}条`
+        : "";
+    }
+  } catch (err) {
+    console.error("[beilu-chat] loadWbEntries 失败:", err);
+    listEl.innerHTML = `<p class="text-xs text-error text-center py-4">加载失败: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+/**
+ * 渲染左栏条目列表
+ * @param {Array} entries - 条目数组
+ * @param {string} filter - 搜索过滤文本
+ */
+function renderWbEntryList(entries, filter = "") {
+  const listEl = document.getElementById("wb-editor-list");
+  if (!listEl) return;
+
+  const filtered = filter
+    ? entries.filter((e) => {
+        const text =
+          `${e.comment || ""} ${(e.key || []).join(" ")} ${e.content || ""}`.toLowerCase();
+        return text.includes(filter.toLowerCase());
+      })
+    : entries;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<p class="text-xs text-base-content/40 text-center py-4">${filter ? "无匹配条目" : "暂无条目"}</p>`;
+    return;
+  }
+
+  listEl.innerHTML = "";
+  filtered.forEach((entry) => {
+    const item = document.createElement("div");
+    const isSelected = _wbEdSelectedEntry?.uid === entry.uid;
+    const isDisabled = entry.disable === true;
+    item.className = `wb-editor-entry${isSelected ? " wb-entry-selected" : ""}${isDisabled ? " wb-entry-disabled" : ""}`;
+    item.dataset.uid = entry.uid;
+
+    // 激活模式标签
+    let modeLabel = "";
+    if (entry.constant) {
+      modeLabel = '<span class="badge badge-xs badge-warning">常驻</span>';
+    } else if (entry.key && entry.key.length > 0) {
+      modeLabel = `<span class="badge badge-xs badge-ghost">${escapeHtml(entry.key[0])}</span>`;
+    }
+
+    item.innerHTML = `
+      <div class="flex items-center gap-1.5 w-full min-w-0">
+        <span class="w-2 h-2 rounded-full shrink-0 ${isDisabled ? "bg-base-content/20" : "bg-success"}"></span>
+        <span class="flex-1 truncate text-xs">${escapeHtml(entry.comment || "(无名)")}</span>
+        ${modeLabel}
+      </div>
+    `;
+
+    item.addEventListener("click", () => selectWbEntry(entry));
+    listEl.appendChild(item);
+  });
+}
+
+/**
+ * 选中条目 → 填充右栏详情
+ * @param {object} entry - 条目数据
+ */
+function selectWbEntry(entry) {
+  _wbEdSelectedEntry = entry;
+  exitWbEditMode();
+
+  // 高亮列表项
+  const listEl = document.getElementById("wb-editor-list");
+  listEl?.querySelectorAll(".wb-editor-entry").forEach((el) => {
+    el.classList.toggle("wb-entry-selected", el.dataset.uid == entry.uid);
+  });
+
+  // 显示详情面板
+  const detailPanel = document.getElementById("wb-editor-detail");
+  if (detailPanel) detailPanel.style.display = "";
+
+  // 填充字段
+  const commentEl = document.getElementById("wb-ed-comment");
+  const toggleEl = document.getElementById("wb-ed-toggle");
+  const activationEl = document.getElementById("wb-ed-activation");
+  const keysEl = document.getElementById("wb-ed-keys");
+  const keys2El = document.getElementById("wb-ed-keys2");
+  const positionEl = document.getElementById("wb-ed-position");
+  const depthEl = document.getElementById("wb-ed-depth");
+  const orderEl = document.getElementById("wb-ed-order");
+  const roleEl = document.getElementById("wb-ed-role");
+  const contentEl = document.getElementById("wb-ed-content");
+
+  if (commentEl) commentEl.value = entry.comment || "";
+  if (toggleEl) toggleEl.checked = !entry.disable;
+
+  // 激活模式
+  if (activationEl) {
+    if (entry.constant) {
+      activationEl.value = "constant";
+    } else {
+      activationEl.value = "regex";
+    }
+  }
+
+  // 关键词
+  if (keysEl) keysEl.value = (entry.key || []).join(", ");
+  if (keys2El) keys2El.value = (entry.keysecondary || []).join(", ");
+
+  // 常驻模式时隐藏关键词
+  const keysGroup = document.getElementById("wb-ed-keys-group");
+  const keys2Group = document.getElementById("wb-ed-keys2-group");
+  if (entry.constant) {
+    if (keysGroup) keysGroup.style.display = "none";
+    if (keys2Group) keys2Group.style.display = "none";
+  } else {
+    if (keysGroup) keysGroup.style.display = "";
+    if (keys2Group) keys2Group.style.display = "";
+  }
+
+  // 位置
+  if (positionEl) positionEl.value = String(entry.position ?? 0);
+
+  // 深度（仅 position=4 时显示）
+  if (depthEl) depthEl.value = entry.depth ?? 4;
+  const depthGroup = document.getElementById("wb-ed-depth-group");
+  if (depthGroup) {
+    depthGroup.style.display = (entry.position ?? 0) == 4 ? "" : "none";
+  }
+
+  // 排序
+  if (orderEl) orderEl.value = entry.order ?? 100;
+
+  // 角色
+  if (roleEl) roleEl.value = String(entry.role ?? 0);
+
+  // 内容
+  if (contentEl) contentEl.value = entry.content || "";
+}
+
+/** 进入编辑模式 */
+function enterWbEditMode() {
+  if (!_wbEdSelectedEntry) return;
+  _wbEdIsEditing = true;
+
+  // 解锁字段
+  const fields = [
+    "wb-ed-comment",
+    "wb-ed-keys",
+    "wb-ed-keys2",
+    "wb-ed-content",
+  ];
+  fields.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.readOnly = false;
+  });
+
+  const selectFields = [
+    "wb-ed-activation",
+    "wb-ed-position",
+    "wb-ed-depth",
+    "wb-ed-order",
+    "wb-ed-role",
+  ];
+  selectFields.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = false;
+  });
+
+  // 内容textarea加高亮
+  const contentEl = document.getElementById("wb-ed-content");
+  if (contentEl) contentEl.classList.add("textarea-warning");
+
+  // 切换按钮显隐
+  document.getElementById("wb-ed-edit-btn")?.classList.add("hidden");
+  document.getElementById("wb-ed-save-btn")?.classList.remove("hidden");
+  document.getElementById("wb-ed-cancel-btn")?.classList.remove("hidden");
+}
+
+/** 退出编辑模式 */
+function exitWbEditMode() {
+  _wbEdIsEditing = false;
+
+  // 锁定字段
+  const fields = [
+    "wb-ed-comment",
+    "wb-ed-keys",
+    "wb-ed-keys2",
+    "wb-ed-content",
+  ];
+  fields.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.readOnly = true;
+  });
+
+  const selectFields = [
+    "wb-ed-activation",
+    "wb-ed-position",
+    "wb-ed-depth",
+    "wb-ed-order",
+    "wb-ed-role",
+  ];
+  selectFields.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = true;
+  });
+
+  // 移除高亮
+  const contentEl = document.getElementById("wb-ed-content");
+  if (contentEl) contentEl.classList.remove("textarea-warning");
+
+  // 切换按钮显隐
+  document.getElementById("wb-ed-edit-btn")?.classList.remove("hidden");
+  document.getElementById("wb-ed-save-btn")?.classList.add("hidden");
+  document.getElementById("wb-ed-cancel-btn")?.classList.add("hidden");
+}
+
+/** 取消编辑 */
+function cancelWbEdit() {
+  if (_wbEdSelectedEntry) {
+    selectWbEntry(_wbEdSelectedEntry); // 重新填充原始数据
+  }
+}
+
+/** 保存条目 */
+async function saveWbEntry() {
+  if (!_wbEdSelectedEntry) return;
+
+  const uid = _wbEdSelectedEntry.uid;
+  const commentEl = document.getElementById("wb-ed-comment");
+  const keysEl = document.getElementById("wb-ed-keys");
+  const keys2El = document.getElementById("wb-ed-keys2");
+  const positionEl = document.getElementById("wb-ed-position");
+  const depthEl = document.getElementById("wb-ed-depth");
+  const orderEl = document.getElementById("wb-ed-order");
+  const roleEl = document.getElementById("wb-ed-role");
+  const contentEl = document.getElementById("wb-ed-content");
+  const activationEl = document.getElementById("wb-ed-activation");
+
+  const props = {
+    comment: commentEl?.value || "",
+    key: (keysEl?.value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    keysecondary: (keys2El?.value || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    content: contentEl?.value || "",
+    position: parseInt(positionEl?.value) || 0,
+    depth: parseInt(depthEl?.value) || 4,
+    order: parseInt(orderEl?.value) || 100,
+    role: parseInt(roleEl?.value) || 0,
+    constant: activationEl?.value === "constant",
+  };
+
+  try {
+    const res = await fetch(WB_API_SET, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ update_entry: { uid, props } }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    exitWbEditMode();
+    showToast("条目已保存", "success");
+
+    // 刷新列表，保持选中
+    await loadWbEntries();
+    // 重新选中（uid不变）
+    const updated = _wbEdEntries.find((e) => e.uid === uid);
+    if (updated) selectWbEntry(updated);
+  } catch (err) {
+    showToast("保存失败: " + err.message, "error");
+  }
+}
+
+/** 新增条目 */
+async function addWbEntry() {
+  try {
+    const res = await fetch(WB_API_SET, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ add_entry: { props: { comment: "新条目" } } }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    showToast("条目已添加", "success");
+    await loadWbEntries();
+
+    // 自动选中新增的条目（通常是最后一个）
+    if (_wbEdEntries.length > 0) {
+      const lastEntry = _wbEdEntries[_wbEdEntries.length - 1];
+      selectWbEntry(lastEntry);
+      enterWbEditMode();
+    }
+  } catch (err) {
+    showToast("添加失败: " + err.message, "error");
+  }
+}
+
+/** 删除条目 */
+async function deleteWbEntry() {
+  if (!_wbEdSelectedEntry) return;
+
+  const name = _wbEdSelectedEntry.comment || "(无名)";
+  if (!confirm(`确定删除条目 "${name}" 吗？此操作不可撤销。`)) return;
+
+  try {
+    const res = await fetch(WB_API_SET, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delete_entry: { uid: _wbEdSelectedEntry.uid } }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    showToast(`条目 "${name}" 已删除`, "success");
+    _wbEdSelectedEntry = null;
+
+    // 隐藏详情面板
+    const detailPanel = document.getElementById("wb-editor-detail");
+    if (detailPanel) detailPanel.style.display = "none";
+
+    await loadWbEntries();
+  } catch (err) {
+    showToast("删除失败: " + err.message, "error");
+  }
+}
+
+/**
+ * 切换条目启用/禁用
+ * @param {number} uid - 条目 UID
+ * @param {boolean} disabled - 是否禁用
+ */
+async function toggleWbEntry(uid, disabled) {
+  try {
+    const res = await fetch(WB_API_SET, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toggle_entry: { uid, disabled } }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // 更新本地缓存
+    const entry = _wbEdEntries.find((e) => e.uid === uid);
+    if (entry) entry.disable = disabled;
+
+    // 刷新列表
+    const filter = document.getElementById("wb-editor-search")?.value || "";
+    renderWbEntryList(_wbEdEntries, filter);
+  } catch (err) {
+    showToast("切换失败: " + err.message, "error");
+    // 回退 checkbox
+    const toggleEl = document.getElementById("wb-ed-toggle");
+    if (toggleEl) toggleEl.checked = !disabled;
   }
 }
 
@@ -1076,10 +1789,17 @@ async function initWorldBinding() {
 const leftPersonaSelect = document.getElementById("left-persona-select");
 const leftPersonaStatus = document.getElementById("left-persona-status");
 const leftPersonaDesc = document.getElementById("left-persona-desc");
+const personaEditBtn = document.getElementById("persona-edit-btn");
+const personaSaveBtn = document.getElementById("persona-save-btn");
+const personaCancelBtn = document.getElementById("persona-cancel-btn");
+
+/** 用户人设描述原始值备份（取消编辑时还原） */
+let _personaDescOriginal = "";
 
 /**
  * 初始化用户人设选择下拉框
  * 从 Fount parts API 获取 persona 列表，填充下拉框，绑定事件
+ * 支持编辑/保存/取消人设描述
  */
 async function initPersonaSelector() {
   if (!leftPersonaSelect) return;
@@ -1104,13 +1824,19 @@ async function initPersonaSelector() {
       if (personaName && leftPersonaDesc) {
         try {
           const details = await getPartDetails("personas/" + personaName);
-          leftPersonaDesc.textContent = details?.info?.description || "";
+          const desc = details?.info?.description || "";
+          leftPersonaDesc.value = desc;
+          _personaDescOriginal = desc;
         } catch {
-          leftPersonaDesc.textContent = "";
+          leftPersonaDesc.value = "";
+          _personaDescOriginal = "";
         }
       } else if (leftPersonaDesc) {
-        leftPersonaDesc.textContent = "";
+        leftPersonaDesc.value = "";
+        _personaDescOriginal = "";
       }
+      // 确保退出编辑模式
+      exitPersonaEditMode();
     };
     await syncValue();
 
@@ -1136,13 +1862,19 @@ async function initPersonaSelector() {
         if (newName && leftPersonaDesc) {
           try {
             const details = await getPartDetails("personas/" + newName);
-            leftPersonaDesc.textContent = details?.info?.description || "";
+            const desc = details?.info?.description || "";
+            leftPersonaDesc.value = desc;
+            _personaDescOriginal = desc;
           } catch {
-            leftPersonaDesc.textContent = "";
+            leftPersonaDesc.value = "";
+            _personaDescOriginal = "";
           }
         } else if (leftPersonaDesc) {
-          leftPersonaDesc.textContent = "";
+          leftPersonaDesc.value = "";
+          _personaDescOriginal = "";
         }
+        // 切换人设时退出编辑模式
+        exitPersonaEditMode();
         showToast(
           `人设已${newName ? "设为: " + newName : "恢复默认"}`,
           "success",
@@ -1152,9 +1884,76 @@ async function initPersonaSelector() {
         leftPersonaSelect.value = personaName || "";
       }
     });
+
+    // 编辑按钮
+    personaEditBtn?.addEventListener("click", () => {
+      if (!personaName) {
+        showToast("请先选择一个人设", "warning");
+        return;
+      }
+      if (leftPersonaDesc) {
+        leftPersonaDesc.readOnly = false;
+        leftPersonaDesc.classList.add("textarea-warning");
+      }
+      personaEditBtn?.classList.add("hidden");
+      personaSaveBtn?.classList.remove("hidden");
+      personaCancelBtn?.classList.remove("hidden");
+    });
+
+    // 取消按钮
+    personaCancelBtn?.addEventListener("click", () => {
+      if (leftPersonaDesc) {
+        leftPersonaDesc.value = _personaDescOriginal;
+      }
+      exitPersonaEditMode();
+    });
+
+    // 保存按钮
+    personaSaveBtn?.addEventListener("click", async () => {
+      if (!personaName) {
+        showToast("没有选中的人设", "error");
+        return;
+      }
+      const newDesc = leftPersonaDesc?.value || "";
+      try {
+        const formData = new FormData();
+        formData.append("description", newDesc);
+        const saveResp = await fetch(
+          `/api/parts/shells:beilu-home/update-persona/${encodeURIComponent(personaName)}`,
+          {
+            method: "PUT",
+            body: formData,
+          },
+        );
+        if (!saveResp.ok) {
+          const errData = await saveResp.json().catch(() => ({}));
+          throw new Error(
+            errData.message || errData.error || `HTTP ${saveResp.status}`,
+          );
+        }
+        _personaDescOriginal = newDesc;
+        exitPersonaEditMode();
+        showToast("人设描述已保存", "success");
+      } catch (err) {
+        showToast("保存失败: " + err.message, "error");
+      }
+    });
   } catch (err) {
     console.warn("[beilu-chat] initPersonaSelector 失败:", err);
   }
+}
+
+/**
+ * 退出人设描述编辑模式
+ */
+function exitPersonaEditMode() {
+  if (leftPersonaDesc) {
+    leftPersonaDesc.readOnly = true;
+    leftPersonaDesc.classList.remove("textarea-warning");
+  }
+  personaEditBtn?.classList.remove("hidden");
+  personaSaveBtn?.classList.add("hidden");
+  personaCancelBtn?.classList.add("hidden");
 }
 
 // ============================================================
@@ -1292,16 +2091,27 @@ let _charInfoOriginal = {};
  */
 async function initCharInfoPanel() {
   const charId = getCurrentCharId();
+  console.log("[beilu-chat][DIAG] initCharInfoPanel 开始, charId:", charId);
   if (!charId) {
     // charList 可能还没加载，延迟重试
+    console.log("[beilu-chat][DIAG] charId 为空，启动延迟重试");
     const retryTimer = setInterval(async () => {
       const id = getCurrentCharId();
       if (id) {
         clearInterval(retryTimer);
+        console.log(
+          "[beilu-chat][DIAG] initCharInfoPanel 延迟获取到 charId:",
+          id,
+        );
         await loadCharInfo(id);
       }
     }, 2000);
-    setTimeout(() => clearInterval(retryTimer), 30000);
+    setTimeout(() => {
+      clearInterval(retryTimer);
+      console.warn(
+        "[beilu-chat][DIAG] initCharInfoPanel 延迟重试超时(30s)，charId 仍为空",
+      );
+    }, 30000);
     return;
   }
   await loadCharInfo(charId);
@@ -1312,9 +2122,24 @@ async function initCharInfoPanel() {
  * @param {string} charId - 角色卡 ID（目录名）
  */
 async function loadCharInfo(charId) {
+  console.log("[beilu-chat][DIAG] loadCharInfo 开始, charId:", charId);
   try {
     const details = await getPartDetails("chars/" + charId);
-    if (!details?.info) return;
+    if (!details?.info) {
+      if (charNameDisplay) {
+        charNameDisplay.textContent = charId || "未加载角色";
+        charNameDisplay.dataset.charId = charId || "";
+      }
+      if (charDescShort) charDescShort.textContent = "角色信息暂不可用";
+      if (charDescriptionEdit) {
+        charDescriptionEdit.value = "暂无角色描述（角色信息未就绪）";
+        charDescriptionEdit.placeholder = "暂无角色描述";
+      }
+      if (charGreetingEdit) {
+        charGreetingEdit.value = "(开场白加载失败)";
+      }
+      return;
+    }
 
     const info = details.info;
 
@@ -1338,10 +2163,39 @@ async function loadCharInfo(charId) {
     // 短描述
     if (charDescShort) charDescShort.textContent = info.description || "";
 
-    // 角色描述（完整 markdown）
-    if (charDescriptionEdit)
-      charDescriptionEdit.value =
-        info.description_markdown || info.description || "";
+    // 角色描述：优先用 getPartDetails 的 description_markdown/description
+    // 如果为空，fallback 到 char-data API 中的 description/personality/system_prompt
+    let descValue = info.description_markdown || info.description || "";
+
+    if (!descValue) {
+      try {
+        const charDataResp = await fetch(
+          `/api/parts/shells:beilu-home/char-data/${encodeURIComponent(charId)}`,
+        );
+        if (charDataResp.ok) {
+          const charData = await charDataResp.json();
+          // SillyTavern V2 格式：charData.data.description，V1：charData.description
+          const cdDesc =
+            charData?.data?.description || charData?.description || "";
+          const cdPersonality =
+            charData?.data?.personality || charData?.personality || "";
+          const cdSysPrompt =
+            charData?.data?.system_prompt || charData?.system_prompt || "";
+          // 按优先级 fallback
+          descValue = cdDesc || cdPersonality || cdSysPrompt || "";
+        }
+      } catch (e) {
+        console.warn(
+          "[beilu-chat] loadCharInfo char-data fallback 失败:",
+          e.message,
+        );
+      }
+    }
+
+    if (charDescriptionEdit) {
+      charDescriptionEdit.value = descValue;
+      charDescriptionEdit.placeholder = descValue ? "角色描述" : "暂无角色描述";
+    }
 
     // 开场白 — 延迟从聊天队列获取第一条角色消息
     if (charGreetingEdit) {
@@ -1359,10 +2213,26 @@ async function loadCharInfo(charId) {
     }
 
     _charInfoOriginal = {
-      description_markdown: info.description_markdown || "",
+      description_markdown: descValue,
     };
   } catch (err) {
-    console.warn("[beilu-chat] 加载角色信息失败:", err);
+    console.error(
+      "[beilu-chat][DIAG] loadCharInfo 失败:",
+      err.message,
+      err.stack,
+    );
+    if (charNameDisplay) {
+      charNameDisplay.textContent = charId || "未加载角色";
+      charNameDisplay.dataset.charId = charId || "";
+    }
+    if (charDescShort) charDescShort.textContent = "角色信息加载失败";
+    if (charDescriptionEdit) {
+      charDescriptionEdit.value = "角色描述加载失败，请稍后重试。";
+      charDescriptionEdit.placeholder = "暂无角色描述";
+    }
+    if (charGreetingEdit) {
+      charGreetingEdit.value = "(开场白加载失败)";
+    }
   }
 }
 
@@ -1441,10 +2311,248 @@ charInfoSaveBtn?.addEventListener("click", async () => {
 });
 
 // ============================================================
+// C3: 聊天背景设置（背景图上传 + 透明度 + 模糊）
+// ============================================================
+
+/**
+ * 初始化聊天背景设置系统
+ * - 从 localStorage 恢复设置参数（fitMode/opacity/blur）
+ * - 从服务器加载已上传的背景图
+ * - 绑定控件事件（上传/URL/缩放模式/滑块/重置）
+ */
+function initBackgroundSettings() {
+  const bg1 = document.getElementById("bg1");
+  const uploadBtn = document.getElementById("bg-upload-btn");
+  const uploadInput = document.getElementById("bg-upload-input");
+  const resetBtn = document.getElementById("bg-reset-btn");
+  const urlInput = document.getElementById("bg-url-input");
+  const fitModeSelect = document.getElementById("bg-fit-mode");
+  const opacitySlider = document.getElementById("bg-opacity-slider");
+  const opacityValue = document.getElementById("bg-opacity-value");
+  const blurSlider = document.getElementById("bg-blur-slider");
+  const blurValue = document.getElementById("bg-blur-value");
+
+  if (!bg1) return;
+
+  // ---- 工具函数 ----
+
+  /** 应用背景图到 #bg1 */
+  function applyBgImage(url) {
+    if (!url) {
+      bg1.style.backgroundImage = "";
+      document.body.classList.remove("has-bg-image");
+      return;
+    }
+    bg1.style.backgroundImage = `url("${url}")`;
+    document.body.classList.add("has-bg-image");
+  }
+
+  /** 应用缩放模式 */
+  function applyFitMode(mode) {
+    bg1.classList.remove(
+      "fit-cover",
+      "fit-contain",
+      "fit-stretch",
+      "fit-center",
+    );
+    bg1.classList.add(`fit-${mode}`);
+    if (fitModeSelect) fitModeSelect.value = mode;
+    localStorage.setItem("beilu-bg-fit", mode);
+  }
+
+  /** 应用透明度 */
+  function applyOpacity(val) {
+    const v = parseInt(val, 10);
+    document.documentElement.style.setProperty(
+      "--chat-bg-opacity",
+      (v / 100).toFixed(2),
+    );
+    if (opacitySlider) opacitySlider.value = v;
+    if (opacityValue) opacityValue.textContent = `${v}%`;
+    localStorage.setItem("beilu-bg-opacity", v);
+  }
+
+  /** 应用模糊强度 */
+  function applyBlur(val) {
+    const v = parseInt(val, 10);
+    document.documentElement.style.setProperty("--chat-bg-blur", `${v}px`);
+    if (blurSlider) blurSlider.value = v;
+    if (blurValue) blurValue.textContent = `${v}px`;
+    localStorage.setItem("beilu-bg-blur", v);
+  }
+
+  // ---- 恢复 localStorage 参数 ----
+  const savedFit = localStorage.getItem("beilu-bg-fit") || "cover";
+  const savedOpacity = localStorage.getItem("beilu-bg-opacity") ?? "30";
+  const savedBlur = localStorage.getItem("beilu-bg-blur") ?? "10";
+  const savedUrl = localStorage.getItem("beilu-bg-url") || "";
+
+  applyFitMode(savedFit);
+  applyOpacity(savedOpacity);
+  applyBlur(savedBlur);
+
+  // ---- 从服务器加载已上传的背景图 ----
+  fetch("/api/parts/shells:chat/background", { credentials: "include" })
+    .then((res) => {
+      if (res.status === 204) {
+        // 无上传的背景图 → 检查是否有 URL 模式
+        if (savedUrl) {
+          applyBgImage(savedUrl);
+          if (urlInput) urlInput.value = savedUrl;
+        }
+        return null;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.blob();
+    })
+    .then((blob) => {
+      if (!blob) return;
+      // 服务器有背景图 → 创建 ObjectURL 并应用
+      const objectUrl = URL.createObjectURL(blob);
+      applyBgImage(objectUrl);
+      // 标记来源为"已上传"
+      localStorage.setItem("beilu-bg-source", "upload");
+    })
+    .catch((err) => {
+      console.warn("[beilu-chat] 加载背景图失败:", err.message);
+      // 回退到 URL 模式
+      if (savedUrl) {
+        applyBgImage(savedUrl);
+        if (urlInput) urlInput.value = savedUrl;
+      }
+    });
+
+  // ---- 控件事件绑定 ----
+
+  // 上传按钮 → 触发 file input
+  uploadBtn?.addEventListener("click", () => uploadInput?.click());
+
+  // 文件选中 → 上传到服务器
+  uploadInput?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/parts/shells:chat/background", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      // 上传成功 → 本地预览
+      const objectUrl = URL.createObjectURL(file);
+      applyBgImage(objectUrl);
+      localStorage.setItem("beilu-bg-source", "upload");
+      localStorage.removeItem("beilu-bg-url");
+      if (urlInput) urlInput.value = "";
+      showToast("背景图已上传", "success");
+    } catch (err) {
+      showToast("背景图上传失败: " + err.message, "error");
+    }
+
+    // 清空 input 以便重复上传同一文件
+    uploadInput.value = "";
+  });
+
+  // URL 输入 → 回车应用
+  urlInput?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const url = urlInput.value.trim();
+    if (url) {
+      applyBgImage(url);
+      localStorage.setItem("beilu-bg-url", url);
+      localStorage.setItem("beilu-bg-source", "url");
+      showToast("背景图已应用（URL模式）", "success");
+    } else {
+      // 清空 URL → 如果有上传的背景图则切回上传模式
+      localStorage.removeItem("beilu-bg-url");
+      localStorage.setItem("beilu-bg-source", "upload");
+      // 重新加载上传的背景图
+      fetch("/api/parts/shells:chat/background", { credentials: "include" })
+        .then((res) => (res.status === 204 ? null : res.blob()))
+        .then((blob) => {
+          if (blob) applyBgImage(URL.createObjectURL(blob));
+          else applyBgImage("");
+        })
+        .catch(() => applyBgImage(""));
+    }
+  });
+
+  // URL 输入失焦 → 也应用
+  urlInput?.addEventListener("blur", () => {
+    const url = urlInput.value.trim();
+    const savedSource = localStorage.getItem("beilu-bg-source");
+    // 只在 URL 模式下或首次输入时响应 blur
+    if (url && savedSource !== "upload") {
+      applyBgImage(url);
+      localStorage.setItem("beilu-bg-url", url);
+      localStorage.setItem("beilu-bg-source", "url");
+    }
+  });
+
+  // 缩放模式选择
+  fitModeSelect?.addEventListener("change", () => {
+    applyFitMode(fitModeSelect.value);
+  });
+
+  // 透明度滑块
+  opacitySlider?.addEventListener("input", () => {
+    applyOpacity(opacitySlider.value);
+  });
+
+  // 模糊强度滑块
+  blurSlider?.addEventListener("input", () => {
+    applyBlur(blurSlider.value);
+  });
+
+  // 重置按钮 → 清除背景图 + 删除服务器文件
+  resetBtn?.addEventListener("click", async () => {
+    // 清除前端状态
+    applyBgImage("");
+    localStorage.removeItem("beilu-bg-url");
+    localStorage.removeItem("beilu-bg-source");
+    if (urlInput) urlInput.value = "";
+
+    // 恢复默认参数
+    applyFitMode("cover");
+    applyOpacity("30");
+    applyBlur("10");
+
+    // 删除服务器端背景图
+    try {
+      await fetch("/api/parts/shells:chat/background", {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.warn("[beilu-chat] 删除服务器背景图失败:", err.message);
+    }
+
+    showToast("背景已重置为默认", "info");
+  });
+
+  console.log("[beilu-chat] 背景设置已初始化");
+}
+
+// ============================================================
 // 初始化
 // ============================================================
 
 async function init() {
+  console.log(
+    "[beilu-chat][DIAG] ===== init() 开始 =====",
+    "hash:",
+    window.location.hash,
+    "href:",
+    window.location.href,
+  );
   applyTheme();
 
   // 初始化 ST 兼容层（EventBus + Globals + CDN 预加载）
@@ -1474,12 +2582,17 @@ async function init() {
   }
 
   // 字体比例控制已在 initLayout() → initFeatureControls() 中初始化，不再重复调用
-
+  console.log("[beilu-chat][DIAG] init: 即将调用 initializeChat...");
   try {
     await initializeChat();
   } catch (e) {
-    console.warn("[beilu-chat] initializeChat 失败（非致命）:", e.message);
+    console.error(
+      "[beilu-chat][DIAG] initializeChat 失败:",
+      e.message,
+      e.stack,
+    );
   }
+  console.log("[beilu-chat][DIAG] init: initializeChat 完成");
 
   // 初始化 API 配置模块
   try {
@@ -1518,17 +2631,30 @@ async function init() {
   ensureDataTableInit();
 
   // 初始化角色快捷信息面板（左栏）
+  console.log("[beilu-chat][DIAG] init: 即将调用 initCharInfoPanel...");
   try {
     await initCharInfoPanel();
   } catch (e) {
-    console.warn("[beilu-chat] initCharInfoPanel 失败（非致命）:", e.message);
+    console.error(
+      "[beilu-chat][DIAG] initCharInfoPanel 失败:",
+      e.message,
+      e.stack,
+    );
   }
+  console.log("[beilu-chat][DIAG] init: initCharInfoPanel 完成");
 
   // 初始化世界书绑定（左栏）
   try {
     await initWorldBinding();
   } catch (e) {
     console.warn("[beilu-chat] initWorldBinding 失败（非致命）:", e.message);
+  }
+
+  // 初始化世界书条目编辑器（左栏弹窗）
+  try {
+    initWbEditor();
+  } catch (e) {
+    console.warn("[beilu-chat] initWbEditor 失败（非致命）:", e.message);
   }
 
   // 初始化用户人设选择（左栏）
@@ -1643,6 +2769,13 @@ async function init() {
     }
   });
 
+  // 初始化放大编辑器（所有 textarea 的通用放大窗口）
+  try {
+    initExpandEditor();
+  } catch (e) {
+    console.warn("[beilu-chat] initExpandEditor 失败（非致命）:", e.message);
+  }
+
   // 初始化提示词查看器悬浮窗
   try {
     initPromptViewer();
@@ -1655,6 +2788,16 @@ async function init() {
 
   // 初始化功能开关面板
   initFeatureToggles();
+
+  // 初始化聊天背景设置（C3: 背景图+透明度+模糊）
+  try {
+    initBackgroundSettings();
+  } catch (e) {
+    console.warn(
+      "[beilu-chat] initBackgroundSettings 失败（非致命）:",
+      e.message,
+    );
+  }
 
   // 加载 INJ-2 状态（用于扩展菜单中的手动切换）
   loadInj2Status();
@@ -1692,22 +2835,17 @@ async function init() {
     );
   }
 
-  // 启动贝露的眼睛（桌面截图）主动发送轮询
+  // 初始化贝露的眼睛（桌面截图）状态 UI + 启动主动发送轮询
   try {
+    initEyeStatusUI();
     startEyeActivePoll();
   } catch (e) {
     console.warn("[beilu-chat] startEyeActivePoll 失败（非致命）:", e.message);
   }
 
-  // 启动浏览器感知主动发送轮询
-  try {
-    startBrowserActivePoll();
-  } catch (e) {
-    console.warn(
-      "[beilu-chat] startBrowserActivePoll 失败（非致命）:",
-      e.message,
-    );
-  }
+  // 浏览器感知：禁止自动轮询，仅支持手动发送
+  // startBrowserActivePoll() 已禁用 — 主人要求浏览器感知只能手动发送
+  console.log("[beilu-chat] 浏览器感知自动轮询已禁用（仅手动发送模式）");
 
   // 启动文件操作结果自动继续轮询
   try {
@@ -2355,15 +3493,32 @@ async function handleNewChat() {
     const data = await res.json();
 
     // 自动添加当前角色卡（后端 addchar 会自动获取 greeting 并保存）
+    // ★ 防御：先验证角色卡是否仍存在，避免删除角色后新建聊天卡死
     if (currentChar) {
+      let charExists = false;
       try {
-        await fetch(`/api/parts/shells:chat/${data.chatid}/char`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ charname: currentChar }),
-        });
-      } catch (err) {
-        console.warn("[beilu-chat] 新聊天自动添加角色失败:", err.message);
+        const checkResp = await fetch(
+          `/api/parts/shells:beilu-home/char-data/${encodeURIComponent(currentChar)}`,
+        );
+        charExists = checkResp.ok;
+      } catch {
+        charExists = false;
+      }
+
+      if (charExists) {
+        try {
+          await fetch(`/api/parts/shells:chat/${data.chatid}/char`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ charname: currentChar }),
+          });
+        } catch (err) {
+          console.warn("[beilu-chat] 新聊天自动添加角色失败:", err.message);
+        }
+      } else {
+        console.warn(
+          `[beilu-chat] 角色卡 "${currentChar}" 已不存在，跳过自动添加`,
+        );
       }
     }
 
@@ -3780,13 +4935,146 @@ async function compressImageBase64(
 }
 
 // ============================================================
-// 贝露的眼睛 — 桌面截图主动发送轮询
+// 贝露的眼睛 — 桌面截图主动发送轮询 + 状态 UI
 // ============================================================
 
 /** 轮询定时器 */
 let _eyePollTimer = null;
 /** 防止重复发送的冷却时间戳 */
 let _eyeCooldownUntil = 0;
+/** 已发送的截图计数（本次会话） */
+let _eyeSentCount = 0;
+
+// P0 修复（beilu-eye 404）：绕过 Fount parts API，使用自定义路由
+// Fount 框架未为 beilu-eye 注册 HTTP 路由，导致 /api/parts/plugins:beilu-eye/... 返回 404
+// 改用 endpoints.mjs 中注册的 /api/eye/* 自定义路由
+const EYE_API_GET = "/api/eye/getdata";
+const EYE_API_SET = "/api/eye/setdata";
+
+/**
+ * 更新右栏 Eye 状态指示 UI
+ * @param {object} data - GetData 返回的数据
+ */
+function updateEyeStatusUI(data) {
+  const dot = document.getElementById("eye-status-dot");
+  const text = document.getElementById("eye-status-text");
+  const countEl = document.getElementById("eye-snapshot-count");
+  const errorRow = document.getElementById("eye-error-row");
+
+  if (!dot || !text) return;
+
+  const status = data.eyeStatus || "stopped";
+
+  // 状态点颜色
+  const dotColors = {
+    running: "bg-success",
+    starting: "bg-warning",
+    checking: "bg-warning",
+    stopped: "bg-base-content/20",
+    error: "bg-error",
+  };
+  dot.className = `w-2 h-2 rounded-full inline-block ${dotColors[status] || "bg-base-content/20"}`;
+
+  // 状态文字
+  const statusLabels = {
+    running: "运行中",
+    starting: "启动中...",
+    checking: "检查中...",
+    stopped: "未运行",
+    error: "出错",
+  };
+  text.textContent = statusLabels[status] || status;
+  text.className = `text-xs ${status === "running" ? "text-success" : status === "error" ? "text-error" : "text-base-content/50"}`;
+
+  // 快照计数
+  if (countEl) countEl.textContent = _eyeSentCount;
+
+  // 错误信息
+  if (errorRow) {
+    if (data.eyeError) {
+      errorRow.textContent = `⚠ ${data.eyeError}`;
+      errorRow.title = data.eyeError;
+      errorRow.classList.remove("hidden");
+    } else {
+      errorRow.classList.add("hidden");
+    }
+  }
+}
+
+/**
+ * 初始化 Eye 状态 UI 按钮事件
+ */
+function initEyeStatusUI() {
+  const restartBtn = document.getElementById("eye-restart-btn");
+  const stopBtn = document.getElementById("eye-stop-btn");
+  const clearBtn = document.getElementById("eye-clear-btn");
+
+  restartBtn?.addEventListener("click", async () => {
+    restartBtn.disabled = true;
+    try {
+      await fetch(EYE_API_SET, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _action: "restart" }),
+      });
+      showToast("桌面截图服务正在重启...", "info");
+    } catch (err) {
+      showToast("重启失败: " + err.message, "error");
+    } finally {
+      setTimeout(() => {
+        restartBtn.disabled = false;
+      }, 3000);
+    }
+  });
+
+  stopBtn?.addEventListener("click", async () => {
+    stopBtn.disabled = true;
+    try {
+      await fetch(EYE_API_SET, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _action: "stop" }),
+      });
+      showToast("桌面截图服务已停止", "info");
+    } catch (err) {
+      showToast("停止失败: " + err.message, "error");
+    } finally {
+      setTimeout(() => {
+        stopBtn.disabled = false;
+      }, 2000);
+    }
+  });
+
+  clearBtn?.addEventListener("click", async () => {
+    try {
+      await fetch(EYE_API_SET, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _action: "clear" }),
+      });
+      showToast("待注入截图已清除", "info");
+    } catch (err) {
+      showToast("清除失败: " + err.message, "error");
+    }
+  });
+
+  // 首次加载 Eye 状态
+  fetchEyeStatusForUI();
+}
+
+/**
+ * 从后端获取 Eye 状态并更新 UI（不触发截图发送）
+ */
+async function fetchEyeStatusForUI() {
+  try {
+    const resp = await fetch(EYE_API_GET);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    updateEyeStatusUI(data);
+  } catch {
+    // 静默（插件可能未加载）
+  }
+}
 
 /**
  * 启动桌面截图主动发送轮询
@@ -3800,8 +5088,11 @@ function startEyeActivePoll() {
 }
 
 async function pollEyeStatus() {
-  // 冷却期内跳过
-  if (Date.now() < _eyeCooldownUntil) return;
+  // 冷却期内跳过（但仍然更新 UI 状态）
+  if (Date.now() < _eyeCooldownUntil) {
+    fetchEyeStatusForUI();
+    return;
+  }
   try {
     const resp = await fetch("/api/eye/status");
     if (!resp.ok) return;
@@ -3863,9 +5154,12 @@ async function pollEyeStatus() {
           ? message
           : `[beilu-eye-screenshot] ${message}`;
         await addUserReply({ content: taggedMessage, files: [screenshotFile] });
+        _eyeSentCount++;
         console.log(
           "[beilu-chat] 截图消息已发送（含图片文件，聊天界面已隐藏），后端自动触发AI回复",
         );
+        // 发送成功后立即刷新 UI 状态
+        fetchEyeStatusForUI();
       } catch (err) {
         console.error("[beilu-chat] 截图消息发送失败:", err);
         _eyeCooldownUntil = Date.now() + 3000;

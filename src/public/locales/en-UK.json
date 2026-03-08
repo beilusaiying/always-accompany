@@ -963,9 +963,9 @@
       "topTabs": {
         "chat": "💬 Chat",
         "bot": "🤖 Bot",
-        "files": "📁 Files",
+        "files": "📁 AI File Edit",
         "memory": "🧠 Memory",
-        "helper": "🛠️ Helper"
+        "helper": "🛠️ Regex & Scripts"
       },
       "apiBanner": {
         "text": "AI service not configured. Messages will not receive replies.",

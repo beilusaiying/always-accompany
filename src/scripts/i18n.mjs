@@ -1,18 +1,16 @@
-import fs from 'node:fs'
-import process from 'node:process'
-import { setInterval } from 'node:timers'
+import fs from "node:fs";
+import process from "node:process";
 
-import { exec } from 'npm:@steve02081504/exec'
-import { console as baseConsole } from 'npm:@steve02081504/virtual-console'
+import { exec } from "npm:@steve02081504/exec";
+import { console as baseConsole } from "npm:@steve02081504/virtual-console";
 
-import { getUserByUsername } from '../server/auth.mjs'
-import { __dirname } from '../server/base.mjs'
-import { events } from '../server/events.mjs'
-import { loadData, loadTempData, saveData } from '../server/setting_loader.mjs'
-import { sendEventToAll } from '../server/web_server/event_dispatcher.mjs'
+import { getUserByUsername } from "../server/auth.mjs";
+import { __dirname } from "../server/base.mjs";
+import { events } from "../server/events.mjs";
+import { loadData, loadTempData, saveData } from "../server/setting_loader.mjs";
+import { sendEventToAll } from "../server/web_server/event_dispatcher.mjs";
 
-import { loadJsonFile } from './json_loader.mjs'
-import { ms } from './ms.mjs'
+import { loadJsonFile } from "./json_loader.mjs";
 
 /**
  * @typedef {import('../decl/locale_data.ts').LocaleData} LocaleData
@@ -22,20 +20,21 @@ import { ms } from './ms.mjs'
  * @typedef {import('../decl/locale_data.ts').LocaleKeyParams} LocaleKeyParams
  */
 
-const console = baseConsole
+const console = baseConsole;
 /**
  * 所有可用区域设置的列表。
  * @type {{id: string, name: string}[]}
  */
-export const beiluLocaleList = fs.readFileSync(__dirname + '/src/public/locales/list.csv', 'utf8')
-	.trim()
-	.split('\n')
-	.slice(1) // Skip header
-	.map(line => {
-		const [id, ...nameParts] = line.split(',')
-		return { id: id.trim(), name: nameParts.join(',').trim() }
-	})
-	.filter(locale => locale.id)
+export const beiluLocaleList = fs
+  .readFileSync(__dirname + "/src/public/locales/list.csv", "utf8")
+  .trim()
+  .split("\n")
+  .slice(1) // Skip header
+  .map((line) => {
+    const [id, ...nameParts] = line.split(",");
+    return { id: id.trim(), name: nameParts.join(",").trim() };
+  })
+  .filter((locale) => locale.id);
 
 /**
  * 从首选区域设置列表中获取最佳匹配的区域设置。
@@ -44,24 +43,22 @@ export const beiluLocaleList = fs.readFileSync(__dirname + '/src/public/locales/
  * @returns {string} 最佳匹配的区域设置。
  */
 export function getbestlocale(preferredlocaleList, localeList) {
-	const available = new Set(localeList.map(l => l?.id ?? l).filter(Boolean))
+  const available = new Set(localeList.map((l) => l?.id ?? l).filter(Boolean));
 
-	for (const preferred of preferredlocaleList ?? []) {
-		// 1. 完全匹配
-		if (available.has(preferred))
-			return preferred
+  for (const preferred of preferredlocaleList ?? []) {
+    // 1. 完全匹配
+    if (available.has(preferred)) return preferred;
 
-		// 2. 部分匹配 (例如, 'en' 来自 'en-US')
-		const prefix = preferred.split('-')[0]
-		for (const locale of available)
-			if (locale.startsWith(prefix))
-				return locale
-	}
+    // 2. 部分匹配 (例如, 'en' 来自 'en-US')
+    const prefix = preferred.split("-")[0];
+    for (const locale of available)
+      if (locale.startsWith(prefix)) return locale;
+  }
 
-	return 'en-UK' // 默认
+  return "en-UK"; // 默认
 }
 
-const beiluLocaleCache = {}
+const beiluLocaleCache = {};
 
 /**
  * 获取区域设置数据。
@@ -69,8 +66,11 @@ const beiluLocaleCache = {}
  * @returns {LocaleData} 区域设置数据。
  */
 export function getLocaleData(localeList) {
-	const resultLocale = getbestlocale(localeList, beiluLocaleList)
-	return beiluLocaleCache[resultLocale] ?? loadJsonFile(__dirname + `/src/public/locales/${resultLocale}.json`)
+  const resultLocale = getbestlocale(localeList, beiluLocaleList);
+  return (
+    beiluLocaleCache[resultLocale] ??
+    loadJsonFile(__dirname + `/src/public/locales/${resultLocale}.json`)
+  );
 }
 /**
  * 获取用户的区域设置数据。
@@ -79,73 +79,78 @@ export function getLocaleData(localeList) {
  * @returns {Promise<LocaleData>} 一个解析为区域设置数据的承诺。
  */
 export async function getLocaleDataForUser(username, preferredlocaleList) {
-	const result = {
-		...getLocaleData([
-			...preferredlocaleList ?? [],
-			...getUserByUsername(username)?.locales ?? [],
-		])
-	}
-	const partsLocaleLists = loadData(username, 'parts_locale_lists_cache')
-	const partsLocaleCache = loadData(username, 'parts_locales_cache')
-	const partsLocaleLoaders = loadTempData(username, 'parts_locale_loaders')
-	for (const partpath in partsLocaleLists) {
-		const resultLocale = getbestlocale(preferredlocaleList, partsLocaleLists[partpath])
-		partsLocaleCache[partpath] ??= {}
-		const partdata = partsLocaleCache[partpath][resultLocale] ??= await partsLocaleLoaders[partpath]?.(resultLocale)
-		Object.assign(result, partdata)
-	}
-	saveData(username, 'parts_locales_cache')
-	return result
+  const result = {
+    ...getLocaleData([
+      ...(preferredlocaleList ?? []),
+      ...(getUserByUsername(username)?.locales ?? []),
+    ]),
+  };
+  const partsLocaleLists = loadData(username, "parts_locale_lists_cache");
+  const partsLocaleCache = loadData(username, "parts_locales_cache");
+  const partsLocaleLoaders = loadTempData(username, "parts_locale_loaders");
+  for (const partpath in partsLocaleLists) {
+    const resultLocale = getbestlocale(
+      preferredlocaleList,
+      partsLocaleLists[partpath],
+    );
+    partsLocaleCache[partpath] ??= {};
+    const partdata = (partsLocaleCache[partpath][resultLocale] ??=
+      await partsLocaleLoaders[partpath]?.(resultLocale));
+    Object.assign(result, partdata);
+  }
+  saveData(username, "parts_locales_cache");
+  return result;
 }
-events.on('part-loaded', ({ username, partpath }) => {
-	delete loadData(username, 'parts_locales_cache')?.[partpath]
-})
-events.on('part-uninstalled', ({ username, partpath }) => {
-	delete loadData(username, 'parts_locales_cache')?.[partpath]
-	saveData(username, 'parts_locales_cache')
-	delete loadData(username, 'parts_locale_lists_cache')?.[partpath]
-	saveData(username, 'parts_locale_lists_cache')
-	delete loadTempData(username, 'parts_locale_loaders')?.[partpath]
-})
+events.on("part-loaded", ({ username, partpath }) => {
+  delete loadData(username, "parts_locales_cache")?.[partpath];
+});
+events.on("part-uninstalled", ({ username, partpath }) => {
+  delete loadData(username, "parts_locales_cache")?.[partpath];
+  saveData(username, "parts_locales_cache");
+  delete loadData(username, "parts_locale_lists_cache")?.[partpath];
+  saveData(username, "parts_locale_lists_cache");
+  delete loadTempData(username, "parts_locale_loaders")?.[partpath];
+});
 
 /**
  * 本地主机上所有可用区域设置的列表。
  * @type {string[]}
  */
-export const localhostLocales = [...new Set([
-	...[
-		process.env.LANG,
-		process.env.LANGUAGE,
-		process.env.LC_ALL,
-		await exec('locale -uU').then(r => r.stdout.trim()).catch(() => undefined),
-	].filter(Boolean).map(locale => locale.split('.')[0].replace('_', '-')),
-	...navigator.languages || [navigator.language],
-	'en-UK',
-].filter(Boolean))]
+export const localhostLocales = [
+  ...new Set(
+    [
+      ...[
+        process.env.LANG,
+        process.env.LANGUAGE,
+        process.env.LC_ALL,
+        await exec("locale -uU")
+          .then((r) => r.stdout.trim())
+          .catch(() => undefined),
+      ]
+        .filter(Boolean)
+        .map((locale) => locale.split(".")[0].replace("_", "-")),
+      ...(navigator.languages || [navigator.language]),
+      "en-UK",
+    ].filter(Boolean),
+  ),
+];
 /**
  * 本地主机的区域设置数据。
  * @type {LocaleData}
  */
-export let localhostLocaleData = getLocaleData(localhostLocales)
+export let localhostLocaleData = getLocaleData(localhostLocales);
 
 fs.watch(`${__dirname}/src/public/locales`, (event, filename) => {
-	if (!filename?.endsWith('.json')) return
-	const locale = filename.slice(0, -5)
-	console.log(`Detected change in ${filename}.`)
+  if (!filename?.endsWith(".json")) return;
+  const locale = filename.slice(0, -5);
+  console.log(`Detected change in ${filename}.`);
 
-	// 清除已更改文件的缓存（如果存在）
-	if (!beiluLocaleCache[locale]) return
-	delete beiluLocaleCache[locale]
-	localhostLocaleData = getLocaleData(localhostLocales)
-	sendEventToAll('locale-updated', null)
-})
-
-// 疯狂星期四V我50
-if (localhostLocales[0] === 'zh-CN')
-	setInterval(() => {
-		if (new Date().getDay() === 4)
-			console.error('%cException Error Syntax Unexpected string: Crazy Thursday vivo 50', 'color: red')
-	}, ms('5m')).unref()
+  // 清除已更改文件的缓存（如果存在）
+  if (!beiluLocaleCache[locale]) return;
+  delete beiluLocaleCache[locale];
+  localhostLocaleData = getLocaleData(localhostLocales);
+  sendEventToAll("locale-updated", null);
+});
 
 /**
  * 为部件添加区域设置数据。
@@ -156,12 +161,12 @@ if (localhostLocales[0] === 'zh-CN')
  * @returns {void}
  */
 export function addPartLocaleData(username, partpath, localeList, loader) {
-	const normalizedPartpath = partpath.replace(/^\/+|\/+$/g, '')
-	const partsLocaleLists = loadData(username, 'parts_locale_lists_cache')
-	const partsLocaleLoaders = loadTempData(username, 'parts_locale_loaders')
-	partsLocaleLists[normalizedPartpath] = localeList
-	partsLocaleLoaders[normalizedPartpath] = loader
-	saveData(username, 'parts_locale_lists_cache')
+  const normalizedPartpath = partpath.replace(/^\/+|\/+$/g, "");
+  const partsLocaleLists = loadData(username, "parts_locale_lists_cache");
+  const partsLocaleLoaders = loadTempData(username, "parts_locale_loaders");
+  partsLocaleLists[normalizedPartpath] = localeList;
+  partsLocaleLoaders[normalizedPartpath] = loader;
+  saveData(username, "parts_locale_lists_cache");
 }
 
 /**
@@ -171,15 +176,13 @@ export function addPartLocaleData(username, partpath, localeList, loader) {
  * @returns {any} 键的值，如果键不存在则为 undefined。
  */
 function getNestedValue(obj, key) {
-	const keys = key.split('.')
-	let value = obj
-	for (const k of keys)
-		if (value && value instanceof Object && k in value)
-			value = value[k]
-		else
-			return undefined
+  const keys = key.split(".");
+  let value = obj;
+  for (const k of keys)
+    if (value && value instanceof Object && k in value) value = value[k];
+    else return undefined;
 
-	return value
+  return value;
 }
 /**
  * @overload
@@ -203,12 +206,12 @@ function getNestedValue(obj, key) {
  * @returns {string} - 翻译后的文本。
  */
 function baseGeti18n(localeData, key, params = {}) {
-	let translation = getNestedValue(localeData, key)
-	if (translation === undefined)
-		console.warn(`Translation key "${key}" not found.`)
-	for (const param in params)
-		translation = translation?.replaceAll?.(`\${${param}}`, params[param])
-	return translation
+  let translation = getNestedValue(localeData, key);
+  if (translation === undefined)
+    console.warn(`Translation key "${key}" not found.`);
+  for (const param in params)
+    translation = translation?.replaceAll?.(`\${${param}}`, params[param]);
+  return translation;
 }
 /**
  * @overload
@@ -232,7 +235,7 @@ function baseGeti18n(localeData, key, params = {}) {
  * @returns {string} - 翻译后的文本。
  */
 export function geti18nForLocales(localeList, key, params = {}) {
-	return baseGeti18n(getLocaleData(localeList), key, params)
+  return baseGeti18n(getLocaleData(localeList), key, params);
 }
 /**
  * @overload
@@ -256,7 +259,7 @@ export function geti18nForLocales(localeList, key, params = {}) {
  * @returns {string} - 翻译后的文本。
  */
 export async function geti18nForUser(username, key, params = {}) {
-	return baseGeti18n(await getLocaleDataForUser(username), key, params)
+  return baseGeti18n(await getLocaleDataForUser(username), key, params);
 }
 /**
  * @overload
@@ -279,7 +282,7 @@ export async function geti18nForUser(username, key, params = {}) {
  * @returns {string} - 翻译后的文本，如果未找到则返回键本身。
  */
 export function geti18n(key, params = {}) {
-	return baseGeti18n(localhostLocaleData, key, params)
+  return baseGeti18n(localhostLocaleData, key, params);
 }
 /**
  * @overload
@@ -301,7 +304,7 @@ export function geti18n(key, params = {}) {
  * @param {object} [params] - 可选的参数，用于插值。
  * @returns {void}
  */
-console.infoI18n = (key, params = {}) => console.info(geti18n(key, params))
+console.infoI18n = (key, params = {}) => console.info(geti18n(key, params));
 /**
  * @overload
  * @template {LocaleKeyWithoutParams} TKey
@@ -322,7 +325,7 @@ console.infoI18n = (key, params = {}) => console.info(geti18n(key, params))
  * @param {object} [params] - 可选的参数，用于插值。
  * @returns {void}
  */
-console.logI18n = (key, params = {}) => console.log(geti18n(key, params))
+console.logI18n = (key, params = {}) => console.log(geti18n(key, params));
 /**
  * @overload
  * @template {LocaleKeyWithoutParams} TKey
@@ -343,7 +346,7 @@ console.logI18n = (key, params = {}) => console.log(geti18n(key, params))
  * @param {object} [params] - 可选的参数，用于插值。
  * @returns {void}
  */
-console.warnI18n = (key, params = {}) => console.warn(geti18n(key, params))
+console.warnI18n = (key, params = {}) => console.warn(geti18n(key, params));
 /**
  * @overload
  * @template {LocaleKeyWithoutParams} TKey
@@ -364,7 +367,7 @@ console.warnI18n = (key, params = {}) => console.warn(geti18n(key, params))
  * @param {object} [params] - 可选的参数，用于插值。
  * @returns {void}
  */
-console.errorI18n = (key, params = {}) => console.error(geti18n(key, params))
+console.errorI18n = (key, params = {}) => console.error(geti18n(key, params));
 /**
  * @overload
  * @template {LocaleKeyWithoutParams} TKey
@@ -388,7 +391,8 @@ console.errorI18n = (key, params = {}) => console.error(geti18n(key, params))
  * @param {object} [params] - 可选的参数，用于插值。
  * @returns {void}
  */
-console.freshLineI18n = (id, key, params = {}) => console.freshLine(id, geti18n(key, params))
+console.freshLineI18n = (id, key, params = {}) =>
+  console.freshLine(id, geti18n(key, params));
 /**
  * @overload
  * @template {LocaleKeyWithoutParams} TKey
@@ -410,7 +414,7 @@ console.freshLineI18n = (id, key, params = {}) => console.freshLine(id, geti18n(
  * @returns {void}
  */
 export function alertI18n(key, params = {}) {
-	return alert(geti18n(key, params))
+  return alert(geti18n(key, params));
 }
 /**
  * @overload
@@ -433,7 +437,7 @@ export function alertI18n(key, params = {}) {
  * @returns {string | null} 用户输入或null。
  */
 export function promptI18n(key, params = {}) {
-	return prompt(geti18n(key, params))
+  return prompt(geti18n(key, params));
 }
 /**
  * @overload
@@ -456,10 +460,10 @@ export function promptI18n(key, params = {}) {
  * @returns {boolean} 如果用户点击确定则返回true，否则返回false。
  */
 export function confirmI18n(key, params = {}) {
-	return confirm(geti18n(key, params))
+  return confirm(geti18n(key, params));
 }
 /**
  * 导出的控制台对象。
  * @type {Console}
  */
-export { console }
+export { console };

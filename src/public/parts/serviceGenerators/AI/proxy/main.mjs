@@ -97,15 +97,69 @@ async function GetSource(config, { SaveConfig }) {
       }
     }
 
-    const requestBody = JSON.stringify({
+    let requestBodyObj = {
       model: config.model,
       messages,
       stream: config.use_stream,
       ...normalizedModelArgs,
+    };
+    // DeepSeek 专项预处理（对标酒馆：top_p 兜底 + tools required 清理 + 参数过滤）
+    requestBodyObj = patchBodyForDeepSeek(requestBodyObj, {
+      url: config.url,
+      model: config.model,
     });
+
+    // DeepSeek 消息后处理：自动合并连续同角色消息（对标酒馆 SEMI_TOOLS 后处理）
+    {
+      const _u = String(config.url || "").toLowerCase();
+      const _m = String(config.model || "").toLowerCase();
+      if (
+        (_u.includes("deepseek") || _m.includes("deepseek")) &&
+        Array.isArray(requestBodyObj.messages)
+      ) {
+        const beforeCount = requestBodyObj.messages.length;
+        requestBodyObj.messages = mergeConsecutiveRoles(
+          requestBodyObj.messages,
+        );
+        const afterCount = requestBodyObj.messages.length;
+        if (beforeCount !== afterCount) {
+          console.log(
+            `[proxy/fetchChatCompletion] DeepSeek 消息合并: ${beforeCount} → ${afterCount} 条`,
+          );
+        }
+        // DeepSeek 不支持最后一条消息为 assistant（不支持 prefill）
+        // 如果最后一条是 assistant，追加一条 user 占位消息让 AI 继续生成
+        const lastMsg =
+          requestBodyObj.messages[requestBodyObj.messages.length - 1];
+        if (lastMsg && lastMsg.role === "assistant") {
+          console.log(
+            `[proxy/fetchChatCompletion] DeepSeek 尾部 assistant 转 user: 追加空 user 消息`,
+          );
+          // 将 assistant 预填充内容转为 system 提示，再追加 user 触发
+          const prefillContent = lastMsg.content || "";
+          if (prefillContent) {
+            lastMsg.role = "system";
+            lastMsg.content = `assistant:\n${prefillContent}`;
+          } else {
+            // 空 assistant 直接移除
+            requestBodyObj.messages.pop();
+          }
+          requestBodyObj.messages.push({ role: "user", content: "继续" });
+        }
+      }
+    }
+
+    const requestBody = JSON.stringify(requestBodyObj);
     const requestBodySize = new TextEncoder().encode(requestBody).length;
     console.log(
       `[proxy/fetchChatCompletion] 请求体大小: ${(requestBodySize / 1024 / 1024).toFixed(2)} MB (${requestBodySize} bytes), messages数: ${messages.length}, model: ${config.model}`,
+    );
+    // [诊断] 打印完整的 model_arguments，排查 400 根因
+    console.log(
+      `[proxy/fetchChatCompletion] normalizedModelArgs: ${JSON.stringify(normalizedModelArgs)}`,
+    );
+    console.log(
+      `[proxy/fetchChatCompletion] stream: ${config.use_stream}, url: ${config.url}`,
     );
 
     const response = await fetch(config.url, {
@@ -126,30 +180,34 @@ async function GetSource(config, { SaveConfig }) {
     );
 
     if (!response.ok) {
-      let errorDetail;
+      let rawText = "";
+      let parsed = null;
       try {
-        const text = await response.text();
+        rawText = await response.text();
         try {
-          const data = JSON.parse(text);
-          errorDetail = { data, response };
+          parsed = JSON.parse(rawText);
         } catch {
-          errorDetail = { text, response };
+          /* rawText 保留原文 */
         }
       } catch {
-        errorDetail = { text: `(无法读取响应体)`, response };
+        rawText = "(无法读取响应体)";
       }
-      const errMsg =
-        errorDetail.data?.error?.message ||
-        errorDetail.data?.message ||
-        (typeof errorDetail.data === "string" ? errorDetail.data : null) ||
-        errorDetail.text ||
-        `HTTP ${response.status}`;
-      console.error(
-        `[proxy/fetchChatCompletion] API 错误 ${response.status}: ${errMsg}`,
+      const normalized = normalizeProviderError(
+        response.status,
+        response.statusText,
+        rawText,
+        parsed,
       );
-      const err = new Error(`API Error ${response.status}: ${errMsg}`);
-      err.status = response.status;
-      err.detail = errorDetail;
+      console.error(
+        `[proxy/fetchChatCompletion] API 错误 ${normalized.status}: ${normalized.message}` +
+          (normalized.type ? ` [type=${normalized.type}]` : "") +
+          (normalized.code ? ` [code=${normalized.code}]` : ""),
+      );
+      const err = new Error(
+        `API Error ${normalized.status}: ${normalized.message}`,
+      );
+      err.status = normalized.status;
+      err.detail = normalized;
       throw err;
     }
 
@@ -243,6 +301,16 @@ async function GetSource(config, { SaveConfig }) {
 
             const data = trimmed.slice(5).trim();
             if (data === "[DONE]") continue;
+
+            // 过滤非JSON内容（某些反代在流末尾发送纯文本错误信息如 "unexpected EOF"）
+            if (!data.startsWith("{") && !data.startsWith("[")) {
+              if (data.length > 0) {
+                console.warn(
+                  `[proxy/stream] 跳过非JSON SSE data: "${data.substring(0, 100)}"`,
+                );
+              }
+              continue;
+            }
 
             try {
               const json = JSON.parse(data);
@@ -363,25 +431,65 @@ async function GetSource(config, { SaveConfig }) {
    */
   async function fetchChatCompletionWithRetry(messages, options) {
     const errors = [];
-    let retryConfigs = [
-      {}, // 第一次尝试，使用原始配置
-    ];
-    // 智能构建 URL 重试列表，避免产生 /v1/v1/ 等冗余路径
-    const baseUrl = config.url;
-    if (!baseUrl.endsWith("/chat/completions")) {
-      if (baseUrl.endsWith("/v1")) {
-        // URL 已含 /v1，只需追加 /chat/completions
-        retryConfigs.push({ urlSuffix: "/chat/completions" });
+
+    /**
+     * 构造 URL 候选列表（统一规范化，避免字符串盲拼导致 Invalid URL / 重复路径）
+     * @param {string} rawUrl
+     * @returns {string[]}
+     */
+    function buildRetryUrls(rawUrl) {
+      const parsed = (() => {
+        try {
+          return new URL((rawUrl || "").trim());
+        } catch {
+          return null;
+        }
+      })();
+      if (!parsed) return [];
+
+      const candidates = [];
+      const seen = new Set();
+      const pushCandidate = (nextUrl) => {
+        if (!nextUrl || seen.has(nextUrl)) return;
+        seen.add(nextUrl);
+        candidates.push(nextUrl);
+      };
+      const withPath = (pathname) => {
+        const next = new URL(parsed.toString());
+        next.pathname = pathname;
+        return next.toString();
+      };
+
+      const normalizedPath = parsed.pathname.replace(/\/+$/g, "") || "/";
+
+      if (!normalizedPath.endsWith("/chat/completions")) {
+        if (normalizedPath.endsWith("/v1")) {
+          // .../v1 -> 优先 .../v1/chat/completions，原始 URL 作为回退
+          pushCandidate(withPath(`${normalizedPath}/chat/completions`));
+          pushCandidate(parsed.toString()); // 原始 /v1 作为回退
+        } else {
+          // 非 /v1 结尾：原始优先，再补全路径候选
+          pushCandidate(parsed.toString());
+          pushCandidate(withPath(`${normalizedPath}/v1/chat/completions`));
+          pushCandidate(withPath(`${normalizedPath}/chat/completions`));
+        }
       } else {
-        // URL 不含 /v1，尝试两种后缀
-        retryConfigs.push({ urlSuffix: "/v1/chat/completions" });
-        retryConfigs.push({ urlSuffix: "/chat/completions" });
+        // 已经是完整路径，直接使用
+        pushCandidate(parsed.toString());
       }
+
+      return candidates;
     }
 
-    for (const retryConfig of retryConfigs) {
-      const currentConfig = { ...config }; // 复制配置，避免修改原始配置
-      if (retryConfig.urlSuffix) currentConfig.url += retryConfig.urlSuffix;
+    const urlCandidates = buildRetryUrls(config.url);
+    if (urlCandidates.length === 0) {
+      throw new Error(
+        `[proxy] 非法 AI URL 配置: "${config.url}". 需要完整绝对 URL（例如 https://api.openai.com/v1/chat/completions）`,
+      );
+    }
+
+    for (const candidateUrl of urlCandidates) {
+      const currentConfig = { ...config, url: candidateUrl };
 
       try {
         const result = await fetchChatCompletion(
@@ -390,9 +498,9 @@ async function GetSource(config, { SaveConfig }) {
           options,
         );
 
-        if (retryConfig.urlSuffix) {
+        if (candidateUrl !== config.url) {
           console.info(
-            `[proxy] URL 临时追加后缀成功: ${config.url} + ${retryConfig.urlSuffix} → ${currentConfig.url}（不改写配置）`,
+            `[proxy] URL 候选重试成功: ${config.url} -> ${candidateUrl}（不改写配置）`,
           );
         }
 
@@ -405,6 +513,7 @@ async function GetSource(config, { SaveConfig }) {
         errors.push(error);
       }
     }
+
     // 抛出时提供有意义的错误信息
     if (errors.length === 1) throw errors[0];
     const combined = new Error(
@@ -828,6 +937,21 @@ async function GetSource(config, { SaveConfig }) {
         const previewUpdater = (r) =>
           replyPreviewUpdater?.(clearFormat({ ...r }));
 
+        // [诊断] 打印最终发送给 API 的消息摘要
+        console.log(
+          `[proxy/StructCall] 最终消息摘要 (共${messages.length}条, commanderMode=${!!commanderMode}):`,
+        );
+        for (let i = 0; i < messages.length; i++) {
+          const m = messages[i];
+          const contentStr =
+            typeof m.content === "string"
+              ? m.content
+              : JSON.stringify(m.content);
+          console.log(
+            `  [${i}] role=${m.role}, len=${contentStr.length}, preview: ${JSON.stringify(contentStr.substring(0, 120))}`,
+          );
+        }
+
         await fetchChatCompletionWithRetry(messages, {
           signal,
           previewUpdater,
@@ -1179,6 +1303,134 @@ function convertTrailingAssistantToSystem(messages) {
     }
   }
   return result;
+}
+
+// ============================================================
+// Provider 特化辅助函数（对标酒馆 DeepSeek 分支）
+// ============================================================
+
+/**
+ * 对 OpenAI 兼容请求做 DeepSeek 特化预处理
+ * 触发条件：url 或 model 名称命中 deepseek
+ * 对标酒馆 sendDeepSeekRequest 中的 body 清洗逻辑
+ *
+ * @param {object} requestBody - 原始请求体对象
+ * @param {{ url?: string, model?: string }} context - 上下文信息
+ * @returns {object} 处理后的请求体
+ */
+function patchBodyForDeepSeek(requestBody = {}, { url = "", model = "" } = {}) {
+  const u = String(url || "").toLowerCase();
+  const m = String(model || "").toLowerCase();
+  const isDeepSeek = u.includes("deepseek") || m.includes("deepseek");
+
+  if (!isDeepSeek) return requestBody;
+
+  const body = { ...requestBody };
+
+  // 1) top_p 保底：DeepSeek 不接受 top_p=0 或 undefined，酒馆用 Number.EPSILON
+  if (!(Number(body.top_p) > 0)) body.top_p = Number.EPSILON;
+
+  // 2) tools required: [] 清理（对标酒馆：DeepSeek 拒绝空 required 数组）
+  if (Array.isArray(body.tools)) {
+    body.tools = body.tools.map((tool) => {
+      const t = structuredClone(tool);
+      const req = t?.function?.parameters?.required;
+      if (Array.isArray(req) && req.length === 0) {
+        delete t.function.parameters.required;
+      }
+      return t;
+    });
+  }
+
+  // 3) max_tokens 限制：DeepSeek 各模型有不同上限
+  //    deepseek-chat: max 8192, deepseek-reasoner: max 16384
+  //    对标酒馆：酒馆在前端限制 max_tokens 范围
+  if (body.max_tokens) {
+    const isReasoner = m.includes("reasoner");
+    const maxLimit = isReasoner ? 16384 : 8192;
+    if (body.max_tokens > maxLimit) {
+      console.log(
+        `[patchBodyForDeepSeek] max_tokens ${body.max_tokens} 超出 DeepSeek 限制 (${maxLimit})，已裁剪`,
+      );
+      body.max_tokens = maxLimit;
+    }
+  }
+
+  // 4) 删除 DeepSeek 不支持的参数（对标酒馆：只发 DeepSeek 文档支持的字段）
+  const DEEPSEEK_UNSUPPORTED = [
+    "top_k",
+    "min_p",
+    "top_a",
+    "repetition_penalty",
+    "include_reasoning", // DeepSeek 自动返回 reasoning_content，不需要此字段
+    "reasoning_effort", // DeepSeek 不支持 reasoning_effort 参数
+    "logit_bias", // DeepSeek 不支持
+    "n", // DeepSeek 不支持多候选
+  ];
+  for (const key of DEEPSEEK_UNSUPPORTED) {
+    if (key in body) {
+      console.log(
+        `[patchBodyForDeepSeek] 删除不支持的参数: ${key}=${JSON.stringify(body[key])}`,
+      );
+      delete body[key];
+    }
+  }
+
+  // 5) 模型名校验警告：URL 含 deepseek 但 model 不含 deepseek
+  if (u.includes("deepseek") && !m.includes("deepseek")) {
+    console.warn(
+      `[patchBodyForDeepSeek] ⚠️ URL 是 DeepSeek 但模型名不含 deepseek: "${model}". ` +
+        `推荐使用 deepseek-chat 或 deepseek-reasoner`,
+    );
+  }
+
+  console.log(
+    `[proxy/patchBodyForDeepSeek] DeepSeek 预处理已应用: top_p=${body.top_p}, tools=${body.tools?.length ?? "无"}`,
+  );
+
+  return body;
+}
+
+/**
+ * 统一提取 provider 错误信息为结构化对象
+ * 兼容 OpenAI / DeepSeek / Claude / 各类中转的错误格式
+ *
+ * @param {number} status - HTTP 状态码
+ * @param {string} statusText - HTTP 状态文本
+ * @param {string} rawText - 原始响应文本
+ * @param {object|null} parsed - 已解析的 JSON（如果有）
+ * @returns {{ status: number, statusText: string, message: string, type: string|null, code: string|null, param: string|null, raw: object|string|null }}
+ */
+function normalizeProviderError(
+  status,
+  statusText,
+  rawText = "",
+  parsed = null,
+) {
+  const p =
+    parsed ||
+    (() => {
+      try {
+        return JSON.parse(rawText);
+      } catch {
+        return null;
+      }
+    })();
+
+  const err = p?.error || p?.detail?.error || null;
+  return {
+    status,
+    statusText,
+    message:
+      err?.message ||
+      p?.message ||
+      rawText?.slice?.(0, 500) ||
+      "Provider request failed",
+    type: err?.type || null,
+    code: err?.code || null,
+    param: err?.param || null,
+    raw: p || rawText || null,
+  };
 }
 
 /**

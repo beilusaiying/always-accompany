@@ -54,6 +54,9 @@ let layoutState = {
   activeTab: "chat",
   chatDockCollapsed: false,
   rightCollapsedByUser: false,
+  // 三栏面板宽度
+  leftPanelWidth: 280,
+  rightPanelWidth: 320,
   // IDE 状态
   ideSidebarWidth: 240,
   ideActivePanel: "explorer",
@@ -88,11 +91,17 @@ function saveState() {
 function applyLeftPanel() {
   if (!leftPanel) return;
   leftPanel.classList.toggle("collapsed", layoutState.leftCollapsed);
+  // 拖拽手柄显隐
+  const lHandle = document.getElementById("left-panel-resize");
+  if (lHandle) lHandle.classList.toggle("hidden", layoutState.leftCollapsed);
 }
 
 function applyRightPanel() {
   if (!rightPanel) return;
   rightPanel.classList.toggle("collapsed", layoutState.rightCollapsed);
+  // 拖拽手柄显隐
+  const rHandle = document.getElementById("right-panel-resize");
+  if (rHandle) rHandle.classList.toggle("hidden", layoutState.rightCollapsed);
 }
 
 function toggleLeftPanel() {
@@ -401,6 +410,115 @@ function restoreIdePanel(activityBar, sidebar, stateKey, panelPrefix) {
 }
 
 // ============================================================
+// 三栏面板拖拽调宽（左栏 / 右栏）
+// ============================================================
+
+function initPanelResize() {
+  const leftHandle = document.getElementById("left-panel-resize");
+  const rightHandle = document.getElementById("right-panel-resize");
+
+  // 通用：设置面板宽度（同步 content 内容区）
+  function setPanelWidth(panel, width) {
+    panel.style.width = width + "px";
+    const content = panel.querySelector(".left-panel-content, .right-panel-content");
+    if (content) {
+      content.style.width = width + "px";
+      content.style.minWidth = width + "px";
+    }
+  }
+
+  // 恢复保存的宽度
+  if (leftPanel && layoutState.leftPanelWidth && layoutState.leftPanelWidth !== 280) {
+    setPanelWidth(leftPanel, layoutState.leftPanelWidth);
+  }
+  if (rightPanel && layoutState.rightPanelWidth && layoutState.rightPanelWidth !== 320) {
+    setPanelWidth(rightPanel, layoutState.rightPanelWidth);
+  }
+
+  // 左面板拖拽：向右拖 = 变宽
+  if (leftPanel && leftHandle) {
+    let dragging = false, startX = 0, startW = 0;
+
+    const onDown = (e) => {
+      if (layoutState.leftCollapsed) return;
+      dragging = true;
+      startX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      startW = leftPanel.offsetWidth;
+      leftHandle.classList.add("dragging");
+      leftPanel.style.transition = "none";
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const cx = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const delta = cx - startX;
+      const newW = Math.max(180, Math.min(startW + delta, window.innerWidth * 0.45));
+      setPanelWidth(leftPanel, newW);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      leftHandle.classList.remove("dragging");
+      leftPanel.style.transition = "";
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      layoutState.leftPanelWidth = leftPanel.offsetWidth;
+      saveState();
+    };
+
+    leftHandle.addEventListener("mousedown", onDown);
+    leftHandle.addEventListener("touchstart", onDown, { passive: false });
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchend", onUp);
+  }
+
+  // 右面板拖拽：向左拖 = 变宽（delta 为负）
+  if (rightPanel && rightHandle) {
+    let dragging = false, startX = 0, startW = 0;
+
+    const onDown = (e) => {
+      if (layoutState.rightCollapsed) return;
+      dragging = true;
+      startX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      startW = rightPanel.offsetWidth;
+      rightHandle.classList.add("dragging");
+      rightPanel.style.transition = "none";
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const cx = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const delta = startX - cx; // 向左拖 = delta 为正 = 变宽
+      const newW = Math.max(200, Math.min(startW + delta, window.innerWidth * 0.45));
+      setPanelWidth(rightPanel, newW);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      rightHandle.classList.remove("dragging");
+      rightPanel.style.transition = "";
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      layoutState.rightPanelWidth = rightPanel.offsetWidth;
+      saveState();
+    };
+
+    rightHandle.addEventListener("mousedown", onDown);
+    rightHandle.addEventListener("touchstart", onDown, { passive: false });
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchend", onUp);
+  }
+}
+
+// ============================================================
 // 侧边栏拖拽调宽
 // ============================================================
 
@@ -664,6 +782,9 @@ export function initLayout() {
   // 恢复 IDE 面板状态
   restoreIdePanel(ideActivityBar, ideSidebar, "ideActivePanel", "ide-panel");
   restoreIdePanel(memActivityBar, memSidebar, "memActivePanel", "mem-panel");
+
+  // 初始化三栏面板拖拽
+  initPanelResize();
 
   // 初始化侧边栏拖拽
   initSidebarResize(ideSidebar, ideSidebarResize, "ideSidebarWidth");
@@ -1368,9 +1489,9 @@ let _browserPollingTimer = null;
 function initBrowserSensePolling() {
   // 立即查询一次
   updateBrowserSenseStatus();
-  // 每 10 秒轮询
+  // 每 30 秒轮询状态（降低频率，仅更新 UI 状态显示）
   if (_browserPollingTimer) clearInterval(_browserPollingTimer);
-  _browserPollingTimer = setInterval(updateBrowserSenseStatus, 10000);
+  _browserPollingTimer = setInterval(updateBrowserSenseStatus, 30000);
 }
 
 async function updateBrowserSenseStatus() {

@@ -3403,13 +3403,31 @@ function getPresetListForP1(p1Preset) {
  */
 function parsePresetSwitchTag(content) {
   if (!content) return { presetName: null, cleanContent: content };
+  // 优先匹配完整闭合标签
   const match = content.match(/<presetSwitch>([\s\S]*?)<\/presetSwitch>/i);
-  if (!match) return { presetName: null, cleanContent: content };
-  const presetName = match[1].trim();
-  const cleanContent = content
-    .replace(/<presetSwitch>[\s\S]*?<\/presetSwitch>/gi, "")
-    .trim();
-  return { presetName: presetName || null, cleanContent };
+  if (match) {
+    const presetName = match[1].trim();
+    const cleanContent = content
+      .replace(/<presetSwitch>[\s\S]*?<\/presetSwitch>/gi, "")
+      .trim();
+    return { presetName: presetName || null, cleanContent };
+  }
+  // 兜底：匹配开标签但闭合标签被截断的情况（AI输出被max_tokens截断）
+  const partialMatch = content.match(/<presetSwitch>([^<]+)/i);
+  if (partialMatch) {
+    const presetName = partialMatch[1].trim();
+    if (presetName) {
+      console.warn(
+        `[beilu-memory] parsePresetSwitchTag: 检测到截断的 presetSwitch 标签，提取预设名: "${presetName}"`,
+      );
+      const cleanContent = content
+        .replace(/<presetSwitch>[^<]*/i, "")
+        .replace(/<\/p\w*$/i, "") // 清理截断的闭合标签残余如 </p
+        .trim();
+      return { presetName, cleanContent };
+    }
+  }
+  return { presetName: null, cleanContent: content };
 }
 
 // ============================================================
@@ -3663,7 +3681,10 @@ async function runMemoryPresetAI(
             beilu_preset_after: afterMessages,
             beilu_injection_above: [],
             beilu_injection_below: [],
-            beilu_model_params: {},
+            beilu_model_params: {
+              squash_system_messages: true,
+              prompt_post_processing: "strict",
+            },
           },
         },
       },
@@ -5653,7 +5674,31 @@ const pluginExport = {
                   );
                   const replyText = (result.reply || "").trim();
 
-                  // 判定P1是否返回了实质性记忆内容
+                  // 1. 先提取 presetSwitch 标签（独立于记忆内容判定）
+                  const {
+                    presetName: switchTarget,
+                    cleanContent: cleanedP1Reply,
+                  } = parsePresetSwitchTag(result.reply);
+                  if (switchTarget) {
+                    // 冷却检查：系统阻滞 — AI 照常输出标签，但冷却期内不执行
+                    const _cdRemaining =
+                      presetSwitchCooldown.get(_cooldownKey) || 0;
+                    if (_cdRemaining > 0) {
+                      console.log(
+                        `[beilu-memory] P1 请求切换预设: "${switchTarget}" — 冷却中(剩余${_cdRemaining}轮)，已忽略`,
+                      );
+                    } else {
+                      _presetSwitchTarget = switchTarget;
+                      _presetSwitchExecuted = true;
+                      presetSwitchCooldown.set(_cooldownKey, _cooldownConfig);
+                      console.log(
+                        `[beilu-memory] P1 请求切换预设: "${switchTarget}"，冷却已重置为${_cooldownConfig}轮`,
+                      );
+                    }
+                  }
+
+                  // 2. 然后判定记忆内容是否有实质内容（用清理后的文本判断）
+                  const cleanedText = cleanedP1Reply.trim();
                   const _noResultKws = [
                     "无需检索",
                     "无相关记忆",
@@ -5662,31 +5707,9 @@ const pluginExport = {
                     "无相关内容",
                   ];
                   const _isP1NoResult =
-                    replyText.length < 5 ||
-                    _noResultKws.some((kw) => replyText.includes(kw));
+                    cleanedText.length < 5 ||
+                    _noResultKws.some((kw) => cleanedText.includes(kw));
                   if (!_isP1NoResult) {
-                    // 解析预设切换标签
-                    const {
-                      presetName: switchTarget,
-                      cleanContent: cleanedP1Reply,
-                    } = parsePresetSwitchTag(result.reply);
-                    if (switchTarget) {
-                      // 冷却检查：系统阻滞 — AI 照常输出标签，但冷却期内不执行
-                      const _cdRemaining =
-                        presetSwitchCooldown.get(_cooldownKey) || 0;
-                      if (_cdRemaining > 0) {
-                        console.log(
-                          `[beilu-memory] P1 请求切换预设: "${switchTarget}" — 冷却中(剩余${_cdRemaining}轮)，已忽略`,
-                        );
-                      } else {
-                        _presetSwitchTarget = switchTarget;
-                        _presetSwitchExecuted = true;
-                        presetSwitchCooldown.set(_cooldownKey, _cooldownConfig);
-                        console.log(
-                          `[beilu-memory] P1 请求切换预设: "${switchTarget}"，冷却已重置为${_cooldownConfig}轮`,
-                        );
-                      }
-                    }
                     const p1Content = `[记忆AI检索结果]\n${cleanedP1Reply}\n[/记忆AI检索结果]`;
                     depthInjections.push({
                       id: "P1_RETRIEVAL",
@@ -5701,7 +5724,7 @@ const pluginExport = {
                     );
                   } else {
                     console.log(
-                      `[beilu-memory] P1 判定无实质内容: "${replyText.substring(0, 30)}"`,
+                      `[beilu-memory] P1 判定无实质内容: "${cleanedText.substring(0, 50)}"${switchTarget ? ` (但预设切换指令已处理: "${switchTarget}")` : ""}`,
                     );
                   }
 

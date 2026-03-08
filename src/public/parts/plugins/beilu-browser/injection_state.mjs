@@ -23,6 +23,34 @@
 /** @type {{ url: string, title: string, content: string, selectedText: string, message: string, timestamp: number } | null} */
 let _pendingInjection = null;
 
+/** 注入数据 TTL（毫秒）：超过此时间自动视为过期并丢弃 */
+const INJECTION_TTL_MS = 60_000;
+
+/**
+ * 检查 pending 数据是否已过期，过期则自动清理
+ * @returns {boolean} true = 有效数据存在
+ */
+function checkAndExpire() {
+  if (!_pendingInjection) return false;
+  const age = Date.now() - _pendingInjection.timestamp;
+  if (age > INJECTION_TTL_MS) {
+    console.log(
+      "[beilu-browser] pending 注入已过期，自动清理",
+      "| age:",
+      Math.round(age / 1000),
+      "秒",
+      "| title:",
+      _pendingInjection.title,
+      "| TTL:",
+      INJECTION_TTL_MS / 1000,
+      "秒",
+    );
+    _pendingInjection = null;
+    return false;
+  }
+  return true;
+}
+
 /**
  * 设置待注入的浏览器页面数据
  * @param {{ url: string, title: string, content?: string, selectedText?: string, message?: string }} data
@@ -49,28 +77,44 @@ export function setPendingBrowserInjection(data) {
 /**
  * 消费（取出并清除）待注入数据
  * 调用后 pendingInjection 变为 null，实现一次性注入
+ * 增加 TTL 过期检查 + 原子消费日志
  * @returns {{ url: string, title: string, content: string, selectedText: string, message: string, timestamp: number } | null}
  */
 export function consumePendingBrowserInjection() {
+  if (!checkAndExpire()) return null;
   const data = _pendingInjection;
   _pendingInjection = null;
+  if (data) {
+    console.log(
+      "[beilu-browser] pending 已消费",
+      "| age:",
+      Math.round((Date.now() - data.timestamp) / 1000),
+      "秒",
+      "| title:",
+      data.title,
+      "| contentLen:",
+      data.content?.length || 0,
+    );
+  }
   return data;
 }
 
 /**
  * 检查是否有待注入数据（不消费）
+ * 含 TTL 过期检查
  * @returns {boolean}
  */
 export function hasPendingBrowserInjection() {
-  return _pendingInjection !== null;
+  return checkAndExpire();
 }
 
 /**
  * 获取待注入数据的状态（不消费）
+ * 含 TTL 过期检查
  * @returns {{ hasPending: boolean, message: string|null, title: string|null, url: string|null }}
  */
 export function getPendingBrowserStatus() {
-  if (!_pendingInjection)
+  if (!checkAndExpire())
     return { hasPending: false, message: null, title: null, url: null };
   return {
     hasPending: true,

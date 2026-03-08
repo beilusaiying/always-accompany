@@ -340,10 +340,25 @@ export async function renderMessage(message) {
   const builtinProcessed = applyBuiltinProcessors(contentForProcessing);
   // 传入消息角色，用户消息不应用 display regex（防止内容消失）
   const messageRole = message.role || (message.is_user ? "user" : "");
+  // P0 修复（问题3）：charName 优先使用 timeSlice.charname（Fount 文件系统 key），
+  // 回退到 message.name（显示名）。scoped 正则的 boundCharName 是导入时的文件系统名，
+  // 若用显示名匹配会导致 scoped 美化正则被跳过，XML 标签无法渲染。
+  const charKeyForRegex = message.timeSlice?.charname || message.name || "";
   const { text: displayProcessed, placeholders } = applyDisplayRules(
     builtinProcessed,
-    { role: messageRole, charName: message.name || "" },
+    { role: messageRole, charName: charKeyForRegex },
   );
+
+  // bug3 诊断：记录收口前关键输入，便于定位“渲染成功但捕捉失败”
+  diag.debug("renderMessage display pipeline input", {
+    id: message?.id,
+    role: messageRole,
+    rawLen: rawContent?.length || 0,
+    thinkingCleanLen: thinkingCleanText?.length || 0,
+    builtinLen: builtinProcessed?.length || 0,
+    displayLen: displayProcessed?.length || 0,
+    placeholderCount: placeholders?.size || 0,
+  });
 
   // ★ 渲染深度检查：超出深度的旧消息不做 full-html 渲染
   const renderDepth = getRenderDepth();
@@ -357,6 +372,7 @@ export async function renderMessage(message) {
   const segments = splitMixedContent(displayProcessed);
   let contentType;
   let renderedContent;
+  let renderBranch = "unknown";
   const currentRenderMode = getRenderMode();
 
   if (segments) {
@@ -364,6 +380,7 @@ export async function renderMessage(message) {
     // ★ 深度检查：超出渲染深度时，mixed 内容中的 full-html 段也降级为 markdown
     if (!isWithinRenderDepth) {
       contentType = "markdown";
+      renderBranch = "mixed->markdown(depth)";
       diag.debug("splitMixedContent: 超出渲染深度，mixed 降级为纯 markdown");
       // 所有段落统一走 markdown 渲染
       let combinedText = segments.map((s) => s.content).join("\n\n");
@@ -373,6 +390,7 @@ export async function renderMessage(message) {
       }
     } else {
       contentType = "mixed";
+      renderBranch = "mixed";
       diag.debug("splitMixedContent: 检测到混合内容", {
         segmentCount: segments.length,
         types: segments.map((s) => s.type),
@@ -401,6 +419,7 @@ export async function renderMessage(message) {
     }
 
     if (contentType === "full-html") {
+      renderBranch = "full-html";
       // full-html 统一用 iframe 渲染（无论 sandbox/free 模式）
       // 自由模式直接 innerHTML 注入完整 HTML 文档会导致：
       // 1. 浏览器无法在 div 内嵌套 <!doctype>/<html>/<head>/<body>
@@ -408,6 +427,7 @@ export async function renderMessage(message) {
       renderedContent =
         '<div class="iframe-placeholder">正在加载美化视图...</div>';
     } else {
+      renderBranch = "markdown";
       // 普通 markdown 或脚本片段 → 走原有 markdown 管线
       renderedContent = await renderMarkdownAsString(displayProcessed, cache);
       if (placeholders.size > 0) {
@@ -415,6 +435,18 @@ export async function renderMessage(message) {
       }
     }
   }
+
+  diag.debug("renderMessage display pipeline output", {
+    id: message?.id,
+    role: messageRole,
+    renderMode: currentRenderMode,
+    withinRenderDepth: isWithinRenderDepth,
+    segmentCount: segments?.length || 0,
+    contentType,
+    branch: renderBranch,
+    renderedLen: renderedContent?.length || 0,
+    placeholderCount: placeholders?.size || 0,
+  });
 
   // ★ 预计算 media 判断，避免在模板中对 content 做 match（模板引擎会解析 content 中的 ${} 导致卡死）
   // full-html 内容一定包含媒体（iframe），强制为 true 确保气泡获得 w-full 类
@@ -888,7 +920,7 @@ export async function renderMessage(message) {
 }
 
 /**
- * 为消息元素中的头像图片添加加载失败回退
+ * 为消息元素中的头像图片添加加载失败回退 + 点击悬浮预览
  * 当角色卡被删除或没有照片时，显示默认头像图标
  * @param {HTMLElement} el - 消息 DOM 元素
  */
@@ -904,6 +936,123 @@ function _addAvatarFallback(el) {
         img.src = DEFAULT_AVATAR;
       }
     });
+
+    // C2-chat: 点击头像显示悬浮放大预览（右下角、可拖动、×关闭）
+    const avatarContainer = img.closest(".message-avatar, .avatar");
+    if (avatarContainer) {
+      avatarContainer.style.cursor = "pointer";
+      avatarContainer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        _showAvatarFloatingPreview(img.src);
+      });
+    }
+  }
+}
+
+// ============================================================
+// C2-chat: 头像悬浮放大预览（右下角、可拖动、×关闭）
+// ============================================================
+
+/** 悬浮预览 DOM 元素（全局单例，点击不同头像时替换图片） */
+let _avatarPreviewEl = null;
+
+/**
+ * 显示/替换头像悬浮预览
+ * @param {string} imageUrl - 头像图片 URL
+ */
+function _showAvatarFloatingPreview(imageUrl) {
+  if (!imageUrl || imageUrl === DEFAULT_AVATAR) return;
+
+  // 已存在 → 替换图片
+  if (_avatarPreviewEl && document.body.contains(_avatarPreviewEl)) {
+    const img = _avatarPreviewEl.querySelector(".avatar-preview-img");
+    if (img) img.src = imageUrl;
+    return;
+  }
+
+  // 创建悬浮窗
+  const container = document.createElement("div");
+  container.className = "avatar-floating-preview";
+
+  // 关闭按钮（hover 时显示）
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "avatar-preview-close";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    _closeAvatarPreview();
+  });
+  container.appendChild(closeBtn);
+
+  // 图片
+  const img = document.createElement("img");
+  img.className = "avatar-preview-img";
+  img.src = imageUrl;
+  img.alt = "avatar preview";
+  img.addEventListener("error", () => {
+    _closeAvatarPreview();
+  });
+  container.appendChild(img);
+
+  // 拖拽逻辑
+  let isDragging = false;
+  let dragStartX, dragStartY, startLeft, startTop;
+
+  container.addEventListener("mousedown", (e) => {
+    if (e.target === closeBtn) return;
+    isDragging = true;
+    container.classList.add("dragging");
+    const rect = container.getBoundingClientRect();
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+    // 切换定位模式：从 bottom/right 改为 top/left
+    container.style.bottom = "auto";
+    container.style.right = "auto";
+    container.style.left = startLeft + "px";
+    container.style.top = startTop + "px";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", _onPreviewMouseMove);
+  document.addEventListener("mouseup", _onPreviewMouseUp);
+
+  function _onPreviewMouseMove(e) {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    container.style.left = startLeft + dx + "px";
+    container.style.top = startTop + dy + "px";
+  }
+
+  function _onPreviewMouseUp() {
+    if (isDragging) {
+      isDragging = false;
+      container.classList.remove("dragging");
+    }
+  }
+
+  // 存储清理函数
+  container._cleanupDrag = () => {
+    document.removeEventListener("mousemove", _onPreviewMouseMove);
+    document.removeEventListener("mouseup", _onPreviewMouseUp);
+  };
+
+  document.body.appendChild(container);
+  _avatarPreviewEl = container;
+}
+
+/**
+ * 关闭头像悬浮预览
+ */
+function _closeAvatarPreview() {
+  if (_avatarPreviewEl) {
+    if (_avatarPreviewEl._cleanupDrag) _avatarPreviewEl._cleanupDrag();
+    if (document.body.contains(_avatarPreviewEl)) {
+      document.body.removeChild(_avatarPreviewEl);
+    }
+    _avatarPreviewEl = null;
   }
 }
 

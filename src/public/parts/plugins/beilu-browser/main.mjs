@@ -28,7 +28,7 @@ const pageSnapshots = [];
 let browserConfig = {
   enabled: true,
   maxContentLength: 20000, // 注入给 AI 的最大文本长度（主人要求至少 20000 token 级别）
-  autoInject: true, // 是否自动注入最新页面到 GetPrompt
+  autoInject: false, // 禁止自动注入 — 仅通过手动发送（consumeBrowser → 一次性注入）
   injectMode: "latest", // 'latest' = 只注入最新一个 | 'all' = 注入所有缓存
 };
 
@@ -258,6 +258,23 @@ const pluginExport = {
 
         // 接收页面快照（含可选的消息附带，用于主动发送模式）
         if (data._action === "pushPage") {
+          diag.log(
+            "[DIAG] pushPage 收到请求",
+            "| url:",
+            (data.url || "").substring(0, 80),
+            "| hasContent:",
+            !!data.content,
+            "| contentLen:",
+            (data.content || "").length,
+            "| hasMessage:",
+            !!data.message,
+            "| message:",
+            (data.message || "").substring(0, 50),
+            "| snapshotCount_before:",
+            pageSnapshots.length,
+            "| timestamp:",
+            Date.now(),
+          );
           if (!data.url && !data.content) {
             diag.warn("pushPage: 缺少 url 和 content，数据被丢弃", {
               receivedKeys: Object.keys(data),
@@ -294,6 +311,13 @@ const pluginExport = {
         // 前端不再用 addUserReply 显示在聊天界面，而是调用此接口后 triggerCharacterReply
         // GetPrompt 检测到 _pendingPromptInjection 时注入并自动清除
         if (data._action === "consumeBrowser") {
+          diag.log(
+            "[DIAG] consumeBrowser 请求",
+            "| hasPending_before:",
+            getPendingBrowserStatus().hasPending,
+            "| timestamp:",
+            Date.now(),
+          );
           const consumed = consumePendingBrowserInjection();
           if (consumed) {
             // 将消费到的数据存入一次性 GetPrompt 注入缓存

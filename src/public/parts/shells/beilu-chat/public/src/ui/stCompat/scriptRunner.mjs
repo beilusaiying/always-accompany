@@ -472,16 +472,16 @@ ${block.code}
 	   <script type="module">
 	   if (typeof window.z.object !== 'function') {
 	       try {
-	           // 主 CDN：与 bundle.js 的其他依赖（klona/json5/pinia 等）使用同一 CDN
-	           const zod = await import('https://testingcf.jsdelivr.net/npm/zod@3/+esm');
-	           window.z = zod;
-	           self.z = zod;
-	           console.log('[scriptRunner] Zod 4.x loaded from testingcf CDN, methods:', Object.keys(zod).slice(0, 8).join(', '));
+	           // 主 CDN：testingcf（与 bundle.js 的其他依赖使用同一 CDN，国内可达性更好）
+	           const zod2 = await import('https://testingcf.jsdelivr.net/npm/zod@4/+esm');
+	           window.z = zod2;
+	           self.z = zod2;
+	           console.log('[scriptRunner] Zod 4.x loaded from testingcf CDN, methods:', Object.keys(zod2).slice(0, 8).join(', '));
 	       } catch(e1) {
 	           console.warn('[scriptRunner] testingcf CDN failed:', e1.message, '— trying fallback CDN');
 	           try {
-	               // 备选 CDN
-	               const zod2 = await import('https://cdn.jsdelivr.net/npm/zod@3/+esm');
+	               // 备选 CDN：cdn.jsdelivr.net
+	               const zod2 = await import('https://cdn.jsdelivr.net/npm/zod@4/+esm');
 	               window.z = zod2;
 	               self.z = zod2;
 	               console.log('[scriptRunner] Zod 4.x loaded from cdn.jsdelivr fallback');

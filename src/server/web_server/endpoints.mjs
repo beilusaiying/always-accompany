@@ -65,7 +65,10 @@ import { watchFrontendChanges } from "./watcher.mjs";
 // 贝露的眼睛 — 桌面截图注入共享状态
 import {
   consumePendingInjection,
+  getEyeProcessState,
   getPendingStatus,
+  hasPendingInjection,
+  setEyeProcessState,
   setPendingInjection,
 } from "../../public/parts/plugins/beilu-eye/injection_state.mjs";
 
@@ -473,6 +476,58 @@ export async function registerEndpoints(router) {
 
   router.get("/api/eye/status", async (req, res) => {
     res.status(200).json(getPendingStatus());
+  });
+
+  // ---- beilu-eye: getdata / setdata（替代 Fount parts API，解决 404 问题）----
+  router.get("/api/eye/getdata", async (req, res) => {
+    const processState = getEyeProcessState();
+    res.status(200).json({
+      hasPending: hasPendingInjection(),
+      eyeStatus: processState.status,
+      eyeError: processState.error,
+      desktopEyeDir: processState.desktopEyeDir,
+      description:
+        "贝露的眼睛 — 桌面截图工具 (Python)，截图通过 files 路径直接发送给 AI",
+    });
+  });
+
+  router.post("/api/eye/setdata", async (req, res) => {
+    try {
+      const data = req.body || {};
+
+      if (data._action === "inject") {
+        if (!data.image) {
+          return res.status(400).json({ error: "Missing image field" });
+        }
+        setPendingInjection({
+          image: data.image,
+          message: data.message || "",
+          mode: data.mode || "passive",
+        });
+        return res.status(200).json({ success: true });
+      }
+
+      if (data._action === "clear") {
+        consumePendingInjection();
+        return res.status(200).json({ success: true });
+      }
+
+      // restart / stop 操作通过共享状态标志通知 beilu-eye 插件
+      // 这里简单更新状态，实际进程控制由 beilu-eye/main.mjs 的 Load/Unload 处理
+      if (data._action === "restart" || data._action === "stop") {
+        setEyeProcessState({
+          status: data._action === "stop" ? "stopped" : "starting",
+        });
+        return res
+          .status(200)
+          .json({ success: true, message: `Action ${data._action} noted` });
+      }
+
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("[eye/setdata] Error:", err);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // 消费截图数据（获取完整 base64 并清除 pending 状态）

@@ -73,6 +73,9 @@ export default {
         chardata,
       }),
       SetData: async (data) => {
+        console.log(
+          `[beilu-char][SetData] AIsource="${data.AIsource || "(空)"}", username="${username}", chardir="${path.basename(chardir)}"`,
+        );
         if (data.AIsource)
           AIsource = await loadPart(
             username,
@@ -83,6 +86,9 @@ export default {
             username,
             "serviceSources/AI",
           );
+        console.log(
+          `[beilu-char][SetData] AIsource 加载结果: filename="${AIsource?.filename || "(null)"}", type="${AIsource?.type || "?"}"`,
+        );
         if (data.plugins)
           plugins = Object.fromEntries(
             await Promise.all(

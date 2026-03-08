@@ -967,9 +967,9 @@
       "topTabs": {
         "chat": "💬 チャット",
         "bot": "🤖 Bot",
-        "files": "📁 ファイル",
+        "files": "📁 AIファイル編集",
         "memory": "🧠 メモリー",
-        "helper": "🛠️ ヘルパー"
+        "helper": "🛠️ 正規表現&スクリプト"
       },
       "apiBanner": {
         "text": "AIサービスが未設定です。メッセージに返答できません。",

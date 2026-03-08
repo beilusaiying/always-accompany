@@ -50,6 +50,9 @@ import { createBufferedSyncPreviewUpdater, generateDiff } from "./stream.mjs";
 
 const diag = createDiag("chat");
 
+// 缓存已知 loadPart 失败的 world 路径，避免聊天历史中多条 timeSlice 反复触发同一个不存在的 world 加载告警
+const _failedWorldPaths = new Set();
+
 // ============================================================
 // API 错误友好化 — 将原始异常分类为用户可读的中文提示
 // ============================================================
@@ -434,7 +437,9 @@ class timeSlice_t {
 
   static async fromJSON(json, username) {
     if (!json) json = {};
-    return Object.assign(new timeSlice_t(), {
+
+    let worldLoadFailed = false;
+    const instance = Object.assign(new timeSlice_t(), {
       ...json,
       chars: Object.fromEntries(
         await Promise.all(
@@ -464,15 +469,19 @@ class timeSlice_t {
           ]),
         ),
       ),
-      world_id: json.world,
+      world_id: json.world || undefined,
       world: json.world
-        ? await loadPart(username, "worlds/" + json.world).catch((e) => {
-            console.warn(
-              `[chat] loadPart failed: worlds/${json.world}`,
-              e?.message || String(e),
-            );
-            return undefined;
-          })
+        ? _failedWorldPaths.has("worlds/" + json.world)
+          ? ((worldLoadFailed = true), undefined)
+          : await loadPart(username, "worlds/" + json.world).catch((e) => {
+              console.warn(
+                `[chat] loadPart failed: worlds/${json.world} — will clear world_id`,
+                e?.message || String(e),
+              );
+              _failedWorldPaths.add("worlds/" + json.world);
+              worldLoadFailed = true;
+              return undefined;
+            })
         : undefined,
       player_id: json.player,
       player: json.player
@@ -485,6 +494,11 @@ class timeSlice_t {
           })
         : undefined,
     });
+
+    if (worldLoadFailed) {
+      instance.world_id = undefined;
+    }
+    return instance;
   }
 }
 
@@ -813,6 +827,75 @@ function getChatStorageDir(username, primaryCharName) {
   return userDir + "/shells/chat/chats";
 }
 
+/**
+ * P0 路径自修复：当预期路径找不到聊天文件时，探测备用路径并回写 metadata。
+ * 探测顺序：
+ *   1. 当前预期路径（快速返回）
+ *   2. 旧路径 shells/chat/chats/（若当前指向新路径）
+ *   3. 扫描所有 chars/{any}/chats/ 目录（若当前指向旧路径或主角色目录不匹配）
+ *
+ * @param {string} username
+ * @param {string} chatid
+ * @param {string} currentPrimaryCharName - 当前 metadata 中的 primaryCharName
+ * @returns {string|null} 找到的文件完整路径，找不到返回 null
+ */
+function tryRepairChatPath(username, chatid, currentPrimaryCharName) {
+  const userDir = getUserDictionary(username);
+  const chatFileName = chatid + ".json";
+
+  // 1. 当前预期路径
+  const currentDir = getChatStorageDir(username, currentPrimaryCharName || "");
+  const currentPath = currentDir + "/" + chatFileName;
+  if (fs.existsSync(currentPath)) return currentPath;
+
+  // 2. 若当前指向新路径（有 primaryCharName），尝试旧路径
+  if (currentPrimaryCharName) {
+    const oldDir = userDir + "/shells/chat/chats";
+    const oldPath = oldDir + "/" + chatFileName;
+    if (fs.existsSync(oldPath)) {
+      console.log(
+        `[chat] 路径自修复: ${chatid} 在旧路径 shells/chat/chats/ 找到，回写 primaryCharName=""`,
+      );
+      const chatData = chatMetadatas.get(chatid);
+      if (chatData) chatData.primaryCharName = "";
+      return oldPath;
+    }
+  }
+
+  // 3. 扫描所有角色目录
+  const charsDir = userDir + "/chars/";
+  if (fs.existsSync(charsDir)) {
+    try {
+      const charDirs = fs
+        .readdirSync(charsDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory());
+      for (const charDir of charDirs) {
+        if (charDir.name === currentPrimaryCharName) continue; // 已在步骤1检查过
+        const scanPath = charsDir + charDir.name + "/chats/" + chatFileName;
+        if (fs.existsSync(scanPath)) {
+          console.log(
+            `[chat] 路径自修复: ${chatid} 在 chars/${charDir.name}/chats/ 找到，回写 primaryCharName="${charDir.name}"`,
+          );
+          const chatData = chatMetadatas.get(chatid);
+          if (chatData) chatData.primaryCharName = charDir.name;
+          return scanPath;
+        }
+      }
+    } catch (e) {
+      console.warn(`[chat] 路径自修复扫描失败:`, e.message);
+    }
+  }
+
+  // 4. 若当前指向旧路径（无 primaryCharName），也尝试旧路径本身（防御性）
+  if (!currentPrimaryCharName) {
+    const oldDir = userDir + "/shells/chat/chats";
+    const oldPath = oldDir + "/" + chatFileName;
+    if (fs.existsSync(oldPath)) return oldPath;
+  }
+
+  return null; // 真正找不到
+}
+
 export async function saveChat(chatid) {
   const chatData = chatMetadatas.get(chatid);
   if (!chatData || !chatData.chatMetadata) return;
@@ -830,9 +913,9 @@ export async function loadChat(chatid) {
 
   if (!chatData.chatMetadata) {
     const { username, primaryCharName } = chatData;
-    const chatDir = getChatStorageDir(username, primaryCharName);
-    const filepath = chatDir + "/" + chatid + ".json";
-    if (!fs.existsSync(filepath)) return undefined;
+    // P0 自修复：预期路径找不到时探测备用路径
+    const filepath = tryRepairChatPath(username, chatid, primaryCharName);
+    if (!filepath) return undefined;
     chatData.chatMetadata = await chatMetadata_t.fromJSON(
       loadJsonFile(filepath),
     );
@@ -852,8 +935,16 @@ async function getChatRequest(chatid, charname, options = {}) {
   const { username, LastTimeSlice: timeSlice } = chatMetadata;
   const { locales } = getUserByUsername(username);
   const userinfo = (await getPartInfo(timeSlice.player, locales)) || {};
-  const charinfo =
-    (await getPartInfo(timeSlice.chars[charname], locales)) || {};
+  let charinfo = (await getPartInfo(timeSlice.chars[charname], locales)) || {};
+  // ★ 兜底：getPartInfo 可能因 chardata.json 缺失返回空，用 getPartDetails 补充角色显示名
+  if (!charinfo.name) {
+    const details = await getPartDetails(username, `chars/${charname}`).catch(
+      () => null,
+    );
+    if (details?.info?.name) {
+      charinfo = { ...charinfo, name: details.info.name };
+    }
+  }
   const UserCharname = userinfo.name || timeSlice.player_id || username;
 
   const other_chars = { ...timeSlice.chars };
@@ -923,6 +1014,7 @@ async function getChatRequest(chatid, charname, options = {}) {
     other_chars,
     chat_scoped_char_memory: (timeSlice.chars_memories[charname] ??= {}),
     plugins: mergedPlugins,
+    user_description: userinfo.description || "",
     extension: {},
   };
 
@@ -980,19 +1072,34 @@ export async function setWorld(chatid, worldname) {
 // ============================================================
 
 export async function addchar(chatid, charname) {
+  const diagReqId = `${chatid}:${charname}:${Date.now().toString(36)}`;
+  const addcharStartAt = Date.now();
+  const logDiag = (msg) =>
+    console.log(
+      `[addchar DIAG][${diagReqId}][+${Date.now() - addcharStartAt}ms] ${msg}`,
+    );
+
+  logDiag(`▶ 开始 chatid=${chatid} charname=${charname}`);
+  const tLoadChat = Date.now();
   const chatMetadata = await loadChat(chatid);
   if (!chatMetadata) throw new Error("Chat not found");
 
   const { username } = chatMetadata;
+  logDiag(`1. loadChat 完成, username=${username}, cost=${Date.now() - tLoadChat}ms`);
 
   // 已存在则跳过
   if (chatMetadata.LastTimeSlice.chars[charname]) return null;
 
   // 修复Bug2：先加到 LastTimeSlice，再调 getChatRequest
+  logDiag(`2. 开始 loadPart chars/${charname}`);
+  const tLoadPart = Date.now();
   const char = (chatMetadata.LastTimeSlice.chars[charname] = await loadPart(
     username,
     `chars/${charname}`,
   ));
+  logDiag(
+    `3. loadPart 完成, cost=${Date.now() - tLoadPart}ms, char=${!!char}, hasInterfaces=${!!char?.interfaces}, hasChatInterface=${!!char?.interfaces?.chat}`,
+  );
   broadcastChatEvent(chatid, { type: "char_added", payload: { charname } });
 
   // 如果是第一个角色，设定 primaryCharName 并迁移存储位置
@@ -1017,6 +1124,8 @@ export async function addchar(chatid, charname) {
     }
   }
 
+  logDiag(`4. 迁移处理完成`);
+
   // 准备 greeting 时间切片
   const isFirstChar =
     Object.keys(chatMetadata.LastTimeSlice.chars).length === 1;
@@ -1026,15 +1135,28 @@ export async function addchar(chatid, charname) {
 
   try {
     // 修复Bug1：getChatRequest 在 try 内
+    logDiag(`5. 开始 getChatRequest, isFirstChar=${isFirstChar}`);
+    const tGetChatRequest = Date.now();
     const request = await getChatRequest(chatid, charname);
+    logDiag(`6. getChatRequest 完成, cost=${Date.now() - tGetChatRequest}ms`);
 
     let result = null;
-    if (isFirstChar && char.interfaces.chat?.GetGreeting)
+    const hasGetGreeting = !!char.interfaces?.chat?.GetGreeting;
+    logDiag(`7. hasGetGreeting=${hasGetGreeting}`);
+    if (isFirstChar && char.interfaces.chat?.GetGreeting) {
+      logDiag(`8. 开始 GetGreeting(0)`);
+      const tGreeting0 = Date.now();
       result = await char.interfaces.chat.GetGreeting(request, 0);
+      logDiag(
+        `9. GetGreeting(0) 完成, cost=${Date.now() - tGreeting0}ms, hasResult=${!!result}`,
+      );
+    }
 
     if (!result) {
       // 没有 greeting，直接保存
+      logDiag(`10. 无 greeting，直接保存`);
       saveChat(chatid);
+      logDiag(`◀ 完成 (无greeting), total=${Date.now() - addcharStartAt}ms`);
       return null;
     }
 
@@ -1047,18 +1169,40 @@ export async function addchar(chatid, charname) {
     );
     await addChatLogEntry(chatid, greeting_entry);
 
+    logDiag(`11. greeting 已添加到 chatLog`);
+
     // ★ P6-3 修复：预加载所有 alternate_greetings 到 timeLines
     // 酒馆行为：新建聊天时将 [first_mes, ...alternate_greetings] 全部填入 swipes 数组
     // fount 行为（修复后）：将所有 greetings 预加载到 timeLines，显示 1/N
+    // ★ 安全上限：最多 100 个 alternate greetings，防止 GetGreeting 实现不正确导致无限循环
+    const MAX_ALTERNATE_GREETINGS = 100;
     if (isFirstChar && char.interfaces.chat?.GetGreeting) {
+      logDiag(`12. 开始预加载 alternate_greetings (上限=${MAX_ALTERNATE_GREETINGS})`);
       let greetingIndex = 1;
-      while (true) {
+      while (greetingIndex <= MAX_ALTERNATE_GREETINGS) {
         try {
+          if (greetingIndex <= 10) {
+            logDiag(`12.${greetingIndex}. 尝试 GetGreeting(${greetingIndex})`);
+          }
+          const tAltGreeting = Date.now();
           const altResult = await char.interfaces.chat.GetGreeting(
             request,
             greetingIndex,
           );
-          if (!altResult) break;
+          if (greetingIndex <= 10) {
+            logDiag(
+              `12.${greetingIndex}. GetGreeting 返回, cost=${Date.now() - tAltGreeting}ms`,
+            );
+          }
+          if (!altResult) {
+            logDiag(`12.${greetingIndex}. 返回 null/falsy，结束循环`);
+            break;
+          }
+          // ★ 额外安全检查：如果返回的 content 为空字符串也视为结束
+          if (typeof altResult === "object" && !altResult.content && altResult.content !== 0) {
+            logDiag(`12.${greetingIndex}. 返回对象但 content 为空，结束循环`);
+            break;
+          }
           const altTimeSlice = timeSlice.copy();
           altTimeSlice.greeting_type = "single";
           altTimeSlice.charname = charname;
@@ -1072,9 +1216,14 @@ export async function addchar(chatid, charname) {
           chatMetadata.timeLines.push(altEntry);
           greetingIndex++;
         } catch (e) {
+          logDiag(`12.${greetingIndex}. 异常终止: ${e.message}`);
           break;
         }
       }
+      if (greetingIndex > MAX_ALTERNATE_GREETINGS) {
+        console.warn(`[addchar][${diagReqId}] ★ GetGreeting 循环达到上限 ${MAX_ALTERNATE_GREETINGS}，强制终止。角色卡的 GetGreeting 实现可能有问题（永远不返回 null）。charname=${charname}`);
+      }
+      logDiag(`13. alternate_greetings 预加载完成, count=${chatMetadata.timeLines.length}`);
       if (chatMetadata.timeLines.length > 1) {
         broadcastChatEvent(chatid, {
           type: "timeline_info",
@@ -1087,11 +1236,13 @@ export async function addchar(chatid, charname) {
       }
     }
 
+    logDiag(`◀ 完成 (有greeting), total=${Date.now() - addcharStartAt}ms`);
     return greeting_entry;
   } catch (error) {
-    console.error("addchar greeting error:", error);
+    console.error(`[addchar DIAG][${diagReqId}] ★ greeting error:`, error);
     // 修复Bug3+4：错误时也保存（角色已经加入了）
     saveChat(chatid);
+    logDiag(`◀ 完成 (error路径), total=${Date.now() - addcharStartAt}ms`);
     return null;
   }
 }
@@ -1223,7 +1374,14 @@ async function BuildChatLogEntryFromCharReply(
   username,
 ) {
   new_timeSlice.charname = charname;
+  const tPartDetails = Date.now();
+  console.log(
+    `[charEntry DIAG] 开始 getPartDetails chars/${charname} username=${username}`,
+  );
   const { info } = (await getPartDetails(username, `chars/${charname}`)) || {};
+  console.log(
+    `[charEntry DIAG] 完成 getPartDetails chars/${charname} cost=${Date.now() - tPartDetails}ms hasInfo=${!!info}`,
+  );
 
   const entry = new chatLogEntry_t();
   Object.assign(entry, {
@@ -1646,9 +1804,9 @@ export async function addUserReply(chatid, object) {
 // ============================================================
 
 async function loadChatSummary(username, chatid, primaryCharName) {
-  const chatDir = getChatStorageDir(username, primaryCharName || "");
-  const filepath = chatDir + "/" + chatid + ".json";
-  if (!fs.existsSync(filepath)) return null;
+  // P0 自修复：预期路径找不到时探测备用路径
+  const filepath = tryRepairChatPath(username, chatid, primaryCharName || "");
+  if (!filepath) return null;
 
   try {
     const rawChatData = loadJsonFile(filepath);
@@ -1697,6 +1855,42 @@ export async function getChatList(username) {
     }),
   );
 
+  // P0 修复：清理幽灵摘要 — 摘要指向的 chatid 在 chatMetadatas 中不存在，
+  // 或者对应的聊天文件在磁盘上已不存在（tryRepairChatPath 找不到）
+  let ghostCleaned = 0;
+  for (const chatid of Object.keys(summariesCache)) {
+    if (!summariesCache[chatid]) {
+      delete summariesCache[chatid];
+      ghostCleaned++;
+      continue;
+    }
+    const metaEntry = chatMetadatas.get(chatid);
+    if (!metaEntry || metaEntry.username !== username) {
+      // 摘要存在但 chatMetadatas 中无对应条目 → 幽灵摘要
+      delete summariesCache[chatid];
+      ghostCleaned++;
+      continue;
+    }
+    // 额外校验：磁盘文件是否真实存在
+    const filepath = tryRepairChatPath(
+      username,
+      chatid,
+      metaEntry.primaryCharName || "",
+    );
+    if (!filepath) {
+      console.warn(
+        `[chat] getChatList: 清理幽灵摘要 ${chatid}（磁盘文件不存在）`,
+      );
+      delete summariesCache[chatid];
+      chatMetadatas.delete(chatid);
+      ghostCleaned++;
+    }
+  }
+  if (ghostCleaned > 0) {
+    console.log(`[chat] getChatList: 清理了 ${ghostCleaned} 条幽灵摘要`);
+    saveShellData(username, "chat", "chat_summaries_cache");
+  }
+
   const chatList = Object.values(summariesCache).filter(Boolean);
   return chatList.sort(
     (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime),
@@ -1717,10 +1911,29 @@ export async function deleteChat(chatids, username) {
     try {
       const chatData = chatMetadatas.get(chatid);
       const primaryCharName = chatData?.primaryCharName || "";
-      const chatDir = getChatStorageDir(username, primaryCharName);
-      const filepath = chatDir + "/" + chatid + ".json";
 
-      if (fs.existsSync(filepath)) await fs.promises.unlink(filepath);
+      // P0 修复：删除时也走路径自修复，确保删到真实文件
+      const filepath = tryRepairChatPath(username, chatid, primaryCharName);
+      if (filepath) await fs.promises.unlink(filepath);
+
+      // 额外清理：检查另一条路径是否有残留幽灵文件
+      const userDir = getUserDictionary(username);
+      const chatFileName = chatid + ".json";
+      const oldPath = userDir + "/shells/chat/chats/" + chatFileName;
+      const newPath = primaryCharName
+        ? userDir + "/chars/" + primaryCharName + "/chats/" + chatFileName
+        : null;
+      for (const altPath of [oldPath, newPath]) {
+        if (altPath && altPath !== filepath && fs.existsSync(altPath)) {
+          try {
+            await fs.promises.unlink(altPath);
+            console.log("[chat] 清理残留幽灵文件:", altPath);
+          } catch (_) {
+            /* 忽略 */
+          }
+        }
+      }
+
       chatMetadatas.delete(chatid);
       delete summariesCache[chatid];
       return { chatid, success: true, message: "Chat deleted successfully" };
@@ -2017,8 +2230,33 @@ export async function buildFakeSendRequest(chatid, charname) {
 
   if (!charname) {
     const chars = Object.keys(timeSlice.chars);
-    if (chars.length === 0) throw new Error("No characters in this chat");
-    charname = chars[0];
+    if (chars.length === 0) {
+      // 容错：LastTimeSlice.chars 为空时，尝试从 chatMetadatas 的 primaryCharName 回退
+      const chatData = chatMetadatas.get(chatid);
+      const fallbackChar = chatData?.primaryCharName;
+      if (fallbackChar) {
+        try {
+          timeSlice.chars[fallbackChar] = await loadPart(
+            chatMetadata.username,
+            "chars/" + fallbackChar,
+          );
+          charname = fallbackChar;
+          console.warn(
+            `[chat/fake-send] chars was empty, recovered from primaryCharName "${fallbackChar}"`,
+          );
+        } catch (e) {
+          throw new Error(
+            `No characters in this chat (primaryCharName "${fallbackChar}" load failed: ${e.message})`,
+          );
+        }
+      } else {
+        throw new Error(
+          "No characters in this chat and no primaryCharName available",
+        );
+      }
+    } else {
+      charname = chars[0];
+    }
   }
 
   // 步骤 1：构建 chatReplyRequest_t（传入 isFakeSend 标记，插件据此跳过耗时操作如 P1 检索）
@@ -2055,6 +2293,7 @@ export async function buildFakeSendRequest(chatid, charname) {
       content: m.content || "",
       _identifier: m.identifier,
       _name: m.name,
+      _is_marker: !!m.is_marker,
       _source: source,
       _section: section,
     });

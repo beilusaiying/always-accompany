@@ -166,6 +166,46 @@ export default {
             "utf-8",
           );
 
+          // 为新角色自动分配默认 AIsource
+          try {
+            const parts_config = loadData(username, "parts_config");
+            let defaultAIsource = "";
+            // 策略1: 复用已有角色卡的 AIsource
+            for (const [key, val] of Object.entries(parts_config)) {
+              if (key.startsWith("chars/") && val?.AIsource) {
+                defaultAIsource = val.AIsource;
+                break;
+              }
+            }
+            // 策略2: 找 generator === "proxy" 的第一个 AI 源
+            if (!defaultAIsource) {
+              for (const [key, val] of Object.entries(parts_config)) {
+                if (
+                  key.startsWith("serviceSources/AI/") &&
+                  val?.generator === "proxy"
+                ) {
+                  defaultAIsource = key.replace("serviceSources/AI/", "");
+                  break;
+                }
+              }
+            }
+            if (defaultAIsource) {
+              parts_config[`chars/${charName}`] = {
+                AIsource: defaultAIsource,
+                plugins: [],
+              };
+              saveData(username, "parts_config");
+              console.log(
+                `[beilu-home] 新角色自动配置 AIsource: "${defaultAIsource}" → chars/${charName}`,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[beilu-home] 新角色自动配置 AIsource 失败:",
+              e.message,
+            );
+          }
+
           // 通知 Fount 刷新 parts 缓存
           try {
             notifyPartInstall(username, `chars/${charName}`);
@@ -180,6 +220,160 @@ export default {
         } catch (error) {
           console.error("[beilu-home] Error creating char:", error);
           res.status(500).json({ message: error.message });
+        }
+      },
+    );
+
+    // POST /api/parts/shells:beilu-home/sync-aisource
+    // 将指定 AI 源同步到所有未配置 AIsource 的角色卡（仅补空，不覆盖已有绑定）
+    router.post(
+      "/api/parts/shells\\:beilu-home/sync-aisource",
+      authenticate,
+      async (req, res) => {
+        try {
+          const { username } = await getUserByReq(req);
+          const { sourceName } = req.body || {};
+
+          if (
+            !sourceName ||
+            typeof sourceName !== "string" ||
+            !sourceName.trim()
+          ) {
+            return res.status(400).json({ error: "sourceName required" });
+          }
+
+          const normalizedSourceName = sourceName.trim();
+          const parts_config = loadData(username, "parts_config");
+
+          if (!parts_config || typeof parts_config !== "object") {
+            return res.status(500).json({ error: "parts_config invalid" });
+          }
+
+          let updated = 0;
+          for (const [key, val] of Object.entries(parts_config)) {
+            if (!key.startsWith("chars/")) continue;
+
+            const charConfig =
+              val && typeof val === "object" && !Array.isArray(val) ? val : {};
+            if (charConfig.AIsource) continue;
+
+            parts_config[key] = {
+              ...charConfig,
+              AIsource: normalizedSourceName,
+            };
+            updated++;
+          }
+
+          if (updated > 0) {
+            saveData(username, "parts_config");
+          }
+
+          res.status(200).json({
+            success: true,
+            updated,
+            sourceName: normalizedSourceName,
+          });
+        } catch (error) {
+          console.error("[beilu-home] sync-aisource error:", error);
+          res.status(500).json({ error: error.message });
+        }
+      },
+    );
+
+    // ============================================================
+    // GET /api/parts/shells:beilu-home/char-aisource/:charName
+    // 获取角色卡当前绑定的 AI 源 + 可用源列表
+    // ============================================================
+    router.get(
+      "/api/parts/shells\\:beilu-home/char-aisource/:charName",
+      authenticate,
+      async (req, res) => {
+        try {
+          const { username } = await getUserByReq(req);
+          const { charName } = req.params;
+          const parts_config = loadData(username, "parts_config");
+
+          // 当前角色绑定的 AIsource
+          const charConfig = parts_config[`chars/${charName}`];
+          const currentSource = charConfig?.AIsource || "";
+
+          // 可用的 AI 源列表
+          const available = [];
+          for (const key of Object.keys(parts_config)) {
+            if (key.startsWith("serviceSources/AI/")) {
+              available.push(key.replace("serviceSources/AI/", ""));
+            }
+          }
+
+          res.json({ AIsource: currentSource, available });
+        } catch (error) {
+          console.error("[beilu-home] char-aisource GET error:", error);
+          res.status(500).json({ error: error.message });
+        }
+      },
+    );
+
+    // ============================================================
+    // PUT /api/parts/shells:beilu-home/char-aisource/:charName
+    // 设置角色卡绑定的 AI 源
+    // Body: { AIsource: string }
+    // ============================================================
+    router.put(
+      "/api/parts/shells\\:beilu-home/char-aisource/:charName",
+      authenticate,
+      async (req, res) => {
+        try {
+          const { username } = await getUserByReq(req);
+          const { charName } = req.params;
+          const { AIsource } = req.body || {};
+
+          if (!AIsource || typeof AIsource !== "string") {
+            return res.status(400).json({ error: "AIsource required" });
+          }
+
+          const parts_config = loadData(username, "parts_config");
+          const configKey = `chars/${charName}`;
+
+          // 保留现有的其他配置字段（如 plugins）
+          const existing =
+            parts_config[configKey] &&
+            typeof parts_config[configKey] === "object"
+              ? parts_config[configKey]
+              : {};
+
+          parts_config[configKey] = {
+            ...existing,
+            AIsource: AIsource.trim(),
+          };
+
+          saveData(username, "parts_config");
+          console.log(
+            `[beilu-home] 角色 AIsource 已更新: chars/${charName} → ${AIsource}`,
+          );
+
+          // 热更新：如果角色卡实例已加载到内存，立即触发 SetData 重新加载 AIsource
+          try {
+            const charPart = parts_set[username]?.[`chars/${charName}`];
+            if (charPart?.interfaces?.config?.SetData) {
+              await charPart.interfaces.config.SetData({
+                ...existing,
+                AIsource: AIsource.trim(),
+              });
+              console.log(
+                `[beilu-home] 角色 ${charName} AIsource 已热更新到内存`,
+              );
+            }
+          } catch (hotErr) {
+            console.warn(
+              `[beilu-home] 角色 ${charName} AIsource 热更新失败:`,
+              hotErr.message,
+            );
+          }
+
+          res.json({ success: true, AIsource: AIsource.trim() });
+        } catch (error) {
+          console.error("[beilu-home] char-aisource PUT error:", error);
+          res.status(500).json({ error: error.message });
         }
       },
     );

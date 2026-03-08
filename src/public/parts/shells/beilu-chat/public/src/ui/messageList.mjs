@@ -44,6 +44,7 @@ const diag = createDiag("messageList");
 // ★ Phase 1.2 + Phase 2：MVU 变量桥接 + 混合内容分段渲染
 import { addDragAndDropSupport } from "./dragAndDrop.mjs";
 import { renderAsIframe } from "./iframeRenderer.mjs";
+import { getPluginEnabled } from "./stCompat/pluginManager.mjs";
 import {
   addDeletionListener,
   getChatLogIndexByQueueIndex,
@@ -316,16 +317,19 @@ export async function renderMessage(message) {
   // ★ 提取思维链内容（从正文中剥离，后续渲染到独立 UI 组件）
   const { cleanText: thinkingCleanText, thinkingText } =
     extractThinkingContent(rawContent);
-
   // ★ Phase 3.1：最新 char 消息自动注入状态栏占位符
   let contentForProcessing = thinkingCleanText;
   const queueForAutoInject = getQueue();
+  // ★ 修复：放宽 isLastCharMessage 判断条件
+  // 1) 正在流式生成的 char 消息一定是最新的（此时可能还没加入 queue）
+  // 2) 已在 queue 中且是最后一条 char 消息
   const isLastCharMessage =
     message.role === "char" &&
-    queueForAutoInject.length > 0 &&
-    queueForAutoInject[queueForAutoInject.length - 1]?.id === message.id;
-  // 检查队列中是否有任何消息带 mvu_variables（说明 MVU 已启用）
-  const mvuEnabled = queueForAutoInject.some((m) => m.extension?.mvu_variables);
+    (message.is_generating ||
+      (queueForAutoInject.length > 0 &&
+        queueForAutoInject[queueForAutoInject.length - 1]?.id === message.id));
+  // ★ 修复：从插件管理器获取 MVU 真实启用状态，不依赖队列中的 extension 字段
+  const mvuEnabled = getPluginEnabled("beilu-mvu");
 
   if (
     isLastCharMessage &&
@@ -500,10 +504,13 @@ export async function renderMessage(message) {
     safeAvatar = safeAvatar.replace(/"/g, '"');
   }
 
-  // 计算楼层号（从 virtualQueue 获取消息在队列中的位置）
+  // ★ 修复：使用绝对索引计算楼层号（chatLog 中的真实位置）
+  // 避免虚拟队列截断（msgLoadLimit）导致楼层号跳变
   const queueForFloor = getQueue();
-  const floorIndex = queueForFloor.findIndex((m) => m.id === message.id);
-  const floorNumber = floorIndex >= 0 ? `#${floorIndex}` : "";
+  const floorQueueIndex = queueForFloor.findIndex((m) => m.id === message.id);
+  const floorAbsoluteIndex =
+    floorQueueIndex >= 0 ? getChatLogIndexByQueueIndex(floorQueueIndex) : -1;
+  const floorNumber = floorAbsoluteIndex >= 0 ? `#${floorAbsoluteIndex}` : "";
 
   const preprocessedMessage = {
     ...message,
@@ -958,92 +965,6 @@ let _avatarPreviewEl = null;
 
 /**
  * 显示/替换头像悬浮预览
- * @param {string} imageUrl - 头像图片 URL
- */
-function _showAvatarFloatingPreview(imageUrl) {
-  if (!imageUrl || imageUrl === DEFAULT_AVATAR) return;
-
-  // 已存在 → 替换图片
-  if (_avatarPreviewEl && document.body.contains(_avatarPreviewEl)) {
-    const img = _avatarPreviewEl.querySelector(".avatar-preview-img");
-    if (img) img.src = imageUrl;
-    return;
-  }
-
-  // 创建悬浮窗
-  const container = document.createElement("div");
-  container.className = "avatar-floating-preview";
-
-  // 关闭按钮（hover 时显示）
-  const closeBtn = document.createElement("button");
-  closeBtn.className = "avatar-preview-close";
-  closeBtn.textContent = "×";
-  closeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    _closeAvatarPreview();
-  });
-  container.appendChild(closeBtn);
-
-  // 图片
-  const img = document.createElement("img");
-  img.className = "avatar-preview-img";
-  img.src = imageUrl;
-  img.alt = "avatar preview";
-  img.addEventListener("error", () => {
-    _closeAvatarPreview();
-  });
-  container.appendChild(img);
-
-  // 拖拽逻辑
-  let isDragging = false;
-  let dragStartX, dragStartY, startLeft, startTop;
-
-  container.addEventListener("mousedown", (e) => {
-    if (e.target === closeBtn) return;
-    isDragging = true;
-    container.classList.add("dragging");
-    const rect = container.getBoundingClientRect();
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    startLeft = rect.left;
-    startTop = rect.top;
-    // 切换定位模式：从 bottom/right 改为 top/left
-    container.style.bottom = "auto";
-    container.style.right = "auto";
-    container.style.left = startLeft + "px";
-    container.style.top = startTop + "px";
-    e.preventDefault();
-  });
-
-  document.addEventListener("mousemove", _onPreviewMouseMove);
-  document.addEventListener("mouseup", _onPreviewMouseUp);
-
-  function _onPreviewMouseMove(e) {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartX;
-    const dy = e.clientY - dragStartY;
-    container.style.left = startLeft + dx + "px";
-    container.style.top = startTop + dy + "px";
-  }
-
-  function _onPreviewMouseUp() {
-    if (isDragging) {
-      isDragging = false;
-      container.classList.remove("dragging");
-    }
-  }
-
-  // 存储清理函数
-  container._cleanupDrag = () => {
-    document.removeEventListener("mousemove", _onPreviewMouseMove);
-    document.removeEventListener("mouseup", _onPreviewMouseUp);
-  };
-
-  document.body.appendChild(container);
-  _avatarPreviewEl = container;
-}
-
-/**
  * 关闭头像悬浮预览
  */
 function _closeAvatarPreview() {

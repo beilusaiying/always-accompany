@@ -6,16 +6,22 @@
 <title>always-accompany 使用手册 / User Manual</title>
 <meta name="description" content="always-accompany (beilu) 使用手册与开发文档 / User manual and developer docs">
 <style>
-:root{--bg:#f7f7f8;--panel:#ffffff;--border:#e4e4e7;--text:#27272a;--muted:#71717a;--accent:#4f6ef2;--accent-soft:#eef1fe;--code-bg:#f4f4f5}
+:root{--bg:#f7f7f9;--panel:#ffffff;--border:#e6e6ea;--text:#26262b;--muted:#72727c;--accent:#5b6cf0;--accent-2:#8b5cf6;--accent-soft:#eef0fe;--code-bg:#f4f4f6;--shadow:rgba(30,30,60,.08);--hero:linear-gradient(135deg,#5b6cf0 0%,#8b5cf6 100%)}
+[data-theme="dark"]{--bg:#131318;--panel:#1b1b22;--border:#2c2c36;--text:#e6e6ec;--muted:#9a9aa8;--accent:#8f9cff;--accent-2:#b394ff;--accent-soft:#262640;--code-bg:#23232d;--shadow:rgba(0,0,0,.45);--hero:linear-gradient(135deg,#3d47a8 0%,#6d4bb8 100%)}
 *{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Hiragino Sans","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--border)}
-header .logo{font-weight:700;font-size:15px;white-space:nowrap}
-header .logo a{color:inherit;text-decoration:none}
+html{color-scheme:light}
+[data-theme="dark"]{color-scheme:dark}
+body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Hiragino Sans","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;transition:background .25s,color .25s}
+header{display:flex;align-items:center;gap:12px;padding:9px 18px;background:var(--panel);border-bottom:1px solid var(--border);box-shadow:0 1px 8px var(--shadow)}
+header .logo{font-weight:700;font-size:15px;white-space:nowrap;display:flex;align-items:center;gap:8px}
+header .logo a{color:inherit;text-decoration:none;display:flex;align-items:center;gap:8px}
+header .logo img{width:26px;height:26px;border-radius:7px;display:block}
 header .spacer{flex:1}
 header select{font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text)}
 header .gh{font-size:13px;color:var(--muted);text-decoration:none;white-space:nowrap}
 header .gh:hover{color:var(--accent)}
+.theme-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:14px;cursor:pointer;color:var(--text);line-height:1.4}
+.theme-btn:hover{border-color:var(--accent)}
 .layout{flex:1;display:flex;min-height:0}
 .sidebar-wrap{width:270px;min-width:270px;border-right:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column}
 .toolbar{padding:10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
@@ -42,24 +48,29 @@ header .gh:hover{color:var(--accent)}
 .article h1{font-size:26px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .article h2{font-size:20px;margin-top:32px;border-bottom:1px solid var(--border);padding-bottom:6px}
 .article h3{font-size:16px;margin-top:24px}
-.article code{background:var(--code-bg);padding:2px 5px;border-radius:4px;font-size:13px;font-family:Consolas,Menlo,monospace}
-.article pre{background:var(--code-bg);padding:14px;border-radius:8px;overflow-x:auto}
+.article code{background:var(--code-bg);padding:2px 5px;border-radius:4px;font-size:13px;font-family:"Cascadia Code",Consolas,Menlo,monospace}
+.article pre{background:var(--code-bg);border:1px solid var(--border);padding:14px;border-radius:10px;overflow-x:auto;box-shadow:inset 0 1px 3px var(--shadow)}
 .article pre code{background:none;padding:0}
-.article table{border-collapse:collapse;width:100%;font-size:14px}
-.article th,.article td{border:1px solid var(--border);padding:6px 10px;text-align:left}
-.article th{background:var(--code-bg)}
-.article blockquote{margin:0;padding:2px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 6px 6px 0;color:var(--muted)}
-.article img{max-width:100%}
+.article table{border-collapse:collapse;width:100%;font-size:14px;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px var(--shadow)}
+.article th,.article td{border:1px solid var(--border);padding:7px 11px;text-align:left}
+.article th{background:var(--accent-soft);color:var(--text)}
+.article tr:nth-child(even) td{background:color-mix(in srgb,var(--code-bg) 55%,transparent)}
+.article blockquote{margin:0;padding:6px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--muted)}
+.article img{max-width:100%;border-radius:8px}
 .article a{color:var(--accent)}
+.article h1,.article h2{scroll-margin-top:12px}
 .app-only{color:var(--muted);border-bottom:1px dashed var(--muted);cursor:help}
-.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;max-width:860px;margin:20px auto}
-.home-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
-.home-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-2px)}
+.hero{max-width:860px;margin:26px auto 0;padding:30px 34px;border-radius:16px;background:var(--hero);color:#fff;box-shadow:0 8px 28px var(--shadow)}
+.hero h2{margin:0;font-size:26px;letter-spacing:.5px}
+.hero p{margin:8px 0 0;font-size:14px;opacity:.92}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;max-width:860px;margin:22px auto}
+.home-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:box-shadow .18s,transform .18s,border-color .18s;position:relative;overflow:hidden}
+.home-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hero);opacity:0;transition:opacity .18s}
+.home-card:hover{box-shadow:0 6px 20px var(--shadow);transform:translateY(-3px);border-color:var(--accent)}
+.home-card:hover::before{opacity:1}
 .home-icon{font-size:26px}
 .home-title{font-weight:600;margin-top:8px;font-size:14px}
 .home-count{font-size:12px;color:var(--muted);margin-top:4px}
-.home-heading{max-width:860px;margin:18px auto 0;font-size:22px}
-.home-sub{max-width:860px;margin:6px auto 0;color:var(--muted);font-size:14px}
 .menu-btn{display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:16px;cursor:pointer}
 .err{color:#dc2626;font-size:14px}
 .loading{color:var(--muted);font-size:13px}
@@ -74,8 +85,9 @@ header .gh:hover{color:var(--accent)}
 <body>
 <header>
   <button class="menu-btn" id="menu-btn">☰</button>
-  <div class="logo"><a href="#">📖 always-accompany</a></div>
+  <div class="logo"><a href="#"><img src="icon.jpg" alt="" onerror="this.style.display='none'">always-accompany</a></div>
   <div class="spacer"></div>
+  <button class="theme-btn" id="theme-btn" title="切换主题 / Toggle theme">🌙</button>
   <select id="lang-sel" style="display:none"></select>
   <a class="gh" href="https://github.com/beilusaiying/beilu-always-accompany" target="_blank" rel="noopener">GitHub ↗</a>
 </header>
@@ -212,9 +224,11 @@ function showHomepage() {
   const el = document.getElementById("content");
   if (!_index) return;
   el.innerHTML = "";
-  const h = document.createElement("h2"); h.className = "home-heading"; h.textContent = _index.title || "always-accompany 使用手册";
-  const sub = document.createElement("p"); sub.className = "home-sub";
-  sub.textContent = _lang === "en" ? "Select a chapter to start reading." : "选择一个章节开始阅读。";
+  const hero = document.createElement("div"); hero.className = "hero";
+  const h = document.createElement("h2"); h.textContent = _index.title || "always-accompany 使用手册";
+  const sub = document.createElement("p");
+  sub.textContent = _lang === "en" ? "Original layered memory · P1 external divergence · Select a chapter to start reading." : "原创分层记忆 · P1 外置发散 · 选择一个章节开始阅读。";
+  hero.append(h, sub);
   const grid = document.createElement("div"); grid.className = "home-grid";
   for (const ch of _index.tree) {
     const kids = (ch.children || []).filter(c => matchAudience(c.audience));
@@ -227,7 +241,7 @@ function showHomepage() {
     card.addEventListener("click", () => nav(kids[0].file));
     grid.appendChild(card);
   }
-  el.append(h, sub, grid);
+  el.append(hero, grid);
   updateBreadcrumb(null);
   document.querySelectorAll("#sidebar .item").forEach(i => i.classList.remove("active"));
 }
@@ -330,6 +344,25 @@ function initLangSelector() {
     else showHomepage();
   });
 }
+// 主题切换：localStorage 记忆，首访跟随系统
+const THEME_KEY = "beiluWikiTheme";
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  const btn = document.getElementById("theme-btn");
+  if (btn) btn.textContent = t === "dark" ? "☀️" : "🌙";
+}
+(function initTheme() {
+  const urlTheme = new URLSearchParams(location.search).get("theme");
+  const saved = localStorage.getItem(THEME_KEY);
+  const t = (urlTheme === "dark" || urlTheme === "light") ? urlTheme
+    : saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  applyTheme(t);
+})();
+document.getElementById("theme-btn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, cur);
+  applyTheme(cur);
+});
 function hideMobileSidebar() { document.getElementById("sidebar-wrap").classList.remove("show"); }
 document.getElementById("menu-btn").addEventListener("click", () => document.getElementById("sidebar-wrap").classList.toggle("show"));
 document.getElementById("search").addEventListener("input", e => filterSidebar(e.target.value));

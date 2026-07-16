@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "title": "always-accompany ユーザーマニュアル",
+  "languages": [
+    { "id": "zh-CN", "name": "简体中文" },
+    { "id": "zh-TW", "name": "繁體中文" },
+    { "id": "ja", "name": "日本語" },
+    { "id": "en", "name": "English" }
+  ],
+  "tree": [
+    {
+      "title": "クイックスタート",
+      "icon": "rocket",
+      "children": [
+        { "title": "クイックスタート", "file": "getting-started/overview.md", "audience": ["beginner", "user", "developer"] },
+        { "title": "AI サービスソースの設定", "file": "getting-started/install.md", "audience": ["beginner", "user"] },
+        { "title": "プリセットとパラメータ", "file": "getting-started/first-chat.md", "audience": ["beginner", "user"] },
+        { "title": "UIレイアウト", "file": "getting-started/ui-guide.md", "audience": ["beginner", "user"] }
+      ]
+    },
+    {
+      "title": "モードシステム",
+      "icon": "layers",
+      "children": [
+        { "title": "モード概要", "file": "modes/overview.md", "audience": ["user", "developer"] },
+        { "title": "チャットモード", "file": "modes/chat.md", "audience": ["beginner", "user"] },
+        { "title": "コードモード (Code/IDE)", "file": "modes/ide.md", "audience": ["user", "developer"] },
+        { "title": "ワークモード", "file": "modes/work.md", "audience": ["user", "developer"] },
+        { "title": "Bot モード", "file": "modes/bot.md", "audience": ["user", "developer"] },
+        { "title": "ゲームコンパニオンモード", "file": "modes/game.md", "audience": ["user"] },
+        { "title": "サブモードと切り替え", "file": "modes/submodes.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "マクロシステム",
+      "icon": "code",
+      "children": [
+        { "title": "マクロとは", "file": "macros/overview.md", "audience": ["beginner", "user"] },
+        { "title": "基本マクロ", "file": "macros/basic.md", "audience": ["beginner", "user"] },
+        { "title": "高度なマクロ", "file": "macros/advanced.md", "audience": ["user", "developer"] },
+        { "title": "変数マクロ", "file": "macros/variables.md", "audience": ["user", "developer"] },
+        { "title": "記憶システムマクロ", "file": "macros/memory.md", "audience": ["user", "developer"] },
+        { "title": "IDE/コードマクロ", "file": "macros/ide.md", "audience": ["developer"] },
+        { "title": "env カスタム変数マクロ", "file": "macros/env.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "記憶システム",
+      "icon": "brain",
+      "children": [
+        { "title": "記憶システム概要", "file": "memory/overview.md", "audience": ["beginner", "user"] },
+        { "title": "記憶テーブル (#0-#9)", "file": "memory/tables.md", "audience": ["user", "developer"] },
+        { "title": "ホットレイヤー記憶", "file": "memory/hot-layer.md", "audience": ["user", "developer"] },
+        { "title": "記憶AIプリセット (P1-P8)", "file": "memory/presets.md", "audience": ["developer"] },
+        { "title": "コンテキスト圧縮", "file": "memory/compression.md", "audience": ["user", "developer"] },
+        { "title": "記憶アーカイブと検索", "file": "memory/archival.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "ワールドブック",
+      "icon": "book",
+      "children": [
+        { "title": "ワールドブック概要", "file": "memory/worldbook-overview.md", "audience": ["beginner", "user"] },
+        { "title": "エントリとトリガー機構", "file": "memory/worldbook-entries.md", "audience": ["user", "developer"] },
+        { "title": "正規表現とレンダリングエントリ", "file": "memory/worldbook-regex.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "インジェクションシステム (INJ)",
+      "icon": "inject",
+      "children": [
+        { "title": "インジェクションシステム概要", "file": "memory/inj-overview.md", "audience": ["user", "developer"] },
+        { "title": "INJ ルール設定", "file": "memory/inj-rules.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "プリセットエンジン",
+      "icon": "settings",
+      "children": [
+        { "title": "プリセットシステム概要", "file": "presets/overview.md", "audience": ["beginner", "user"] },
+        { "title": "プリセットの分類と選択", "file": "presets/categories.md", "audience": ["user"] },
+        { "title": "プリセットエントリ構造", "file": "presets/structure.md", "audience": ["developer"] },
+        { "title": "コマンダーモード", "file": "presets/commander.md", "audience": ["developer"] },
+        { "title": "プリセットとモードの連動", "file": "presets/mode-binding.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "AI サービス設定",
+      "icon": "zap",
+      "children": [
+        { "title": "サービスソース概要", "file": "ai-service/overview.md", "audience": ["beginner", "user"] },
+        { "title": "対応 AI プロバイダ", "file": "ai-service/providers.md", "audience": ["user"] },
+        { "title": "API 設定詳細", "file": "ai-service/api-config.md", "audience": ["user", "developer"] },
+        { "title": "モデルパラメータ", "file": "ai-service/model-params.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "プロンプトチュートリアル",
+      "icon": "lightbulb",
+      "children": [
+        { "title": "LLM 大規模言語モデルを理解する", "file": "prompt-techniques/llm-basics.md", "audience": ["beginner", "user"] },
+        { "title": "ゼロから始めるプロンプト入門", "file": "prompt-techniques/prompt-basics.md", "audience": ["beginner", "user"] },
+        { "title": "always-accompany でのプロンプト実践", "file": "prompt-techniques/practice.md", "audience": ["user", "developer"] },
+        { "title": "上級・専門テクニック", "file": "prompt-techniques/advanced.md", "audience": ["user", "developer"] },
+        { "title": "プロンプト基礎理論", "file": "prompt-techniques/theory.md", "audience": ["beginner", "user"] },
+        { "title": "アイデンティティ設定テクニック", "file": "prompt-techniques/identity.md", "audience": ["user"] },
+        { "title": "禁止より誘導", "file": "prompt-techniques/guide-not-ban.md", "audience": ["user"] },
+        { "title": "CoT 思考の連鎖", "file": "prompt-techniques/cot.md", "audience": ["user", "developer"] },
+        { "title": "精錬とイテレーション", "file": "prompt-techniques/refine.md", "audience": ["user"] },
+        { "title": "小さな言葉、大きな効果", "file": "prompt-techniques/small-words.md", "audience": ["user", "developer"] },
+        { "title": "書式と記号の活用", "file": "prompt-techniques/formatting.md", "audience": ["user"] },
+        { "title": "Few-Shot プロンプティング", "file": "prompt-techniques/few-shot.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "プラグインシステム",
+      "icon": "plug",
+      "children": [
+        { "title": "プラグイン概要", "file": "plugins/overview.md", "audience": ["user", "developer"] },
+        { "title": "ファイル操作 (beilu-files)", "file": "plugins/files.md", "audience": ["user", "developer"] },
+        { "title": "画面認識 (beilu-eye)", "file": "plugins/eye.md", "audience": ["user"] },
+        { "title": "ウェブ検索 (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
+        { "title": "正規表現拡張 (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
+        { "title": "変数システム (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
+        { "title": "スクリプトエンジン", "file": "plugins/scripts.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "YonBan (IDE 拡張)",
+      "icon": "wrench",
+      "children": [
+        { "title": "YonBan 概要", "file": "yonban/overview.md", "audience": ["user", "developer"] },
+        { "title": "ツール一覧", "file": "yonban/tools.md", "audience": ["user", "developer"] },
+        { "title": "承認と権限", "file": "yonban/approval.md", "audience": ["user", "developer"] },
+        { "title": "実行パイプライン", "file": "yonban/architecture.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "セキュリティ設定",
+      "icon": "shield",
+      "children": [
+        { "title": "セキュリティセンター", "file": "security/overview.md", "audience": ["user", "developer"] },
+        { "title": "権限と認証", "file": "security/auth.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "開発者ガイド",
+      "icon": "wrench",
+      "children": [
+        { "title": "システムアーキテクチャ", "file": "developer/architecture.md", "audience": ["developer"] },
+        { "title": "メッセージパイプライン", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "プラグイン開発", "file": "developer/plugin-dev.md", "audience": ["developer"] },
+        { "title": "API エンドポイントリファレンス", "file": "developer/api-reference.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "P1 自己駆動発散リコール",
+      "icon": "brain",
+      "children": [
+        { "title": "まえがき：概要と総目次", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "第1章 設計理念とコンセプト体系", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
+        { "title": "第2章 システムアーキテクチャと処理フロー", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
+        { "title": "第3章 アルゴリズム設計と形式的記述", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },
+        { "title": "第4章 記憶システム", "file": "p1-recall/ch4-memory.md", "audience": ["user", "developer"] },
+        { "title": "第5章 システム進化と実験評価", "file": "p1-recall/ch5-evolution.md", "audience": ["developer"] },
+        { "title": "第6章 リソース体系と付録", "file": "p1-recall/ch6-resources.md", "audience": ["developer"] }
+      ]
+    }
+  ]
+}

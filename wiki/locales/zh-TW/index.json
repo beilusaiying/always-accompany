@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "title": "always-accompany 使用手冊",
+  "languages": [
+    { "id": "zh-CN", "name": "简体中文" },
+    { "id": "zh-TW", "name": "繁體中文" },
+    { "id": "ja", "name": "日本語" },
+    { "id": "en", "name": "English" }
+  ],
+  "tree": [
+    {
+      "title": "快速開始",
+      "icon": "rocket",
+      "children": [
+        { "title": "快速開始", "file": "getting-started/overview.md", "audience": ["beginner", "user", "developer"] },
+        { "title": "設定 AI 服務來源", "file": "getting-started/install.md", "audience": ["beginner", "user"] },
+        { "title": "預設集與參數", "file": "getting-started/first-chat.md", "audience": ["beginner", "user"] },
+        { "title": "介面佈局", "file": "getting-started/ui-guide.md", "audience": ["beginner", "user"] }
+      ]
+    },
+    {
+      "title": "模式系統",
+      "icon": "layers",
+      "children": [
+        { "title": "模式概覽", "file": "modes/overview.md", "audience": ["user", "developer"] },
+        { "title": "聊天模式 (Chat)", "file": "modes/chat.md", "audience": ["beginner", "user"] },
+        { "title": "程式碼模式 (Code/IDE)", "file": "modes/ide.md", "audience": ["user", "developer"] },
+        { "title": "工作模式 (Work)", "file": "modes/work.md", "audience": ["user", "developer"] },
+        { "title": "Bot 模式", "file": "modes/bot.md", "audience": ["user", "developer"] },
+        { "title": "遊戲陪伴模式", "file": "modes/game.md", "audience": ["user"] },
+        { "title": "子模式與切換", "file": "modes/submodes.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "巨集系統",
+      "icon": "code",
+      "children": [
+        { "title": "巨集是什麼", "file": "macros/overview.md", "audience": ["beginner", "user"] },
+        { "title": "基礎巨集", "file": "macros/basic.md", "audience": ["beginner", "user"] },
+        { "title": "進階巨集", "file": "macros/advanced.md", "audience": ["user", "developer"] },
+        { "title": "變數巨集", "file": "macros/variables.md", "audience": ["user", "developer"] },
+        { "title": "記憶系統巨集", "file": "macros/memory.md", "audience": ["user", "developer"] },
+        { "title": "IDE/程式碼巨集", "file": "macros/ide.md", "audience": ["developer"] },
+        { "title": "env 自訂變數巨集", "file": "macros/env.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "記憶系統",
+      "icon": "brain",
+      "children": [
+        { "title": "記憶系統概覽", "file": "memory/overview.md", "audience": ["beginner", "user"] },
+        { "title": "記憶表格 (#0-#9)", "file": "memory/tables.md", "audience": ["user", "developer"] },
+        { "title": "熱層記憶", "file": "memory/hot-layer.md", "audience": ["user", "developer"] },
+        { "title": "記憶 AI 預設集 (P1-P8)", "file": "memory/presets.md", "audience": ["developer"] },
+        { "title": "上下文壓縮", "file": "memory/compression.md", "audience": ["user", "developer"] },
+        { "title": "記憶歸檔與檢索", "file": "memory/archival.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "世界書",
+      "icon": "book",
+      "children": [
+        { "title": "世界書概覽", "file": "memory/worldbook-overview.md", "audience": ["beginner", "user"] },
+        { "title": "條目與觸發機制", "file": "memory/worldbook-entries.md", "audience": ["user", "developer"] },
+        { "title": "正規表示式與渲染條目", "file": "memory/worldbook-regex.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "注入系統 (INJ)",
+      "icon": "inject",
+      "children": [
+        { "title": "注入系統概覽", "file": "memory/inj-overview.md", "audience": ["user", "developer"] },
+        { "title": "INJ 規則設定", "file": "memory/inj-rules.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "預設集引擎",
+      "icon": "settings",
+      "children": [
+        { "title": "預設集系統概覽", "file": "presets/overview.md", "audience": ["beginner", "user"] },
+        { "title": "預設集分類與選擇", "file": "presets/categories.md", "audience": ["user"] },
+        { "title": "預設集條目結構", "file": "presets/structure.md", "audience": ["developer"] },
+        { "title": "司令員模式", "file": "presets/commander.md", "audience": ["developer"] },
+        { "title": "預設集與模式連動", "file": "presets/mode-binding.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "AI 服務設定",
+      "icon": "zap",
+      "children": [
+        { "title": "服務來源概覽", "file": "ai-service/overview.md", "audience": ["beginner", "user"] },
+        { "title": "支援的 AI 服務商", "file": "ai-service/providers.md", "audience": ["user"] },
+        { "title": "API 設定詳解", "file": "ai-service/api-config.md", "audience": ["user", "developer"] },
+        { "title": "模型參數", "file": "ai-service/model-params.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "提示詞教學",
+      "icon": "lightbulb",
+      "children": [
+        { "title": "認識 LLM 大型語言模型", "file": "prompt-techniques/llm-basics.md", "audience": ["beginner", "user"] },
+        { "title": "從零開始認識提示詞", "file": "prompt-techniques/prompt-basics.md", "audience": ["beginner", "user"] },
+        { "title": "always-accompany 的提示詞實戰", "file": "prompt-techniques/practice.md", "audience": ["user", "developer"] },
+        { "title": "進階與專業技巧", "file": "prompt-techniques/advanced.md", "audience": ["user", "developer"] },
+        { "title": "提示詞基礎理論", "file": "prompt-techniques/theory.md", "audience": ["beginner", "user"] },
+        { "title": "身份設定技巧", "file": "prompt-techniques/identity.md", "audience": ["user"] },
+        { "title": "引導優於禁止", "file": "prompt-techniques/guide-not-ban.md", "audience": ["user"] },
+        { "title": "CoT 思維鏈", "file": "prompt-techniques/cot.md", "audience": ["user", "developer"] },
+        { "title": "精簡與迭代", "file": "prompt-techniques/refine.md", "audience": ["user"] },
+        { "title": "小詞彙大作用", "file": "prompt-techniques/small-words.md", "audience": ["user", "developer"] },
+        { "title": "格式與符號運用", "file": "prompt-techniques/formatting.md", "audience": ["user"] },
+        { "title": "少樣本提示", "file": "prompt-techniques/few-shot.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "外掛系統",
+      "icon": "plug",
+      "children": [
+        { "title": "外掛概覽", "file": "plugins/overview.md", "audience": ["user", "developer"] },
+        { "title": "檔案操作 (beilu-files)", "file": "plugins/files.md", "audience": ["user", "developer"] },
+        { "title": "螢幕感知 (beilu-eye)", "file": "plugins/eye.md", "audience": ["user"] },
+        { "title": "網路搜尋 (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
+        { "title": "正規表示式增強 (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
+        { "title": "變數系統 (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
+        { "title": "腳本引擎", "file": "plugins/scripts.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "YonBan (IDE 擴充)",
+      "icon": "wrench",
+      "children": [
+        { "title": "YonBan 概覽", "file": "yonban/overview.md", "audience": ["user", "developer"] },
+        { "title": "工具清單", "file": "yonban/tools.md", "audience": ["user", "developer"] },
+        { "title": "審批與權限", "file": "yonban/approval.md", "audience": ["user", "developer"] },
+        { "title": "執行鏈路", "file": "yonban/architecture.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "安全設定",
+      "icon": "shield",
+      "children": [
+        { "title": "安全中心", "file": "security/overview.md", "audience": ["user", "developer"] },
+        { "title": "權限與驗證", "file": "security/auth.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "開發者指南",
+      "icon": "wrench",
+      "children": [
+        { "title": "系統架構", "file": "developer/architecture.md", "audience": ["developer"] },
+        { "title": "訊息管線", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "外掛開發", "file": "developer/plugin-dev.md", "audience": ["developer"] },
+        { "title": "API 端點參考", "file": "developer/api-reference.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "P1 自驅動發散召回",
+      "icon": "brain",
+      "children": [
+        { "title": "前言：摘要與總目錄", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "第1章 設計理念與概念體系", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
+        { "title": "第2章 系統架構與處理流程", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
+        { "title": "第3章 演算法設計與形式化描述", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },
+        { "title": "第4章 記憶系統", "file": "p1-recall/ch4-memory.md", "audience": ["user", "developer"] },
+        { "title": "第5章 系統演進與實驗評估", "file": "p1-recall/ch5-evolution.md", "audience": ["developer"] },
+        { "title": "第6章 資源體系與附錄", "file": "p1-recall/ch6-resources.md", "audience": ["developer"] }
+      ]
+    }
+  ]
+}

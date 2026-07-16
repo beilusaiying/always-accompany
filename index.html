@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>always-accompany 使用手册 / User Manual</title>
+<meta name="description" content="always-accompany (beilu) 使用手册与开发文档 / User manual and developer docs">
+<style>
+:root{--bg:#f7f7f8;--panel:#ffffff;--border:#e4e4e7;--text:#27272a;--muted:#71717a;--accent:#4f6ef2;--accent-soft:#eef1fe;--code-bg:#f4f4f5}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Hiragino Sans","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--border)}
+header .logo{font-weight:700;font-size:15px;white-space:nowrap}
+header .logo a{color:inherit;text-decoration:none}
+header .spacer{flex:1}
+header select{font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text)}
+header .gh{font-size:13px;color:var(--muted);text-decoration:none;white-space:nowrap}
+header .gh:hover{color:var(--accent)}
+.layout{flex:1;display:flex;min-height:0}
+.sidebar-wrap{width:270px;min-width:270px;border-right:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column}
+.toolbar{padding:10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.toolbar input{width:100%;padding:6px 9px;font-size:13px;border:1px solid var(--border);border-radius:6px;outline:none}
+.toolbar input:focus{border-color:var(--accent)}
+.aud-tabs{display:flex;gap:4px}
+.aud-btn{flex:1;font-size:12px;padding:4px 0;border:1px solid var(--border);background:var(--panel);border-radius:6px;cursor:pointer;color:var(--muted)}
+.aud-btn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.sidebar{flex:1;overflow-y:auto;padding:8px}
+.sec-header{display:flex;align-items:center;gap:6px;padding:7px 8px;font-size:13px;font-weight:600;cursor:pointer;border-radius:6px;user-select:none}
+.sec-header:hover{background:var(--accent-soft)}
+.chevron{font-size:9px;transition:transform .15s;color:var(--muted)}
+.sec.open .chevron{transform:rotate(90deg)}
+.sec-list{display:none;padding-left:14px}
+.sec.open .sec-list{display:block}
+.item{padding:5px 9px;font-size:13px;color:var(--muted);cursor:pointer;border-radius:6px;line-height:1.4}
+.item:hover{background:var(--accent-soft);color:var(--text)}
+.item.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.breadcrumb{padding:10px 26px 0;font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;min-height:20px}
+.bc-home{cursor:pointer}
+.content{flex:1;overflow-y:auto;padding:14px 26px 60px}
+.article{max-width:860px;margin:0 auto;line-height:1.75;font-size:15px}
+.article h1{font-size:26px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.article h2{font-size:20px;margin-top:32px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.article h3{font-size:16px;margin-top:24px}
+.article code{background:var(--code-bg);padding:2px 5px;border-radius:4px;font-size:13px;font-family:Consolas,Menlo,monospace}
+.article pre{background:var(--code-bg);padding:14px;border-radius:8px;overflow-x:auto}
+.article pre code{background:none;padding:0}
+.article table{border-collapse:collapse;width:100%;font-size:14px}
+.article th,.article td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.article th{background:var(--code-bg)}
+.article blockquote{margin:0;padding:2px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 6px 6px 0;color:var(--muted)}
+.article img{max-width:100%}
+.article a{color:var(--accent)}
+.app-only{color:var(--muted);border-bottom:1px dashed var(--muted);cursor:help}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;max-width:860px;margin:20px auto}
+.home-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.home-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-2px)}
+.home-icon{font-size:26px}
+.home-title{font-weight:600;margin-top:8px;font-size:14px}
+.home-count{font-size:12px;color:var(--muted);margin-top:4px}
+.home-heading{max-width:860px;margin:18px auto 0;font-size:22px}
+.home-sub{max-width:860px;margin:6px auto 0;color:var(--muted);font-size:14px}
+.menu-btn{display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:16px;cursor:pointer}
+.err{color:#dc2626;font-size:14px}
+.loading{color:var(--muted);font-size:13px}
+@media (max-width:760px){
+  .menu-btn{display:block}
+  .sidebar-wrap{position:fixed;top:49px;left:0;bottom:0;z-index:20;transform:translateX(-100%);transition:transform .2s;box-shadow:4px 0 18px rgba(0,0,0,.1)}
+  .sidebar-wrap.show{transform:translateX(0)}
+  .content{padding:12px 16px 60px}
+}
+</style>
+</head>
+<body>
+<header>
+  <button class="menu-btn" id="menu-btn">☰</button>
+  <div class="logo"><a href="#">📖 always-accompany</a></div>
+  <div class="spacer"></div>
+  <select id="lang-sel" style="display:none"></select>
+  <a class="gh" href="https://github.com/beilusaiying/beilu-always-accompany" target="_blank" rel="noopener">GitHub ↗</a>
+</header>
+<div class="layout">
+  <div class="sidebar-wrap" id="sidebar-wrap">
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="搜索 / Search...">
+      <div class="aud-tabs" id="aud-tabs">
+        <button class="aud-btn active" data-aud="user">使用者</button>
+        <button class="aud-btn" data-aud="beginner">新手</button>
+        <button class="aud-btn" data-aud="developer">开发者</button>
+      </div>
+    </div>
+    <div class="sidebar" id="sidebar"></div>
+  </div>
+  <div class="main">
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="content" id="content"><p class="loading">加载中... / Loading...</p></div>
+  </div>
+</div>
+<script>
+"use strict";
+/* 独立静态 wiki 查看器 — 语义对齐应用内 wikiViewer.mjs：
+   覆盖式多语言（zh-CN 原文默认，locales/{lang}/ 同路径覆盖、缺失回退中文）、
+   受众过滤、beilu: 应用内协议降级、.md 相对链接站内导航、hash 深链。 */
+const WIKI_BASE = "wiki/";
+const LANG_KEY = "beiluWikiLang";
+const ICON_MAP = { rocket:"🚀", layers:"📑", code:"⚙", brain:"🧠", book:"📖", inject:"💉", settings:"🎛", zap:"⚡", lightbulb:"💡", plug:"🔌", shield:"🛡", wrench:"🔧" };
+const AUD_LABELS = {
+  "zh-CN": { user: "使用者", beginner: "新手", developer: "开发者" },
+  "zh-TW": { user: "使用者", beginner: "新手", developer: "開發者" },
+  "ja":    { user: "ユーザー", beginner: "初心者", developer: "開発者" },
+  "en":    { user: "User", beginner: "Beginner", developer: "Developer" }
+};
+function applyAudLabels() {
+  const map = AUD_LABELS[_lang] || AUD_LABELS["zh-CN"];
+  document.querySelectorAll(".aud-btn").forEach(b => { b.textContent = map[b.dataset.aud] || b.dataset.aud; });
+}
+const CDN = [
+  ["https://testingcf.jsdelivr.net/npm/marked@12/marked.min.js", "https://testingcf.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"],
+  ["https://cdn.jsdelivr.net/npm/marked@12/marked.min.js", "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"]
+];
+let _lang = localStorage.getItem(LANG_KEY) || detectLang();
+let _rootIndex = null, _index = null, _indexLang = null, _currentFile = null;
+let _audience = "user";
+let _mdReady = null;
+
+function detectLang() {
+  const nav = (navigator.language || "zh-CN").toLowerCase();
+  if (nav.startsWith("zh-tw") || nav.startsWith("zh-hant") || nav.startsWith("zh-hk")) return "zh-TW";
+  if (nav.startsWith("ja")) return "ja";
+  if (nav.startsWith("zh")) return "zh-CN";
+  return "en";
+}
+function loadScript(src) {
+  return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+}
+function ensureMd() {
+  if (_mdReady) return _mdReady;
+  _mdReady = (async () => {
+    for (const [markedSrc, purifySrc] of CDN) {
+      try { await loadScript(markedSrc); await loadScript(purifySrc); return true; }
+      catch { /* 下一个 CDN */ }
+    }
+    return false; // 全挂 → 降级 <pre> 原文
+  })();
+  return _mdReady;
+}
+async function fetchRootIndex() {
+  if (_rootIndex) return _rootIndex;
+  const res = await fetch(WIKI_BASE + "index.json");
+  if (!res.ok) throw new Error("index fetch " + res.status);
+  _rootIndex = await res.json();
+  return _rootIndex;
+}
+async function fetchIndex() {
+  if (_index && _indexLang === _lang) return _index;
+  _index = await fetchRootIndex();
+  if (_lang !== "zh-CN") try {
+    const res = await fetch(WIKI_BASE + "locales/" + _lang + "/index.json");
+    if (res.ok) _index = await res.json();
+  } catch { /* 覆盖层缺失回退中文 */ }
+  _indexLang = _lang;
+  return _index;
+}
+function matchAudience(a) { return !a || a.length === 0 || a.includes(_audience); }
+
+function renderSidebar(tree) {
+  const sb = document.getElementById("sidebar");
+  sb.innerHTML = "";
+  for (const ch of tree) {
+    const kids = (ch.children || []).filter(c => matchAudience(c.audience));
+    if (!kids.length) continue;
+    const sec = document.createElement("div");
+    sec.className = "sec";
+    const head = document.createElement("div");
+    head.className = "sec-header";
+    const chev = document.createElement("span"); chev.className = "chevron"; chev.textContent = "▶";
+    const ico = document.createElement("span"); ico.textContent = ICON_MAP[ch.icon] || "";
+    const t = document.createElement("span"); t.textContent = ch.title;
+    head.append(chev, ico, t);
+    head.addEventListener("click", () => sec.classList.toggle("open"));
+    sec.appendChild(head);
+    const list = document.createElement("div");
+    list.className = "sec-list";
+    for (const item of kids) {
+      const el = document.createElement("div");
+      el.className = "item"; el.textContent = item.title; el.dataset.file = item.file;
+      el.addEventListener("click", () => { nav(item.file); hideMobileSidebar(); });
+      list.appendChild(el);
+    }
+    sec.appendChild(list);
+    sb.appendChild(sec);
+  }
+}
+function updateBreadcrumb(file) {
+  const bc = document.getElementById("breadcrumb");
+  if (!file || !_index) { bc.innerHTML = ""; return; }
+  let chT = "", pgT = "";
+  for (const ch of _index.tree) {
+    const f = (ch.children || []).find(c => c.file === file);
+    if (f) { chT = ch.title; pgT = f.title; break; }
+  }
+  bc.innerHTML = "";
+  const home = document.createElement("span"); home.className = "bc-home"; home.textContent = "📖"; home.title = "首页 / Home";
+  home.addEventListener("click", () => nav(null));
+  const s1 = document.createElement("span"); s1.textContent = "›";
+  const c = document.createElement("span"); c.textContent = chT;
+  const s2 = document.createElement("span"); s2.textContent = "›";
+  const p = document.createElement("span"); p.textContent = pgT;
+  bc.append(home, s1, c, s2, p);
+}
+function showHomepage() {
+  const el = document.getElementById("content");
+  if (!_index) return;
+  el.innerHTML = "";
+  const h = document.createElement("h2"); h.className = "home-heading"; h.textContent = _index.title || "always-accompany 使用手册";
+  const sub = document.createElement("p"); sub.className = "home-sub";
+  sub.textContent = _lang === "en" ? "Select a chapter to start reading." : "选择一个章节开始阅读。";
+  const grid = document.createElement("div"); grid.className = "home-grid";
+  for (const ch of _index.tree) {
+    const kids = (ch.children || []).filter(c => matchAudience(c.audience));
+    if (!kids.length) continue;
+    const card = document.createElement("div"); card.className = "home-card";
+    const ico = document.createElement("div"); ico.className = "home-icon"; ico.textContent = ICON_MAP[ch.icon] || "📄";
+    const t = document.createElement("div"); t.className = "home-title"; t.textContent = ch.title;
+    const n = document.createElement("div"); n.className = "home-count"; n.textContent = kids.length + (_lang === "en" ? " pages" : " 篇");
+    card.append(ico, t, n);
+    card.addEventListener("click", () => nav(kids[0].file));
+    grid.appendChild(card);
+  }
+  el.append(h, sub, grid);
+  updateBreadcrumb(null);
+  document.querySelectorAll("#sidebar .item").forEach(i => i.classList.remove("active"));
+}
+async function loadPage(file) {
+  _currentFile = file;
+  const el = document.getElementById("content");
+  el.innerHTML = '<p class="loading">加载中... / Loading...</p>';
+  try {
+    let res = null;
+    if (_lang !== "zh-CN")
+      res = await fetch(WIKI_BASE + "locales/" + _lang + "/" + file).catch(() => null);
+    if (!res || !res.ok) res = await fetch(WIKI_BASE + file);
+    if (!res.ok) { el.innerHTML = '<p class="err">页面不存在 / Not found: ' + file.replace(/[<>&]/g, "") + "</p>"; return; }
+    const md = await res.text();
+    const art = document.createElement("article"); art.className = "article";
+    if (await ensureMd()) {
+      // ALLOWED_URI_REGEXP 放行 beilu: 应用内协议，否则 DOMPurify 剥掉 href 导致降级检测落空
+      art.innerHTML = DOMPurify.sanitize(marked.parse(md), {
+        ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|beilu):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i
+      });
+    } else {
+      const pre = document.createElement("pre"); pre.textContent = md; art.appendChild(pre); // CDN 全挂降级
+    }
+    el.innerHTML = ""; el.appendChild(art);
+    art.querySelectorAll("a").forEach(a => {
+      const href = a.getAttribute("href") || "";
+      if (href.startsWith("beilu:") || !href) {
+        const span = document.createElement("span");
+        span.className = "app-only"; span.textContent = a.textContent;
+        span.title = _lang === "en" ? "This action is available inside the beilu app" : "此操作需在 beilu 应用内进行";
+        a.replaceWith(span);
+      } else if (href.endsWith(".md")) {
+        a.addEventListener("click", e => {
+          e.preventDefault();
+          const resolved = _currentFile ? new URL(href, "http://x/" + _currentFile).pathname.slice(1) : href;
+          nav(resolved);
+        });
+      } else if (/^https?:/.test(href)) {
+        a.target = "_blank"; a.rel = "noopener";
+      }
+    });
+    el.scrollTop = 0;
+  } catch (e) {
+    el.innerHTML = '<p class="err">加载失败 / Load failed: ' + String(e.message).replace(/[<>&]/g, "") + "</p>";
+  }
+  updateBreadcrumb(file);
+  document.querySelectorAll("#sidebar .item").forEach(i => {
+    i.classList.toggle("active", i.dataset.file === file);
+    if (i.dataset.file === file) i.closest(".sec")?.classList.add("open");
+  });
+}
+function nav(file) {
+  location.hash = file ? encodeURIComponent(_lang) + "/" + file : "";
+  if (!file) { _currentFile = null; showHomepage(); }
+}
+function applyHash() {
+  const h = decodeURIComponent(location.hash.replace(/^#/, ""));
+  if (!h) { _currentFile = null; showHomepage(); return; }
+  const idx = h.indexOf("/");
+  if (idx > 0) {
+    const lang = h.slice(0, idx), file = h.slice(idx + 1);
+    if (_rootIndex?.languages?.some(l => l.id === lang) && lang !== _lang) {
+      _lang = lang; localStorage.setItem(LANG_KEY, _lang);
+      const sel = document.getElementById("lang-sel");
+      if (sel) sel.value = _lang;
+      applyAudLabels();
+      fetchIndex().then(i => renderSidebar(i.tree));
+    }
+    if (file) { loadPage(file); return; }
+  }
+  showHomepage();
+}
+function filterSidebar(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll("#sidebar .sec").forEach(sec => {
+    let any = false;
+    sec.querySelectorAll(".item").forEach(it => {
+      const m = !q || it.textContent.toLowerCase().includes(q);
+      it.style.display = m ? "" : "none";
+      if (m) any = true;
+    });
+    sec.style.display = any ? "" : "none";
+    if (q && any) sec.classList.add("open");
+  });
+}
+function initLangSelector() {
+  const sel = document.getElementById("lang-sel");
+  const langs = _rootIndex?.languages;
+  if (!Array.isArray(langs) || langs.length < 2) return;
+  if (!langs.some(l => l.id === _lang)) _lang = "zh-CN";
+  sel.innerHTML = langs.map(l => `<option value="${l.id}"${l.id === _lang ? " selected" : ""}>${l.name}</option>`).join("");
+  sel.style.display = "";
+  sel.addEventListener("change", async () => {
+    _lang = sel.value;
+    localStorage.setItem(LANG_KEY, _lang);
+    applyAudLabels();
+    const idx = await fetchIndex();
+    renderSidebar(idx.tree);
+    if (_currentFile) { location.hash = encodeURIComponent(_lang) + "/" + _currentFile; loadPage(_currentFile); }
+    else showHomepage();
+  });
+}
+function hideMobileSidebar() { document.getElementById("sidebar-wrap").classList.remove("show"); }
+document.getElementById("menu-btn").addEventListener("click", () => document.getElementById("sidebar-wrap").classList.toggle("show"));
+document.getElementById("search").addEventListener("input", e => filterSidebar(e.target.value));
+document.querySelectorAll(".aud-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    _audience = btn.dataset.aud;
+    document.querySelectorAll(".aud-btn").forEach(b => b.classList.toggle("active", b === btn));
+    if (_index) renderSidebar(_index.tree);
+    if (!_currentFile) showHomepage();
+  });
+});
+window.addEventListener("hashchange", applyHash);
+(async () => {
+  try {
+    ensureMd();
+    const idx = await fetchIndex();
+    initLangSelector();
+    applyAudLabels();
+    renderSidebar(idx.tree);
+    applyHash();
+  } catch (e) {
+    document.getElementById("content").innerHTML = '<p class="err">目录加载失败 / Failed to load index: ' + String(e.message).replace(/[<>&]/g, "") + "</p>";
+  }
+})();
+</script>
+</body>
+</html>

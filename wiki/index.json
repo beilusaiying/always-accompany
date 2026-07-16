@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "title": "always-accompany 使用手册",
+  "languages": [
+    { "id": "zh-CN", "name": "简体中文" },
+    { "id": "zh-TW", "name": "繁體中文" },
+    { "id": "ja", "name": "日本語" },
+    { "id": "en", "name": "English" }
+  ],
+  "tree": [
+    {
+      "title": "快速开始",
+      "icon": "rocket",
+      "children": [
+        { "title": "快速开始", "file": "getting-started/overview.md", "audience": ["beginner", "user", "developer"] },
+        { "title": "配置 AI 服务源", "file": "getting-started/install.md", "audience": ["beginner", "user"] },
+        { "title": "预设与参数", "file": "getting-started/first-chat.md", "audience": ["beginner", "user"] },
+        { "title": "界面布局", "file": "getting-started/ui-guide.md", "audience": ["beginner", "user"] }
+      ]
+    },
+    {
+      "title": "模式系统",
+      "icon": "layers",
+      "children": [
+        { "title": "模式概览", "file": "modes/overview.md", "audience": ["user", "developer"] },
+        { "title": "聊天模式 (Chat)", "file": "modes/chat.md", "audience": ["beginner", "user"] },
+        { "title": "编程模式 (Code/IDE)", "file": "modes/ide.md", "audience": ["user", "developer"] },
+        { "title": "工作模式 (Work)", "file": "modes/work.md", "audience": ["user", "developer"] },
+        { "title": "Bot 模式", "file": "modes/bot.md", "audience": ["user", "developer"] },
+        { "title": "游戏陪伴模式", "file": "modes/game.md", "audience": ["user"] },
+        { "title": "子模式与切换", "file": "modes/submodes.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "宏系统",
+      "icon": "code",
+      "children": [
+        { "title": "宏是什么", "file": "macros/overview.md", "audience": ["beginner", "user"] },
+        { "title": "基础宏", "file": "macros/basic.md", "audience": ["beginner", "user"] },
+        { "title": "高级宏", "file": "macros/advanced.md", "audience": ["user", "developer"] },
+        { "title": "变量宏", "file": "macros/variables.md", "audience": ["user", "developer"] },
+        { "title": "记忆系统宏", "file": "macros/memory.md", "audience": ["user", "developer"] },
+        { "title": "IDE/编程宏", "file": "macros/ide.md", "audience": ["developer"] },
+        { "title": "env 自定义变量宏", "file": "macros/env.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "记忆系统",
+      "icon": "brain",
+      "children": [
+        { "title": "记忆系统概览", "file": "memory/overview.md", "audience": ["beginner", "user"] },
+        { "title": "记忆表格 (#0-#9)", "file": "memory/tables.md", "audience": ["user", "developer"] },
+        { "title": "热层记忆", "file": "memory/hot-layer.md", "audience": ["user", "developer"] },
+        { "title": "记忆AI预设 (P1-P8)", "file": "memory/presets.md", "audience": ["developer"] },
+        { "title": "上下文压缩", "file": "memory/compression.md", "audience": ["user", "developer"] },
+        { "title": "记忆归档与检索", "file": "memory/archival.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "世界书",
+      "icon": "book",
+      "children": [
+        { "title": "世界书概览", "file": "memory/worldbook-overview.md", "audience": ["beginner", "user"] },
+        { "title": "条目与触发机制", "file": "memory/worldbook-entries.md", "audience": ["user", "developer"] },
+        { "title": "正则与渲染条目", "file": "memory/worldbook-regex.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "注入系统 (INJ)",
+      "icon": "inject",
+      "children": [
+        { "title": "注入系统概览", "file": "memory/inj-overview.md", "audience": ["user", "developer"] },
+        { "title": "INJ 规则配置", "file": "memory/inj-rules.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "预设引擎",
+      "icon": "settings",
+      "children": [
+        { "title": "预设系统概览", "file": "presets/overview.md", "audience": ["beginner", "user"] },
+        { "title": "预设分类与选择", "file": "presets/categories.md", "audience": ["user"] },
+        { "title": "预设条目结构", "file": "presets/structure.md", "audience": ["developer"] },
+        { "title": "司令员模式", "file": "presets/commander.md", "audience": ["developer"] },
+        { "title": "预设与模式联动", "file": "presets/mode-binding.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "AI 服务配置",
+      "icon": "zap",
+      "children": [
+        { "title": "服务源概览", "file": "ai-service/overview.md", "audience": ["beginner", "user"] },
+        { "title": "支持的 AI 服务商", "file": "ai-service/providers.md", "audience": ["user"] },
+        { "title": "API 配置详解", "file": "ai-service/api-config.md", "audience": ["user", "developer"] },
+        { "title": "模型参数", "file": "ai-service/model-params.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "提示词教程",
+      "icon": "lightbulb",
+      "children": [
+        { "title": "认识 LLM 大语言模型", "file": "prompt-techniques/llm-basics.md", "audience": ["beginner", "user"] },
+        { "title": "从零开始认识提示词", "file": "prompt-techniques/prompt-basics.md", "audience": ["beginner", "user"] },
+        { "title": "贝露的提示词实战", "file": "prompt-techniques/practice.md", "audience": ["user", "developer"] },
+        { "title": "进阶和专业技巧", "file": "prompt-techniques/advanced.md", "audience": ["user", "developer"] },
+        { "title": "提示词基础理论", "file": "prompt-techniques/theory.md", "audience": ["beginner", "user"] },
+        { "title": "身份设定技巧", "file": "prompt-techniques/identity.md", "audience": ["user"] },
+        { "title": "引导优于禁止", "file": "prompt-techniques/guide-not-ban.md", "audience": ["user"] },
+        { "title": "CoT 思维链", "file": "prompt-techniques/cot.md", "audience": ["user", "developer"] },
+        { "title": "精简与迭代", "file": "prompt-techniques/refine.md", "audience": ["user"] },
+        { "title": "小词汇大作用", "file": "prompt-techniques/small-words.md", "audience": ["user", "developer"] },
+        { "title": "格式与符号运用", "file": "prompt-techniques/formatting.md", "audience": ["user"] },
+        { "title": "少样本提示", "file": "prompt-techniques/few-shot.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "插件系统",
+      "icon": "plug",
+      "children": [
+        { "title": "插件概览", "file": "plugins/overview.md", "audience": ["user", "developer"] },
+        { "title": "文件操作 (beilu-files)", "file": "plugins/files.md", "audience": ["user", "developer"] },
+        { "title": "屏幕感知 (beilu-eye)", "file": "plugins/eye.md", "audience": ["user"] },
+        { "title": "联网搜索 (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
+        { "title": "正则增强 (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
+        { "title": "变量系统 (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
+        { "title": "脚本引擎", "file": "plugins/scripts.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "YonBan (IDE 扩展)",
+      "icon": "wrench",
+      "children": [
+        { "title": "YonBan 概览", "file": "yonban/overview.md", "audience": ["user", "developer"] },
+        { "title": "工具列表", "file": "yonban/tools.md", "audience": ["user", "developer"] },
+        { "title": "审批与权限", "file": "yonban/approval.md", "audience": ["user", "developer"] },
+        { "title": "执行链路", "file": "yonban/architecture.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "安全设置",
+      "icon": "shield",
+      "children": [
+        { "title": "安全中心", "file": "security/overview.md", "audience": ["user", "developer"] },
+        { "title": "权限与鉴权", "file": "security/auth.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "开发者指南",
+      "icon": "wrench",
+      "children": [
+        { "title": "系统架构", "file": "developer/architecture.md", "audience": ["developer"] },
+        { "title": "消息管线", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "插件开发", "file": "developer/plugin-dev.md", "audience": ["developer"] },
+        { "title": "API 端点参考", "file": "developer/api-reference.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "P1 自驱动发散召回",
+      "icon": "brain",
+      "children": [
+        { "title": "前言：摘要与总目录", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "第1章 设计理念与概念体系", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
+        { "title": "第2章 系统架构与处理流程", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
+        { "title": "第3章 算法设计与形式化描述", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },
+        { "title": "第4章 记忆系统", "file": "p1-recall/ch4-memory.md", "audience": ["user", "developer"] },
+        { "title": "第5章 系统演进与实验评估", "file": "p1-recall/ch5-evolution.md", "audience": ["developer"] },
+        { "title": "第6章 资源体系与附录", "file": "p1-recall/ch6-resources.md", "audience": ["developer"] }
+      ]
+    }
+  ]
+}

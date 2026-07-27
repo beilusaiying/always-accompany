@@ -1,0 +1,56 @@
+always-accompany
+Copyright (c) 2026 凛倾 (beilusaiying)
+
+This software is licensed under the GNU Affero General Public License v3.0
+with the following additional terms, as permitted by Section 7 of the AGPL:
+
+────────────────────────────────────────────────────────────────
+
+1. Attribution Requirement (AGPL §7b)
+
+   All copies, modified or unmodified, and all derivative works must
+   prominently display the following attribution in the user interface
+   (e.g. an "About" page, startup screen, or footer) and in any
+   accompanying documentation:
+
+     "Based on always-accompany by 凛倾 (beilusaiying)"
+     https://github.com/beilusaiying/always-accompany
+
+   You may add your own name or branding alongside this notice,
+   but you must not remove or obscure the original attribution.
+
+2. Brand and Trademark Restriction (AGPL §7c, §7e)
+
+   The names "always-accompany", "beilu", "贝露", and the project logo
+   may not be used to endorse or promote products derived from this
+   software without specific prior written permission from the copyright
+   holder.
+
+   This restriction does not apply to the required attribution notice
+   described in Section 1 above.
+
+3. No Misrepresentation of Origin (AGPL §7c)
+
+   Modified versions must be clearly marked as such and must not be
+   misrepresented as the original software. If you distribute a modified
+   version, you must include a prominent notice stating that you have
+   changed the software, along with the date of modification.
+
+4. Disclaimer of Warranty (AGPL §7a)
+
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+   THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT,
+   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT
+   OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   SUCH DAMAGE.
+
+   Any data loss, service interruption, or other damage caused by user
+   misconfiguration, improper operation, or third-party AI model behavior
+   is solely the user's responsibility.
+
+────────────────────────────────────────────────────────────────
+
+These additional terms apply to all files in this repository unless
+explicitly stated otherwise in the file header.

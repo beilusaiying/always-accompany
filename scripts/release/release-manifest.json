@@ -65,7 +65,6 @@
       "backup-sync.sh",
       "docs/",
       "specs/",
-      "图库/",
       "desktop-eye/user-models/",
       "test_preset_writelock.mjs",
       "_shot2.mjs",

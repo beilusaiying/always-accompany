@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Rejoindre_la_communauté-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Mettre_une_étoile_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Préréglages_mémoire-Prêt_à_l'emploi-4CAF50?style=for-the-badge" alt="Préréglages mémoire"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a> | <a href="README_RU.md">Русский</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | Français | <a href="README_PT.md">Português</a></p>
@@ -216,8 +214,6 @@ Runtime fount (Deno) · Couche de compatibilité Node.js backend + routage style
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Rejoindre_maintenant-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 Préréglages mémoire prêts à l'emploi](beilu-presets_2026-02-23.json) — importez et c'est parti
-
 Partagez des fiches de personnage · publiez des préréglages · contribuez des world books · signalez des bugs · proposez des idées · contribuez du code — toutes les contributions sont bienvenues !
 
 ---
@@ -250,9 +246,3 @@ Partagez des fiches de personnage · publiez des préréglages · contribuez des
 | ![Interface externe](imgs/screenshots/external-interface.png) **Interface externe** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
-
----
-
-## Licence
-
-Ce projet est construit sur le framework [fount](https://github.com/steve02081504/fount), utilisé avec une autorisation obtenue directement auprès de l'auteur original.

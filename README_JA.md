@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-コミュニティに参加-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star_を付ける_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_記憶プリセット-すぐに使える-4CAF50?style=for-the-badge" alt="記憶プリセット"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | 日本語 | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
@@ -216,8 +214,6 @@ AI P1 は毎ターン API リクエストを送る必要があります——遅
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-今すぐ参加-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 すぐに使える記憶プリセット](beilu-presets_2026-02-23.json) — インポートしてすぐ使える
-
 キャラクターカードの共有 · プリセットの公開 · 世界観設定への貢献 · バグ報告 · 提案 · コード貢献 — 参加をお待ちしています！
 
 ---
@@ -250,9 +246,3 @@ AI P1 は毎ターン API リクエストを送る必要があります——遅
 | ![外部インターフェース](imgs/screenshots/external-interface.png) **外部インターフェース** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
-
----
-
-## ライセンス
-
-本プロジェクトは [fount](https://github.com/steve02081504/fount) フレームワークをベースに開発されており、原作者と直接連絡を取り、使用の許諾を得ています。

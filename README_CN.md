@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-加入社区-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-点个_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_记忆预设-开箱即用-4CAF50?style=for-the-badge" alt="记忆预设"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | 中文 | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
@@ -216,8 +214,6 @@ AI P1 每轮要发 API 请求——有延迟、有成本、离线不能用。我
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-立即加入-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 开箱即用的记忆预设](beilu-presets_2026-02-23.json) — 导入即用
-
 分享角色卡 · 发布预设 · 贡献世界书 · 反馈 Bug · 提出建议 · 贡献代码 — 欢迎参与！
 
 ---
@@ -251,8 +247,3 @@ AI P1 每轮要发 API 请求——有延迟、有成本、离线不能用。我
 
 </details>
 
----
-
-## 许可证
-
-本项目基于 [fount](https://github.com/steve02081504/fount) 框架开发，已与原作者直接沟通获得授权使用。

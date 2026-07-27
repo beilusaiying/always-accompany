@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Unirse_a_la_comunidad-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Dale_una_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Presets_de_memoria-Listos_para_usar-4CAF50?style=for-the-badge" alt="Presets de memoria"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | Español</p>
@@ -216,8 +214,6 @@ Runtime fount (Deno) · capa de compatibilidad backend Node.js + enrutamiento es
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Unirse_ahora-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 Presets de memoria listos para usar](beilu-presets_2026-02-23.json) — importa y listo
-
 Comparte tarjetas de personaje · publica presets · contribuye libros del mundo · reporta errores · sugiere funciones · contribuye código —¡todos son bienvenidos!
 
 ---
@@ -250,9 +246,3 @@ Comparte tarjetas de personaje · publica presets · contribuye libros del mundo
 | ![Interfaz externa](imgs/screenshots/external-interface.png) **Interfaz externa** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Bot de Discord** | |
 
 </details>
-
----
-
-## Licencia
-
-Este proyecto está construido sobre el framework [fount](https://github.com/steve02081504/fount), usado con autorización obtenida directamente del autor original.

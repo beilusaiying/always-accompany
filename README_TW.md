@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-加入社群-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-點個_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_記憶預設-開箱即用-4CAF50?style=for-the-badge" alt="記憶預設"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">簡體中文</a> | 繁體中文 | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
@@ -216,8 +214,6 @@ AI P1 每輪都要發 API 請求——有延遲、有成本、離線不能用。
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-立即加入-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 開箱即用的記憶預設](beilu-presets_2026-02-23.json) — 匯入即用
-
 分享角色卡 · 發布預設 · 貢獻世界書 · 回報 Bug · 提出建議 · 貢獻程式碼 — 歡迎參與！
 
 ---
@@ -250,9 +246,3 @@ AI P1 每輪都要發 API 請求——有延遲、有成本、離線不能用。
 | ![外部介面](imgs/screenshots/external-interface.png) **外部介面** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
-
----
-
-## 授權條款
-
-本專案基於 [fount](https://github.com/steve02081504/fount) 框架開發，已與原作者直接溝通並取得授權使用。

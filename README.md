@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star%20⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Memory_Presets-Ready_to_Use-4CAF50?style=for-the-badge" alt="Memory Presets"></a>
 </p>
 
 <p align="center">English | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
@@ -216,8 +214,6 @@ Runtime fount (Deno) · Backend Node.js compatibility layer + Express-style rout
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Now-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 Ready-to-use memory presets](beilu-presets_2026-02-23.json) — import and go
-
 Share character cards · Publish presets · Contribute world books · Report bugs · Suggest features · Contribute code — all welcome!
 
 ---
@@ -251,8 +247,3 @@ Share character cards · Publish presets · Contribute world books · Report bug
 
 </details>
 
----
-
-## License
-
-This project is built on the [fount](https://github.com/steve02081504/fount) framework, used with direct authorization obtained from the original author.

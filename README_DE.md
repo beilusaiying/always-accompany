@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Community_beitreten-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star_geben_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Gedächtnis--Presets-Sofort_einsatzbereit-4CAF50?style=for-the-badge" alt="Gedächtnis-Presets"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | Deutsch | <a href="README_ES.md">Español</a></p>
@@ -216,8 +214,6 @@ Laufzeitumgebung fount (Deno) · Backend Node.js-Kompatibilitätsschicht + Expre
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Jetzt_beitreten-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 Sofort einsatzbereite Gedächtnis-Presets](beilu-presets_2026-02-23.json) — importieren und loslegen
-
 Charakterkarten teilen · Presets veröffentlichen · Weltbücher beisteuern · Bugs melden · Vorschläge machen · Code beitragen — alle sind willkommen!
 
 ---
@@ -250,9 +246,3 @@ Charakterkarten teilen · Presets veröffentlichen · Weltbücher beisteuern · 
 | ![Externes Interface](imgs/screenshots/external-interface.png) **Externes Interface** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord-Bot** | |
 
 </details>
-
----
-
-## Lizenz
-
-Dieses Projekt basiert auf dem [fount](https://github.com/steve02081504/fount)-Framework und wird mit direkt vom Originalautor eingeholter Genehmigung verwendet.

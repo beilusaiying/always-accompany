@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Entrar_na_comunidade-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Dar_uma_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_Predefinições_de_memória-Prontas_para_usar-4CAF50?style=for-the-badge" alt="Predefinições de memória"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a> | <a href="README_RU.md">Русский</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | <a href="README_FR.md">Français</a> | Português</p>
@@ -216,8 +214,6 @@ Runtime fount (Deno) · Camada de compatibilidade Node.js no backend + roteament
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Entrar_agora-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 Predefinições de memória prontas para usar](beilu-presets_2026-02-23.json) — importe e use
-
 Compartilhe fichas de personagem · publique predefinições · contribua com world books · relate bugs · sugira ideias · contribua com código — todos são bem-vindos!
 
 ---
@@ -250,9 +246,3 @@ Compartilhe fichas de personagem · publique predefinições · contribua com wo
 | ![Interface externa](imgs/screenshots/external-interface.png) **Interface externa** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
-
----
-
-## Licença
-
-Este projeto é construído sobre o framework [fount](https://github.com/steve02081504/fount), usado com autorização obtida diretamente do autor original.

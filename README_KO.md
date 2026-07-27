@@ -8,8 +8,6 @@
   <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-커뮤니티_참여-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
   <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
-  &nbsp;
-  <a href="beilu-presets_2026-02-23.json"><img src="https://img.shields.io/badge/📦_기억_프리셋-바로_사용-4CAF50?style=for-the-badge" alt="기억 프리셋"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | 한국어 | <a href="README_RU.md">Русский</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | <a href="README_FR.md">Français</a> | <a href="README_PT.md">Português</a></p>
@@ -216,8 +214,6 @@ P1 AI는 매 턴 API 요청을 보내야 합니다 — 지연, 비용이 발생�
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-지금_참여하기-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-[📦 바로 쓸 수 있는 기억 프리셋](beilu-presets_2026-02-23.json) — 임포트하면 바로 사용 가능
-
 캐릭터 카드 공유 · 프리셋 배포 · 월드북 기여 · 버그 제보 · 제안 · 코드 기여 — 모두 환영합니다!
 
 ---
@@ -250,9 +246,3 @@ P1 AI는 매 턴 API 요청을 보내야 합니다 — 지연, 비용이 발생�
 | ![외부 인터페이스](imgs/screenshots/external-interface.png) **외부 인터페이스** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
-
----
-
-## 라이선스
-
-본 프로젝트는 [fount](https://github.com/steve02081504/fount) 프레임워크를 기반으로 개발되었으며, 원저작자에게 직접 연락해 사용 승인을 받았습니다.

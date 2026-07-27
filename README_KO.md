@@ -12,7 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | 한국어 | <a href="README_RU.md">Русский</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | <a href="README_FR.md">Français</a> | <a href="README_PT.md">Português</a></p>
 
-> 본 프로젝트는 한 명의 대학생이 설계·아키텍처·개발을 모두 독자적으로 완성했으며, AI 보조 프로그래밍의 도움을 받아 알고리즘 설계·생체모방 원리·프레임워크 아키텍처·논리적 사고 등 다방면의 역량을 결합했습니다.
+> 본 프로젝트는 갓 졸업한 대학생이 설계·아키텍처·개발을 모두 독자적으로 완성했으며, AI 보조 프로그래밍의 도움을 받아 알고리즘 설계·생체모방 원리·프레임워크 아키텍처·논리적 사고 등 다방면의 역량을 결합했습니다.
 
 ---
 

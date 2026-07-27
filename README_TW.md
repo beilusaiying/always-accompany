@@ -12,7 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">簡體中文</a> | 繁體中文 | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
 
-> 本專案由一名在校大學生獨立完成全部設計、架構與開發，藉助 AI 輔助程式設計，融合演算法設計、仿生學原理、框架架構和邏輯思維等多方面能力。
+> 本專案由一名剛畢業的大學生獨立完成全部設計、架構與開發，藉助 AI 輔助程式設計，融合演算法設計、仿生學原理、框架架構和邏輯思維等多方面能力。
 
 ---
 

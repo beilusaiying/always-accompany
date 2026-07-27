@@ -12,7 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | Deutsch | <a href="README_ES.md">Español</a></p>
 
-> Das gesamte Projekt — Design, Architektur und Entwicklung — wurde eigenständig von einem Universitätsstudenten umgesetzt, mithilfe KI-gestützter Programmierung und unter Einbeziehung von Fähigkeiten aus Algorithmendesign, Bionik-Prinzipien, Framework-Architektur und logischem Denken.
+> Das gesamte Projekt — Design, Architektur und Entwicklung — wurde eigenständig von einem frischen Universitätsabsolventen umgesetzt, mithilfe KI-gestützter Programmierung und unter Einbeziehung von Fähigkeiten aus Algorithmendesign, Bionik-Prinzipien, Framework-Architektur und logischem Denken.
 
 ---
 

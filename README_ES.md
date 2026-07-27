@@ -12,7 +12,7 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | Español</p>
 
-> Todo este proyecto —diseño, arquitectura y desarrollo— fue completado de forma independiente por un estudiante universitario, apoyándose en programación asistida por IA, con habilidades que abarcan diseño de algoritmos, principios de biomimética, arquitectura de frameworks y pensamiento lógico.
+> Todo este proyecto —diseño, arquitectura y desarrollo— fue completado de forma independiente por un recién graduado universitario, apoyándose en programación asistida por IA, con habilidades que abarcan diseño de algoritmos, principios de biomimética, arquitectura de frameworks y pensamiento lógico.
 
 ---
 

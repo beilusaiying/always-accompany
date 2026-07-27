@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>always accompany · 桌宠菜单</title>
+	<!--
+		桌宠【悬浮设置菜单窗】(凛倾 2026-07-12"还可以打开悬浮窗直接设置""可以参考这个游戏"——萝莉斯桌宠标签条形态):
+		角色脚下标签条 对话/形象/设置/截图/系统 + 二级面板。触发=角色双击 或 右键菜单「悬浮菜单」。
+		窗口 focusable(对话输入要键盘焦点),blur 即通知主进程关闭(游戏同款轻量退场)。
+		所有动作经 preload petMenuAction 单通道 → 主进程映射【既有链】:
+		  chat-send→pet-message / set-model→setPetSetting / set-scale→PET_GROUP 重排+petHeight 持久化 /
+		  set-opacity→bubbleOpacity / toggle-passthrough→applyPetPassthrough / crop→startCropCapture /
+		  autoshot→autoCapture.autoCaptureAndSend / hide/close/open-web。不造新后端。
+		风格与 pet-bubble 同源(flat 琥珀米白,CSS 变量同名)。
+	-->
+	<style>
+		:root {
+			--bubble-alpha: 0.95;
+			--bubble-bg: rgba(255, 252, 245, var(--bubble-alpha));
+			--bubble-fg: #3a2c12;
+			--bubble-border: rgba(245, 197, 66, 0.55);
+			--bubble-name-color: #b8860b;
+		}
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; user-select: none; font: 13px/1.5 "Microsoft YaHei", system-ui, sans-serif; }
+		#wrap { display: flex; flex-direction: column; gap: 3px; padding: 4px; }
+		#menubar { display: flex; gap: 2px; padding: 4px; background: var(--bubble-bg); border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.3), inset 0 0 0 1px var(--bubble-border); }
+		#menubar .tab { flex: 1; text-align: center; padding: 5px 8px; border-radius: 9px; cursor: pointer; color: var(--bubble-fg); white-space: nowrap; }
+		#menubar .tab:hover { background: rgba(245,197,66,.18); }
+		#menubar .tab.active { background: linear-gradient(180deg,#f5c542,#dfa62a); color: #4a3608; font-weight: 700; }
+		.panel { display: none; padding: 9px 11px; background: var(--bubble-bg); border-radius: 12px; color: var(--bubble-fg); box-shadow: 0 4px 14px rgba(0,0,0,.3), inset 0 0 0 1px var(--bubble-border); }
+		.panel.show { display: block; }
+		.row { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+		label { min-width: 58px; color: var(--bubble-name-color); font-weight: 700; font-size: 12px; }
+		input[type=range] { flex: 1; accent-color: #dfa62a; }
+		input[type=text] { flex: 1; border: 1px solid rgba(245,197,66,.5); border-radius: 8px; padding: 4px 9px; font: inherit; background: rgba(255,255,255,.78); outline: none; color: var(--bubble-fg); }
+		input[type=text]:focus { border-color: #d9a531; }
+		select { flex: 1; border: 1px solid rgba(245,197,66,.5); border-radius: 8px; padding: 3px 6px; font: inherit; font-size: 12px; background: rgba(255,255,255,.78); color: var(--bubble-fg); outline: none; }
+		button { border: none; border-radius: 8px; padding: 4px 11px; font: inherit; font-size: 12px; background: linear-gradient(180deg,#f5c542,#dfa62a); color: #4a3608; font-weight: 700; cursor: pointer; }
+		button.ghost { background: rgba(245,197,66,.15); color: var(--bubble-fg); font-weight: 400; }
+		button.ghost.on { background: rgba(245,197,66,.4); font-weight: 700; }
+		.item { padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+		.item:hover { background: rgba(245,197,66,.18); }
+		.hint { font-size: 11px; color: rgba(184,134,11,.85); margin-top: 3px; }
+		#model-list { display: flex; flex-wrap: wrap; gap: 5px; max-height: 96px; overflow-y: auto; }
+		.val { min-width: 44px; text-align: right; font-size: 12px; color: var(--bubble-name-color); }
+	</style>
+</head>
+<body>
+	<div id="wrap">
+		<div id="menubar">
+			<div class="tab active" data-p="p-chat">对话</div>
+			<div class="tab" data-p="p-look">形象</div>
+			<div class="tab" data-p="p-set">设置</div>
+			<div class="tab" data-p="p-shot">截图</div>
+			<div class="tab" data-p="p-sys">系统</div>
+			<button class="ghost" id="menu-close" title="关闭悬浮对话" style="margin-left:auto">✕</button>
+		</div>
+		<div class="panel show" id="p-chat">
+			<!-- T9(凛倾 0722):AI 回应直接显示在本对话框(与气泡同源),不再只指望下方气泡 -->
+			<div id="chat-replies" style="display:none; max-height:130px; overflow-y:auto; font-size:12px; line-height:1.5; padding:4px 6px; margin-bottom:6px; border-radius:8px; background:rgba(245,197,66,.08); white-space:pre-wrap; word-break:break-word;"></div>
+			<div class="row"><input type="text" id="chat-input" placeholder="想说什么…(Enter 发送)" maxlength="500"><button class="ghost" id="chat-mic" title="语音输入(需 STT 服务运行)">🎤</button><button id="chat-send">发送</button></div>
+			<div class="hint" id="chat-hint">回应会显示在这里和下方气泡</div>
+		</div>
+		<div class="panel" id="p-look">
+			<div class="row" style="align-items:flex-start"><label>形象</label><div id="model-list"></div></div>
+			<div class="hint">点击即切换(与网页设置中心同源)</div>
+		</div>
+		<div class="panel" id="p-set">
+			<div class="row"><label>大小比例</label><input type="range" id="scale" min="50" max="186" value="100"><span class="val" id="scale-val">100%</span><button class="ghost" id="size-reset">复位</button></div>
+			<div class="row"><label>气泡透明</label><input type="range" id="opacity" min="20" max="100" value="95"><span class="val" id="opacity-val">95%</span></div>
+			<!-- T8(凛倾 0722"[系统tab]改成[右键完整菜单].而不是状态显示"):停留/表情/动态=完整操作项,选项数据主进程 menu 字段单源 -->
+			<div class="row"><label>气泡停留</label><select id="dwell"></select></div>
+			<div class="row"><label>待机表情</label><select id="expr"></select></div>
+			<div class="row"><label>动态预设</label><select id="dyn"></select></div>
+			<div class="row"><label>游戏穿透</label><button class="ghost" id="passthrough">关</button><span class="hint">开启后角色上右键可切回</span></div>
+		</div>
+		<div class="panel" id="p-shot">
+			<div class="item" id="crop">📷 框选截图 → 给 AI 看 (Alt+Shift+S)</div>
+			<div class="item" id="autoshot">👁 自截图一张(全屏·带去重/时间)</div>
+		</div>
+		<div class="panel" id="p-sys">
+			<div class="item" id="hide">🙈 隐藏桌宠(托盘 ✦ 可重新打开)</div>
+			<div class="item" id="open-web">🌐 打开 beilu 网页设置中心</div>
+			<div class="item" id="close-pet">⛔ 关闭桌宠(网页设置中心可重开)</div>
+		</div>
+	</div>
+	<script>
+		const $ = (id) => document.getElementById(id);
+		const act = (action, value) => window.desktopEye && window.desktopEye.petMenuAction(action, value);
+		// 标签切换 + 面板高度变化上报(主进程按内容收缩窗高)
+		const tabs = document.querySelectorAll('#menubar .tab');
+		function _reportH() { requestAnimationFrame(() => act('resize', document.getElementById('wrap').scrollHeight + 2)); }
+		tabs.forEach((t) => { t.onclick = () => {
+			tabs.forEach((x) => x.classList.remove('active'));
+			document.querySelectorAll('.panel').forEach((p) => p.classList.remove('show'));
+			t.classList.add('active');
+			$(t.dataset.p).classList.add('show');
+			_reportH();
+		}; });
+		// 常驻关闭出口(凛倾 0722"真实常驻":blur 自关已删,✕/右键再点/快捷键=三个显式出口)
+		$('menu-close').onclick = () => act('dismiss');
+		// T9:AI 回应进对话框(语音/触碰/截图/输入触发的回应全经主进程 _showOrbBanner 同源推来)
+		if (window.desktopEye && window.desktopEye.onPetChatReply) {
+			window.desktopEye.onPetChatReply((text) => {
+				const box = $('chat-replies');
+				if (!box || !text) return;
+				box.style.display = '';
+				const item = document.createElement('div');
+				item.textContent = text;
+				item.style.marginBottom = '6px';
+				box.appendChild(item);
+				while (box.children.length > 8) box.removeChild(box.firstChild);
+				box.scrollTop = box.scrollHeight;
+				_reportH();
+			});
+		}
+		// 对话:走 pet-message 既有链(与触碰热区 send 同通道)
+		function _send() {
+			const t = $('chat-input').value.trim();
+			if (!t) return;
+			act('chat-send', t);
+			$('chat-input').value = '';
+			$('chat-hint').textContent = '已发送,回应稍后出现在气泡';
+		}
+		$('chat-send').onclick = _send;
+		$('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') _send(); e.stopPropagation(); });
+		// 语音输入(凛倾 0722 完整链):🎤开录→⏹停+转文字(主进程直连本机 STT 服务,降噪+拾音)→填输入框→点发送走既有 chat-send 链
+		(() => {
+			const mic = $('chat-mic');
+			if (!mic || !window.desktopEye || !window.desktopEye.sttRecord) return;
+			let rec = false;
+			mic.onclick = () => window.desktopEye.sttRecord(rec ? 'stop' : 'start');
+			window.desktopEye.onSttResult((r) => {
+				const hint = $('chat-hint');
+				if (r.phase === 'starting') { if (hint) hint.textContent = r.note || 'STT 服务启动中…'; }
+				else if (r.phase === 'recording') { rec = true; mic.textContent = '⏹'; mic.classList.add('on'); if (hint) hint.textContent = '录音中…再点⏹结束(' + (r.device || '默认设备') + ')'; }
+				else if (r.phase === 'transcribing') { rec = false; mic.textContent = '…'; if (hint) hint.textContent = '转文字中…'; }
+				else if (r.phase === 'done') { mic.textContent = '🎤'; mic.classList.remove('on'); const ipt = $('chat-input'); if (ipt && r.text) { ipt.value = (ipt.value ? ipt.value + ' ' : '') + r.text; act('draft', ipt.value); } if (hint) hint.textContent = r.text ? '已转文字,点「发送」' : '未识别到语音'; }
+				else if (r.phase === 'error') { rec = false; mic.textContent = '🎤'; mic.classList.remove('on'); if (hint) hint.textContent = '语音失败: ' + (r.error || ''); }
+			});
+		})();
+		// 草稿实时上报主进程(凛倾 2026-07-13"3做":blur 自关不再丢字,重开经 pet-menu-init.chatDraft 恢复)
+		$('chat-input').addEventListener('input', () => act('draft', $('chat-input').value));
+		// 设置控件
+		$('scale').addEventListener('input', () => { $('scale-val').textContent = $('scale').value + '%'; act('set-scale', Number($('scale').value)); });
+		$('opacity').addEventListener('input', () => { $('opacity-val').textContent = $('opacity').value + '%'; act('set-opacity', Number($('opacity').value) / 100); });
+		$('passthrough').onclick = () => act('toggle-passthrough');
+		$('size-reset').onclick = () => act('size-reset');
+		$('crop').onclick = () => act('crop');
+		$('autoshot').onclick = () => { act('autoshot'); };
+		$('hide').onclick = () => act('hide');
+		$('open-web').onclick = () => act('open-web');
+		$('close-pet').onclick = () => act('close-pet');
+		// Esc 关菜单
+		window.addEventListener('keydown', (e) => { if (e.key === 'Escape') act('dismiss'); });
+		// 初始化(主进程推当前状态:形象列表/当前值)
+		if (window.desktopEye && window.desktopEye.onPetMenuInit) {
+			window.desktopEye.onPetMenuInit((cfg) => {
+				if (!cfg) return;
+				if (Array.isArray(cfg.models)) {
+					const box = $('model-list');
+					box.innerHTML = '';
+					for (const name of cfg.models) {
+						const b = document.createElement('button');
+						b.className = 'ghost' + (name === cfg.currentModel ? ' on' : '');
+						b.textContent = name;
+						b.onclick = () => { act('set-model', name); box.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); };
+						box.appendChild(b);
+					}
+				}
+				// D1 分叉修(2026-07-13):滑条值域=主进程按真实限值(caps 接管的 PET_GROUP.min/maxH)换算下发,HTML 50~186 只是离线初值
+				if (Number(cfg.scaleMinPct) > 0) $('scale').min = Math.round(cfg.scaleMinPct);
+				if (Number(cfg.scaleMaxPct) > 0) $('scale').max = Math.round(cfg.scaleMaxPct);
+				// D3 分叉修:输入限值=caps.hitLimits.sayMaxChars 单源(HTML maxlength=500 只是离线初值)
+				if (Number(cfg.sayMaxChars) > 0) $('chat-input').maxLength = Math.round(cfg.sayMaxChars);
+				// B1:截图项文案随真实快捷键
+				if (typeof cfg.hotkey === 'string' && cfg.hotkey) $('crop').textContent = '📷 框选截图 → 给 AI 看 (' + cfg.hotkey + ')';
+				// T8:停留/表情/动态选择器(选项数据=主进程 _menuOptionData 单源,与托盘菜单同源零副本)
+				if (cfg.menu) {
+					const fill = (id, opts, cur, actName) => {
+						const sel = $(id); if (!sel) return;
+						sel.innerHTML = '';
+						for (const [label, v] of opts) {
+							const o = document.createElement('option');
+							o.value = String(v); o.textContent = label;
+							if (String(v) === String(cur)) o.selected = true;
+							sel.appendChild(o);
+						}
+						sel.onchange = () => act(actName, id === 'dwell' ? Number(sel.value) : sel.value);
+					};
+					if (Array.isArray(cfg.menu.dwellOptions)) fill('dwell', cfg.menu.dwellOptions, cfg.menu.curDwell, 'set-dwell');
+					if (Array.isArray(cfg.menu.exprOptions)) fill('expr', cfg.menu.exprOptions, cfg.menu.curExpr, 'set-expr');
+					if (Array.isArray(cfg.menu.dynKeys)) fill('dyn', cfg.menu.dynKeys.map((k) => [k || '标准', k]), '', 'set-dyn');
+				}
+				if (typeof cfg.scalePercent === 'number') { $('scale').value = Math.round(cfg.scalePercent); $('scale-val').textContent = Math.round(cfg.scalePercent) + '%'; }
+				if (typeof cfg.bubbleOpacity === 'number') { const v = Math.round(cfg.bubbleOpacity * 100); $('opacity').value = v; $('opacity-val').textContent = v + '%'; }
+				$('passthrough').textContent = cfg.passthrough ? '开' : '关';
+				$('passthrough').classList.toggle('on', !!cfg.passthrough);
+				if (typeof cfg.chatDraft === 'string' && cfg.chatDraft && !$('chat-input').value) $('chat-input').value = cfg.chatDraft; // 恢复上次未发送草稿
+				_reportH();
+			});
+		}
+		_reportH();
+	</script>
+</body>
+</html>

@@ -1,0 +1,400 @@
+/* ============================================================
+   memoryBrowser 记忆文件浏览器样式
+   ============================================================ */
+
+/* 文件树容器 */
+.mb-tree-container {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  user-select: none;
+}
+
+/* 根节点 */
+.mb-tree-root {
+  padding: 0;
+}
+
+.mb-tree-root-header {
+  font-weight: 600;
+  color: color-mix(in oklch, var(--beilu-secondary) 65%, var(--color-base-content));
+}
+
+/* 文件树项通用样式 */
+.mb-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.2rem 0.375rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.mb-tree-item:hover {
+  background-color: oklch(var(--bc) / 0.07);
+}
+
+/* 目录节点 */
+.mb-tree-dir {
+  /* 目录节点包装 */
+}
+
+.mb-tree-dir-header {
+  font-weight: 500;
+}
+
+/* 文件节点 */
+.mb-tree-file {
+  cursor: pointer;
+}
+
+.mb-tree-file:hover {
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+/* 选中的文件 */
+.mb-tree-selected {
+  background-color: var(--beilu-amber-18) !important;
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+/* 子级容器 */
+.mb-tree-children {
+  padding-left: 0.75rem;
+  border-left: 1px solid oklch(var(--bc) / 0.08);
+  margin-left: 0.375rem;
+}
+
+/* 展开箭头 */
+.mb-tree-arrow {
+  display: inline-block;
+  font-size: 0.55em;
+  width: 0.8em;
+  text-align: center;
+  color: oklch(var(--bc) / 0.65);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.mb-tree-arrow.mb-expanded {
+  transform: rotate(90deg);
+}
+
+/* 图标 */
+.mb-tree-icon {
+  flex-shrink: 0;
+  font-size: 0.85em;
+}
+
+/* 标签 */
+.mb-tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 文件大小 */
+.mb-tree-size {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* T037：文件更新时间（树节点，size 左侧）。比 size 更淡，避免抢焦点；窄屏溢出时先隐藏 */
+.mb-tree-mtime {
+  font-size: 0.6rem;
+  color: oklch(var(--bc) / 0.55);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 层级标签（hot/warm/cold） */
+.mb-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.mb-badge-hot {
+  background-color: var(--beilu-error-15);
+  color: var(--beilu-error);
+}
+
+.mb-badge-warm {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: var(--beilu-warning);
+}
+
+.mb-badge-cold {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: var(--beilu-code-blue);
+}
+
+.mb-badge-code {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: var(--beilu-badge-code);
+}
+
+/* 加载状态 */
+.mb-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: oklch(var(--bc) / 0.65);
+  font-size: 0.8rem;
+}
+
+.mb-loading-sm {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.65);
+}
+
+.mb-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--beilu-border-subtle);
+  border-top-color: var(--beilu-amber);
+  border-radius: 50%;
+  animation: mb-spin 0.6s linear infinite;
+}
+
+@keyframes mb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 空目录提示 */
+.mb-empty-dir {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.55);
+  font-style: italic;
+}
+
+/* 错误提示 */
+.mb-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: var(--beilu-error);
+  font-size: 0.8rem;
+}
+
+.mb-error-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  color: var(--beilu-error);
+}
+
+.mb-retry-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--beilu-error-40);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--beilu-error);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mb-retry-btn:hover {
+  background-color: var(--beilu-error-15);
+}
+
+/* 刷新按钮 */
+.mb-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  opacity: 0.5;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.mb-refresh-btn:hover {
+  opacity: 1;
+  background-color: oklch(var(--bc) / 0.08);
+}
+
+/* ===== memoryBrowser 文件查看器 ===== */
+
+.mb-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.mb-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.03);
+  border-bottom: 1px solid oklch(var(--bc) / 0.1);
+  flex-shrink: 0;
+}
+
+.mb-viewer-path {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.mb-viewer-icon {
+  flex-shrink: 0;
+}
+
+.mb-viewer-filepath {
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in oklch, var(--beilu-tertiary) 65%, var(--color-base-content));
+}
+
+.mb-viewer-size {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* T037：查看器头部更新时间元信息（filepath 与 size 之间）。 */
+.mb-viewer-mtime {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mb-viewer-actions {
+  display: flex;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* 文件内容区 */
+.mb-viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.mb-viewer-loading,
+.mb-viewer-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  font-size: 0.85rem;
+  color: var(--beilu-error);
+}
+
+.mb-viewer-loading {
+  color: oklch(var(--bc) / 0.65);
+}
+
+/* JSON 格式化内容 */
+.mb-json-content,
+.mb-text-content {
+  margin: 0;
+  padding: 0.75rem;
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--beilu-pv-text);
+  background-color: var(--beilu-shadow-8);
+}
+
+/* 编辑器区域 */
+.mb-editor-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mb-editor-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  resize: none;
+  padding: 0.75rem;
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  border: none;
+  border-top: 1px solid oklch(var(--bc) / 0.1);
+  background-color: var(--beilu-shadow-12);
+  color: inherit;
+  tab-size: 4;
+}
+
+.mb-editor-textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--beilu-amber-30);
+}
+
+.mb-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.03);
+  border-top: 1px solid oklch(var(--bc) / 0.1);
+  flex-shrink: 0;
+}
+
+/* memoryBrowser 滚动条 */
+.mb-tree-container::-webkit-scrollbar,
+.mb-viewer-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mb-tree-container::-webkit-scrollbar-thumb,
+.mb-viewer-body::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+.mb-tree-container::-webkit-scrollbar-track,
+.mb-viewer-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+

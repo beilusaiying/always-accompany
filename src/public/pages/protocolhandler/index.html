@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta property="og:title" content="beilu 内部导航器" />
+	<meta property="og:type" content="website" />
+	<meta property="og:description" content="安静高效地将你的意图转化为 beilu 内部的无缝跳转。" />
+	<meta name="description" content="安静高效地将你的意图转化为 beilu 内部的无缝跳转。" />
+	<title data-i18n="protocolhandler.title"></title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.png" type="image/png" />
+	<link rel="manifest" href="/manifest.json" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="apple-mobile-web-app-title" content="always accompany" />
+	<meta name="theme-color" content="#0e3c5c" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="/vendor/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<script src="/vendor/tailwindcss-browser.js" crossorigin="anonymous"></script>
+	<script type="module" src="/base.mjs"></script>
+	<link rel="stylesheet" href="./index.css" type="text/css" />
+</head>
+
+<body>
+	<main class="flex justify-center items-center h-screen">
+		<div class="text-center">
+			<p id="message" class="text-lg mb-4" data-i18n="protocolhandler.processing"></p>
+			<progress class="progress w-56"></progress>
+		</div>
+	</main>
+	<dialog id="confirmation_modal" class="modal">
+		<div class="modal-box">
+			<h3 class="font-bold text-lg" data-i18n="protocolhandler.runPartConfirm.title"></h3>
+			<p class="py-4" id="confirmation_message"></p>
+			<div class="modal-action">
+				<button class="btn btn-primary" id="confirm_btn" data-i18n="protocolhandler.runPartConfirm.confirm"></button>
+				<button class="btn" id="cancel_btn" data-i18n="protocolhandler.runPartConfirm.cancel"></button>
+			</div>
+		</div>
+	</dialog>
+	<script type="module" src="./index.mjs"></script>
+</body>
+
+</html>

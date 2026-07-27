@@ -1,0 +1,188 @@
+{
+	"en-UK": {
+		"name": "WeChat Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Run your character as a WeChat bot via a third-party bridge service.",
+		"description_markdown": "Connects to a third-party WeChat bridge (e.g. WeChatPad, GeWeChat) via webhook mode. You must deploy the bridge service separately. beilu receives messages via a webhook endpoint and sends replies through the bridge HTTP API.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"bot",
+			"integration",
+			"webhook"
+		]
+	},
+	"zh-CN": {
+		"name": "微信 Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "通过第三方桥接服务将角色作为微信机器人运行。",
+		"description_markdown": "通过 Webhook 模式连接第三方微信协议桥（如 WeChatPad、GeWeChat 等），需用户自行部署桥接服务。beilu 通过 Webhook 端点接收消息，通过桥接服务 HTTP API 发送回复。",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"微信",
+			"WeChat",
+			"机器人",
+			"集成",
+			"webhook"
+		]
+	},
+	"ar-SA": {
+		"name": "بوت WeChat",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "قم بتشغيل شخصيتك كبوت WeChat عبر خدمة جسر من طرف ثالث.",
+		"description_markdown": "يتصل بجسر WeChat من طرف ثالث عبر وضع webhook. يتطلب نشر خدمة الجسر بشكل منفصل.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"بوت",
+			"تكامل"
+		]
+	},
+	"de-DE": {
+		"name": "WeChat-Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Führe deinen Charakter als WeChat-Bot über einen Drittanbieter-Bridge-Dienst aus.",
+		"description_markdown": "Verbindet sich über den Webhook-Modus mit einem WeChat-Bridge-Dienst von Drittanbietern. Sie müssen den Bridge-Dienst separat bereitstellen.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"Bot",
+			"Integration"
+		]
+	},
+	"emoji": {
+		"name": "💬🤖",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "💬🔗🌐",
+		"description_markdown": "🔗🤖➡️💬",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"💬",
+			"🤖",
+			"🔗"
+		]
+	},
+	"es-ES": {
+		"name": "Bot de WeChat",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Ejecuta tu personaje como un bot de WeChat a través de un servicio puente de terceros.",
+		"description_markdown": "Se conecta a un servicio puente de WeChat de terceros a través del modo webhook. Debes desplegar el servicio puente por separado.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"bot",
+			"integración"
+		]
+	},
+	"fr-FR": {
+		"name": "Bot WeChat",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Exécutez votre personnage en tant que bot WeChat via un service de pont tiers.",
+		"description_markdown": "Se connecte à un service de pont WeChat tiers via le mode webhook. Vous devez déployer le service de pont séparément.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"bot",
+			"intégration"
+		]
+	},
+	"ja-JP": {
+		"name": "WeChatボット",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "サードパーティブリッジサービスを通じてキャラクターをWeChatボットとして実行します。",
+		"description_markdown": "Webhookモードでサードパーティ製WeChatブリッジに接続します。ブリッジサービスを別途デプロイする必要があります。",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"ボット",
+			"統合"
+		]
+	},
+	"ko-KR": {
+		"name": "위챗 봇",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "서드파티 브리지 서비스를 통해 캐릭터를 위챗 봇으로 실행하세요.",
+		"description_markdown": "웹훅 모드로 서드파티 위챗 브리지에 연결합니다. 브리지 서비스를 별도로 배포해야 합니다.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"위챗",
+			"봇",
+			"통합"
+		]
+	},
+	"lzh": {
+		"name": "微信靈偶",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "化身託於微信靈偶而行，藉第三方橋接而通。",
+		"description_markdown": "融泉源化身於微信，藉 Webhook 與第三方橋接服務相連，以於彼方與眾生結緣。",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"微信",
+			"靈偶",
+			"融通"
+		]
+	},
+	"pt-PT": {
+		"name": "Bot do WeChat",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Execute seu personagem como um bot do WeChat através de um serviço de ponte de terceiros.",
+		"description_markdown": "Conecta-se a um serviço de ponte WeChat de terceiros através do modo webhook. Você deve implantar o serviço de ponte separadamente.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"bot",
+			"integração"
+		]
+	},
+	"ru-RU": {
+		"name": "WeChat-бот",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Запустите своего персонажа в качестве бота WeChat через сторонний мост-сервис.",
+		"description_markdown": "Подключается к стороннему мосту WeChat через режим webhook. Вам необходимо отдельно развернуть сервис моста.",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"WeChat",
+			"бот",
+			"интеграция"
+		]
+	},
+	"zh-TW": {
+		"name": "微信 Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "透過第三方橋接服務將角色作為微信機器人運行。",
+		"description_markdown": "透過 Webhook 模式連接第三方微信協議橋，需用戶自行部署橋接服務。beilu 透過 Webhook 端點接收消息，透過橋接服務 HTTP API 發送回覆。",
+		"version": "0.0.1",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"微信",
+			"WeChat",
+			"機器人",
+			"集成"
+		]
+	}
+}

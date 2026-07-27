@@ -1,0 +1,7 @@
+{
+  "name": "beilu-plugin-host",
+  "display_name": "用户插件宿主",
+  "description": "管理 user-plugins/ 目录下的外部插件（Python/Node/可执行文件），自动启动子进程并桥接 AI 生成管线",
+  "version": "1.0.0",
+  "author": "beilu"
+}

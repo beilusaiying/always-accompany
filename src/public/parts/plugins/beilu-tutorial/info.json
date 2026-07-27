@@ -1,0 +1,29 @@
+{
+  "en-UK": {
+    "name": "Tutorial / Visual Novel",
+    "avatar": "https://api.iconify.design/mdi/book-play.svg",
+    "description": "Interactive tutorial and visual novel engine",
+    "description_markdown": "Create interactive tutorials and visual novel sequences. Supports character sprites, branching dialogue, UI element guidance, and image pack management.",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["tutorial", "visual-novel", "guide", "always accompany"]
+  },
+  "zh-CN": {
+    "name": "教程 / 视觉小说",
+    "avatar": "https://api.iconify.design/mdi/book-play.svg",
+    "description": "交互式教程和视觉小说引擎",
+    "description_markdown": "创建交互式教程和视觉小说序列。支持角色立绘、分支对话、UI元素引导、图片包管理。",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["教程", "视觉小说", "引导", "always accompany"]
+  },
+  "ja-JP": {
+    "name": "チュートリアル / ビジュアルノベル",
+    "avatar": "https://api.iconify.design/mdi/book-play.svg",
+    "description": "インタラクティブチュートリアルとビジュアルノベルエンジン",
+    "description_markdown": "インタラクティブなチュートリアルとビジュアルノベルシーケンスを作成。キャラクタースプライト、分岐ダイアログ、UI要素ガイド、画像パック管理に対応。",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["チュートリアル", "ビジュアルノベル", "ガイド", "always accompany"]
+  }
+}

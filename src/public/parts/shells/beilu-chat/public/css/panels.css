@@ -1,0 +1,713 @@
+/* ============================================================
+   conversationManager 对话管理面板样式（增强版）
+   ============================================================ */
+
+/* 角色卡信息头 */
+.conv-header-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.5);
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  margin-bottom: 0.25rem;
+  user-select: none;
+}
+
+/* 模式过滤切换按钮 */
+.conv-mode-filter-btn {
+  background: oklch(var(--bc) / 0.08);
+  color: var(--beilu-amber-80);
+  border: 1px solid var(--beilu-border-subtle);
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.conv-mode-filter-btn:hover {
+  background: var(--beilu-amber-22);
+  border-color: var(--beilu-amber-40);
+}
+
+/* F-A 会话分区 header（⭐ 收藏 / 今天 / 昨天 / 具体日期）—— sticky 吸顶，
+   背景用不透明主题底色保证对比度（避免滚动时与会话条重叠看不清）。 */
+.conv-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.3rem 0.55rem 0.2rem;
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--beilu-amber, #d4a017);
+  background-color: var(--beilu-bg-card);
+  border-bottom: 1px solid oklch(var(--bc) / 0.12);
+  user-select: none;
+}
+
+/* 空对话提示（bc 基跟随主题深浅，勿硬编码白字——浅底主题白字不可见） */
+.conv-empty {
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+  font-size: 0.75rem;
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+  line-height: 1.6;
+}
+
+/* 对话条目 — 两行布局 */
+.conv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+  user-select: none;
+  font-size: 0.75rem;
+  border: 1px solid transparent;
+  margin-bottom: 0.2rem;
+}
+
+.conv-item:hover {
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+/* 当前激活的对话 */
+.conv-active {
+  background-color: var(--beilu-amber-18) !important;
+  border-color: var(--beilu-amber-25);
+}
+
+.conv-active .conv-label {
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+/* 置顶对话 */
+.conv-pinned {
+  border-left: 2px solid var(--beilu-amber-50);
+}
+
+/* 第一行：图标 + 名称 + 时间。flex-wrap：徽章/「XX窗口在用」标签放不下时换行，
+   不挤压名称（凛倾 0712「chat界面不会自动拉伸」）；conv-label min-width 保名称可读底线。 */
+.conv-item-top {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* 图标区（收藏/置顶） */
+.conv-icons {
+  display: inline-flex;
+  gap: 0.1rem;
+  flex-shrink: 0;
+  font-size: 0.7em;
+}
+
+.conv-pin-icon,
+.conv-star-icon {
+  font-size: 0.7em;
+}
+
+/* 对话名称 */
+.conv-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 6em;
+  font-size: 0.78rem;
+}
+
+/* 相对时间 */
+.conv-time {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  color: oklch(var(--bc) / 0.65);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* 第二行：消息预览 */
+.conv-item-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-left: 0.1rem;
+}
+
+.conv-preview-sender {
+  flex-shrink: 0;
+  font-weight: 500;
+  color: oklch(var(--bc) / 0.65);
+}
+
+.conv-preview-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 重命名内联输入框 */
+.conv-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--beilu-amber);
+  border-radius: 0.2rem;
+  background-color: var(--beilu-shadow-20);
+  color: inherit;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--beilu-amber-20);
+}
+
+/* 右键菜单 */
+.conv-ctx-menu {
+  font-size: 0.75rem;
+}
+
+/* JSON 编辑器 */
+#memory-json-editor {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  background-color: var(--beilu-shadow-8);
+  color: inherit;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+#memory-json-editor:focus {
+  box-shadow: inset 0 0 0 1px var(--beilu-amber-20);
+}
+
+/* ============================================================
+   扩展工具菜单（≡ 按钮弹出）
+   ============================================================ */
+
+/* ≡ 按钮样式 */
+.extend-menu-trigger {
+  min-width: 2.5rem;
+  padding: 0 0.4rem;
+}
+
+.extend-menu-status {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.5);
+  margin-left: auto;
+  padding: 0 0.25rem;
+}
+
+/* 输入区域相对定位（菜单的锚点） */
+.chat-input {
+  position: relative;
+}
+
+/* ============================================================
+   悬浮窗（可拖动 + 缩放）
+   ============================================================ */
+
+.floating-window {
+  position: fixed;
+  /* T12：接入中央表 --z-float(150)。原硬编码 150（界面9: 60→150，高于 header 低于 --z-modal，保留「设置/编辑弹窗盖浮窗」原序）*/
+  z-index: var(--z-float);
+  min-width: 360px;
+  min-height: 300px;
+  width: 520px;
+  height: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  /* 琥珀黄不透明实底 */
+  background-color: var(--beilu-bg-card);
+  border: 1px solid oklch(var(--bc) / 0.3);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 8px 32px var(--beilu-shadow-50),
+    0 0 0 1px var(--beilu-amber-15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--beilu-pv-value);
+  /* 默认居中 */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: box-shadow 0.2s ease;
+}
+
+.floating-window.hidden {
+  display: none !important;
+}
+
+.floating-window.fw-dragging {
+  box-shadow:
+    0 12px 48px var(--beilu-shadow-50),
+    0 0 0 2px var(--beilu-amber-25);
+  opacity: 1;
+}
+
+.floating-window.fw-maximized {
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw;
+  max-height: 100vh;
+  border-radius: 0;
+  transform: none;
+}
+
+/* 标题栏 */
+.floating-window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.08);
+  border-bottom: 1px solid var(--beilu-border-subtle);
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.floating-window-header:active {
+  cursor: grabbing;
+}
+
+.fw-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--beilu-secondary) 65%, var(--color-base-content));
+}
+
+.fw-status {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: oklch(var(--bc) / 0.65);
+}
+
+.fw-controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.fw-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.12s ease;
+  opacity: 0.6;
+}
+
+.fw-ctrl-btn:hover {
+  opacity: 1;
+  background-color: oklch(var(--bc) / 0.1);
+}
+
+.fw-ctrl-close:hover {
+  background-color: var(--beilu-error-25);
+  color: var(--beilu-error);
+}
+
+/* 工具栏 */
+.fw-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.06);
+  border-bottom: 1px solid var(--beilu-border-subtle);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.fw-toolbar-spacer {
+  flex: 1;
+}
+
+.fw-tab-group {
+  display: flex;
+  background-color: var(--beilu-shadow-8);
+  border-radius: 0.375rem;
+  padding: 0.125rem;
+}
+
+.fw-tab-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.12s ease;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.fw-tab-btn:hover {
+  opacity: 0.85;
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+.fw-tab-btn.fw-tab-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-18);
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+/* 内容区 */
+.fw-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 统计栏 */
+.pv-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.6);
+  background-color: oklch(var(--bc) / 0.06);
+  border-bottom: 1px solid oklch(var(--bc) / 0.08);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.pv-stats.hidden {
+  display: none;
+}
+
+.pv-stat-sep {
+  opacity: 0.3;
+}
+
+/* 选项卡内容 */
+.pv-tab-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.pv-tab-content.hidden {
+  display: none !important;
+}
+
+.pv-output {
+  padding: 0.5rem;
+  min-height: 100%;
+}
+
+.pv-placeholder {
+  text-align: center;
+  color: rgba(196, 181, 253, 0.4);
+  padding: 2rem 1rem;
+  font-size: 0.85rem;
+}
+
+/* 消息卡片 */
+.pv-message {
+  border: 1px solid oklch(var(--bc) / 0.08);
+  border-radius: 0.5rem;
+  margin-bottom: 0.375rem;
+  overflow: hidden;
+  transition: border-color 0.12s ease;
+}
+
+.pv-message:hover {
+  border-color: var(--beilu-amber-25);
+}
+
+.pv-message-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease;
+}
+
+.pv-message-header:hover {
+  background-color: oklch(var(--bc) / 0.04);
+}
+
+.pv-role-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.pv-role-system {
+  background-color: rgba(168, 85, 247, 0.2);
+  color: var(--beilu-pv-system);
+}
+
+.pv-role-user {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: var(--beilu-code-blue);
+}
+
+.pv-role-assistant {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: var(--beilu-success);
+}
+
+.pv-message-preview {
+  flex: 1;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(196, 181, 253, 0.7);
+}
+
+.pv-message-chars {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-message-chevron {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.pv-message.pv-expanded .pv-message-chevron {
+  transform: rotate(90deg);
+}
+
+.pv-message-body {
+  display: none;
+  padding: 0.5rem;
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: var(--beilu-shadow-15);
+  border-top: 1px solid oklch(var(--bc) / 0.1);
+  color: var(--beilu-pv-text);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pv-message.pv-expanded .pv-message-body {
+  display: block;
+}
+
+/* 参数网格 */
+.pv-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.pv-param-item {
+  border: 1px solid oklch(var(--bc) / 0.08);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+}
+
+.pv-param-label {
+  font-size: 0.65rem;
+  color: rgba(196, 181, 253, 0.5);
+  margin-bottom: 0.25rem;
+}
+
+.pv-param-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--beilu-pv-value);
+  font-family: "Cascadia Code", "Fira Code", monospace;
+}
+
+/* 原始 JSON */
+.pv-raw-json {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 0.75rem;
+  color: var(--beilu-pv-text);
+  margin: 0;
+}
+
+/* 来源标签 */
+.pv-source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.pv-source-preset {
+  background-color: rgba(168, 85, 247, 0.15);
+  color: var(--beilu-src-preset);
+}
+
+.pv-source-preset-after {
+  background-color: rgba(236, 72, 153, 0.15);
+  color: var(--beilu-src-preset-after);
+}
+
+.pv-source-injection {
+  background-color: rgba(251, 146, 60, 0.15);
+  color: var(--beilu-src-injection);
+}
+
+.pv-source-injection-above {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: var(--beilu-warning);
+}
+
+.pv-source-injection-below {
+  background-color: var(--beilu-error-12);
+  color: var(--beilu-error);
+}
+
+.pv-source-chat {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: var(--beilu-code-blue);
+}
+
+/* 标识符标签 */
+.pv-ident-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.55rem;
+  background-color: oklch(var(--bc) / 0.08);
+  color: oklch(var(--bc) / 0.5);
+  border: 1px solid oklch(var(--bc) / 0.1);
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+}
+
+/* 名称标签 */
+.pv-name-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+  background-color: rgba(34, 197, 94, 0.1);
+  color: rgba(34, 197, 94, 0.7);
+  flex-shrink: 0;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Section 分隔线 — 5 段式区段切换标记 */
+.pv-section-divider {
+  text-align: center;
+  padding: 0.375rem 0;
+  margin: 0.25rem 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.5);
+  border-top: 1px dashed var(--beilu-amber-25);
+  border-bottom: 1px dashed var(--beilu-amber-25);
+  background-color: var(--beilu-amber-5);
+  letter-spacing: 0.15em;
+  user-select: none;
+}
+
+.pv-section-divider.pv-section-injection {
+  color: var(--beilu-src-injection);
+  border-color: rgba(251, 146, 60, 0.3);
+  background-color: rgba(251, 146, 60, 0.04);
+}
+
+.pv-section-divider.pv-section-chat {
+  color: var(--beilu-code-blue);
+  border-color: rgba(59, 130, 246, 0.3);
+  background-color: rgba(59, 130, 246, 0.04);
+}
+
+/* Marker 消息灰化 */
+.pv-marker {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.pv-marker .pv-message-header {
+  background-color: rgba(148, 163, 184, 0.06);
+}
+
+/* 消息序号 */
+.pv-msg-index {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: oklch(var(--bc) / 0.65);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 1.8em;
+}
+
+/* 参数分隔线 */
+.pv-param-divider {
+  grid-column: 1 / -1;
+  padding: 0.375rem 0.25rem 0.125rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.65);
+  border-bottom: 1px solid oklch(var(--bc) / 0.08);
+  margin-bottom: 0.125rem;
+}
+

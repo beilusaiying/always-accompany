@@ -1,0 +1,32 @@
+{
+	"en-UK": {
+		"name": "WeCom Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "Run your character as a WeCom (WeChat Work) bot.",
+		"description_markdown": "Allows you to connect your character to WeCom (WeChat Work) and interact with them as a bot via webhook callback mode.",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["WeCom", "WeChat Work", "bot", "integration", "office"]
+	},
+	"zh-CN": {
+		"name": "企业微信 Bot",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "将角色作为企业微信机器人运行。",
+		"description_markdown": "通过企业微信应用消息模式，将角色连接到企业微信并作为机器人与用户互动。",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["企业微信", "WeCom", "机器人", "集成", "办公"]
+	},
+	"emoji": {
+		"name": "🏢🤖",
+		"avatar": "https://api.iconify.design/simple-icons/wechat.svg",
+		"description": "🏢💬🔗",
+		"description_markdown": "🏢🤖➡️💬",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["🏢", "🤖", "🔗"]
+	}
+}

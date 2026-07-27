@@ -1,0 +1,32 @@
+{
+	"en-UK": {
+		"name": "DingTalk Bot",
+		"avatar": "https://api.iconify.design/simple-icons/dingtalk.svg",
+		"description": "Run your character as a DingTalk bot.",
+		"description_markdown": "Allows you to connect your character to DingTalk (钉钉) and interact with them as a bot via Stream mode (no public domain required).",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["DingTalk", "dingtalk", "bot", "integration", "office"]
+	},
+	"zh-CN": {
+		"name": "钉钉 Bot",
+		"avatar": "https://api.iconify.design/simple-icons/dingtalk.svg",
+		"description": "将角色作为钉钉机器人运行。",
+		"description_markdown": "通过 Stream 长连接模式（无需公网域名）将角色接入钉钉，支持私聊和群聊。",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["钉钉", "DingTalk", "机器人", "集成", "办公"]
+	},
+	"emoji": {
+		"name": "📎🤖",
+		"avatar": "https://api.iconify.design/simple-icons/dingtalk.svg",
+		"description": "📎💬🔗",
+		"description_markdown": "📎🤖➡️💬",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["📎", "🤖", "🔗"]
+	}
+}

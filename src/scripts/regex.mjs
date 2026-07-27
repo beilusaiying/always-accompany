@@ -1,0 +1,31 @@
+/**
+ * 从斜线分隔的正则表达式字符串中获取一个真实的正则表达式对象。
+ *
+ * 此函数使用 `/` 作为分隔符，正则表达式内部出现的每个 `/` 都必须进行转义。
+ * 标志是可选的，但只能是 JavaScript 的 `RegExp` 支持的有效标志（`g`、`i`、`m`、`s`、`u`、`y`）。
+ *
+ * @param {string} input - 一个带分隔符的正则表达式字符串。
+ * @returns {RegExp} 正则表达式对象。
+ */
+export function parseRegexFromString(input) {
+	// 提取正则表达式模式和标志
+	const match = input.match(/^\/([\W\w]+?)\/([gimsuy]*)$/)
+	if (!match) throw new Error(`Invalid regex string: ${input}`)
+
+	let [, pattern, flags] = match
+
+	// 如果我们发现任何未转义的斜线分隔符，我们也会退出。
+	// JS 不关心正则表达式模式内部的分隔符，但为了使其在我们的实现之外成为一个有效的正则表达式，
+	// 我们必须确保我们的分隔符被正确转义。否则其他所有引擎都会失败。
+	if (pattern.match(/(^|[^\\])\//)) throw new Error(`There is an unescaped slash in the regex: ${input}`)
+
+	// 现在我们需要实际地反转义斜线分隔符，因为 JS 不关心分隔符
+	pattern = pattern.replace('\\/', '/')
+
+	// 然后我们返回正则表达式。如果失败，则表示语法无效。
+	return new RegExp(pattern, flags)
+}
+
+// 收口: escapeRegExp/unescapeRegExp 原为逐字副本(与权威逐字等价),改为 re-export 权威 scripts/escape.mjs(同目录),
+// 消除手抄副本（2026-07-16 补齐 unescapeRegExp 漏网——pages/scripts/regex.mjs 已同型收口）
+export { escapeRegExp, unescapeRegExp } from './escape.mjs'

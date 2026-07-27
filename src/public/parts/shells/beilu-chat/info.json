@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "always accompany Chat",
+		"avatar": "https://api.iconify.design/mdi/chat-processing-outline.svg",
+		"description": "The amber-themed chat interface with full management panels.",
+		"description_markdown": "**always accompany Chat** is the primary chat shell for always accompany. Features an amber-themed UI, message rendering pipeline, and management panels for presets, memory, regex, files, and agents.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"chat",
+			"shell",
+			"UI",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "always accompany 聊天",
+		"avatar": "https://api.iconify.design/mdi/chat-processing-outline.svg",
+		"description": "琥珀色主题聊天界面，含完整管理面板",
+		"description_markdown": "**always accompany 聊天** 是 always accompany 的主聊天 Shell。琥珀色主题 UI、消息渲染管线、以及预设/记忆/正则/文件/Agent 管理面板。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"聊天",
+			"Shell",
+			"界面",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "💬🌟",
+		"avatar": "https://api.iconify.design/mdi/chat-processing-outline.svg",
+		"description": "💬🤖✨🟡",
+		"description_markdown": "💬 🤖\n✨ 🟡\n📋 🧠 🔤 📁 🤝",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"💬",
+			"✨",
+			"🟡",
+			"🌱"
+		]
+	}
+}

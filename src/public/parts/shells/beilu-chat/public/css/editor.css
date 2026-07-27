@@ -1,0 +1,719 @@
+/* ============================================================
+   文件树 & 记忆树样式
+   ============================================================ */
+
+.file-tree {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  user-select: none;
+}
+
+.file-tree-item:hover {
+  background-color: var(--beilu-amber-10);
+}
+
+.file-tree-item.active {
+  background-color: var(--beilu-amber-18);
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+.file-tree-item .tree-icon {
+  flex-shrink: 0;
+  font-size: 0.85em;
+}
+
+.file-tree-item .tree-toggle {
+  flex-shrink: 0;
+  width: 0.8em;
+  font-size: 0.7em;
+  text-align: center;
+  color: oklch(var(--bc) / 0.65);
+}
+
+.file-tree-item .tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-children {
+  border-left: 1px solid oklch(var(--bc) / 0.08);
+  margin-left: 0.5rem;
+}
+
+/* left-content-files/memory 已不存在，滚动条规则已清除 */
+
+/* chat-dock 已删除（W59，凛倾"关闭ai对话这个完全多余"），CSS 一并清除 */
+
+/* 停靠区内的聊天容器 — 紧凑模式 */
+#chat-container.compact-chat {
+  height: 100%;
+}
+
+#chat-container.compact-chat .chat-messages {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* (旧 .chat-input compact规则已删除 — 现在用 .chat-input-wrapper) */
+
+#chat-container.compact-chat #message-input {
+  min-height: 3rem;
+  max-height: 40vh;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  overflow-y: auto;
+  resize: none;
+}
+
+#chat-container.compact-chat #attachment-preview {
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+
+/* 停靠区折叠状态 */
+#chat-container.chat-dock-collapsed {
+  display: none;
+}
+
+/* ============================================================
+   编辑器区域（文件 & 记忆）
+   ============================================================ */
+
+.editor-toolbar {
+  background-color: oklch(var(--bc) / 0.03);
+  border-color: oklch(var(--bc) / 0.1);
+}
+
+.editor-toolbar .btn-ghost:hover {
+  background-color: var(--beilu-amber-12);
+}
+
+#file-editor-area,
+#memory-editor-area {
+  background-color: var(--beilu-shadow-8);
+}
+
+/* 编辑器查找/替换浮条 */
+#file-editor-area {
+  position: relative;
+}
+.ide-find-bar {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  background: var(--beilu-bg-card);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  box-shadow: 0 4px 14px var(--beilu-shadow-35);
+}
+.ide-find-bar.hidden {
+  display: none;
+}
+.ide-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ide-find-input {
+  width: 150px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  background: var(--color-base-100);
+  color: var(--color-base-content);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  outline: none;
+}
+.ide-find-input:focus {
+  border-color: var(--color-primary);
+}
+.ide-find-count {
+  min-width: 38px;
+  font-size: 0.7rem;
+  text-align: center;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+}
+.ide-find-btn {
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  line-height: 1;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-base-content);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.ide-find-btn:hover {
+  background: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+}
+.ide-find-btn-text {
+  border-color: color-mix(in oklch, var(--color-base-content) 20%, transparent);
+}
+
+/* 编辑器内容（当有文件打开时）— 仅适用于IDE文件编辑器 */
+.ide-container .editor-content {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  padding: 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.editor-content:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--beilu-amber-20);
+}
+
+/* 行号区 */
+.editor-line-numbers {
+  position: sticky;
+  left: 0;
+  padding: 1rem 0.75rem 1rem 0.5rem;
+  text-align: right;
+  color: oklch(var(--bc) / 0.55);
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  user-select: none;
+  border-right: 1px solid oklch(var(--bc) / 0.07);
+  background-color: var(--beilu-shadow-5);
+}
+
+/* 文件编辑器 textarea + 行号同步 */
+#file-editor-textarea {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  line-height: 1.4em;
+  tab-size: 4;
+  background: transparent;
+  color: inherit;
+}
+
+#file-editor-textarea:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+#editor-line-numbers {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  line-height: 1.4em;
+  white-space: pre;
+  color: oklch(var(--bc) / 0.55);
+  min-width: 2.5em;
+}
+
+/* [0723 代码美化] 结构化行号 div：why 原 textContent 纯数字无法承载活动行/缩进线，
+   改 innerHTML 每行一个 .ide-ln div。关键=line-height 严格 1.4em 对齐 textarea(L207)，
+   零 margin/padding + block，防 innerHTML div 累积高度导致行号↔代码行错位(Regression)。 */
+.ide-ln {
+  display: block;
+  line-height: 1.4em;
+  margin: 0;
+  padding: 0;
+  /* 缩进参考线：data-indent 层级 → 左侧内边距 + 竖线(box-shadow 不占位不破坏对齐) */
+  position: relative;
+}
+/* 缩进参考线：每级一条淡竖线，用 background 渐变模拟(不占高度，不影响行号对齐)。
+   data-indent 0~6 级，每级约 0.6em 宽。挂在行号 gutter 右缘暗示代码缩进层级。 */
+.ide-ln[data-indent="1"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.12); }
+.ide-ln[data-indent="2"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.18); }
+.ide-ln[data-indent="3"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.24); }
+.ide-ln[data-indent="4"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.30); }
+.ide-ln[data-indent="5"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.36); }
+.ide-ln[data-indent="6"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.42); }
+/* 活动行高亮：光标所在行号 div 加 .ide-ln-active(updateCursorPos 触发)，VSCode 同款琥珀色 */
+.ide-ln-active {
+  color: var(--beilu-amber, #f59e0b) !important;
+  background: oklch(var(--bc) / 0.06);
+  font-weight: 600;
+}
+
+/* 正则编辑器列表 */
+.regex-rule-item:hover .rule-menu-btn {
+  opacity: 1 !important;
+}
+
+/* 编辑器滚动条 */
+#file-editor-area::-webkit-scrollbar,
+#memory-editor-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#file-editor-area::-webkit-scrollbar-thumb,
+#memory-editor-area::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 4px;
+}
+
+#file-editor-area::-webkit-scrollbar-track,
+#memory-editor-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   dataTable 表格编辑器样式
+   ============================================================ */
+
+/* 工具栏 */
+.dt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.03);
+  border-bottom: 1px solid oklch(var(--bc) / 0.1);
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.dt-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* §三-#15 记忆表格编辑工具栏窄宽自适应（照预览 tables编辑工具栏自适应v2，纯前端零后端）：
+   右组(.dt-actions)换行 + 💾保存(.dt-save) sticky 常驻 + 编辑器 <560px 时按钮文字(.dt-btn-lbl)降级为纯 emoji，
+   修窄宽时右组不换行致 💾保存被容器横切裁出。container-type 落编辑器根 .dt-editor。 */
+.dt-editor {
+  container-type: inline-size;
+}
+.dt-actions {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+  justify-content: flex-end;
+}
+.dt-save {
+  position: sticky;
+  right: 0.25rem;
+}
+@container (max-width: 560px) {
+  .dt-btn-lbl {
+    display: none;
+  }
+  .dt-btn-sm {
+    padding: 0.2rem 0.35rem;
+  }
+}
+
+/* 按钮 */
+.dt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--beilu-amber-25);
+  background: transparent;
+  color: var(--beilu-amber);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dt-btn:hover:not(:disabled) {
+  background-color: var(--beilu-amber-12);
+  border-color: var(--beilu-amber);
+}
+
+.dt-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dt-btn-sm {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+}
+
+.dt-btn-xs {
+  padding: 0.125rem 0.25rem;
+  font-size: 0.65rem;
+}
+
+.dt-btn-primary {
+  background-color: var(--beilu-amber-dark);
+  color: var(--beilu-amber-text);
+  border-color: var(--beilu-amber-dark);
+}
+
+.dt-btn-primary:hover:not(:disabled) {
+  background-color: var(--beilu-amber);
+  color: var(--beilu-amber-text);
+}
+
+.dt-btn-outline {
+  border-color: var(--beilu-amber-25);
+}
+
+.dt-btn-danger {
+  border-color: var(--beilu-error-40);
+  color: var(--beilu-error);
+}
+
+.dt-btn-danger:hover:not(:disabled) {
+  background-color: var(--beilu-error-15);
+  border-color: var(--beilu-error);
+}
+
+/* 表格导航标签 */
+.dt-table-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--beilu-amber);
+  cursor: pointer;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.12s ease;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-table-label:hover {
+  background-color: oklch(var(--bc) / 0.07);
+}
+
+.dt-table-count {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tab 切换 */
+.dt-tab-group {
+  background-color: var(--beilu-shadow-8);
+  border-radius: 0.375rem;
+  padding: 0.125rem;
+}
+
+.dt-tab-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.12s ease;
+  opacity: 0.6;
+}
+
+.dt-tab-btn:hover {
+  opacity: 0.85;
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+.dt-tab-btn.dt-tab-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-18);
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+/* 内容区 */
+.dt-content-area {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+/* 表格 */
+.dt-table-wrapper {
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+.dt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  table-layout: auto;
+}
+
+.dt-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.dt-table th {
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.7rem;
+  background-color: oklch(var(--bc) / 0.08);
+  border: 1px solid oklch(var(--bc) / 0.1);
+  color: color-mix(in oklch, var(--beilu-tertiary) 65%, var(--color-base-content));
+  white-space: nowrap;
+  user-select: none;
+}
+
+.dt-table th.dt-col-header {
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.dt-table th.dt-col-header:hover {
+  background-color: var(--beilu-amber-20);
+}
+
+.dt-row-num-header,
+.dt-action-header {
+  width: 36px;
+  text-align: center;
+}
+
+.dt-table td {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid oklch(var(--bc) / 0.07);
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+.dt-table tbody tr:hover {
+  background-color: oklch(var(--bc) / 0.03);
+}
+
+.dt-row-num {
+  text-align: center;
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.55);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  width: 36px;
+}
+
+/* 可编辑单元格 */
+.dt-cell {
+  cursor: text;
+  min-height: 1.6em;
+  min-width: 60px;
+  transition:
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+  word-break: break-word;
+}
+
+.dt-cell:hover {
+  background-color: oklch(var(--bc) / 0.04);
+}
+
+.dt-cell:focus {
+  outline: none;
+  background-color: var(--beilu-amber-10);
+  box-shadow: inset 0 0 0 1.5px var(--beilu-amber);
+}
+
+/* 行操作 */
+.dt-action-cell {
+  text-align: center;
+  width: 36px;
+}
+
+/* 修4 20260716：行一级动作=归档（可恢复），删除降级批量条——原 .dt-row-delete-btn 红色语义随之退役，
+   归档钮 amber 语义（与列头归档钮同族） */
+.dt-row-archive-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--beilu-amber-50);
+  font-size: 0.7rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.12s ease;
+  opacity: 0;
+}
+
+.dt-table tbody tr:hover .dt-row-archive-btn {
+  opacity: 1;
+}
+
+.dt-row-archive-btn:hover {
+  background-color: var(--beilu-amber-15);
+  color: var(--beilu-amber);
+}
+
+/* 无数据行 */
+.dt-no-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: oklch(var(--bc) / 0.65);
+  font-size: 0.85rem;
+  gap: 0.75rem;
+}
+
+/* 空状态 */
+.dt-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 2rem;
+}
+
+.dt-empty-icon {
+  font-size: 3rem;
+  opacity: 0.3;
+  margin-bottom: 1rem;
+}
+
+.dt-empty-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--beilu-secondary) 65%, var(--color-base-content));
+  opacity: 0.85;
+  margin-bottom: 0.5rem;
+}
+
+.dt-empty-desc {
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.6;
+  max-width: 280px;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   dataTable 模板视图
+   ============================================================ */
+
+.dt-template-view {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dt-template-section {
+  border: 1px solid oklch(var(--bc) / 0.08);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.dt-template-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--beilu-tertiary) 65%, var(--color-base-content));
+  margin-bottom: 0.75rem;
+}
+
+.dt-template-field {
+  margin-bottom: 0.75rem;
+}
+
+.dt-template-field label {
+  display: block;
+  font-size: 0.7rem;
+  color: oklch(var(--bc) / 0.5);
+  margin-bottom: 0.25rem;
+}
+
+.dt-template-input {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--beilu-border-subtle);
+  border-radius: 0.25rem;
+  background-color: var(--beilu-shadow-8);
+  color: inherit;
+  transition: border-color 0.12s ease;
+}
+
+.dt-template-input:focus {
+  outline: none;
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+.dt-template-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.75rem !important;
+  color: inherit !important;
+}
+
+.dt-template-checkbox-label input[type="checkbox"] {
+  accent-color: var(--beilu-amber);
+}
+
+.dt-template-hint {
+  display: block;
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.55);
+  margin-top: 0.25rem;
+}
+
+/* 列定义列表 */
+.dt-template-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.dt-template-col-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.dt-template-col-idx {
+  width: 20px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.55);
+  flex-shrink: 0;
+}
+
+.dt-template-col-item .dt-template-input {
+  flex: 1;
+}
+
+/* 危险操作区 */
+.dt-template-danger {
+  border-color: var(--beilu-error-20);
+}
+
+.dt-danger-title {
+  color: var(--beilu-error) !important;
+}
+

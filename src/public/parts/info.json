@@ -1,0 +1,287 @@
+{
+	"en-UK": {
+		"name": "beilu Root",
+		"avatar": "/favicon.svg",
+		"description": "The foundational core of beilu.",
+		"description_markdown": "This is the **root component** of the beilu system. It serves as the primary engine that initializes and orchestrates all other parts.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"system",
+			"core",
+			"root",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "beilu 根组件",
+		"avatar": "/favicon.svg",
+		"description": "beilu 的核心基础组件",
+		"description_markdown": "这是 beilu 系统的**根部组件**，负责承载并加载系统中的所有功能部件。",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"系统",
+			"核心",
+			"根节点",
+			"beilu"
+		]
+	},
+	"ar-SA": {
+		"name": "جذر ينبوع",
+		"avatar": "/favicon.svg",
+		"description": "النواة الأساسية للينبوع",
+		"description_markdown": "هذا هو الجزء الجذري لنظام beilu، وهو المسؤول عن تحميل وتشغيل جميع الأجزاء الأخرى.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"نظام",
+			"أساسي",
+			"جذر",
+			"beilu"
+		]
+	},
+	"de-DE": {
+		"name": "beilu-Stamm",
+		"avatar": "/favicon.svg",
+		"description": "Die Kernkomponente von beilu",
+		"description_markdown": "Dies ist die **Stammkomponente** des beilu-Systems, die alle anderen Teile darauf lädt und verwaltet.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"System",
+			"Kern",
+			"Stamm",
+			"beilu"
+		]
+	},
+	"emoji": {
+		"name": "🌱",
+		"avatar": "/favicon.svg",
+		"description": "🌱 🧱 ➡️ 🧩🧩🧩",
+		"description_markdown": "🌱 ➡️ 🌱. \n🏗️ ➕ 🔄 🧩. \n🧱 ➡️ 🚀.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"⚙️",
+			"🌱",
+			"🏗️",
+			"🌱"
+		]
+	},
+	"es-ES": {
+		"name": "Raíz de beilu",
+		"avatar": "/favicon.svg",
+		"description": "El núcleo fundamental de beilu",
+		"description_markdown": "Esta es la **parte raíz** de beilu, encargada de cargar y orquestar todos los demás componentes.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"núcleo",
+			"raíz",
+			"beilu"
+		]
+	},
+	"fr-FR": {
+		"name": "Racine de beilu",
+		"avatar": "/favicon.svg",
+		"description": "Le noyau fondamental de beilu",
+		"description_markdown": "Il s'agit de la **composante racine** de beilu, servant à charger toutes les autres parties du système.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"système",
+			"noyau",
+			"racine",
+			"beilu"
+		]
+	},
+	"hi-IN": {
+		"name": "beilu मूल",
+		"avatar": "/favicon.svg",
+		"description": "beilu का मूलभूत कोर",
+		"description_markdown": "यह beilu का **मूल भाग** है, जो इस पर अन्य सभी भागों को लोड करने के लिए जिम्मेदार है।",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"प्रणाली",
+			"कोर",
+			"मूल",
+			"beilu"
+		]
+	},
+	"is-IS": {
+		"name": "beilu Rót",
+		"avatar": "/favicon.svg",
+		"description": "Grunnkjarni beilu",
+		"description_markdown": "Þetta er **rótarhluti** beilu kerfisins, sem hleður og stýrir öllum öðrum hlutum.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"kerfi",
+			"kjarni",
+			"rót",
+			"beilu"
+		]
+	},
+	"it-IT": {
+		"name": "Radice di beilu",
+		"avatar": "/favicon.svg",
+		"description": "Il cuore fondamentale di beilu",
+		"description_markdown": "Questa è la **componente radice** di beilu, che carica tutte le altre parti su di essa.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"nucleo",
+			"radice",
+			"beilu"
+		]
+	},
+	"ja-JP": {
+		"name": "beilu ルート",
+		"avatar": "/favicon.svg",
+		"description": "beilu のコア基礎コンポーネント",
+		"description_markdown": "これは beilu システムの**ルート部分**であり、すべてのコンポーネントをロードして管理します。",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"システム",
+			"コア",
+			"ルート",
+			"beilu"
+		]
+	},
+	"ko-KR": {
+		"name": "beilu 루트",
+		"avatar": "/favicon.svg",
+		"description": "beilu의 핵심 기초 구성 요소",
+		"description_markdown": "이것은 beilu의 **루트 부분**으로, 모든 구성 요소를 로드하고 관리하는 역할을 합니다.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"시스템",
+			"핵심",
+			"루트",
+			"beilu"
+		]
+	},
+	"lzh": {
+		"name": "beilu 之根",
+		"avatar": "/favicon.svg",
+		"description": "beilu 之根柢",
+		"description_markdown": "此乃 beilu 系統之**根柢**。萬部皆由此起，承載群件以運化。\n",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"系統",
+			"根柢",
+			"樞機",
+			"beilu"
+		]
+	},
+	"nl-NL": {
+		"name": "beilu Wortel",
+		"avatar": "/favicon.svg",
+		"description": "De fundamentele kern van beilu",
+		"description_markdown": "Dit is het **hoofdgedeelte** van beilu, dat alle andere onderdelen laadt en aanstuurt.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"systeem",
+			"kern",
+			"wortel",
+			"beilu"
+		]
+	},
+	"pt-PT": {
+		"name": "Raiz do beilu",
+		"avatar": "/favicon.svg",
+		"description": "O núcleo fundamental do beilu",
+		"description_markdown": "Esta é a **parte raiz** do beilu, responsável por carregar todos os componentes no sistema.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"sistema",
+			"núcleo",
+			"raiz",
+			"beilu"
+		]
+	},
+	"ru-RU": {
+		"name": "Корень beilu",
+		"avatar": "/favicon.svg",
+		"description": "Фундаментальное ядро beilu",
+		"description_markdown": "Это **корневой компонент** системы beilu, отвечающий за загрузку всех остальных частей.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"система",
+			"ядро",
+			"корень",
+			"beilu"
+		]
+	},
+	"uk-UA": {
+		"name": "Корінь beilu",
+		"avatar": "/favicon.svg",
+		"description": "Фундаментальне ядро beilu",
+		"description_markdown": "Це **коренева частина** системи beilu, що завантажує всі інші компоненти.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"система",
+			"ядро",
+			"корінь",
+			"beilu"
+		]
+	},
+	"vi-VN": {
+		"name": "Gốc của beilu",
+		"avatar": "/favicon.svg",
+		"description": "Cốt lõi cơ bản của beilu",
+		"description_markdown": "Đây là **phần gốc** của hệ thống beilu, chịu trách nhiệm tải tất cả các bộ phận khác lên đó.",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"hệ thống",
+			"cốt lõi",
+			"gốc",
+			"beilu"
+		]
+	},
+	"zh-TW": {
+		"name": "beilu 根組件",
+		"avatar": "/favicon.svg",
+		"description": "beilu 的核心基礎組件",
+		"description_markdown": "這是 beilu 系統的**根部組件**，負責承載並加載系統中的所有功能部件。",
+		"version": "0.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": [
+			"系統",
+			"核心",
+			"根節點",
+			"beilu"
+		]
+	}
+}

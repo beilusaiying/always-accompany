@@ -1,0 +1,7 @@
+{
+  "base_url": "https://your-gateway.example.com",
+  "api_key": "YOUR_API_KEY",
+  "image_model": "gemini-image-model-name",
+  "spec_model": "gemini-text-model-name",
+  "_note": "仅 gen_image.py(AI出图)/gen_spec.py(独立CLI生成) 使用；beilu 的 <ppt_op> 主链路不需要本文件"
+}

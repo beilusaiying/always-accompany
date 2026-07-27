@@ -1,0 +1,32 @@
+{
+	"en-UK": {
+		"name": "Lark Bot",
+		"avatar": "https://api.iconify.design/simple-icons/larksuite.svg",
+		"description": "Run your character as a Lark/Feishu bot.",
+		"description_markdown": "Allows you to connect your character to Lark/Feishu and interact with them as a bot. Uses WebSocket mode — no public server required.",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["Lark", "Feishu", "bot", "integration", "office"]
+	},
+	"zh-CN": {
+		"name": "飞书 Bot",
+		"avatar": "https://api.iconify.design/simple-icons/larksuite.svg",
+		"description": "将角色作为飞书机器人运行。",
+		"description_markdown": "允许您将角色连接到飞书并作为机器人与其互动。使用 WebSocket 模式，无需公网服务器。",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["飞书", "Lark", "机器人", "集成", "办公"]
+	},
+	"emoji": {
+		"name": "🚀🤖",
+		"avatar": "https://api.iconify.design/simple-icons/larksuite.svg",
+		"description": "🚀💬🔗",
+		"description_markdown": "🚀🤖➡️💬",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["🚀", "🤖", "🔗"]
+	}
+}

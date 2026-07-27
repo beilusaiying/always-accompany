@@ -1,0 +1,135 @@
+{
+  "id": "bot",
+  "label": "Bot",
+  "icon": "🤖",
+  "desc": "bot 独立模式（凛倾0706拍板 6口之③）：基于 chat 属外部工具（底部功能层），9 个 bot shell（discord/dingtalk/lark/slack/telegram/wechat/wecom/x/line）生成链绑定维度（0716 校准：原'四 bot shell'系首批快照；kookbot 同日凛倾拍板删除——游戏语音场景与用户群无交集）。首版照抄 chat 现状真值，行为等价",
+  "base": null,
+  "_note": "T5 首版铁则：features 照抄现状真值（散点清单 2026-07-02），config=声明表（差异行为仍由功能层内 if 驱动，切流量批逐项接线）。hooks 序=现状插件链序，影子 diff 是序的最终裁判。0716 接线批校准：dailyGreeting 由抄 chat 模板的 true 修正为 false——现状问候门（getPromptHandler T6-S3）从不含 bot，接线时对齐现状真值防行为漂移。",
+  "features": {
+    "memory": {
+      "enabled": true,
+      "config": {
+        "hotLayerDir": null,
+        "orphanStrip": false,
+        "codeProjectEnv": false
+      }
+    },
+    "teaching": {
+      "enabled": true,
+      "config": {
+        "taskPlanHowto": false,
+        "dailyGreeting": false
+      }
+    },
+    "p1": {
+      "enabled": true,
+      "config": {
+        "selfDriven": false,
+        "aiP1": true,
+        "_note_selfDriven": "[0724 002拍板] selfDriven(自驱动P1词库管线)=实验功能,完全不需要加载,全模式关闭。它会把 conceptnet/swow/activation_terms 等 119MB 词库 JSON 解析成数百MB 进程级永驻缓存(0723 内存2GB案主因)。给未来AI:禁把 selfDriven 改回 true 或绕过声明门直接 import p1_pipeline——实验成熟需 002 拍板;aiP1(检索AI)是正路不依赖JS词库,保持不动。门在 getPromptHandler Phase3 modeFeature(mode,\"p1\")。"
+      }
+    },
+    "websearch": {
+      "enabled": true
+    },
+    "scheduler": {
+      "enabled": true,
+      "config": {
+        "dueJobsInject": false,
+        "crossWindowWake": true
+      }
+    },
+    "flowGroup": {
+      "enabled": false
+    },
+    "ide": {
+      "enabled": false
+    },
+    "taskRunner": {
+      "enabled": false
+    },
+    "preset": {
+      "enabled": true,
+      "config": {
+        "strategy": "single"
+      }
+    }
+  },
+  "hooks": {
+    "request": [
+      {
+        "target": "functions:memory",
+        "verb": "getPrompt",
+        "feature": "memory",
+        "slot": "beilu-memory"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "mvuGetPrompt",
+        "slot": "beilu-mvu"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "toggleGetPrompt",
+        "slot": "beilu-toggle"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "sysinfoGetPrompt",
+        "slot": "beilu-sysinfo"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "worldInfo",
+        "slot": "beilu-worldbook"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "getPrompt",
+        "feature": "preset",
+        "slot": "beilu-preset"
+      },
+      {
+        "phase": "tweak",
+        "dl": [
+          2,
+          1,
+          0
+        ],
+        "steps": [
+          {
+            "target": "functions:prompt",
+            "verb": "mvuTweakPrompt",
+            "slot": "beilu-mvu"
+          },
+          {
+            "target": "functions:prompt",
+            "verb": "wbTweakPrompt",
+            "slot": "beilu-worldbook"
+          },
+          {
+            "target": "functions:prompt",
+            "verb": "tweakPrompt",
+            "feature": "preset",
+            "slot": "beilu-preset"
+          }
+        ]
+      }
+    ]
+  },
+  "presetBinding": {
+    "strategy": "single",
+    "submodeSet": null,
+    "resolvePreset": "active_preset_map[chatId]"
+  },
+  "cache": {
+    "scopeKeys": [
+      "mode",
+      "chatId"
+    ]
+  },
+  "storage": {
+    "root": "getModeCtxDir"
+  },
+  "_note2": "菜单完整性(步骤4普查): GetPrompt相插件参与者=memory/preset/worldbook/mvu/toggle/sysinfo(经facade)+files/browser/plugin-host(未迁无facade,影子孪生直调不进ModeDef); 相内并发各写各槽=序不影响产物,等价约束只在相位边界"
+}

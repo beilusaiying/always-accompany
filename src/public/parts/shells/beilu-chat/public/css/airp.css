@@ -1,0 +1,132 @@
+/* ============================================================
+   airp.css — AIRP 符号 DSL 渲染样式（第4章步②-c）
+   ------------------------------------------------------------
+   配对：renderAirpDSL(airpRenderer.mjs) 产出的 class 结构。
+   职责分工（002 哲学：图是氛围/符号是真相）：
+     - 配色【不在此写死】：由 renderAirpDSL 内联 style 注入（background / --airp-light / color），
+       来源=后端 plugins:beilu-airp 能力谱(palette)，用户可改。本文件只用 var(--airp-light) 引用。
+     - 本文件只管：布局 / 动态效果动画 / 对话框自适应。
+   动态效果开关(D-B)：renderAirpDSL 按后端 dynEffects 开关挂 airp-glow/airp-rain/airp-flicker class，
+     关闭时不挂 class → 对应动画自然不生效（用户可关，防性能）。
+   自适应(D-A·002原话'结合算法当前对话框自适应')：airp-scene width:100% 适应 .message-content 父容器；
+     窄屏媒体查询转紧凑；不依赖 JS 读宽度（applyBuiltinProcessors 无 DOM）。
+   reduced-motion：prefers-reduced-motion 停全部动画（对应 dynEffects.respectReducedMotion）。
+   作用域：.chat-message .message-content 内（同 misc.css:107 气泡作用域，不污染全站）。
+   ============================================================ */
+
+/* ---------- 场景容器 ---------- */
+.chat-message .message-content .airp-scene {
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0.6em 0;
+	padding: 0.8em 1em;
+	border-radius: 8px;
+	/* background 由内联 style 注入（来自后端 palette）；无注入时透明降级 */
+	position: relative;
+	overflow: hidden;
+	line-height: 1.5;
+}
+
+/* ---------- 角色位 ---------- */
+.chat-message .message-content .airp-char {
+	display: flex;
+	align-items: baseline;
+	gap: 0.4em;
+	margin: 0.3em 0;
+}
+.chat-message .message-content .airp-pos-left { justify-content: flex-start; }
+.chat-message .message-content .airp-pos-center { justify-content: center; }
+.chat-message .message-content .airp-pos-right { justify-content: flex-end; }
+.chat-message .message-content .airp-char-name {
+	font-weight: 600;
+	opacity: 0.95;
+}
+.chat-message .message-content .airp-char-mood {
+	font-size: 0.85em;
+	opacity: 0.7;
+	padding: 0 0.4em;
+	border-radius: 4px;
+	border: 1px solid currentColor;
+}
+
+/* ---------- 叙事文本 ---------- */
+.chat-message .message-content .airp-desc {
+	display: inline;
+	/* color 由内联 style 注入（来自后端 palette）；无注入时继承正文色 */
+}
+
+/* ============================================================
+   动态效果（D-B）——class 由 renderAirpDSL 按 dynEffects 开关挂载
+   配色不写死：辉光颜色引用 --airp-light（内联注入的 CSS 变量）
+   ============================================================ */
+
+/* 辉光呼吸：霓虹光晕随呼吸明暗，颜色=场景 light */
+.chat-message .message-content .airp-scene.airp-glow {
+	animation: airp-glow-breathe 3.2s ease-in-out infinite;
+}
+@keyframes airp-glow-breathe {
+	0%, 100% { box-shadow: 0 0 6px 0 var(--airp-light, transparent); }
+	50%      { box-shadow: 0 0 18px 3px var(--airp-light, transparent); }
+}
+
+/* 霓虹闪烁：轻微不规则亮度抖动 */
+.chat-message .message-content .airp-scene.airp-flicker::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: var(--airp-light, transparent);
+	opacity: 0;
+	mix-blend-mode: screen;
+	animation: airp-flicker-pulse 4s steps(1, end) infinite;
+}
+@keyframes airp-flicker-pulse {
+	0%, 97%, 100% { opacity: 0; }
+	97.5%         { opacity: 0.08; }
+	98.5%         { opacity: 0.04; }
+	99%           { opacity: 0.1; }
+}
+
+/* 雨滴：斜向下移动的细线纹理（纯 CSS 渐变，无图片资产） */
+.chat-message .message-content .airp-scene.airp-rain::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image: repeating-linear-gradient(
+		105deg,
+		transparent 0,
+		transparent 6px,
+		rgba(180, 200, 230, 0.06) 6px,
+		rgba(180, 200, 230, 0.06) 7px
+	);
+	background-size: 100% 200%;
+	animation: airp-rain-fall 0.7s linear infinite;
+}
+@keyframes airp-rain-fall {
+	0%   { background-position: 0 0; }
+	100% { background-position: -14px 200%; }
+}
+
+/* ============================================================
+   对话框自适应（D-A）——窄屏转紧凑，不错位
+   ============================================================ */
+@media (max-width: 480px) {
+	.chat-message .message-content .airp-scene {
+		padding: 0.5em 0.6em;
+		margin: 0.4em 0;
+	}
+
+}
+
+/* ============================================================
+   reduced-motion 兜底（dynEffects.respectReducedMotion）——停全部动画
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+	.chat-message .message-content .airp-scene.airp-glow,
+	.chat-message .message-content .airp-scene.airp-flicker::before,
+	.chat-message .message-content .airp-scene.airp-rain::after {
+		animation: none;
+	}
+}

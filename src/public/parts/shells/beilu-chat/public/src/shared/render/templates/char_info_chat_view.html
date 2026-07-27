@@ -1,0 +1,21 @@
+<div class="card bg-base-100 shadow-sm mt-2 w-full" data-template-type="char">
+	<div class="card-body">
+		<img src="${avatar}" class="w-12 h-12 rounded-full mr-4" style="object-fit: cover;"
+			onerror="this.style.display='none'" />
+		<div>
+			<h2 class="card-title">${name}</h2>
+			<p>${description}</p>
+		</div>
+	</div>
+	<!-- 频率滑条已删（T070 链 UI 末节，凛倾0706授权删除批）：出向端点早删+入向 case 已删+后端零 frequency_data 产出=恒 0.5 纯僵尸控件 -->
+	<div class="card-actions justify-end items-center p-2 px-4">
+		<div class="flex items-center gap-2">
+			<button class="btn btn-xs btn-error remove-char-button" data-i18n="chat.charCard.buttons.removeChar">
+				<img src="/parts/shells:beilu-chat/icons/line-md__person-remove.svg" data-i18n="chat.charCard.buttons.removeCharIcon" />
+			</button>
+			<button class="btn btn-xs btn-primary force-reply-button" data-i18n="chat.charCard.buttons.forceReply">
+				<img src="/parts/shells:beilu-chat/icons/line-md__chat-round-dots.svg" data-i18n="chat.charCard.buttons.forceReplyIcon" />
+			</button>
+		</div>
+	</div>
+</div>

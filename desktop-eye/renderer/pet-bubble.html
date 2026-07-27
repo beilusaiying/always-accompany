@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>always accompany · 桌宠对话</title>
+	<!--
+		桌宠【对话框窗】：透明置顶、紧贴角色【下方】的独立窗口(凛倾决策:完整体型+下方对话窗，不浮盖角色)。
+		文本由【主进程单一轮询源】经 IPC 'bubble-text' 推来(preload onBubbleText)。空文本时整窗透明不可见。
+		UI 跟 beilu 主界面走：flat、琥珀描边、米白底，不用玻璃。
+	-->
+	<style>
+		/* 用户可设(凛倾需求):透明度/底色/文字色/圆角。
+		   --bubble-bg 留空→回退主题琥珀米白底×alpha;设了自定义色则该色优先(含自身 alpha)。 */
+		:root {
+			--bubble-alpha: 0.95;
+			--bubble-bg: rgba(255, 252, 245, var(--bubble-alpha));
+			--bubble-fg: #3a2c12;
+			--bubble-radius: 14px;
+			--bubble-border: rgba(245, 197, 66, 0.55);
+			/* 任务④全项可调(凛倾:自由调整颜色和界面):名标色/字号 也入变量,applyConfig 统一驱动 */
+			--bubble-name-color: #b8860b;
+			--bubble-fs: 14px;
+		}
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		html, body {
+			width: 100%; height: 100%;
+			overflow: hidden;
+			background: transparent;
+			user-select: none;
+			color-scheme: light; /* 默认浅色(凛倾:对话框需要浅色,按系统主题);用户可自定义覆盖 */
+			font: 14px/1.55 "Microsoft YaHei", system-ui, sans-serif;
+		}
+		#wrap {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			padding: 10px 8px;
+		}
+		/* 对话框：上缘有指向角色(上方)的小三角；flat 琥珀风。 */
+		#box {
+			position: relative;
+			width: 100%;
+			max-height: 100%;
+			overflow: hidden;
+			padding: 10px 14px;
+			border-radius: var(--bubble-radius);
+			background: var(--bubble-bg);
+			color: var(--bubble-fg);
+			box-shadow: 0 4px 18px rgba(180, 140, 40, 0.30), inset 0 0 0 1px var(--bubble-border);
+			opacity: 0;
+			transform: translateY(4px);
+			transition: opacity 0.22s ease, transform 0.22s ease;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+		#box.show { opacity: 1; transform: translateY(0); }
+		#box { font-size: var(--bubble-fs); }
+		/* 外阴影关(保描边);尖角关 */
+		#box.noshadow { box-shadow: inset 0 0 0 1px var(--bubble-border); }
+		#box.notail::before { display: none; }
+		/* 指向上方角色的尖角 */
+		#box::before {
+			content: '';
+			position: absolute;
+			left: 50%; top: -7px;
+			width: 14px; height: 14px;
+			margin-left: -7px;
+			background: var(--bubble-bg);
+			transform: rotate(45deg);
+			box-shadow: -1px -1px 0 rgba(245, 197, 66, 0.35);
+		}
+		#name {
+			font-size: 12px;
+			font-weight: 700;
+			color: var(--bubble-name-color);
+			margin-bottom: 2px;
+		}
+	</style>
+</head>
+<body>
+	<div id="wrap">
+		<div id="box"><div id="name">AI</div><div id="text"></div></div>
+	</div>
+	<script>
+		const box = document.getElementById('box');
+		const textEl = document.getElementById('text');
+		let _timer = null;
+		let _dwellMs = 6000; // 用户可设的停留时长(凛倾需求;0=常驻不自动隐藏)。
+		// 应用用户设置:opacity(0.1~1)→对话框底色透明度；dwellMs(≥0)→停留时长。
+		function applyConfig(cfg) {
+			if (!cfg) return;
+			const root = document.documentElement.style;
+			if (typeof cfg.opacity === 'number') {
+				root.setProperty('--bubble-alpha', String(Math.max(0.1, Math.min(1, cfg.opacity))));
+			}
+			if (typeof cfg.dwellMs === 'number') _dwellMs = Math.max(0, cfg.dwellMs);
+			// 自定义底色:非空→该色优先(覆盖琥珀默认);空字符串→回退主题色×alpha。
+			if (typeof cfg.color === 'string') {
+				if (cfg.color) root.setProperty('--bubble-bg', cfg.color);
+				else root.setProperty('--bubble-bg', 'rgba(255, 252, 245, var(--bubble-alpha))');
+			}
+			if (typeof cfg.textColor === 'string') {
+				root.setProperty('--bubble-fg', cfg.textColor || '#3a2c12');
+			}
+			// 圆角:>=0 用该值;<0(默认 -1)回退 14px。
+			if (typeof cfg.radius === 'number') {
+				root.setProperty('--bubble-radius', (cfg.radius >= 0 ? cfg.radius : 14) + 'px');
+			}
+			// 任务④全项(类型守卫:undefined=离线/旧后端 → 保内建默认,不分叉)
+			if (typeof cfg.borderColor === 'string') root.setProperty('--bubble-border', cfg.borderColor || 'rgba(245, 197, 66, 0.55)');
+			if (typeof cfg.nameColor === 'string') root.setProperty('--bubble-name-color', cfg.nameColor || '#b8860b');
+			if (typeof cfg.fontSize === 'number') root.setProperty('--bubble-fs', (cfg.fontSize > 0 ? cfg.fontSize : 14) + 'px');
+			const nameEl = document.getElementById('name');
+			if (nameEl) {
+				if (typeof cfg.nameEnabled === 'boolean') nameEl.style.display = cfg.nameEnabled ? '' : 'none';
+				if (typeof cfg.nameText === 'string') nameEl.textContent = cfg.nameText || 'AI';
+			}
+			if (typeof cfg.shadow === 'boolean') box.classList.toggle('noshadow', !cfg.shadow);
+			if (typeof cfg.tail === 'boolean') box.classList.toggle('notail', !cfg.tail);
+		}
+		function showText(t) {
+			if (!t) { box.classList.remove('show'); return; }
+			textEl.textContent = t;
+			box.classList.add('show');
+			clearTimeout(_timer);
+			// 停留时长由用户设置决定;0=常驻(不自动隐藏)。
+			if (_dwellMs > 0) _timer = setTimeout(() => box.classList.remove('show'), _dwellMs);
+		}
+		if (window.desktopEye && window.desktopEye.onBubbleText) {
+			window.desktopEye.onBubbleText((t) => showText(t));
+		}
+		if (window.desktopEye && window.desktopEye.onBubbleConfig) {
+			window.desktopEye.onBubbleConfig(applyConfig);
+		}
+		// 调试入口(自动化驱动用)。
+		window.__bubbleTest = { show: showText, applyConfig, getDwell: () => _dwellMs };
+	</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "en-UK": {
+    "name": "Browser Automation",
+    "avatar": "https://api.iconify.design/mdi/web.svg",
+    "description": "Control browser via CDP, navigate/click/type/snapshot/screenshot",
+    "description_markdown": "**Browser Automation** - AI controls a real browser through Chrome DevTools Protocol. Navigate pages, click elements, type text, take snapshots and screenshots.",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["beilu", "browser", "automation"]
+  },
+  "zh-CN": {
+    "name": "浏览器自动化",
+    "avatar": "https://api.iconify.design/mdi/web.svg",
+    "description": "通过CDP协议控制浏览器，导航/点击/输入/快照/截图",
+    "description_markdown": "**浏览器自动化** - AI 通过 Chrome DevTools Protocol 控制真实浏览器。导航页面、点击元素、输入文字、获取快照和截图。",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["beilu", "browser", "automation"]
+  }
+}

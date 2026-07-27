@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>lipsync test</title>
+<style>html,body{margin:0;background:#222}#live2d-host{width:400px;height:600px}</style>
+<!-- 真实 vendor 运行时:与生产同 -->
+<script src="vendor/live2dcubismcore.min.js"></script>
+<script src="vendor/pixi.min.js"></script>
+<script src="vendor/cubism4.min.js"></script>
+</head>
+<body>
+<div id="live2d-host"></div>
+<script type="module">
+  // ★ 导入【真实】两模块(相对本页解析,imports 全部命中生产代码)
+  import { initLive2dRenderer } from "./src/shared/companion/live2dRenderer.mjs";
+  // iframeRenderer 引入即在父页注册音频桥 + voice 事件派发逻辑(_wireVoiceLipEvents)。
+  //   它顺带 import diagLogger / onElementRemoved / stCompat —— 由静态服务器一并提供。
+  import * as IFR from "./src/shared/render/iframeRenderer.mjs"; // 6c批5：shared-ui/→shared/render/（四分区搬迁）
+  const { renderAsIframe } = IFR;
+
+  window.__test = { events: [], err: null, ifrLoaded: !!IFR };
+
+  // 记录 live2d 收到的 voice 口型事件(验证事件总线接通)
+  window.addEventListener("beilu:voice-audio-start", (e) => {
+    window.__test.events.push({ t: "start", hasEl: !!(e.detail && e.detail.audioEl) });
+  });
+  window.addEventListener("beilu:voice-audio-end", () => {
+    window.__test.events.push({ t: "end" });
+  });
+
+  (async () => {
+    try {
+      await initLive2dRenderer();           // 真实渲染器:加载 Hiyori 到 #live2d-host
+      window.__test.ready = !!(window.beiluLive2d && window.beiluLive2d.ready && window.beiluLive2d.ready());
+    } catch (e) { window.__test.err = String(e && e.message || e); }
+  })();
+
+  // 合成一段 0.6s 440Hz 正弦的 WAV data-URI(真实有能量的音频,驱动 RMS 口型)。
+  function makeWavDataUri(seconds = 0.6, freq = 440, sr = 8000) {
+    const n = Math.floor(seconds * sr);
+    const bytes = 44 + n * 2;
+    const buf = new ArrayBuffer(bytes);
+    const dv = new DataView(buf);
+    const ws = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+    ws(0, "RIFF"); dv.setUint32(4, bytes - 8, true); ws(8, "WAVE");
+    ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    ws(36, "data"); dv.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      const v = Math.sin(2 * Math.PI * freq * (i / sr)) * 0.8;
+      dv.setInt16(44 + i * 2, v * 0x7fff, true);
+    }
+    let bin = ""; const u8 = new Uint8Array(buf);
+    for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+    return "data:audio/wav;base64," + btoa(bin);
+  }
+
+  // ★ 走【完整真实链路】:渲染一个真实 iframe(renderAsIframe 内会 ensureParentResizeListener
+  //   注册父页音频桥 message 监听),iframe 内 srcdoc 调真实 window.beiluAudio.play(url,{track:'voice'})
+  //   → postMessage 'beilu-audio-play' → 父页 beiluAudioPlay → voice <audio> 播放 → playing 事件
+  //   → _wireVoiceLipEvents 派发 beilu:voice-audio-start → live2dRenderer talkWithAudio。
+  let _voiceUrl = makeWavDataUri();
+  window.__renderIframe = async () => {
+    // 构造 renderAsIframe 需要的宿主(.message-content)
+    const host = document.createElement("div");
+    host.id = "msg-test-1";
+    host.innerHTML = '<div class="message-content"></div>';
+    document.body.appendChild(host);
+    // iframe srcdoc:加载后调真实音频桥播 voice。base64 内联 url 避免引号问题。
+    const b64 = btoa(unescape(encodeURIComponent(_voiceUrl)));
+    const doc = `<!doctype html><html><head></head><body>
+      <script>
+        window.addEventListener('load', function(){
+          try {
+            var u = decodeURIComponent(escape(atob('${b64}')));
+            window.__voiceUrl = u;
+            window.parent.postMessage({type:'iframe-ready'}, '*');
+          } catch(e){ console.warn('decode', e); }
+        });
+        window.__setUrl = function(u){ window.__voiceUrl = u; };
+        window.__doPlay = function(){ window.beiluAudio.play(window.__voiceUrl, {track:'voice', volume:1}); };
+        window.__doStop = function(){ window.beiluAudio.stop({track:'voice'}); };
+      <\/script>
+    </body></html>`;
+    const ifr = await renderAsIframe(doc, host, "");
+    window.__ifr = ifr;
+    return !!ifr;
+  };
+  // 在 iframe 上下文里触发真实 beiluAudio.play(经 srcdoc 注入的 __doPlay)。
+  //   每次换一段【不同 url】的 WAV,避开 voice 轨 isSameUrl 不重启的守卫(复播真实场景=新 TTS url)。
+  window.__playVoice = (freq) => {
+    const w = window.__ifr && window.__ifr.contentWindow;
+    if (w && w.__setUrl && w.__doPlay) { w.__setUrl(makeWavDataUri(0.8, freq || 330)); w.__doPlay(); return "called"; }
+    return "no-iframe-fn";
+  };
+  window.__stopVoice = () => {
+    const w = window.__ifr && window.__ifr.contentWindow;
+    if (w && w.__doStop) { w.__doStop(); return "called"; }
+    return "no-iframe-fn";
+  };
+  // 读 Hiyori 当前 ParamMouthOpenY(真实口型参数)
+  window.__mouth = () => {
+    try { return window.beiluLive2d._faceProbe().mouth; } catch (e) { return null; }
+  };
+  window.__mode = () => { try { return window.beiluLive2d._faceProbe().mode; } catch (e) { return null; } };
+</script>
+</body>
+</html>

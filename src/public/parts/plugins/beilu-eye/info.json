@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "Beilu Companion (Live2D · Image · Eye)",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "Desktop companion 3-in-1: Live2D/image avatar, speech bubble, and screen perception (screenshot → AI context).",
+		"description_markdown": "**Beilu Companion** bundles three features: ① avatar rendering (Live2D models or image packs), ② the desktop speech bubble, ③ screen perception — desktop screenshots injected as one-time temporary AI context (never persisted in chat history).",
+		"version": "0.2.0",
+		"author": "凛倾",
+		"tags": ["live2d", "image-pack", "screenshot", "desktop", "vision", "beilu"]
+	},
+	"zh-CN": {
+		"name": "桌宠三合一(Live2D·图片·屏幕感知)",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "桌宠插件三合一:虚拟形象(Live2D/图片包) + 对话框 + 屏幕感知(截图临时注入 AI)",
+		"description_markdown": "**桌宠三合一**(凛倾 2026-07-09 定):① 虚拟形象 — Live2D 模型或图片包(同表情多图随机,AI 表情键即切图);② 桌面对话框 — 颜色/名标/字号/尖角全可调;③ 屏幕感知 — 桌面截图作为一次性临时上下文注入 AI,不入聊天记录。",
+		"version": "0.2.0",
+		"author": "凛倾",
+		"tags": ["live2d", "图片包", "截图", "桌面", "视觉", "always accompany"]
+	},
+	"emoji": {
+		"name": "👁️📸",
+		"avatar": "https://api.iconify.design/mdi/eye-outline.svg",
+		"description": "👁️📸➡️🤖",
+		"description_markdown": "👁️ ➡️ 📸\n🖥️ ➡️ 🤖",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["👁️", "📸", "🖥️", "🌱"]
+	}
+}

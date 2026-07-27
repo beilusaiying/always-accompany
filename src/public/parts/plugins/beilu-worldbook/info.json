@@ -1,0 +1,16 @@
+{
+	"zh-CN": {
+		"name": "beilu-worldbook",
+		"description": "ST 世界书管理 — 兼容 SillyTavern 世界书格式，提供条目管理和关键词激活",
+		"version": "1.0.0",
+		"author": "凛倾",
+		"tags": ["worldbook", "world-info", "sillytavern"]
+	},
+	"en-UK": {
+		"name": "beilu-worldbook",
+		"description": "ST World Book Manager — Compatible with SillyTavern world info format",
+		"version": "1.0.0",
+		"author": "Linqing",
+		"tags": ["worldbook", "world-info", "sillytavern"]
+	}
+}

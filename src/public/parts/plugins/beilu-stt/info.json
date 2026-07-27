@@ -1,0 +1,29 @@
+{
+  "en-UK": {
+    "name": "Speech-to-Text (STT)",
+    "avatar": "https://api.iconify.design/mdi/microphone.svg",
+    "description": "Local speech transcription with MOSS-Transcribe-Diarize",
+    "description_markdown": "Local speech-to-text using MOSS-Transcribe-Diarize 0.9B. Supports 50+ languages, speaker diarization, timestamps, and acoustic event detection.",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["stt", "speech", "transcription", "diarization", "always accompany"]
+  },
+  "zh-CN": {
+    "name": "语音转录 (STT)",
+    "avatar": "https://api.iconify.design/mdi/microphone.svg",
+    "description": "基于 MOSS-Transcribe-Diarize 的本地语音转录",
+    "description_markdown": "使用 MOSS-Transcribe-Diarize 0.9B 进行本地语音转文字。支持 50+ 语言、说话人分离、时间戳、声学事件检测。",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["语音转录", "语音识别", "说话人分离", "always accompany"]
+  },
+  "ja-JP": {
+    "name": "音声文字起こし (STT)",
+    "avatar": "https://api.iconify.design/mdi/microphone.svg",
+    "description": "MOSS-Transcribe-Diarizeによるローカル音声文字起こし",
+    "description_markdown": "MOSS-Transcribe-Diarize 0.9Bを使用したローカル音声認識。50以上の言語、話者分離、タイムスタンプ対応。",
+    "version": "0.1.0",
+    "author": "beilu",
+    "tags": ["音声認識", "文字起こし", "話者分離", "always accompany"]
+  }
+}

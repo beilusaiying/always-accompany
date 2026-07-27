@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Live",
+		"avatar": "https://api.iconify.design/mdi/broadcast.svg",
+		"description": "Live stream danmaku into the chat context.",
+		"description_markdown": "**Beilu Live** connects to a live streaming room, screens incoming danmaku with deterministic rules (blacklist / cooldown / dedup / length), and feeds the selected ones into the existing main chat pipeline. No second generation chain — the main line handles api / preset / memory / prompt / streaming as before.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"live",
+			"danmaku",
+			"bilibili",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "直播设计",
+		"avatar": "https://api.iconify.design/mdi/broadcast.svg",
+		"description": "直播弹幕接入：算法初筛后注入对话上下文",
+		"description_markdown": "**直播设计** 连接直播间弹幕，经确定性规则初筛（黑名单/冷却/去重/长度），把选中的弹幕拼成上下文交给既有主对话链。不新建生成链——api/预设/记忆/提示词/流式渲染全部复用原有能力。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"直播",
+			"弹幕",
+			"哔哩哔哩",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "📺💬",
+		"avatar": "https://api.iconify.design/mdi/broadcast.svg",
+		"description": "📺💬➡️🗨️",
+		"description_markdown": "📺 💬 ➡️ 🗨️\n🔍 ⏳ 📥",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"📺",
+			"💬",
+			"🔍",
+			"🌱"
+		]
+	}
+}

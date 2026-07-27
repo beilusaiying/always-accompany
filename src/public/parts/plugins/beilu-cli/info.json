@@ -1,0 +1,18 @@
+{
+	"en-UK": {
+		"name": "Beilu CLI",
+		"avatar": "https://api.iconify.design/mdi/console.svg",
+		"description": "CLI backend for IDE tools — no IDE required, 42 tools via WebSocket.",
+		"version": "1.0.0",
+		"author": "凛倾",
+		"tags": ["cli", "ide", "tools", "beilu"]
+	},
+	"zh-CN": {
+		"name": "CLI 后端",
+		"avatar": "https://api.iconify.design/mdi/console.svg",
+		"description": "CLI 工具后端 — 无需 IDE，42 个工具通过 WebSocket 执行",
+		"version": "1.0.0",
+		"author": "凛倾",
+		"tags": ["CLI", "IDE", "工具", "always accompany"]
+	}
+}

@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Sysinfo",
+		"avatar": "https://api.iconify.design/mdi/monitor-dashboard.svg",
+		"description": "System information monitoring — running processes, time, CPU/memory.",
+		"description_markdown": "**Beilu Sysinfo** allows the AI to query system status via `<sysinfo>` tags. Provides running processes, system time, CPU/memory usage, and OS information.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"system",
+			"monitor",
+			"processes",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "系统监控",
+		"avatar": "https://api.iconify.design/mdi/monitor-dashboard.svg",
+		"description": "系统信息监控 — 运行程序、时间、CPU/内存",
+		"description_markdown": "**系统监控** 允许 AI 通过 `<sysinfo>` 标签查询系统状态。提供运行程序列表、系统时间、CPU/内存使用率和操作系统信息。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"系统",
+			"监控",
+			"进程",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "💻📊",
+		"avatar": "https://api.iconify.design/mdi/monitor-dashboard.svg",
+		"description": "🤖💻➡️📊⏰",
+		"description_markdown": "🤖 ➡️ 💻\n📊 ⏰ 🔧",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"💻",
+			"📊",
+			"⏰",
+			"🌱"
+		]
+	}
+}

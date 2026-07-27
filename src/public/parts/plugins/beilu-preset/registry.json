@@ -1,0 +1,256 @@
+{
+  "presets": {
+    "框架审查员": {
+      "file": "框架审查员.json",
+      "source": "builtin",
+      "description": "原话对齐审计：独立理解、承接四态、完备抽查、范围对齐",
+      "tags": [],
+      "created_at": "2026-03-28T16:48:13.544Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "代码专家": {
+      "file": "代码专家.json",
+      "source": "builtin",
+      "description": "外科手术式代码工程师，流水线唯一直接改代码的角色",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.570Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "纠错专家": {
+      "file": "纠错专家.json",
+      "source": "builtin",
+      "description": "三不继承+假设验证循环+无差别调查，根因层修复",
+      "tags": [],
+      "created_at": "2026-03-28T16:48:13.641Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "任务交接员": {
+      "file": "任务交接员.json",
+      "source": "builtin",
+      "description": "SBAR/ADR/Postmortem归档交接，完成度写实",
+      "tags": [],
+      "created_at": "2026-03-28T16:48:13.643Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "流程组装": {
+      "file": "流程组装.json",
+      "source": "builtin",
+      "description": "工作模式·流程组装 — 将提示词+Skill组装为可执行流程组",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.544Z",
+      "modified_at": "2026-03-31T01:03:44.544Z",
+      "bucket": "work"
+    },
+    "任务确认": {
+      "file": "任务确认.json",
+      "source": "builtin",
+      "description": "工作模式·任务确认 — 理解需求，核对理解，记录任务MD",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.549Z",
+      "modified_at": "2026-04-13T23:15:37.912Z",
+      "bucket": "work"
+    },
+    "任务设计": {
+      "file": "任务设计.json",
+      "source": "builtin",
+      "description": "工作模式·任务设计 — 读取任务MD，设计执行流程",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.554Z",
+      "modified_at": "2026-03-31T01:03:44.554Z",
+      "bucket": "work"
+    },
+    "执行流程组": {
+      "file": "执行流程组.json",
+      "source": "builtin",
+      "description": "工作模式·执行流程组 — 按顺序执行各步骤",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.560Z",
+      "modified_at": "2026-03-31T01:03:44.560Z",
+      "bucket": "work"
+    },
+    "流程优化": {
+      "file": "流程优化.json",
+      "source": "builtin",
+      "description": "工作模式·流程优化 — 精简步骤，减少token消耗",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.565Z",
+      "modified_at": "2026-03-31T01:03:44.565Z",
+      "bucket": "work"
+    },
+    "提示词设计": {
+      "file": "提示词设计.json",
+      "source": "builtin",
+      "description": "工作模式·提示词设计 — 为任务设计所需的AI提示词",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.570Z",
+      "modified_at": "2026-03-31T01:03:44.570Z",
+      "bucket": "work"
+    },
+    "框架审查": {
+      "file": "框架审查.json",
+      "source": "builtin",
+      "description": "工作模式·框架审查 — 审查流程是否有错误或遗漏",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.576Z",
+      "modified_at": "2026-03-31T01:03:44.576Z",
+      "bucket": "work"
+    },
+    "脚本制作": {
+      "file": "脚本制作.json",
+      "source": "builtin",
+      "description": "工作模式·Skill/脚本制作 — 制作任务所需的脚本和工具",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.581Z",
+      "modified_at": "2026-03-31T01:03:44.581Z",
+      "bucket": "work"
+    },
+    "验证": {
+      "file": "验证.json",
+      "source": "builtin",
+      "description": "工作模式·验证 — 检验执行结果的质量",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.586Z",
+      "modified_at": "2026-03-31T01:03:44.586Z",
+      "bucket": "work"
+    },
+    "收尾归档": {
+      "file": "收尾归档.json",
+      "source": "builtin",
+      "description": "工作模式·收尾归档 — 归档任务，记录经验",
+      "tags": [],
+      "created_at": "2026-03-31T01:03:44.593Z",
+      "modified_at": "2026-03-31T01:03:44.593Z",
+      "bucket": "work"
+    },
+    "分身_调查追踪": {
+      "file": "分身_调查追踪.json",
+      "source": "builtin",
+      "description": "代码考古学家+调用链追踪专家，主动搜索采集事实",
+      "tags": [],
+      "created_at": "2026-06-08T09:30:00.000Z",
+      "modified_at": "2026-06-30T12:46:20.760Z",
+      "bucket": "clone"
+    },
+    "分身_代码更改": {
+      "file": "分身_代码更改.json",
+      "source": "builtin",
+      "description": "精确外科手术工程师，按指令Read-Modify-Verify",
+      "tags": [],
+      "created_at": "2026-06-08T09:30:00.000Z",
+      "modified_at": "2026-06-28T15:19:14.120Z",
+      "bucket": "clone"
+    },
+    "分身_测试实验": {
+      "file": "分身_测试实验.json",
+      "source": "builtin",
+      "description": "QA自动化工程师+实验记录员，断言驱动测试",
+      "tags": [],
+      "created_at": "2026-06-08T09:30:00.000Z",
+      "modified_at": "2026-06-30T12:46:12.890Z",
+      "bucket": "clone"
+    },
+    "分身_大型调查": {
+      "file": "分身_大型调查.json",
+      "source": "builtin",
+      "description": "系统完整性审计师，双向可达性链路扫描",
+      "tags": [],
+      "created_at": "2026-06-08T09:30:00.000Z",
+      "modified_at": "2026-06-30T12:46:28.301Z",
+      "bucket": "clone"
+    },
+    "分身_全能型": {
+      "file": "分身_全能型.json",
+      "source": "builtin",
+      "description": "对抗性分析师+独立审计官，不锚定主AI结论",
+      "tags": [],
+      "created_at": "2026-06-08T09:30:00.000Z",
+      "modified_at": "2026-06-30T12:46:06.546Z",
+      "bucket": "clone"
+    },
+    "大项目协调": {
+      "file": "大项目协调.json",
+      "source": "builtin",
+      "description": "大项目协调中枢：scope锁定+依赖链排序+完整输出+降级+决策树",
+      "tags": [],
+      "created_at": "2026-06-30T13:42:16.550Z",
+      "modified_at": "2026-07-01T03:17:11.903Z",
+      "bucket": "code"
+    },
+    "PPT制作": {
+      "file": "PPT制作.json",
+      "source": "builtin",
+      "description": "PPT制作：五步工作流 outline内容大纲→draft字符画→generate美化生成→edit增量补丁/page逐页打磨→核对交付；主张/证据/解释同型，spec 落盘为真源",
+      "tags": [],
+      "created_at": "2026-07-17T23:00:00.000Z",
+      "modified_at": "2026-07-17T23:00:00.000Z",
+      "bucket": "ppt/工作"
+    },
+    "Bot通用": {
+      "file": "Bot通用.json",
+      "source": "builtin",
+      "description": "Bot通用：场合(私聊/群聊)×触发人×平台能力三判→短消息结论先行，权限与隐私意识",
+      "tags": [],
+      "created_at": "2026-07-17T23:00:00.000Z",
+      "modified_at": "2026-07-17T23:00:00.000Z",
+      "bucket": "bot/通用"
+    },
+    "办公助理": {
+      "file": "办公助理.json",
+      "source": "builtin",
+      "description": "办公助理：翻译/纪要/邮件/文档/整理→结论先行→拿来即用成稿，语域贴收件人",
+      "tags": [],
+      "created_at": "2026-07-17T23:00:00.000Z",
+      "modified_at": "2026-07-17T23:00:00.000Z",
+      "bucket": "bot/办公"
+    },
+    "预设设计": {
+      "file": "预设设计.json",
+      "source": "builtin",
+      "description": "工作模式·提示词+预设设计 — 设计beilu提示词与预设本身(提示词工程作者)，内含教程+017示例+方法论",
+      "tags": [],
+      "created_at": "2026-07-17T23:00:00.000Z",
+      "modified_at": "2026-07-17T23:00:00.000Z",
+      "bucket": "work/流水线"
+    },
+    "前置任务专家": {
+      "file": "前置任务专家.json",
+      "source": "builtin",
+      "description": "需求理解+现状调查+设计出案一体化前置（确认师+设计师合并）",
+      "tags": [],
+      "created_at": "2026-07-24T00:00:00.000Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "算法与推演专家": {
+      "file": "算法与推演专家.json",
+      "source": "builtin",
+      "description": "可衡量化+严谨推导+算法白盒实验，数值支撑后交代码专家",
+      "tags": [],
+      "created_at": "2026-07-24T00:00:00.000Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "链路审计专家": {
+      "file": "链路审计专家.json",
+      "source": "builtin",
+      "description": "传导链走查+AI结构病扫+白盒布点+实测收讫（错误生产师+测试专家合并）",
+      "tags": [],
+      "created_at": "2026-07-24T00:00:00.000Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/流水线"
+    },
+    "前端美化专家": {
+      "file": "前端美化专家.json",
+      "source": "builtin",
+      "description": "双战场分流：产品UI优先序铁律+营销页anti-slop全流程",
+      "tags": [],
+      "created_at": "2026-07-24T00:00:00.000Z",
+      "modified_at": "2026-07-24T00:00:00.000Z",
+      "bucket": "code/前端"
+    }
+  }
+}

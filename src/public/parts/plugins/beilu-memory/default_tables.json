@@ -1,0 +1,451 @@
+{
+	"_comment": "beilu-memory 官方默认表格配置（data 资产官方配置化 T075）。三模式各一套：chat #0-#10 / code #0-#5 / work #0-#4。用户首次触达对应模式表格时从此惰性播种；用户改自己的表结构互不影响；本文件升级不覆盖用户已改（播种只在缺失时）。读侧 storage.mjs getDefaultTables(mode)：本文件优先→代码骨架 DEFAULT_*_TABLES 兜底（fail-loud 留痕）。",
+	"chat": [
+		{
+			"id": 0,
+			"name": "时空表格",
+			"columns": [
+				"日期",
+				"时间",
+				"地点（当前描写）",
+				"此地角色"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当时间/地点/在场角色发生变化时",
+				"update": "当当前行的信息需要更新时",
+				"delete": "当转场到新场景且旧场景不再需要时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 1,
+			"name": "角色特征表格",
+			"columns": [
+				"角色名",
+				"身体特征",
+				"性格",
+				"职业",
+				"爱好",
+				"喜欢的事物",
+				"住所",
+				"其他重要信息"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当出现新的角色时",
+				"update": "当角色特征发生变化时",
+				"delete": "当角色永久退场时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 2,
+			"name": "角色与{{user}}社交表格",
+			"columns": [
+				"角色名",
+				"对{{user}}关系",
+				"对{{user}}态度",
+				"对{{user}}的好感度"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当出现新的角色与{{user}}的关系时",
+				"update": "当关系/态度/好感度变化时",
+				"delete": "当角色永久退场时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 3,
+			"name": "任务、命令或者约定表格",
+			"columns": [
+				"角色",
+				"任务",
+				"地点",
+				"持续时间"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当出现新的任务/命令/约定时",
+				"update": "当任务状态变化时",
+				"delete": "当任务完成且已归档时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 4,
+			"name": "当日临时记忆",
+			"columns": [
+				"角色",
+				"事件简述",
+				"日期",
+				"地点",
+				"情绪"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当发生需要记住的事件时",
+				"update": "当事件状态变化时",
+				"delete": "仅在归档时由系统执行"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 5,
+			"name": "重要物品表格（背包）",
+			"columns": [
+				"拥有人",
+				"物品描述",
+				"物品名",
+				"重要原因"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当出现随身携带或当前装备的重要物品时",
+				"update": "当物品信息变化时",
+				"delete": "当物品放入仓库（不再随身携带）时，使用moveToStash操作归档"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 6,
+			"name": "当天事件大总结",
+			"columns": [
+				"时间",
+				"地点",
+				"事件概述"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当临时记忆归档时由总结AI生成",
+				"update": "当总结需要修正时",
+				"delete": "当日终归档完成后清空"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 7,
+			"name": "{{char}}想要记住的关于{{user}}的事情",
+			"columns": [
+				"日期",
+				"想要记住的事情",
+				"原因"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当发现值得记住的关于{{user}}的事情时",
+				"update": "当相关信息需要补充时",
+				"delete": "当超过3天的条目已归档到热记忆层时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 8,
+			"name": "{{char}}永远记住的事情",
+			"columns": [
+				"事件",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当发生永远值得记住的重要事件时",
+				"update": "当事件需要补充信息时",
+				"delete": "合并重复项时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 9,
+			"name": "时空记忆表格",
+			"columns": [
+				"日期",
+				"当日总结"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当日终归档时从#6转入",
+				"update": "当总结需要修正时",
+				"delete": "当超过两天的条目需要清理时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 10,
+			"name": "{{user}}画像",
+			"columns": [
+				"认知图式",
+				"语义网络",
+				"依恋与人际",
+				"沟通特征",
+				"情绪表达信号",
+				"用户语言映射表",
+				"模式特化观察"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "观察到用户特征时记录到对应列。单次观察直接写入，标注(单次)。多次验证(>=3次同模式)后去掉标注",
+				"update": "用户纠正时直接修正。新信息与旧条目矛盾→不覆盖而是两面并存标注情境(AGM修正原则)",
+				"delete": "用户明确否定某条目时移除(AGM收缩)。长期未引用→置信度降低可清理",
+				"column_guide": "认知图式(Piaget): 已识别的概念框架/同化倾向/顺应记录/矛盾或多面性 | 语义网络(Collins&Loftus): 核心概念节点与连接/高激活概念簇/已验证联想路径 | 依恋与人际(Bowlby): 对AI关系期待/安全感信号与不安信号/回避与趋近模式 | 沟通特征(Grice+Accommodation): 准则违反模式/表达习惯情境差异/信息密度波动 | 情绪表达信号(Plutchik): 基础情绪映射/情绪触发模式/情绪表达方式 | 用户语言映射(DRT): 私有缩写代号→含义/高频句式指代/省略模式/跨对话持续性指称 | 模式特化: code=技术栈熟悉度+代码风格+调试推理路径+架构切入层级 / work=工作流图式+信息呈现偏好+协作主动度 / chat=话题偏好雷区+情感交互模式+对AI角色期待"
+			},
+			"description": "用户画像(跨模式共通)。穿透规则: 特化层信号跨模式反复出现→写入共通列。更新遵循AGM信念修正+最小改变原则",
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		}
+	],
+	"code": [
+		{
+			"id": 0,
+			"name": "任务原话记录",
+			"columns": [
+				"任务摘要",
+				"用户原话",
+				"状态",
+				"关联文件",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当用户提出新的编程任务时，完整记录原话，不改写不省略",
+				"update": "当任务状态变化（进行中/完成/搁置）或完成后补充关联文件时",
+				"delete": "当任务已完成并归档到任务MD文件后"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 1,
+			"name": "代码定位表",
+			"columns": [
+				"文件路径",
+				"关键函数·区域",
+				"行号范围",
+				"功能说明",
+				"最后更新"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当读完一个文件后，提取关键函数/代码区域的位置信息，路径用相对项目根的格式",
+				"update": "当代码变更导致行号或函数名变化时及时更新，保持定位准确",
+				"delete": "当文件被删除或函数被移除时"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 2,
+			"name": "文档索引表",
+			"columns": [
+				"文档名",
+				"路径",
+				"类型",
+				"摘要",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当创建新的MD文件、设计文档、bug记录、变更日志时自动记录路径和摘要",
+				"update": "当文档内容大幅变更时更新摘要，类型可选：设计文档/变更记录/bug记录/API文档/工作日志",
+				"delete": "当文档被删除或合并到其他文档时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 3,
+			"name": "流程·架构索引",
+			"columns": [
+				"名称",
+				"类型",
+				"文档路径",
+				"覆盖范围",
+				"版本"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当发现新的流程图、项目图、架构文档时记录，类型可选：流程图/项目图/架构图/模块说明",
+				"update": "当文档更新版本或覆盖范围变化时",
+				"delete": "当文档被废弃或被新版本完全替代时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 4,
+			"name": "错误·经验表",
+			"columns": [
+				"问题现象",
+				"根因",
+				"修复方案",
+				"涉及文件",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当修复一个bug或发现一个重要经验后自动记录，重点记录根因和修复方案",
+				"update": "当发现相关问题的新信息或更好的解决方案时",
+				"delete": "当问题已完全解决且不再有参考价值时"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 5,
+			"name": "{{user}}画像",
+			"columns": [
+				"认知图式",
+				"语义网络",
+				"依恋与人际",
+				"沟通特征",
+				"情绪表达信号",
+				"用户语言映射表",
+				"模式特化观察"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "观察到用户特征时记录到对应列。单次观察直接写入，标注(单次)。多次验证(>=3次同模式)后去掉标注",
+				"update": "用户纠正时直接修正。新信息与旧条目矛盾→不覆盖而是两面并存标注情境(AGM修正原则)",
+				"delete": "用户明确否定某条目时移除(AGM收缩)。长期未引用→置信度降低可清理",
+				"column_guide": "认知图式(Piaget): 已识别的概念框架/同化倾向/顺应记录/矛盾或多面性 | 语义网络(Collins&Loftus): 核心概念节点与连接/高激活概念簇/已验证联想路径 | 依恋与人际(Bowlby): 对AI关系期待/安全感信号与不安信号/回避与趋近模式 | 沟通特征(Grice+Accommodation): 准则违反模式/表达习惯情境差异/信息密度波动 | 情绪表达信号(Plutchik): 基础情绪映射/情绪触发模式/情绪表达方式 | 用户语言映射(DRT): 私有缩写代号→含义/高频句式指代/省略模式/跨对话持续性指称 | 模式特化: code=技术栈熟悉度+代码风格+调试推理路径+架构切入层级 / work=工作流图式+信息呈现偏好+协作主动度 / chat=话题偏好雷区+情感交互模式+对AI角色期待"
+			},
+			"description": "用户画像(跨模式共通)。穿透规则: 特化层信号跨模式反复出现→写入共通列。更新遵循AGM信念修正+最小改变原则",
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		}
+	],
+	"work": [
+		{
+			"id": 0,
+			"name": "任务原话记录",
+			"columns": [
+				"任务摘要",
+				"用户原话",
+				"类型",
+				"状态",
+				"关联文档",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当用户提出新的工作任务时，完整记录原话，不改写不省略",
+				"update": "当任务状态变化（待办/设计中/执行中/验证中/完成）或补充关联文档路径时",
+				"delete": "当任务已完成并由收尾归档到MD文件后"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 1,
+			"name": "工作文档索引",
+			"columns": [
+				"文档名",
+				"路径",
+				"类型",
+				"摘要",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当在 work/active/ 创建新MD文件时记录路径和摘要",
+				"update": "当文档内容变更时更新摘要，类型可选：任务计划/流程设计/提示词设计/skill脚本/执行日志/归档报告",
+				"delete": "当文档被删除或合并时"
+			},
+			"required": true,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 2,
+			"name": "产出索引",
+			"columns": [
+				"产出名",
+				"类型",
+				"路径",
+				"关联任务",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当完成一个可交付的工作产出时（翻译稿/报告/PPT/脚本/流程组等）",
+				"update": "当产出被修改或补充时",
+				"delete": "当产出已过时或被新版本替代时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 3,
+			"name": "经验记录",
+			"columns": [
+				"问题",
+				"原因",
+				"解决方案",
+				"关联任务",
+				"日期"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "当发现工作流程中的问题或总结出有效经验时",
+				"update": "当有更好的解决方案时",
+				"delete": "当经验不再适用时"
+			},
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		},
+		{
+			"id": 4,
+			"name": "{{user}}画像",
+			"columns": [
+				"认知图式",
+				"语义网络",
+				"依恋与人际",
+				"沟通特征",
+				"情绪表达信号",
+				"用户语言映射表",
+				"模式特化观察"
+			],
+			"rows": [],
+			"rules": {
+				"insert": "观察到用户特征时记录到对应列。单次观察直接写入，标注(单次)。多次验证(>=3次同模式)后去掉标注",
+				"update": "用户纠正时直接修正。新信息与旧条目矛盾→不覆盖而是两面并存标注情境(AGM修正原则)",
+				"delete": "用户明确否定某条目时移除(AGM收缩)。长期未引用→置信度降低可清理",
+				"column_guide": "认知图式(Piaget): 已识别的概念框架/同化倾向/顺应记录/矛盾或多面性 | 语义网络(Collins&Loftus): 核心概念节点与连接/高激活概念簇/已验证联想路径 | 依恋与人际(Bowlby): 对AI关系期待/安全感信号与不安信号/回避与趋近模式 | 沟通特征(Grice+Accommodation): 准则违反模式/表达习惯情境差异/信息密度波动 | 情绪表达信号(Plutchik): 基础情绪映射/情绪触发模式/情绪表达方式 | 用户语言映射(DRT): 私有缩写代号→含义/高频句式指代/省略模式/跨对话持续性指称 | 模式特化: code=技术栈熟悉度+代码风格+调试推理路径+架构切入层级 / work=工作流图式+信息呈现偏好+协作主动度 / chat=话题偏好雷区+情感交互模式+对AI角色期待"
+			},
+			"description": "用户画像(跨模式共通)。穿透规则: 特化层信号跨模式反复出现→写入共通列。更新遵循AGM信念修正+最小改变原则",
+			"required": false,
+			"user_customizable": true,
+			"enabled": true
+		}
+	]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "beilu-desktop-eye",
+  "version": "0.1.0",
+  "description": "桌面截图工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  },
+  "author": "凛倾",
+  "license": "MIT",
+  "dependencies": {
+    "koffi": "^3.1.1"
+  }
+}

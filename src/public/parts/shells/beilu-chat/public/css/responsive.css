@@ -1,0 +1,257 @@
+/* ============================================================
+   响应式
+   ============================================================ */
+
+/* 响应式: 小屏幕下隐藏左右栏 */
+@media (max-width: 768px) {
+  /* 手机端隐藏面板拖拽手柄 */
+  .panel-resize-handle {
+    display: none !important;
+  }
+
+  .left-panel {
+    position: fixed;
+    left: 0;
+    top: var(--top-bar-h, 42px);
+    bottom: 0;
+    z-index: 35;
+    box-shadow: 2px 0 10px var(--beilu-shadow-30);
+  }
+
+  .left-panel.collapsed {
+    transform: translateX(-100%);
+  }
+
+  .right-panel {
+    position: fixed;
+    right: 0;
+    top: var(--top-bar-h, 42px);
+    bottom: 0;
+    z-index: 35;
+    box-shadow: -2px 0 10px var(--beilu-shadow-30);
+  }
+
+  .right-panel.collapsed {
+    transform: translateX(100%);
+  }
+
+  /* mobile-open 状态显示面板 */
+  .left-panel.mobile-open {
+    transform: translateX(0) !important;
+    width: 280px !important;
+  }
+
+  .right-panel.mobile-open {
+    transform: translateX(0) !important;
+    width: 320px !important;
+  }
+
+  /* 顶部栏固定（fixed 而非 sticky，避免手机滚动/键盘弹出时消失） */
+  #top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+  }
+
+  /* 三栏容器补偿顶部栏高度 */
+  #three-column {
+    margin-top: var(--top-bar-h, 42px);
+  }
+
+  /* 遮罩层 z-index 调整，低于面板(35)和顶栏(40) */
+  .mobile-overlay {
+    z-index: 34;
+  }
+}
+
+/* ============================================================
+	  手机适配遮罩层
+	  ============================================================ */
+
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--beilu-shadow-50);
+  z-index: 30;
+  transition: opacity 0.2s ease;
+  opacity: 0;
+}
+
+.mobile-overlay.active {
+  display: block;
+  opacity: 1;
+}
+
+/* ============================================================
+	  手机端面板关闭按钮
+	  ============================================================ */
+
+.mobile-panel-close-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid oklch(var(--bc) / 0.1);
+  flex-shrink: 0;
+}
+
+/* .hidden 配对规则：本文件晚于工具类加载，display:flex 会压过 .hidden 的 display:none，
+   缺此配对=桌面端侧栏顶部常驻幽灵「✕ 关闭」按钮（点了不走 layoutState，状态不落盘）。
+   同库惯例见 .settings-modal-overlay.hidden / .ide-sidebar-panel.hidden 等配对规则 */
+.mobile-panel-close-bar.hidden {
+  display: none;
+}
+
+.mobile-panel-close-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--beilu-amber-30);
+  border-radius: 0.25rem;
+  background: var(--beilu-amber-8);
+  color: var(--beilu-amber);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.mobile-panel-close-btn:hover {
+  background: var(--beilu-amber-20);
+}
+
+/* ============================================================
+	  字体大小配置（通过 CSS 变量）
+	  ============================================================ */
+
+:root {
+  --beilu-font-size: 14px;
+}
+
+body {
+  font-family: var(--beilu-font-family, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif);
+}
+
+body.font-size-small {
+  --beilu-font-size: 12px;
+  font-size: 12px;
+}
+
+body.font-size-medium {
+  --beilu-font-size: 14px;
+  font-size: 14px;
+}
+
+body.font-size-large {
+  --beilu-font-size: 16px;
+  font-size: 16px;
+}
+
+.message-content {
+  font-size: var(--beilu-font-size);
+}
+
+/* ============================================================
+   消息密度配置（B5修复：通过 data-msg-density 属性控制）
+   ============================================================ */
+
+/* 紧凑模式：消息间距缩小 */
+body[data-msg-density="compact"] .chat-message {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+body[data-msg-density="compact"] .chat-messages {
+  gap: 4px;
+}
+body[data-msg-density="compact"] .message-content {
+  line-height: 1.4;
+}
+
+/* 标准模式（默认，无需额外样式） */
+
+/* 宽松模式：消息间距增大 */
+body[data-msg-density="cozy"] .chat-message {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+body[data-msg-density="cozy"] .chat-messages {
+  gap: 16px;
+}
+body[data-msg-density="cozy"] .message-content {
+  line-height: 1.8;
+}
+
+/* ============================================================
+   API 未配置提示 banner（聊天页面顶部）
+   ============================================================ */
+
+.beilu-chat-api-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: var(--beilu-banner-amber-bg);
+  border-bottom: 1px solid var(--beilu-banner-amber-border);
+  font-size: 0.8rem;
+  color: var(--beilu-banner-amber);
+  flex-shrink: 0;
+  z-index: 25;
+  animation: chat-banner-in 0.3s ease;
+}
+
+@keyframes chat-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.beilu-chat-api-banner-icon {
+  flex-shrink: 0;
+}
+
+.beilu-chat-api-banner-text {
+  flex: 1;
+  font-size: 0.78rem;
+}
+
+.beilu-chat-api-banner-link {
+  color: var(--beilu-banner-amber);
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.beilu-chat-api-banner-link:hover {
+  color: var(--beilu-banner-amber-hover);
+}
+
+.beilu-chat-api-banner-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--beilu-banner-amber);
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.beilu-chat-api-banner-close:hover {
+  opacity: 1;
+  background-color: rgba(217, 119, 6, 0.15);
+}
+

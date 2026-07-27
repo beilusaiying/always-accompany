@@ -1,0 +1,48 @@
+{
+	"name": "✨ always accompany — 永远在你身边",
+	"short_name": "always accompany",
+	"description": "✨ 永远在你身边 ✨",
+	"start_url": "/",
+	"id": "/",
+	"display": "minimal-ui",
+	"background_color": "#0e3c5c",
+	"theme_color": "#0e3c5c",
+	"categories": [
+		"productivity",
+		"AI",
+		"chatbot",
+		"agent"
+	],
+	"protocol_handlers": [
+		{
+			"protocol": "web+beilu",
+			"url": "/protocolhandler?url=%s"
+		}
+	],
+	"icons": [
+		{
+			"src": "/favicon-192.png",
+			"type": "image/png",
+			"sizes": "192x192",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/favicon.png",
+			"type": "image/png",
+			"sizes": "256x256",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/favicon-512.png",
+			"type": "image/png",
+			"sizes": "512x512",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/favicon.ico",
+			"type": "image/vnd.microsoft.icon",
+			"sizes": "256x256 128x128 64x64 48x48 32x32 16x16",
+			"purpose": "any"
+		}
+	]
+}

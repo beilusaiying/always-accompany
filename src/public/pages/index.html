@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta property="og:title" content="beilu-always accompany — 永远在你身边" />
+	<meta property="og:type" content="website" />
+	<meta property="og:description" content="beilu-always accompany. 准备就绪，即将进入对话与故事的世界。" />
+	<meta name="description" content="beilu-always accompany. 准备就绪，即将进入对话与故事的世界。" />
+	<title data-i18n="startPage.title">beilu!</title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.png" type="image/png" />
+	<link rel="manifest" href="/manifest.json" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="apple-mobile-web-app-title" content="always accompany" />
+	<meta name="theme-color" content="#0e3c5c" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="/vendor/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<!-- defer(2026-07-20 白屏修):此前同步加载+执行运行时编译器,低配机上下载/编译期挡住解析器,
+	     body 连加载指示都画不出=长时间纯白假死(VM 实测)。本页正文只有加载指示,布局类晚一拍
+	     应用只影响居中时机;首绘由下方内联关键样式兜底,零外部依赖。 -->
+	<script src="/vendor/tailwindcss-browser.js" crossorigin="anonymous" defer></script>
+	<style>
+		/* 内联关键样式:tailwind/daisyui 就绪前的首绘兜底(活着的信号,替代纯白) */
+		.boot-hint { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; font-family: system-ui, sans-serif; color: #888; font-size: 14px; }
+		.boot-hint .ring { width: 40px; height: 40px; border: 4px solid rgba(136,136,136,.25); border-top-color: #888; border-radius: 50%; animation: bootspin 1s linear infinite; }
+		@keyframes bootspin { to { transform: rotate(360deg) } }
+	</style>
+	<script type="module" src="/base.mjs"></script>
+	<script type="module">
+		import { initTranslations } from './scripts/i18n.mjs'
+		import { resolveDefaultShell } from './scripts/parts.mjs'
+		import { setTheme } from './scripts/theme.mjs'
+		initTranslations('startPage')
+		const urlParams = new URLSearchParams(window.location.search)
+		if (!urlParams.get('cold_bootting')) try {
+			await fetch('/api/ping', { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(500) })
+		}
+		catch {
+			const iframe = document.createElement('iframe')
+			iframe.ariaHidden = true
+			iframe.style.display = 'none'
+			iframe.src = 'beilu://nop/'
+			document.body.appendChild(iframe)
+		}
+		if (urlParams.get('userPreferredLanguages')) {
+			// [T6双键批] 格式统一：i18n.mjs:71 读侧用 JSON.parse 期望 JSON 数组，settingsSlots.mjs:87
+			//   写侧也 JSON.stringify——此处原直写 URL 裸串会让 i18n.mjs:71 JSON.parse 抛异常。
+			//   URL 参数按逗号分隔解析为数组后 JSON.stringify，与全库读写格式对齐。
+			const _langs = urlParams.get('userPreferredLanguages').split(',').map(s => s.trim()).filter(Boolean)
+			localStorage.setItem('userPreferredLanguages', JSON.stringify(_langs))
+		}
+		if (urlParams.get('theme')) await setTheme(urlParams.get('theme'))
+
+		// resolveDefaultShell 已含废壳映射 + 空值兜底（统一落 beilu-chat），不再拼废串 shells:home。
+		resolveDefaultShell().then(defaultShell => {
+			window.location.href = `/parts/shells:${defaultShell}`
+		}).catch(() => {
+			window.location.href = '/login/'
+		})
+	</script>
+</head>
+
+<body class="flex justify-center items-center h-screen">
+	<main>
+		<!-- 本页唯一正文=加载指示。boot-hint 用内联关键样式而非 daisyui 类:
+		     框架 CSS/编译器就绪前也能首绘(白屏假死修的一部分),页面数秒内即跳转。 -->
+		<div class="boot-hint">
+			<div class="ring"></div>
+			<p>正在打开界面…（低配置机器首次启动可能需要较久）</p>
+		</div>
+	</main>
+</body>
+
+</html>

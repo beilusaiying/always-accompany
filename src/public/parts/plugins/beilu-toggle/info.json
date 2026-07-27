@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Toggle",
+		"avatar": "https://api.iconify.design/mdi/toggle-switch-outline.svg",
+		"description": "AI-controlled dynamic toggling of world book and preset entries.",
+		"description_markdown": "**Beilu Toggle** allows the AI to dynamically enable/disable world book entries and preset prompt entries via `<toggle>` XML tags in its replies.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"toggle",
+			"worldinfo",
+			"preset",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "条目控制",
+		"avatar": "https://api.iconify.design/mdi/toggle-switch-outline.svg",
+		"description": "AI 通过标签动态开关世界书和预设条目",
+		"description_markdown": "**条目控制** 允许 AI 在回复中通过 `<toggle>` XML 标签动态启用/禁用世界书条目和预设提示词条目。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"开关",
+			"世界书",
+			"预设",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "🔀🎚️",
+		"avatar": "https://api.iconify.design/mdi/toggle-switch-outline.svg",
+		"description": "🤖🏷️➡️✅❌",
+		"description_markdown": "🤖 ➡️ 🏷️\n✅ ⇄ ❌",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🔀",
+			"🎚️",
+			"🏷️",
+			"🌱"
+		]
+	}
+}

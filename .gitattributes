@@ -1,0 +1,5 @@
+# Line-ending guards: a user cloning with global core.autocrlf=true would otherwise get CRLF .sh
+# files whose shebang line breaks with "bad interpreter" on Linux/macOS.
+*.sh text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf

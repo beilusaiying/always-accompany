@@ -1,0 +1,1307 @@
+/* ============================================================
+   IDE 接口管理面板（任务P: ideConnPanel）
+   ============================================================ */
+
+/* 连接卡片容器 */
+.conn-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 连接卡片 */
+.conn-card {
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 0.5rem;
+  padding: 10px;
+  background-color: var(--beilu-shadow-8);
+  transition: border-color 0.15s ease;
+}
+
+.conn-card:hover {
+  border-color: var(--beilu-amber-30);
+}
+
+.conn-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.conn-card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* 连接状态圆点 */
+.conn-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conn-dot-disconnected {
+  background-color: var(--beilu-muted);
+}
+
+.conn-dot-connecting {
+  background-color: var(--beilu-warning);
+  animation: conn-pulse 1s ease-in-out infinite;
+}
+
+.conn-dot-connected {
+  background-color: var(--beilu-success);
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+
+.conn-dot-error {
+  background-color: var(--beilu-error);
+}
+
+@keyframes conn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* 状态标签 */
+.conn-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.conn-tag-disconnected {
+  background-color: rgba(107, 114, 128, 0.15);
+  color: var(--beilu-muted);
+}
+
+.conn-tag-connecting {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: var(--beilu-warning);
+}
+
+.conn-tag-connected {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--beilu-success);
+}
+
+.conn-tag-error {
+  background-color: var(--beilu-error-15);
+  color: var(--beilu-error);
+}
+
+/* 连接操作按钮 */
+.conn-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.conn-btn {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--beilu-amber-25);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.conn-btn:hover {
+  background-color: var(--beilu-amber-12);
+  border-color: var(--beilu-amber);
+}
+
+.conn-btn-primary {
+  background-color: var(--beilu-amber-dark);
+  color: var(--beilu-amber-text);
+  border-color: var(--beilu-amber-dark);
+}
+
+.conn-btn-primary:hover {
+  background-color: var(--beilu-amber);
+  color: var(--beilu-amber-text);
+}
+
+.conn-btn-danger {
+  border-color: var(--beilu-error-40);
+  color: var(--beilu-error);
+}
+
+.conn-btn-danger:hover {
+  background-color: var(--beilu-error-15);
+  border-color: var(--beilu-error);
+}
+
+/* 连接设置 */
+.conn-settings-container {
+  background-color: var(--beilu-shadow-6);
+  border-radius: 0.375rem;
+  padding: 8px;
+}
+
+.conn-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+}
+
+.conn-setting-row label {
+  font-size: 0.72rem;
+}
+
+.conn-toggle {
+  accent-color: var(--beilu-amber);
+  width: 14px;
+  height: 14px;
+}
+
+.conn-input {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.7rem;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 0.2rem;
+  background-color: var(--beilu-shadow-10);
+  color: inherit;
+  transition: border-color 0.12s ease;
+}
+
+.conn-input:focus {
+  outline: none;
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+/* 运行时状态 */
+.conn-runtime-container {
+  background-color: var(--beilu-shadow-6);
+  border-radius: 0.375rem;
+  padding: 6px 8px;
+}
+
+.conn-runtime-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 0.72rem;
+}
+
+.conn-runtime-label {
+  opacity: 0.6;
+  font-size: 0.7rem;
+}
+
+.conn-runtime-value {
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+/* 已加载插件 */
+.conn-plugins-container {
+  background-color: var(--beilu-shadow-6);
+  border-radius: 0.375rem;
+  padding: 4px 8px;
+}
+
+.conn-plugin-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 0.72rem;
+}
+
+.conn-plugin-icon {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.conn-plugin-name {
+  flex: 1;
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.7rem;
+}
+
+.conn-plugin-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.conn-plugin-tag-running {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: var(--beilu-success);
+}
+
+.conn-plugin-tag-standby {
+  background-color: rgba(107, 114, 128, 0.15);
+  color: var(--beilu-muted);
+}
+
+/* ---- IDE 接口管理 — 浅色模式适配 ---- */
+
+/* A8(2026-06-10): conn-tag/plugin-tag 的 var(--beilu-muted) 文字在 light 灰底标签(rgba(107,114,128,.15)叠#f0ead8≈#dcd8cb)上仅 1.78:1，几乎不可读。
+   补偿为 #4b525e（在该标签底上 5.52:1）。dark 模式 var(--beilu-muted) 在 #1d232a 上已达标，故仅 light 覆盖，不动 dark。 */
+[data-theme="light"] .conn-tag-disconnected,
+[data-theme="light"] .conn-plugin-tag-standby {
+  color: #4b525e !important;
+}
+
+[data-theme="light"] .conn-card {
+  background-color: var(--beilu-shadow-3);
+  border-color: var(--beilu-amber-20);
+}
+
+[data-theme="light"] .conn-settings-container,
+[data-theme="light"] .conn-runtime-container,
+[data-theme="light"] .conn-plugins-container {
+  background-color: var(--beilu-shadow-3);
+}
+
+[data-theme="light"] .conn-input {
+  background-color: var(--beilu-shadow-3);
+}
+
+/* ============================================================
+   工作面板 (P5)
+   ============================================================ */
+
+.work-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.work-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.work-header h3 { margin: 0; font-size: 15px; }
+
+.work-section {
+  background: var(--beilu-bg-card);
+  border-radius: 8px;
+  padding: 10px;
+}
+.work-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.7;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.work-section-body { min-height: 24px; }
+
+.work-stats-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.work-stat b { margin-left: 2px; }
+
+.work-progress {
+  height: 6px;
+  background: var(--color-base-300);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.work-progress-bar {
+  height: 100%;
+  background: var(--beilu-work-gradient);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.work-progress-label {
+  position: absolute;
+  right: 4px;
+  top: -14px;
+  font-size: 11px;
+  opacity: 0.6;
+}
+.work-meta {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+.work-task-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--color-base-300) 30%, transparent);
+}
+.work-task-status { flex-shrink: 0; }
+.work-task-type { font-size: 11px; opacity: 0.6; flex-shrink: 0; }
+.work-task-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-task-date { font-size: 11px; opacity: 0.4; flex-shrink: 0; }
+
+.work-delegate-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  gap: 8px;
+}
+.work-delegate-item.active { color: var(--beilu-warning); }
+.work-delegate-item.done { opacity: 0.6; font-size: 12px; }
+.work-delegate-round { font-size: 11px; opacity: 0.5; }
+.work-subsection-title { font-size: 11px; opacity: 0.5; margin-top: 6px; }
+
+.work-approval-card {
+  border: 1px solid color-mix(in oklch, var(--color-warning) 30%, transparent);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 4px 0;
+}
+.work-approval-title { font-weight: 600; margin-bottom: 4px; }
+.work-approval-desc { font-size: 12px; opacity: 0.7; margin-bottom: 6px; }
+.work-approval-actions { display: flex; gap: 8px; }
+
+.work-scheduler-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  gap: 8px;
+}
+.work-scheduler-item.disabled { opacity: 0.4; }
+.work-scheduler-schedule { font-size: 11px; opacity: 0.5; }
+
+.work-toggle {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.work-toggle input { opacity: 0; width: 0; height: 0; }
+.work-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--color-base-300);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.work-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  top: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.work-toggle input:checked + .work-toggle-slider { background: var(--beilu-success, var(--beilu-success)); }
+.work-toggle input:checked + .work-toggle-slider::before { transform: translateX(14px); }
+
+.work-empty {
+  text-align: center;
+  opacity: 0.65;
+  padding: 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .work-panel { padding: 8px; gap: 8px; }
+  .work-stats-row { flex-wrap: wrap; gap: 8px; }
+  .work-approval-actions { flex-direction: column; }
+}
+
+/* ============================================================
+   全智能 Greeting (W28: 快速提示建议)
+   ============================================================ */
+
+.smart-greeting-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.smart-greeting-panel.hidden { display: none; }
+.smart-greeting-content {
+  text-align: center;
+  max-width: 560px;
+  padding: 24px;
+  pointer-events: auto;
+}
+
+.smart-greeting {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 28px;
+  opacity: 0.85;
+}
+
+.smart-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.smart-suggestion {
+  padding: 8px 16px;
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--color-base-300);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-base-content);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.smart-suggestion:hover {
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  border-color: color-mix(in oklch, var(--color-primary) 40%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.1);
+}
+
+.smart-hint {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+/* WK-T8: 工作活动栏角标 (任务/工作流/监控)
+   数字徽标非裸红点：底色描边环贴活动栏底色，视觉归属图标按钮而非悬浮异物 */
+.work-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 13px;
+  height: 13px;
+  border-radius: 7px;
+  background: var(--color-error);
+  color: white;
+  font-size: 8px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+  border: 1.5px solid var(--beilu-bg-card);
+  box-shadow: none;
+}
+.work-badge.badge-running { background: var(--color-success); animation: pulse-badge 1.5s infinite; }
+.work-badge.badge-warning { background: var(--color-warning); color: black; }
+@keyframes pulse-badge {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.15); }
+}
+.ide-activity-btn { position: relative; }
+
+/* MO-T2: 多模式同对话锁提示条 (顶部固定条) */
+.multi-mode-lock-bar {
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 6px 14px;
+  background: color-mix(in oklch, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in oklch, var(--color-warning) 40%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.15);
+  max-width: 90vw;
+}
+.multi-mode-lock-bar.hidden { display: none; }
+
+/* IDE-T2: 对话项改名/标记/删除按钮。原 hover 才显示 → 常显低透明度（凛倾 07-12：
+   hover 隐藏=按钮不可发现，触屏也无 hover）；hover 提亮。 */
+.conv-item .conv-hover-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+  opacity: 0.4;
+}
+.conv-item:hover .conv-hover-actions { opacity: 1; }
+/* 「另一窗口在用」角标（数据源=后端 chatUiSockets 经 getchatlist.inUseCount） */
+.conv-inuse-badge {
+  color: var(--color-success, #4ade80);
+  font-size: 0.6rem;
+  line-height: 1;
+  animation: conv-inuse-pulse 2s ease-in-out infinite;
+}
+@keyframes conv-inuse-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+/* 模式徽章（buildModeBadge 单源输出：图标+模式文字，自解释） */
+.conv-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.65rem;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--beilu-amber-15, oklch(0.8 0.15 80 / 0.15));
+  color: color-mix(in oklch, var(--color-base-content) 75%, transparent);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* 「XX窗口在用」文字标签（buildInUseLabel 单源输出） */
+.conv-using-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--color-success, #4ade80) 18%, transparent);
+  color: var(--color-success, #4ade80);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.conv-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  color: inherit;
+}
+.conv-action-btn:hover { opacity: 1; }
+
+/* AIRP-T16: 审批浮窗 — 有待审批时自动弹出右下角 */
+.ide-approval-floating {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: var(--z-float); /* T12：接入中央表 --z-float(150)，原硬编码 150 与 floating-window 同浮窗层 */
+  width: 380px;
+  max-width: 90vw;
+  max-height: 60vh;
+  padding: 10px 12px;
+  background: var(--color-base-100);
+  border: 2px solid color-mix(in oklch, var(--color-warning) 60%, transparent);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.2);
+  font-size: 12px;
+}
+
+/* AIRP-T15: 编辑弹窗窗口化 3 档 */
+#editor-modal-window.editor-size-small { width: 60vw; height: 60vh; max-width: 700px; max-height: 600px; }
+#editor-modal-window.editor-size-full { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; }
+#editor-modal-window.editor-size-full .editor-content { max-width: none; }
+
+/* EX-T2: 可拖拽 + 右下角 resize 手柄 */
+#editor-modal-window { position: relative; }
+#editor-modal-window.editor-floating { position: fixed !important; margin: 0 !important; }
+#editor-modal-window .editor-tab-bar { cursor: grab; user-select: none; }
+#editor-modal-window.editor-dragging .editor-tab-bar { cursor: grabbing; }
+#editor-modal-window .editor-tab-bar .editor-tab,
+#editor-modal-window .editor-tab-bar .btn,
+#editor-modal-window .editor-tab-bar #editor-back-btn { cursor: pointer; }
+.editor-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--beilu-amber-50) 50%);
+  border-bottom-right-radius: 8px;
+  z-index: 10;
+}
+.editor-resize-handle:hover { background: linear-gradient(135deg, transparent 50%, var(--beilu-amber-90) 50%); }
+#editor-modal-window.editor-size-full .editor-resize-handle { display: none; }
+
+/* EX-T3: 设置弹窗拖拽条 + 浮窗定位 */
+#settings-modal-window { position: relative; }
+#settings-modal-window.settings-floating { position: fixed !important; margin: 0 !important; }
+#settings-modal-window.settings-dragging { cursor: grabbing; }
+.settings-drag-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  background: var(--beilu-amber-8);
+  border-bottom: 1px solid var(--beilu-amber-15);
+  z-index: 5;
+}
+.settings-drag-bar:hover { background: var(--beilu-amber-15); }
+#settings-modal-window.settings-dragging .settings-drag-bar { cursor: grabbing; }
+/* 为 drag-bar 让出空间 */
+#settings-modal-window .settings-activity-bar,
+#settings-modal-window .settings-sidebar { margin-top: 18px; }
+
+/* ============================================================
+   临时对话区 (设计3章: 全智能模式 inline 确认)
+   ============================================================ */
+.temp-conv-panel {
+  margin: 8px 16px;
+  background: var(--color-base-100);
+  border: 2px solid color-mix(in oklch, var(--color-primary) 30%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.1);
+}
+.temp-conv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: color-mix(in oklch, var(--color-primary) 8%, transparent);
+  border-bottom: 1px solid var(--color-base-300);
+}
+.temp-conv-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-primary);
+}
+.temp-conv-header-actions { display: flex; gap: 4px; }
+.temp-conv-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.temp-conv-body.hidden { display: none; }
+.temp-conv-task-info {
+  padding: 8px 10px;
+  background: var(--beilu-bg-card);
+  border-radius: 8px;
+}
+.temp-conv-messages {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.temp-conv-messages:empty { display: none; }
+.temp-conv-msg {
+  margin-bottom: 2px;
+}
+.temp-conv-msg-role {
+  font-weight: 600;
+  opacity: 0.6;
+  margin-right: 4px;
+}
+.temp-conv-input-row {
+  display: flex;
+  gap: 4px;
+}
+.temp-conv-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.temp-conv-collapsed {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-align: center;
+}
+.temp-conv-collapsed.hidden { display: none; }
+
+/* Claude风格大类卡片 */
+.smart-categories {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.smart-cat-btn {
+  padding: 18px 10px;
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--color-base-300);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-base-content);
+  transition: all 0.2s;
+  text-align: center;
+}
+.smart-cat-btn:hover {
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  border-color: color-mix(in oklch, var(--color-primary) 50%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.15);
+}
+
+.smart-sub-panel {
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--color-base-300);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 480px) {
+  .smart-greeting-content { padding: 16px; }
+  .smart-suggestion { font-size: 12px; padding: 6px 12px; }
+  .smart-categories { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================================================
+   游戏陪伴悬浮窗
+   ============================================================ */
+
+/* W46修复: 陪伴面板从小悬浮窗改为全屏弹窗(不透明) */
+.companion-float-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--beilu-modal-bg);
+  opacity: var(--beilu-modal-opacity);
+  border: 1px solid var(--color-base-300);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.3);
+  z-index: var(--z-modal); /* T12：全屏弹窗(W46 不透明)接入中央表 --z-modal，原硬编码 100 */
+  overflow: hidden;
+}
+.companion-float-panel.hidden { display: none; }
+
+.companion-float-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-base-300);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.companion-float-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.companion-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.companion-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+.companion-status-dot.active {
+  background: var(--color-success);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--color-success) 50%, transparent);
+}
+
+.companion-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.companion-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .companion-float-panel {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: 70px;
+  }
+}
+
+/* ============================================================
+   编辑界面 (W28: 6Tab专业编辑)
+   ============================================================ */
+
+.editor-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-base-300);
+  background: var(--beilu-modal-bg);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.editor-tab {
+  padding: 6px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-base-content);
+  border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.editor-tab:hover { background: var(--beilu-bg-card); }
+.editor-tab.active {
+  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 32px;
+  /* 0712 固定宽度全扫 P1：900px 硬钳大屏两侧白边，同 smart 820 案，相对化跟随放大 */
+  max-width: max(900px, 90%);
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+/* 活动的editor-section填满editor-content剩余高度 */
+.editor-section:not(.hidden) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* T006死码批: .editor-entry 族样式已删（DOM 零存在，绑定块已删于 layout.mjs） */
+
+@media (max-width: 640px) {
+  .editor-content { padding: 16px; }
+  .editor-grid { grid-template-columns: 1fr; }
+  .editor-tab { padding: 6px 8px; font-size: 12px; }
+}
+
+/* ============================================================
+   设置面板 (W28: 独立设置页面)
+   ============================================================ */
+
+/* W35: 设置面板已改为IDE式活动栏+侧边栏，.settings-nav不再使用 */
+/* 设置侧边栏复用ide-sidebar样式，默认宽度320px */
+.settings-sidebar { width: 320px; min-width: 200px; max-width: 60vw; }
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.settings-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.settings-desc {
+  font-size: 13px;
+  opacity: 0.6;
+  margin-bottom: 20px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.settings-about-info {
+  line-height: 2;
+  font-size: 14px;
+}
+
+.settings-iframe {
+  width: 100%;
+  height: calc(100vh - 200px);
+  min-height: 500px;
+  border: 1px solid var(--color-base-300);
+  border-radius: 8px;
+  background: var(--color-base-100);
+}
+
+.editor-iframe {
+  width: 100%;
+  height: calc(100vh - 200px);
+  min-height: 500px;
+  border: 1px solid var(--color-base-300);
+  border-radius: 8px;
+  background: var(--color-base-100);
+}
+
+@media (max-width: 640px) {
+  .settings-sidebar { width: 100%; max-width: 100vw; }
+  .settings-content { padding: 12px; }
+}
+
+/* ============================================================
+   额外插件管理面板
+   ============================================================ */
+
+.ext-panel-overlay {
+  position: fixed; inset: 0;
+  z-index: var(--z-modal);
+  background: var(--beilu-modal-overlay);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s ease;
+}
+.ext-panel-overlay.visible { opacity: 1; }
+.ext-panel-overlay.hidden { display: none !important; }
+
+.ext-panel {
+  position: relative;
+  width: min(92vw, 860px); height: min(85vh, 680px);
+  background: var(--beilu-modal-bg);
+  border-radius: 14px;
+  display: flex; overflow: hidden;
+  box-shadow: 0 12px 40px oklch(0 0 0 / 0.25);
+  border: 1px solid var(--color-base-300);
+  transform: translateY(12px); transition: transform 0.25s ease;
+}
+.ext-panel-overlay.visible .ext-panel { transform: translateY(0); }
+
+.ext-panel-nav {
+  width: 200px; min-width: 160px;
+  background: var(--beilu-surface);
+  border-right: 1px solid var(--color-base-300);
+  display: flex; flex-direction: column;
+  padding: 16px 0;
+}
+.ext-panel-nav-title {
+  font-size: 14px; font-weight: 600;
+  padding: 0 16px 12px; margin: 0;
+  color: var(--beilu-amber-fg);
+  border-bottom: 1px solid var(--color-base-300);
+}
+.ext-panel-nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; cursor: pointer;
+  font-size: 13px; color: inherit;
+  border: none; background: none; width: 100%;
+  text-align: left; transition: background 0.15s;
+}
+.ext-panel-nav-item:hover { background: var(--beilu-amber-5); }
+.ext-panel-nav-item.active {
+  background: var(--beilu-amber-10);
+  color: var(--beilu-amber-fg);
+  font-weight: 500;
+}
+.ext-panel-nav-item i { font-size: 16px; }
+
+.ext-panel-content {
+  flex: 1; overflow-y: auto;
+  padding: 24px 28px;
+}
+.ext-panel-close {
+  position: absolute; top: 10px; right: 14px;
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: inherit; opacity: 0.5;
+  z-index: 1;
+}
+.ext-panel-close:hover { opacity: 1; }
+
+.ext-section-title {
+  font-size: 16px; font-weight: 600; margin: 0 0 6px;
+}
+.ext-section-desc {
+  font-size: 12px; opacity: 0.6; margin: 0 0 20px;
+}
+.ext-setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--beilu-amber-3);
+  gap: 12px;
+}
+.ext-setting-row:last-child { border-bottom: none; }
+.ext-setting-label {
+  flex: 1; min-width: 0;
+}
+.ext-setting-label .label-main {
+  font-size: 13px; font-weight: 500;
+}
+.ext-setting-label .label-desc {
+  font-size: 11px; opacity: 0.5; margin-top: 2px;
+}
+.ext-setting-control {
+  flex-shrink: 0;
+}
+.ext-status-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 6px;
+}
+.ext-status-dot.running { background: var(--beilu-success); }
+.ext-status-dot.stopped { background: var(--beilu-error); }
+.ext-status-dot.starting { background: var(--beilu-warning); animation: ext-pulse 1s infinite; }
+@keyframes ext-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.ext-btn-group {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.ext-wrap { max-width: 640px; }
+.ext-title-area { margin-bottom: 24px; }
+.ext-subsection-title {
+  font-size: 14px; font-weight: 600;
+  margin: 24px 0 8px; color: var(--beilu-amber-fg);
+}
+.ext-subsection-title:first-of-type { margin-top: 20px; }
+.ext-status-card {
+  background: var(--beilu-surface); border-radius: 10px;
+  padding: 16px; margin-bottom: 20px;
+  border: 1px solid var(--color-base-300);
+}
+.ext-status-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  font-size: 13px;
+}
+.ext-setting-block {
+  padding: 10px 0; border-bottom: 1px solid var(--beilu-amber-3);
+}
+.ext-setting-block .ext-setting-label { margin-bottom: 6px; }
+.ext-setting-block input,
+.ext-setting-block textarea { margin-top: 6px; }
+.ext-doctor-row {
+  display: flex; align-items: center; gap: 8px; padding: 2px 0;
+}
+.ext-doctor-icon { font-weight: 600; width: 16px; text-align: center; }
+.ext-doctor-icon.ok { color: var(--beilu-success, #22c55e); }
+/* [0727] 原 var(--color-base-400):daisyUI v5 无 base-400 档=全主题未定义,声明失效退继承色,
+   missing 态与正常文字无区分;改语义灰 --beilu-muted(light-dark 双态,index.css 定义) */
+.ext-doctor-icon.missing { color: var(--beilu-muted, #90a4ae); }
+.ext-doctor-icon.blocked { color: var(--beilu-warning, orange); }
+.ext-doctor-icon.error { color: var(--beilu-error, #ef4444); }
+.ext-doctor-name { font-weight: 500; min-width: 80px; }
+.ext-doctor-detail { opacity: 0.6; font-size: 12px; }
+/* 通用信息网格（browser 操作/宏列表等只读展示） */
+.ext-info-grid {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 6px 16px; font-size: 12px; opacity: 0.6;
+}
+.ext-info-grid .info-name { font-weight: 500; font-family: monospace; }
+.ext-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ext-status-text { font-size: 13px; }
+.ext-input-num { width: 120px; }
+/* 使用引导卡（reach/browser，范式同 STT 引导卡） */
+.ext-guide-title { font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--beilu-amber-fg); }
+.ext-guide-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; }
+.ext-guide-step { font-size: 13px; font-weight: 500; min-width: 88px; flex-shrink: 0; }
+.ext-guide-text { font-size: 12px; opacity: 0.85; }
+/* 凭据「如何获取」折叠引导 */
+.ext-help-details { margin-top: 4px; font-size: 12px; }
+.ext-help-details summary { cursor: pointer; opacity: 0.7; user-select: none; }
+.ext-help-details[open] summary { opacity: 1; }
+.ext-help-body { white-space: pre-line; opacity: 0.75; padding: 6px 0 2px 14px; line-height: 1.7; }
+/* 浏览记录列表 */
+.ext-hist-list { font-size: 12px; max-height: 220px; overflow-y: auto; opacity: 0.85; }
+.ext-hist-item { padding: 3px 0; border-bottom: 1px dashed var(--color-base-300); word-break: break-all; }
+.ext-hist-op { font-family: monospace; font-weight: 500; margin-right: 6px; }
+.ext-hist-time { opacity: 0.5; margin-right: 6px; font-size: 11px; }
+.ext-range-wrap { display: flex; align-items: center; gap: 10px; }
+.ext-range-val {
+  font-size: 12px; font-family: monospace;
+  opacity: 0.6; min-width: 50px; text-align: right;
+}
+
+/* ============================================================
+   语音转录结果弹窗
+   ============================================================ */
+
+.transcript-overlay {
+  position: fixed; inset: 0;
+  z-index: calc(var(--z-modal) + 1);
+  background: var(--beilu-modal-overlay);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s ease;
+}
+.transcript-overlay.visible { opacity: 1; }
+.transcript-overlay.hidden { display: none !important; }
+
+.transcript-popup {
+  width: min(92vw, 680px); max-height: 82vh;
+  background: var(--beilu-modal-bg);
+  border-radius: 16px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px oklch(0 0 0 / 0.3);
+  border: 1px solid var(--color-base-300);
+  transform: translateY(16px); transition: transform 0.25s ease;
+  overflow: hidden;
+}
+.transcript-overlay.visible .transcript-popup { transform: translateY(0); }
+
+.transcript-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-base-300);
+}
+.transcript-header h3 {
+  font-size: 15px; font-weight: 600; margin: 0;
+}
+.transcript-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; opacity: 0.5; color: inherit;
+}
+.transcript-close:hover { opacity: 1; }
+
+.transcript-tabs {
+  display: flex; gap: 0; padding: 0 20px;
+  border-bottom: 1px solid var(--color-base-300);
+}
+.transcript-tab {
+  padding: 8px 16px; font-size: 12px;
+  background: none; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: inherit; opacity: 0.6; transition: all 0.15s;
+}
+.transcript-tab:hover { opacity: 0.8; }
+.transcript-tab.active {
+  opacity: 1; border-bottom-color: var(--beilu-amber);
+  color: var(--beilu-amber-fg);
+}
+
+.transcript-speakers {
+  display: flex; gap: 8px; padding: 10px 20px;
+  flex-wrap: wrap;
+}
+.transcript-speaker-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 500;
+}
+
+.transcript-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 20px;
+}
+.transcript-segment {
+  display: flex; gap: 10px;
+  padding: 8px 10px; margin-bottom: 4px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.transcript-segment:hover {
+  background: var(--beilu-amber-3);
+}
+.transcript-segment-time {
+  flex-shrink: 0; width: 100px;
+  font-size: 11px; opacity: 0.45;
+  font-family: monospace;
+  padding-top: 2px;
+}
+.transcript-segment-speaker {
+  flex-shrink: 0;
+  padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  height: fit-content; margin-top: 1px;
+}
+.transcript-segment-text {
+  flex: 1; font-size: 13.5px; line-height: 1.5;
+  outline: none; min-width: 0;
+  padding: 0 4px; border-radius: 4px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.transcript-segment-text:hover {
+  border-color: var(--beilu-amber-15);
+}
+.transcript-segment-text:focus {
+  border-color: var(--beilu-amber);
+  background: var(--beilu-amber-3);
+}
+
+.transcript-fulltext {
+  width: 100%; min-height: 200px;
+  background: var(--beilu-surface);
+  border: 1px solid var(--color-base-300);
+  border-radius: 8px;
+  padding: 12px; font-size: 13px; line-height: 1.6;
+  color: inherit; resize: vertical;
+  font-family: inherit;
+}
+
+.transcript-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; padding: 14px 20px;
+  border-top: 1px solid var(--color-base-300);
+}
+.transcript-footer .btn-inject {
+  background: var(--beilu-amber);
+  color: var(--beilu-amber-text);
+  border: none; padding: 6px 18px;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: filter 0.15s;
+}
+.transcript-footer .btn-inject:hover { filter: brightness(1.1); }
+
+@media (max-width: 640px) {
+  .ext-panel-nav { width: 56px; min-width: 56px; }
+  .ext-panel-nav-title { display: none; }
+  .ext-panel-nav-item span { display: none; }
+  .ext-panel-content { padding: 16px; }
+  .transcript-segment-time { width: 70px; font-size: 10px; }
+}
+

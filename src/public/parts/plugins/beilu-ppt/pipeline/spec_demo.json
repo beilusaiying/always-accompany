@@ -1,0 +1,122 @@
+{
+  "meta": {
+    "title": "AI 生成 PPT 管线介绍",
+    "font": "微软雅黑",
+    "theme": {
+      "title_color": "1F3A8A",
+      "body_color": "333333",
+      "bg_color": "FFFFFF",
+      "accent_color": "2563EB"
+    }
+  },
+  "slides": [
+    {
+      "id": "s1",
+      "title": "为什么需要语义拓扑管线",
+      "blocks": [
+        {
+          "id": "s1_b1",
+          "kind": "bullets",
+          "region": "full",
+          "weight": 1,
+          "items": [
+            "传统方式让大模型直接吐坐标，排版经常错位、文字溢出框外",
+            "本管线让 AI 只负责语义与拓扑，完全不碰任何几何坐标",
+            "算法层用真实字体度量做换行与分栏，保证每一行都放得下",
+            "三个渲染器只消费算好的布局，字符画、预览图与 PPTX 完全一致"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "管线三层职责划分",
+      "blocks": [
+        {
+          "id": "s2_b1",
+          "kind": "bullets",
+          "region": "left",
+          "weight": 2,
+          "items": [
+            "语义层：AI 输出零坐标的 spec，只描述标题、要点与区域",
+            "几何层：solver 依据字体度量做换行、分栏与溢出信号",
+            "渲染层：ascii、png、pptx 三路各自消费同一份 layout",
+            "回程信号：当内容放不下时向上游反馈，触发拆页或精简"
+          ]
+        },
+        {
+          "id": "s2_b2",
+          "kind": "image",
+          "region": "right",
+          "weight": 1,
+          "placeholder": "三层管线架构示意图",
+          "src": "assets/demo_arch.png"
+        },
+        {
+          "id": "s2_b3",
+          "kind": "text",
+          "region": "bottom",
+          "weight": 1,
+          "text": "备注：单源原则要求换行与坐标计算只在 solver 中发生，渲染器一律不得二次换行，以此保证多端对齐。"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "三种渲染器对照",
+      "blocks": [
+        {
+          "id": "s3_b1",
+          "kind": "bullets",
+          "region": "left",
+          "weight": 1,
+          "items": [
+            "字符画渲染：纯文本框线，便于在终端里快速校验拓扑",
+            "预览图渲染：Pillow 绘制位图，所见即所得地检查视觉效果",
+            "文档渲染：输出可编辑的 PPTX，交付给最终用户继续修改"
+          ]
+        },
+        {
+          "id": "s3_b2",
+          "kind": "chart",
+          "region": "center",
+          "weight": 1,
+          "chart_type": "bar",
+          "title": "三端渲染耗时对比",
+          "categories": ["字符画", "预览图", "文档"],
+          "series": [
+            {"name": "首页", "values": [3, 8, 12]},
+            {"name": "整份", "values": [9, 24, 36]}
+          ]
+        },
+        {
+          "id": "s3_b3",
+          "kind": "image",
+          "region": "right",
+          "weight": 1,
+          "placeholder": "渲染结果三联对比图"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "title": "各块类型能力对照表",
+      "blocks": [
+        {
+          "id": "s4_t1",
+          "kind": "table",
+          "region": "full",
+          "weight": 1,
+          "headers": ["块类型", "语义输入", "渲染产物", "适用场景"],
+          "rows": [
+            ["bullets", "items 要点数组", "悬挂缩进列表", "论点罗列与层级说明"],
+            ["chart", "categories + series", "可编辑原生图表", "数据趋势与对比"],
+            ["stat", "value + label", "大数字 callout", "关键指标强调"],
+            ["table", "headers + rows", "可编辑原生表格", "结构化数据对照"]
+          ],
+          "caption": "表：五种内容块的输入输出与适用场景对照"
+        }
+      ]
+    }
+  ]
+}

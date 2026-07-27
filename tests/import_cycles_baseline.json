@@ -1,0 +1,39 @@
+{
+  "updatedAt": "2026-07-22T14:19:55.156Z",
+  "cycles": [
+    [
+      "public/pages/scripts/svgInliner.mjs",
+      "public/pages/scripts/template.mjs"
+    ],
+    [
+      "public/parts/shells/beilu-chat/src/lib/chatOps.mjs",
+      "public/parts/shells/beilu-chat/src/lib/requestBuilder.mjs"
+    ],
+    [
+      "public/parts/shells/beilu-chat/public/src/shared/state/diagLogger.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/transport/api-client.mjs"
+    ],
+    [
+      "public/parts/shells/beilu-chat/public/src/panels/feature/featureControls.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/chat-core/chat.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/chat-core/messageInput.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/layout/sidebar.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/render/StreamRenderer.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/render/messageList.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/render/virtualQueue.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/transport/websocket.mjs",
+      "public/parts/shells/beilu-chat/public/src/shared/widgets/tokenProgressBar.mjs"
+    ],
+    [
+      "public/parts/shells/beilu-chat/public/src/panels/bot/botSidePanels.mjs",
+      "public/parts/shells/beilu-chat/public/src/panels/bot/discordBotPanel.mjs"
+    ],
+    [
+      "public/parts/shells/beilu-chat/public/src/panels/editors/regexEditor.mjs",
+      "public/parts/shells/beilu-chat/public/src/panels/settings/importExport.mjs",
+      "public/parts/shells/beilu-chat/public/src/panels/settings/panels.mjs",
+      "public/parts/shells/beilu-chat/public/src/panels/settings/settings.mjs",
+      "public/parts/shells/beilu-chat/public/src/panels/settings/settingsSlots.mjs"
+    ]
+  ]
+}

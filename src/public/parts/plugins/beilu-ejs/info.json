@@ -1,0 +1,16 @@
+{
+	"zh-CN": {
+		"name": "beilu-ejs",
+		"description": "EJS 模板渲染 — 对标 ST-Prompt-Template，渲染世界书和提示词中的 EJS 模板语法",
+		"version": "1.0.0",
+		"author": "凛倾",
+		"tags": ["ejs", "template", "render", "compatibility"]
+	},
+	"en-UK": {
+		"name": "beilu-ejs",
+		"description": "EJS Template Rendering — Compatible with ST-Prompt-Template, renders EJS syntax in worldbook and prompts",
+		"version": "1.0.0",
+		"author": "Linqing",
+		"tags": ["ejs", "template", "render", "compatibility"]
+	}
+}

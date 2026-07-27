@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>always accompany · 桌宠</title>
+	<!--
+		桌宠【角色窗】：透明置顶 Live2D，只渲染角色【完整体型】(等比 contain 完整露出，不裁)。
+		对话文本不在此窗显示——交给角色【下方】的独立气泡窗 pet-bubble.html(凛倾决策:完整体型+下方对话窗)。
+		渲染核心复用 beilu-chat 的 live2dRenderer.mjs(禁改)。事件由【主进程单一轮询源】经 IPC 驱动:
+		  - 主进程是 /api/eye/orb-consume 的唯一消费者(main.js _consumeOrbMessage)，剥 <emotion> 标签后
+		    经 IPC 'pet-drive' {emotion,text} 推来 → 本页派发 beilu:emotion-changed(表情)+ beilu:companion-message(口型脉冲)。
+		    (旧版本页内自行 poll orb-consume 会与主进程抢消息——consume 读后清空，已移除。)
+		  - 模型加载后把【原始画布宽高比】经 IPC 'pet-ratio' 上报主进程 → 主进程按角色比例 resize 角色窗(每个角色大小不同)。
+		资源根目录由主进程经 query(publicDir) 传入，<base href> 指向它，使 live2dRenderer 的相对 fetch/import 正确解析。
+	-->
+	<script>
+		// ① 解析 publicDir → 设 <base>，必须在任何相对资源加载/模块 import 之前同步完成。
+		(function () {
+			var qs = new URLSearchParams(location.search);
+			var pub = qs.get('publicDir') || '';
+			window.__BEILU_APP_PORT = qs.get('beiluPort') || '1314';
+			window.__BEILU_PET_PASSTHROUGH = qs.get('passthrough') === 'true'; // 初始游戏穿透态(同步,避免 IPC race)
+			window.__BEILU_PET_IDLE_EXPR = qs.get('idleExpression') || ''; // 初始待机表情(空=模型 defaultEmotion)
+			try { window.__BEILU_PET_DYNAMICS = JSON.parse(qs.get('dynamics') || '{}'); } catch (e) { window.__BEILU_PET_DYNAMICS = {}; } // 初始动态设置(人工自主)
+			try { window.__BEILU_USER_MODELS = JSON.parse(qs.get('userModels') || '[]'); } catch (e) { window.__BEILU_USER_MODELS = []; } // 用户模型(主进程扫描用户目录注入,同步在 import 前→renderer _mergeUserModels 合并)
+			try { window.__BEILU_CHAR_MODELS = JSON.parse(qs.get('charModels') || '{}'); } catch (e) { window.__BEILU_CHAR_MODELS = {}; } // D-2 角色卡→模型 映射(主进程注入,同步在 import 前→renderer _initCharModels 读)
+			// 调试工具"保存到用户配置"写的字典:桌宠是 file://,相对端点不可达,故注入绝对 beilu URL(_mergeUserModels 与扫描数组【都】合并)
+			window.__BEILU_USER_DICT_URL = 'http://localhost:' + window.__BEILU_APP_PORT + '/api/eye/usermodel-dict';
+			window.__BEILU_PET_MODEL = qs.get('model') || ''; // 初始选用模型(空=dict[0];renderer init 用它选初始模型)
+			// creature 选择已移除(凛倾 2026-07-14:删除史莱姆和青蛙,贝露图片包为唯一默认形象)
+			if (pub) {
+				var norm = pub.replace(/\\/g, '/');
+				var url = 'file:///' + encodeURI(norm).replace(/#/g, '%23').replace(/\?/g, '%3F') + '/';
+				var base = document.createElement('base');
+				base.href = url;
+				document.head.appendChild(base);
+				window.__BEILU_PUBLIC_BASE = url;
+			}
+		})();
+	</script>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		html, body {
+			width: 100%; height: 100%;
+			overflow: hidden;
+			background: transparent;
+			user-select: none;
+		}
+		/* live2dRenderer 挂点：填满窗口，背景透明(Application backgroundAlpha:0)。角色完整体型 contain 居中。 */
+		#live2d-host {
+			position: absolute;
+			inset: 0;
+			width: 100%; height: 100%;
+		}
+
+		/* ===== 无模型兜底:简洁占位(贝露图片包为唯一默认形象;此占位仅在模型/图片包均不可达的极端边缘态出现) =====
+		   默认隐藏;renderer 无模型(getModel() 空)时由脚本显示。 */
+		#pet-fallback {
+			position: absolute; inset: 0; display: none;
+			align-items: center; justify-content: center;
+		}
+		#pet-fallback.show { display: flex; }
+		#pet-fallback .fit { transform: scale(1); transform-origin: center center; }
+		.pf-placeholder {
+			position: relative; width: 100px; height: 100px;
+			display: flex; align-items: center; justify-content: center;
+			border-radius: 50%;
+			background: radial-gradient(circle at 40% 35%, rgba(255,252,245,.9), rgba(245,197,66,.25));
+			box-shadow: 0 4px 16px rgba(180,134,11,.2);
+			animation: pf-float 4.2s ease-in-out infinite;
+			font-size: 36px; color: #b8860b; opacity: .7;
+		}
+		@keyframes pf-float { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-6px) } }
+		.pf-placeholder.pf-tap { animation: pf-tap 0.32s ease; }
+		@keyframes pf-tap { 0%{ transform: translateY(0) scale(1) } 40%{ transform: translateY(-10px) scale(1.06) } 100%{ transform: translateY(0) scale(1) } }
+	</style>
+</head>
+<body>
+	<div id="live2d-host"></div>
+
+	<!-- 无模型兜底占位(贝露图片包为默认;此占位仅在极端边缘态出现)。renderer 无模型时由脚本 .show -->
+	<div id="pet-fallback">
+		<div class="fit">
+			<div class="pf-placeholder">&#9733;</div>
+		</div>
+	</div>
+
+	<!-- vendored 库(顺序 core→pixi→cubism4)。相对路径经 <base> 解析到 beilu-chat public 目录。 -->
+	<script src="vendor/live2dcubismcore.min.js"></script>
+	<script src="vendor/pixi.min.js"></script>
+	<script src="vendor/cubism4.min.js"></script>
+
+	<script type="module">
+		// ② live2dRenderer.mjs 动态 import(确保 <base> 已生效)。挂 #live2d-host、读 model_dict、
+		//    订阅 beilu:emotion-changed / beilu:companion-message。
+		const base = window.__BEILU_PUBLIC_BASE || './';
+		let rendererReady = false;
+		try {
+			// 修死路径(2026-07-09):渲染器实际在 src/shared/companion/(原 src/ui/ 全仓不存在,import 必败→恒走史莱姆兜底)。
+			const mod = await import(base + 'src/shared/companion/live2dRenderer.mjs');
+			await mod.initLive2dRenderer();
+			rendererReady = true;
+			console.log('[pet] live2dRenderer 初始化完成');
+			// 模型加载后上报原始画布宽高比 → 主进程按角色比例 resize 角色窗。
+			try {
+				const m = window.beiluLive2d && window.beiluLive2d._metrics && window.beiluLive2d._metrics();
+				if (m && m.internal && m.internal.w && m.internal.h && window.desktopEye && window.desktopEye.reportPetRatio) {
+					window.desktopEye.reportPetRatio(m.internal.w / m.internal.h);
+				}
+			} catch (e) { /* 上报失败不致命，用默认窗口尺寸 */ }
+			// 待机表情自定义:应用初始 idleExpression(用户设置;空=模型 defaultEmotion 不覆盖)。
+			try {
+				if (window.__BEILU_PET_IDLE_EXPR && window.beiluLive2d) {
+					window.beiluLive2d.setEmotion(window.__BEILU_PET_IDLE_EXPR);
+					window.__idleExprApplied = window.__BEILU_PET_IDLE_EXPR; // 观测:确认待机表情已应用
+				}
+			} catch (e) { /* 该模型无此表情则忽略 */ }
+			// 人工自主的动态设置(物理/摆动/视线幅度等)→ 应用到渲染层(初始)。
+			try {
+				if (!window.__beiluDynFromConfig && window.__BEILU_PET_DYNAMICS && Object.keys(window.__BEILU_PET_DYNAMICS).length && window.beiluLive2d && window.beiluLive2d.applyUserDynamics) { // 空不覆盖:空 query 晚于 onPetConfig 会 clobber 已下发 dynamics
+					window.beiluLive2d.applyUserDynamics(window.__BEILU_PET_DYNAMICS);
+				}
+			} catch (e) { /* 忽略 */ }
+		} catch (e) {
+			console.error('[pet] live2dRenderer 加载失败:', e);
+		}
+		// 运行时改待机表情(设置变更)。
+		// ----------------------------------------------------------------
+		// T2 无 Live2D 模型兜底:renderer 无模型(getModel() 空 / 加载失败)时,
+		//   显示前端美化默认形象(基础占位,等 Live2D 替换),而非空窗。对话框窗(pet-bubble)始终独立工作。
+		// ----------------------------------------------------------------
+		const fbEl = document.getElementById('pet-fallback');
+		const fbFit = fbEl && fbEl.querySelector('.fit');
+		const fbPet = fbEl && fbEl.querySelector('.pf-placeholder');
+		let _fallbackMode = false;
+		function fitFallback() {
+			if (!_fallbackMode || !fbFit) return;
+			const s = Math.max(0.5, Math.min(2.6, Math.min(window.innerWidth / 160, window.innerHeight / 172)));
+			fbFit.style.transform = 'scale(' + s + ')';
+		}
+		function showFallback() {
+			if (!fbEl) return;
+			_fallbackMode = true;
+			fbEl.classList.add('show');
+			fitFallback();
+			try { if (window.desktopEye && window.desktopEye.reportPetRatio) window.desktopEye.reportPetRatio(1.0); } catch (e) {}
+			console.log('[pet] 无模型/图片包 → 显示占位');
+		}
+		function hideFallback() {
+			_fallbackMode = false;
+			if (fbEl) fbEl.classList.remove('show');
+		}
+		function hasLive2dModel() {
+			try { return !!(window.beiluLive2d && window.beiluLive2d.getModel && window.beiluLive2d.getModel()); }
+			catch (e) { return false; }
+		}
+		if (!hasLive2dModel()) showFallback();
+		window.addEventListener('resize', fitFallback);
+
+		if (window.desktopEye && window.desktopEye.onPetConfig) {
+			window.desktopEye.onPetConfig(async (cfg) => {
+				if (!cfg || !window.beiluLive2d) return;
+				// 动态/物理 + motion 开关先于 reloadModel 应用:模型 setup 跑 startIdleLoop 时闸门须已就位(否则首帧 idle 漏放)。
+				if (cfg.dynamics && window.beiluLive2d.applyUserDynamics) { try { window.beiluLive2d.applyUserDynamics(cfg.dynamics); window.__beiluDynFromConfig = true; } catch (e) {} }
+				// 魔法棒 alpha 阈值(去硬编码 2026-07-13):pet_settings 单源随 pet-config 下发,setter 内做值域白检+清缓存。
+				if (cfg.alphaHitThreshold !== undefined && window.beiluLive2d.setAlphaHitThreshold) { try { window.beiluLive2d.setAlphaHitThreshold(cfg.alphaHitThreshold); } catch (e) {} }
+				// D-2 角色卡映射更新(随 beilu 同步下发);activeChar 提供时按角色卡换模型,无来源则沿用全局 modelName。
+				if (cfg.charModels && window.beiluLive2d.setCharModels) { try { window.beiluLive2d.setCharModels(cfg.charModels); } catch (e) {} }
+					let charModelApplied = false; // D-2 优先级:角色卡绑定 > 全局 modelName——应用成功后禁止下方全局重载盖回(2026-07-09 确诊:原先必盖,角色绑定形同虚设)
+					if (cfg.activeChar && window.beiluLive2d.setCharacter) { // 当前角色名(主进程提供时按角色卡换模型;无来源则不触发,沿用全局 modelName)
+						try {
+							const okc = await window.beiluLive2d.setCharacter(cfg.activeChar);
+							if (okc) {
+								charModelApplied = true;
+								hideFallback();
+								const mc = window.beiluLive2d._metrics && window.beiluLive2d._metrics();
+								if (mc && mc.internal && mc.internal.w && mc.internal.h && window.desktopEye.reportPetRatio) window.desktopEye.reportPetRatio(mc.internal.w / mc.internal.h);
+							}
+						} catch (e) {}
+					}
+					if (!charModelApplied && cfg.modelName && cfg.modelName !== window.beiluLive2d.getModel() && window.beiluLive2d.reloadModel) {
+					try {
+						const ok = await window.beiluLive2d.reloadModel(cfg.modelName);
+						if (ok) {
+							hideFallback(); // 切到真模型 → 收起兜底形象
+							const m = window.beiluLive2d._metrics && window.beiluLive2d._metrics();
+							if (m && m.internal && m.internal.w && m.internal.h && window.desktopEye.reportPetRatio) window.desktopEye.reportPetRatio(m.internal.w / m.internal.h);
+						} else if (window.desktopEye.petHitSay) {
+							// 诊断可见(2026-07-10 审计C修):此前加载失败静默留在旧形象/小生物=用户以为设置没生效。
+							// 复用 say→_showOrbBanner 显示链(bannerEnabled 守卫/截断同规),文本=诊断信息非对话内容。
+							window.desktopEye.petHitSay('形象「' + cfg.modelName + '」加载失败,请检查模型/图片包文件');
+						}
+					} catch (e) { if (window.desktopEye.petHitSay) window.desktopEye.petHitSay('形象「' + cfg.modelName + '」加载出错: ' + (e && e.message || e)); }
+				}
+				if (cfg.hitLimits && typeof cfg.hitLimits === 'object') {
+					window.__BEILU_HIT_LIMITS = cfg.hitLimits; // 手势判据(caps 单源经主进程下发)
+					try { if (window.beiluLive2d && window.beiluLive2d.setHitCountResetMs) window.beiluLive2d.setHitCountResetMs(cfg.hitLimits.countResetMs); } catch (e) {} // 次数细分窗口
+				}
+				if (cfg.idleExpression) { try { window.beiluLive2d.setEmotion(cfg.idleExpression); } catch (e) {} }
+			});
+			// 监听器注册完毕(此前 await initLive2dRenderer 加载模型耗时数秒,期间主进程 push 会丢)→ 主动拉一次当前配置补回。
+			try { if (window.desktopEye.requestPetConfig) window.desktopEye.requestPetConfig(); } catch (e) {}
+		}
+
+		// ----------------------------------------------------------------
+		// 事件桥：把【主进程经 IPC 推来】的 AI 文本/情感转成 live2dRenderer 订阅的 window 事件。
+		//   emotion → beilu:emotion-changed(表情切换)；text → beilu:companion-message(口型脉冲)。
+		//   文本【不在角色窗显示】，由主进程同时推给下方气泡窗。
+		// ----------------------------------------------------------------
+		function emitEmotion(emotion) {
+			if (!emotion) return;
+			window.dispatchEvent(new CustomEvent('beilu:emotion-changed', { detail: { emotion } }));
+		}
+		function emitCompanion(text) {
+			if (!text) return;
+			window.dispatchEvent(new CustomEvent('beilu:companion-message', { detail: { text } }));
+		}
+
+		// 主进程 IPC 'pet-drive' {emotion, text}（preload 暴露 onPetDrive）。
+		if (window.desktopEye && window.desktopEye.onPetDrive) {
+			window.desktopEye.onPetDrive((payload) => {
+				if (!payload) return;
+				if (payload.emotion) emitEmotion(payload.emotion);
+				if (payload.text) emitCompanion(payload.text);
+			});
+		}
+
+		// 调试入口：手动测试角色动作/表情(控制台或自动化驱动，不影响生产链路)。
+		window.__petTest = {
+			emotion: emitEmotion,
+			talk: emitCompanion,
+			rendererReady: () => rendererReady,
+		};
+
+		// ----------------------------------------------------------------
+		// 角色【自由移动 + 缩放】(凛倾需求)。airi 式命中测试:
+		//   光标在角色不透明包围盒内 → 请求主进程让窗口接管鼠标(可拖/可滚)；离开 → 恢复穿透(不挡桌面)。
+		//   拖拽=按住角色移动整组(角色+对话框)；滚轮=缩放角色(主进程固定底边重排)。
+		//   命中盒来自 beiluLive2d._metrics().bounds(渲染 px≈CSS px，pixi resolution=1)。
+		// ----------------------------------------------------------------
+		let _interactive = false, _dragging = false, _dragMode = 'move', _passthrough = !!window.__BEILU_PET_PASSTHROUGH;
+		function _overChar(x, y) {
+			if (_passthrough) return false; // 游戏穿透:不命中=不接管鼠标
+			// 兜底形象模式:用美化形象的 DOM 包围盒做命中测试(无 Live2D 模型时也可拖动/点击)。
+			if (_fallbackMode && fbPet) {
+				const r = fbPet.getBoundingClientRect();
+				return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+			}
+			const m = window.beiluLive2d && window.beiluLive2d._metrics && window.beiluLive2d._metrics();
+			if (!m || !m.bounds) return false;
+			const b = m.bounds;
+			return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+		}
+		function _setInteractive(on) {
+			if (on === _interactive) return;
+			_interactive = on;
+			if (window.desktopEye && window.desktopEye.setPetInteractive) window.desktopEye.setPetInteractive(on);
+		}
+		let _downX = 0, _downY = 0, _moved = false, _lastMoveX = 0, _downAt = 0;
+		let _strokeAcc = 0, _strokeLastX = null, _strokeLastY = null, _strokeCooldownUntil = 0; // 抚摸:角色上滑动累计位移(判据=caps.hitLimits)
+		window.addEventListener('mousemove', (e) => {
+			if (_dragging) {
+				// 拖动判定阈值可配(B5 去硬编码 2026-07-13):caps.hitLimits.dragPx 经 pet-config 下发,缺失=4(原值)
+				const _dragPx = (window.__BEILU_HIT_LIMITS && Number(window.__BEILU_HIT_LIMITS.dragPx) > 0) ? Number(window.__BEILU_HIT_LIMITS.dragPx) : 4;
+				if (Math.abs(e.screenX - _downX) + Math.abs(e.screenY - _downY) > _dragPx) _moved = true;
+				// 拖动跟随:喂水平移动量给身体软倾(数值框架:临界阻尼弹簧→ParamBodyAngleZ,不过冲不抖,非整体旋转)。
+				// scale 拖(Ctrl+拖缩放)不喂:窗口高度在变,软倾会与 relayout 打架。
+				if (_dragMode === 'move' && window.beiluLive2d && window.beiluLive2d.nudge) window.beiluLive2d.nudge(e.screenX - _lastMoveX);
+				_lastMoveX = e.screenX;
+				window.desktopEye && window.desktopEye.petDragMove(e.screenX, e.screenY);
+				return;
+			}
+			const over = _overChar(e.clientX, e.clientY);
+			_setInteractive(over);
+			// 抚摸识别(游戏范式,判据单源=caps 经 pet-config 下发;无判据=不识别,诚实降级):
+			// 角色上非拖拽滑动累计位移≥strokePx → 触发一次 stroke 手势热区命中,冷却 strokeCooldownMs。
+			const hl = window.__BEILU_HIT_LIMITS;
+			if (over && hl && Number(hl.strokePx) > 0 && window.beiluLive2d && window.beiluLive2d.hitAt) {
+				if (_strokeLastX != null) _strokeAcc += Math.abs(e.clientX - _strokeLastX) + Math.abs(e.clientY - _strokeLastY);
+				_strokeLastX = e.clientX; _strokeLastY = e.clientY;
+				if (_strokeAcc >= Number(hl.strokePx) && Date.now() >= _strokeCooldownUntil) {
+					_strokeAcc = 0;
+					_strokeCooldownUntil = Date.now() + (Number(hl.strokeCooldownMs) > 0 ? Number(hl.strokeCooldownMs) : 0);
+					window.beiluLive2d.hitAt(e.clientX, e.clientY, 'stroke'); // 未命中无副作用(不回落 tap:抚摸无默认反应)
+				}
+			} else if (!over) { _strokeAcc = 0; _strokeLastX = null; _strokeLastY = null; }
+		});
+		window.addEventListener('mousedown', (e) => {
+			if (e.button !== 0 || !_overChar(e.clientX, e.clientY)) return;
+			// Ctrl+拖=缩放(凛倾 2026-07-10"为什么不可以拖动人物"缩放;裸拖=移动,两模式共用一条拖拽协议)
+			_dragMode = e.ctrlKey ? 'scale' : 'move';
+			_dragging = true; _moved = false; _downX = e.screenX; _downY = e.screenY; _lastMoveX = e.screenX; _downAt = Date.now();
+			window.desktopEye && window.desktopEye.petDragStart(e.screenX, e.screenY, _dragMode);
+		});
+		window.addEventListener('mouseup', (e) => {
+			if (!_dragging) return;
+			_dragging = false;
+			window.desktopEye && window.desktopEye.petDragEnd();
+			// 没拖动=点击/长按(判据 pressMs 单源=caps;无判据=一律 click) → 先问触碰热区;未命中回落默认 tap。
+			if (!_moved) {
+				if (_fallbackMode && fbPet) { fbPet.classList.remove('pf-tap'); void fbPet.offsetWidth; fbPet.classList.add('pf-tap'); }
+				else if (window.beiluLive2d) {
+					const hl = window.__BEILU_HIT_LIMITS;
+					const gesture = (hl && Number(hl.pressMs) > 0 && (Date.now() - _downAt) >= Number(hl.pressMs)) ? 'press' : 'click';
+					const hitDone = window.beiluLive2d.hitAt && window.beiluLive2d.hitAt(e.clientX, e.clientY, gesture);
+					if (!hitDone && window.beiluLive2d.tap) window.beiluLive2d.tap();
+				}
+			}
+		});
+		// 角色双击 → 触碰热区手势(凛倾 2026-07-13"菜单只可以右键.双击还有其他手势都是用户自己设置的"):
+		// 双击从"固定开菜单"改为热区体系的一档手势(caps.hitGestures 含 dblclick),动作=用户在触碰编辑器配;
+		// 未配置区/未命中=无副作用(与 stroke 同语义,不回落 tap——两次单击已各自触发过 tap)。菜单入口=右键(固定)。
+		window.addEventListener('dblclick', (e) => {
+			if (_passthrough || !_overChar(e.clientX, e.clientY)) return;
+			try { if (window.beiluLive2d && window.beiluLive2d.hitAt) window.beiluLive2d.hitAt(e.clientX, e.clientY, 'dblclick'); } catch (err) { /* 未命中/无配置:无副作用 */ }
+		});
+		// 热区 say 动作 → 主进程气泡显示(台词=用户配置;经既有 _showOrbBanner 链:bannerEnabled 守卫/截断/声音)。
+		window.addEventListener('beilu:pet-hit-say', (e) => {
+			const t = e && e.detail && e.detail.text;
+			if (t && window.desktopEye && window.desktopEye.petHitSay) window.desktopEye.petHitSay(String(t));
+		});
+		// 热区 send 动作(触碰设计②) → 主进程 POST /api/eye/pet-message → AI 回应走既有 orb→气泡链。
+		window.addEventListener('beilu:pet-hit-send', (e) => {
+			const t = e && e.detail && e.detail.text;
+			if (t && window.desktopEye && window.desktopEye.petHitSend) window.desktopEye.petHitSend(String(t));
+		});
+		document.addEventListener('mouseleave', () => { if (!_dragging) _setInteractive(false); });
+		window.addEventListener('wheel', (e) => {
+			if (!_overChar(e.clientX, e.clientY)) return;
+			e.preventDefault();
+			window.desktopEye && window.desktopEye.petScale(e.deltaY < 0 ? 1 : -1);
+		}, { passive: false });
+		// 角色右键 → 主进程弹快捷设置菜单(穿透态由主进程边沿检测同责;菜单只可以右键=固定入口,凛倾 2026-07-13)。
+		window.addEventListener('contextmenu', (e) => {
+			if (_passthrough || !_overChar(e.clientX, e.clientY)) return;
+			e.preventDefault();
+			window.desktopEye && window.desktopEye.petContextMenu();
+		});
+		// 游戏穿透态:开启即释放交互(停命中测试)。
+		if (window.desktopEye && window.desktopEye.onPetPassthrough) {
+			window.desktopEye.onPetPassthrough((on) => {
+				_passthrough = on;
+				if (on) { _dragging = false; _setInteractive(false); }
+			});
+		}
+		// ── 命中盒上报主进程(2026-07-12 框架修) ──
+		// 本机 Electron forward:true 不转发 mousemove(受控探针实测 count=0,对照组正常)→上面 mousemove 命中检测
+		// 在穿透态永远收不到第一个事件=交互总闸常闭。改为把角色实际边界周期上报主进程,主进程读全局光标轮询判命中。
+		// 边界与 _overChar 同源:兜底=小生物 DOM 框;其余=_metrics().bounds(图片包=alpha 不透明包围盒,魔法棒式)。
+		// 穿透态也照常上报(不判 _passthrough):主进程穿透语义自持——不接管鼠标但需要命中盒判"角色上右键弹菜单"
+		// (凛倾 2026-07-12 操作闭环:穿透了右键还得能切回来)。
+		function _charRect() {
+			if (_fallbackMode && fbPet) {
+				const r = fbPet.getBoundingClientRect();
+				return { x: r.x, y: r.y, w: r.width, h: r.height };
+			}
+			const m = window.beiluLive2d && window.beiluLive2d._metrics && window.beiluLive2d._metrics();
+			if (!m || !m.bounds) return null;
+			return { x: m.bounds.x, y: m.bounds.y, w: m.bounds.w, h: m.bounds.h };
+		}
+		let _lastRectStr = '';
+		setInterval(() => {
+			if (!window.desktopEye || !window.desktopEye.reportPetHitRect) return;
+			const r = _charRect();
+			const s = r ? [Math.round(r.x), Math.round(r.y), Math.round(r.w), Math.round(r.h)].join(',') : '';
+			if (s !== _lastRectStr) { _lastRectStr = s; window.desktopEye.reportPetHitRect(r); }
+		}, 350);
+		// ── 像素级命中二级判定(T3,凛倾 tasks#11) ──
+		// 主进程光标在命中盒【内】时下发探针(窗内 client px)→ 此处问渲染层该点是否真有内容(单点 alpha)→
+		// 回报 true 不透明/false 透明/null 无法判定。主进程收 false 才收回接管(角色四肢间透明区不再挡桌面点击);
+		// null=降级按包围盒(现行为),诚实不编造。兜底小生物无像素层(DOM 框即真实边界)=恒 null。
+		if (window.desktopEye && window.desktopEye.onPetPixelProbe) {
+			window.desktopEye.onPetPixelProbe(async (p) => {
+				if (!p || !window.desktopEye.reportPetPixelHit) return;
+				let opaque = null;
+				try {
+					if (!_fallbackMode && window.beiluLive2d && window.beiluLive2d.pixelHitAt) {
+						const v = await window.beiluLive2d.pixelHitAt(Number(p.x), Number(p.y));
+						if (v === true || v === false) opaque = v;
+					}
+				} catch (e) { opaque = null; }
+				window.desktopEye.reportPetPixelHit(opaque);
+			});
+		}
+		// 测试钩子(自动化验证命中测试/穿透逻辑用)。
+		window.__petTest.overChar = (x, y) => _overChar(x, y);
+		window.__petTest.state = () => ({ passthrough: _passthrough, interactive: _interactive });
+		window.__petTest.setPassthrough = (on) => { _passthrough = !!on; if (on) { _dragging = false; _setInteractive(false); } };
+		window.__petTest.charRect = () => _charRect();
+	</script>
+</body>
+</html>

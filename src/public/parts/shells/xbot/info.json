@@ -1,0 +1,32 @@
+{
+	"en-UK": {
+		"name": "X Bot",
+		"avatar": "https://api.iconify.design/simple-icons/x.svg",
+		"description": "Run your character as an X (Twitter) bot.",
+		"description_markdown": "Allows you to connect your character to X (Twitter) and interact with them as a bot via DM polling and mention detection.",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["X", "Twitter", "bot", "integration"]
+	},
+	"zh-CN": {
+		"name": "X(推特) Bot",
+		"avatar": "https://api.iconify.design/simple-icons/x.svg",
+		"description": "将角色作为 X(推特) 机器人运行。",
+		"description_markdown": "将角色接入 X(推特)，通过轮询私信和@提及与用户互动。",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["X", "推特", "机器人", "集成"]
+	},
+	"emoji": {
+		"name": "🐦🤖",
+		"avatar": "https://api.iconify.design/simple-icons/x.svg",
+		"description": "🐦💬🔗",
+		"description_markdown": "🐦🤖➡️💬",
+		"version": "0.1.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["🐦", "🤖", "🔗"]
+	}
+}

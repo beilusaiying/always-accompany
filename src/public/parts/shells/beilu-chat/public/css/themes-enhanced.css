@@ -1,0 +1,1424 @@
+/* ============================================================
+   淡色模式（乳白色/米白色）覆盖
+   ============================================================ */
+
+[data-theme="light"] {
+  /* daisyUI 基础色覆盖 — 米白色系，护眼柔和 */
+  --b1: 0.965 0.012 85;
+  --b2: 0.94 0.016 80;
+  --b3: 0.91 0.02 80;
+  --bc: 0.25 0.035 60;
+
+  /* beilu 主题色适配淡色模式（加深，保证对比度） */
+  --beilu-amber: #9b7b1e;
+  --beilu-amber-dark: #7a5e15;
+  --beilu-amber-light: #c4981a;
+  --beilu-bg-dark: #f5efe3;
+  --beilu-bg-card: #ede6d6;
+  /* --beilu-modal-bg / overlay 已由 :root 跟随 daisyUI 语义变量，无需覆盖 */
+  /* T028c 方案C：亮底档=较浓白叠加（贴米白背景 ΔC≈1.05，正文对比 15.26:1）+ 亮底侧条（加深保对比） */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+
+/* ============================================================
+   鲜艳主题UI增强
+   核心思路(P5): 氛围色做背景 + 信息载体用对比色(白/深) + accent做装饰
+   P5: 红背景 + 白面板(读信息) + 黑文字 + 红装饰
+   ============================================================ */
+
+/* --- cyberpunk: 深蓝黑背景(像游戏) + 黄色图标/accent + 青色信息 --- */
+[data-theme="cyberpunk"] {
+  /* vendor 声明 cyberpunk 为 color-scheme:light，但本项目把它改成了深底（下方 --beilu-bg-dark #0a0a14），
+     必须同步改 scheme，否则 light-dark() 自适应色（状态文字/beilu token）会按浅色 scheme 给暗色文字贴深底 */
+  color-scheme: dark;
+  --b1: 0.12 0.025 255;
+  --b2: 0.10 0.03 258;
+  --b3: 0.08 0.035 260;
+  --bc: 0.88 0.02 200;
+  --beilu-amber: #f3e600;
+  --beilu-amber-text: #0a0a14;
+  --beilu-amber-rgb: 243, 230, 0;
+  --beilu-accent: #00f7ff;
+  --beilu-bg-dark: #0a0a14;
+  --beilu-bg-card: #10101e;
+  /* T028c 方案C 深底档：底色贴背景 + 深底侧条 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017;
+  --beilu-bot-bar: #5a9bd4;
+}
+[data-theme="cyberpunk"] .left-panel { border-color: rgba(0,247,255,0.12); }
+[data-theme="cyberpunk"] .settings-modal,
+[data-theme="cyberpunk"] .editor-modal,
+[data-theme="cyberpunk"] .floating-window {
+  border-color: rgba(0,247,255,0.2);
+  box-shadow: 0 0 15px rgba(0,247,255,0.08), 0 0 4px rgba(243,230,0,0.04);
+}
+[data-theme="cyberpunk"] .btn-primary {
+  box-shadow: 0 0 10px rgba(243,230,0,0.15);
+}
+
+/* --- bumblebee: 黄底保留 + 白色信息面板(像P5白面板on红底) + 深棕文字 --- */
+[data-theme="bumblebee"] {
+  --beilu-amber: #8a6a20;
+  --beilu-amber-text: #ffffff;
+  --beilu-amber-rgb: 138, 106, 32;
+  /* T028c 方案C 亮底档：底色贴背景 + 亮底侧条 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+[data-theme="bumblebee"] .left-panel {
+  background-color: color-mix(in oklch, var(--beilu-bg-card) 92%, white);
+}
+[data-theme="bumblebee"] .settings-modal,
+[data-theme="bumblebee"] .editor-modal,
+[data-theme="bumblebee"] .floating-window {
+  border-color: rgba(138,106,32,0.2);
+  box-shadow: 0 2px 16px rgba(138,106,32,0.08);
+  background-color: color-mix(in oklch, var(--color-base-100) 95%, white);
+}
+
+/* --- acid: 保留白底 + 荧光色做accent边框/badge(不做大面积) --- */
+[data-theme="acid"] {
+  --beilu-amber: #b000c0;
+  --beilu-amber-text: #f8f0ff;
+  --beilu-amber-rgb: 176, 0, 192;
+  --beilu-accent: #00c850;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+[data-theme="acid"] .settings-modal,
+[data-theme="acid"] .editor-modal,
+[data-theme="acid"] .floating-window {
+  border-color: rgba(176,0,192,0.15);
+  box-shadow: 0 0 12px rgba(176,0,192,0.06), 0 0 4px rgba(0,200,80,0.04);
+}
+
+/* --- valentine: 粉底保留 + 白/浅面板做信息载体 + 深玫红文字 --- */
+[data-theme="valentine"] {
+  --beilu-amber: #c04070;
+  --beilu-amber-text: #fff5f8;
+  --beilu-amber-rgb: 192, 64, 112;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+[data-theme="valentine"] .left-panel {
+  background-color: color-mix(in oklch, var(--beilu-bg-card) 90%, white);
+}
+[data-theme="valentine"] .settings-modal,
+[data-theme="valentine"] .editor-modal,
+[data-theme="valentine"] .floating-window {
+  border-color: rgba(192,64,112,0.15);
+  box-shadow: 0 2px 14px rgba(192,64,112,0.06);
+  background-color: color-mix(in oklch, var(--color-base-100) 92%, white);
+}
+
+/* --- lemonade: 绿底保留 + 白面板信息载体 + 深绿文字 --- */
+[data-theme="lemonade"] {
+  --beilu-amber: #3a7a50;
+  --beilu-amber-text: #f0fff5;
+  --beilu-amber-rgb: 58, 122, 80;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+[data-theme="lemonade"] .settings-modal,
+[data-theme="lemonade"] .editor-modal,
+[data-theme="lemonade"] .floating-window {
+  border-color: rgba(58,122,80,0.15);
+  box-shadow: 0 2px 14px rgba(58,122,80,0.06);
+  background-color: color-mix(in oklch, var(--color-base-100) 92%, white);
+}
+
+/* ============================================================
+   UI优化主题 (data-beilu-enhanced) — 方法论驱动设计
+   完整UI颜色搭配: daisyUI oklch基色 + beilu变量 + 纹理 + 交互
+   ============================================================ */
+
+/* --- cyberpunk Pro: CP2077 — 深底+青/红/黄三色+扫描线+切角 --- */
+/* ═══════════════════════════════════════════════════════════════
+   CYBERPUNK Pro — CP2077: AR投射HUD / 三色职能(青=可用 红=装饰 黄=辅助)
+   无阴影(AR投射=无实体) / 线框边框 / 切角 / 扫描线 / 大写宽字距
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="cyberpunk"] {
+  --b1: 0.08 0.02 260; --b2: 0.10 0.025 258; --b3: 0.06 0.03 262;
+  --bc: 0.88 0.01 240;
+  --p: 0.85 0.15 195; --s: 0.55 0.2 15; --a: 0.90 0.16 95;
+  --beilu-amber: #f3e600; --beilu-amber-text: #0a0a14; --beilu-amber-rgb: 243, 230, 0;
+  --beilu-accent: #00f7ff;
+  --beilu-bg-dark: #060610; --beilu-bg-card: #0e0e1e;
+  /* T028c 方案C 深底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017;
+  --beilu-bot-bar: #5a9bd4;
+}
+/* 扫描线纹理 */
+[data-beilu-enhanced="cyberpunk"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,247,255,0.012) 2px, rgba(0,247,255,0.012) 4px);
+  pointer-events: none; z-index: 0;
+  animation: beilu-scan 12s linear infinite;
+}
+@keyframes beilu-scan { to { transform: translateY(4px); } }
+/* 面板: 线框+无阴影+无圆角(AR投射=无物理实体) */
+[data-beilu-enhanced="cyberpunk"] .left-panel {
+  background-color: rgba(10,10,18,0.88);
+  border: 1px solid rgba(0,247,255,0.12); border-radius: 0;
+  box-shadow: none;
+}
+[data-beilu-enhanced="cyberpunk"] #right-panel {
+  background-color: rgba(10,10,18,0.85);
+  border: 1px solid rgba(0,247,255,0.1); border-radius: 0;
+  box-shadow: none;
+}
+[data-beilu-enhanced="cyberpunk"] #top-bar {
+  background-color: rgba(10,10,18,0.9);
+  border-bottom: 1px solid rgba(0,247,255,0.1); border-radius: 0;
+  box-shadow: none;
+}
+[data-beilu-enhanced="cyberpunk"] .left-panel:hover,
+[data-beilu-enhanced="cyberpunk"] #right-panel:hover {
+  border-color: rgba(0,247,255,0.25);
+  box-shadow: none;
+}
+/* 角标装饰(CP2077面板左上角三角标记) */
+[data-beilu-enhanced="cyberpunk"] .left-panel::before {
+  content: ''; position: absolute; top: 0; left: 0;
+  width: 0; height: 0; border-style: solid;
+  border-width: 6px 6px 0 0;
+  border-color: rgba(0,247,255,0.4) transparent transparent transparent;
+}
+/* modal/弹窗: 切角+微光(唯一允许轻微发光的场景=真实层叠) */
+[data-beilu-enhanced="cyberpunk"] .settings-modal,
+[data-beilu-enhanced="cyberpunk"] .editor-modal,
+[data-beilu-enhanced="cyberpunk"] .floating-window {
+  border: 1px solid rgba(0,247,255,0.2); border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: 0 0 8px rgba(0,247,255,0.04);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+/* 按钮: 切角+线框+hover边框变亮(AR高亮) */
+[data-beilu-enhanced="cyberpunk"] .menu_button {
+  border: 1px solid rgba(0,247,255,0.1); border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  background-color: rgba(10,10,20,0.6);
+}
+[data-beilu-enhanced="cyberpunk"] .menu_button:hover {
+  border-color: rgba(0,247,255,0.4); color: #00f7ff;
+  background-color: rgba(0,247,255,0.04);
+  box-shadow: none; transform: none;
+}
+[data-beilu-enhanced="cyberpunk"] .menu_button:active {
+  background-color: rgba(0,247,255,0.08); transform: scale(0.97);
+}
+/* 黄色辅助按钮(CP2077黄=警告/辅助) */
+[data-beilu-enhanced="cyberpunk"] .btn-primary,
+[data-beilu-enhanced="cyberpunk"] .menu_button.primary {
+  background-color: rgba(243,230,0,0.08);
+  border-color: rgba(243,230,0,0.3); color: #f3e600;
+}
+[data-beilu-enhanced="cyberpunk"] .btn-primary:hover {
+  background-color: rgba(243,230,0,0.15);
+  border-color: rgba(243,230,0,0.5);
+}
+/* Tab栏: 无圆角+hover青色底线 */
+[data-beilu-enhanced="cyberpunk"] .top-tab {
+  border-bottom: 2px solid transparent; border-radius: 0;
+}
+[data-beilu-enhanced="cyberpunk"] .top-tab:hover {
+  background-color: rgba(0,247,255,0.03); color: #00f7ff;
+}
+[data-beilu-enhanced="cyberpunk"] .top-tab.active,
+[data-beilu-enhanced="cyberpunk"] .top-tab[data-active="true"] {
+  border-bottom-color: #00f7ff; color: #00f7ff;
+  background-color: rgba(0,247,255,0.05);
+}
+/* 输入框: 无圆角+线框 */
+[data-beilu-enhanced="cyberpunk"] #send_textarea {
+  border: 1px solid rgba(0,247,255,0.1); border-radius: 0;
+  background-color: rgba(8,8,16,0.7);
+}
+[data-beilu-enhanced="cyberpunk"] #send_textarea:focus {
+  border-color: rgba(0,247,255,0.35);
+  box-shadow: 0 0 0 1px rgba(0,247,255,0.08);
+}
+/* 分隔线: 青色渐变(比硬线更科技感) */
+[data-beilu-enhanced="cyberpunk"] hr,
+[data-beilu-enhanced="cyberpunk"] .divider {
+  background: linear-gradient(90deg, transparent, rgba(0,247,255,0.15) 30%, rgba(0,247,255,0.2) 50%, rgba(0,247,255,0.15) 70%, transparent);
+}
+/* 标题/标签: 大写+宽字距(CP2077 HUD文字风格) */
+[data-beilu-enhanced="cyberpunk"] .panel-title,
+[data-beilu-enhanced="cyberpunk"] .section-label {
+  text-transform: uppercase; letter-spacing: 2px;
+  font-size: 0.68rem; font-weight: 700;
+}
+/* 红色标签(CP2077中红=装饰标签) */
+[data-beilu-enhanced="cyberpunk"] .tag,
+[data-beilu-enhanced="cyberpunk"] .badge {
+  color: rgba(225,44,16,0.7); text-transform: uppercase; letter-spacing: 1px;
+}
+/* 滚动条: 青色细条 */
+[data-beilu-enhanced="cyberpunk"] ::-webkit-scrollbar-thumb { background: rgba(0,247,255,0.15); border-radius: 0; }
+[data-beilu-enhanced="cyberpunk"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,247,255,0.40); }
+/* 侧栏项: 左边框=青色指示器 */
+[data-beilu-enhanced="cyberpunk"] .activity-item:hover,
+[data-beilu-enhanced="cyberpunk"] .preset-item:hover {
+  background-color: rgba(0,247,255,0.03);
+  border-left-color: rgba(0,247,255,0.4); color: #00f7ff;
+}
+[data-beilu-enhanced="cyberpunk"] .activity-item.active,
+[data-beilu-enhanced="cyberpunk"] .preset-item.active {
+  background-color: rgba(0,247,255,0.05);
+  border-left-color: #00f7ff; color: #00f7ff;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NIGHT Pro — P3R "沉入内心之海": 亮青#51EEFC+金色#FFC54A+水波纹
+   柔和圆角 / tinted shadow(水下光散射) / 克制排版 / 无切角无倾斜
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="night"] {
+  --b1: 0.09 0.03 230; --b2: 0.11 0.035 228; --b3: 0.07 0.025 232;
+  --bc: 0.88 0.015 220;
+  --p: 0.85 0.12 195; --s: 0.78 0.12 80; --a: 0.62 0.08 225;
+  --beilu-amber: #51EEFC; --beilu-amber-text: #0a101e; --beilu-amber-rgb: 81, 238, 252;
+  --beilu-accent: #FFC54A;
+  --beilu-bg-dark: #070c18; --beilu-bg-card: #121e38;
+  /* T028c 方案C 深底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017;
+  --beilu-bot-bar: #5a9bd4;
+}
+/* 水波纹纹理(焦散线=水下光线穿透) */
+[data-beilu-enhanced="night"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 38px, rgba(81,238,252,0.018) 38px, rgba(81,238,252,0.018) 40px);
+  background-size: 100% 100%;
+  pointer-events: none; z-index: 0;
+}
+/* 面板: 深海半透明+水下光散射shadow+14px柔圆角 */
+[data-beilu-enhanced="night"] .left-panel {
+  background-color: rgba(14,24,44,0.88);
+  border: 1px solid rgba(81,238,252,0.08); border-radius: 14px;
+  box-shadow: 0 2px 14px rgba(18,105,204,0.06);
+}
+[data-beilu-enhanced="night"] #right-panel {
+  background-color: rgba(14,24,44,0.85);
+  border: 1px solid rgba(81,238,252,0.06); border-radius: 14px;
+  box-shadow: 0 2px 14px rgba(18,105,204,0.05);
+}
+[data-beilu-enhanced="night"] #top-bar {
+  background-color: rgba(14,24,44,0.9);
+  border-bottom: 1px solid rgba(81,238,252,0.06);
+  box-shadow: 0 1px 10px rgba(18,105,204,0.05);
+}
+[data-beilu-enhanced="night"] .left-panel:hover,
+[data-beilu-enhanced="night"] #right-panel:hover {
+  border-color: rgba(81,238,252,0.15);
+  box-shadow: 0 4px 22px rgba(18,105,204,0.1), 0 0 50px rgba(81,238,252,0.02);
+}
+/* modal: 水下光散射glow+blur */
+[data-beilu-enhanced="night"] .settings-modal,
+[data-beilu-enhanced="night"] .editor-modal,
+[data-beilu-enhanced="night"] .floating-window {
+  border: 1px solid rgba(81,238,252,0.12); border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(18,105,204,0.12), 0 0 60px rgba(81,238,252,0.03);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+/* 按钮: 柔圆角+水下柔光hover */
+[data-beilu-enhanced="night"] .menu_button {
+  border: 1px solid rgba(81,238,252,0.08); border-radius: 8px;
+  background-color: rgba(16,26,44,0.6);
+}
+[data-beilu-enhanced="night"] .menu_button:hover {
+  border-color: rgba(81,238,252,0.25); color: #51EEFC;
+  background-color: rgba(81,238,252,0.04);
+  box-shadow: 0 2px 10px rgba(18,105,204,0.08);
+}
+[data-beilu-enhanced="night"] .menu_button:active {
+  transform: scale(0.97);
+  box-shadow: 0 1px 4px rgba(18,105,204,0.06);
+}
+/* Tab栏: 柔圆角+亮青底线+hover水光 */
+[data-beilu-enhanced="night"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="night"] .top-tab:hover {
+  background-color: rgba(81,238,252,0.03); color: #51EEFC;
+}
+[data-beilu-enhanced="night"] .top-tab.active,
+[data-beilu-enhanced="night"] .top-tab[data-active="true"] {
+  border-bottom-color: #51EEFC; color: #51EEFC;
+  background-color: rgba(81,238,252,0.05); font-weight: 600;
+}
+/* 输入框: 深海玻璃+focus水下蓝光 */
+[data-beilu-enhanced="night"] #send_textarea {
+  border: 1px solid rgba(81,238,252,0.08); border-radius: 12px;
+  background-color: rgba(12,20,36,0.7);
+}
+[data-beilu-enhanced="night"] #send_textarea:focus {
+  border-color: #51EEFC;
+  box-shadow: 0 0 0 2px rgba(81,238,252,0.08), 0 0 16px rgba(18,105,204,0.06);
+}
+/* 分隔线: 亮青→柔蓝渐变(水下光线穿透) */
+[data-beilu-enhanced="night"] hr,
+[data-beilu-enhanced="night"] .divider {
+  background: linear-gradient(90deg, transparent, rgba(81,238,252,0.1) 25%, rgba(109,154,199,0.06) 75%, transparent);
+}
+/* 标题: 克制优雅(P3R无大写/无宽字距/微增字距) */
+[data-beilu-enhanced="night"] .panel-title {
+  font-weight: 500; letter-spacing: 0.5px;
+}
+/* 滚动条: 亮青 */
+[data-beilu-enhanced="night"] ::-webkit-scrollbar-thumb { background: rgba(81,238,252,0.15); }
+[data-beilu-enhanced="night"] ::-webkit-scrollbar-thumb:hover { background: rgba(81,238,252,0.35); }
+/* 侧栏项: 亮青指示器 */
+[data-beilu-enhanced="night"] .activity-item:hover,
+[data-beilu-enhanced="night"] .preset-item:hover {
+  background-color: rgba(81,238,252,0.03);
+  border-left-color: rgba(81,238,252,0.3); color: #51EEFC;
+}
+[data-beilu-enhanced="night"] .activity-item.active,
+[data-beilu-enhanced="night"] .preset-item.active {
+  background-color: rgba(81,238,252,0.05);
+  border-left-color: #51EEFC; color: #51EEFC;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VALENTINE Pro — 柔美少女: 白+淡粉双色 / 交错圆点 / 大圆角
+   蓝紫accent打破粉色单调 / 柔和tinted shadow / 有机形状
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="valentine"] {
+  --b1: 0.94 0.025 350; --b2: 0.91 0.03 348; --b3: 0.88 0.035 346;
+  --bc: 0.25 0.06 340;
+  --p: 0.48 0.16 355; --s: 0.42 0.18 290; --a: 0.42 0.16 358;
+  --beilu-amber: #b04468; --beilu-amber-text: #fff4fa; --beilu-amber-rgb: 176, 68, 104;
+  --beilu-accent: #7046b4;
+  --beilu-bg-dark: #f0dce5; --beilu-bg-card: #f5e5ee;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e;
+  --beilu-bot-bar: #4a7bbf;
+}
+/* 交错圆点纹理(少女感) */
+[data-beilu-enhanced="valentine"]::before {
+  content: ''; position: fixed; inset: 0;
+  background:
+    radial-gradient(circle, rgba(176,68,104,0.03) 1px, transparent 1px),
+    radial-gradient(circle, rgba(176,68,104,0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+  pointer-events: none; z-index: 0;
+}
+/* 面板: 白+淡粉渐变+柔光shadow+16px大圆角 */
+[data-beilu-enhanced="valentine"] .left-panel {
+  background: linear-gradient(180deg, rgba(248,218,232,0.9) 0%, rgba(240,210,225,0.85) 100%);
+  border: 1px solid rgba(176,68,104,0.08); border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(176,68,104,0.04);
+}
+[data-beilu-enhanced="valentine"] #right-panel {
+  background: linear-gradient(180deg, rgba(248,222,235,0.88) 0%, rgba(242,215,228,0.84) 100%);
+  border: 1px solid rgba(176,68,104,0.06); border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(176,68,104,0.03);
+}
+[data-beilu-enhanced="valentine"] #top-bar {
+  background-color: rgba(248,220,233,0.92);
+  border-bottom: 1px solid rgba(176,68,104,0.06);
+  box-shadow: 0 1px 6px rgba(176,68,104,0.03);
+}
+[data-beilu-enhanced="valentine"] .left-panel:hover,
+[data-beilu-enhanced="valentine"] #right-panel:hover {
+  border-color: rgba(176,68,104,0.15);
+  box-shadow: 0 4px 18px rgba(176,68,104,0.06);
+}
+/* modal: 大圆角+柔光 */
+[data-beilu-enhanced="valentine"] .settings-modal,
+[data-beilu-enhanced="valentine"] .editor-modal,
+[data-beilu-enhanced="valentine"] .floating-window {
+  border: 1px solid rgba(176,68,104,0.12); border-radius: 18px;
+  box-shadow: 0 4px 20px rgba(176,68,104,0.06);
+  background-color: color-mix(in oklch, var(--color-base-100) 92%, white);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+/* 按钮: 大圆角+柔光hover */
+[data-beilu-enhanced="valentine"] .menu_button {
+  border: 1px solid rgba(176,68,104,0.1); border-radius: 12px;
+  background-color: rgba(248,230,240,0.6);
+}
+[data-beilu-enhanced="valentine"] .menu_button:hover {
+  border-color: rgba(176,68,104,0.25); color: #b04468;
+  background-color: rgba(176,68,104,0.06);
+  box-shadow: 0 2px 10px rgba(176,68,104,0.06);
+}
+[data-beilu-enhanced="valentine"] .menu_button:active {
+  transform: scale(0.97);
+}
+/* Tab栏: 粉色底线+hover */
+[data-beilu-enhanced="valentine"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="valentine"] .top-tab:hover {
+  background-color: rgba(176,68,104,0.04); color: #b04468;
+}
+[data-beilu-enhanced="valentine"] .top-tab.active,
+[data-beilu-enhanced="valentine"] .top-tab[data-active="true"] {
+  border-bottom-color: #b04468; color: #b04468;
+  background-color: rgba(176,68,104,0.06); font-weight: 600;
+}
+/* 输入框: 大圆角+focus粉光 */
+[data-beilu-enhanced="valentine"] #send_textarea {
+  border: 1px solid rgba(176,68,104,0.08); border-radius: 14px;
+  background-color: rgba(255,245,250,0.7);
+}
+[data-beilu-enhanced="valentine"] #send_textarea:focus {
+  border-color: #b04468;
+  box-shadow: 0 0 0 2px rgba(176,68,104,0.08), 0 0 10px rgba(176,68,104,0.04);
+}
+/* 分隔线: 粉色渐变 */
+[data-beilu-enhanced="valentine"] hr,
+[data-beilu-enhanced="valentine"] .divider {
+  background: linear-gradient(90deg, transparent, rgba(176,68,104,0.1) 25%, rgba(112,70,180,0.06) 75%, transparent);
+}
+/* 滚动条: 玫红 */
+[data-beilu-enhanced="valentine"] ::-webkit-scrollbar-thumb { background: rgba(176,68,104,0.18); }
+[data-beilu-enhanced="valentine"] ::-webkit-scrollbar-thumb:hover { background: rgba(176,68,104,0.35); }
+/* 侧栏项: 玫红指示器 */
+[data-beilu-enhanced="valentine"] .activity-item:hover,
+[data-beilu-enhanced="valentine"] .preset-item:hover {
+  background-color: rgba(176,68,104,0.04);
+  border-left-color: rgba(176,68,104,0.3); color: #b04468;
+}
+[data-beilu-enhanced="valentine"] .activity-item.active,
+[data-beilu-enhanced="valentine"] .preset-item.active {
+  background-color: rgba(176,68,104,0.06);
+  border-left-color: #b04468; color: #b04468;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUMBLEBEE Pro — 暖蜜工匠: 白+暖奶油双色 / 斜线蜂巢纹理 / 深琥珀+森林绿
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="bumblebee"] {
+  --b1: 0.96 0.02 85; --b2: 0.94 0.025 82; --b3: 0.92 0.03 80; --bc: 0.22 0.04 60;
+  --p: 0.47 0.12 75; --s: 0.42 0.11 72; --a: 0.42 0.08 145;
+  --beilu-amber: #7a5c12; --beilu-amber-text: #faf4e6; --beilu-amber-rgb: 122, 92, 18;
+  --beilu-accent: #3d6035;
+  --beilu-bg-dark: #ede5d0; --beilu-bg-card: #f5eeda;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45); --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e; --beilu-bot-bar: #4a7bbf;
+}
+[data-beilu-enhanced="bumblebee"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: linear-gradient(45deg, rgba(122,92,18,0.02) 25%, transparent 25%, transparent 50%, rgba(122,92,18,0.02) 50%, rgba(122,92,18,0.02) 75%, transparent 75%);
+  background-size: 14px 14px; pointer-events: none; z-index: 0;
+}
+[data-beilu-enhanced="bumblebee"] .left-panel {
+  background: linear-gradient(180deg, rgba(248,242,228,0.92) 0%, rgba(240,232,210,0.88) 100%);
+  border: 1px solid rgba(122,92,18,0.08); border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(122,92,18,0.03);
+}
+[data-beilu-enhanced="bumblebee"] #right-panel {
+  background: linear-gradient(180deg, rgba(245,240,225,0.9) 0%, rgba(238,230,208,0.86) 100%);
+  border: 1px solid rgba(122,92,18,0.06); border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(122,92,18,0.03);
+}
+[data-beilu-enhanced="bumblebee"] #top-bar {
+  background-color: rgba(248,242,228,0.92);
+  border-bottom: 1px solid rgba(122,92,18,0.06);
+  box-shadow: 0 1px 6px rgba(122,92,18,0.03);
+}
+[data-beilu-enhanced="bumblebee"] .left-panel:hover { border-color: rgba(122,92,18,0.15); box-shadow: 0 4px 16px rgba(122,92,18,0.05); }
+[data-beilu-enhanced="bumblebee"] .settings-modal, [data-beilu-enhanced="bumblebee"] .editor-modal, [data-beilu-enhanced="bumblebee"] .floating-window {
+  border: 1px solid rgba(122,92,18,0.12); border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(122,92,18,0.05); backdrop-filter: blur(10px) saturate(140%);
+}
+[data-beilu-enhanced="bumblebee"] .menu_button { border: 1px solid rgba(122,92,18,0.1); border-radius: 8px; background-color: rgba(248,240,220,0.6); }
+[data-beilu-enhanced="bumblebee"] .menu_button:hover { border-color: rgba(122,92,18,0.25); color: #7a5c12; background-color: rgba(122,92,18,0.05); box-shadow: 0 2px 8px rgba(122,92,18,0.05); }
+[data-beilu-enhanced="bumblebee"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="bumblebee"] .top-tab:hover { background-color: rgba(122,92,18,0.04); color: #7a5c12; }
+[data-beilu-enhanced="bumblebee"] .top-tab.active, [data-beilu-enhanced="bumblebee"] .top-tab[data-active="true"] { border-bottom-color: #7a5c12; color: #7a5c12; background-color: rgba(122,92,18,0.06); font-weight: 600; }
+[data-beilu-enhanced="bumblebee"] #send_textarea { border: 1px solid rgba(122,92,18,0.08); border-radius: 10px; background-color: rgba(255,250,240,0.7); }
+[data-beilu-enhanced="bumblebee"] #send_textarea:focus { border-color: #7a5c12; box-shadow: 0 0 0 2px rgba(122,92,18,0.08); }
+[data-beilu-enhanced="bumblebee"] hr, [data-beilu-enhanced="bumblebee"] .divider { background: linear-gradient(90deg, transparent, rgba(122,92,18,0.1) 25%, rgba(61,96,53,0.06) 75%, transparent); }
+[data-beilu-enhanced="bumblebee"] ::-webkit-scrollbar-thumb { background: rgba(122,92,18,0.18); }
+[data-beilu-enhanced="bumblebee"] ::-webkit-scrollbar-thumb:hover { background: rgba(122,92,18,0.35); }
+[data-beilu-enhanced="bumblebee"] .activity-item:hover, [data-beilu-enhanced="bumblebee"] .preset-item:hover { background-color: rgba(122,92,18,0.04); border-left-color: rgba(122,92,18,0.3); color: #7a5c12; }
+[data-beilu-enhanced="bumblebee"] .activity-item.active, [data-beilu-enhanced="bumblebee"] .preset-item.active { background-color: rgba(122,92,18,0.06); border-left-color: #7a5c12; color: #7a5c12; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SYNTHWAVE Pro — 80年代霓虹复古: 深紫+粉红/青双色 / 网格 / skew微倾斜
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="synthwave"] {
+  --b1: 0.12 0.05 300; --b2: 0.14 0.055 298; --b3: 0.10 0.045 302; --bc: 0.88 0.02 310;
+  --p: 0.65 0.22 350; --s: 0.75 0.15 185; --a: 0.80 0.12 80;
+  --beilu-amber: #f0508c; --beilu-amber-text: #1a0e28; --beilu-amber-rgb: 240, 80, 140;
+  --beilu-accent: #2de2e6;
+  --beilu-bg-dark: #120a1e; --beilu-bg-card: #1e1235;
+  /* T028c 方案C 深底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045); --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017; --beilu-bot-bar: #5a9bd4;
+}
+[data-beilu-enhanced="synthwave"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0, transparent 39px, rgba(240,80,140,0.02) 39px, rgba(240,80,140,0.02) 40px), repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(45,226,230,0.015) 39px, rgba(45,226,230,0.015) 40px);
+  background-size: 40px 40px; pointer-events: none; z-index: 0;
+}
+[data-beilu-enhanced="synthwave"] .left-panel {
+  background-color: rgba(28,16,45,0.88); border: 1px solid rgba(240,80,140,0.1); border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(240,80,140,0.03);
+}
+[data-beilu-enhanced="synthwave"] #right-panel {
+  background-color: rgba(28,16,45,0.85); border: 1px solid rgba(240,80,140,0.08); border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(240,80,140,0.03);
+}
+[data-beilu-enhanced="synthwave"] #top-bar {
+  background-color: rgba(28,16,45,0.9); border-bottom: 1px solid rgba(240,80,140,0.08);
+  box-shadow: 0 1px 6px rgba(240,80,140,0.03);
+}
+[data-beilu-enhanced="synthwave"] .left-panel:hover { border-color: rgba(240,80,140,0.2); box-shadow: 0 4px 16px rgba(240,80,140,0.05); }
+[data-beilu-enhanced="synthwave"] .settings-modal, [data-beilu-enhanced="synthwave"] .editor-modal, [data-beilu-enhanced="synthwave"] .floating-window {
+  border: 1px solid rgba(240,80,140,0.15); border-radius: 6px;
+  box-shadow: 0 2px 14px rgba(240,80,140,0.04), 0 0 4px rgba(45,226,230,0.03);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+[data-beilu-enhanced="synthwave"] .menu_button { border: 1px solid rgba(240,80,140,0.1); border-radius: 4px; background-color: rgba(30,18,52,0.6); transform: skewX(-2deg); }
+[data-beilu-enhanced="synthwave"] .menu_button > * { transform: skewX(2deg); }
+[data-beilu-enhanced="synthwave"] .menu_button:hover { border-color: rgba(240,80,140,0.3); color: #f0508c; background-color: rgba(240,80,140,0.06); box-shadow: 0 2px 10px rgba(240,80,140,0.05); transform: skewX(-2deg) translateY(-1px); }
+[data-beilu-enhanced="synthwave"] .menu_button:active { transform: skewX(-2deg) scale(0.97); }
+[data-beilu-enhanced="synthwave"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="synthwave"] .top-tab:hover { background-color: rgba(240,80,140,0.04); color: #f0508c; }
+[data-beilu-enhanced="synthwave"] .top-tab.active, [data-beilu-enhanced="synthwave"] .top-tab[data-active="true"] { border-bottom-color: #f0508c; color: #f0508c; background-color: rgba(240,80,140,0.06); font-weight: 600; }
+[data-beilu-enhanced="synthwave"] #send_textarea { border: 1px solid rgba(240,80,140,0.1); border-radius: 6px; background-color: rgba(20,12,35,0.7); }
+[data-beilu-enhanced="synthwave"] #send_textarea:focus { border-color: #f0508c; box-shadow: 0 0 0 2px rgba(240,80,140,0.08), 0 0 10px rgba(240,80,140,0.04); }
+[data-beilu-enhanced="synthwave"] hr, [data-beilu-enhanced="synthwave"] .divider { background: linear-gradient(90deg, transparent, rgba(240,80,140,0.1) 25%, rgba(45,226,230,0.06) 75%, transparent); }
+[data-beilu-enhanced="synthwave"] ::-webkit-scrollbar-thumb { background: rgba(240,80,140,0.18); }
+[data-beilu-enhanced="synthwave"] ::-webkit-scrollbar-thumb:hover { background: rgba(240,80,140,0.4); }
+[data-beilu-enhanced="synthwave"] .activity-item:hover, [data-beilu-enhanced="synthwave"] .preset-item:hover { background-color: rgba(240,80,140,0.04); border-left-color: rgba(240,80,140,0.3); color: #f0508c; }
+[data-beilu-enhanced="synthwave"] .activity-item.active, [data-beilu-enhanced="synthwave"] .preset-item.active { background-color: rgba(240,80,140,0.06); border-left-color: #f0508c; color: #f0508c; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ACID Pro — 迷幻波普: 近白底+品红/翠绿双层半色调 / 中圆角8px
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="acid"] {
+  --b1: 0.97 0.008 350; --b2: 0.95 0.01 350; --b3: 0.93 0.012 350; --bc: 0.12 0.04 320;
+  --p: 0.48 0.22 340; --s: 0.52 0.14 163; --a: 0.70 0.15 80;
+  --beilu-amber: #b4007a; --beilu-amber-text: #f8f0ff; --beilu-amber-rgb: 180, 0, 122;
+  --beilu-accent: #00895a;
+  --beilu-bg-dark: #f0eee8; --beilu-bg-card: #f5f3ee;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45); --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e; --beilu-bot-bar: #4a7bbf;
+}
+[data-beilu-enhanced="acid"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: radial-gradient(circle, rgba(180,0,122,0.025) 1px, transparent 1px), radial-gradient(circle, rgba(0,137,90,0.015) 1px, transparent 1px);
+  background-size: 8px 8px, 12px 12px; pointer-events: none; z-index: 0;
+}
+[data-beilu-enhanced="acid"] .left-panel {
+  background: linear-gradient(180deg, rgba(255,255,250,0.94) 0%, rgba(245,245,238,0.9) 100%);
+  border: 1px solid rgba(180,0,122,0.06); border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(180,0,122,0.02);
+}
+[data-beilu-enhanced="acid"] #right-panel {
+  background: linear-gradient(180deg, rgba(252,252,246,0.92) 0%, rgba(242,242,236,0.88) 100%);
+  border: 1px solid rgba(180,0,122,0.05); border-radius: 8px;
+}
+[data-beilu-enhanced="acid"] #top-bar {
+  background-color: rgba(255,255,250,0.94);
+  border-bottom: 1px solid rgba(180,0,122,0.05);
+  box-shadow: 0 1px 4px rgba(180,0,122,0.02);
+}
+[data-beilu-enhanced="acid"] .left-panel:hover { border-color: rgba(180,0,122,0.12); box-shadow: 0 4px 14px rgba(180,0,122,0.04); }
+[data-beilu-enhanced="acid"] .settings-modal, [data-beilu-enhanced="acid"] .editor-modal, [data-beilu-enhanced="acid"] .floating-window {
+  border: 1px solid rgba(180,0,122,0.1); border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(180,0,122,0.04), 0 0 4px rgba(0,137,90,0.03);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+[data-beilu-enhanced="acid"] .menu_button { border: 1px solid rgba(180,0,122,0.08); border-radius: 6px; background-color: rgba(248,248,240,0.6); }
+[data-beilu-enhanced="acid"] .menu_button:hover { border-color: rgba(180,0,122,0.2); color: #b4007a; background-color: rgba(180,0,122,0.04); box-shadow: 0 2px 8px rgba(180,0,122,0.04); }
+[data-beilu-enhanced="acid"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="acid"] .top-tab:hover { background-color: rgba(180,0,122,0.03); color: #b4007a; }
+[data-beilu-enhanced="acid"] .top-tab.active, [data-beilu-enhanced="acid"] .top-tab[data-active="true"] { border-bottom-color: #b4007a; color: #b4007a; background-color: rgba(180,0,122,0.05); font-weight: 600; }
+[data-beilu-enhanced="acid"] #send_textarea { border: 1px solid rgba(180,0,122,0.06); border-radius: 8px; background-color: rgba(255,255,250,0.7); }
+[data-beilu-enhanced="acid"] #send_textarea:focus { border-color: #b4007a; box-shadow: 0 0 0 2px rgba(180,0,122,0.06); }
+[data-beilu-enhanced="acid"] hr, [data-beilu-enhanced="acid"] .divider { background: linear-gradient(90deg, transparent, rgba(180,0,122,0.08) 30%, rgba(0,137,90,0.05) 70%, transparent); }
+[data-beilu-enhanced="acid"] ::-webkit-scrollbar-thumb { background: rgba(180,0,122,0.15); }
+[data-beilu-enhanced="acid"] ::-webkit-scrollbar-thumb:hover { background: rgba(180,0,122,0.3); }
+[data-beilu-enhanced="acid"] .activity-item:hover, [data-beilu-enhanced="acid"] .preset-item:hover { background-color: rgba(180,0,122,0.03); border-left-color: rgba(180,0,122,0.25); color: #b4007a; }
+[data-beilu-enhanced="acid"] .activity-item.active, [data-beilu-enhanced="acid"] .preset-item.active { background-color: rgba(180,0,122,0.05); border-left-color: #b4007a; color: #b4007a; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LEMONADE Pro — 柠檬园午后: 白+浅绿双色 / 椭圆波纹 / 紫红互补+深绿+暖橙棕
+   ═══════════════════════════════════════════════════════════════ */
+[data-beilu-enhanced="lemonade"] {
+  --b1: 0.94 0.03 135; --b2: 0.92 0.035 133; --b3: 0.90 0.04 130; --bc: 0.20 0.04 140;
+  --p: 0.45 0.14 340; --s: 0.50 0.12 150; --a: 0.60 0.14 25;
+  --beilu-amber: #a02882; --beilu-amber-text: #f0fff5; --beilu-amber-rgb: 160, 40, 130;
+  --beilu-accent: #2a7848;
+  --beilu-bg-dark: #daecd2; --beilu-bg-card: #e5f2dd;
+  /* T028c 方案C 亮底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.45); --beilu-bot-msg-bg: rgba(255, 255, 255, 0.45);
+  --beilu-user-bar: #9b7b1e; --beilu-bot-bar: #4a7bbf;
+}
+[data-beilu-enhanced="lemonade"]::before {
+  content: ''; position: fixed; inset: 0;
+  background: radial-gradient(ellipse 80px 40px at 50% 50%, rgba(42,120,72,0.012), transparent);
+  background-size: 100px 60px; pointer-events: none; z-index: 0;
+}
+[data-beilu-enhanced="lemonade"] .left-panel {
+  background: linear-gradient(180deg, rgba(240,248,232,0.92) 0%, rgba(230,242,220,0.88) 100%);
+  border: 1px solid rgba(42,120,72,0.06); border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(42,120,72,0.03);
+}
+[data-beilu-enhanced="lemonade"] #right-panel {
+  background: linear-gradient(180deg, rgba(238,246,228,0.9) 0%, rgba(228,240,218,0.86) 100%);
+  border: 1px solid rgba(42,120,72,0.05); border-radius: 10px;
+}
+[data-beilu-enhanced="lemonade"] #top-bar {
+  background-color: rgba(240,248,232,0.92);
+  border-bottom: 1px solid rgba(42,120,72,0.05);
+  box-shadow: 0 1px 6px rgba(42,120,72,0.03);
+}
+[data-beilu-enhanced="lemonade"] .left-panel:hover { border-color: rgba(160,40,130,0.1); box-shadow: 0 4px 14px rgba(42,120,72,0.05); }
+[data-beilu-enhanced="lemonade"] .settings-modal, [data-beilu-enhanced="lemonade"] .editor-modal, [data-beilu-enhanced="lemonade"] .floating-window {
+  border: 1px solid rgba(160,40,130,0.08); border-radius: 10px;
+  box-shadow: 0 2px 14px rgba(42,120,72,0.04); backdrop-filter: blur(10px) saturate(140%);
+}
+[data-beilu-enhanced="lemonade"] .menu_button { border: 1px solid rgba(42,120,72,0.08); border-radius: 8px; background-color: rgba(240,248,230,0.6); }
+[data-beilu-enhanced="lemonade"] .menu_button:hover { border-color: rgba(160,40,130,0.2); color: #a02882; background-color: rgba(160,40,130,0.04); box-shadow: 0 2px 8px rgba(42,120,72,0.04); }
+[data-beilu-enhanced="lemonade"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="lemonade"] .top-tab:hover { background-color: rgba(160,40,130,0.03); color: #a02882; }
+[data-beilu-enhanced="lemonade"] .top-tab.active, [data-beilu-enhanced="lemonade"] .top-tab[data-active="true"] { border-bottom-color: #a02882; color: #a02882; background-color: rgba(160,40,130,0.05); font-weight: 600; }
+[data-beilu-enhanced="lemonade"] #send_textarea { border: 1px solid rgba(42,120,72,0.06); border-radius: 10px; background-color: rgba(245,252,240,0.7); }
+[data-beilu-enhanced="lemonade"] #send_textarea:focus { border-color: #a02882; box-shadow: 0 0 0 2px rgba(160,40,130,0.06); }
+[data-beilu-enhanced="lemonade"] hr, [data-beilu-enhanced="lemonade"] .divider { background: linear-gradient(90deg, transparent, rgba(160,40,130,0.08) 30%, rgba(42,120,72,0.05) 70%, transparent); }
+[data-beilu-enhanced="lemonade"] ::-webkit-scrollbar-thumb { background: rgba(42,120,72,0.15); }
+[data-beilu-enhanced="lemonade"] ::-webkit-scrollbar-thumb:hover { background: rgba(42,120,72,0.35); }
+[data-beilu-enhanced="lemonade"] .activity-item:hover, [data-beilu-enhanced="lemonade"] .preset-item:hover { background-color: rgba(160,40,130,0.03); border-left-color: rgba(160,40,130,0.25); color: #a02882; }
+[data-beilu-enhanced="lemonade"] .activity-item.active, [data-beilu-enhanced="lemonade"] .preset-item.active { background-color: rgba(160,40,130,0.05); border-left-color: #a02882; color: #a02882; }
+
+/* --- aqua Pro: 深海蓝紫+金琥珀accent+青海波纹理+柔圆角 ---
+   方法论推导:
+   A: daisyUI aqua底色=深蓝紫(oklch 37% 0.146 266) → 保留深蓝氛围
+      amber原#64d2ff水蓝与底色同色系无对比 → 换暖色互补accent
+      oklch H266(蓝紫)互补≈H86(金黄) → accent=琥珀金#d4a050
+      accent2=珊瑚粉#e0806a → 暖色第二功能色
+   B: 面板=稍浅蓝紫(半透明), tinted shadow(蓝调)
+   C: 青海波(seigaiha)纹理 → 水主题性格
+   D: hover柔光(蓝调), translateX
+   E: 12px圆角(柔和水感), 无切角
+*/
+[data-beilu-enhanced="aqua"] {
+  --b1: 0.20 0.08 266;
+  --b2: 0.24 0.07 264;
+  --b3: 0.17 0.09 268;
+  --bc: 0.88 0.02 260;
+  --p: 0.75 0.12 80;
+  --s: 0.65 0.14 25;
+  --a: 0.80 0.10 195;
+  --beilu-amber: #d4a050;
+  --beilu-amber-text: #0a0e18;
+  --beilu-amber-rgb: 212, 160, 80;
+  --beilu-accent: #e0806a;
+  --beilu-bg-dark: #0e1228;
+  --beilu-bg-card: #161c35;
+  /* T028c 方案C 深底档 */
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017;
+  --beilu-bot-bar: #5a9bd4;
+}
+[data-beilu-enhanced="aqua"]::before {
+  content: ''; position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 50% 100%, transparent 48%, rgba(212,160,80,0.02) 49%, rgba(212,160,80,0.02) 51%, transparent 52%),
+    radial-gradient(circle at 50% 100%, transparent 33%, rgba(212,160,80,0.015) 34%, rgba(212,160,80,0.015) 36%, transparent 37%);
+  background-size: 40px 20px;
+  pointer-events: none; z-index: 0;
+}
+/* 面板: 深海半透明+金琥珀tinted shadow+12px柔圆角 */
+[data-beilu-enhanced="aqua"] .left-panel {
+  background-color: rgba(18,22,50,0.88);
+  border: 1px solid rgba(212,160,80,0.08); border-radius: 12px;
+  box-shadow: 0 2px 14px rgba(14,18,40,0.15);
+}
+[data-beilu-enhanced="aqua"] #right-panel {
+  background-color: rgba(18,22,50,0.85);
+  border: 1px solid rgba(212,160,80,0.06); border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(14,18,40,0.12);
+}
+[data-beilu-enhanced="aqua"] #top-bar {
+  background-color: rgba(18,22,50,0.9);
+  border-bottom: 1px solid rgba(212,160,80,0.06);
+  box-shadow: 0 1px 8px rgba(14,18,40,0.1);
+}
+[data-beilu-enhanced="aqua"] .left-panel:hover { border-color: rgba(212,160,80,0.15); box-shadow: 0 4px 20px rgba(212,160,80,0.06); }
+[data-beilu-enhanced="aqua"] .settings-modal, [data-beilu-enhanced="aqua"] .editor-modal, [data-beilu-enhanced="aqua"] .floating-window {
+  border: 1px solid rgba(212,160,80,0.12); border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(14,18,40,0.2); backdrop-filter: blur(10px) saturate(140%);
+}
+/* 按钮: 深海玻璃+金琥珀hover */
+[data-beilu-enhanced="aqua"] .menu_button { border: 1px solid rgba(212,160,80,0.08); border-radius: 8px; background-color: rgba(16,22,42,0.6); }
+[data-beilu-enhanced="aqua"] .menu_button:hover { border-color: rgba(212,160,80,0.25); color: #d4a050; background-color: rgba(212,160,80,0.04); box-shadow: 0 2px 10px rgba(212,160,80,0.05); }
+[data-beilu-enhanced="aqua"] .menu_button:active { transform: scale(0.97); }
+/* Tab栏 */
+[data-beilu-enhanced="aqua"] .top-tab { border-bottom: 2px solid transparent; }
+[data-beilu-enhanced="aqua"] .top-tab:hover { background-color: rgba(212,160,80,0.03); color: #d4a050; }
+[data-beilu-enhanced="aqua"] .top-tab.active, [data-beilu-enhanced="aqua"] .top-tab[data-active="true"] { border-bottom-color: #d4a050; color: #d4a050; background-color: rgba(212,160,80,0.05); font-weight: 600; }
+/* 输入框 */
+[data-beilu-enhanced="aqua"] #send_textarea { border: 1px solid rgba(212,160,80,0.08); border-radius: 12px; background-color: rgba(12,18,36,0.7); }
+[data-beilu-enhanced="aqua"] #send_textarea:focus { border-color: #d4a050; box-shadow: 0 0 0 2px rgba(212,160,80,0.08), 0 0 12px rgba(212,160,80,0.04); }
+/* 分隔线: 金→珊瑚渐变 */
+[data-beilu-enhanced="aqua"] hr, [data-beilu-enhanced="aqua"] .divider { background: linear-gradient(90deg, transparent, rgba(212,160,80,0.1) 25%, rgba(224,128,106,0.06) 75%, transparent); }
+/* 滚动条 */
+[data-beilu-enhanced="aqua"] ::-webkit-scrollbar-thumb { background: rgba(212,160,80,0.18); }
+[data-beilu-enhanced="aqua"] ::-webkit-scrollbar-thumb:hover { background: rgba(212,160,80,0.35); }
+/* 侧栏项 */
+[data-beilu-enhanced="aqua"] .activity-item:hover, [data-beilu-enhanced="aqua"] .preset-item:hover { background-color: rgba(212,160,80,0.03); border-left-color: rgba(212,160,80,0.3); color: #d4a050; }
+[data-beilu-enhanced="aqua"] .activity-item.active, [data-beilu-enhanced="aqua"] .preset-item.active { background-color: rgba(212,160,80,0.05); border-left-color: #d4a050; color: #d4a050; }
+
+/* ============================================================
+   全局视觉基础 — 所有36个主题通用的UI设计增强
+   不依赖data-beilu-enhanced，原色系列也受益
+   enhanced per-theme规则在后面覆盖这些基础
+   ============================================================ */
+
+/* 按钮: hover上浮+发光+active缩放 */
+.menu_button {
+  transition: all 0.15s ease;
+}
+.menu_button:hover {
+  box-shadow: 0 0 8px rgba(var(--beilu-amber-rgb), 0.06);
+  color: var(--beilu-amber);
+  transform: translateY(-1px);
+}
+.menu_button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* 分隔线: 渐变消隐(不是硬1px线) */
+.settings-modal hr,
+.editor-modal hr,
+.floating-window hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--beilu-amber-rgb), 0.1) 20%, rgba(var(--beilu-amber-rgb), 0.16) 50%, rgba(var(--beilu-amber-rgb), 0.1) 80%, transparent);
+}
+
+/* Tab栏: active底线+底色+字重(2-3弱信号) */
+.top-tab {
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+.top-tab:hover {
+  background-color: rgba(var(--beilu-amber-rgb), 0.04);
+}
+
+/* 输入框: focus边框发光 */
+#send_textarea:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px rgba(var(--beilu-amber-rgb), 0.08);
+  outline: none;
+}
+
+/* modal/弹窗: 边框+shadow深度 */
+.settings-modal,
+.editor-modal,
+.floating-window {
+  border: 1px solid rgba(var(--beilu-amber-rgb), 0.1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 0 8px rgba(var(--beilu-amber-rgb), 0.03);
+}
+
+/* 滚动条: 主题accent色 */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--beilu-amber-rgb), 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--beilu-amber-rgb), 0.3);
+}
+
+/* ============================================================
+   enhanced统一增强 — enhanced主题在全局基础上叠加的增强
+   ============================================================ */
+
+/* ── 面板深度：半透明+tinted shadow让面板"浮"起来 ── */
+[data-beilu-enhanced] .left-panel,
+[data-beilu-enhanced] #right-panel {
+  background-color: color-mix(in oklch, var(--beilu-bg-card) 88%, transparent);
+  border-color: rgba(var(--beilu-amber-rgb), 0.08);
+  box-shadow: 0 2px 12px rgba(var(--beilu-amber-rgb), 0.03);
+}
+[data-beilu-enhanced] #top-bar {
+  background-color: color-mix(in oklch, var(--beilu-bg-card) 90%, transparent);
+  border-bottom: 1px solid rgba(var(--beilu-amber-rgb), 0.08);
+  box-shadow: 0 1px 8px rgba(var(--beilu-amber-rgb), 0.03);
+}
+
+/* ── 面板hover发光(理由:告诉用户此区域可交互) ── */
+[data-beilu-enhanced] .left-panel:hover,
+[data-beilu-enhanced] #right-panel:hover {
+  border-color: rgba(var(--beilu-amber-rgb), 0.15);
+  box-shadow: 0 4px 18px rgba(var(--beilu-amber-rgb), 0.05);
+}
+
+/* ── modal/floating: blur+shadow(有真实层叠) ── */
+[data-beilu-enhanced] .settings-modal,
+[data-beilu-enhanced] .editor-modal,
+[data-beilu-enhanced] .floating-window {
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgba(var(--beilu-amber-rgb), 0.12);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 0 12px rgba(var(--beilu-amber-rgb), 0.04);
+}
+
+/* ── 按钮：边框+hover发光+active缩放 ── */
+[data-beilu-enhanced] .menu_button {
+  border: 1px solid rgba(var(--beilu-amber-rgb), 0.1);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+[data-beilu-enhanced] .menu_button:hover {
+  border-color: rgba(var(--beilu-amber-rgb), 0.3);
+  box-shadow: 0 0 10px rgba(var(--beilu-amber-rgb), 0.08);
+  color: var(--beilu-amber);
+  transform: translateY(-1px);
+}
+[data-beilu-enhanced] .menu_button:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: 0 0 4px rgba(var(--beilu-amber-rgb), 0.06);
+}
+
+/* ── 分隔线：渐变消隐(不是硬线) ── */
+[data-beilu-enhanced] hr,
+[data-beilu-enhanced] .divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--beilu-amber-rgb), 0.12) 20%, rgba(var(--beilu-amber-rgb), 0.2) 50%, rgba(var(--beilu-amber-rgb), 0.12) 80%, transparent);
+}
+
+/* ── Tab栏：面板包裹+active用2-3弱信号(底色+底线+字重) ── */
+[data-beilu-enhanced] .top-tab {
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+[data-beilu-enhanced] .top-tab:hover {
+  background-color: rgba(var(--beilu-amber-rgb), 0.04);
+  color: var(--beilu-amber);
+}
+[data-beilu-enhanced] .top-tab.active,
+[data-beilu-enhanced] .top-tab[data-active="true"] {
+  background-color: rgba(var(--beilu-amber-rgb), 0.06);
+  border-bottom-color: var(--beilu-amber);
+  color: var(--beilu-amber);
+  font-weight: 600;
+}
+
+/* ── input：边框+focus发光 ── */
+[data-beilu-enhanced] #send_textarea,
+[data-beilu-enhanced] .editor-modal textarea {
+  border: 1px solid rgba(var(--beilu-amber-rgb), 0.1);
+  border-radius: 8px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+[data-beilu-enhanced] #send_textarea:focus,
+[data-beilu-enhanced] .editor-modal textarea:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px rgba(var(--beilu-amber-rgb), 0.08), 0 0 12px rgba(var(--beilu-amber-rgb), 0.04);
+  outline: none;
+}
+
+/* ── 滚动条：per-theme accent色+圆角 ── */
+[data-beilu-enhanced] ::-webkit-scrollbar { width: 5px; }
+[data-beilu-enhanced] ::-webkit-scrollbar-track { background: transparent; }
+[data-beilu-enhanced] ::-webkit-scrollbar-thumb {
+  background: rgba(var(--beilu-amber-rgb), 0.15);
+  border-radius: 3px;
+}
+[data-beilu-enhanced] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--beilu-amber-rgb), 0.35);
+}
+
+/* ── 侧栏项：左边框指示器+hover(不是纯变色) ── */
+[data-beilu-enhanced] .activity-item,
+[data-beilu-enhanced] .preset-item {
+  border-left: 2px solid transparent;
+  transition: all 0.12s ease;
+}
+[data-beilu-enhanced] .activity-item:hover,
+[data-beilu-enhanced] .preset-item:hover {
+  background-color: rgba(var(--beilu-amber-rgb), 0.04);
+  border-left-color: rgba(var(--beilu-amber-rgb), 0.3);
+  color: var(--beilu-amber);
+}
+[data-beilu-enhanced] .activity-item.active,
+[data-beilu-enhanced] .preset-item.active {
+  background-color: rgba(var(--beilu-amber-rgb), 0.06);
+  border-left-color: var(--beilu-amber);
+  color: var(--beilu-amber);
+}
+
+/* ── cyberpunk: 全面板切角+按钮切角+无圆角+角标+无阴影(AR投射) ── */
+[data-beilu-enhanced="cyberpunk"] .settings-modal,
+[data-beilu-enhanced="cyberpunk"] .editor-modal,
+[data-beilu-enhanced="cyberpunk"] .floating-window {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: 0 0 8px rgba(0,247,255,0.04);
+}
+[data-beilu-enhanced="cyberpunk"] .left-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-beilu-enhanced="cyberpunk"] .menu_button {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+[data-beilu-enhanced="cyberpunk"] .menu_button:hover {
+  box-shadow: none;
+  border-color: rgba(0,247,255,0.4);
+}
+[data-beilu-enhanced="cyberpunk"] #send_textarea {
+  border-radius: 0;
+}
+[data-beilu-enhanced="cyberpunk"] .panel-title,
+[data-beilu-enhanced="cyberpunk"] .section-label {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+/* ── synthwave: 微倾斜(P5动感)+按钮skew ── */
+[data-beilu-enhanced="synthwave"] .menu_button {
+  transform: skewX(-2deg);
+}
+[data-beilu-enhanced="synthwave"] .menu_button > * {
+  transform: skewX(2deg);
+}
+[data-beilu-enhanced="synthwave"] .menu_button:hover {
+  transform: skewX(-2deg) translateY(-1px);
+}
+
+/* ── valentine: 柔化所有边框+大圆角按钮 ── */
+[data-beilu-enhanced="valentine"] .menu_button {
+  border-radius: 10px;
+  border-color: rgba(176,68,104,0.12);
+}
+[data-beilu-enhanced="valentine"] #send_textarea {
+  border-radius: 12px;
+}
+
+/* ── 亮色主题双色搭配(白+淡色面板层次) ── */
+[data-beilu-enhanced="valentine"] .left-panel {
+  background: linear-gradient(180deg, rgba(248,218,232,0.9) 0%, rgba(240,210,225,0.85) 100%);
+}
+[data-beilu-enhanced="bumblebee"] .left-panel {
+  background: linear-gradient(180deg, rgba(248,242,228,0.92) 0%, rgba(240,232,210,0.88) 100%);
+}
+[data-beilu-enhanced="lemonade"] .left-panel {
+  background: linear-gradient(180deg, rgba(240,248,232,0.92) 0%, rgba(230,242,220,0.88) 100%);
+}
+[data-beilu-enhanced="acid"] .left-panel {
+  background: linear-gradient(180deg, rgba(255,255,250,0.94) 0%, rgba(245,245,238,0.9) 100%);
+}
+
+/* 方法论E: night P3R水波动画(理由:水下主题性格) */
+@keyframes beilu-p3r-wave {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+[data-beilu-enhanced="night"]::after {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 58px, rgba(81,238,252,0.015) 58px, rgba(81,238,252,0.015) 60px);
+  pointer-events: none; z-index: 0;
+  animation: beilu-p3r-wave 6s ease-in-out infinite;
+}
+
+/* 方法论E: valentine大圆角面板 */
+[data-beilu-enhanced="valentine"] .settings-modal,
+[data-beilu-enhanced="valentine"] .editor-modal,
+[data-beilu-enhanced="valentine"] .floating-window { border-radius: 16px; }
+
+/* 方法论E: aqua柔圆角面板 */
+[data-beilu-enhanced="aqua"] .settings-modal,
+[data-beilu-enhanced="aqua"] .editor-modal,
+[data-beilu-enhanced="aqua"] .floating-window { border-radius: 12px; }
+
+/* ============================================================
+   enhanced主题下插件UI颜色协调
+   index.css中硬编码颜色(绿/蓝/灰)改为跟随主题
+   ============================================================ */
+
+/* 插件运行状态标签 — 使用主题色而非硬编码绿 */
+[data-beilu-enhanced] .conn-plugin-tag-running {
+  background-color: rgba(var(--beilu-amber-rgb), 0.12);
+  color: var(--beilu-amber);
+}
+
+/* 插件待机标签 — 使用主题bc色 */
+[data-beilu-enhanced] .conn-plugin-tag-standby {
+  background-color: oklch(from var(--color-base-content) l c h / 0.08);
+  color: oklch(from var(--color-base-content) l c h / 0.5);
+}
+
+/* IDE连接面板 — 蓝色改为主题accent */
+[data-beilu-enhanced] .conn-card {
+  border-color: rgba(var(--beilu-amber-rgb), 0.15);
+}
+[data-beilu-enhanced] .conn-input {
+  border-color: rgba(var(--beilu-amber-rgb), 0.12);
+}
+[data-beilu-enhanced] .conn-input:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px rgba(var(--beilu-amber-rgb), 0.1);
+}
+
+/* prefers-reduced-motion降级 */
+@media (prefers-reduced-motion: reduce) {
+  [data-beilu-enhanced]::before,
+  [data-beilu-enhanced]::after { animation: none !important; }
+}
+
+/* ============================================================
+   enhanced下硬编码功能色覆盖
+   原CSS中蓝(59,130,246)/绿(34,197,94)不跟随主题
+   enhanced下改为主题amber/accent变量驱动
+   ============================================================ */
+
+/* 角色标签(pv-role): 蓝=用户→amber, 绿=AI→accent */
+[data-beilu-enhanced] .pv-role-user {
+  background-color: rgba(var(--beilu-amber-rgb), 0.15);
+  color: var(--beilu-amber);
+}
+[data-beilu-enhanced] .pv-role-assistant {
+  background-color: rgba(var(--beilu-amber-rgb), 0.08);
+  color: var(--beilu-amber-light);
+}
+
+/* 徽章(mb-badge): 蓝=冷→amber */
+[data-beilu-enhanced] .mb-badge-cold {
+  background-color: rgba(var(--beilu-amber-rgb), 0.12);
+}
+
+/* MCP/IDE面板边框和背景 */
+[data-beilu-enhanced] .mcp-tool-panel {
+  border-color: rgba(var(--beilu-amber-rgb), 0.2);
+  background-color: rgba(var(--beilu-amber-rgb), 0.03);
+}
+[data-beilu-enhanced] .mcp-tool-name {
+  color: var(--beilu-amber);
+}
+[data-beilu-enhanced] .mcp-server-header {
+  border-color: rgba(var(--beilu-amber-rgb), 0.15);
+}
+
+/* 文件面板 */
+[data-beilu-enhanced] .file-panel-header {
+  border-color: rgba(var(--beilu-amber-rgb), 0.12);
+}
+
+/* 成功/运行状态: 保留语义色但使用变量 */
+[data-beilu-enhanced] .pv-role-system {
+  color: var(--beilu-muted);
+}
+
+/* ============================================================
+   enhanced下stCompat插件管理器/变量管理器颜色覆盖
+   pluginManager.mjs和variableManager.mjs注入<style>
+   用硬编码暗色(#d4d4d4/#888/#666等)
+   enhanced下用oklch主题色覆盖
+   ============================================================ */
+[data-beilu-enhanced] .plugin-manager {
+  color: oklch(from var(--color-base-content) l c h);
+  background: oklch(from var(--beilu-bg-card) l c h / 0.97);
+}
+[data-beilu-enhanced] .pm-header {
+  background: oklch(from var(--color-base-300) l c h / 0.9);
+  border-color: oklch(from var(--color-base-content) l c h / 0.08);
+}
+[data-beilu-enhanced] .pm-card {
+  border-color: oklch(from var(--color-base-content) l c h / 0.08);
+  background: oklch(from var(--beilu-bg-card) l c h / 0.7);
+}
+[data-beilu-enhanced] .pm-card:hover {
+  border-color: oklch(from var(--color-base-content) l c h / 0.12);
+  background: oklch(from var(--beilu-bg-card) l c h / 0.8);
+}
+[data-beilu-enhanced] .pm-card-name { color: oklch(from var(--color-base-content) l c h); }
+[data-beilu-enhanced] .pm-card-id { color: oklch(from var(--color-base-content) l c h / 0.4); }
+[data-beilu-enhanced] .pm-card-desc { color: oklch(from var(--color-base-content) l c h / 0.55); }
+[data-beilu-enhanced] .pm-refresh-btn { color: oklch(from var(--color-base-content) l c h / 0.5); border-color: oklch(from var(--color-base-content) l c h / 0.1); }
+[data-beilu-enhanced] .pm-status-text { color: oklch(from var(--color-base-content) l c h / 0.55); }
+[data-beilu-enhanced] .pm-status-off { background: oklch(from var(--color-base-content) l c h / 0.3); }
+
+/* variableManager同理 */
+[data-beilu-enhanced] .var-manager {
+  color: oklch(from var(--color-base-content) l c h);
+  background: oklch(from var(--beilu-bg-card) l c h / 0.97);
+}
+[data-beilu-enhanced] .var-tab { color: oklch(from var(--color-base-content) l c h / 0.5); }
+[data-beilu-enhanced] .var-tab:hover { color: oklch(from var(--color-base-content) l c h / 0.8); }
+[data-beilu-enhanced] .var-tab.active { color: var(--beilu-amber); }
+
+/* gitPanel次要文字色覆盖 */
+[data-beilu-enhanced] .gp-ctx { color: oklch(from var(--color-base-content) l c h / 0.45); }
+[data-beilu-enhanced] .gp-hunk,
+[data-beilu-enhanced] .gp-hash { color: var(--beilu-amber); }
+[data-beilu-enhanced] .gp-note { background: oklch(from var(--color-base-100) l c h); border-color: oklch(from var(--color-base-content) l c h / 0.12); color: oklch(from var(--color-base-content) l c h / 0.55); }
+[data-beilu-enhanced] .beilu-hidden-msg::after { color: oklch(from var(--color-base-content) l c h / 0.5); background: oklch(from var(--color-base-content) l c h / 0.08); }
+[data-beilu-enhanced] .beilu-hidden-bar { color: oklch(from var(--color-base-content) l c h / 0.5); background: oklch(from var(--color-base-content) l c h / 0.05); border-color: oklch(from var(--color-base-content) l c h / 0.15); }
+
+/* --- pastel: 加毛玻璃增强层次 --- */
+[data-theme="pastel"] .settings-modal,
+[data-theme="pastel"] .editor-modal,
+[data-theme="pastel"] .floating-window {
+  backdrop-filter: blur(10px) saturate(130%);
+  border-color: rgba(149,88,120,0.12);
+  box-shadow: 0 2px 14px rgba(149,88,120,0.05);
+}
+
+/* --- abyss: 调整消息气泡（T028c 方案C 深底档） --- */
+[data-theme="abyss"] {
+  --beilu-user-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-bot-msg-bg: rgba(255, 255, 255, 0.045);
+  --beilu-user-bar: #d4a017;
+  --beilu-bot-bar: #5a9bd4;
+}
+
+/* --- wireframe: 低饱和蓝灰accent(保持线框感+让按钮可辨) --- */
+[data-theme="wireframe"] {
+  --beilu-amber: #4a6080;
+  --beilu-amber-text: #ffffff;
+  --beilu-amber-rgb: 74, 96, 128;
+}
+
+/* 亮色模式字体对比度增强 */
+[data-theme="light"] .text-xs { color: oklch(var(--color-base-content)); }
+/* opacity-30/40 补偿已移至 html[data-theme="light"] 规则（高特异性），此处不再重复 */
+[data-theme="light"] .text-base-content\/20 { color: rgba(50,40,25,0.4) !important; }
+[data-theme="light"] .text-base-content\/30 { color: rgba(50,40,25,0.48) !important; }
+/* A8(2026-06-10): /40 0.55→0.68（旧 0.55 在 --b1=#f5efe3 上仅 3.34:1 不达标；0.68→4.82:1，最暗 modal #f0ead8 上 4.71:1）。 */
+[data-theme="light"] .text-base-content\/40 { color: rgba(50,40,25,0.68) !important; }
+/* A8(2026-06-10): /50 0.65→0.72（拉开与 /40 层次；0.72→5.43:1，modal 上 5.29:1）。/50 的 opacity 叠加补偿已于 :7371 删除，此处为唯一补偿源。 */
+[data-theme="light"] .text-base-content\/50 { color: rgba(50,40,25,0.72) !important; }
+[data-theme="light"] .text-base-content\/60 { color: rgba(50,40,25,0.75) !important; }
+
+/* ---- 时间线导航栏 — 浅色模式适配 ---- */
+
+[data-theme="light"] .chat-message .swipe-nav .arrow {
+  background-color: rgba(60, 50, 30, 0.2);
+  color: rgba(60, 50, 30, 0.8);
+  text-shadow: none;
+}
+
+[data-theme="light"] .chat-message .swipe-nav .arrow:hover {
+  background-color: rgba(60, 50, 30, 0.4);
+  color: rgba(40, 30, 15, 1);
+}
+
+[data-theme="light"] .chat-message .swipe-nav .swipe-counter {
+  color: rgba(120, 90, 20, 0.7);
+  background-color: rgba(60, 50, 30, 0.1);
+}
+
+[data-theme="light"] .chat-message:hover .swipe-nav .swipe-counter {
+  color: var(--beilu-amber);
+}
+
+/* ---- 浮动窗口 — 浅色模式 ---- */
+
+[data-theme="light"] .floating-window {
+  background-color: var(--beilu-bg-card);
+  border-color: rgba(155, 123, 30, 0.3);
+  box-shadow:
+    0 8px 32px var(--beilu-shadow-12),
+    0 0 0 1px rgba(155, 123, 30, 0.1);
+  color: oklch(var(--color-base-content));
+}
+
+[data-theme="light"] .floating-window.fw-dragging {
+  box-shadow:
+    0 12px 48px var(--beilu-shadow-15),
+    0 0 0 2px var(--beilu-amber-20);
+}
+
+[data-theme="light"] .floating-window-header {
+  background-color: rgba(155, 123, 30, 0.08);
+  border-color: var(--beilu-amber-20);
+}
+
+/* ---- 文件选择器 — 浅色模式 ---- */
+
+[data-theme="light"] .fp-modal {
+  background-color: var(--beilu-bg-card);
+  border-color: rgba(155, 123, 30, 0.3);
+  color: oklch(var(--color-base-content));
+}
+
+[data-theme="light"] .fp-header {
+  background-color: rgba(155, 123, 30, 0.08);
+  border-color: var(--beilu-amber-20);
+}
+
+/* ---- IDE 菜单下拉 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-menu-dropdown {
+  background-color: var(--beilu-bg-card);
+  border-color: rgba(155, 123, 30, 0.25);
+  box-shadow: 0 4px 16px var(--beilu-shadow-8);
+}
+
+/* ---- 扩展菜单 — 浅色模式 ---- */
+
+[data-theme="light"] .extend-menu {
+  box-shadow:
+    0 -4px 16px var(--beilu-shadow-10),
+    0 0 0 1px rgba(155, 123, 30, 0.06);
+}
+
+/* ---- 思维链 — 浅色模式 ---- */
+
+[data-theme="light"] .thinking-fold .thinking-content {
+  color: rgba(50, 40, 25, 0.65);
+}
+
+[data-theme="light"] .thinking-toggle-content {
+  color: rgba(50, 40, 25, 0.55);
+}
+
+/* ---- 代码折叠 — 浅色模式 ---- */
+
+[data-theme="light"] .code-fold pre code {
+  color: rgba(50, 40, 25, 0.8);
+}
+
+/* ---- JSON/文本内容 — 浅色模式 ---- */
+
+[data-theme="light"] .mb-json-content,
+[data-theme="light"] .mb-text-content {
+  color: oklch(var(--color-base-content));
+  background-color: var(--beilu-shadow-3);
+}
+
+/* ---- promptViewer — 浅色模式 ---- */
+
+[data-theme="light"] .pv-message-body {
+  color: oklch(var(--color-base-content));
+  background-color: var(--beilu-shadow-4);
+}
+
+[data-theme="light"] .pv-message-preview {
+  color: rgba(60, 50, 30, 0.6);
+}
+
+[data-theme="light"] .pv-placeholder {
+  color: rgba(60, 50, 30, 0.35);
+}
+
+[data-theme="light"] .pv-raw-json {
+  color: oklch(var(--color-base-content));
+}
+
+[data-theme="light"] .pv-param-value {
+  color: oklch(var(--color-base-content));
+}
+
+[data-theme="light"] .pv-param-label {
+  color: rgba(60, 50, 30, 0.5);
+}
+
+[data-theme="light"] .pv-ctx-item-preview {
+  color: rgba(60, 50, 30, 0.55);
+}
+
+[data-theme="light"] .pv-ctx-item-body {
+  color: oklch(var(--color-base-content));
+  background-color: var(--beilu-shadow-4);
+}
+
+/* ---- 输入框 — 浅色模式（去掉深色半透明背景） ---- */
+
+[data-theme="light"] .left-panel input[type="number"],
+[data-theme="light"] .right-panel input[type="text"],
+[data-theme="light"] .right-panel input[type="password"],
+[data-theme="light"] .right-panel select,
+[data-theme="light"] #detail-content,
+[data-theme="light"] .dt-template-input,
+[data-theme="light"] .fp-path-input,
+[data-theme="light"] .mb-editor-textarea,
+[data-theme="light"] #memory-json-editor,
+[data-theme="light"] #file-editor-textarea {
+  background-color: var(--beilu-shadow-3);
+}
+
+/* ---- 编辑器区域 — 浅色模式 ---- */
+
+[data-theme="light"] #file-editor-area,
+[data-theme="light"] #memory-editor-area {
+  background-color: var(--beilu-shadow-2);
+}
+
+/* ---- 记忆AI输出 — 浅色模式 ---- */
+
+[data-theme="light"] .memory-ai-output-entry.entry-content {
+  color: oklch(var(--color-base-content));
+}
+
+/* ---- IDE 活动栏 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-activity-bar {
+  background-color: var(--beilu-shadow-4);
+}
+
+/* ---- IDE 状态栏 — 浅色模式 ---- */
+
+[data-theme="light"] .ide-statusbar {
+  background-color: var(--beilu-amber);
+  color: #fff;
+}
+
+/* ---- 滚动条 — 浅色模式 ---- */
+
+[data-theme="light"] #chat-messages::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+}
+
+[data-theme="light"] #chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(155, 123, 30, 0.35);
+}
+
+/* ---- 行号区 — 浅色模式 ---- */
+
+[data-theme="light"] .editor-line-numbers,
+[data-theme="light"] #editor-line-numbers {
+  color: rgba(155, 123, 30, 0.35);
+}
+
+/* ---- 对比度增强 — 浅色模式下低 opacity 元素 ---- */
+
+[data-theme="light"] .top-tab {
+  opacity: 0.65;
+}
+
+[data-theme="light"] .top-tab:hover {
+  opacity: 0.95;
+}
+
+[data-theme="light"] .top-tab-active {
+  opacity: 1;
+}
+

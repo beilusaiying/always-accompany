@@ -1,0 +1,23 @@
+{
+	"defaultParts": {
+		"shells": [
+			"beilu-chat"
+		],
+		"plugins": [
+			"beilu-memory",
+			"beilu-preset",
+			"beilu-files",
+			"beilu-toggle",
+			"beilu-logger",
+			"beilu-regex",
+			"beilu-worldbook",
+			"beilu-eye",
+			"beilu-ejs",
+			"beilu-mvu",
+			"beilu-sysinfo",
+			"beilu-vectordb",
+			"beilu-web",
+			"beilu-plugin-host"
+		]
+	}
+}

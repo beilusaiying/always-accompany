@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Web",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "Web fetching capability — AI can access URLs and get page content.",
+		"description_markdown": "**Beilu Web** enables the AI to search the web via `<search>` and read pages via `<browse>` tags. Search/browse results are written into the chat history by default (persistent and visible); enable \"inject once\" (inject_once) in the web search settings to make results affect only the current turn without being saved to history.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"web",
+			"fetch",
+			"internet",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "联网搜索",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "联网能力 — AI 访问 URL 获取网页内容",
+		"description_markdown": "**联网搜索** 允许 AI 通过 `<search>` 搜索网页、`<browse>` 读取网页。搜索/浏览结果默认写入对话历史（持久可见）；在联网设置中勾选「仅本轮」（inject_once）后才只影响当轮生成、不写入历史。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"联网",
+			"抓取",
+			"互联网",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "🌐📥",
+		"avatar": "https://api.iconify.design/mdi/web.svg",
+		"description": "🤖🌐➡️📄",
+		"description_markdown": "🤖 ➡️ 🌐\n📥 📄\n⏳ 1️⃣",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🌐",
+			"📥",
+			"📄",
+			"🌱"
+		]
+	}
+}

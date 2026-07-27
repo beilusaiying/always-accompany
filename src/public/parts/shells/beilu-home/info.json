@@ -1,0 +1,45 @@
+{
+	"_deprecated": "⚠️ 废弃声明（凛倾 2026-06-10）：beilu-home 已标记废弃，暂保留运行（不影响功能就继续用）。新功能请去 beilu-chat；本壳后续整体迁移后移除。活依赖（角色管理/删除角色等）迁移前不动。",
+	"en-UK": {
+		"name": "always accompany Home",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "Homepage shell with tabbed navigation for usage, system settings, and user settings.",
+		"description_markdown": "**always accompany Home** is the main homepage shell for always accompany. Provides a tabbed interface for character management, system configuration, and user settings.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"home",
+			"shell",
+			"UI",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "always accompany 首页",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "首页 Shell，选项卡式导航：使用、系统设置、用户设置",
+		"description_markdown": "**always accompany 首页** 是 always accompany 的主首页 Shell。提供选项卡式界面，管理角色卡、系统配置和用户设置。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"首页",
+			"Shell",
+			"界面",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "🏠🌟",
+		"avatar": "https://api.iconify.design/mdi/home-variant-outline.svg",
+		"description": "🏠📋⚙️👤",
+		"description_markdown": "🏠 🌟\n📋 ⚙️ 👤",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🏠",
+			"📋",
+			"⚙️",
+			"🌱"
+		]
+	}
+}

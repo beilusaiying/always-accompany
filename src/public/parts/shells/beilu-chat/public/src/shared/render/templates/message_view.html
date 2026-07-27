@@ -1,0 +1,108 @@
+<div class="chat-message mb-3 group" id="${id}" data-template-type="message">
+	<!-- 消息头部：头像 + 名字 + 楼层号 + 时间 -->
+	<div class="message-header flex items-center gap-2 px-1 mb-1">
+		<div class="message-avatar rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30 border border-amber-700/40">
+			<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
+				onerror="this.style.display='none';this.parentElement.querySelector('.avatar-fallback')||this.parentElement.insertAdjacentHTML('beforeend','<div class=avatar-fallback style=width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--beilu-amber,#fbbf24);font-size:12px;font-weight:bold>?</div>')" />
+		</div>
+		<span class="char-name text-sm font-bold text-primary">${name}</span>
+		<span class="message-floor text-xs opacity-50 font-mono">${floor}</span>
+		<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
+	</div>
+	<!-- 思维链（独立于消息气泡，默认隐藏） -->
+	<div class="thinking-toggle hidden" data-thinking-for="${id}">
+		<button class="thinking-toggle-btn">
+			<span class="thinking-toggle-icon">▶</span>
+			<span class="thinking-toggle-label"><i data-ic="thought"></i> 思考了一会</span><span class="thinking-toggle-badge"><i data-ic="lock"></i> 仅你可见 · AI 看不到</span>
+		</button>
+		<div class="thinking-toggle-content hidden"></div>
+	</div>
+	<!-- 消息体 -->
+	<div class="chat-bubble relative p-[15px] ml-10 rounded-lg ${contentHasMedia ? 'w-full' : ''}">
+		<div class="button-group">
+			<div class="normal-buttons join" style="display: flex;">
+				<button class="edit-button btn btn-xs btn-primary join-item" data-i18n="chat.messageView.buttons.edit">
+					<img src="/parts/shells:beilu-chat/icons/line-md__edit.svg" data-i18n="chat.messageView.buttons.editIcon" />
+				</button>
+				<button class="btn btn-xs btn-ghost join-item" popovertarget="popover-${id}" style="anchor-name:--anchor-${id}" data-i18n="chat.messageView.buttons.more">
+					<img src="/parts/shells:beilu-chat/icons/line-md__list-3.svg" data-i18n="chat.messageView.buttons.moreIcon" />
+				</button>
+			</div>
+			<div class="shift-buttons join" style="display: none;">
+				<button class="download-html-button-direct btn btn-xs btn-success join-item" data-i18n="chat.messageView.buttons.downloadHtml">
+					<img src="/parts/shells:beilu-chat/icons/line-md__download.svg" data-i18n="chat.messageView.buttons.downloadHtmlIcon" />
+				</button>
+				<button class="delete-button btn btn-xs btn-error join-item" data-i18n="chat.messageView.buttons.delete">
+					<img src="/parts/shells:beilu-chat/icons/line-md__remove.svg" data-i18n="chat.messageView.buttons.deleteIcon" />
+				</button>
+			</div>
+		</div>
+		<ul class="dropdown dropdown-end menu w-52 rounded-box bg-base-100 shadow-sm" popover id="popover-${id}" style="position-anchor:--anchor-${id}">
+			<li>
+				<button type="button" class="toggle-hide-button">
+					<img src="/parts/shells:beilu-chat/icons/mdi__eye-outline.svg" class="w-4 h-4" />
+					<span class="toggle-hide-label">隐藏（不发送 AI）</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="delete-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__remove.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.deleteIcon" />
+					<span data-i18n="chat.messageView.dropdown.delete"></span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="rollback-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__backup-restore.svg" class="w-4 h-4" />
+					<span>回档到此</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="branch-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__external-link.svg" class="w-4 h-4" />
+					<span>从此分叉</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="copy-markdown-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__document-list.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.copyMarkdownIcon" />
+					<span data-i18n="chat.messageView.dropdown.copyMarkdown"></span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="copy-text-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__document.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.copyTextIcon" />
+					<span data-i18n="chat.messageView.dropdown.copyText"></span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="copy-html-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__document-code.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.copyHtmlIcon" />
+					<span data-i18n="chat.messageView.dropdown.copyHtml"></span>
+				</button>
+			</li>
+			<li>
+				<button type="button" class="download-html-button">
+					<img src="/parts/shells:beilu-chat/icons/line-md__download.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.downloadHtmlIcon" />
+					<span data-i18n="chat.messageView.dropdown.downloadHtml"></span>
+				</button>
+			</li>
+			<li>
+				<details>
+					<summary>
+						<img src="/parts/shells:beilu-chat/icons/line-md__external-link.svg" class="w-4 h-4" data-i18n="chat.messageView.dropdown.shareIcon" />
+						<span data-i18n="chat.messageView.dropdown.share"></span>
+					</summary>
+					<ul>
+						<li><span class="share-button" data-time="1h" data-i18n="chat.messageView.dropdown.share.1h"></span></li>
+						<li><span class="share-button" data-time="12h" data-i18n="chat.messageView.dropdown.share.12h"></span></li>
+						<li><span class="share-button" data-time="24h" data-i18n="chat.messageView.dropdown.share.24h"></span></li>
+						<li><span class="share-button" data-time="72h" data-i18n="chat.messageView.dropdown.share.72h"></span></li>
+					</ul>
+				</details>
+			</li>
+		</ul>
+		<div class="message-content markdown-body">
+		</div>
+		<div class="attachments"></div>
+	</div>
+</div>

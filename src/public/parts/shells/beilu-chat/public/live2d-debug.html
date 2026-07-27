@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live2D 对接调试 · beilu 桌宠</title>
+<!--
+  桌宠 Live2D 对接【调试工具】(凛倾要"做一个我们这里的调试")。放 beilu-chat/public 以相对路径加载 vendor 库+模型。
+  能力:加载任意 model_dict 模型 → ① 参数面板(枚举 coreModel._model.parameters,实时值条+滑块覆盖,VTube Studio 式)
+       ② 动作组/表情列表点击试播 ③ 语义映射器(把参数指给 eyeBall/mouth/bodyAngle 等角色 → 导出 model_dict.params/dynamics 片段)。
+  UI flat 琥珀(跟 beilu 主界面),自包含内联样式(不依赖 daisyui)。
+  注:浏览器直开需 http 服务(fetch model_dict);本工具用于"加新模型→看参数→填映射配置"的对接工作流。
+-->
+<style>
+  :root { --amber:#f0a020; --amber-dim:#b8860b; --bg:#1a1f26; --bg2:#222a33; --bg3:#2c3540; --line:#3a4552; --txt:#e8e2d4; --txt-dim:#9aa3ad; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:var(--bg); color:var(--txt); font:13px/1.5 "Microsoft YaHei",system-ui,sans-serif; }
+  #app { display:flex; height:100vh; overflow:hidden; }
+  /* 左:渲染 */
+  #left { width:380px; shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--line); background:var(--bg2); }
+  #bar { padding:10px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #bar select, #bar button { background:var(--bg3); color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:5px 9px; font-size:12px; cursor:pointer; }
+  #bar button:hover { border-color:var(--amber); color:var(--amber); }
+  #status { font-size:11px; color:var(--txt-dim); }
+  #stage { flex:1; position:relative; background:radial-gradient(120% 120% at 50% 0%,#2a3340,#15191f 70%); }
+  #cv { position:absolute; inset:0; width:100%; height:100%; }
+  /* 右:面板 */
+  #right { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #tabs { display:flex; border-bottom:1px solid var(--line); background:var(--bg2); }
+  .tab { padding:9px 16px; cursor:pointer; font-size:12px; color:var(--txt-dim); border-bottom:2px solid transparent; }
+  .tab.on { color:var(--amber); border-bottom-color:var(--amber); }
+  .pane { flex:1; overflow-y:auto; padding:10px 14px; display:none; }
+  .pane.on { display:block; }
+  h3 { font-size:12px; color:var(--amber-dim); margin:6px 0; font-weight:700; }
+  /* 参数行 */
+  .prow { display:grid; grid-template-columns:160px 1fr 56px 24px; gap:8px; align-items:center; padding:2px 0; font-size:11px; }
+  .prow .pid { color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; }
+  .prow .pbar { position:relative; height:14px; background:var(--bg3); border-radius:7px; overflow:hidden; }
+  .prow .pfill { position:absolute; top:0; bottom:0; left:50%; width:2px; background:var(--amber); }
+  .prow input[type=range] { width:100%; }
+  .prow .pval { text-align:right; color:var(--txt-dim); font-family:Consolas,monospace; }
+  .prow input[type=checkbox] { accent-color:var(--amber); }
+  .pinned .pid { color:var(--amber); }
+  .chipwrap { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 10px; }
+  .chip { background:var(--bg3); border:1px solid var(--line); border-radius:6px; padding:4px 10px; font-size:11px; cursor:pointer; }
+  .chip:hover { border-color:var(--amber); color:var(--amber); }
+  .maprow { display:grid; grid-template-columns:120px 1fr; gap:8px; align-items:center; margin:3px 0; font-size:12px; }
+  .maprow select { width:100%; background:var(--bg3); color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:4px; font-size:11px; }
+  #export { width:100%; height:160px; background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:6px; font-family:Consolas,monospace; font-size:11px; padding:8px; margin-top:8px; }
+  .hint { font-size:11px; color:var(--txt-dim); margin:4px 0; }
+  input[type=search]{ background:var(--bg3); color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:11px; width:100%; margin-bottom:6px; }
+  /* 导入扫描清单(flat 琥珀) */
+  .scaninfo { background:var(--bg3); border:1px solid var(--line); border-left:3px solid var(--amber); border-radius:6px; padding:7px 10px; margin-bottom:8px; font-size:11px; }
+  .scaninfo .si-title { color:var(--amber-dim); font-weight:700; margin-bottom:4px; }
+  .scaninfo .si-stats { display:flex; flex-wrap:wrap; gap:10px; color:var(--txt-dim); }
+  .scaninfo .si-stats b { color:var(--txt); font-family:Consolas,monospace; }
+  .scaninfo .si-ok { color:#6cc070; }
+  .scaninfo .si-warn { color:#e0913a; }
+  .scaninfo .si-warnline { color:#e0913a; margin-top:4px; }
+  /* 自定义表情(虚拟表情):捕获按钮 + 列表行 */
+  .capwrap { margin:10px 0 6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .cerow { display:flex; gap:6px; align-items:center; margin:4px 0; font-size:11px; }
+  .cerow .cename { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:Consolas,monospace; color:var(--amber); }
+  .cerow .chip { padding:3px 8px; }
+  .chip.on { background:var(--amber); color:var(--bg); border-color:var(--amber); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="left">
+    <div id="bar">
+      <select id="modelSel"></select>
+      <button id="loadBtn">加载</button>
+      <button id="resetBtn" title="清除所有参数覆盖">复位</button>
+      <span id="status">选择模型…</span>
+    </div>
+    <div id="stage"><canvas id="cv"></canvas></div>
+  </div>
+  <div id="right">
+    <div id="tabs">
+      <div class="tab on" data-pane="pParams">参数</div>
+      <div class="tab" data-pane="pMotion">动作 / 表情</div>
+      <div class="tab" data-pane="pEmotion">情绪映射</div>
+      <div class="tab" data-pane="pMap">语义映射 → 导出</div>
+    </div>
+    <div class="pane on" id="pParams">
+      <div id="scanInfo" class="scaninfo" style="display:none"></div>
+      <input type="search" id="pSearch" placeholder="过滤参数 id…（如 Mouth / Eye / Body）">
+      <div class="hint">勾选「覆盖」后拖滑块=每帧锁定该值(看参数控制什么);取消勾选放回模型自驱动。值条红线=实时值。</div>
+      <div id="paramList"></div>
+      <div class="capwrap">
+        <button id="captureBtn" class="chip" style="border-color:var(--amber);color:var(--amber)">＋ 捕获当前为自定义表情</button>
+        <span class="hint" style="margin:0">把当前所有「覆盖」参数收成一个命名虚拟表情</span>
+      </div>
+      <h3>自定义表情(虚拟表情)</h3>
+      <div class="hint">用户设计的【任意参数+值】组,与模型作者预设的 exp3 无关。可绑到情绪(「情绪映射」页选 ★自定义)。试播=临时贴到脸上看效果。</div>
+      <div id="customExprList"></div>
+    </div>
+    <div class="pane" id="pMotion">
+      <h3>动作组(点击试播)</h3><div class="chipwrap" id="motionChips"></div>
+      <h3>表情(点击试切)</h3><div class="chipwrap" id="exprChips"></div>
+    </div>
+    <div class="pane" id="pEmotion">
+      <div class="hint">把【标准情绪】指给【这个模型的表情/动作】。AI 回复里的 <code>&lt;emotion&gt;</code> 用这些标准名,渲染层按此表查这个模型该播哪个表情/动作。
+        ★=按表情名自动建议(可改)。表情列=有表情的模型(emotionMap);动作列=无表情/想用动作演情绪的模型(emotionMotionMap)。点情绪名可试播当前选择。</div>
+      <div id="emoRows"></div>
+      <div class="hint" style="margin-top:8px">留空=该情绪不映射(渲染层优雅降级:无表情不报错)。导出在「语义映射 → 导出」页随其它字段一起生成+保存。</div>
+    </div>
+    <div class="pane" id="pMap">
+      <div class="hint">把模型的实际参数指给语义角色(空=用 Cubism 标准名默认)。下方实时生成 model_dict 的 params 片段,复制进该模型条目即可。
+        下拉项 ★=按导入扫描的参数模糊建议预选(选项本身来自运行时实际枚举,更准);可改。</div>
+      <div style="margin-bottom:6px"><button id="applySugBtn" class="chip" style="display:none">★ 一键套用建议</button></div>
+      <div id="mapRows"></div>
+      <h3>导出(model_dict 片段)</h3>
+      <textarea id="export" readonly></textarea>
+      <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button id="copyBtn" class="chip">复制</button>
+        <button id="saveBtn" class="chip">保存到用户配置</button>
+        <span id="saveMsg" class="hint" style="margin:0"></span>
+      </div>
+      <div class="hint">保存=写入桌宠用户配置(localhost 端点),桌宠/网页渲染下次加载即生效,不改内置模型库。</div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/live2dcubismcore.min.js"></script>
+<script src="vendor/pixi.min.js"></script>
+<script src="vendor/cubism4.min.js"></script>
+<script>
+const ROLES = ["eyeBallX","eyeBallY","mouthOpen","mouthForm","angleX","angleY","angleZ","bodyAngleX","bodyAngleZ","breath"];
+const STD = { eyeBallX:"ParamEyeBallX",eyeBallY:"ParamEyeBallY",mouthOpen:"ParamMouthOpenY",mouthForm:"ParamMouthForm",angleX:"ParamAngleX",angleY:"ParamAngleY",angleZ:"ParamAngleZ",bodyAngleX:"ParamBodyAngleX",bodyAngleZ:"ParamBodyAngleZ",breath:"ParamBreath" };
+// 标准情绪集(AI 用这些名;每模型把它们映射到自己的表情/动作)。与渲染层别名表同源,故工具里配的能被渲染层查到。
+const EMOTIONS = ["neutral","happy","angry","sad","blush","surprised"];
+// 自动建议用:情绪→可能的表情/动作命名关键词(子串匹配模型实际名)。仅"建议预选",用户可改——猜测留在导入期,运行时只查表(不在渲染层硬编码猜)。
+const EALIAS = { neutral:["normal","default","neutral","idle","face_default","素"], happy:["smile","happy","joy","fun","laugh","grin","喜","笑"], angry:["angry","anger","mad","怒"], sad:["sad","cry","sorrow","tear","depress","悲","泣"], blush:["blush","shy","embarrass","shame","羞","赤"], surprised:["surprise","shock","astonish","惊"] };
+let app=null, model=null, dict=[], pins={}, paramIds=[], mapping={}, curCfg=null;
+let exprDefs=[], motionGroups=[], emoMap={}, emoMotionMap={}; // 模型表情/动作枚举 + 情绪→表情名 / 情绪→动作组 授权表
+let customExprs={}, previewExpr=null; // 用户设计的虚拟表情 {name:[{Id,Value,Blend}]} + 当前试播中的那组(每帧 Overwrite 贴)
+let scanByName={}; // 导入深扫结果 by name(/api/eye/usermodel-scan):{name:{parameterIds,expressions,motions,mocValid,texturesValid,suggestedMapping,...}}
+
+const $=s=>document.querySelector(s);
+function setStatus(t){ $("#status").textContent=t; }
+
+async function boot(){
+  const PIXI=window.PIXI;
+  if(!PIXI||!PIXI.live2d){ setStatus("PIXI/cubism 未加载"); return; }
+  dict=[];
+  try{ const r=await fetch("vendor/live2d-models/model_dict.json"); const a=await r.json(); if(Array.isArray(a)) a.forEach(m=>{ m._src="内置"; dict.push(m); }); }catch(e){ /* 内置读不到:继续 */ }
+  // 导入细化:把【用户配置过的导入模型】也并进下拉(/api/eye/usermodel-dict),否则无法在工具里重新打开/改映射。
+  //   注:全新【未配置】的导入模型文件位于 desktop-eye/user-models(Electron 侧扫描),web 端暂无扫描端点 → 它们要先在桌宠里选用一次或手填 url。此为遗留导入管线项。
+  try{ const r=await fetch("/api/eye/usermodel-dict"); if(r.ok){ const a=await r.json(); if(Array.isArray(a)) a.forEach(m=>{ if(m&&m.name&&!dict.some(d=>d.name===m.name)){ m._src="用户配置"; dict.push(m); } }); } }catch(e){ /* 无端点/非localhost:跳过 */ }
+  // 导入深扫(T-D):/api/eye/usermodel-scan 返回 desktop-eye/user-models 静态扫描的【未配置】导入模型(含 parameterIds/expressions/motions/校验/suggestedMapping)。
+  //   并进下拉(去重,标记来源"导入(未配置)");按 name 存 scanByName 供「扫描清单」展示 + suggestedMapping ★预选。已配置同名模型不覆盖(用户配置优先),但仍记录其扫描信息。
+  try{ const r=await fetch("/api/eye/usermodel-scan"); if(r.ok){ const a=await r.json(); if(Array.isArray(a)) a.forEach(m=>{
+        if(!m||!m.name) return;
+        scanByName[m.name]=m; // 记录扫描信息(无论是否已配置,清单/★建议都用得到)
+        if(!dict.some(d=>d.name===m.name)){ const e={ name:m.name, url:m.url, _src:"导入(未配置)" }; dict.push(e); }
+      }); } }catch(e){ /* 无端点/非localhost:跳过 */ }
+  if(!dict.length){ setStatus("无模型(内置 model_dict 空 + 无用户导入)。需 http 服务且导入模型"); return; }
+  $("#modelSel").innerHTML=dict.map((m,i)=>`<option value="${i}">${m.name} · ${m._src||""}</option>`).join("");
+  setStatus(dict.length+" 个模型(内置+导入),点加载");
+}
+async function loadModel(cfg){
+  const PIXI=window.PIXI;
+  if(!app){
+    PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker);
+    app=new PIXI.Application({ view:$("#cv"), resizeTo:$("#stage"), backgroundAlpha:0, antialias:true, autoStart:true });
+    let _dbgElapsed=0;
+    app.ticker.add(()=>{ // 每帧:先跑真管线(internalModel.update)+deltaTime=0,再贴 pins/试播表情(=渲染前最终值,不被 loadParameters 抹回)
+      if(!model) return;
+      const core=model.internalModel&&model.internalModel.coreModel; if(!core) return;
+      const dms=app.ticker.deltaMS||16.7;
+      // 关键(对齐 live2dRenderer:607-617):直接消费 internalModel.update 跑 motion/physics/loadParameters,并清 model.deltaTime,
+      //   否则 PIXI 渲染阶段再跑一次管线,其末 loadParameters 会把下面 setParameterValueById 的覆盖值抹回基值(脸/参数不动)。
+      try{ const im=model.internalModel;
+        if(im&&typeof im.update==="function"){ _dbgElapsed+=dms; im.update(dms,_dbgElapsed); model.deltaTime=0; }
+      }catch(e){}
+      for(const id in pins){ try{ core.setParameterValueById(id, pins[id]); }catch(e){} }                       // 参数面板覆盖
+      if(previewExpr){ for(const p of previewExpr){ if(p&&p.Id){ try{ core.setParameterValueById(p.Id, p.Value); }catch(e){} } } } // 试播自定义表情(Overwrite)
+    });
+    setInterval(refreshLiveBars, 100);
+  }
+  if(model){ try{ app.stage.removeChild(model); model.destroy(); }catch(e){} model=null; }
+  pins={};
+  setStatus("加载 "+cfg.name+"…");
+  model=await PIXI.live2d.Live2DModel.from(cfg.url,{autoInteract:false});
+  app.stage.addChild(model);
+  layout();
+  paramIds=enumParams();
+  renderScanInfo(cfg); buildParamList(); buildMotionExpr(); buildCustomExpr(cfg); buildEmotionMapper(cfg); buildMapper(cfg);
+  setStatus(cfg.name+" · "+paramIds.length+" 参数 · "+exprDefs.length+" 表情 · "+motionGroups.length+" 动作组");
+}
+// 导入【扫描清单】(T-D):打开模型后展示该模型 model3.json 静态深扫信息(参数数/表情数/动作组数/校验)。
+//   数据来自 boot() 拉的 /api/eye/usermodel-scan(按 name 存 scanByName);无扫描数据(内置/未扫到)→不显示该面板。
+function renderScanInfo(cfg){
+  const host=$("#scanInfo"); if(!host) return;
+  const s=cfg&&cfg.name?scanByName[cfg.name]:null;
+  if(!s){ host.style.display="none"; host.innerHTML=""; return; }
+  const exprN=Array.isArray(s.expressions)?s.expressions.length:0;
+  // 扫描端点 motions 为 {group:[{file}]} 对象结构 → 动作组数=键数。
+  const motN=(s.motions&&typeof s.motions==="object")?Object.keys(s.motions).length:0;
+  const paramN=Array.isArray(s.parameterIds)?s.parameterIds.length:0;
+  const mocOk=s.mocValid!==false, texOk=s.texturesValid!==false;
+  const warns=[];
+  if(!mocOk) warns.push("moc3 校验未通过(.moc3 缺失或头部无效)");
+  if(!texOk) warns.push("纹理校验未通过(贴图文件缺失)");
+  if(s.mocHeaderValid===false) warns.push("moc3 头部版本异常");
+  if(Array.isArray(s.basenameCollisions)&&s.basenameCollisions.length) warns.push("文件名碰撞:"+s.basenameCollisions.join(","));
+  host.innerHTML=`<div class="si-title">导入扫描清单 · ${s.name||cfg.name}</div>
+    <div class="si-stats">
+      <span>参数 <b>${paramN}</b></span>
+      <span>表情 <b>${exprN}</b></span>
+      <span>动作组 <b>${motN}</b></span>
+      <span>moc3 <span class="${mocOk?'si-ok':'si-warn'}">${mocOk?'✓':'✗'}</span></span>
+      <span>纹理 <span class="${texOk?'si-ok':'si-warn'}">${texOk?'✓':'✗'}</span></span>
+    </div>${warns.length?`<div class="si-warnline">⚠ ${warns.join(' / ')}</div>`:''}`;
+  host.style.display="block";
+}
+function layout(){
+  if(!model||!app) return;
+  const w=$("#stage").clientWidth, h=$("#stage").clientHeight;
+  const iw=(model.internalModel&&model.internalModel.width)||model.width, ih=(model.internalModel&&model.internalModel.height)||model.height;
+  model.anchor.set(0.5,0.5); model.scale.set(Math.min(w/iw,h/ih)*0.92); model.position.set(w/2,h/2);
+}
+window.addEventListener("resize",layout);
+
+function enumParams(){
+  const core=model.internalModel.coreModel, p=(core._model||core).parameters;
+  if(!p||!p.ids) return [];
+  const out=[];
+  for(let i=0;i<p.ids.length;i++) out.push({ i, id:p.ids[i], min:p.minimumValues?p.minimumValues[i]:-1, max:p.maximumValues?p.maximumValues[i]:1, def:p.defaultValues?p.defaultValues[i]:0 });
+  return out;
+}
+function liveVals(){ const core=model.internalModel.coreModel, p=(core._model||core).parameters; return p&&p.values?p.values:null; }
+
+function buildParamList(){
+  const host=$("#paramList"), q=($("#pSearch").value||"").toLowerCase();
+  host.innerHTML="";
+  for(const pm of paramIds){
+    if(q && pm.id.toLowerCase().indexOf(q)<0) continue;
+    const row=document.createElement("div"); row.className="prow"; row.dataset.idx=pm.i;
+    row.innerHTML=`<span class="pid" title="${pm.id}">${pm.id}</span>
+      <div class="pbar"><div class="pfill"></div></div>
+      <span class="pval">0.00</span>
+      <input type="checkbox" title="覆盖(锁定此值)">`;
+    // 滑块覆盖:用 range 覆盖 pbar 交互(点 checkbox 后 pbar 变滑块)
+    const chk=row.querySelector("input"); const bar=row.querySelector(".pbar");
+    const range=document.createElement("input"); range.type="range"; range.min=pm.min; range.max=pm.max; range.step=(pm.max-pm.min)/200||0.01; range.value=pm.def; range.style.display="none";
+    bar.after(range); range.style.gridColumn="2";
+    chk.addEventListener("change",()=>{
+      if(chk.checked){ pins[pm.id]=parseFloat(range.value); row.classList.add("pinned"); bar.style.display="none"; range.style.display="block"; }
+      else{ delete pins[pm.id]; row.classList.remove("pinned"); bar.style.display="block"; range.style.display="none"; }
+    });
+    range.addEventListener("input",()=>{ pins[pm.id]=parseFloat(range.value); });
+    host.appendChild(row);
+  }
+}
+function refreshLiveBars(){
+  const vals=model?liveVals():null; if(!vals) return;
+  for(const row of $("#paramList").children){
+    const idx=+row.dataset.idx, pm=paramIds.find(p=>p.i===idx); if(!pm) continue;
+    const v=vals[idx], t=(v-pm.min)/((pm.max-pm.min)||1);
+    const fill=row.querySelector(".pfill"); if(fill) fill.style.left=(Math.max(0,Math.min(1,t))*100)+"%";
+    const pv=row.querySelector(".pval"); if(pv) pv.textContent=(v||0).toFixed(2);
+  }
+}
+$("#pSearch").addEventListener("input",buildParamList);
+
+function buildMotionExpr(){
+  const mm=model.internalModel.motionManager;
+  const defs=mm&&mm.definitions||{};
+  motionGroups=Object.keys(defs); // 枚举动作组名(供情绪→动作映射)
+  $("#motionChips").innerHTML=motionGroups.map(g=>`<span class="chip" data-g="${g}">${g} (${(defs[g]||[]).length})</span>`).join("")||'<span class="hint">无动作组</span>';
+  $("#motionChips").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{ try{ model.motion(c.dataset.g, undefined, 3); }catch(e){} });
+  const em=mm&&mm.expressionManager;
+  exprDefs=((em&&em.definitions)||[]).map((e,i)=>({ i, name:e.name||e.Name||('表情'+i) })); // 枚举表情名(供情绪→表情映射)
+  $("#exprChips").innerHTML=(exprDefs.length?exprDefs.map(e=>`<span class="chip" data-i="${e.i}">${e.name}</span>`).join(""):'<span class="hint">无表情</span>');
+  $("#exprChips").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{ try{ model.expression(+c.dataset.i); }catch(e){} });
+}
+// 情绪映射授权器:每个标准情绪 → 选这个模型的【表情】(emotionMap,存表情名)和/或【动作组】(emotionMotionMap)。★按名自动建议。
+function _suggest(list, getName, emo){ const al=EALIAS[emo]||[emo]; for(const it of list){ const n=String(getName(it)).toLowerCase(); if(al.some(a=>n.includes(a))) return it; } return null; }
+function buildEmotionMapper(cfg){
+  // 以已有配置为初值(重新编辑用户模型时保留),否则空;再对未配的情绪做★自动建议。
+  emoMap=Object.assign({}, cfg.emotionMap||{});
+  emoMotionMap=Object.assign({}, cfg.emotionMotionMap||{});
+  const host=$("#emoRows"); host.innerHTML="";
+  // expr 下拉选项 = 模型 exp3 表情 + 用户设计的自定义虚拟表情(值=custom:<name>,渲染层走 custom 分支)。
+  const customOpts=Object.keys(customExprs).map(n=>`<option value="custom:${n}">★自定义:${n}</option>`).join("");
+  const exprOpts=`<option value="">—</option>`+exprDefs.map(e=>`<option value="${e.name}">${e.name}</option>`).join("")+customOpts;
+  const motOpts=`<option value="">—</option>`+motionGroups.map(g=>`<option value="${g}">${g}</option>`).join("");
+  for(const emo of EMOTIONS){
+    // 自动建议(仅当用户未显式配过该情绪):表情按名匹配,动作组按名匹配。
+    let eSel=emoMap[emo]!=null?emoMap[emo]:""; let eSug=false;
+    if(eSel===""){ const s=_suggest(exprDefs,e=>e.name,emo); if(s){ eSel=s.name; emoMap[emo]=s.name; eSug=true; } }
+    let mSel=emoMotionMap[emo]!=null?emoMotionMap[emo]:""; let mSug=false;
+    if(mSel===""){ const s=_suggest(motionGroups,g=>g,emo); if(s){ mSel=s; emoMotionMap[emo]=s; mSug=true; } }
+    const row=document.createElement("div"); row.className="maprow"; row.style.gridTemplateColumns="84px 1fr 1fr 30px";
+    const mk=(opts,sel)=>opts.replace(`value="${String(sel).replace(/"/g,'&quot;')}"`,`value="${String(sel).replace(/"/g,'&quot;')}" selected`);
+    row.innerHTML=`<span title="标准情绪" style="cursor:pointer" class="emoName" data-emo="${emo}">${emo}</span>
+      <select data-emo="${emo}" data-kind="expr" title="表情(emotionMap)">${mk(exprOpts,eSel)}</select>
+      <select data-emo="${emo}" data-kind="motion" title="动作组(emotionMotionMap)">${mk(motOpts,mSel)}</select>
+      <span class="hint" style="text-align:center" title="${eSug||mSug?'按名自动建议(可改)':''}">${eSug||mSug?'★':''}</span>`;
+    host.appendChild(row);
+  }
+  host.querySelectorAll("select").forEach(s=>s.onchange=()=>{
+    const emo=s.dataset.emo, t=s.dataset.kind==="expr"?emoMap:emoMotionMap;
+    if(s.value) t[emo]=s.value; else delete t[emo];
+    exportMap();
+  });
+  // 点情绪名=试播当前选择(先表情后动作),所见即所得。
+  host.querySelectorAll(".emoName").forEach(el=>el.onclick=()=>{
+    const emo=el.dataset.emo;
+    if(emoMap[emo]){
+      if(typeof emoMap[emo]==="string" && emoMap[emo].startsWith("custom:")){ previewCustomExpr(emoMap[emo].slice(7)); return; } // 自定义虚拟表情=试播这组参数
+      const d=exprDefs.find(e=>e.name===emoMap[emo]); if(d){ try{ model.expression(d.i); }catch(e){} }
+    }
+    if(emoMotionMap[emo]){ try{ model.motion(emoMotionMap[emo], undefined, 2); }catch(e){} }
+  });
+}
+
+// 语义映射 ★自动建议(T-D):下拉【选项】用运行时枚举 paramIds(更准,实际加载到的参数);
+//   suggestedMapping(扫描端点按 model3.json 静态扫的参数模糊建议)仅作 ★预选来源——
+//   role 未配置过时,若 suggestedMapping[role] 在运行时枚举里存在,则 ★预选该项。
+function buildMapper(cfg){
+  curCfg=cfg;
+  mapping=Object.assign({}, cfg.params||{});
+  const sug=(cfg&&cfg.name&&scanByName[cfg.name]&&scanByName[cfg.name].suggestedMapping)||{};
+  const idSet=new Set(paramIds.map(p=>p.id)); // 运行时枚举到的真实参数 id 集
+  const host=$("#mapRows"); host.innerHTML="";
+  for(const role of ROLES){
+    const row=document.createElement("div"); row.className="maprow";
+    // 建议:仅当建议参数确实在运行时枚举里(避免静态扫到、运行时没有的幽灵参数)。
+    const sg=(sug[role]&&idSet.has(sug[role]))?sug[role]:"";
+    // 当前选中:已配置优先;否则用建议★预选(不写进 mapping,仅 UI 选中;点"一键套用"或手改才落 mapping)。
+    const cur=mapping[role]||sg||"";
+    const opts=`<option value="">（默认 ${STD[role]}）</option>`+paramIds.map(p=>`<option value="${p.id}">${p.id}${p.id===sg?' ★':''}</option>`).join("");
+    row.innerHTML=`<span>${role} <span class="hint">(${STD[role]})</span></span>
+      <select data-role="${role}">${opts.replace(`value="${cur}"`,`value="${cur}" selected`)}</select>`;
+    host.appendChild(row);
+  }
+  host.querySelectorAll("select").forEach(s=>s.onchange=()=>{ if(s.value) mapping[s.dataset.role]=s.value; else delete mapping[s.dataset.role]; exportMap(); });
+  // 一键套用建议:把所有运行时存在的 ★建议写进 mapping(不覆盖用户已手配的角色)。
+  const ab=$("#applySugBtn");
+  if(ab){
+    const hasSug=ROLES.some(r=>sug[r]&&idSet.has(sug[r]));
+    ab.style.display=hasSug?"":"none";
+    // 直接写 mapping + 同步对应 select 的选中值(不走 buildMapper 重建——重建会从 cfg.params 重置 mapping,抹掉刚套用的值)。
+    ab.onclick=()=>{ for(const r of ROLES){ if(sug[r]&&idSet.has(sug[r])){ mapping[r]=sug[r]; const sel=host.querySelector(`select[data-role="${r}"]`); if(sel) sel.value=sug[r]; } } exportMap(); };
+  }
+  exportMap();
+}
+// ── 自定义表情(虚拟表情)L2D-T2/T3:把参数面板调好的一组覆盖参数捕获成命名表情→可绑情绪→存 model_dict.customExpressions。
+//   渲染层 setEmotion 对 emotionMap 值 "custom:<name>" 走 custom 分支,复用 _applyActiveExpr 每帧按 Blend 贴(零新贴参逻辑)。 ──
+function _coreModel(){ return model&&model.internalModel&&model.internalModel.coreModel; }
+function buildCustomExpr(cfg){
+  customExprs=Object.assign({}, (cfg&&cfg.customExpressions)||{}); // 重新编辑已配置模型时恢复其虚拟表情
+  previewExpr=null; renderCustomExprList();
+}
+// 捕获:当前所有【覆盖】参数(pins)→ [{Id,Value,Blend:"Overwrite"}]。name 可传参(自动化);否则 prompt 弹名。
+function captureCustomExpr(presetName){
+  const ids=Object.keys(pins);
+  if(!ids.length){ alert("先在参数面板勾选「覆盖」并拖动滑块设定一组参数,再捕获。"); return null; }
+  const name=(presetName!=null?presetName:(prompt("给这个自定义表情命名(如 微笑脸):","")||"")).trim();
+  if(!name) return null;
+  customExprs[name]=ids.map(id=>({Id:id,Value:pins[id],Blend:"Overwrite"})); // Overwrite=用户"把参数设成这个值"语义,最稳
+  renderCustomExprList(); refreshEmotionExprOptions(); exportMap();
+  return name;
+}
+function renderCustomExprList(){
+  const host=$("#customExprList"); if(!host) return;
+  const names=Object.keys(customExprs);
+  if(!names.length){ host.innerHTML='<span class="hint">无自定义表情。勾选覆盖→拖滑块→点上方「捕获」。</span>'; return; }
+  host.innerHTML=names.map(n=>{
+    const arr=customExprs[n], on=previewExpr===arr;
+    return `<div class="cerow"><span class="cename" title="${arr.map(p=>p.Id+'='+p.Value).join(', ')}">${n} <span class="hint">(${arr.length}参数)</span></span>
+      <button class="chip ce-play${on?' on':''}" data-n="${n}">${on?'停止':'试播'}</button>
+      <button class="chip ce-del" data-n="${n}">删除</button></div>`;
+  }).join("");
+  host.querySelectorAll(".ce-play").forEach(b=>b.onclick=()=>previewCustomExpr(b.dataset.n));
+  host.querySelectorAll(".ce-del").forEach(b=>b.onclick=()=>deleteCustomExpr(b.dataset.n));
+}
+function previewCustomExpr(name){
+  const arr=customExprs[name]; if(!arr) return;
+  if(previewExpr===arr){ _revertPreview(arr); previewExpr=null; }       // 停止
+  else { if(previewExpr) _revertPreview(previewExpr); previewExpr=arr; } // 切换:先复原旧的
+  renderCustomExprList();
+}
+// 停止/切换试播:把这组参数写回模型默认(对齐渲染层 _revertExprParams,否则 Overwrite 值粘住残留)。
+function _revertPreview(arr){
+  const core=_coreModel(); if(!arr||!core) return;
+  for(const p of arr){ if(!p||!p.Id) continue;
+    let d=0; try{ d=core.getParameterDefaultValueById(p.Id); }catch(e){}
+    try{ core.setParameterValueById(p.Id,(typeof d==="number"&&!isNaN(d))?d:0); }catch(e){}
+  }
+}
+function deleteCustomExpr(name){
+  if(previewExpr===customExprs[name]){ _revertPreview(customExprs[name]); previewExpr=null; }
+  delete customExprs[name];
+  for(const e in emoMap) if(emoMap[e]==="custom:"+name) delete emoMap[e]; // 清悬空 custom: 引用(避免导出指向不存在的表情)
+  renderCustomExprList(); refreshEmotionExprOptions(); exportMap();
+}
+// 捕获/删除后,给情绪页每个 expr 下拉重建 custom 选项(保留当前选中,不重建整个 mapper 以免重置 emoMap/重跑建议)。
+function refreshEmotionExprOptions(){
+  document.querySelectorAll('#emoRows select[data-kind="expr"]').forEach(sel=>{
+    const cur=sel.value;
+    [...sel.options].filter(o=>o.value.indexOf("custom:")===0).forEach(o=>o.remove());
+    for(const n of Object.keys(customExprs)){ const o=document.createElement("option"); o.value="custom:"+n; o.textContent="★自定义:"+n; sel.appendChild(o); }
+    sel.value=cur; // 选中项若被删→落空(""),emoMap 已在 deleteCustomExpr 清理
+  });
+}
+function buildEntry(){
+  // 构建【完整 model_dict 条目】(用户自定义:本工具配好→复制粘 / 保存到用户配置)。
+  const params={}; for(const r in mapping) if(mapping[r]&&mapping[r]!==STD[r]) params[r]=mapping[r];
+  const c=curCfg||{};
+  const entry={
+    name:c.name||"我的模型",
+    url:c.url||"vendor/live2d-models/<目录>/<名>.model3.json",
+    scale:c.scale!=null?c.scale:1.0,
+    yShiftRatio:c.yShiftRatio!=null?c.yShiftRatio:0.5,
+    defaultEmotion:c.defaultEmotion||"neutral",
+  };
+  if(Object.keys(params).length) entry.params=params;        // 参数映射(空=用标准默认+优雅降级)
+  // 情绪映射:用「情绪映射」页授权的表(emoMap=情绪→表情名 / emoMotionMap=情绪→动作组),非仅透传旧值。
+  const _em={}; for(const k in emoMap) if(emoMap[k]) _em[k]=emoMap[k];
+  const _emm={}; for(const k in emoMotionMap) if(emoMotionMap[k]) _emm[k]=emoMotionMap[k];
+  if(Object.keys(_em).length) entry.emotionMap=_em;
+  if(Object.keys(_emm).length) entry.emotionMotionMap=_emm;
+  if(Object.keys(customExprs).length) entry.customExpressions=customExprs; // ★用户设计的虚拟表情(空则不带,向后兼容)
+  if(c.dynamics) entry.dynamics=c.dynamics;
+  // T-E schema 补全:idleMotionGroup/tapMotionGroup(渲染层 R 读但旧 buildEntry 漏导出)+ xShiftRatio(T-B 对齐横向偏移)。
+  //   工具暂无这三项的专属控件 → 仅当 curCfg 已带(重新编辑已配置模型时)才透传,不丢字段;无则不带(优雅降级)。
+  if(c.idleMotionGroup) entry.idleMotionGroup=c.idleMotionGroup;
+  if(c.tapMotionGroup) entry.tapMotionGroup=c.tapMotionGroup;
+  if(c.xShiftRatio!=null) entry.xShiftRatio=c.xShiftRatio;
+  return entry;
+}
+function exportMap(){
+  $("#export").value=JSON.stringify(buildEntry(),null,2)+"\n// 说明:留空字段=框架自动推导(参数标准名/情绪按表情名/动作组按名匹配);只在自动不对时才填覆盖。";
+}
+$("#copyBtn").onclick=()=>{ $("#export").select(); document.execCommand("copy"); };
+$("#saveBtn").onclick=async()=>{
+  const msg=$("#saveMsg");
+  const entry=buildEntry();
+  if(!curCfg||!curCfg.url){ msg.textContent="先加载一个模型再保存"; return; }
+  msg.textContent="保存中…";
+  try{
+    const r=await fetch("/api/eye/usermodel-save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(entry)});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.success) msg.textContent="已保存「"+entry.name+"」(用户配置共 "+j.count+" 条),渲染下次加载生效";
+    else msg.textContent="保存失败:"+(j.error||("HTTP "+r.status));
+  }catch(e){ msg.textContent="保存失败:"+e.message; }
+};
+
+$("#tabs").addEventListener("click",e=>{ const t=e.target.closest(".tab"); if(!t)return;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); document.querySelectorAll(".pane").forEach(x=>x.classList.remove("on"));
+  t.classList.add("on"); $("#"+t.dataset.pane).classList.add("on");
+});
+$("#loadBtn").onclick=()=>{ const i=+$("#modelSel").value; if(dict[i]) loadModel(dict[i]); };
+$("#resetBtn").onclick=()=>{ for(const id in pins) delete pins[id]; $("#paramList").querySelectorAll("input[type=checkbox]").forEach(c=>{c.checked=false;}); buildParamList(); };
+$("#captureBtn").onclick=()=>captureCustomExpr();
+window.__dbg={ load:i=>loadModel(dict[i]), pins:()=>pins, params:()=>paramIds,
+  setPin:(id,v)=>{ pins[id]=v; }, capture:n=>captureCustomExpr(n), customExprs:()=>customExprs, preview:n=>previewCustomExpr(n),
+  bindEmotion:(emo,val)=>{ const sel=document.querySelector(`#emoRows select[data-emo="${emo}"][data-kind="expr"]`); if(sel){ sel.value=val; if(sel.onchange) sel.onchange(); } else { emoMap[emo]=val; exportMap(); } },
+  emoMap:()=>emoMap, entry:()=>buildEntry(), paramVal:id=>{ const c=_coreModel(); try{ return c.getParameterValueById(id); }catch(e){ return null; } } };
+boot();
+</script>
+</body>
+</html>

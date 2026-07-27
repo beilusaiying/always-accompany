@@ -1,0 +1,147 @@
+/* ============================================================
+   live.css — 直播接入（beilu-live 插件）面板样式
+   ------------------------------------------------------------
+   配对：index.html #comp-seg-live 段 + panels/companion/live.mjs 接线。
+   位置惯例：插件自带样式独立成 css/<name>.css（同 airp.css），
+     由 index.html <link> 挂载；不往 index.css 里堆。
+
+   【配色一律走项目变量，不写死色值】
+     --beilu-amber / --beilu-success / --beilu-error / --beilu-warning
+     --beilu-bg-card / --beilu-border-subtle / --beilu-shadow-*
+     oklch(var(--bc) / x)  = 基础前景色按透明度取
+     color-mix(in oklch, var(--color-base-content) N%, transparent)
+   ⚠ 硬编码色值（尤其白字）在浅底主题下不可见——panels.css:52 已为此栽过。
+     本文件零 #hex、零 rgb()，全部经变量或 color-mix 派生。
+
+   作用域：全部选择器挂 #comp-seg-live 前缀，不污染其他面板。
+   ============================================================ */
+
+/* ---------- 段容器内的分组块 ---------- */
+/* 三个分组（接入目标 / 运行控制 / 参数）的统一底：比卡片略深一档，
+   用 bc 透明度而非固定灰——跟随主题深浅翻转。 */
+#comp-seg-live .live-group {
+	background-color: oklch(var(--bc) / 0.05);
+	border: 1px solid var(--beilu-border-subtle);
+	border-radius: 0.5rem;
+	padding: 0.75rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+/* 分组小标题 */
+#comp-seg-live .live-group-title {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: oklch(var(--bc) / 0.7);
+	user-select: none;
+}
+
+/* ---------- 连接状态灯 ---------- */
+/* 四态由 live.mjs 挂 class：connecting / authed / retrying / closed。
+   颜色走项目语义变量，不用 daisyUI 的 bg-success 等工具类——
+   工具类在自定义主题下未必映射到项目配色。 */
+#comp-seg-live .live-dot {
+	width: 0.625rem;
+	height: 0.625rem;
+	border-radius: 9999px;
+	flex-shrink: 0;
+	background-color: oklch(var(--bc) / 0.25);
+	transition: background-color 0.2s ease;
+}
+#comp-seg-live .live-dot.live-dot-authed { background-color: var(--beilu-success); }
+#comp-seg-live .live-dot.live-dot-closed { background-color: var(--beilu-error); }
+#comp-seg-live .live-dot.live-dot-connecting,
+#comp-seg-live .live-dot.live-dot-retrying {
+	background-color: var(--beilu-warning);
+	animation: live-dot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes live-dot-pulse {
+	0%, 100% { opacity: 1; }
+	50%      { opacity: 0.35; }
+}
+
+/* ---------- 统计格 ---------- */
+/* 数值区：等宽数字防跳动（数字变化时宽度不抖）。 */
+#comp-seg-live .live-stat {
+	background-color: oklch(var(--bc) / 0.06);
+	border-radius: 0.375rem;
+	padding: 0.35rem 0.25rem;
+	text-align: center;
+}
+#comp-seg-live .live-stat-num {
+	font-size: 0.85rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--beilu-amber);
+	line-height: 1.2;
+}
+#comp-seg-live .live-stat-label {
+	font-size: 0.6rem;
+	color: oklch(var(--bc) / 0.5);
+	margin-top: 0.1rem;
+}
+/* 未运行时数值显示 "—"，颜色降一档避免误读为真实数据 */
+#comp-seg-live .live-stat-num.live-stat-idle {
+	color: oklch(var(--bc) / 0.3);
+	font-weight: 400;
+}
+
+/* ---------- 承载对话显示行 ---------- */
+#comp-seg-live .live-chatid {
+	background-color: oklch(var(--bc) / 0.08);
+	border-radius: 0.25rem;
+	padding: 0.1rem 0.35rem;
+	font-size: 0.7rem;
+	font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+	color: oklch(var(--bc) / 0.65);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+/* 未绑定=警示色：没绑对话时启动会被后端拒绝，这里先给出可见提示 */
+#comp-seg-live .live-chatid.live-chatid-unbound {
+	color: var(--beilu-warning);
+	background-color: color-mix(in oklch, var(--color-warning) 10%, transparent);
+}
+
+/* ---------- 状态消息行 ---------- */
+#comp-seg-live .live-msg {
+	font-size: 0.65rem;
+	color: oklch(var(--bc) / 0.6);
+	min-height: 1em;
+	padding-top: 0.15rem;
+}
+#comp-seg-live .live-msg.live-msg-error { color: var(--beilu-error); }
+
+/* ---------- 拦截原因明细 ---------- */
+#comp-seg-live .live-reasons {
+	font-size: 0.62rem;
+	color: oklch(var(--bc) / 0.55);
+	line-height: 1.5;
+}
+
+/* ---------- 凭据区 ---------- */
+/* 由 live.mjs 按 platforms[].credentials[] 动态生成，此处只管容器与间距 */
+#comp-seg-live .live-creds {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+/* ---------- 窄屏收敛 ---------- */
+/* 段容器父级是 max-w-[920px] 的滚动区（index.html:3457）；
+   窄屏时统计五格与参数三列各自降列，不横向溢出。 */
+@media (max-width: 720px) {
+	#comp-seg-live .live-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	#comp-seg-live .live-params-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+	#comp-seg-live .live-dot.live-dot-connecting,
+	#comp-seg-live .live-dot.live-dot-retrying { animation: none; }
+}

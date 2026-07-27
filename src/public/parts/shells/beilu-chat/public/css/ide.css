@@ -1,0 +1,1036 @@
+/* ============================================================
+   IDE 布局（文件/记忆模式）
+   ============================================================ */
+
+/* IDE 容器 */
+.ide-container {
+  height: 100%;
+  background-color: var(--color-base-100);
+}
+
+/* 活动栏 */
+.ide-activity-bar {
+  width: 48px;
+  background-color: var(--beilu-shadow-15);
+  border-right: 1px solid oklch(var(--bc) / 0.08);
+  padding: 4px 0;
+  gap: 2px;
+}
+
+.ide-activity-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  opacity: 0.45;
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+/* [0727 凛倾「我需要最多可以承担 100 个窗口的设计」]
+   活动栏是 flex-col，其子项默认 flex-shrink:1 —— 线图标多起来高度不够时，
+   浏览器会把**上面那 9 个面板按钮一起压扁**（40px 被压成十几 px，图标变形）。
+   把面板按钮钉死不压缩，压力全部交给线图标容器 #ide-line-tabs 承担，
+   它自带 overflow-y:auto（lineManager.mjs:823）→ 超出即滚动，布局不变形。
+   作用域限定 #ide-activity-bar：mem/work/bot 三个活动栏不受影响。 */
+#ide-activity-bar > .ide-activity-btn {
+  flex-shrink: 0;
+}
+
+.ide-activity-btn:hover {
+  opacity: 0.8;
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+.ide-activity-btn.ide-activity-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-15);
+}
+
+.ide-activity-btn.ide-activity-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 25%;
+  height: 50%;
+  width: 2px;
+  background-color: var(--beilu-amber);
+  border-radius: 0 2px 2px 0;
+}
+
+/* 记忆中心活动栏 4 组导航（合并 v4 #21）：scope #mem-activity-bar，不影响 IDE/Bot 活动栏。
+   加宽放文字标签（cryptic 图标不清晰 → 图标+文字），列内左对齐。 */
+#mem-activity-bar {
+  width: 118px;
+  align-items: stretch;
+}
+#mem-activity-bar .mem-nav-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  width: 100%;
+}
+#mem-activity-bar .mem-nav-gh {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.45;
+  font-weight: 600;
+  padding: 7px 8px 3px;
+  text-align: left;
+  border-top: 1px solid oklch(var(--bc) / 0.08);
+  margin-top: 3px;
+  cursor: default;
+  user-select: none;
+}
+#mem-activity-bar .mem-nav-group:first-of-type .mem-nav-gh {
+  border-top: none;
+  margin-top: 0;
+}
+/* 活动栏按钮：图标 + 文字标签横排，左对齐 */
+#mem-activity-bar .ide-activity-btn {
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 5px 10px;
+}
+#mem-activity-bar .mem-nav-label {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 底部导出/导入按钮也跟随横排（图标右补文字见 HTML） */
+#mem-activity-bar .mt-auto .ide-activity-btn {
+  justify-content: flex-start;
+}
+
+/* 记忆内容 子tab（合并 v4 #21：文件树/表格 合一） */
+.mem-csub-btn {
+  font-size: 0.7rem;
+  padding: 2px 10px;
+  border-radius: 4px;
+  border: 1px solid oklch(var(--bc) / 0.18);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.12s, background 0.12s;
+}
+.mem-csub-btn:hover {
+  opacity: 0.85;
+}
+.mem-csub-btn.mem-csub-active {
+  opacity: 1;
+  background: var(--beilu-amber-15);
+  border-color: var(--beilu-amber);
+}
+
+/* Bot 模式: 活动栏平台按钮 (图标+文字堆叠) */
+#bot-activity-bar .ide-activity-btn {
+  flex-direction: column;
+  width: 48px;
+  height: 44px;
+  padding: 2px 0;
+  margin-bottom: 2px;
+}
+#bot-activity-bar .ide-activity-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Bot 模式: 侧边栏头部功能子 Tab */
+.bot-func-tab {
+  background: transparent;
+  border: 1px solid var(--beilu-border-subtle);
+  color: inherit;
+  opacity: 0.55;
+  transition: all 0.12s ease;
+  cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+  padding: 2px 4px;
+}
+.bot-func-tab:hover {
+  opacity: 0.85;
+  background-color: oklch(var(--bc) / 0.06);
+}
+.bot-func-tab.bot-func-tab-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-15);
+  border-color: var(--beilu-amber-50);
+}
+
+/* W54: settings活动栏（独立于ide，复用相同样式） */
+.settings-activity-bar {
+  width: 48px;
+  background-color: var(--beilu-shadow-15);
+  border-right: 1px solid oklch(var(--bc) / 0.08);
+  padding: 4px 0;
+  gap: 2px;
+}
+.settings-activity-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  opacity: 0.45;
+  transition: all 0.12s ease;
+  position: relative;
+}
+.settings-activity-btn:hover {
+  opacity: 0.8;
+  background-color: var(--beilu-amber-8);
+}
+.settings-activity-btn.settings-activity-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-15);
+}
+.settings-activity-btn.settings-activity-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 25%;
+  height: 50%;
+  width: 2px;
+  background-color: var(--beilu-amber);
+  border-radius: 0 2px 2px 0;
+}
+
+/* 侧边栏 */
+.ide-sidebar {
+  width: 240px;
+  min-width: 160px;
+  max-width: 50vw;
+  background-color: var(--beilu-bg-card);
+  border-right: 1px solid oklch(var(--bc) / 0.08);
+  position: relative;
+}
+
+/* ── 多卡并行：右侧「卡片/窗口」板块（一窗一线，左/中不动） ── */
+.ide-rightbar {
+  width: 264px;
+  min-width: 180px;
+  max-width: 40vw;
+  background-color: var(--beilu-bg-card);
+  border-left: 1px solid oklch(var(--bc) / 0.08);
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+.ide-rightbar.collapsed {
+  width: 36px;
+  min-width: 36px;
+  overflow: hidden;
+}
+.ide-rightbar.collapsed .ide-rightbar-head {
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  padding: 12px 8px;
+  white-space: nowrap;
+}
+.ide-rightbar.collapsed #ide-cards-body { display: none; }
+.ide-rightbar-head {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--beilu-amber, #d4a017);
+  border-bottom: 1px solid oklch(var(--bc) / 0.08);
+}
+.cardp-card {
+  border: 1px solid oklch(var(--bc) / 0.08);
+  border-radius: 7px;
+  margin: 6px;
+  overflow: hidden;
+}
+.cardp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.cardp-head:hover { background-color: var(--color-base-300); }
+.cardp-ar { font-size: 9px; opacity: 0.6; }
+.cardp-name { font-weight: 600; color: var(--beilu-amber, #d4a017); font-size: 12px; }
+.cardp-cnt { margin-left: auto; font-size: 10px; opacity: 0.5; }
+.cardp-convs { border-top: 1px solid rgba(128, 128, 128, 0.15); padding: 3px 6px 5px 20px; }
+.cardp-conv {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+.cardp-conv:hover { background-color: var(--color-base-300); opacity: 1; }
+.cardp-conv.cur {
+  background-color: var(--beilu-amber-18);
+  color: var(--beilu-amber, #d4a017);
+  opacity: 1;
+}
+/* 缺-2 运行态：在跑线绿点脉冲 */
+.cardp-run { color: var(--beilu-running); font-size: 8px; margin-right: 4px; animation: cardp-pulse 1.4s ease-in-out infinite; }
+@keyframes cardp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+/* 缺-1 任务条目台：当前对话任务清单 + 打勾 */
+.cardp-tasks { padding: 2px 6px 4px 30px; }
+.cardp-task {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.cardp-task:hover { background-color: var(--color-base-300); opacity: 1; }
+.cardp-task-ic { width: 11px; text-align: center; flex-shrink: 0; }
+.cardp-task-tx { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardp-task.completed { opacity: 0.5; }
+.cardp-task.completed .cardp-task-tx { text-decoration: line-through; }
+.cardp-task.completed .cardp-task-ic { color: var(--beilu-running); }
+.cardp-task.in_progress .cardp-task-ic { color: var(--beilu-amber, #d4a017); }
+.cardp-task-empty { padding: 3px 6px 3px 30px; font-size: 12px; color: var(--beilu-muted, #90a4ae); opacity: 0.75; }
+.cardp-empty { padding: 16px 10px; font-size: 11px; opacity: 0.45; text-align: center; }
+.cardp-add {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 7px;
+  font-size: 12px;
+  color: var(--beilu-amber, #d4a017);
+  background: transparent;
+  border: 1px dashed oklch(var(--bc) / 0.3);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.cardp-add:hover { background-color: var(--beilu-amber-8); }
+
+/* T030 期D：两层结构补充样式（就近复用现有 cardp 变量/风格，不自创视觉体系）。 */
+/* 外层：窗口(模式)分类头 */
+.cardp-modehead {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--beilu-amber, #d4a017);
+  opacity: 0.85;
+}
+.cardp-submodehead { opacity: 0.6; font-size: 10px; margin-top: 4px; }
+/* 卡头右侧操作：×收起（视图态）/ ⊗移除永久链路 */
+.cardp-collapse, .cardp-unlink {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.5;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cardp-collapse:hover { opacity: 1; }
+.cardp-unlink:hover { opacity: 1; color: #e57373; }
+/* 未固定链路的当前卡（兜底可见）+ 固定按钮 */
+.cardp-card.unlinked { border-style: dashed; opacity: 0.85; }
+.cardp-pin { margin-left: 6px; font-size: 11px; opacity: 0.6; cursor: pointer; flex-shrink: 0; }
+.cardp-pin:hover { opacity: 1; }
+/* 卡内新建对话入口（卡之下子级） */
+.cardp-conv-new { color: var(--beilu-amber, #d4a017); opacity: 0.7; }
+.cardp-conv-new:hover { opacity: 1; }
+/* work/code 子模式角色链（一窗多角色卡） */
+.cardp-submode-list { padding-left: 12px; }
+.cardp-submode { opacity: 0.8; }
+.cardp-submode:hover { opacity: 1; }
+/* 角色卡选择弹窗（选卡即建永久链路）——旧版无样式裸渲染，此处补最小视觉 */
+.cardp-picker {
+  margin: 6px;
+  padding: 6px;
+  border: 1px solid var(--beilu-border-subtle);
+  border-radius: 7px;
+  background-color: var(--color-base-200, rgba(0, 0, 0, 0.15));
+}
+.cardp-picker-title { font-size: 11px; font-weight: 600; color: var(--beilu-amber, #d4a017); padding: 3px 6px 5px; }
+.cardp-picker-item {
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.cardp-picker-item:hover { background-color: var(--color-base-300); opacity: 1; }
+.cardp-picker-item.linked { opacity: 0.55; color: var(--beilu-amber, #d4a017); }
+.cardp-picker-empty { padding: 8px; font-size: 11px; opacity: 0.5; text-align: center; }
+.cardp-picker-cancel { opacity: 0.6; margin-top: 4px; border-top: 1px solid oklch(var(--bc) / 0.08); }
+
+.ide-sidebar-panel {
+  height: 100%;
+}
+
+.ide-sidebar-panel.hidden {
+  display: none !important;
+}
+
+/* 侧边栏拖拽调宽手柄 */
+.ide-sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.ide-sidebar-resize:hover,
+.ide-sidebar-resize.dragging {
+  background-color: var(--beilu-amber);
+  opacity: 0.5;
+}
+
+/* 侧边栏滚动条 */
+.ide-sidebar-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ide-sidebar-panel::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+/* IDE 主区域 */
+.ide-main {
+  background-color: var(--color-base-100);
+}
+
+/* 菜单栏 */
+.ide-menubar {
+  height: 28px;
+  background-color: var(--beilu-shadow-8);
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  padding: 0 4px;
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.ide-menu-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ide-menu-label {
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.1s ease;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.ide-menu-label:hover {
+  opacity: 1;
+  background-color: var(--beilu-amber-12);
+}
+
+/* 菜单下拉 */
+.ide-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  min-width: 200px;
+  background-color: var(--beilu-bg-card);
+  border: 1px solid var(--beilu-amber-25);
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 16px var(--beilu-shadow-40);
+  padding: 4px 0;
+  animation: ide-menu-in 0.1s ease;
+}
+
+.ide-menu-dropdown.hidden {
+  display: none;
+}
+
+@keyframes ide-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ide-menu-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  white-space: nowrap;
+}
+
+.ide-menu-action:hover {
+  background-color: var(--beilu-amber-15);
+  color: var(--beilu-amber);
+}
+
+.ide-menu-action[data-shortcut]::after {
+  content: attr(data-shortcut);
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin-left: 24px;
+}
+
+.ide-menu-toggle {
+  cursor: pointer;
+  gap: 8px;
+}
+
+.ide-menu-toggle input[type="checkbox"] {
+  accent-color: var(--beilu-amber);
+  width: 12px;
+  height: 12px;
+}
+
+.ide-menu-divider {
+  height: 1px;
+  background-color: oklch(var(--bc) / 0.1);
+  margin: 3px 8px;
+}
+
+/* 编辑器标签栏 */
+.ide-editor-tabs {
+  height: 32px;
+  min-height: 32px;
+  background-color: var(--beilu-shadow-5);
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  gap: 0;
+  scrollbar-width: none;
+}
+
+.ide-editor-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ide-editor-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 100%;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border-right: 1px solid oklch(var(--bc) / 0.06);
+  transition: background-color 0.1s ease;
+  white-space: nowrap;
+  max-width: 160px;
+  position: relative;
+}
+
+.ide-editor-tab:hover {
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+.ide-editor-tab.ide-tab-active {
+  background-color: var(--color-base-100);
+  color: var(--beilu-amber);
+  font-weight: 500;
+  border-bottom: 2px solid var(--beilu-amber);
+}
+
+.ide-editor-tab .ide-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ide-editor-tab .ide-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  border-radius: 2px;
+  opacity: 0;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.ide-editor-tab:hover .ide-tab-close {
+  opacity: 0.5;
+}
+
+.ide-editor-tab .ide-tab-close:hover {
+  opacity: 1;
+  background-color: var(--beilu-error-25);
+  color: var(--beilu-error);
+}
+
+.ide-editor-tab .ide-tab-dirty {
+  color: var(--beilu-amber);
+  font-size: 0.5rem;
+  flex-shrink: 0;
+}
+
+.ide-tabs-placeholder {
+  padding: 0 12px;
+  font-style: italic;
+}
+
+/* 状态栏 */
+.ide-statusbar {
+  height: 22px;
+  min-height: 22px;
+  background-color: var(--beilu-amber-dark);
+  padding: 0 8px;
+  color: var(--color-base-content);
+  text-shadow: 0 1px 2px var(--beilu-shadow-30);
+}
+
+/* ============================================================
+   文件树路径输入框（fileExplorer 顶部）
+   ============================================================ */
+
+#file-root-input {
+  background-color: var(--beilu-shadow-10);
+  border-color: var(--beilu-amber-20);
+}
+
+#file-root-input:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+/* ============================================================
+   iframe 美化渲染（full-html 内容）
+   ============================================================ */
+
+/* iframe 容器 — 替代 markdown-body */
+.iframe-content {
+  padding: 0 !important;
+  overflow: hidden;
+  width: 100% !important;
+}
+
+/* 当消息内容为 iframe 美化时，强制覆盖 daisyUI .chat-bubble 的所有约束 */
+.chat-bubble:has(.iframe-content) {
+  margin-left: 0 !important;
+  max-width: 100% !important;
+  max-inline-size: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+/* 包含 iframe 的消息也需要全宽 */
+.chat-message:has(.iframe-content) {
+  max-width: 100% !important;
+}
+
+/* iframe 元素 */
+.beilu-beauty-iframe {
+  width: 100% !important;
+  border: none;
+  display: block;
+  min-height: 200px;
+  border-radius: 0;
+  background-color: transparent;
+  /* 不加 transition: height — 高度变化应即时生效，避免视觉延迟 */
+}
+
+/* 加载占位符 */
+.iframe-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: oklch(var(--bc) / 0.65);
+  font-size: 0.85rem;
+  gap: 0.5rem;
+}
+
+.iframe-placeholder::before {
+  content: "◔";
+  animation: iframe-spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes iframe-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   记忆AI输出面板
+   ============================================================ */
+
+.memory-ai-output-panel {
+  border-top: 1px solid oklch(var(--bc) / 0.18);
+  background-color: var(--beilu-amber-5);
+  max-height: 200px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.memory-ai-output-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.07);
+  border-bottom: 1px solid oklch(var(--bc) / 0.1);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.memory-ai-output-icon {
+  flex-shrink: 0;
+}
+
+.memory-ai-output-title {
+  font-weight: 600;
+  color: var(--beilu-amber);
+  font-size: 0.75rem;
+}
+
+.memory-ai-output-status {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  margin-left: auto;
+}
+
+.memory-ai-output-status.status-running {
+  color: var(--beilu-warning);
+}
+
+.memory-ai-output-status.status-done {
+  color: var(--beilu-success);
+}
+
+.memory-ai-output-status.status-error {
+  color: var(--beilu-error);
+}
+
+.memory-ai-output-chevron {
+  font-size: 0.65rem;
+  color: oklch(var(--bc) / 0.65);
+  margin-left: auto;
+  margin-right: 0.25rem;
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+
+.memory-ai-output-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  opacity: 0.5;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.memory-ai-output-close:hover {
+  opacity: 1;
+  background-color: var(--beilu-error-25);
+  color: var(--beilu-error);
+}
+
+.memory-ai-output-body {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-height: 160px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.memory-ai-output-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.memory-ai-output-body::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+/* 单条输出条目 */
+.memory-ai-output-entry {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid oklch(var(--bc) / 0.06);
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.memory-ai-output-entry:last-child {
+  border-bottom: none;
+}
+
+.memory-ai-output-entry.entry-status {
+  color: oklch(var(--bc) / 0.5);
+  font-style: italic;
+  font-family: inherit;
+}
+
+.memory-ai-output-entry.entry-content {
+  color: var(--beilu-pv-text);
+}
+
+.memory-ai-output-entry.entry-error {
+  color: var(--beilu-error);
+}
+
+/* ============================================================
+   记忆AI预设面板 & 对话面板
+   ============================================================ */
+
+/* 预设列表按钮 */
+.mem-preset-item {
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.mem-preset-item:hover {
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+/* 预设提示词编辑区 */
+#mem-preset-content {
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  background-color: var(--beilu-shadow-8);
+  tab-size: 4;
+}
+
+#mem-preset-content:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+#mem-preset-content:not([readonly]) {
+  background-color: var(--beilu-amber-5);
+  border-color: var(--beilu-amber);
+}
+
+/* AI 对话消息区 */
+#mem-ai-messages {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(var(--bc) / 0.15) transparent;
+}
+
+#mem-ai-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+#mem-ai-messages::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+#mem-ai-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 对话消息气泡 */
+.mem-ai-msg {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  animation: mem-msg-in 0.2s ease;
+}
+
+@keyframes mem-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mem-ai-msg:hover {
+  border-color: var(--beilu-amber-25);
+}
+
+/* 用户消息 — 琥珀边框 */
+.mem-ai-msg-user {
+  border-left: 2px solid var(--beilu-amber-50);
+}
+
+/* AI消息 — 左侧绿色标记 */
+.mem-ai-msg-ai {
+  border-left: 2px solid rgba(34, 197, 94, 0.4);
+}
+
+/* 系统消息 */
+.mem-ai-msg-system {
+  font-style: italic;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background-color: oklch(var(--bc) / 0.03);
+}
+
+/* 输入区 textarea */
+#mem-ai-input {
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+#mem-ai-input:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+/* 预设面板滚动条 */
+#mem-preset-list {
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(var(--bc) / 0.15) transparent;
+}
+
+#mem-preset-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+#mem-preset-list::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+/* ============================================================
+   记忆预设切换器（活动栏内）
+   ============================================================ */
+
+/* 预设切换按钮 */
+.mem-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  margin: 0 auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  opacity: 0.5;
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+.mem-switcher-btn:hover {
+  opacity: 0.85;
+  background-color: var(--beilu-amber-8);
+}
+
+.mem-switcher-active {
+  opacity: 1;
+  background-color: var(--beilu-amber-15);
+}
+
+.mem-switcher-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 2px;
+  background-color: var(--beilu-amber);
+  border-radius: 0 2px 2px 0;
+}
+
+.mem-switcher-id {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--beilu-amber);
+  letter-spacing: 0.02em;
+}
+
+/* 界面8: 预设按钮搬进主区工具栏横排后的布局修正（原 margin:0 auto 为竖排量身，flex 行内会吸掉间距） */
+#mem-toolbar-presets .mem-switcher-btn {
+  margin: 0;
+}
+#mem-toolbar-presets .mem-switcher-active::before {
+  left: 10%;
+  top: auto;
+  bottom: 0;
+  width: 80%;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+}
+
+/* 记忆模块系统消息 */
+.mem-msg-system {
+  font-style: italic;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.03);
+}
+
+/* 记忆消息流标题栏 */
+#mem-chat-view .flex-shrink-0:first-child {
+  background-color: oklch(var(--bc) / 0.03);
+  border-bottom: 1px solid oklch(var(--bc) / 0.1);
+}
+
+/* 记忆消息流输入区 */
+#mem-chat-view .flex-shrink-0:last-child {
+  background-color: oklch(var(--bc) / 0.02);
+  border-top: 1px solid oklch(var(--bc) / 0.1);
+}
+
+/* ============================================================
+   旧 drawer / 旧右侧边栏 — 隐藏（DOM 保留供 sidebar.mjs 使用）
+   ============================================================ */
+
+#left-drawer-container {
+  display: none !important;
+}
+
+#right-sidebar-container {
+  display: none !important;
+}
+

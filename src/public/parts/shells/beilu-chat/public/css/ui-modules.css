@@ -1,0 +1,1147 @@
+/* ============================================================
+   注入坞（inject dock）— 工具栏按钮弹出的 INJ 条目操作台（src/shared/chat-core/injectDock.mjs）
+   0726 重构：原「单次注入面板」（输入框与 toolbar 之间的单条 textarea，.single-inject-panel/.sip-*）
+   整段让位——那形态只能存一条、无法选择注入哪条（凛倾「完全没有办法使用…这个完全就是 bug」）。
+
+   样式约定：浮窗范式照抄 .extend-menu-popup（modes.css:163）——fixed + var(--beilu-bg-card)
+   + var(--beilu-amber-20) 边 + var(--z-popup)；行内控件一律用 daisyUI 类（btn/input/select/
+   checkbox/badge/textarea），此处只写布局与状态色，不自造第二套控件样式。配色全走既有
+   --beilu-* / --color-* 变量，深浅主题自适应，无写死色值（旧段那句 rgba 硬编码随之删除）。
+   ============================================================ */
+
+.inject-dock {
+  position: fixed;
+  z-index: var(--z-popup);
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: min(62vh, 540px);
+  display: flex;
+  flex-direction: column;
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 10px;
+  box-shadow: 0 -4px 16px var(--beilu-shadow-30);
+  overflow: hidden;
+  animation: idock-in 0.14s ease;
+}
+
+.inject-dock.hidden {
+  display: none;
+}
+
+@keyframes idock-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- 头部 ---- */
+
+.idock-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--beilu-amber-8);
+  border-bottom: 1px solid var(--beilu-amber-10);
+  flex-shrink: 0;
+}
+
+.idock-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  /* 底是 amber-8 淡染(≈base 底色) → 用 on-base 的 fg，勿用 on-accent 反色的 amber-text */
+  color: var(--beilu-amber-fg);
+}
+
+.idock-queue {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--beilu-amber-20);
+  color: var(--beilu-amber-fg);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.idock-queue.hidden {
+  display: none;
+}
+
+.idock-close {
+  background: none;
+  border: none;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.idock-close:hover {
+  color: var(--color-base-content);
+  background: var(--beilu-amber-10);
+}
+
+/* ---- 工具行（搜索 / 排序 / 新建）---- */
+
+.idock-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--beilu-amber-10);
+  flex-shrink: 0;
+}
+
+.idock-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.idock-sort {
+  width: 6.5rem;
+  flex-shrink: 0;
+}
+
+/* ---- 条目列表 ---- */
+
+.idock-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  min-height: 80px;
+}
+
+.idock-empty {
+  padding: 18px 8px;
+  font-size: 11px;
+  text-align: center;
+  color: color-mix(in oklch, var(--color-base-content) 45%, transparent);
+}
+
+/* 分组头（⚡本轮待注入 / 🧩我的条目 / 🏛系统条目）：sticky 使长列表滚动时始终知道在哪一段 */
+.idock-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  margin: 4px 0 2px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: var(--beilu-amber-8);
+  color: color-mix(in oklch, var(--color-base-content) 70%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.idock-group:first-child {
+  margin-top: 0;
+}
+
+.idock-group-n {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+/* ---- 分类（模式窗口）chips：横向单行可滚，避免多分类时把列表挤下去 ---- */
+
+.idock-modes {
+  display: flex;
+  gap: 3px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--beilu-amber-10);
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.idock-modes::-webkit-scrollbar {
+  display: none;
+}
+
+.idock-modes:empty {
+  display: none;
+}
+
+.idock-chip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--beilu-amber-15);
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.idock-chip:hover {
+  background: var(--beilu-amber-12);
+  color: var(--color-base-content);
+}
+
+.idock-chip.active {
+  background: var(--beilu-amber-25);
+  border-color: var(--beilu-amber);
+  color: var(--beilu-amber-fg);
+  font-weight: 600;
+}
+
+.idock-row {
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.idock-row:hover {
+  background: var(--beilu-amber-8);
+}
+
+/* 本轮已挑中：整行点亮 + 恒置顶（列表排序在 JS 里做），收起浮窗前一眼看清这条消息会带什么 */
+.idock-row.queued {
+  background: var(--beilu-amber-12);
+  border-color: var(--beilu-amber-25);
+}
+
+.idock-row.editing {
+  border-color: var(--beilu-amber-25);
+}
+
+.idock-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.idock-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.idock-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding-left: 22px; /* 与上行 checkbox 之后的名称起点对齐 */
+  font-size: 9px;
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+.idock-pos {
+  white-space: nowrap;
+}
+
+.idock-eff.on {
+  color: var(--color-success);
+}
+
+.idock-eff.off {
+  color: color-mix(in oklch, var(--color-warning) 80%, transparent);
+}
+
+.idock-eff.idle {
+  opacity: 0.55;
+}
+
+.idock-queued-tag {
+  color: var(--beilu-amber-fg);
+  font-weight: 600;
+}
+
+/* 行内动作按钮（⚡这轮 / ✎编辑）：与 .chat-toolbar-btn 同量级，不用 daisyUI btn 免得撑高行 */
+.idock-btn {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: color-mix(in oklch, var(--color-base-content) 70%, transparent);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.idock-btn:hover {
+  background: var(--beilu-amber-15);
+  color: var(--color-base-content);
+}
+
+.idock-btn.idock-once.active {
+  background: var(--beilu-amber-25);
+  border-color: var(--beilu-amber);
+  color: var(--beilu-amber-fg);
+}
+
+/* ---- 就地编辑器（含位置：上方/下方 + 排序值）---- */
+
+.idock-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  margin: 0 2px 6px;
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 6px;
+  background: var(--beilu-shadow-8);
+}
+
+.idock-editor-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 6px;
+  align-items: center;
+}
+
+.idock-editor-grid label {
+  font-size: 10px;
+  white-space: nowrap;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+}
+
+.idock-editor-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* ---- 底部「临时一句话」：原单次注入 textarea 通道，id=single-inject 保持不变 ---- */
+
+.idock-footer {
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--beilu-amber-10);
+  background: var(--beilu-amber-3);
+  flex-shrink: 0;
+}
+
+.idock-footer-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+}
+
+.idock-footer-hint {
+  opacity: 0.6;
+}
+
+.idock-temp {
+  background-color: var(--beilu-shadow-8);
+  border-color: var(--beilu-amber-25);
+}
+
+.idock-temp:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+[data-theme="light"] .idock-temp {
+  background-color: var(--beilu-shadow-3);
+}
+
+/* ---- 工具栏按钮上的本轮待注入计数（浮窗收起后仍可见，防「不知道带了什么就发出去」）---- */
+
+#single-inject-btn {
+  position: relative;
+}
+
+#single-inject-btn.has-once::after {
+  content: attr(data-once-count);
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--beilu-amber);
+  color: var(--beilu-amber-text);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 窄屏贴边全宽（left/bottom 由 JS 写 inline style，故此处需 !important 才能覆盖） */
+@media (max-width: 640px) {
+  .inject-dock {
+    left: 8px !important;
+    right: 8px;
+    width: auto;
+    max-height: 70vh;
+  }
+}
+
+/* .sip-header / .sip-title / .sip-close / .sip-body / .single-inject-panel textarea 段已删
+   （0726 注入坞重构）：消费方 index.html #single-inject-panel 整块同批删除，
+   textarea 本体（id=single-inject）迁入注入坞底部「临时一句话」，样式接 .idock-temp。 */
+
+/* ---- 输入区域(W28) — 浅色模式 ---- */
+
+[data-theme="light"] .chat-input-wrapper {
+  border-color: var(--beilu-amber-25);
+  box-shadow: 0 2px 12px var(--beilu-shadow-8);
+}
+[data-theme="light"] .chat-input-wrapper:focus-within {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 2px 16px var(--beilu-amber-15);
+}
+[data-theme="light"] .chat-input-toolbar {
+  border-top-color: var(--beilu-amber-15);
+}
+[data-theme="light"] .chat-toolbar-btn:hover {
+  background: var(--beilu-amber-10);
+}
+[data-theme="light"] .chat-send-btn {
+  box-shadow: 0 2px 8px var(--beilu-amber-20);
+}
+[data-theme="light"] .chat-send-btn img {
+  filter: invert(0);
+}
+[data-theme="light"] .chat-model-selector {
+  border-color: var(--beilu-amber-25);
+}
+
+/* skill-inject 条样式已随 D6 skillInjectBar 整删（凛倾0706授权） */
+
+/* ---- extend-menu 弹窗 — 浅色模式 ---- */
+
+[data-theme="light"] .extend-menu-popup {
+  box-shadow: 0 -4px 16px var(--beilu-shadow-10);
+}
+
+/* ============================================================
+   放大编辑器 Modal（C7: 所有 textarea 的通用放大窗口）
+   ============================================================ */
+
+/* textarea 容器 — 相对定位，放大按钮锚点 */
+.expandable-container {
+  position: relative;
+}
+
+/* 放大按钮 — textarea 右上角 */
+.expand-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--beilu-amber-25);
+  background: var(--beilu-shadow-40);
+  color: var(--beilu-amber);
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.12s ease;
+  line-height: 1;
+}
+
+.expandable-container:hover .expand-btn,
+.expandable-container:focus-within .expand-btn {
+  opacity: 0.7;
+}
+
+.expand-btn:hover {
+  opacity: 1 !important;
+  background: var(--beilu-amber-25);
+  border-color: var(--beilu-amber);
+}
+
+/* dialog modal — 全屏遮罩 */
+.expand-editor-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  padding: 0;
+  margin: 0;
+  max-width: 100vw;
+  max-height: 100vh;
+  background: transparent;
+  /* 界面9: 200→语义层级（⛶可从任何编辑层打开须盖住 modal/浮窗；实际靠 dialog top-layer，此值为非 showModal 兜底） */
+  z-index: var(--z-overlay-nested);
+}
+
+.expand-editor-modal::backdrop {
+  background-color: var(--beilu-modal-overlay);
+}
+
+/* 内容容器 — 全屏铺满 */
+.expand-editor-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  margin: 0;
+  background-color: var(--beilu-bg-card);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  color: inherit;
+}
+
+/* 头部栏 */
+.expand-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background-color: oklch(var(--bc) / 0.08);
+  border-bottom: 1px solid var(--beilu-border-subtle);
+  flex-shrink: 0;
+}
+
+#expand-editor-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--beilu-amber);
+}
+
+.expand-editor-controls {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.expand-editor-controls button {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  border: 1px solid var(--beilu-amber-25);
+}
+
+#expand-editor-save {
+  background-color: var(--beilu-amber-dark);
+  color: var(--beilu-amber-text);
+  border-color: var(--beilu-amber-dark);
+}
+
+#expand-editor-save:hover {
+  background-color: var(--beilu-amber);
+}
+
+#expand-editor-cancel {
+  background: transparent;
+  color: inherit;
+}
+
+#expand-editor-cancel:hover {
+  background-color: var(--beilu-error-15);
+  color: var(--beilu-error);
+  border-color: var(--beilu-error-40);
+}
+
+/* 编辑区 textarea */
+.expand-editor-textarea {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  padding: 0.75rem;
+  font-family:
+    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  border: none;
+  background-color: var(--beilu-shadow-12);
+  color: inherit;
+  tab-size: 4;
+}
+
+.expand-editor-textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--beilu-amber-20);
+}
+
+/* 浅色模式适配 */
+[data-theme="light"] .expand-editor-container {
+  background-color: var(--beilu-bg-card);
+  border: none;
+  color: oklch(var(--color-base-content));
+}
+
+[data-theme="light"] .expand-editor-header {
+  background-color: rgba(155, 123, 30, 0.08);
+  border-color: var(--beilu-amber-20);
+}
+
+[data-theme="light"] .expand-editor-textarea {
+  background-color: var(--beilu-shadow-3);
+}
+
+[data-theme="light"] .expand-btn {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(155, 123, 30, 0.3);
+}
+
+[data-theme="light"] .expand-btn:hover {
+  background: rgba(155, 123, 30, 0.15);
+}
+
+/* ============================================================
+   世界书条目编辑器弹窗（wb-editor）
+   ============================================================ */
+
+/* 弹窗尺寸覆盖（比默认 floating-window 更大） */
+#wb-editor-window {
+  width: 720px;
+  height: 560px;
+  min-width: 480px;
+  min-height: 360px;
+}
+
+/* 双栏布局 */
+.wb-editor-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 左栏：条目列表 */
+.wb-editor-list-panel {
+  width: 220px;
+  min-width: 160px;
+  border-right: 1px solid var(--beilu-border-subtle);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.wb-editor-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.wb-editor-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wb-editor-list::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+/* 条目列表项 */
+.wb-entry-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.wb-entry-item:hover {
+  background-color: oklch(var(--bc) / 0.06);
+}
+
+.wb-entry-item.wb-entry-selected {
+  background-color: var(--beilu-amber-15);
+  border-color: var(--beilu-amber-25);
+}
+
+.wb-entry-item.wb-entry-disabled {
+  opacity: 0.45;
+}
+
+.wb-entry-item .wb-entry-icon {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+}
+
+.wb-entry-item .wb-entry-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-entry-item .wb-entry-uid {
+  font-size: 0.6rem;
+  color: oklch(var(--bc) / 0.55);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 分组标题 */
+.wb-group-header {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: oklch(var(--bc) / 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  margin-top: 0.25rem;
+  user-select: none;
+}
+
+.wb-group-header:first-child {
+  margin-top: 0;
+}
+
+/* 右栏：条目详情 */
+.wb-editor-detail-panel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-editor-detail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+}
+
+.wb-editor-detail-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wb-editor-detail-scroll::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--bc) / 0.15);
+  border-radius: 2px;
+}
+
+/* 详情面板输入框样式 */
+#wb-editor-detail input[type="text"],
+#wb-editor-detail input[type="number"],
+#wb-editor-detail select,
+#wb-editor-detail textarea {
+  background-color: var(--beilu-shadow-10);
+  border-color: var(--beilu-amber-20);
+}
+
+#wb-editor-detail input:focus,
+#wb-editor-detail select:focus,
+#wb-editor-detail textarea:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+/* 搜索框样式 */
+#wb-editor-search {
+  background-color: var(--beilu-shadow-10);
+}
+
+#wb-editor-search:focus {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+}
+
+/* 浅色模式适配 */
+[data-theme="light"] #wb-editor-detail input[type="text"],
+[data-theme="light"] #wb-editor-detail input[type="number"],
+[data-theme="light"] #wb-editor-detail select,
+[data-theme="light"] #wb-editor-detail textarea,
+[data-theme="light"] #wb-editor-search {
+  background-color: var(--beilu-shadow-3);
+}
+
+/* 响应式：小屏幕下改为纵向布局 */
+@media (max-width: 640px) {
+  #wb-editor-window {
+    width: 95vw;
+    height: 85vh;
+    min-width: 300px;
+  }
+
+  .wb-editor-body {
+    flex-direction: column;
+  }
+
+  .wb-editor-list-panel {
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--beilu-amber-20);
+  }
+}
+
+/* ============================================================
+   C3: 自定义聊天背景图系统（对标酒馆 #bg1）
+   ============================================================ */
+
+/* CSS 变量（默认值） */
+:root {
+  --chat-bg-opacity: 0.3;
+  --chat-bg-blur: 10px;
+}
+
+/* 背景图层 — 全屏固定定位，位于所有内容之下 */
+#bg1 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  display: none; /* 默认隐藏，JS 设置背景图后才显示 */
+}
+
+/* 有背景图时显示 #bg1 */
+body.has-bg-image #bg1 {
+  display: block;
+}
+
+/* 缩放模式 */
+#bg1.fit-cover {
+  background-size: cover;
+}
+
+#bg1.fit-contain {
+  background-size: contain;
+}
+
+#bg1.fit-stretch {
+  background-size: 100% 100%;
+}
+
+#bg1.fit-center {
+  background-size: auto;
+  background-position: center;
+}
+
+/* ---- 有背景图时：对话区半透明 + 模糊效果 ----
+   使用 daisyUI 语义 oklch 变量，自动跟随任意主题（dark/light/valentine/...）。
+   不再需要单独 [data-theme="light"] 覆盖。 */
+
+/* AI 消息气泡 — 半透明底色 */
+body.has-bg-image .chat-message .chat-bubble {
+  background-color: color-mix(in oklch, var(--beilu-bg-card) calc(var(--chat-bg-opacity) * 100%), transparent);
+  backdrop-filter: blur(calc(var(--chat-bg-blur) / 2));
+  -webkit-backdrop-filter: blur(calc(var(--chat-bg-blur) / 2));
+}
+
+/* 顶部栏 — 半透明 */
+body.has-bg-image #top-bar {
+  background-color: color-mix(in oklch, var(--color-base-100) calc(var(--chat-bg-opacity) * 100%), transparent);
+  backdrop-filter: blur(var(--chat-bg-blur));
+  -webkit-backdrop-filter: blur(var(--chat-bg-blur));
+}
+
+/* 左右面板 — 半透明 */
+body.has-bg-image .left-panel,
+body.has-bg-image .right-panel {
+  background-color: color-mix(in oklch, var(--color-base-100) calc(var(--chat-bg-opacity) * 100%), transparent);
+  backdrop-filter: blur(var(--chat-bg-blur));
+  -webkit-backdrop-filter: blur(var(--chat-bg-blur));
+}
+
+/* [0727] 原 #input-area 规则已删:index.html 全文无 id="input-area" 元素,是从未生效的死选择器。 */
+
+/* 聊天容器背景透明 */
+body.has-bg-image #chat-container,
+body.has-bg-image #chat-messages {
+  background-color: transparent;
+}
+
+/* ============================================================
+   C2-chat: 头像悬浮放大预览（右下角、可拖动、×关闭）
+   ============================================================ */
+
+.avatar-floating-preview {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 80;
+  width: 180px;
+  height: 180px;
+  border-radius: 12px;
+  border: 2px solid var(--beilu-amber-50);
+  box-shadow: 0 8px 32px var(--beilu-shadow-50);
+  background-color: var(--color-base-300);
+  overflow: hidden;
+  cursor: grab;
+  animation: avatar-preview-in 0.2s ease;
+  user-select: none;
+}
+
+.avatar-floating-preview.dragging {
+  cursor: grabbing;
+  box-shadow: 0 12px 48px var(--beilu-shadow-60);
+}
+
+@keyframes avatar-preview-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 预览图片 */
+.avatar-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+/* 关闭按钮 — hover 容器时显示 */
+.avatar-preview-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--beilu-shadow-55);
+  color: var(--color-base-content);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.12s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-floating-preview:hover .avatar-preview-close {
+  opacity: 1;
+}
+
+.avatar-preview-close:hover {
+  background: var(--beilu-error-60);
+}
+
+/* 浅色模式适配 */
+[data-theme="light"] .avatar-floating-preview {
+  background-color: var(--beilu-bg-card);
+  border-color: rgba(155, 123, 30, 0.4);
+  box-shadow: 0 8px 32px var(--beilu-shadow-15);
+}
+
+[data-theme="light"] .avatar-preview-close:hover {
+  background: var(--beilu-error-60);
+  color: var(--color-base-content);
+}
+
+/* ============================================================
+   编程模式切换按钮（顶部栏 #mode-switch-btn）
+   ============================================================ */
+
+/* 基础样式 */
+.mode-switch-btn {
+  position: relative;
+  border: 1px solid var(--beilu-amber-25);
+  border-radius: 1rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* 聊天模式（默认态） */
+.mode-switch-btn.mode-switch-chat,
+.mode-switch-btn[data-mode="chat"] {
+  background-color: var(--beilu-amber-8);
+  color: var(--beilu-amber);
+  border-color: var(--beilu-amber-25);
+}
+
+.mode-switch-btn.mode-switch-chat:hover,
+.mode-switch-btn[data-mode="chat"]:hover {
+  background-color: var(--beilu-amber-18);
+  border-color: var(--beilu-amber);
+}
+
+/* 编程模式（激活态 — 蓝紫色调，区分于聊天的琥珀色） */
+.mode-switch-btn.mode-switch-code,
+.mode-switch-btn[data-mode="code"] {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: var(--beilu-code-indigo);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.mode-switch-btn.mode-switch-code:hover,
+.mode-switch-btn[data-mode="code"]:hover {
+  background-color: rgba(99, 102, 241, 0.22);
+  border-color: var(--beilu-code-indigo);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+/* 切换中状态（disabled） */
+.mode-switch-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ---- 浅色模式适配 ---- */
+
+[data-theme="light"] .mode-switch-btn.mode-switch-chat,
+[data-theme="light"] .mode-switch-btn[data-mode="chat"] {
+  background-color: rgba(155, 123, 30, 0.08);
+  color: var(--beilu-amber);
+  border-color: rgba(155, 123, 30, 0.25);
+}
+
+[data-theme="light"] .mode-switch-btn.mode-switch-chat:hover,
+[data-theme="light"] .mode-switch-btn[data-mode="chat"]:hover {
+  background-color: rgba(155, 123, 30, 0.15);
+}
+
+[data-theme="light"] .mode-switch-btn.mode-switch-code,
+[data-theme="light"] .mode-switch-btn[data-mode="code"] {
+  background-color: rgba(79, 70, 229, 0.08);
+  color: var(--beilu-code-indigo-light);
+  border-color: rgba(79, 70, 229, 0.3);
+}
+
+[data-theme="light"] .mode-switch-btn.mode-switch-code:hover,
+[data-theme="light"] .mode-switch-btn[data-mode="code"]:hover {
+  background-color: rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+
+[data-theme="light"] .avatar-preview-close:hover {
+  background: var(--beilu-error-60);
+  color: var(--color-base-content);
+}
+
+/* ============================================================
+   Token 进度条样式 (Phase 3B)
+   ============================================================ */
+
+.token-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: 0.5rem;
+  padding: 0 0.5rem;
+  height: 24px;
+  background-color: var(--beilu-shadow-10);
+  border-radius: 12px;
+  border: 1px solid var(--beilu-amber-15);
+}
+
+.token-progress-bar-wrapper {
+  width: 80px;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+
+.token-progress-fill {
+  height: 100%;
+  width: 0%;
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
+  border-radius: 3px;
+}
+
+/* 颜色阶梯 */
+.tp-green {
+  background-color: var(--beilu-success);
+}
+.tp-yellow {
+  background-color: var(--beilu-tp-yellow);
+}
+.tp-red {
+  background-color: var(--beilu-error);
+}
+
+.token-progress-text {
+  font-family: "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.65rem;
+  color: var(--beilu-amber-70);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.token-compress-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  opacity: 0.6;
+  transition:
+    opacity 0.2s,
+    transform 0.1s;
+}
+
+.token-compress-btn:hover:not(:disabled) {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.token-compress-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 淡色主题适配 */
+[data-theme="light"] .token-progress-container {
+  background-color: var(--beilu-shadow-5);
+  border-color: var(--beilu-amber-20);
+}
+
+[data-theme="light"] .token-progress-bar-wrapper {
+  background-color: var(--beilu-shadow-8);
+}
+
+[data-theme="light"] .token-progress-text {
+  color: rgba(139, 105, 20, 0.7);
+}
+

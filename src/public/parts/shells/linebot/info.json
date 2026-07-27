@@ -1,0 +1,32 @@
+{
+	"en-UK": {
+		"name": "LINE Bot",
+		"avatar": "https://api.iconify.design/simple-icons/line.svg",
+		"description": "Run your character as a LINE bot.",
+		"description_markdown": "Connect your beilu character to LINE Messaging API via webhook. Supports private chats, group mentions, and full message pipeline.",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["LINE", "bot", "integration", "japan"]
+	},
+	"zh-CN": {
+		"name": "LINE Bot",
+		"avatar": "https://api.iconify.design/simple-icons/line.svg",
+		"description": "将角色作为 LINE 机器人运行。",
+		"description_markdown": "通过 Webhook 将 beilu 角色接入 LINE Messaging API。支持私聊、群@触发及完整消息管线。",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["LINE", "机器人", "集成", "日本"]
+	},
+	"emoji": {
+		"name": "🟢🤖",
+		"avatar": "https://api.iconify.design/simple-icons/line.svg",
+		"description": "🟢💬🔗",
+		"description_markdown": "🟢🤖➡️💬",
+		"version": "1.0.0",
+		"author": "beilu",
+		"home_page": "",
+		"tags": ["🟢", "🤖", "🔗"]
+	}
+}

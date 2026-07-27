@@ -1,0 +1,43 @@
+{
+	"en-UK": {
+		"name": "Beilu PPT",
+		"avatar": "https://api.iconify.design/mdi/presentation.svg",
+		"description": "AI-driven PPT generation via the ascii pipeline — spec in, pptx + previews out.",
+		"description_markdown": "**Beilu PPT** bridges the ascii PPT pipeline. The AI emits a semantic `spec` (zero coordinates) via `<ppt_op>` tags; the pipeline solves layout and renders ascii preview, PNG previews and an editable `.pptx`. Results (ascii + overflow signals) are fed back so the AI can revise and regenerate.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"ppt",
+			"slides",
+			"pipeline",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "PPT 生成",
+		"avatar": "https://api.iconify.design/mdi/presentation.svg",
+		"description": "AI 驱动的 PPT 生成 — spec 进，pptx + 预览出",
+		"description_markdown": "**PPT 生成** 桥接字符画 PPT 管线。AI 通过 `<ppt_op>` 标签给出语义 spec（零坐标），管线做几何求解并渲染字符画预览、PNG 预览和可编辑 `.pptx`。结果（字符画 + 溢出信号）回喂给 AI，可修改 spec 重新生成。仅在 work / code（含文件层）模式下生效。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"PPT",
+			"幻灯片",
+			"管线",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "📊🎞️",
+		"avatar": "https://api.iconify.design/mdi/presentation.svg",
+		"description": "🤖➡️📝➡️📊",
+		"description_markdown": "🤖 ➡️ 📝\n📐 ➡️ 📊 🖼️\n🔁 ✅",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"📊",
+			"🎞️",
+			"🌱"
+		]
+	}
+}

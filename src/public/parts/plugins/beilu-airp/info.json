@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu AIRP",
+		"avatar": "https://api.iconify.design/mdi/palette-outline.svg",
+		"description": "Symbol-based scene rendering: DSL tags to styled HTML.",
+		"description_markdown": "**Beilu AIRP** renders LLM-authored DSL tags (scene/sym/char/desc) into styled HTML — colored text and symbol art. Numeric state stays in deterministic code; the LLM only writes the narrative skin.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"airp",
+			"rendering",
+			"dsl",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "AIRP渲染",
+		"avatar": "https://api.iconify.design/mdi/palette-outline.svg",
+		"description": "符号化场景渲染：DSL标签映射为styled HTML",
+		"description_markdown": "**AIRP渲染** 将 LLM 输出的 DSL 标签（scene/sym/char/desc）渲染为 styled HTML——彩色文本与符号画。数值留在确定性代码里，LLM 只负责叙事皮肤。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"airp",
+			"渲染",
+			"符号化",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "🎨🔣",
+		"avatar": "https://api.iconify.design/mdi/palette-outline.svg",
+		"description": "🎨🔣➡️✨",
+		"description_markdown": "🎨 🔣 ➡️ ✨\n🌃 🌈 📜",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🎨",
+			"🔣",
+			"✨",
+			"🌱"
+		]
+	}
+}

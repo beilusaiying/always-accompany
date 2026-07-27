@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="darkreader-lock" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta property="og:title" content="always accompany" />
+	<meta property="og:type" content="website" />
+	<meta property="og:description" content="选择你的身份，开始与贝露的旅程。" />
+	<meta name="description" content="选择你的身份，开始与贝露的旅程。" />
+	<title>登录 — always accompany</title>
+	<link rel="icon" href="/favicon.ico" />
+	<link rel="icon" href="/favicon.png" type="image/png" />
+	<link rel="manifest" href="/manifest.json" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="apple-mobile-web-app-title" content="always accompany" />
+	<meta name="theme-color" content="#0e3c5c" />
+	<script blocking="render" type="module" src="/preload.mjs"></script>
+	<link href="/vendor/daisyui.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<link href="/base.css" rel="stylesheet" type="text/css" crossorigin="anonymous" />
+	<script src="/vendor/tailwindcss-browser.js" crossorigin="anonymous"></script>
+	<script type="module" src="/base.mjs"></script>
+	<link rel="stylesheet" href="./index.css" type="text/css" />
+</head>
+
+<body class="flex flex-col min-h-screen">
+	<main class="flex-grow hero">
+		<div class="hero-content flex-col w-full max-w-lg">
+
+			<!-- 视图1: 用户选择 -->
+			<div id="view-user-select" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-2">选择用户</h1>
+				<!-- FT-E1: 凛倾模拟新用户「我以为这个是联网的…登录界面就要说明」 -->
+				<p class="text-xs text-center opacity-60 mb-4">🔒 beilu 完全在你自己的电脑上本地运行，数据不上传。<br/>账号用于本机多用户隔离；密码仅在局域网/服务器共享访问时有用。</p>
+				<div id="user-list" class="flex flex-col gap-3 mb-4">
+					<!-- 用户卡片将动态插入 -->
+				</div>
+				<div class="divider">或</div>
+				<button class="btn btn-primary w-full" id="btn-create-new">创建新用户</button>
+			</div>
+
+			<!-- 视图2: 创建用户 -->
+			<div id="view-create-user" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-6">创建新用户</h1>
+				<div class="card shrink-0 w-full shadow-2xl bg-base-100">
+					<div class="card-body">
+						<p class="text-error text-xs" id="create-error-message"></p>
+						<div class="form-control">
+							<label class="label" for="create-username">
+								<span class="label-text">用户名</span>
+							</label>
+							<input type="text" id="create-username" class="input input-bordered" placeholder="输入你的名字" required autocomplete="username" />
+						</div>
+						<div class="form-control mt-4">
+							<label class="label">
+								<span class="label-text">认证方式</span>
+							</label>
+							<div class="flex gap-3">
+								<label class="label cursor-pointer gap-2">
+									<input type="radio" name="auth-mode" value="passwordless" class="radio radio-primary" checked />
+									<span class="label-text">无需密码</span>
+								</label>
+								<label class="label cursor-pointer gap-2">
+									<input type="radio" name="auth-mode" value="password" class="radio radio-primary" />
+									<span class="label-text">使用密码</span>
+								</label>
+							</div>
+							<p class="text-xs opacity-50 mt-1">本地单人使用选「无需密码」即可；密码用于局域网/服务器多人访问时的账号隔离。</p>
+						</div>
+						<div id="create-password-group" class="form-control" style="display: none;">
+							<label class="label" for="create-password">
+								<span class="label-text">密码</span>
+							</label>
+							<input type="password" id="create-password" class="input input-bordered" placeholder="设置密码" autocomplete="new-password" />
+							<div id="create-password-strength" class="text-xs mt-1"></div>
+						</div>
+						<div id="create-confirm-password-group" class="form-control" style="display: none;">
+							<label class="label" for="create-confirm-password">
+								<span class="label-text">确认密码</span>
+							</label>
+							<input type="password" id="create-confirm-password" class="input input-bordered" placeholder="再次输入密码" autocomplete="new-password" />
+						</div>
+						<div class="card-actions justify-between mt-4">
+							<button class="btn btn-ghost" id="btn-back-to-select">返回</button>
+							<button class="btn btn-primary" id="btn-create-submit">创建并登录</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 视图3: 密码登录 -->
+			<div id="view-password-login" class="w-full" style="display: none;">
+				<h1 class="text-3xl font-bold text-center mb-2">欢迎回来</h1>
+				<p class="text-center text-base-content/60 mb-6" id="password-login-username-display"></p>
+				<div class="card shrink-0 w-full shadow-2xl bg-base-100">
+					<div class="card-body">
+						<p class="text-error text-xs" id="login-error-message"></p>
+						<div class="form-control">
+							<label class="label" for="login-password">
+								<span class="label-text">密码</span>
+							</label>
+							<input type="password" id="login-password" class="input input-bordered" placeholder="输入密码" required autocomplete="current-password" />
+						</div>
+						<div class="card-actions justify-between mt-4">
+							<button class="btn btn-ghost" id="btn-back-from-login">返回</button>
+							<button class="btn btn-primary" id="btn-login-submit">登录</button>
+						</div>
+						<div class="text-center mt-2">
+							<a class="link link-hover text-xs text-base-content/50" id="btn-forgot-password" style="display:none">忘记密码？</a>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 视图4: 安全问题找回密码 -->
+			<div id="view-security-questions" class="w-full" style="display: none;">
+				<h1 class="text-2xl font-bold text-center mb-2">找回密码</h1>
+				<p class="text-center text-base-content/60 mb-4" id="sq-username-display"></p>
+				<div class="card shrink-0 w-full shadow-2xl bg-base-100">
+					<div class="card-body space-y-3">
+						<p class="text-error text-xs" id="sq-error-message"></p>
+						<div id="sq-questions-container" class="space-y-3"></div>
+						<div class="form-control">
+							<label class="label"><span class="label-text">新密码</span></label>
+							<input type="password" id="sq-new-password" class="input input-bordered input-sm" placeholder="输入新密码" autocomplete="new-password" />
+						</div>
+						<div class="form-control">
+							<label class="label"><span class="label-text">确认新密码</span></label>
+							<input type="password" id="sq-confirm-password" class="input input-bordered input-sm" placeholder="再次输入新密码" autocomplete="new-password" />
+						</div>
+						<div class="card-actions justify-between mt-4">
+							<button class="btn btn-ghost btn-sm" id="btn-back-from-sq">返回登录</button>
+							<button class="btn btn-primary btn-sm" id="btn-sq-submit">重置密码</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 加载中 -->
+			<div id="view-loading" class="flex flex-col items-center gap-4">
+				<span class="loading loading-ring loading-lg"></span>
+				<p class="text-base-content/60">加载中...</p>
+			</div>
+
+		</div>
+	</main>
+
+	<script type="module" src="./index.mjs"></script>
+	<!-- 覆盖式 i18n（登录页独立：/parts/ 域要登录，壳字典匿名不可达，字典在本页 locales/） -->
+	<script type="module" src="./i18n.mjs"></script>
+</body>
+
+</html>

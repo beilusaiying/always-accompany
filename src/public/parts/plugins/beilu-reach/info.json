@@ -1,0 +1,44 @@
+{
+	"en-UK": {
+		"name": "Beilu Reach",
+		"avatar": "https://api.iconify.design/mdi/earth.svg",
+		"description": "Platform adapters — AI can search and read Twitter, Bilibili, YouTube, GitHub, Reddit and more.",
+		"description_markdown": "**Beilu Reach** gives the AI structured access to 13 internet platforms via `<reach>` tags. Each platform has dedicated adapters for deep, structured data retrieval beyond generic web scraping.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"platform",
+			"reach",
+			"social",
+			"beilu"
+		]
+	},
+	"zh-CN": {
+		"name": "平台触达",
+		"avatar": "https://api.iconify.design/mdi/earth.svg",
+		"description": "平台适配器 — AI 可搜索和读取 Twitter、B站、YouTube、GitHub、Reddit 等平台",
+		"description_markdown": "**平台触达** 通过 `<reach>` 标签让 AI 获取 13 个互联网平台的结构化数据。每个平台有专用适配器，比通用网页抓取更深层。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"平台",
+			"触达",
+			"社交",
+			"always accompany"
+		]
+	},
+	"emoji": {
+		"name": "🌍🔌",
+		"avatar": "https://api.iconify.design/mdi/earth.svg",
+		"description": "🤖🌍➡️📊",
+		"description_markdown": "🤖 ➡️ 🌍\n🔌 📊\n🐦 📺 💻",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🌍",
+			"🔌",
+			"📊",
+			"🌱"
+		]
+	}
+}

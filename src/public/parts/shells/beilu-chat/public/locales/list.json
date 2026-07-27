@@ -1,0 +1,38 @@
+[
+ {
+  "id": "zh-TW",
+  "name": "繁體中文"
+ },
+ {
+  "id": "ja",
+  "name": "日本語"
+ },
+ {
+  "id": "en",
+  "name": "English"
+ },
+ {
+  "id": "ko",
+  "name": "한국어"
+ },
+ {
+  "id": "ru",
+  "name": "Русский"
+ },
+ {
+  "id": "de",
+  "name": "Deutsch"
+ },
+ {
+  "id": "fr",
+  "name": "Français"
+ },
+ {
+  "id": "es",
+  "name": "Español"
+ },
+ {
+  "id": "pt",
+  "name": "Português"
+ }
+]

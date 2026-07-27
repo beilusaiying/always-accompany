@@ -1,0 +1,21 @@
+{
+	"home_function_buttons": [
+		{
+			"info": "chat.home_function_buttons.viewHistory",
+			"level": 100,
+			"url": "/parts/shells:beilu-chat/",
+			"button": "<img src=\"https://api.iconify.design/mdi/chat-processing-outline.svg\" class=\"text-icon\"/>"
+		}
+	],
+	"home_interfaces": {
+		"chars": [
+			{
+				"info": "chat.home_char_interfaces.main",
+				"level": 1,
+				"interface": "chat",
+				"url": "/parts/shells:beilu-chat/new?char=${name}",
+				"button": "<img src=\"https://api.iconify.design/mdi/chat-processing-outline.svg\" class=\"text-icon\"/>"
+			}
+		]
+	}
+}

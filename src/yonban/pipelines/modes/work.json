@@ -1,0 +1,140 @@
+{
+  "id": "work",
+  "label": "工作",
+  "icon": "📋",
+  "desc": "11 work 子模式流程组 + 定时调度主场（DEFAULT_WORK_SUB_MODES + flowGroup auto_advance）",
+  "base": "chat",
+  "_note": "照抄现状真值：dueJobsInject=:1174 到期任务注入；flowGroup.stateInject=:1627 W58；hotLayerStyle=framework-first 即 :404 『_开头全文/普通只摘要』。work 无 taskRunner（用 flowGroup auto_advance，设计① §3.3）。",
+  "features": {
+    "memory": {
+      "enabled": true,
+      "config": {
+        "hotLayerDir": "work/active",
+        "hotLayerStyle": "framework-first",
+        "orphanStrip": true,
+        "codeProjectEnv": false
+      }
+    },
+    "teaching": {
+      "enabled": true,
+      "config": {
+        "taskPlanHowto": true,
+        "dailyGreeting": false
+      }
+    },
+    "p1": {
+      "enabled": true,
+      "config": {
+        "selfDriven": false,
+        "aiP1": true,
+        "_note_selfDriven": "[0724 002拍板] selfDriven(自驱动P1词库管线)=实验功能,完全不需要加载,全模式关闭。它会把 conceptnet/swow/activation_terms 等 119MB 词库 JSON 解析成数百MB 进程级永驻缓存(0723 内存2GB案主因)。给未来AI:禁把 selfDriven 改回 true 或绕过声明门直接 import p1_pipeline——实验成熟需 002 拍板;aiP1(检索AI)是正路不依赖JS词库,保持不动。门在 getPromptHandler Phase3 modeFeature(mode,\"p1\")。"
+      }
+    },
+    "websearch": {
+      "enabled": true
+    },
+    "scheduler": {
+      "enabled": true,
+      "config": {
+        "dueJobsInject": true,
+        "crossWindowWake": true
+      }
+    },
+    "flowGroup": {
+      "enabled": true,
+      "config": {
+        "stateInject": true
+      }
+    },
+    "ide": {
+      "enabled": false
+    },
+    "taskRunner": {
+      "enabled": false
+    },
+    "preset": {
+      "enabled": true,
+      "config": {
+        "strategy": "submode-chain",
+        "submodeSet": "DEFAULT_WORK_SUB_MODES"
+      }
+    }
+  },
+  "hooks": {
+    "request": [
+      {
+        "target": "functions:memory",
+        "verb": "getPrompt",
+        "feature": "memory",
+        "slot": "beilu-memory"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "mvuGetPrompt",
+        "slot": "beilu-mvu"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "toggleGetPrompt",
+        "slot": "beilu-toggle"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "sysinfoGetPrompt",
+        "slot": "beilu-sysinfo"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "worldInfo",
+        "slot": "beilu-worldbook"
+      },
+      {
+        "target": "functions:prompt",
+        "verb": "getPrompt",
+        "feature": "preset",
+        "slot": "beilu-preset"
+      },
+      {
+        "phase": "tweak",
+        "dl": [
+          2,
+          1,
+          0
+        ],
+        "steps": [
+          {
+            "target": "functions:prompt",
+            "verb": "mvuTweakPrompt",
+            "slot": "beilu-mvu"
+          },
+          {
+            "target": "functions:prompt",
+            "verb": "wbTweakPrompt",
+            "slot": "beilu-worldbook"
+          },
+          {
+            "target": "functions:prompt",
+            "verb": "tweakPrompt",
+            "feature": "preset",
+            "slot": "beilu-preset"
+          }
+        ]
+      }
+    ]
+  },
+  "presetBinding": {
+    "strategy": "submode-chain",
+    "submodeSet": "DEFAULT_WORK_SUB_MODES",
+    "resolvePreset": "active_preset_map[chatId]"
+  },
+  "cache": {
+    "scopeKeys": [
+      "mode",
+      "chatId"
+    ]
+  },
+  "storage": {
+    "root": "getModeCtxDir"
+  },
+  "_note2": "菜单完整性(步骤4普查): GetPrompt相插件参与者=memory/preset/worldbook/mvu/toggle/sysinfo(经facade)+files/browser/plugin-host(未迁无facade,影子孪生直调不进ModeDef); 相内并发各写各槽=序不影响产物,等价约束只在相位边界"
+}

@@ -1,0 +1,789 @@
+/* === W28 Phase 2: 输入区域重设计 === */
+
+.chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border: 1px solid var(--beilu-amber-15);
+  border-radius: 16px;
+  margin: 0.5rem 1rem;
+  background: var(--beilu-bg-card);
+  overflow: hidden;
+  box-shadow: 0 2px 12px var(--beilu-shadow-8);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.chat-input-wrapper:focus-within {
+  border-color: var(--beilu-amber-40);
+  box-shadow: 0 2px 16px var(--beilu-amber-10);
+}
+
+/* 输入框拖拽调高手柄（凛倾2026-07-09：对话框像侧栏一样可拉伸；同 .panel-resize-handle 交互语义，方向改纵向） */
+.chat-input-resize-handle {
+  height: 5px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  transition: background 0.15s;
+}
+.chat-input-resize-handle:hover,
+.chat-input-resize-handle.dragging {
+  background: var(--beilu-amber-40);
+}
+
+.chat-input-textarea {
+  border: none;
+  background: transparent;
+  resize: none;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  outline: none;
+  min-height: 60px;
+  max-height: 200px;
+  color: inherit;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.chat-input-textarea::placeholder {
+  /* 30%→50%：浅主题下 30% 前景几乎不可见（2026-07-10 对比度批） */
+  color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+  font-style: italic;
+}
+
+.chat-input-attachments:empty { display: none; }
+.chat-input-attachments {
+  padding: 0 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.chat-input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  border-top: 1px solid var(--beilu-amber-8);
+  background: color-mix(in oklch, var(--beilu-bg-card) 50%, transparent);
+}
+
+.chat-input-toolbar-left,
+.chat-input-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* 收缩保护：flex item 默认 min-width:auto 会让长模型名撑爆 space-between、挤压对侧按钮组 */
+  min-width: 0;
+}
+
+/* R3: 脚本按钮 host — 聊天输入栏的脚本自定义按钮容器 */
+.script-buttons-host {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.script-buttons-host .script-btn {
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  border: 1px solid var(--beilu-amber-40);
+  background: var(--beilu-amber-8);
+  color: inherit;
+}
+.script-buttons-host .script-btn:hover {
+  background: var(--beilu-amber-20);
+  border-color: var(--beilu-amber-70);
+}
+
+/* skillPicker 样式段已删（凛倾 0723 说明书库整域删除）：.upload-opt-menu / .skillpick-* 消费方 skillPicker.mjs 同批删 */
+
+.chat-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.15s;
+  color: inherit;
+}
+.chat-toolbar-btn:hover {
+  opacity: 1;
+  background: var(--beilu-amber-10);
+}
+
+.chat-model-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.15s;
+  color: inherit;
+}
+.chat-model-selector:hover { opacity: 1; border-color: var(--beilu-amber); }
+/* 长模型名截断（如 claude-sonnet-4-5-20250929）：无上限时撑爆工具栏挤压左侧按钮组 */
+#model-selector-label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-selector-arrow { font-size: 0.6rem; }
+
+.chat-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  /* 发送是黄金路径按钮：空间不足时截断模型名而非挤压发送钮 */
+  flex-shrink: 0;
+  border: none;
+  background: var(--beilu-amber);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px var(--beilu-amber-30);
+}
+.chat-send-btn:hover { filter: brightness(1.1); transform: scale(1.05); box-shadow: 0 3px 12px var(--beilu-amber-40); }
+.chat-send-btn:active { transform: scale(0.95); }
+.chat-send-btn img { filter: invert(1); }
+
+/* ≡菜单弹出 */
+/* W54修复P3: 改为fixed定位避免被overflow:hidden裁剪 */
+.extend-menu-popup {
+  position: fixed;
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--beilu-amber-20);
+  border-radius: 10px;
+  padding: 0.35rem 0;
+  min-width: 180px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 -4px 16px var(--beilu-shadow-30);
+  z-index: var(--z-popup);
+}
+.extend-menu-popup.hidden { display: none; }
+
+.extend-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: inherit;
+  text-align: left;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  user-select: none;
+}
+.extend-menu-item:hover {
+  background-color: var(--beilu-amber-12);
+  color: var(--beilu-amber);
+}
+.extend-menu-item:active {
+  background-color: var(--beilu-amber-20);
+}
+
+.extend-menu-divider {
+  height: 1px;
+  background: var(--beilu-amber-10);
+  margin: 0.25rem 0;
+}
+/* B26: ≡菜单快速编辑项 */
+.extend-menu-quick-edit {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.extend-menu-quick-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  gap: 0.5rem;
+}
+
+/* [T06已废弃] airp-sidebar-link 样式已移除，DOM已在airp-only-section中删除 */
+
+/* [W30-H6/H7已修] right-message-toggles / right-browser-sense DOM已删除,CSS规则清理 */
+
+/* [已废弃] work-sidebar-nav/work-nav-item 样式已迁移到 ide-activity-bar 复用 */
+
+/* === W28 Phase 1: 隐藏Tab + 两行布局 === */
+
+/* 隐藏Bot/记忆/正则Tab按钮(DOM保留，通过侧栏/菜单访问) */
+.top-tab-hidden {
+  display: none !important;
+}
+
+/* 编辑界面左导航区不透明背景 */
+.beilu-usage-nav {
+  background: var(--beilu-modal-bg);
+}
+.editor-section {
+  background: var(--beilu-modal-bg);
+}
+
+/* W59: 前置AI编辑面板导航项样式 */
+.preai-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.preai-nav-item:hover {
+  background: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+}
+.preai-nav-item.active {
+  background: var(--beilu-amber-15);
+  font-weight: 600;
+}
+
+/* B2修复: 顶部栏单行布局（W44设计: 角色名|预设 标题 [Tab居中] [Token] [⚙][✏️]） */
+.top-bar {
+  flex-wrap: nowrap;
+}
+
+/* 当前预设名称显示 */
+#header-current-preset {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* === W28: body[data-active-tab] 模式显隐控制 === */
+
+/* W59修复: Smart模式侧栏默认折叠，但用户可通过toggle按钮展开 */
+/* collapsed类存在时 → 折叠（width:0），移除时 → 展开（恢复默认宽度） */
+body[data-active-tab="smart"] .left-panel.collapsed {
+  width: 0 !important;
+  padding: 0;
+  border-right-width: 0;
+  overflow: hidden;
+}
+body[data-active-tab="smart"] .right-panel.collapsed {
+  width: 0 !important;
+  padding: 0;
+  border-left-width: 0;
+  overflow: hidden;
+}
+body[data-active-tab="smart"] .left-panel.collapsed ~ .panel-resize-handle,
+body[data-active-tab="smart"] .right-panel.collapsed ~ .panel-resize-handle {
+  display: none;
+}
+
+/* F6-1: 全智能消息流 820px 窄栏居中(凛倾设计 2.1 Claude 式;长行不拉太宽、阅读更舒适)。
+   作用域=smart 模式(body[data-active-tab=smart]);smart 下 moveChatContainer 把 #chat-container 移入 #center-tab-smart,
+   故居中整条对话列(消息流 #chat-messages + 输入 .chat-input-wrapper 同列),不影响左右固定栏。纯 CSS、可被加宽 chat-width 覆盖。 */
+/* 聊天列宽度单源（0712 根治）：--beilu-chat-width 由设置「聊天宽度」滑块写入
+   （featureControls.applyChatWidth；=100% 时移除变量回默认）。
+   默认：smart=max(820px,85%)（凛倾 F6-1 窄栏设计+跟随放大），其余模式=全宽。
+   width:100%+min-width:0：flex 子项默认 min-width:auto 被内容撑开不收缩，
+   窄窗口下固定列溢出视口右侧、左侧大片空白（凛倾 0712「右边那么多白色」）。 */
+#chat-container {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--beilu-chat-width, none);
+  margin-left: auto;
+  margin-right: auto;
+}
+body[data-active-tab="smart"] #chat-container {
+  max-width: var(--beilu-chat-width, max(820px, 85%));
+}
+
+/* [T06已废弃] airp-only-section 样式已移除，DOM已替换为废弃注释 */
+
+/* ============================================================
+   全智能临时任务卡片（W17）
+   ============================================================ */
+.task-overlay-card {
+  margin: 8px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--beilu-surface, oklch(var(--b3, 0.2 0 0)));
+  border: 1px solid var(--beilu-amber, var(--beilu-warning));
+  border-left: 3px solid var(--beilu-amber, var(--beilu-warning));
+  transition: opacity 0.5s, transform 0.5s;
+}
+.task-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.task-overlay-icon { font-size: 1.1rem; }
+.task-overlay-mode {
+  color: var(--beilu-amber, var(--beilu-warning));
+  font-weight: 600;
+}
+.task-overlay-status {
+  margin-left: auto;
+  color: var(--beilu-diff-anchor);
+  font-size: 0.8rem;
+}
+.task-overlay-title {
+  color: var(--beilu-text, #e0e0e0);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.task-overlay-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.task-overlay-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--beilu-border, rgba(255,255,255,0.12));
+  background: transparent;
+  color: var(--beilu-text, #e0e0e0);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.2s;
+}
+.task-overlay-btn:hover {
+  background: var(--beilu-amber, var(--beilu-warning));
+  color: var(--color-base-100);
+}
+.task-overlay-completed {
+  border-color: var(--beilu-diff-add);
+}
+.task-overlay-completed .task-overlay-status {
+  color: var(--beilu-diff-add);
+}
+.task-overlay-fadeout {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* ============================================================
+   跨模式通知弹窗（W17 机制2）
+   ============================================================ */
+.cross-mode-notification {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: var(--z-toast);
+  min-width: 280px;
+  max-width: 380px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--beilu-surface, oklch(var(--b3, 0.2 0 0)));
+  border: 1px solid var(--beilu-amber, var(--beilu-warning));
+  box-shadow: 0 4px 16px var(--beilu-shadow-30);
+  animation: notif-slide-in 0.3s ease-out;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.cross-mode-notification.notif-hide {
+  opacity: 0;
+  transform: translateX(100%);
+}
+@keyframes notif-slide-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.cross-mode-notif-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.cross-mode-notif-from {
+  color: var(--beilu-amber, var(--beilu-warning));
+  font-weight: 600;
+}
+.cross-mode-notif-close {
+  margin-left: auto;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 1rem;
+}
+.cross-mode-notif-close:hover { opacity: 1; }
+.cross-mode-notif-message {
+  color: var(--beilu-text, #e0e0e0);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+.cross-mode-notif-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.cross-mode-notif-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--beilu-border, rgba(255,255,255,0.12));
+  background: transparent;
+  color: var(--beilu-text, #e0e0e0);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.cross-mode-notif-btn:hover {
+  background: var(--beilu-amber, var(--beilu-warning));
+  color: var(--color-base-100);
+}
+.cross-mode-notif-btn.primary {
+  background: var(--beilu-amber, var(--beilu-warning));
+  color: var(--color-base-100);
+  border-color: var(--beilu-amber, var(--beilu-warning));
+}
+
+/* ============================================================
+   操作diff可视化（W18 §四 — like Cursor）
+   ============================================================ */
+.diff-container {
+  margin: 6px 0;
+  border-radius: 6px;
+  border: 1px solid var(--beilu-border, rgba(255,255,255,0.12));
+  overflow: hidden;
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 0.82rem;
+}
+.diff-header {
+  padding: 4px 10px;
+  background: var(--beilu-surface, oklch(var(--b3, 0.2 0 0)));
+  color: var(--beilu-text, #e0e0e0);
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--beilu-border, rgba(255,255,255,0.12));
+}
+.diff-tool {
+  color: var(--beilu-diff-context);
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+.diff-stats {
+  padding: 2px 10px;
+  background: var(--beilu-surface, oklch(var(--b3, 0.2 0 0)));
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--beilu-border, rgba(255,255,255,0.12));
+}
+.diff-stat-add { color: var(--beilu-diff-add); }
+.diff-stat-remove { color: var(--beilu-diff-remove); }
+.diff-body {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--color-base-300);
+}
+.diff-line-context {
+  padding: 0 10px;
+  color: var(--beilu-diff-context);
+  line-height: 1.5;
+}
+.diff-line-add {
+  padding: 0 10px;
+  background: var(--beilu-diff-add-bg);
+  color: var(--beilu-diff-add);
+  line-height: 1.5;
+}
+.diff-line-remove {
+  padding: 0 10px;
+  background: var(--beilu-diff-remove-bg);
+  color: var(--beilu-diff-remove);
+  line-height: 1.5;
+  text-decoration: line-through;
+  text-decoration-color: var(--beilu-diff-remove-deco);
+}
+.diff-prefix {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+  opacity: 0.6;
+}
+.diff-content {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* ★ 定点查看（阶段2）：周边上下文灰行（改动块前/后的真实文件行，把改动放回上下文看）+ 内容锚徽标 */
+.diff-line-ambient {
+  padding: 0 10px;
+  color: var(--beilu-diff-ambient);
+  opacity: 0.75;
+  line-height: 1.5;
+  background: var(--beilu-diff-ambient-bg);
+}
+.diff-anchor {
+  color: var(--beilu-diff-anchor);
+  font-size: 0.75rem;
+  margin-left: 8px;
+  font-style: italic;
+}
+.diff-anchor-clickable {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.diff-anchor-clickable:hover {
+  color: var(--beilu-diff-anchor-hover);
+  background: var(--beilu-diff-anchor-hover-bg);
+  border-radius: 3px;
+}
+
+/* ============================================================
+   模型选择器 Dropdown (H1修复)
+   ============================================================ */
+.model-selector-dropdown {
+  position: fixed;
+  min-width: 200px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--color-base-100);
+  border: 1px solid var(--color-base-300);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.15);
+  z-index: var(--z-popup);
+  padding: 4px;
+}
+.model-selector-dropdown .model-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s;
+}
+.model-selector-dropdown .model-option:hover { background: var(--beilu-bg-card); }
+.model-selector-dropdown .model-option.active { background: color-mix(in oklch, var(--color-success) 15%, transparent); font-weight: 600; }
+.model-selector-dropdown .model-option-empty {
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+/* Token 进度条样式由 tokenProgressBar.mjs 内联管理 */
+
+/* W55: 预设大悬浮窗 */
+#preset-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--beilu-shadow-60);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#preset-overlay.hidden { display: none !important; }
+
+.preset-modal {
+  background: var(--color-base-100);
+  border: 1px solid var(--color-base-300);
+  border-radius: 16px;
+  width: 90vw;
+  max-width: 960px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px var(--beilu-shadow-40);
+}
+.preset-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.preset-modal-close:hover { color: var(--color-base-content); }
+.preset-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--color-base-300);
+  flex-shrink: 0;
+}
+.preset-modal-header input {
+  flex: 1;
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--color-base-300);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--color-base-content);
+  font-size: 0.9rem;
+  outline: none;
+}
+.preset-modal-header input:focus { border-color: var(--beilu-amber); }
+/* [0717 四格恢复] 预设选择器中段=4 模式格：显示 4 个模式各自「当前正在使用的预设」+点击切换模式
+   （凛倾 0701「中间是每个模式的切换…显示4个模式各绑定的是什么预设」；0716 只删"绑定"写口，显示功能恢复） */
+.preset-modal-modes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 凛倾 0706「4个模式就是现在前端的4个模式」：chat/smart/code/work */
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-base-300);
+  flex-shrink: 0;
+}
+.pm-mode-tile {
+  border: 1.5px solid var(--color-base-300);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: var(--beilu-bg-card);
+  transition: border-color .15s;
+  overflow: hidden;
+}
+.pm-mode-tile:hover { border-color: var(--beilu-amber); }
+.pm-mode-tile.selected { border-color: var(--beilu-amber); background: color-mix(in oklch, var(--beilu-amber) 12%, transparent); }
+.pm-mode-tile .pm-m-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
+.pm-mode-tile .pm-m-preset { margin-top: 4px; font-size: 0.85rem; font-weight: 600; color: var(--color-base-content); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-mode-tile .pm-m-hint { margin-top: 2px; font-size: 0.65rem; color: color-mix(in oklch, var(--color-base-content) 55%, transparent); }
+.preset-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.preset-group-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  margin: 16px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in oklch, var(--color-base-300) 50%, transparent);
+}
+.preset-group-title:first-child { margin-top: 0; }
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.preset-card {
+  background: var(--beilu-bg-card);
+  border: 1px solid var(--color-base-300);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preset-card:hover {
+  border-color: var(--beilu-amber);
+  box-shadow: 0 2px 12px var(--beilu-amber-15);
+}
+.preset-card.active {
+  border-color: var(--beilu-amber);
+  background: var(--beilu-amber-8);
+  box-shadow: 0 0 0 2px var(--beilu-amber-30);
+}
+.preset-card-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-base-content);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preset-card-tag {
+  font-size: 0.7rem;
+  color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+
+/* === 操作阶段标识 === */
+.operation-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--beilu-bg-card) 60%, transparent);
+  font-size: 0.75rem;
+}
+.op-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.op-active {
+  color: var(--color-warning);
+  background: color-mix(in oklch, var(--color-warning) 10%, transparent);
+  animation: op-pulse 1.5s ease-in-out infinite;
+}
+.op-done {
+  color: var(--color-success);
+  background: color-mix(in oklch, var(--color-success) 10%, transparent);
+}
+@keyframes op-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ============================================================
+   W63: 白色模式对比度增强
+   ============================================================ */
+html[data-theme="light"] {
+  /* --beilu-modal-bg 已由 :root 跟随 daisyUI --color-base-200，无需覆盖 */
+  --beilu-accent: #0288d1;
+  --beilu-accent-text: #fff;
+  --beilu-error: #c62828;
+  --beilu-error-text: #fff;
+  --beilu-success: #2e7d32;
+  --beilu-warning: #e65100;
+  --beilu-search: #f9a825;
+  --beilu-purple: #7b1fa2;
+  --beilu-muted: #546e7a;
+  --beilu-text-dim: oklch(var(--color-base-content));
+  --beilu-border-subtle: var(--beilu-shadow-15);
+  --beilu-bg-hover: var(--beilu-shadow-5);
+  --beilu-dot-inactive: #999;
+}
+/* 深色主题：提升低透明度文字的最低对比度（30%白色在黑背景上不可读→45%） */
+html[data-theme="dark"] .text-base-content\/20 { color: rgba(255,255,255,0.38) !important; }
+html[data-theme="dark"] .text-base-content\/30 { color: rgba(255,255,255,0.45) !important; }
+/* A8(2026-06-10): dark 补 /40 /50 /60（原仅补到 /30）。基准 --b1=#1d232a(daisyUI v5 dark)。
+   用纯白补偿而非 --bc 半透明（同 alpha 下纯白对比更高）：/40 white@.50=5.00、/50 white@.55=5.74、/60 white@.60=6.56，均 ≥4.5。
+   注：原 /40 默认渲染（--bc#c6c8cd@0.40）仅 2.70:1，/50 仅 3.44:1，故必补。 */
+html[data-theme="dark"] .text-base-content\/40 { color: rgba(255,255,255,0.50) !important; }
+html[data-theme="dark"] .text-base-content\/50 { color: rgba(255,255,255,0.55) !important; }
+html[data-theme="dark"] .text-base-content\/60 { color: rgba(255,255,255,0.60) !important; }
+/* 浅色主题补偿 */
+html[data-theme="light"] .opacity-30 { opacity: 0.55 !important; }
+html[data-theme="light"] .opacity-40 { opacity: 0.6 !important; }
+/* A8(2026-06-10): 删除 .text-base-content/50 的 opacity:0.7 补偿——它与 [data-theme="light"] .text-base-content/50 的 color:rgba(50,40,25,0.65) 叠加，
+   叠后 #766e60(c=4.41) 再被 opacity 整体淡化为 #9c9487(c=2.61)，反而不可读。/50 现统一只由上方 color 规则单一补偿。 */
+html[data-theme="light"] .swipe-nav .arrow { background: rgba(60, 50, 30, 0.35) !important; }
+html[data-theme="light"] .swipe-counter { background: rgba(60, 50, 30, 0.2) !important; }
+html[data-theme="light"] .pv-placeholder { color: rgba(60, 50, 30, 0.55) !important; }
+html[data-theme="light"] .editor-line-numbers { color: rgba(155, 123, 30, 0.55) !important; }
+html[data-theme="light"] .fp-header,
+html[data-theme="light"] .floating-window-header { background: rgba(155, 123, 30, 0.15) !important; }
+html[data-theme="light"] .settings-modal,
+html[data-theme="light"] .editor-section,
+html[data-theme="light"] .beilu-usage-nav { background-color: var(--beilu-modal-bg) !important; }
+
+

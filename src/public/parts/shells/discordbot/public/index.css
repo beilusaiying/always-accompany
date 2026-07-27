@@ -1,0 +1,79 @@
+body {
+  margin: 0;
+}
+
+/* 消息日志样式 */
+.msg-log-container {
+  scroll-behavior: smooth;
+}
+
+.msg-log-entry {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.msg-log-entry.msg-user {
+  background: oklch(var(--b3));
+  border-left: 3px solid oklch(var(--in));
+}
+
+.msg-log-entry.msg-ai {
+  background: oklch(var(--b3));
+  border-left: 3px solid oklch(var(--su));
+}
+
+.msg-log-entry.msg-error {
+  background: oklch(var(--b3));
+  border-left: 3px solid oklch(var(--er));
+  opacity: 0.9;
+}
+
+.msg-log-entry .msg-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.msg-log-entry .msg-header .msg-author {
+  font-weight: 600;
+  opacity: 1;
+}
+
+.msg-log-entry .msg-header .msg-channel {
+  font-size: 0.75rem;
+}
+
+.msg-log-entry .msg-content {
+  white-space: pre-wrap;
+}
+
+.msg-log-entry .msg-thinking {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: oklch(var(--b1));
+  border-radius: 6px;
+  font-size: 0.8rem;
+  opacity: 0.8;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.msg-log-entry .msg-thinking-toggle {
+  cursor: pointer;
+  color: oklch(var(--wa));
+  font-size: 0.8rem;
+  margin-top: 4px;
+  user-select: none;
+}
+
+.msg-log-entry .msg-thinking-toggle:hover {
+  text-decoration: underline;
+}

@@ -12,6 +12,8 @@
 
 <p align="center"><a href="README.md">English</a> | 中文 | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
 
+<p align="center">📖 <a href="https://beilusaiying.github.io/always-accompany/">在线 Wiki 使用指南</a> &nbsp;·&nbsp; 📄 <a href="docs/p1-paper/README.md">P1 技术论文</a></p>
+
 > 本项目由一名刚毕业的大学生独立完成全部设计、架构与开发，借助 AI 辅助编程，融合算法设计、仿生学原理、框架架构和逻辑思维等多方面能力。
 
 ---

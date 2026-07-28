@@ -12,6 +12,8 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | 日本語 | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
 
+<p align="center">📖 <a href="https://beilusaiying.github.io/always-accompany/">オンライン Wiki（使い方ガイド）</a> &nbsp;·&nbsp; 📄 <a href="docs/p1-paper/README.md">P1 技術論文</a></p>
+
 > 本プロジェクトは、大学を卒業したばかりの学生が一人で設計・アーキテクチャ・開発のすべてを完遂したものです。AI 支援プログラミングを活用しつつ、アルゴリズム設計・生体模倣（バイオミメティクス）の原理・フレームワーク設計・論理的思考など、多方面の能力を融合させています。
 
 ---

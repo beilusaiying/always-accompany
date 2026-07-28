@@ -12,6 +12,8 @@
 
 <p align="center">English | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
 
+<p align="center">📖 <a href="https://beilusaiying.github.io/always-accompany/">Online Wiki (User Guide)</a> &nbsp;·&nbsp; 📄 <a href="docs/p1-paper/README.md">P1 Technical Paper</a></p>
+
 > This entire project — design, architecture, and development — was completed independently by a recent university graduate, leveraging AI-assisted programming with skills spanning algorithm design, biomimicry principles, framework architecture, and logical thinking.
 
 ---

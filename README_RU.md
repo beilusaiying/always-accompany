@@ -12,6 +12,8 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a> | Русский | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | <a href="README_FR.md">Français</a> | <a href="README_PT.md">Português</a></p>
 
+<p align="center">📖 <a href="https://beilusaiying.github.io/always-accompany/">Онлайн-вики (руководство пользователя)</a> &nbsp;·&nbsp; 📄 <a href="docs/p1-paper/README.md">Техническая статья P1</a></p>
+
 > Этот проект был полностью спроектирован, спланирован по архитектуре и разработан самостоятельно недавним выпускником университета с помощью программирования при содействии ИИ, объединив навыки в проектировании алгоритмов, принципах бионики, архитектуре фреймворков и логическом мышлении.
 
 ---

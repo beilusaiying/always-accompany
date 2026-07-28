@@ -12,6 +12,8 @@
 
 <p align="center"><a href="README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a> | <a href="README_RU.md">Русский</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a> | Français | <a href="README_PT.md">Português</a></p>
 
+<p align="center">📖 <a href="https://beilusaiying.github.io/always-accompany/">Wiki en ligne (guide d'utilisation)</a> &nbsp;·&nbsp; 📄 <a href="docs/p1-paper/README.md">Article technique P1</a></p>
+
 > Ce projet a été entièrement conçu, architecturé et développé par un jeune diplômé universitaire, avec l'aide de la programmation assistée par IA, mobilisant à la fois la conception d'algorithmes, des principes de bio-inspiration, l'architecture logicielle et le raisonnement logique.
 
 ---

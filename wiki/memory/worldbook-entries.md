@@ -1,6 +1,6 @@
 # 条目与触发机制
 
-世界书条目的完整字段和三种触发模式。条目在[世界书编辑](beilu:editor/worldbook)中创建和管理。
+世界书条目的完整字段和三种触发模式。条目在[世界书编辑](beilu:editor/worldbook-edit)中创建和管理。
 
 ## 条目结构
 
@@ -38,12 +38,24 @@
 | **cooldown** | 数字 | 触发后冷却的轮次数（冷却期间不再触发） |
 | **delay** | 数字 | 匹配后延迟几轮才实际注入 |
 
-### 开关字段
+### 开关字段（注意分两层）
+
+开关分两层，容易混淆——**enabled 和 boundCharName 是整本世界书（文件级）的开关，不是单个条目的**；条目自己只有一个 `disable` 开关：
+
+**世界书（文件）级开关**：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| **enabled** | 布尔 | 全局启用开关，各角色互通 |
-| **boundCharName** | 字符串 | 角色绑定，只在指定角色时生效 |
+| **enabled** | 布尔 | 这本世界书的全局启用开关，开了对所有角色生效 |
+| **boundCharName** | 字符串 | 角色绑定：这本世界书绑定某个角色后，只要当前角色匹配，整本书就生效——**无论 enabled 是开是关** |
+
+**条目级开关**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| **disable** | 布尔 | 单个条目的禁用开关（注意极性和 enabled 相反：true = 不注入这一条） |
+
+条目本身没有 boundCharName 字段——角色绑定只能按整本世界书设置。
 
 ## 三种触发模式详解
 
@@ -121,33 +133,39 @@ AN（Author's Note）和 EM 是原生的注入位置，由上游框架定义。
 - `delay: 5`
 - 关键词匹配后，延迟 5 轮再注入，制造"事后才揭示"的效果
 
-## 双开关的交互
+## 双开关的交互（OR 关系：命中任意一个就生效）
+
+世界书级的两个开关是 **OR（或）关系**——只要命中其中一个，整本书就会被注入：
 
 ```
-enabled: true  + boundCharName: ""      → 所有角色都生效
-enabled: true  + boundCharName: "Alice"  → 仅角色 Alice 时生效
-enabled: false + (任意)                  → 完全不生效
+enabled: true  + boundCharName 未绑定       → 所有角色都生效（全局开关命中）
+enabled: true  + boundCharName: "Alice"     → 所有角色都生效（全局开关命中，绑定只是多一条命中路径）
+enabled: false + boundCharName: "Alice"     → 当前角色是 Alice 时依然生效！（绑定命中）
+enabled: false + boundCharName 未绑定       → 完全不生效（两个开关都没命中）
 ```
 
-enabled 是全局开关，跨角色共享状态。boundCharName 是角色级过滤。两者是 AND 关系。
+把它想象成一扇有两把钥匙的门：enabled 是万能钥匙（谁来都开门），boundCharName 是专属钥匙（只给绑定的那个角色开门）。**任何一把钥匙都能开门**——所以想让一本世界书彻底停用，光关掉 enabled 还不够，还得把角色绑定也清空，否则在绑定的那个角色对话里它照样注入。
+
+> 常见困惑：「我明明关了 enabled，怎么设定还在生效？」——去看看这本世界书是不是绑定了当前角色。绑定命中时不看 enabled。
+
+<!-- TODO配图: 两把钥匙开一扇门的示意图，标注 enabled=万能钥匙 / boundCharName=专属钥匙，任一命中即注入 -->
 
 ## 运行链
 
 ```
 系统构建上下文
     ↓
-遍历所有世界书条目
+遍历每本世界书（文件级判定）：
+  1. enabled 为 true？或 boundCharName 匹配当前角色？
+     → 至少命中一个才继续，否则整本跳过
+  2. 同一本书只注入一次（去重）
     ↓
-对每个条目：
-  1. 检查 enabled → false 则跳过
-  2. 检查 boundCharName → 不匹配则跳过
-  3. 检查 cooldown → 冷却中则跳过
+遍历这本书里的条目（条目级判定）：
+  3. 条目 disable 为 true → 跳过这一条
   4. 判断触发模式：
      - constant → 直接通过
-     - regex → 匹配对话内容
+     - regex → 匹配对话内容（含 probability 概率、sticky/cooldown/delay 节奏控制）
      - dynamic → 检查记忆表格值
-  5. 检查 probability → 随机判定
-  6. 检查 delay → 未到则暂不注入
     ↓
 通过的条目按 position 和 depth 放入上下文的对应位置
     ↓

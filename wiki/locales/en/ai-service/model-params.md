@@ -116,4 +116,3 @@ For example:
 
 - [API Configuration Details](api-config.md) — Service Source configuration
 - [Preset Entry Structure](../presets/structure.md) — How Presets carry parameters
-- [Presets and Mode Binding](../presets/mode-binding.md) — Submode parameter overrides

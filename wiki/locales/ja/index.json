@@ -80,8 +80,7 @@
         { "title": "プリセットシステム概要", "file": "presets/overview.md", "audience": ["beginner", "user"] },
         { "title": "プリセットの分類と選択", "file": "presets/categories.md", "audience": ["user"] },
         { "title": "プリセットエントリ構造", "file": "presets/structure.md", "audience": ["developer"] },
-        { "title": "コマンダーモード", "file": "presets/commander.md", "audience": ["developer"] },
-        { "title": "プリセットとモードの連動", "file": "presets/mode-binding.md", "audience": ["developer"] }
+        { "title": "コマンダーモード", "file": "presets/commander.md", "audience": ["developer"] }
       ]
     },
     {
@@ -122,7 +121,9 @@
         { "title": "ウェブ検索 (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
         { "title": "正規表現拡張 (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
         { "title": "変数システム (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
-        { "title": "スクリプトエンジン", "file": "plugins/scripts.md", "audience": ["developer"] }
+        { "title": "スクリプトエンジン", "file": "plugins/scripts.md", "audience": ["developer"] },
+        { "title": "ブラウザ自動化 (beilu-browser)", "file": "plugins/browser.md", "audience": ["user", "developer"] },
+        { "title": "プラットフォームリーチ (beilu-reach)", "file": "plugins/reach.md", "audience": ["user", "developer"] }
       ]
     },
     {

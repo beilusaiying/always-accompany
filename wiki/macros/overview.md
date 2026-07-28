@@ -51,7 +51,8 @@ AI 回复到达前端后，替换 `{{char}}` 和 `{{user}}` 让角色名正确�
 | 变量宏 | 读写局部/全局变量 | `{{getvar::hp}}` `{{setvar::hp::100}}` | [变量宏](beilu:wiki/macros/variables.md) |
 | 记忆系统宏 | 记忆模块专用占位符 | `{{tableData}}` `{{hotMemory}}` | [记忆系统宏](beilu:wiki/macros/memory.md) |
 | IDE/编程宏 | 编程模式专用 | `{{sub_mode}}` `{{code_file:x}}` | [IDE/编程宏](beilu:wiki/macros/ide.md) |
-| env 自定义宏 | 插件通过环境注入 | `{{workspace_root}}` | [env 自定义变量宏](beilu:wiki/macros/env.md) |
+| env 自定义宏 | 插件/核心通过环境注入 | `{{workspace_root}}` `{{active_preset_name}}` | [env 自定义变量宏](beilu:wiki/macros/env.md) |
+| 数据注入条目与数据宏 | 尾部 `*-data` 条目专用的动态数据宏 | `{{p1_act}}` `{{p1_retrieval}}` | [数据注入条目与数据宏](beilu:wiki/macros/data-injections.md) |
 
 ## 注意事项
 

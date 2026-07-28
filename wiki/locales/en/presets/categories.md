@@ -12,10 +12,6 @@
 | Task management / documents | work | Includes task decomposition, formatting requirements, and approval workflows |
 | Custom scenario | Create your own Preset | Fully tailored to your needs |
 
-### Auto-Loading by Mode
-
-If you have bound a Preset in the mode settings (see [Preset-Mode Binding](mode-binding.md)), switching modes automatically loads the corresponding Preset — no manual selection needed.
-
 ### Per-Character / Per-Conversation Settings
 
 Each character and each conversation window can independently bind a Preset. The system uses **active_preset_map** to record which Preset each conversation uses, without interference:
@@ -70,12 +66,10 @@ Presets without a bucket field will be matched by the frontend based on keywords
 
 When the system determines which Preset to use for a conversation, it follows this priority:
 
-1. **Conversation-level binding**: Preset recorded in active_preset_map keyed by chatId
-2. **Mode-level binding**: Default Preset for that mode in mode_preset_bindings
-3. **Global default**: active_preset (the globally configured default Preset)
+1. **Conversation-level**: the "currently in use" Preset recorded in active_preset_map keyed by chatId (including precise chatId:mode keys)
+2. **Global default**: active_preset (the globally "currently in use" Preset)
 
 ## Navigation
 
 - [Preset System Overview](overview.md) — Preset fundamentals
 - [Preset Entry Structure](structure.md) — Entry field reference
-- [Preset-Mode Binding](mode-binding.md) — Mode binding mechanism

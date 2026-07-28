@@ -139,4 +139,3 @@ All defaults are defined uniformly by `paramSchema.mjs`'s PARAM_SCHEMA, ensuring
 
 - [Preset System Overview](overview.md) — Preset fundamentals
 - [Commander Mode](commander.md) — Preset takes over message assembly
-- [Preset-Mode Binding](mode-binding.md) — Mode binding mechanism

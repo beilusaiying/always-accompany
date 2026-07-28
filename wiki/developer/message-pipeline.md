@@ -110,8 +110,31 @@ AI 回复完成后，各插件的 ReplyHandler 依次处理：
 - **beilu-files**：解析 `<file_op>` / `<tool_call>` 标签，执行文件操作
 - **beilu-regex**：执行正则替换规则
 - **beilu-mvu**：解析变量操作命令
-- **beilu-memory**：解析 `<tableEdit>` 标签，更新记忆表格
+- **beilu-memory**：**25+ 种标签的统一分派中枢**（详见下节）
 - **beilu-web**：解析 `<search>` / `<browse>` 标签，触发联网请求
+
+#### beilu-memory：标签驱动的副作用中枢
+
+beilu-memory 的 ReplyHandler（`memory/handler/replyHandler.mjs` 的 `handleReply`）远不止解析 `<tableEdit>`——它是整个"通用指令系统"的执行体。设计哲学：**AI 用标签而非 JSON 表达意图**。标签自然地混在回复文本里，`handleReply` 按固定处理序逐个解析、执行副作用、落盘并广播，最后在显示清理阶段把内部协议标签从用户可见内容（content_for_show）中剥掉——用户看到的是干净回复，系统拿到的是结构化指令。
+
+按职能分组的标签清单（处理序号见 replyHandler.mjs 头注释）：
+
+| 职能 | 标签 |
+|------|------|
+| 记忆与表格 | `<tableEdit>` `<memoryArchive>` `<memorySearch>` `<memoryNote>` |
+| 任务清单 | `<taskPlan>` `<taskCheck>` |
+| 热层写入 | `<codeMemoryWrite>` `<workMemoryWrite>` |
+| 联网搜索 | `<needWebSearch>`（executeWebSearch，结果缓存供下轮 GetPrompt 注入） |
+| 模式切换 | `<modeSwitch>`（per-chatId）`<subModeSwitch>`（writeActiveSubModeId + 跨组拒绝 + 回路检测） |
+| IDE 工具 | `<ideToolCall>`（读写分离 → 安全检查 → 审批门/直接执行） |
+| 委派与分身 | `<delegate>` `<parallelDelegate>` `<report>` `<分身N>` |
+| 跨窗口/定时 | `<scheduleWakeup>` `<wakeWindow>` `<sendToWindow>`（统一经 dispatchActivation 分发） |
+| 审批与进度 | `<approval>` `<progress>` `<needHelp>` |
+| 流程与外设 | `<createFlowGroup>` `<captureControl>` `<browserAction>` `<mcpConnect>` |
+| 上下文管理 | `<contextClean>`（hideMessages 可逆隐藏 / purge）`<stopContinue>` `<fileDelivery>` |
+| 已废弃 | `<presetSwitch>`（主AI侧 2026-07-17 起仅清理不执行，统一改用 `<subModeSwitch>`） |
+
+这也是为什么"给 AI 加一种新能力"在 beilu 里通常意味着"教它一个新标签 + 在 replyHandler 挂一个处理块"，而不是加一个 API 端点。
 
 ### 8. 保存与广播
 
@@ -122,9 +145,10 @@ AI 回复完成后，各插件的 ReplyHandler 依次处理：
 如果 AI 的回复触发了续轮条件（如正在执行编程任务、工具调用后需要继续），系统自动触发新一轮的 `triggerCharReply`。
 
 续轮有安全限制：
-- 最大续轮次数（MAX_AUTO_CONTINUES = 30）
+- 续轮无次数上限，可通过面板开关控制
 - 空回复重试限制（EMPTY_REPLY_MAX_RETRIES = 3）
 - fuzzy_edit 连续失败熔断（FUZZY_FAIL_LIMIT = 3）
+- Loop 自动继续：AI 无工具调用结束时可注入自定义文本续轮
 
 ## 模块职责边界
 

@@ -80,8 +80,7 @@
         { "title": "預設集系統概覽", "file": "presets/overview.md", "audience": ["beginner", "user"] },
         { "title": "預設集分類與選擇", "file": "presets/categories.md", "audience": ["user"] },
         { "title": "預設集條目結構", "file": "presets/structure.md", "audience": ["developer"] },
-        { "title": "司令員模式", "file": "presets/commander.md", "audience": ["developer"] },
-        { "title": "預設集與模式連動", "file": "presets/mode-binding.md", "audience": ["developer"] }
+        { "title": "司令員模式", "file": "presets/commander.md", "audience": ["developer"] }
       ]
     },
     {
@@ -122,7 +121,9 @@
         { "title": "網路搜尋 (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
         { "title": "正規表示式增強 (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
         { "title": "變數系統 (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
-        { "title": "腳本引擎", "file": "plugins/scripts.md", "audience": ["developer"] }
+        { "title": "腳本引擎", "file": "plugins/scripts.md", "audience": ["developer"] },
+        { "title": "瀏覽器自動化 (beilu-browser)", "file": "plugins/browser.md", "audience": ["user", "developer"] },
+        { "title": "平台觸達 (beilu-reach)", "file": "plugins/reach.md", "audience": ["user", "developer"] }
       ]
     },
     {

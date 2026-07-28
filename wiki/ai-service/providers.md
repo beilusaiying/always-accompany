@@ -2,6 +2,10 @@
 
 always-accompany 通过渠道（Provider）标识不同的 AI 服务商。在[AI服务源](beilu:settings/api)面板选择正确的渠道可以确保消息格式正确适配，避免 API 调用失败。
 
+> **渠道是 proxy 生成器专属的概念**：本页列出的 10 个渠道都是"proxy 生成器 + OpenAI 兼容格式"下的服务商方言适配。Ollama（本地原生）和 Google Gemini（原生 API）走各自独立的生成器，**不在渠道列表里**——它们在面板的「API 类型」下拉中是与各渠道并列的独立选项。两层概念详见[服务源概览](overview.md)。
+>
+> 面板里选中某个类型后，下拉下方会直接显示该服务的坑提示，与本页各"注意事项"同源。
+
 ### Anthropic Claude
 
 | 项目 | 说明 |
@@ -52,7 +56,7 @@ always-accompany 通过渠道（Provider）标识不同的 AI 服务商。在[AI
 |------|------|
 | 渠道标识 | `deepseek-r1` |
 | 默认端点 | `https://api.deepseek.com/chat/completions` |
-| 注意事项 | deepseek-reasoner 不支持 system 角色消息（自动合并进首条 user） |
+| 注意事项 | deepseek-reasoner 不支持 system 角色消息（自动合并进首条 user）；deepseek-reasoner 官方标注 2026-07-24 弃用，建议迁 V4 系 + 思考模式（选 `deepseek` 渠道） |
 
 ### DeepSeek
 

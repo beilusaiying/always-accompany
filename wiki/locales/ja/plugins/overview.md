@@ -73,10 +73,6 @@
 <div class="wiki-card-title">beilu-vectordb</div>
 <div class="wiki-card-desc">ベクトルデータベース（セマンティック検索）</div>
 </div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-graphrag</div>
-<div class="wiki-card-desc">ナレッジグラフ</div>
-</div>
 </div>
 </div>
 

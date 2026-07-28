@@ -29,13 +29,13 @@ See [Preset Categories & Selection](categories.md) for details.
 
 ## Preset-Mode Interaction
 
-Each mode ([Chat Mode](beilu:mode/chat) / Code / [Work Mode](beilu:mode/work) / [Bot Management](beilu:mode/bot)) can bind a different Preset. When you switch modes, the system automatically loads the Preset bound to that mode:
+Each conversation keeps its own "currently in use" Preset per mode ([Chat Mode](beilu:mode/chat) / Code / [Work Mode](beilu:mode/work) / [Bot Management](beilu:mode/bot)), without interfering with each other:
 
 - Chat Mode with a chat Preset → the AI behaves like a companion character
 - Code Mode with a coding Preset → the AI behaves like a coding assistant
 - Work Mode with a work Preset → the AI behaves like a work partner
 
-See [Preset-Mode Binding](mode-binding.md) for details.
+Switching a Preset changes what is "currently in use" and takes effect immediately; conversations without a record fall back to the global current Preset.
 
 ## Deep Dive
 
@@ -68,4 +68,3 @@ See [Model Parameters](../ai-service/model-params.md) for details. You can also 
 - [Preset Categories & Selection](categories.md) — Choose a Preset for your scenario
 - [Preset Entry Structure](structure.md) — Entry field reference (developers)
 - [Commander Mode](commander.md) — Preset takes over full message assembly (developers)
-- [Preset-Mode Binding](mode-binding.md) — Mode binding mechanism (developers)

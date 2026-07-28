@@ -10,6 +10,7 @@ beilu-memory 插件在构建记忆提示词时使用的专用占位符。记忆�
 |----|------|----------|
 | `{{tableData}}` | 当前模式的记忆表格数据 | 记忆表格（结构化记忆） |
 | `{{hotMemory}}` | 热层记忆 | forever/appointments/user_profile 等持久数据 |
+| `{{workHotLayer}}` | 工作模式热层记忆全文（**仅记忆 AI 预设可用**） | `work/active/` 下 md 全文（同 `{{codeHotLayer}}` 范式，上限 `injection.work_hot_max_chars` 默认 30000） |
 | `{{chat_history}}` | 最近 N 条聊天记录 | 聊天历史 |
 | `{{lastUserMessage}}` | 用户最后一条消息 | 当前对话 |
 | `{{contextSummary}}` | 上下文压缩摘要 | 记忆系统的自动摘要 |

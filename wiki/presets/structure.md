@@ -139,4 +139,3 @@ PresetEngine 的核心方法 `buildAllEntries()` 按以下步骤工作：
 
 - [预设系统概览](overview.md) — 预设基础概念
 - [司令员模式](commander.md) — 预设接管消息组装
-- [预设与模式联动](mode-binding.md) — 模式绑定机制

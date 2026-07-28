@@ -122,9 +122,10 @@ After the AI reply completes, each plugin's ReplyHandler processes it in sequenc
 If the AI's reply triggers a continuation condition (e.g., executing a coding task, needing to continue after a tool call), the system automatically triggers a new round of `triggerCharReply`.
 
 Auto-continue has safety limits:
-- Maximum continuation count (MAX_AUTO_CONTINUES = 30)
+- No continuation count limit, controllable via panel switch
 - Empty reply retry limit (EMPTY_REPLY_MAX_RETRIES = 3)
 - fuzzy_edit consecutive failure circuit breaker (FUZZY_FAIL_LIMIT = 3)
+- Loop auto-continue: inject custom text and continue when AI finishes without tool calls
 
 ## Module Responsibility Boundaries
 

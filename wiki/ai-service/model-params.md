@@ -28,6 +28,13 @@
 | presence_penalty | -2.0 - 2.0 | 存在惩罚。正值鼓励谈论新话题，负值鼓励围绕已有话题 |
 | repetition_penalty | 0+ | 重复惩罚。1.0 = 无惩罚，大于 1 减少重复。Ollama / 本地模型专用 |
 
+### 思考参数
+
+| 参数 | 说明 |
+|------|------|
+| extended_thinking | 是否启用扩展思考（部分模型支持，如 Claude / Qwen 思考模式）。开关见[AI服务源](beilu:settings/api)面板 |
+| thinking_budget | 思考预算（token 数，最小 1024）。extended_thinking 开启后可用 |
+
 ### 其他参数
 
 | 参数 | 说明 |
@@ -54,6 +61,19 @@ PARAM_SCHEMA 默认值
 - **运行时参数面板**：用户在参数面板中手动调整的值（持久化到 runtime_params.json）
 - **子模式参数**：Code / Work 子模式独立覆盖的参数
 - **扩展层覆盖**：由 beilu-memory 或其他插件在运行时动态注入的参数
+
+### 运行时参数面板的覆盖键
+
+运行时参数面板共提供 **15 个覆盖键**，每个键都有"用预设值"的默认哨兵（留在默认值 = 不覆盖，完全交给预设）：
+
+| 分组 | 键 |
+|------|-----|
+| 上下文与流式 | context_msg_limit / stream / openai_max_context / openai_max_tokens |
+| 消息后处理与预填充 | prompt_post_processing / prefill_enabled / claude_prefill_mode |
+| 采样参数 | temperature / top_p / top_k / min_p / frequency_penalty / presence_penalty |
+| 扩展思考 | extended_thinking / thinking_budget |
+
+按用户隔离存储（per-user 视图），多窗口/多用户互不污染。
 
 ### 参数缺省单源
 
@@ -116,4 +136,3 @@ PARAM_SCHEMA 默认值
 
 - [API 配置详解](api-config.md) — 服务源配置
 - [预设条目结构](../presets/structure.md) — 预设如何携带参数
-- [预设与模式联动](../presets/mode-binding.md) — 子模式参数覆盖

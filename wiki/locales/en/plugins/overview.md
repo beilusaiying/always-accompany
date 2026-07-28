@@ -73,10 +73,6 @@ View and configure all plugins in the [Plugin Management](beilu:settings/plugins
 <div class="wiki-card-title">beilu-vectordb</div>
 <div class="wiki-card-desc">Vector database (semantic retrieval)</div>
 </div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-graphrag</div>
-<div class="wiki-card-desc">Knowledge graph</div>
-</div>
 </div>
 </div>
 

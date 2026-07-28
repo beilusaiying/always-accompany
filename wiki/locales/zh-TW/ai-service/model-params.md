@@ -116,4 +116,3 @@ PARAM_SCHEMA 預設值
 
 - [API 設定詳解](api-config.md) — 服務源設定
 - [預設集條目結構](../presets/structure.md) — 預設集如何攜帶參數
-- [預設集與模式聯動](../presets/mode-binding.md) — 子模式參數覆蓋

@@ -51,7 +51,7 @@ AI の応答がフロントエンドに到着した後、`{{char}}` と `{{user}
 | 変数マクロ | ローカル/グローバル変数の読み書き | `{{getvar::hp}}` `{{setvar::hp::100}}` | [変数マクロ](beilu:wiki/macros/variables.md) |
 | 記憶システムマクロ | 記憶モジュール専用プレースホルダー | `{{tableData}}` `{{hotMemory}}` | [記憶システムマクロ](beilu:wiki/macros/memory.md) |
 | IDE/コーディングマクロ | コードモード専用 | `{{sub_mode}}` `{{code_file:x}}` | [IDE/コーディングマクロ](beilu:wiki/macros/ide.md) |
-| env カスタムマクロ | プラグインが環境経由で注入 | `{{workspace_root}}` | [env カスタム変数マクロ](beilu:wiki/macros/env.md) |
+| env カスタムマクロ | プラグイン/コアが環境経由で注入 | `{{workspace_root}}` `{{active_preset_name}}` | [env カスタム変数マクロ](beilu:wiki/macros/env.md) |
 
 ## 注意事項
 

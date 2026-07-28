@@ -29,13 +29,13 @@ always-accompany 的預設集按用途分類（稱為 bucket）：
 
 ## 預設集與模式的聯動
 
-每個模式（[聊天模式](beilu:mode/chat) / Code / [工作模式](beilu:mode/work) / [Bot管理](beilu:mode/bot)）可以綁定不同的預設集。切換模式時，系統自動載入該模式綁定的預設集：
+每個對話在每個模式（[聊天模式](beilu:mode/chat) / Code / [工作模式](beilu:mode/work) / [Bot管理](beilu:mode/bot)）下各自記錄「目前正在使用的預設集」，互不干擾：
 
 - 聊天模式用聊天預設集 → AI 表現得像陪伴角色
 - 程式碼模式用程式碼預設集 → AI 表現得像程式碼助手
 - 工作模式用工作預設集 → AI 表現得像工作夥伴
 
-詳見 [預設集與模式聯動](mode-binding.md)。
+切換預設集即改「正在使用」，即改即生效；無記錄的對話回退全域目前預設集。
 
 ## 深入了解
 
@@ -68,4 +68,3 @@ always-accompany 的預設集按用途分類（稱為 bucket）：
 - [預設集分類與選擇](categories.md) — 按情境選擇合適的預設集
 - [預設集條目結構](structure.md) — 條目欄位詳解（開發者）
 - [司令員模式](commander.md) — 預設集接管完整訊息組裝（開發者）
-- [預設集與模式聯動](mode-binding.md) — 模式綁定機制（開發者）

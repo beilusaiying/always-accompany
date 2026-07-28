@@ -51,7 +51,7 @@ After the AI reply reaches the frontend, `{{char}}` and `{{user}}` are replaced 
 | Variable Macros | Read/write local/global variables | `{{getvar::hp}}` `{{setvar::hp::100}}` | [Variable Macros](beilu:wiki/macros/variables.md) |
 | Memory System Macros | Placeholders for the memory module | `{{tableData}}` `{{hotMemory}}` | [Memory System Macros](beilu:wiki/macros/memory.md) |
 | IDE/Code Macros | Code Mode exclusive | `{{sub_mode}}` `{{code_file:x}}` | [IDE/Code Macros](beilu:wiki/macros/ide.md) |
-| env Custom Macros | Injected by plugins via environment | `{{workspace_root}}` | [env Custom Variable Macros](beilu:wiki/macros/env.md) |
+| env Custom Macros | Injected by plugins/core via environment | `{{workspace_root}}` `{{active_preset_name}}` | [env Custom Variable Macros](beilu:wiki/macros/env.md) |
 
 ## Notes
 

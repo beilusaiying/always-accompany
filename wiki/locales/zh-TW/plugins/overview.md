@@ -73,10 +73,6 @@
 <div class="wiki-card-title">beilu-vectordb</div>
 <div class="wiki-card-desc">向量資料庫（語義檢索）</div>
 </div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-graphrag</div>
-<div class="wiki-card-desc">知識圖譜</div>
-</div>
 </div>
 </div>
 

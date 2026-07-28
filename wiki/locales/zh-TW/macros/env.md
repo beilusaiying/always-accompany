@@ -16,10 +16,20 @@
 
 以下是目前由 always-accompany 官方外掛注入的 env 巨集：
 
-| 巨集 | 注入外掛 | 說明 |
+| 巨集 | 注入來源 | 說明 |
 |----|----------|------|
 | `{{workspace_root}}` | beilu-files | 目前工作區的根目錄路徑 |
 | `{{workspace_tree}}` | beilu-files | 目前工作區的目錄樹結構 |
+| `{{active_preset_name}}` | 預設集系統（核心） | 目前啟用預設集的名稱 |
+| `{{active_preset_description}}` | 預設集系統（核心） | 目前啟用預設集的介紹（description 欄位） |
+| `{{work_sub_modes_list}}` | beilu-memory | 工作模式的全部子模式清單（含介紹），非工作模式時為空。動態內容——只應在尾部條目 `INJ-work-submodes-data` 使用（見「資料注入條目與資料巨集」頁） |
+| `{{code_sub_modes_list}}` | beilu-memory | 程式碼模式的全部子模式清單（含介紹），非程式碼模式時為空。動態內容——只應在尾部條目 `INJ-code-submodes-data` 使用 |
+| `{{current_mode}}` | beilu-memory | 目前啟用的模式（chat/code/work 等） |
+| `{{active_project}}` | beilu-memory | 目前活躍的專案名 |
+| `{{browser_status}}` | beilu-browser | 瀏覽器連線狀態（connected / disconnected）。動態內容——只應在尾部條目 `INJ-browser-status-data` 使用（0722 從 INJ-browser 頭部拆出） |
+| `{{browser_port}}` | beilu-browser | Chrome CDP 偵錯埠號（隨狀態行走尾部條目） |
+
+> **動態巨集位置鐵律**：會逐輪／頻繁變化的巨集（狀態、清單、資料類）禁止用在頭部（`depth >= 1`）條目範本裡——頭部一字變化＝提示詞快取前綴整體失效。動態巨集一律放尾部 `*-data` 條目，詳見「資料注入條目與資料巨集」頁。
 
 ### {{workspace_root}}
 
@@ -28,6 +38,29 @@
 ### {{workspace_tree}}
 
 由 beilu-files 外掛注入。值為目前工作區的目錄樹文字表示。讓 AI 瞭解專案的檔案結構，不需要逐個列舉檔案。
+
+### {{active_preset_name}} 與 {{active_preset_description}}
+
+由預設集系統在組裝提示詞時掛載（與本輪實際使用的預設集引擎同源）。分別替換為目前啟用預設集的名稱與介紹。
+
+主要用途是預設集思考骨架（beilu_think）裡的**身份自檢**：
+
+```
+当前任务身份={{active_preset_name}}
+!!!现在的需要做的事情是否是我的身份范围!!!:{{active_preset_name}}—{{active_preset_description}}
+```
+
+AI 每輪回覆前用真實的預設集身份與介紹核對目前工作是否在身份範圍內，不再靠空白填空憑感覺判斷。預設集介紹可在預設集管理介面編輯，編輯後巨集值即時跟隨。
+
+### {{work_sub_modes_list}} 與 {{code_sub_modes_list}}
+
+由 beilu-memory 匯出。替換為對應模式下全部子模式的即時清單，每行格式 `- id: 名稱 — 介紹`。只在各自模式啟用時有內容（工作巨集在 work 模式、程式碼巨集在 code 模式），其他模式下替換為空字串，因此兩個巨集可以並排寫、互不干擾：
+
+```
+当前身份的工作是否符合现在的身份:{{work_sub_modes_list}}{{code_sub_modes_list}}
+```
+
+清單來自子模式設定的即時資料——預設集裡引用巨集即可，無需手寫子模式列表（手寫列表會隨設定變更漂移）。
 
 ## 外掛如何注入自訂巨集
 

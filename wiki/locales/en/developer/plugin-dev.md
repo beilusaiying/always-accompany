@@ -1,169 +1,208 @@
-# Plugin Development
+# Plugin Development and Integration
 
-always-accompany's plugin system allows you to write custom plugins to extend functionality. Plugins participate in the [message pipeline](message-pipeline.md) through standardized interfaces, and can inject prompts for the AI, process AI replies, provide configuration panels, and more.
+always-accompany's plugin system allows you to write custom plugins to extend functionality. Plugins participate in the [message pipeline](message-pipeline.md) through standardized interfaces, and can inject prompts for the AI, process AI replies, register their own HTTP endpoints, and provide configuration panels.
 
-## Plugin Structure
+This page has two parts: **how to build a plugin** (structure, lifecycle, interfaces) and **how to connect it** (integrating with the conversation pipeline, the frontend, and external applications).
 
-The minimal directory structure of a always-accompany plugin:
+## Part 1: How to Build a Plugin
+
+### Directory Structure
+
+The minimal directory structure of a plugin:
 
 ```
 plugins/my-plugin/
-├── info.json          ← Plugin metadata (required)
-├── main.mjs           ← Plugin entry point (required)
-└── (optional) display.mjs ← Frontend configuration panel
+├── beilu-part.json    ← Part manifest (required — the discovery mechanism only recognizes this)
+├── info.json          ← Localized display information (required)
+└── main.mjs           ← Plugin entry point (required)
 ```
 
-### info.json
+### beilu-part.json (Part Manifest)
 
-The plugin's metadata file, discovered and read by parts_loader:
+The part tree discovery mechanism **only scans `beilu-part.json`**. If a directory contains `main.mjs` but no manifest, the plugin will not be included in the part enumeration and the backend will emit an `orphan_part_no_manifest` warning.
 
 ```json
 {
-  "id": "my-plugin",
-  "name": "My Plugin",
-  "description": "Plugin feature description",
-  "version": "1.0.0"
+  "type": "plugins",
+  "dirname": "my-plugin"
 }
 ```
 
-Or use the `beilu-part.json` format (both are recognized by parts_loader).
+- `type`: Part type path (always `plugins` for plugins)
+- `dirname`: Directory name — must match the actual directory name
 
-### main.mjs
+### info.json (Display Information)
 
-The plugin entry file. Exports an object containing interfaces:
+Localized information organized by language key, displayed in the plugin list and detail pages:
+
+```json
+{
+  "zh-CN": {
+    "name": "我的插件",
+    "avatar": "https://api.iconify.design/mdi/puzzle.svg",
+    "description": "一句话描述",
+    "description_markdown": "**详细描述**，支持 Markdown。",
+    "version": "0.1.0",
+    "author": "你的名字",
+    "tags": ["标签"]
+  },
+  "en-UK": { "name": "My Plugin", "description": "..." }
+}
+```
+
+### main.mjs (Entry Point)
+
+Export an object containing lifecycle hooks and interfaces:
 
 ```javascript
 export default {
-  info: { /* plugin info */ },
+  info,                // typically imported from info.json
+  Init,                // optional: install-time initialization (once per user)
+  Load,                // optional: loaded each time at runtime
+  Unload,              // optional: unload (in-process removal)
+  Uninstall,           // optional: cleanup when the plugin is deleted
   interfaces: {
     chat: {
-      GetPrompt,     // Inject prompts
-      TweakPrompt,   // Adjust prompts
-      ReplyHandler,  // Process AI replies
+      GetPrompt,       // inject prompts
+      TweakPrompt,     // adjust the assembled prompt_struct
+      ReplyHandler,    // process AI replies (can trigger regeneration)
     },
     config: {
-      GetData,       // Read configuration
-      SetData,       // Write configuration
+      GetData,         // read configuration/state
+      SetData,         // write configuration/trigger actions
     },
   },
 };
 ```
 
-## Interface Details
+### Lifecycle and Ordering
 
-### GetPrompt
+Driven by `server/parts_loader.mjs`; the order is fixed:
 
-Called before a message is sent; returns the content the plugin wants to inject into the prompt.
+```
+Init({ router, username })   ← install-once per user (gated by parts_init record)
+  ↓
+Load({ router, username })   ← first load at each runtime
+  ↓
+interfaces.config.SetData(saved config)   ← framework re-injects parts_config persisted configuration
+```
 
-**Parameters**: `(chatReplyRequest)`
+Key points:
 
-**Return value**: A `single_part_prompt_t` object containing:
+- **SetData runs after Load** — `Load` cannot access framework-injected persisted configuration; initialization that depends on configuration must go in SetData or be deferred (lazy execution).
+- `Init` only executes once after installation (guarded by the on-disk `parts_init` record); within a worker isolate it executes once per isolate (in-memory gate).
+- At startup the framework first **shallow-loads** (only `import` to warm the module cache, no hooks run), then **full-preloads** in the background (complete lifecycle); lazy loading on the user request path serves as a fallback.
+- Built-in plugins placed in the `plugins/` directory are automatically registered as default plugins (`plugins/main.mjs` container scans all subdirectories containing `main.mjs` during Load); plugins that fail to load are not registered (prevents dirty entry resurrection).
+- **Hot reload = restart the process** (Deno does not support single-file ESM unloading); code changes require a service restart to take effect.
+- The plugin reference you receive is a lazy proxy (FullProxy); after a reload, old references automatically point to the new instance.
+
+## Part 2: How to Connect — Integrating with the Conversation Pipeline
+
+Each conversation turn, the pipeline touches a plugin's `interfaces.chat` three hooks in a fixed order. To participate, place the plugin in `plugins/` (it participates automatically after registration) — no additional configuration is needed.
+
+### GetPrompt — Pre-reply Injection
+
+All plugins' GetPrompt calls are **issued concurrently and awaited together**; the return value goes into `prompt_struct.plugin_prompts[plugin name]`.
+
+**Signature**: `GetPrompt(args)` (args = chatReplyRequest, contains `chatid` / `username` / `chat_log`, etc.)
+
+**Return value**:
 
 ```javascript
 {
   text: [
-    { content: "Prompt text", important: 0 }
+    { content: "Prompt text", important: 0 }   // sorted by important, enters the "plugins" segment
   ],
-  extension: {
-    // Data passed between plugins (not sent directly to AI)
-  }
+  additional_chat_log: [],   // optional: entries to append to the chat log segment
+  extension: {},             // optional: data passed between plugins (not sent directly to the AI)
 }
 ```
 
-- `text[]`: Text fragments to inject into the prompt, sorted by important
-- `extension`: Extension data for other plugins to read during the TweakPrompt phase
+### TweakPrompt — Post-assembly Adjustment
 
-### TweakPrompt
+Executes in `detail_level` rounds after all GetPrompt calls complete (default 3 rounds: dl = 2 → 1 → 0); plugins within each round run concurrently.
 
-Called after all GetPrompt calls complete, allowing modification of the assembled prompt_struct. Executes in three rounds:
+**Signature**: `TweakPrompt(args, prompt_struct, my_prompt, detail_level)`
 
-**Parameters**: `(prompt_struct, chatReplyRequest, detail_level)`
+- `prompt_struct`: The complete prompt structure (can be modified directly)
+- `my_prompt`: This plugin's return value from the GetPrompt phase
+- Return value: none (modify `prompt_struct` directly)
 
-- `prompt_struct`: The current prompt structure (can be modified directly)
-- `detail_level`: The current round (2 -> 1 -> 0)
+Typical per-round usage: dl=2 reads other plugins' extensions → dl=1 reorganizes message sequences → dl=0 final adjustments.
 
-**Return value**: None (modifies prompt_struct directly)
+### ReplyHandler — Post-reply Processing
 
-Typical usage:
-- Round 1 (dl=2): Read other plugins' extension data
-- Round 2 (dl=1): Reorganize message sequences
-- Round 3 (dl=0): Final adjustments
+After the AI reply arrives, called **serially per plugin** within the regeneration loop.
 
-### ReplyHandler
+**Signature**: `ReplyHandler(result, { ...args, prompt_struct, AddLongTimeLog })`
 
-Called after the AI reply arrives, used to parse and process specific tags in the reply.
+- `result`: The reply object; modifying `result.content` modifies the reply content (`content_for_show` is the display-layer text)
+- `AddLongTimeLog(entry)`: Attaches tool-call traces to this message for persistence (visible across turns)
+- **Return value: truthy = trigger regeneration** (the regen loop has no iteration limit; your logic controls termination); falsy = pass through
+- An exception thrown by a single plugin is isolated and skipped; it does not interrupt other plugins' ReplyHandler calls
 
-**Parameters**: `(replyText, chatReplyRequest)`
+Typical usage: parse custom tags in the AI reply → execute operations (file read/write, variable setting) → inject results into the next round via GetPrompt.
 
-**Return value**: Processed text (can modify reply content)
+### Inter-plugin Communication
 
-Typical usage:
-- Parse custom tags in the AI reply
-- Execute operations corresponding to tags (file read/write, variable setting, etc.)
-- Inject operation results into the next round via GetPrompt
+Plugins do not import each other directly; they communicate indirectly through the `extension` field of `prompt_struct`:
 
-### GetData
+1. Plugin A writes `extension.my_data` in its GetPrompt return value
+2. Plugin B reads `prompt_struct.plugin_prompts['plugin-a'].extension.my_data` during the TweakPrompt phase
 
-Called when the frontend or other modules read plugin configuration/state.
+### Mode Pipeline (Advanced)
 
-**Parameters**: `(request)`
+Generation goes through the ModeDef pipeline (one pipeline per mode: chat/code/work, etc.). Plugins that have been migrated into the pipeline menu are dispatched by mode via dispatch; plugins outside the menu are called directly — **new plugins are called directly by default and participate in all modes** without needing to register in the pipeline menu.
 
-**Return value**: Configuration data object
+## Part 3: How to Connect — Frontend Integration
 
-### SetData
+### Self-registering HTTP Endpoints
 
-Called when the frontend or other modules write plugin configuration or trigger actions.
+The `router` received in `Init` / `Load` is a plugin-dedicated Express router, mounted at:
 
-**Parameters**: `(data, request)`
+```
+/(api|ws|virtual_files)/parts/plugins:<plugin name>/<your registered path>
+```
 
-The `_action` field in `data` can be used to distinguish between different operation types.
+For example, `router.post('/config/setdata', handler)` in your plugin means the frontend calls `POST /api/parts/plugins:my-plugin/config/setdata`. All parts API requests pass through login authentication first; unauthenticated requests return 401.
 
-## Inter-plugin Communication
+### config getdata/setdata Convention
 
-Plugins do not directly import each other. Instead, they communicate indirectly through the `extension` field of `prompt_struct`:
+The general convention for frontend–plugin communication:
 
-1. Plugin A writes data to `extension.my_data` during the GetPrompt phase
-2. Plugin B reads from `prompt_struct.plugin_prompts['plugin-a'].extension.my_data` during the TweakPrompt phase
+- `GET  /api/parts/plugins:<name>/config/getdata` → `interfaces.config.GetData()`
+- `POST /api/parts/plugins:<name>/config/setdata` → `interfaces.config.SetData(data)`
 
-This loosely-coupled design ensures plugins can be developed and deployed independently.
+The `data._action` field distinguishes action types (read file / write config / trigger operation …); a single SetData dispatches multiple operation types.
 
-## Plugin Loading
+### Security-sensitive Configuration Must Register an Owner Gate
 
-### Auto-loading
-
-Plugins listed in `defaultParts.plugins` are automatically loaded in every conversation.
-
-### Loading Order
-
-parts_loader loads plugins in directory order during server startup. Module-level code in plugins executes at load time — be careful to avoid blocking and circular dependencies.
-
-If you need to reference other modules, use lazy dynamic imports (loaded on first use) to avoid loading order issues.
-
-## Security Considerations
-
-### Security-sensitive Configuration
-
-If your plugin has security-sensitive configuration options (such as toggling the Sandbox, allowing command execution, etc.), they need to be registered in `security_policy.mjs`'s `OWNER_ONLY_PART_CONFIG_WRITE` table to ensure these configurations can only be modified by the owner.
+In a multi-user deployment, any logged-in user can call `config/setdata`. If your configuration items write **process-level global security state** (toggling the sandbox, allowing command execution, changing the workspace root …), they must be registered in the security-sensitive write list in `security_policy.mjs` — the framework enforces owner-only writes at the routing seam (case variants are also covered). Otherwise any registered user can flip your switch (RCE / sandbox escape surface).
 
 ### User Data Isolation
 
-In multi-user scenarios, plugin configuration and data should be isolated per user. Use `getUserDataDir(username)` to obtain user data paths, or use AsyncLocalStorage to implement per-user context.
+In multi-user scenarios, plugin configuration and data are isolated per user: store data using user data directories, or implement per-user context with AsyncLocalStorage (as beilu-files does). Note that `args.username` in GetPrompt/ReplyHandler is the source of the isolation key.
 
-### Frontend Configuration Panel
+## Part 4: How to Connect — External Application Integration
 
-Return frontend configuration panel JavaScript code through the `GetConfigDisplayContent` interface. The panel executes in the browser — be careful not to expose sensitive information.
+External programs (games, scripts, third-party tools) do not go through plugins; they use the **`/api/v1` external interface**:
+
+1. Settings → External Application Integration → Create API Key (select permission scope; the key is shown only once)
+2. REST calls: `Authorization: Bearer <key>`, endpoints listed in [API Endpoint Reference](api-reference.md) (chat / characters / variables / memory / presets / worldbooks / tools / webhooks)
+3. Real-time bridge: `ws://host/api/v1/game/connect?chatId=<id>&token=<key>` — send `{type:"send", content, sender}` to trigger an AI reply and automatically receive streaming tokens and message events
+4. Outbound push: register a Webhook; when an AI reply completes, an HMAC-signed POST is sent to your URL
+
+External input is sanitized (invisible characters stripped, protocol tags escaped, wrapped in `<external_user>` identity); bypassing sanitization requires a separate `chat:raw` scope. Dangerous operations (deleting conversations / modifying presets) require an `X-Beilu-Confirm: true` confirmation header.
 
 ## User Plugins (beilu-plugin-host)
 
 Through beilu-plugin-host, users can load custom plugin scripts at runtime without restarting the service. User plugins have the same interface capabilities as built-in plugins but are subject to security policy constraints.
 
-## Testing
+## Debugging
 
-Recommendations for plugin development:
-
-- Use the `BEILU_DIAG=<module-name>` environment variable to enable diagnostic logging
-- Record key events through the whitebox tracing system (wbTrace / wbDetect)
-- Use fakeSend (token preview) mode to test GetPrompt / TweakPrompt output
+- `BEILU_DIAG=<module name>` environment variable enables diagnostic logging
+- whitebox tracing (wbTrace / wbDetect) records key events, visible in the error panel
+- fakeSend (token preview) mode tests GetPrompt / TweakPrompt output without actually sending
 
 ## Navigation
 

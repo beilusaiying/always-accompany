@@ -129,3 +129,4 @@ always-accompany 的模式分为两层：
 - [Bot 模式](beilu:wiki/modes/bot.md) - 多平台 Bot 管理
 - [游戏陪伴模式](beilu:wiki/modes/game.md) - 桌宠与 Live2D
 - [子模式与切换](beilu:wiki/modes/submodes.md) - 子模式详解
+- [多窗口与多开](beilu:wiki/modes/multi-window.md) - 同时开多个窗口、跨窗口唤醒与通知

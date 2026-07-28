@@ -12,8 +12,9 @@
 | 新建按钮 | 创建新的 API 服务源 |
 | 删除按钮 | 删除当前选中的服务源 |
 | 配置名称 | 文本输入，服务源的显示名称 |
-| 渠道下拉 | 多种渠道可选（OpenAI / Claude / Gemini / Ollama 等），决定消息格式适配 |
-| URL | 文本输入，API 端点地址 |
+| API 类型下拉 | 选择服务类型（Anthropic Claude / DeepSeek / Qwen / Google Gemini（原生）/ Ollama（本地原生）等）。选项由后端渠道元数据单源下发，选中后自动填默认端点、显示该服务的坑提示。概念上它把「生成器 + 渠道」两层拍平成一层，详见[服务源概览](overview.md)的「生成器与渠道」 |
+| 坑提示区 | API 类型下拉下方，显示所选服务的已核实注意事项（如 Claude 的 temperature/top_p 互斥） |
+| URL | 文本输入，API 端点地址；旁边有「恢复默认」按钮可随时回填该类型的默认端点 |
 | Key | 文本输入，API 密钥（加密存储） |
 | 模型 | 文本输入，模型名称标识符 |
 | 获取模型列表 | 按钮，从 API 拉取可用模型列表供选择 |
@@ -69,7 +70,7 @@ API 端点地址。不同服务商和生成器使用不同的端点格式。
 
 ### provider（渠道）
 
-告诉 always-accompany 这是哪家服务商的 API，决定消息格式适配策略。详见 [支持的 AI 服务商](providers.md)。
+告诉 always-accompany 这是哪家服务商的 API，决定 OpenAI 兼容格式下的消息适配细节。**渠道只属于 proxy 生成器**——Ollama、Gemini 原生等走各自独立生成器的源没有这个字段。渠道共 10 个值（claude / openrouter-claude / openrouter / gemini / deepseek-r1 / deepseek / qwen / openai-reasoning / openai / generic），详见 [支持的 AI 服务商](providers.md)。
 
 强烈建议手动选择渠道而非依赖自动检测。自动检测（留空或选"自动检测"）会根据 URL 和模型名猜测，可能误判导致 API 调用失败。
 

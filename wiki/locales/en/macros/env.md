@@ -16,10 +16,20 @@ This is a **fully dynamic** mechanism — plugins can update values in `macro_en
 
 The following env Macros are currently injected by official always-accompany plugins:
 
-| Macro | Injecting Plugin | Description |
+| Macro | Injection Source | Description |
 |-------|-----------------|-------------|
 | `{{workspace_root}}` | beilu-files | Root directory path of the current workspace |
 | `{{workspace_tree}}` | beilu-files | Directory tree structure of the current workspace |
+| `{{active_preset_name}}` | Preset system (core) | Name of the currently active Preset |
+| `{{active_preset_description}}` | Preset system (core) | Description of the currently active Preset (the description field) |
+| `{{work_sub_modes_list}}` | beilu-memory | Full list of Work Mode sub-modes (with descriptions); empty outside Work Mode. Dynamic content — only use in the tail entry `INJ-work-submodes-data` (see "Data Injection Entries and Data Macros" page) |
+| `{{code_sub_modes_list}}` | beilu-memory | Full list of Code Mode sub-modes (with descriptions); empty outside Code Mode. Dynamic content — only use in the tail entry `INJ-code-submodes-data` |
+| `{{current_mode}}` | beilu-memory | The currently active mode (chat/code/work, etc.) |
+| `{{active_project}}` | beilu-memory | Name of the currently active project |
+| `{{browser_status}}` | beilu-browser | Browser connection status (connected / disconnected). Dynamic content — only use in the tail entry `INJ-browser-status-data` (split from INJ-browser head on 0722) |
+| `{{browser_port}}` | beilu-browser | Chrome CDP debug port number (travels with the status line in the tail entry) |
+
+> **Iron Rule for Dynamic Macro Placement**: Macros that change every turn or frequently (state, lists, data types) are forbidden in head (`depth >= 1`) entry templates — a single character change in the head invalidates the entire prompt cache prefix. Dynamic Macros must always be placed in tail `*-data` entries. See "Data Injection Entries and Data Macros" page for details.
 
 ### {{workspace_root}}
 
@@ -28,6 +38,29 @@ Injected by the beilu-files plugin. The value is the root directory path of the 
 ### {{workspace_tree}}
 
 Injected by the beilu-files plugin. The value is a text representation of the current workspace's directory tree. It lets the AI understand the project's file structure without listing files one by one.
+
+### {{active_preset_name}} and {{active_preset_description}}
+
+Mounted by the Preset system while assembling the prompt (same source as the Preset engine actually used for this turn). Replaced with the name and description of the currently active Preset.
+
+Their main use is the **identity self-check** in the Preset thinking skeleton (beilu_think):
+
+```
+Current task identity={{active_preset_name}}
+!!!Is what I am about to do within my identity scope!!!:{{active_preset_name}}—{{active_preset_description}}
+```
+
+Before each reply, the AI verifies the current work against the real Preset identity and its description, instead of filling in a blank by feel. The Preset description can be edited in the Preset management UI, and the Macro value follows immediately.
+
+### {{work_sub_modes_list}} and {{code_sub_modes_list}}
+
+Exported by beilu-memory. Replaced with the real-time list of all sub-modes of the corresponding mode, one per line in the format `- id: label — description`. Each Macro only has content while its own mode is active (the work Macro in Work Mode, the code Macro in Code Mode); otherwise it is replaced with an empty string, so the two Macros can be written side by side without interfering:
+
+```
+Does the current work match the current identity:{{work_sub_modes_list}}{{code_sub_modes_list}}
+```
+
+The list comes from live sub-mode configuration data — reference the Macro in Presets instead of hand-writing sub-mode lists (hand-written lists drift as the configuration changes).
 
 ## How Plugins Inject Custom Macros
 

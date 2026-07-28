@@ -2,9 +2,17 @@
 
 beilu-chat 的所有 HTTP/WS 路由在 `endpoints.mjs` 中定义。本文档列出主要端点及其功能。所有端点都通过 `authenticate` 中间件保护（需要登录）。详见[权限与鉴权](../security/auth.md)。
 
+> **权威来源说明**：全项目（含各插件）的完整端点清单以仓库内开发者 Wiki 的 `docs/开发者Wiki/09_API端点参考.md` 为权威版本，两份文档如有出入以该文档及 `endpoints.mjs` 实际注册为准。本页只覆盖 beilu-chat Shell 自身的端点。
+
 ## 路由前缀
 
-所有 beilu-chat 端点的基础路径为 `/api/shells/chat/`。以下端点省略此前缀。
+所有 beilu-chat 端点的基础路径为 `/api/parts/shells:chat/`（parts 框架约定路径 `/api/parts/{type}:{name}/...`，shell 类部件名为 `shells:chat`）。以下端点省略此前缀。
+
+例如"发送消息"端点的完整路径是：
+
+```
+POST /api/parts/shells:chat/:chatid/message
+```
 
 ## 对话消息操作
 
@@ -12,7 +20,7 @@ beilu-chat 的所有 HTTP/WS 路由在 `endpoints.mjs` 中定义。本文档列�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| WS | `/ws/.../ui/:chatid` | 聊天 UI WebSocket 连接 |
+| WS | `/ws/parts/shells:chat/ui/:chatid` | 聊天 UI WebSocket 连接（完整路径，不含 `/api` 前缀） |
 | GET | `:chatid/initial-data` | 打开对话时获取初始化数据 |
 | GET | `:chatid/log` | 获取 chatLog（支持分页） |
 | GET | `:chatid/log/length` | chatLog 长度（`?visible=1` 仅未隐藏条目） |
@@ -92,14 +100,14 @@ beilu-chat 的所有 HTTP/WS 路由在 `endpoints.mjs` 中定义。本文档列�
 
 ## 插件配置端点
 
-插件配置通过 parts_router 的统一端点访问（非 beilu-chat 特有）：
+几乎每个插件都提供一对配置读写端点（在各插件实现体注册，非 beilu-chat 特有）：
 
 | 操作 | 端点 | 说明 |
 |------|------|------|
-| 读配置 | `GET /api/parts/:partpath/config` | 获取插件配置 |
-| 写配置 | `POST /api/parts/:partpath/config` | 更新插件配置 |
-| 读数据 | `GET /api/parts/:partpath/data` | 调用 GetData |
-| 写数据 | `POST /api/parts/:partpath/data` | 调用 SetData |
+| 读配置/数据 | `GET /api/parts/plugins:<插件名>/config/getdata` | 调用插件的 GetData |
+| 写配置/执行操作 | `POST /api/parts/plugins:<插件名>/config/setdata` | 调用插件的 SetData；写操作通过 body 里的 `_action` 字段路由到具体分支 |
+
+例如切换模式走 `POST /api/parts/plugins:beilu-memory/config/setdata`，body 为 `{ "_action": "switchMode", "mode": "code" }`。各插件的 action 清单见 `docs/开发者Wiki/09_API端点参考.md`。
 
 安全敏感的 config/setdata 写入经 `partConfigWriteNeedsOwner` 检测，命中时要求 owner 权限。
 
@@ -119,6 +127,7 @@ always-accompany 通过 WebSocket 实现实时通信。主要事件：
 | `stream_update` | AI 流式回复新片段 |
 | `token_usage` | Token 使用统计 |
 | `typing_status` | 输入状态（多组并行时的对端活动指示） |
+| `tool_results_ready` | IDE 工具结果就绪，触发自动继续 |
 | `auto_continue_fuse` | 自动续轮熔断通知 |
 
 ### 客户端 -> 服务端

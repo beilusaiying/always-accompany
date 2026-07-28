@@ -116,4 +116,3 @@ PARAM_SCHEMA デフォルト値
 
 - [API 設定詳細](api-config.md) — サービスソース設定
 - [プリセット条目構造](../presets/structure.md) — プリセットがパラメータを携帯する仕組み
-- [プリセットとモード連動](../presets/mode-binding.md) — サブモードパラメータの上書き

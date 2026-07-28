@@ -139,4 +139,3 @@ PresetEngine のコアメソッド `buildAllEntries()` は以下のステップ�
 
 - [プリセットシステム概要](overview.md) — プリセットの基本概念
 - [コマンダーモード](commander.md) — プリセットがメッセージ組み立てを制御する仕組み
-- [プリセットとモードの連動](mode-binding.md) — モードバインディングの仕組み

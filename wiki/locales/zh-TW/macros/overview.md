@@ -51,7 +51,7 @@ AI 回覆到達前端後，替換 `{{char}}` 和 `{{user}}` 讓角色名正確�
 | 變數巨集 | 讀寫區域/全域變數 | `{{getvar::hp}}` `{{setvar::hp::100}}` | [變數巨集](beilu:wiki/macros/variables.md) |
 | 記憶系統巨集 | 記憶模組專用佔位符 | `{{tableData}}` `{{hotMemory}}` | [記憶系統巨集](beilu:wiki/macros/memory.md) |
 | IDE/程式碼巨集 | 程式碼模式專用 | `{{sub_mode}}` `{{code_file:x}}` | [IDE/程式碼巨集](beilu:wiki/macros/ide.md) |
-| env 自訂巨集 | 外掛透過環境注入 | `{{workspace_root}}` | [env 自訂變數巨集](beilu:wiki/macros/env.md) |
+| env 自訂巨集 | 外掛/核心透過環境注入 | `{{workspace_root}}` `{{active_preset_name}}` | [env 自訂變數巨集](beilu:wiki/macros/env.md) |
 
 ## 注意事項
 

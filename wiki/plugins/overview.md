@@ -1,6 +1,6 @@
 # 插件
 
-在[插件管理](beilu:settings/plugins)面板查看和配置所有插件。always-accompany 内置 18 个插件，按功能分组如下。
+在[插件管理](beilu:settings/plugins)面板查看和配置所有插件。always-accompany 内置 22 个插件，按功能分组如下。
 
 ## 插件列表
 
@@ -35,7 +35,15 @@
 </div>
 <div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
 <div class="wiki-card-title">beilu-ppt</div>
-<div class="wiki-card-desc">PPT 生成</div>
+<div class="wiki-card-desc">PPT 生成（大纲/生成/迭代，产出 pptx）</div>
+</div>
+<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
+<div class="wiki-card-title">beilu-browser</div>
+<div class="wiki-card-desc">浏览器自动化（AI 操控真实 Chrome）</div>
+</div>
+<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
+<div class="wiki-card-title">beilu-reach</div>
+<div class="wiki-card-desc">平台触达（主流平台专用适配器）</div>
 </div>
 </div>
 </div>
@@ -46,6 +54,14 @@
 <div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
 <div class="wiki-card-title">beilu-eye</div>
 <div class="wiki-card-desc">桌面截图感知 + Electron 桌宠</div>
+</div>
+<div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
+<div class="wiki-card-title">beilu-stt</div>
+<div class="wiki-card-desc">语音转录（本地模型，说话代替打字）</div>
+</div>
+<div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
+<div class="wiki-card-title">beilu-live</div>
+<div class="wiki-card-desc">直播弹幕接入（初筛后注入对话）</div>
 </div>
 </div>
 </div>
@@ -74,8 +90,8 @@
 <div class="wiki-card-desc">向量数据库（语义检索）</div>
 </div>
 <div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-graphrag</div>
-<div class="wiki-card-desc">知识图谱</div>
+<div class="wiki-card-title">beilu-airp</div>
+<div class="wiki-card-desc">AIRP 渲染（DSL 标签渲染为彩色符号画）</div>
 </div>
 </div>
 </div>
@@ -98,6 +114,10 @@
 <div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
 <div class="wiki-card-title">beilu-tutorial</div>
 <div class="wiki-card-desc">应用内教程 / wiki（本帮助页由它渲染）</div>
+</div>
+<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
+<div class="wiki-card-title">beilu-cli</div>
+<div class="wiki-card-desc">CLI 工具后端（无需 IDE 的工具执行）</div>
 </div>
 </div>
 </div>
@@ -157,9 +177,13 @@
 ## 快速导航
 
 - [文件操作 (beilu-files)](files.md) — AI 文件读写
-- [屏幕感知 (beilu-eye)](eye.md) — 桌面截图与桌宠
+- [屏幕感知与桌宠 (beilu-eye)](eye.md) — 桌面截图与桌宠
+- [语音转录 (beilu-stt)](stt.md) — 本地语音转文字
 - [联网搜索 (beilu-web)](web.md) — 搜索与网页浏览
+- [浏览器自动化 (beilu-browser)](browser.md) — AI 操控真实浏览器
+- [平台触达 (beilu-reach)](reach.md) — 主流平台专用适配器
+- [PPT 生成 (beilu-ppt)](ppt.md) — 从需求到 pptx
 - [正则增强 (beilu-regex)](regex.md) — AI 回复后处理
-- [变量系统 (beilu-mvu)](mvu.md) — 变量读写
+- [变量系统 (beilu-mvu)](mvu.md) — 状态追踪
 - [脚本引擎](scripts.md) — EJS 模板与脚本
 - [插件开发](../developer/plugin-dev.md) — 编写自定义插件

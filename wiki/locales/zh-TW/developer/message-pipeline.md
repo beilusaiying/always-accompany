@@ -122,9 +122,10 @@ AI 回覆完成後，各外掛的 ReplyHandler 依次處理：
 如果 AI 的回覆觸發了續輪條件（如正在執行程式碼任務、工具呼叫後需要繼續），系統自動觸發新一輪的 `triggerCharReply`。
 
 續輪有安全限制：
-- 最大續輪次數（MAX_AUTO_CONTINUES = 30）
+- 續輪無次數上限，可通過面板開關控制
 - 空回覆重試限制（EMPTY_REPLY_MAX_RETRIES = 3）
 - fuzzy_edit 連續失敗熔斷（FUZZY_FAIL_LIMIT = 3）
+- Loop 自動繼續：AI 無工具調用結束時可注入自訂文字續輪
 
 ## 模組職責邊界
 

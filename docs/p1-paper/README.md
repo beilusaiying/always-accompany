@@ -4,6 +4,8 @@ P1 自驱动发散召回系统技术论文 / Technical paper of the P1 Self-Driv
 
 P1 is the cognitive front-end of always-accompany: before the main LLM generates a reply, P1 completes a multi-dimensional semantic divergence over the user input — with the current production route (Route 1) running fully LLM-free — and injects the resulting direction words into the LLM context.
 
+> 📖 面向使用者的图文版介绍见[在线 Wiki 的 P1 专项](https://beilusaiying.github.io/always-accompany/)。/ For a user-oriented illustrated introduction, see the P1 section of the [online wiki](https://beilusaiying.github.io/always-accompany/).
+
 ## 目录 / Contents
 
 | # | 中文 | English |

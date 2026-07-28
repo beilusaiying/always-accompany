@@ -25,13 +25,101 @@ run.bat          # Windows
 # or chmod +x run.sh && ./run.sh   # Linux/macOS
 ```
 
-Open your browser to `http://localhost:1314` → set up an AI service source → import a character card → start chatting. The Deno runtime downloads itself automatically on first launch, no manual install needed. You'll need at least one AI API key. The app ships with a full built-in wiki walkthrough.
+Open your browser to `http://localhost:1314` → set up an AI service source → import a character card → start chatting. The Deno runtime downloads itself automatically on first launch, no manual install needed. You'll need at least one AI API key. The app ships with a full built-in wiki walkthrough — also readable as the [online wiki](https://beilusaiying.github.io/always-accompany/).
 
 > **Note:** The first launch takes longer than usual — the runtime needs to download dependencies and initialize the database. Please wait for the page to fully load before interacting. Subsequent launches will be much faster.
 
 ---
 
-A three-layer recursive memory (day → month → year archiving, pure JSON, 260-year capacity) + a front-loaded retrieval AI (a dedicated AI that only hunts for relevant memories and hands what it finds to the reply AI — each one stays in its own lane) + tiered context cleanup (clearing something just stops it from being sent again; the original text stays put and can always be restored). These three pieces mesh together so the AI keeps remembering every word you've ever said, no longer bound by the context window. On top of that, we've built chat/roleplay, IDE coding mode, work mode (including AI-made slide decks), a Live2D desktop pet (screen awareness + game companion), voice input, a Discord Bot, and MCP external tool integration — every entry point shares the same memory, so switching windows doesn't make the AI forget you. Currently being refined: a next-generation retrieval engine (a 21-node pure-algorithm pipeline, zero LLM, zero network, millisecond-level, aiming for sentence-level attention).
+## Why this project exists
+
+Maybe you've seen *Detroit: Become Human*, or *Plastic Memories*. The humanoid AIs in them are genuinely intelligent — work and companionship in one being. So — I decided to build one for myself.
+
+**The first problem to solve is memory.**
+
+Modern AI contexts run to a million tokens, and there is no shortage of memory-store and compression tools. But they are either too flat, or they pile up endlessly as time goes on. You don't want your AI companion to forget the memories between you — yet under existing approaches, that's nearly inevitable.
+
+So what *is* memory? Human memory is actually short-lived — details from two days ago are already blurry. But give me one keyword and I can instantly surface the matching, or related, memory. That points to two directions: **how memory is stored, and how it is found.**
+
+Humans don't retain every detail; we forget selectively. Today's AI doesn't — it either brute-force compresses or dumps everything into a vector store. That betrays the nature of memory: you can't instantly forget what just happened, and you don't replay your last several years every single day.
+
+So we built the system below along exactly those lines.
+
+---
+
+## The memory system — store like a human, forget like a human
+
+> 📖 Full illustrated guide: [Online Wiki · Memory System](https://beilusaiying.github.io/always-accompany/#en/memory/overview.md)
+
+**Data tables** hold today's memories and the permanent ones — the way you might forever remember your first love's name, the first thing you did together, the day of the confession.
+
+Above that sit three layers split by temporal distance, modeling human selective forgetting (layered memory formation + the Ebbinghaus forgetting curve):
+
+```
+📋 Data tables — today's + permanent memories (chat / code / work kept separate)
+🔥 Hot layer (weekly) — daily data auto-archived; the AI files it by time, event, and process threads
+🌤️ Warm layer (monthly) — second-pass compression, keyword extraction — like a table of contents
+❄️ Cold layer (yearly) — deep archive, still reachable on retrieval hits
+```
+
+**Injection weight decreases by layer**: context > data (permanent memories, recurring entries) > hot > warm > cold, plus top-k — re-ranking within each layer by recent recall activity, with buffer layers in between. One full simulated recall hierarchy plus one dynamic layer.
+
+Derived from how the AI actually writes data entries and the daily archiving optimization, per-turn injection stays under 10K tokens even after a year of use (a derivation: ~20 characters per data entry, ~100 interactions per day, daily AI summarization; the hot layer measures ~7,000–11,000 tokens per turn in practice). Beyond a few hard parts, the whole thing is **pure prompts + pure JSON files** — to change the archiving policy, table semantics, or retrieval style, you edit prompts, not code. Storage cost ≈ 0.
+
+Long context is not the cure: the evidence ([Lost in the Middle](https://arxiv.org/abs/2307.03172) / [RULER](https://arxiv.org/abs/2404.06654) / [NoLiMa](https://arxiv.org/abs/2502.05167)) shows context utilization decays with length and position — stuffing it all in ≠ the model seeing it all. ~10K tokens of curated memory carries the information of 100K+ tokens of history.
+
+The hot layer can also hold documents and adjacent memories — roleplay equipment, other characters' parameters, and so on.
+
+---
+
+## Memory recall — not retrieval, but divergence + retrieval
+
+> 📄 Full algorithms & experiments: [P1 Technical Paper](docs/p1-paper/README.md) · 📖 [Online Wiki · P1 section](https://beilusaiying.github.io/always-accompany/#en/p1-recall/preface.md)
+
+"One keyword instantly surfaces related memories" — that is not simple keyword search. Cognitive psychology's account: memory is a semantic network where an activated concept spreads along association edges to its neighbors, weakening with distance (spreading activation, Collins & Loftus 1975); "doctor" primes faster recognition of "nurse" (priming, Meyer & Schvaneveldt 1971). Human recall is intensely instantaneous, while controlling both depth and breadth (working-memory capacity of 4±1 chunks, Cowan 2001).
+
+Against existing options: plain retrieval has no breadth; delegating to a helper AI means diverge-then-search, which kills instantaneity; and the more memory you have, the higher the cost.
+
+**Current production path (AI P1)**: a dedicated retrieval AI finds memories first and hands only the findings to the reply AI — each stays in its lane, attention undiluted. BM25 coarse filter + regex exact match; retrieval runs fine on free lightweight models.
+
+**Next generation, in refinement (self-driven P1)**: a complete pure-algorithm pipeline, zero LLM, zero network:
+
+```
+User message + last 5 turns + data
+  → tokenize (BCC corpus; drop function words like "his / like this")
+  → SWOW association divergence + NB300 six-degree divergence ×2 (work mode adds domain resource libraries)
+  → six-axis positioning (psychology/informatics/sociology/logic/linguistics/cognitive)
+  → 47 sub-axis directional refinement → temperature-scoped search radius
+  → spatial voting (IDW-weighted many-to-one accumulation) → BLQ scoring → recall + direction-word injection
+```
+
+The six axes give a coarse position (which disciplinary direction a word falls in); the 47 sub-axes describe the rate of semantic change along each finer direction within it — a role akin to the Lie derivative (rate of change along a specified direction). One axis positions one word into **multiple information points**, not a single score (concepts occupy regions, not points, in semantic space — Gärdenfors's conceptual spaces, 2000). Six axes → 47 sub-axes → resource layer (SWOW / ConceptNet / Numberbatch's 300K word vectors / affective & domain lexicons) form a multi-level interconnected structure: activation propagates level by level and accumulates additively — a resource-library-meets-neural-network shape.
+
+BLQ scoring is additive fusion (after CombSUM, Fox & Shaw 1994): six evidence dimensions added, four suppression penalties subtracted — addition is an OR gate where evidence complements; multiplication is an AND gate where a single 0.3 collapses the whole chain.
+
+**Measured**: ~200ms per full recall on consumer hardware (8GB VRAM + 32GB RAM) — every conversation turn is backed by a vast instantaneous memory. 27 iterated versions, divergence quality score up 100%+, generic-word rate down from 74% to 4%. All experiment data is public in the [Wiki P1 section](https://beilusaiying.github.io/always-accompany/#en/p1-recall/ch5-evolution.md) and [paper chapter 6](docs/p1-paper/en/06_experiments_evaluation.md).
+
+---
+
+## Divergence — directions the model can't think of on its own
+
+Neural networks and attention are inherently **convergent**: an AI that stares at a pile of memories before answering does worse, and overfits. So we built **external divergence**: each turn injects under 100 tokens of directional content — directions an overfitted model would never reach by itself. A few directional words measurably steer generation (Directional Stimulus Prompting, NeurIPS 2023); an external mechanism doing the diverging while the LLM does the converging beats LLM self-divergence (external scaffolding studies, 2025).
+
+**Relevance divergence** — you're riding in a car and idly imagine yanking the door open. In movies the hero rolls out with a scrape; your safety training says it could kill you. You start wondering: why do movies shoot it that way? — psychology, visual storytelling, film studies. Why would it kill you? — physics, biology. In seconds you've crossed that many disciplines. Creative association lives precisely in the "not too near, not too far" optimal semantic distance band (remote associates theory, Mednick 1962; Orwig et al. 2025).
+
+**Structural divergence** — two utterly different domains whose function and process rhyme can be linked: a factory line and an Agent are both sample → stabilize → modular output (structure-mapping theory, Gentner 1983).
+
+Real outputs (from a 200-case batch run's raw records):
+
+| User input | System's divergence directions | Disciplines crossed |
+| --- | --- | --- |
+| "I can barely hold on. Why is living so hard?" | present-moment awareness / **the nature of being** | psychology → **existentialist philosophy** |
+| "Preparing for a unicorn-startup interview — how do I ask deep questions?" | root-cause analysis / **zone of proximal development** | management → **educational psychology** |
+| "Database queries are slow, how to optimize?" | immutability & state updates / **SRP** | ops → **software engineering methodology** |
+| "A swordsman meets his enemy on a snowy mountain" | **Chekhov's gun** / Jungian archetypes | story → **narratology + analytical psychology** |
+| User's original poem "I died before the light came" | **possible worlds & parallel universes** | poetry → **many-worlds interpretation** |
+
+The vocabulary admission bar: **any word the main model could infer from a bare read is a dead word** — divergence exists to fix two things: overfitting, and releasing the AI's capacity to diverge.
 
 ---
 
@@ -80,135 +168,121 @@ A three-layer recursive memory (day → month → year archiving, pure JSON, 260
 </tr>
 </table>
 
-- **🧠 Three-layer memory**: hot (injected every turn) / warm (retrieved on demand) / cold (deep archive), pure JSON + purely prompt-driven, zero database
-- **🎯 P1 front-loaded retrieval**: a dedicated small AI hunts for memories first and hands them off to the reply AI, BM25 + regex dual engine, retrieval can run on a free model
-- **🗜️ Compression system**: three levels (one-click / by type / line-by-line) × four granularities (chat messages / file reads / system injections / process content) + AI-autonomous `<contextClean>` cleanup, everything is reversible
-- **📊 10 memory tables**: structured storage, auto-maintained by the AI via `<tableEdit>`, achieving information isolation (if the character wouldn't know something, it's simply not in the table)
-- **👑 Prompt engine**: 5-segment message structure + TweakPrompt three-round takeover, macro variables + world book dynamic injection (always-on / regex / dynamic modes)
-- **💻 IDE-level workflow**: VSCode-style three-panel layout, AI reads and writes files directly, command execution approved line by line
-- **🔌 MCP external tools**: paste a JSON snippet to connect; command-type servers are blocked by default until the owner approves, with an env-variable allowlist to prevent leaks
-- **🐾 Desktop pet + game companion**: Live2D / image-pack pet, three privacy tiers, auto-screenshotting + chiming in on its own + adaptive frequency
-- **🎙️ Voice input**: local model transcription, speaker separation + timeline, audio never leaves the machine
-- **🤖 Cross-platform Bot**: Discord deployment, visual management + real-time message log
-- **🧩 22 feature plugins** + user-level plugin host + ecosystem compatibility (import character cards/presets/world books in multiple formats)
-- **🛡️ All data stays local**: deletions go to a recycle bin and can be recovered, multi-layer auto-backup + git rollback
-- **🌐 Multi-language** (Chinese/English/Japanese/Traditional Chinese) · **🔬 Full-stack diagnostics** (12-module logs + one-click packaging) · **🎨 Multiple CSS themes**
+- **🧠 Three-layer memory**: hot (injected every turn) / warm (retrieved on demand) / cold (deep archive), pure JSON + pure prompts, zero database → [Wiki](https://beilusaiying.github.io/always-accompany/#en/memory/overview.md)
+- **🎯 P1 front-loaded retrieval**: a dedicated small AI finds memories before the reply AI answers; BM25 + regex dual engine; works on free models
+- **🗜️ Compression system**: three levels × four granularities + AI self-cleanup, fully reversible → [Wiki](https://beilusaiying.github.io/always-accompany/#en/memory/compression.md)
+- **📊 10 memory tables**: structured storage the AI maintains via `<tableEdit>`, with information isolation (what a character doesn't know isn't in their table)
+- **👑 Prompt engine**: 5-segment message structure + TweakPrompt three-round takeover, macros + worldbook dynamic injection (constant/regex/dynamic)
+- **💻 IDE-grade workflow**: VSCode-style three panes, AI reads/writes files directly, per-command approval
+- **🔌 MCP external tools**: paste JSON to connect; command-type tools held until owner approval; env whitelist against leaks
+- **🐾 Desktop pet + game companion**: Live2D / image-pack pets, three privacy tiers, auto-screenshot + proactive chat + adaptive frequency
+- **🎙️ Voice input**: local-model transcription with speaker diarization + timeline; audio never leaves your machine
+- **🤖 Cross-platform Bot**: Discord deployment with visual management + live message logs
+- **🧩 22 feature plugins** + user-level plugin host + ecosystem compatibility (multiple character-card/preset/worldbook formats)
+- **🛡️ All data local**: deletions go to a recoverable recycle bin, multi-layer auto-backup + git rollback
+- **🌐 Multilingual** (zh/en/ja/zh-TW) · **🔬 Full-stack diagnostics** (12-module logs + one-click bundle) · **🎨 Multiple CSS themes**
 
 ---
 
-## Detailed Mechanisms
+## Mechanisms in detail
 
 <details>
-<summary><strong>🧠 Three-Layer Recursive Memory — Why Layer It At All</strong></summary>
+<summary><strong>🗜️ Compression — granular down to every single file</strong></summary>
 
-Dumping the entire history into one big pool makes lookups slow — and the experimental data backs this up ([Lost in the Middle](https://arxiv.org/abs/2307.03172) / [RULER](https://arxiv.org/abs/2404.06654) / [NoLiMa](https://arxiv.org/abs/2502.05167)): even if it's in there, the model may not actually see it. Modeled on how the hippocampus forms memories and on the Ebbinghaus forgetting curve, we split information into three layers by time distance:
+Honestly, I don't know why nobody had built fine-grained compression categories — especially for code, where everything is brute-force compress-and-hide.
 
-```
-🔥 Hot layer — auto-injected every turn: user profile / permanent memories / pending tasks / recent memories
-🌤️ Warm layer — retrieved on demand (last month): daily summaries / temporary archives / monthly index
-❄️ Cold layer — deep retrieval (older than a month): monthly summaries / historical daily summaries / yearly index
-```
+What piles up in an AI's context is mostly re-read files, thinking, and tool feedback. So we built a complete compression mechanism with extremely fine granularity:
 
-The hot layer costs only ~7,000–11,000 tokens per turn (5–9% of a 128K window). Memory decay borrows from the Ebbinghaus forgetting curve: `score = weight × (1 / (1 + days × 0.1))`. Purely prompt-driven — change the archival strategy, table meanings, or retrieval style just by editing the prompt, no code changes needed.
+- **File level** — every file the AI reads, with a per-item token bill
+- **Work level** — thinking and tool feedback auto-dropped each round
+- **Context level** — conversation, subagent injections, and AI reads managed separately; you can even hide only the AI's lines and keep the user's
+
+**Your information = 0 loss**: every "cleanup" only stops content from being re-sent; the original stays on disk, restorable anytime. Combined with prompts that encourage MD note-taking, the AI can still see your very first sentence inside a 100MB-scale project in IDE mode — which directly reduces "task-attribute substitution" (the AI drifting from what it was originally asked to do).
+
+The AI also self-compresses: the system injects usage signals (50% suggest / 70% warn / 85% urgent) and the AI trims itself via `<contextClean>`, deciding which files it no longer needs.
+
+Measured cache efficiency (Opus + DeepSeek channels, including AI identity switching + self-compression): **70%–80%**.
+
+→ [Wiki · Context Compression](https://beilusaiying.github.io/always-accompany/#en/memory/compression.md)
 
 </details>
 
 <details>
-<summary><strong>🎯 P1 Front-Loaded Retrieval AI — Why Split Into Two AIs</strong></summary>
+<summary><strong>🛡️ Security & privacy</strong></summary>
 
-If the reply AI has to pick the relevant bits out of hundreds of history entries itself, it's both hunting and replying at once, and its attention gets diluted between the two jobs. So we split "finding memories" out into a dedicated small AI:
+For company-grade deployment scenarios: protection against CC attacks, DDoS, and Slowloris.
+
+On the personal side: a whitelist for AI-accessible sites (empty by default — deny-external by default), output content screening (especially for cross-platform collaboration), AI screenshot limits, the L0–L5 permission gate, and per-command approval. All data stays local; audio never leaves the machine.
+
+</details>
+
+<details>
+<summary><strong>🏗️ Architecture — core features as plugins; extend without touching the core</strong></summary>
+
+The backend packages core features as plugins, with an information hub (conduction layer) in the middle; the frontend only displays and operates:
 
 ```
-User sends a message → P1 retrieval AI (<5K tokens, focused purely on recall) → selected memories + current chat → reply AI (focused purely on replying)
+AIRP ─→ input/cache/processing (isolated) ─┐
+Code ─→ input/cache/processing (isolated) ─┤→ information hub (conduction layer) → frontend
+Work ─→ input/cache/processing (isolated) ─┘
 ```
 
-BM25 coarse filtering + regex exact matching, hits the target in at most 3 rounds. Retrieval runs fine on a free lightweight model, so the actual per-conversation cost is essentially just one reply-AI call. P1 also handles automatic preset switching (with a 5-turn cooldown to prevent oscillation).
+So extensibility is strong: to add a feature, write an extension — JS / Python and more are supported.
+
+**Isolation levels**:
+- **Window level** — code, work, chat, airp, game companion, and bot each isolated (game companion writes into chat's data)
+- **Character-card level** — data, memory, conversation files, and regex isolated per card
+- **Fine-grained** — worldbooks, presets
+- **User level** — settings, character cards
+- **chatid** — a dedicated isolation dimension for multi-window use within one mode (multi-window code / bot)
+
+Three layers: **feature layer** (memory/compression/recall/presets/worldbook/web/file ops — one global copy) → **conduction layer** (each window pulls its own line, id-isolated, naturally async) → **interface layer** (web/Bot/desktop pet/VSCode extension — switching interfaces never changes capability).
 
 </details>
 
 <details>
-<summary><strong>🗜️ Context Management — Compression Granularity × Levels × AI-Autonomous Cleanup</strong></summary>
+<summary><strong>👑 Prompt engine + worldbook dynamic injection</strong></summary>
 
-While the AI works, process content keeps piling up (re-reading the same file, stale search results, old tool outputs). Our cleanup only ever hides things — everything can be restored at any time.
+**TweakPrompt's three rounds** take over all module output: Round 1 collect → Round 2 rebuild the 5-segment message structure (beforeChat / injectionAbove / chatHistory / injectionBelow / afterChat) + macro substitution → Round 3 snapshot.
 
-**AI-autonomous cleanup**: the system feeds the AI signals about its own context usage (50% suggested / 70% warning / 85% urgent), and the AI uses `<contextClean>` commands to trim itself autonomously. It writes things down before clearing, so a bad call is still reversible.
-
-**Fine-grained user control**: three levels (one-click full cleanup / by type / hand-picking line by line) × four granularities (chat messages / per-item file-read token billing / five checkable categories of system injections / auto-trimmed process content).
-
-Measured cache hit rate (Opus + DeepSeek, including AI persona switching + autonomous compression): **75%–80%**.
-
-![Compression Panel](imgs/screenshots/compression-multi.png)
-
-</details>
-
-<details>
-<summary><strong>🔬 Self-Driven P1 — A Zero-LLM Retrieval Engine In Active Development</strong></summary>
-
-The P1 AI has to fire off an API request every turn — that means latency, cost, and no offline use. We've been building a fully algorithmic pipeline (21 nodes, ~9,000 lines) aimed at millisecond-level speed, zero network dependency, and sentence-level attention.
-
-**Data foundation**: the [SWOW Chinese association network](https://smallworldofwords.org/) / [ConceptNet Numberbatch 300-dimensional word vectors](https://github.com/commonsense/conceptnet-numberbatch) (~300,000 words) / ConceptNet's Chinese relation graph / THUOCL and other multi-source dictionaries. The lexicon was assembled via AI web search + 2 days of self-review, at close to zero build cost.
-
-**Pipeline**: tokenization → SWOW associative divergence (synonym diffusion is banned — enabling it measurably drops quality by 55–76%) → six-axis parallel scoring (psychological / informational / social / logical / linguistic / cognitive) → 47 sub-direction localization → multi-resource cross-confirmation → spatial-voting ranking (additive IDW, not multiplicative) → secondary divergence (5 independent paths) → BLQ scoring (referencing CombSUM additive fusion, with self-researched dimension weights) → direction-word selection → context injection. All 21 nodes are pure algorithm, zero LLM.
-
-**Experiments**: 27 version iterations; the divergence score went from 2.01 to 4.05 between v9 and v26 (+101%, out of 5, judged word-by-word by hand); recall hit rate ~90%; overall average score ~3.5. The generic/catch-all rate dropped from 74% to 4%.
-
-**Real output** (raw records from a 200-case batch run):
-
-| User Input | System's Divergent Direction | Discipline Crossed Into |
-| --- | --- | --- |
-| "I can barely hold on anymore, why is being alive so hard?" | Present-moment awareness / interoceptive awareness / **what is the nature of the real** | Psychology → **existentialist philosophy** |
-| "Prepping for a unicorn-company interview, how do I come up with questions with real depth?" | Root cause analysis / **zone of proximal development** | Management → **educational psychology** |
-| "Win back churned users in owned-traffic operations on a limited budget" | **Default mode network activation** / **BDNF (brain-derived neurotrophic factor)** | Marketing → **cognitive neuroscience** |
-| "Database queries are painfully slow, how do I optimize them" | Immutability and state updates / **SRP (Single Responsibility Principle)** | Ops → **software engineering methodology** |
-| "A story about a swordsman meeting an enemy on a snowy mountain" | **Chekhov's gun** / Jungian archetypes | Fiction → **narratology + analytical psychology** |
-| A user's original poem, "I died before the light arrived" | **Possible worlds and parallel universes** | Poetry → **many-worlds interpretation in physics** |
-
-Lexicon admission standard: **any word the primary model could already infer just by reading the raw input is a wasted word** — P1's value lies in giving the model directions it wouldn't come up with on its own.
-
-</details>
-
-<details>
-<summary><strong>👑 Prompt Engine + World Book Dynamic Injection</strong></summary>
-
-**TweakPrompt's three rounds** take over every module's output in a unified way: Round 1 collects → Round 2 rebuilds the 5-segment message structure (beforeChat / injectionAbove / chatHistory / injectionBelow / afterChat) + macro substitution → Round 3 snapshots.
-
-**World book has 3 activation modes**: always-on (injected every turn) / regex (keyword-triggered) / dynamic (triggered by reading numeric conditions from memory tables — e.g. affection > 80 unlocks a special dialogue, or quest progress reaching chapter 3 swaps in a different worldview description).
+**Worldbook's 3 activation modes**: constant (every turn) / regex (keyword-triggered) / dynamic (triggered by values in memory tables — affection > 80 unlocks special dialogue; story progress reaching chapter three swaps the worldview description).
 
 **Macro system**: `{{char}}` / `{{user}}` / `{{tableData}}` / `{{hotMemory}}` / `{{current_date}}` / `{{time}}` / `{{idle_duration}}` + custom macros.
 
-</details>
-
-<details>
-<summary><strong>🏗️ System Architecture</strong></summary>
-
-Three layers: **function layer** (memory / compression / recall / presets / world book / networking / file operations… a single global copy) → **transport layer** (each window pulls its own line, isolated by id, naturally async and non-blocking) → **interface layer** (web / Bot / desktop pet / VSCode extension — swap the interface without losing any capability).
-
-Data isolation: user-level (AI sources / global settings) / character-card-level (memory / chat / world book / regex) / conversation-level (chat history / mode / sub-mode).
-
-22 plugins all grow under one unified spec, MCP connects external tools, and the user-level plugin host mounts Python/Node programs — extensions never touch the core codebase.
+→ [Wiki · Worldbook & Injection](https://beilusaiying.github.io/always-accompany/#en/memory/worldbook-overview.md)
 
 </details>
 
 <details>
-<summary><strong>🔭 On the Era of Giant Context Windows</strong></summary>
+<summary><strong>🔭 On the era of huge context windows</strong></summary>
 
-Even if context windows expand to 10M+ tokens, we still keep layered memory: ① there's solid experimental evidence that context utilization decays as length grows; ② ~10K tokens of curated memory carries the information of 100K+ tokens of raw history, at an order-of-magnitude lower cost; ③ structured tables are easier for an AI to read and write accurately than information scattered across a conversation.
+Even with 10M+ token windows, we keep layered memory: ① context utilization decaying with length is well evidenced; ② ~10K tokens of curated memory carries 100K+ tokens of history at an order of magnitude lower cost; ③ structured tables are easier for an AI to read and write accurately than scattered dialogue.
 
 </details>
+
+---
+
+## What we can do today
+
+Voice-to-text with timeline & speaker records · AI-made slide decks · IDE (a toolchain comparable to mainstream coding agents) · the full AIRP suite (SillyTavern ecosystem alignment, rendering, MVU, worldbooks, dynamic context) · Live2D desktop pet, screenshot optimization, game companion · Discord Bot…
+
+In other words — **a friend, or a lover, who can accompany you forever and work alongside you. One who can join you on adventures in other worlds, and help you get your work done.**
+
+And beyond? Once the self-driven series lands, this becomes a fast-conducting, permanently-remembering AI: in gaming, a game companion; in work or healthcare, long-term memory plus always-ready analysis, state records, and rapid response to recurring situations. The original vision was a true humanoid intelligence — small local models handling sensor modules, the main intelligence conducted over the network. This memory system is built for that day.
 
 ---
 
 ## Roadmap
 
-**Completed**: three-layer memory · compression system · P1 retrieval · prompt engine · automatic preset switching · memory tables · world book dynamic injection · Live2D desktop pet · game companion · voice input · AI-made slide decks · MCP · multi-window parallelism · VSCode extension bridge · Discord Bot · 22 plugins · recycle bin & backup rollback · full-stack diagnostics · multi-language support
+**Done**: three-layer memory · compression system · P1 retrieval · prompt engine · preset auto-switching · memory tables · worldbook dynamic injection · Live2D pet · game companion · voice input · AI slide decks · MCP · multi-window parallelism · VSCode extension bridge · Discord Bot · 22 plugins · recycle bin & backup rollback · full-stack diagnostics · multilingual
 
-**Near-term plans**: self-driven P1 (pure algorithm, zero LLM, sentence-level attention) · more Bot platforms · plugin ecosystem · TTS / text-to-image · AI game engine (in the "era" game lineage — deterministic code for numeric state + LLM narrative + symbolic rendering) · live-streaming mode
+**Near-term**: self-driven P1 (pure algorithm, zero LLM, sentence-level attention) · more Bot platforms · plugin ecosystem · TTS / text-to-image · AI game engine (era-lineage: deterministic numeric code + LLM narration + symbol rendering) · streaming mode
 
 ---
 
 ## Tech Stack
 
-Runtime fount (Deno) · Backend Node.js compatibility layer + Express-style routing · Frontend vanilla JS (ESM) · Smart retrieval BM25 + regex (pure JS, zero dependencies) · Desktop pet Electron · Voice local transcription model · Cross-platform discord.js v14 · Storage pure JSON
+Runtime fount (Deno) · backend Node.js compatibility layer + Express routing · frontend vanilla JS (ESM) · smart retrieval BM25 + regex (pure JS, zero deps) · desktop pet Electron · local voice transcription model · cross-platform discord.js v14 · storage pure JSON
 
 ---
 
@@ -216,36 +290,45 @@ Runtime fount (Deno) · Backend Node.js compatibility layer + Express-style rout
 
 <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Now-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-Share character cards · Publish presets · Contribute world books · Report bugs · Suggest features · Contribute code — all welcome!
+Share character cards · publish presets · contribute worldbooks · report bugs · make suggestions · contribute code — welcome aboard!
 
 ---
 
 ## Technologies & Resources Used
 
-- **Voice transcription**: [MOSS-Transcribe-Diarize](https://huggingface.co/ICTNLP/MOSS-Transcribe-Diarize) (local deployment with speaker diarization; the model, ~1.8GB, downloads automatically on first use)
+- **Voice transcription**: [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (local deployment with speaker diarization; ~1.8GB model auto-downloads on first use)
 - **Word vectors**: [ConceptNet Numberbatch](https://github.com/commonsense/conceptnet-numberbatch) (Speer & Lowry-Duda, 2017)
-- **Association data**: the [SWOW (Small World of Words)](https://smallworldofwords.org/) Chinese association dataset
-- **Tokenization & dictionaries**: THUOCL / CoreNatureDictionary / Chinese-Synonyms and other public resources
-- **Search engine bridge**: [ddgs](https://pypi.org/project/ddgs/) (a Python TLS-fingerprint layer that solves the problem of raw fetch requests getting downgraded by search engines)
+- **Association data**: [SWOW (Small World of Words)](https://smallworldofwords.org/) Chinese association dataset
+- **Tokenization & lexicons**: BCC corpus / THUOCL / CoreNatureDictionary / Chinese-Synonyms and other public resources
+- **Search engine bridge**: [ddgs](https://pypi.org/project/ddgs/) (Python TLS fingerprint layer, fixing bare-fetch downgrading by search engines)
 
-## Acknowledgments
+Theoretical references (all 56 in [paper chapter 1](docs/p1-paper/en/01_introduction_related_work.md)): spreading activation (Collins & Loftus 1975) · priming (Meyer & Schvaneveldt 1971) · remote associates (Mednick 1962) · SWOW (De Deyne et al. 2019) · conceptual spaces (Gärdenfors 2000) · CombSUM (Fox & Shaw 1994) · BM25 (Robertson et al. 1995) · IDW (Shepard 1968) · Hough voting (Hough 1962) · RRF (Cormack et al. 2009)
 
-- **[fount](https://github.com/steve02081504/fount)** — the initial reference framework in this project's early days, providing core infrastructure such as AI message handling, service source management, and module loading. The project has since evolved into a fully independent architecture, but fount saved us a lot of low-level development time early on and gave us many valuable ideas to draw from — sincere thanks for that
-- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — the pioneering project in AI roleplay; its preset format, character card spec, and world book system have become community standards, and this project is fully compatible with its ecosystem
-- **SillyTavern plugin community** — thanks to every open-source plugin author for their exploration and sharing around rendering engines, feature extensions, and more
+## Acknowledgements
+
+- **[fount](https://github.com/steve02081504/fount)** — the foundational framework in the project's early days, providing the initial reference for AI message I/O, service-source management, and module loading. The project has since evolved into a fully independent architecture, but fount saved us enormous low-level development time early on and offered many valuable ideas — for which we are very grateful
+- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — the pioneer of AI roleplay; its preset format, character-card spec, and worldbook system have become community standards, and this project is fully compatible with its ecosystem
+- **The SillyTavern plugin community** — thanks to all open-source plugin authors for their exploration and sharing in rendering engines and feature extensions
 
 ---
 
 <details>
-<summary><strong>📸 More Feature Screenshots (click to expand)</strong></summary>
+<summary><strong>📸 More screenshots (click to expand)</strong></summary>
 
 | | | |
 |---|---|---|
-| ![PPT Detail](imgs/screenshots/ppt-detail.png) **Full PPT Workflow** | ![Security Settings](imgs/screenshots/security-settings.png) **Security & Task Flow** | ![Security Center](imgs/screenshots/security-center.png) **Security Center** |
-| ![Multi-language](imgs/screenshots/i18n-support.png) **Multi-language Support** | ![CSS Themes](imgs/screenshots/css-themes.png) **Multiple Themes** | ![Wiki](imgs/screenshots/wiki-guide.png) **Built-in Wiki** |
-| ![Sub-mode](imgs/screenshots/sub-mode-agent.png) **Sub-mode Workflow** | ![Menu](imgs/screenshots/hamburger-menu.png) **Context at a Glance** | ![Loop](imgs/screenshots/auto-loop.png) **Auto/Scheduled Loop** |
-| ![Tool Detection](imgs/screenshots/tool-detection.png) **Environment Detection** | ![Memory Layers](imgs/screenshots/memory-data-layers.png) **Memory File Structure** | ![Extensions](imgs/screenshots/browser-automation.png) **Browser Automation** |
-| ![External Interface](imgs/screenshots/external-interface.png) **External Interface** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
+| ![PPT detail](imgs/screenshots/ppt-detail.png) **Full PPT flow** | ![Security settings](imgs/screenshots/security-settings.png) **Security & task flow** | ![Security center](imgs/screenshots/security-center.png) **Security center** |
+| ![i18n](imgs/screenshots/i18n-support.png) **Multilingual** | ![CSS themes](imgs/screenshots/css-themes.png) **Themes** | ![wiki](imgs/screenshots/wiki-guide.png) **Built-in Wiki** |
+| ![Sub-modes](imgs/screenshots/sub-mode-agent.png) **Sub-mode workflows** | ![Menu](imgs/screenshots/hamburger-menu.png) **Context overview** | ![loop](imgs/screenshots/auto-loop.png) **Auto/scheduled loops** |
+| ![Tool detection](imgs/screenshots/tool-detection.png) **Environment detection** | ![Memory layers](imgs/screenshots/memory-data-layers.png) **Memory file structure** | ![Extension](imgs/screenshots/browser-automation.png) **Browser automation** |
+| ![External interface](imgs/screenshots/external-interface.png) **External interfaces** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
 
 </details>
 
+---
+
+## Links
+
+- 📖 Online Wiki (user guide + P1 section + experiment data): https://beilusaiying.github.io/always-accompany/
+- 📄 P1 Technical Paper (7 chapters, zh + en): [docs/p1-paper](docs/p1-paper/README.md)
+- 💬 Discord Community: https://discord.gg/agHeDq9bqU

@@ -154,6 +154,8 @@ import {
   executeMemorySearchOps,
   formatSearchResultsForAI,
 } from "../storage_mod/retrieval.mjs";
+// [0728 top-k] 主AI主动 <memorySearch> 也是真实召回事件：与 AI P1 同记入召回频率（单模块收口）
+import { recordRecall, collectTouchedFiles } from "../storage_mod/recallStats.mjs";
 import { autoCheckArchiveTriggers, archiveTableRowsGeneric } from "../tools/backgroundTasks.mjs";
 // [0726「底部功能层.txt」第44行收口] 本文件是**传导层**（chat / 分身两条线路），只搬运不持有功能：
 //   结果→AI 可读文本的格式化、相关度打印、不可信边界包裹三件事全在功能层 buildInjectableSearchText。
@@ -1150,6 +1152,8 @@ export async function handleReply(reply, args) {
     if (chatSearchOps.length > 0) {
       try {
         const chatSearchResults = await executeMemorySearchOps(chatSearchOps, username, charName); // async 化（0722 向量 fallback 接入）
+        // [0728 top-k] 记召回频率：结果缓存进 pendingChatSearchResults 下轮必注入，执行点=记录点
+        recordRecall(getMemoryDir(username, charName), collectTouchedFiles(chatSearchResults));
         const formattedResults = formatSearchResultsForAI(chatSearchResults);
         if (formattedResults && formattedResults !== "(无搜索结果)") {
           // 功能槽 memory：与联网搜索的 web 槽并存（架构「a 和 b 同时激活工作两次不影响」）

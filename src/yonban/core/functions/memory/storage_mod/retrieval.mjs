@@ -11,8 +11,9 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  *   ← replyHandler（执行 <memorySearch> 操作）
  *   ← getPromptHandler（获取记忆统计数据）
  *   → storage.mjs（getMemoryDir / memoryCache，取目录路径）
- * 影响范围：纯只读（遍历 memDir 下 .json 文件，不写任何文件）；搜索结果走内存返回不缓存
- * 使用效果：多关键词空格=AND / "|"分隔=OR；单文件最大 500KB；每文件最多返回 5 条匹配
+ * 影响范围：纯只读（遍历 memDir 下 .json 文件，不写任何文件；召回统计只读不写，写点在 getPromptHandler）；搜索结果走内存返回不缓存
+ * 使用效果：多关键词空格=AND / "|"分隔=OR；单文件最大 500KB；每文件最多返回 5 条匹配；
+ *          结果排序=日期序 → 层级权重(冷→温→hot→data 靠后=重要)+层内召回热度 top-k（recallStats.mjs 单源）
  */
 
 import fs from "node:fs";
@@ -21,6 +22,7 @@ import { fileURLToPath } from "node:url";
 
 import { getMemoryDir, memoryCache, isPathSafe } from "./storage.mjs";
 import { semanticFallback } from "../tools/vectorBridge.mjs"; // 关键词零结果→向量语义 fallback（演进规划§1.3 拍板）；未启用=恒[]
+import { applyLayerTopkOrder, getTopRecalled } from "./recallStats.mjs"; // 层级权重+召回热度 top-k 二次排序 / getStats 常用文件提示（只读统计，不破坏本模块纯只读性质）
 
 // P0-1: lib/目录（.../src/public/parts/plugins/beilu-memory/lib），供搜索根相对推算用，不写死 D:\
 const __retrievalDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -402,6 +404,14 @@ function _searchOpGetStats(memDir) {
         : "  (空)",
     );
     if (stats.tablesSummary) lines.push(`\n表格概况:\n${stats.tablesSummary}`);
+    // [0728 top-k] 常被召回文件提示：P1 第一轮即可直接 readFile 热门文件，省掉盲搜轮次（瞬时性优化）
+    const topRecalled = getTopRecalled(memDir, 5);
+    if (topRecalled.length > 0) {
+      lines.push(`\n常被召回文件 (按热度):`);
+      for (const t of topRecalled) {
+        lines.push(`  ${t.file} (${t.count}次, 最近 ${String(t.last).slice(0, 10)})`);
+      }
+    }
     return { op: "getStats", statsText: lines.join("\n") };
   } catch (e) {
     return { op: "getStats", error: e.message };
@@ -441,6 +451,7 @@ async function _searchOpKeyword(keyword, subDirRel, memDir, resolvedMemDir) {
     }
 
     sortSearchResultsByDate(fileMatches);
+    applyLayerTopkOrder(memDir, fileMatches); // 层级(冷→温→hot→data)+层内召回热度重排；日期序经稳定排序成为层内末级 tiebreak
 
     // 关键词零结果 → 向量语义 fallback（演进规划§1.3 拍板：字面 includes 抓不到同义/改写表述，
     // 语义搜索补位；vectordb 未启用/索引空/异常时 semanticFallback 恒返 []=原行为零回归）。
@@ -448,6 +459,7 @@ async function _searchOpKeyword(keyword, subDirRel, memDir, resolvedMemDir) {
     if (fileMatches.length === 0) {
       const vectorMatches = await semanticFallback(memDir, keyword);
       if (vectorMatches.length > 0) {
+        applyLayerTopkOrder(memDir, vectorMatches); // 向量结果同享层级+热度重排（结果对象同有 .file；稳定排序保语义分序为层内末级 tiebreak）
         wbT(null, "retrieval", "searchKeyword:vectorFallback", { keyword, hits: vectorMatches.length });
         return { op: "searchKeyword", keyword, fileMatches, vectorMatches, vectorFallback: true };
       }
@@ -554,6 +566,7 @@ function _searchOpRegex(pattern, subDirRel, memDir, resolvedMemDir) {
     }
 
     sortSearchResultsByDate(fileMatches);
+    applyLayerTopkOrder(memDir, fileMatches); // 同 searchKeyword：层级+召回热度重排（同病同修）
     return { op: "searchRegex", keyword: pattern, fileMatches };
   } catch (e) {
     wbD(null, "retrieval", "searchRegex:error", false, e.message, { pattern });
@@ -646,6 +659,9 @@ function _searchOpListDir(relPath, memDir, resolvedMemDir) {
 
 /**
  * 将搜索结果格式化为可注入AI上下文的文本
+ * [0728 截断保尾] 排序惯例=重要的排后面（层级+热度，recallStats.mjs 单源），原实现超限从尾部
+ *   截断=结果越多越重要的越先被砍（方向冲突）。现改为：各结果块独立渲染 → 字符预算从尾部块
+ *   向前分配 → 省略的是头部（最不重要）块，输出顺序不变；有省略时头部给 [WARN] 提示省略数。
  * @param {object[]} searchResults - executeMemorySearchOps 的返回值
  * @param {number} [charLimit=50000] - 字符上限
  * @returns {string} 格式化文本
@@ -654,157 +670,97 @@ export function formatSearchResultsForAI(searchResults, charLimit) {
   if (!searchResults || searchResults.length === 0) return "(无搜索结果)";
 
   const limit = charLimit || 50000;
-  let totalChars = 0;
-  let truncated = false;
+  const blocks = searchResults.map((r) => _renderSearchResultBlock(r)).filter((b) => b.length > 0);
+  const head = "[记忆文件搜索结果]";
+  const tail = "[/记忆文件搜索结果]";
+  let budget = limit - head.length - tail.length - 80; // 80=省略提示行裕量
 
-  const lines = ["[记忆文件搜索结果]"];
-  totalChars += lines[0].length;
-
-  for (const r of searchResults) {
-    if (truncated) break;
-
-    if (r.error) {
-      const line = `\n[ERR] ${r.op}("${r.path || r.keyword || ""}"): ${r.error}`;
-      totalChars += line.length;
-      if (totalChars > limit) {
-        truncated = true;
-        break;
-      }
-      lines.push(line);
-      continue;
-    }
-
-    switch (r.op) {
-      case "readFile": {
-        const header = `\n[FILE] readFile("${r.path}"):`;
-        totalChars += header.length;
-        if (totalChars > limit) {
-          truncated = true;
-          break;
-        }
-        lines.push(header);
-        const content = r.content || "";
-        const remainingChars = limit - totalChars;
-        if (content.length > Math.min(8000, remainingChars)) {
-          const truncLen = Math.min(8000, remainingChars);
-          const truncContent =
-            content.substring(0, truncLen) +
-            `\n... (内容已截断，共${content.length}字符)`;
-          totalChars += truncContent.length;
-          lines.push(truncContent);
-        } else {
-          totalChars += content.length;
-          lines.push(content);
-        }
-        break;
-      }
-      case "listDir": {
-        const header = `\n[DIR] listDir("${r.path}"):`;
-        totalChars += header.length;
-        if (totalChars > limit) {
-          truncated = true;
-          break;
-        }
-        lines.push(header);
-        // 如果有降级提示（readFile→listDir），输出提示让 AI 知道
-        if (r._note) {
-          const noteLine = `  [提示] ${r._note}`;
-          totalChars += noteLine.length;
-          lines.push(noteLine);
-        }
-        for (const entry of r.entries || []) {
-          const line = `  ${entry.isDir ? "[D]" : "[F]"} ${entry.name}`;
-          totalChars += line.length;
-          if (totalChars > limit) {
-            truncated = true;
-            break;
-          }
-          lines.push(line);
-        }
-        break;
-      }
-      case "searchKeyword":
-      case "searchRegex": {
-        const icon = r.op === "searchKeyword" ? "[SEARCH]" : "[REGEX]";
-        const header = `\n${icon} ${r.op}("${r.keyword}"):`;
-        totalChars += header.length;
-        if (totalChars > limit) {
-          truncated = true;
-          break;
-        }
-        lines.push(header);
-
-        if (r.fileMatches && r.fileMatches.length > 0) {
-          const summary = `  找到 ${r.fileMatches.length} 个文件匹配`;
-          totalChars += summary.length;
-          lines.push(summary);
-
-          for (const fm of r.fileMatches) {
-            if (truncated) break;
-            const fmHeader = `  [FILE] ${fm.file} (${fm.matchCount}处匹配):`;
-            totalChars += fmHeader.length;
-            if (totalChars > limit) {
-              truncated = true;
-              break;
-            }
-            lines.push(fmHeader);
-
-            for (const m of fm.matches || []) {
-              const matchLine = `    L${m.line}: ${m.context}`;
-              totalChars += matchLine.length;
-              if (totalChars > limit) {
-                truncated = true;
-                break;
-              }
-              lines.push(matchLine);
-            }
-          }
-        } else if (r.vectorMatches && r.vectorMatches.length > 0) {
-          // 关键词零命中、向量 fallback 有结果：标明来源是语义近似（非字面命中），AI 按需甄别
-          const vHeader = `  字面无匹配；以下 ${r.vectorMatches.length} 条为向量语义近似结果:`;
-          totalChars += vHeader.length;
-          if (totalChars > limit) { truncated = true; break; }
-          lines.push(vHeader);
-          for (const vm of r.vectorMatches) {
-            if (truncated) break;
-            const snippet = String(vm.content || "").replace(/\s+/g, " ").slice(0, 300);
-            const vLine = `  [VEC|${vm.layer || "?"}] ${vm.file || "?"} (score ${typeof vm.score === "number" ? vm.score.toFixed(3) : "?"}): ${snippet}`;
-            totalChars += vLine.length;
-            if (totalChars > limit) { truncated = true; break; }
-            lines.push(vLine);
-          }
-        } else {
-          lines.push("  (无匹配)");
-        }
-        break;
-      }
-      case "getStats": {
-        const header = `\n[STATS] getStats():`;
-        totalChars += header.length;
-        if (totalChars > limit) {
-          truncated = true;
-          break;
-        }
-        lines.push(header);
-        const statsText = r.statsText || "(无统计数据)";
-        totalChars += statsText.length;
-        if (totalChars > limit) {
-          truncated = true;
-          break;
-        }
-        lines.push(statsText);
-        break;
-      }
+  const kept = [];
+  let omittedCount = 0;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.length <= budget) {
+      kept.unshift(b);
+      budget -= b.length;
+    } else if (kept.length === 0 && budget > 500) {
+      // 连最重要（最尾）的一块都放不下：保块头截块尾（标题/摘要在块头），保证至少有内容
+      kept.unshift(b.slice(0, budget) + `\n... (本块超长已截断，原${b.length}字符)`);
+      omittedCount = i;
+      break;
+    } else {
+      // 中间块放不下：连同其前所有块一起省略（保持连续尾段，不跳块乱序）
+      omittedCount = i + 1;
+      break;
     }
   }
 
-  if (truncated) {
-    lines.push(
-      `\n[WARN] 搜索结果已截断（超过${Math.round(limit / 500)}K token 上限）`,
-    );
+  const lines = [head];
+  if (omittedCount > 0) {
+    lines.push(`[WARN] 超过字符上限，已省略前 ${omittedCount} 项（保留的是排序靠后的重要结果）`);
   }
-  lines.push("[/记忆文件搜索结果]");
+  lines.push(...kept);
+  lines.push(tail);
+  return lines.join("\n");
+}
 
+/** 渲染单个搜索结果块（块内格式与原实现逐字一致；readFile 内容 8000 字符块内上限不变） */
+function _renderSearchResultBlock(r) {
+  const lines = [];
+  if (r.error) {
+    return `\n[ERR] ${r.op}("${r.path || r.keyword || ""}"): ${r.error}`;
+  }
+  switch (r.op) {
+    case "readFile": {
+      lines.push(`\n[FILE] readFile("${r.path}"):`);
+      const content = r.content || "";
+      if (content.length > 8000) {
+        lines.push(content.substring(0, 8000) + `\n... (内容已截断，共${content.length}字符)`);
+      } else {
+        lines.push(content);
+      }
+      break;
+    }
+    case "listDir": {
+      lines.push(`\n[DIR] listDir("${r.path}"):`);
+      // 如果有降级提示（readFile→listDir），输出提示让 AI 知道
+      if (r._note) lines.push(`  [提示] ${r._note}`);
+      for (const entry of r.entries || []) {
+        lines.push(`  ${entry.isDir ? "[D]" : "[F]"} ${entry.name}`);
+      }
+      break;
+    }
+    case "searchKeyword":
+    case "searchRegex": {
+      const icon = r.op === "searchKeyword" ? "[SEARCH]" : "[REGEX]";
+      lines.push(`\n${icon} ${r.op}("${r.keyword}"):`);
+      if (r.fileMatches && r.fileMatches.length > 0) {
+        lines.push(`  找到 ${r.fileMatches.length} 个文件匹配`);
+        for (const fm of r.fileMatches) {
+          lines.push(`  [FILE] ${fm.file} (${fm.matchCount}处匹配):`);
+          for (const m of fm.matches || []) {
+            lines.push(`    L${m.line}: ${m.context}`);
+          }
+        }
+      } else if (r.vectorMatches && r.vectorMatches.length > 0) {
+        // 关键词零命中、向量 fallback 有结果：标明来源是语义近似（非字面命中），AI 按需甄别
+        lines.push(`  字面无匹配；以下 ${r.vectorMatches.length} 条为向量语义近似结果:`);
+        for (const vm of r.vectorMatches) {
+          const snippet = String(vm.content || "").replace(/\s+/g, " ").slice(0, 300);
+          lines.push(`  [VEC|${vm.layer || "?"}] ${vm.file || "?"} (score ${typeof vm.score === "number" ? vm.score.toFixed(3) : "?"}): ${snippet}`);
+        }
+      } else {
+        lines.push("  (无匹配)");
+      }
+      break;
+    }
+    case "getStats": {
+      lines.push(`\n[STATS] getStats():`);
+      lines.push(r.statsText || "(无统计数据)");
+      break;
+    }
+    default:
+      return "";
+  }
   return lines.join("\n");
 }
 

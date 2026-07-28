@@ -142,6 +142,8 @@ import {
   executeMemorySearchOps,
   formatSearchResultsForAI,
 } from "../storage_mod/retrieval.mjs";
+// [0728 top-k] "读到内容的文件"提取规则单源（与 replyHandler 共用，禁复制提取逻辑）
+import { collectTouchedFiles } from "../storage_mod/recallStats.mjs";
 
 import { getClientEnvString } from "../../../transport/ideClient.mjs";
 
@@ -966,6 +968,10 @@ export async function runMemoryPresetAI(
 
   // 3. 多轮搜索循环
   const allExecutedOps = [];
+  // [0728 top-k] 本 run 实际读到内容的记忆文件相对路径（readFile 成功/关键词/正则/向量命中）。
+  //   随返回值带出，由 getPromptHandler 在 AI P1 真注入时交 recallStats.recordRecall 记召回频率
+  //   （写点不在本函数：P2-P8/dryRun/无结果轮不该计数，注入与否只有调用方知道）。
+  const _touchedMemFiles = new Set();
   const roundDetails = [];
   let finalReply = "";
   let finalThinking = "";
@@ -1274,6 +1280,8 @@ export async function runMemoryPresetAI(
         username,
         charName,
       );
+      // [0728 top-k] 收集本轮读到内容的文件（提取规则单源 recallStats.collectTouchedFiles，与 replyHandler 共用）
+      for (const _tf of collectTouchedFiles(searchResults)) _touchedMemFiles.add(_tf);
       const searchResultsText = formatSearchResultsForAI(searchResults);
       allExecutedOps.push({
         type: "memorySearch",
@@ -1424,6 +1432,7 @@ export async function runMemoryPresetAI(
     totalRounds: roundDetails.length,
     totalTimeMs: totalTime,
     timestamp: new Date().toISOString(),
+    touchedMemoryFiles: Array.from(_touchedMemFiles), // [0728 top-k] 供 getPromptHandler 真注入时记召回频率
   };
 }
 

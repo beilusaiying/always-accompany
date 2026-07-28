@@ -101,6 +101,9 @@ import {
 // inj 识别系统 2026-07-13：识别（模式链路）+门控+互斥+值域收口到注入系统单一权威
 // （getDataHandler 显示链、setDataActions 写入校验同源消费）
 import { resolveInjectionContext, resolveEffectiveInjections, isDataDrivenEntry, isDataEntry } from "../storage_mod/injectionSystem.mjs";
+// [0728 top-k] 召回频率写点：AI P1 真注入时记本轮读过的记忆文件（预览/P2-P8/无结果不记；
+//   另一写点=replyHandler 主AI <memorySearch>）；applyLayerTopkOrder=向量初筛候选层级+热度重排
+import { recordRecall, applyLayerTopkOrder } from "../storage_mod/recallStats.mjs";
 // 单源收口（2026-07-13 参照 ST）：分母解析迁到 preset 内存 store 版（原 storage 文件版已删）——
 // 与真生成层 mergeRuntimeParams 同一份内存数据，消除文件级第二解析器漂移（4.1k/238% 症状族）。
 // 壳与实现体 ESM 同实例（plugins/beilu-preset/main.mjs re-export 本路径），getStore 单例安全。
@@ -1407,8 +1410,12 @@ export async function handleGetPrompt(arg) {
           try {
             const _vecHits = await vectorPrefilter(getMemoryDir(username, charName), _lastMsg?.content || _lastMsg?.mes || "");
             if (_vecHits.length > 0) {
+              // [0728 top-k] 只在语义 Top-5 切片内按层级+热度重排（先切片后重排：热度不改变入选
+              //   ——入选仍由语义相关性定，避免低相关高热文件挤掉高相关候选），呈现序供 P1 参考
+              const _vecTop = _vecHits.slice(0, 5);
+              applyLayerTopkOrder(getMemoryDir(username, charName), _vecTop);
               const _vecTpl = data.config?.system_texts?.p1_vector_prefilter || DEFAULT_SYSTEM_TEXTS.p1_vector_prefilter;
-              _vecExtraCtx = _vecTpl.replaceAll("{candidates}", formatVectorCandidates(_vecHits));
+              _vecExtraCtx = _vecTpl.replaceAll("{candidates}", formatVectorCandidates(_vecTop));
               wbT(_cid, "getprompt", "p1:vectorPrefilter", { hits: _vecHits.length, ctxLen: _vecExtraCtx.length });
             }
           } catch (_vecErr) {
@@ -1460,6 +1467,11 @@ export async function handleGetPrompt(arg) {
               const _p1Body = _stripConsumedTagsFromInjection(cleanedP1Reply);
               _pushDataInj("INJ-p1-retrieval-data", { p1_retrieval: _p1Body, p1_retrieval_ts: "" }, { important: 6 });
               wbT(_cid, "getprompt", "p1:aiInject", { contentLen: _p1Body.length });
+              // [0728 top-k] 真注入才计召回频率（语义对齐 tableEngine forever recordHit :442-444）：
+              //   本轮 P1 读过的文件 → recallStats 累计 {count,last} → 检索结果层内 top-k 排序消费
+              if (Array.isArray(result.touchedMemoryFiles) && result.touchedMemoryFiles.length > 0) {
+                recordRecall(getMemoryDir(username, charName), result.touchedMemoryFiles);
+              }
             } else {
               wbD(_cid, "getprompt", "p1:aiNoResult", false, "AI P1 判定无相关记忆/无需检索，不注入", { cleanedLen: cleanedText.length });
             }

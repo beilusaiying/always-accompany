@@ -71,7 +71,7 @@ async function relay(req, res, action) {
 			headers: {
 				'Content-Type': 'application/json',
 				// python 侧只绑 127.0.0.1，username 由本体鉴权后注入（防伪造：覆盖而非透传 body 内值）
-				'X-P1-Username': req.user?.username || '',
+				'X-P1-Username': encodeURIComponent(req.user?.username || ''),
 			},
 			body: JSON.stringify(req.body ?? {}),
 			signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
@@ -114,7 +114,7 @@ export default {
 				const { action, ...payload } = args || {}
 				const r = await fetch(`${P1_BASE}/${action || 'health'}`, {
 					method: action ? 'POST' : 'GET',
-					headers: { 'Content-Type': 'application/json', 'X-P1-Username': user || '' },
+					headers: { 'Content-Type': 'application/json', 'X-P1-Username': encodeURIComponent(user || '') },
 					...(action ? { body: JSON.stringify(payload) } : {}),
 					signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
 				})

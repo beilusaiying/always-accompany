@@ -467,6 +467,14 @@ registerAction("shells:chat", "new", {
 	buildBody: () => undefined,
 });
 
+// chat 壳：确保角色卡四窗口对话（0802 四窗口对话收口：resolveChatIdForChar/initializeChat 调用，
+//   单源=后端 ensureModeChatsForChar，幂等）。body {charname}，返回 {modeChats: {chat,smart,code,work}}。
+registerAction("shells:chat", "ensureModeChats", {
+	method: "POST",
+	buildUrl: () => "/api/parts/shells:chat/ensure-mode-chats",
+	buildBody: (m) => m.payload ?? {},
+});
+
 // chat 壳：对话列表（T6b 批3：workPanel _loadHistoryList）
 registerAction("shells:chat", "getChatList", {
 	method: "GET",

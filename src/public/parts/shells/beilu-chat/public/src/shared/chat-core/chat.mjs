@@ -247,24 +247,29 @@ async function resolveChatIdForChar(charName, hashChatId) {
   const mine = chats.find(c => chatBelongsToChar(c, charName));
   if (mine) return mine.chatid || mine.id;
 
-  // 规则3：当前角色无聊天 → 新建空白 + 绑定
+  // 规则3：当前角色无聊天 → 服务端 ensureModeChatsForChar 建四窗口对话（chat/smart/code/work）
+  // [0802 四窗口对话收口] 原实现只建 1 条 → 默认角色卡首次使用时被四窗共用。改走服务端单点
+  //   ensureModeChatsForChar（与 create-char/import-char 同一实现体，幂等）。
   try {
-    // T6b批7：POST /new + POST /:chatId/char → sendAction shells:chat#new / #bindCharToChat。!ok 门面抛错走 catch。
-    const newD = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-    const newId = newD.chatid || newD.id;
-    if (newId) {
-      await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: newId }, payload: { charname: charName } });
-      // [D6 收口 0713] 补分类落位（convMeta.mode+服务端 chat_modes 双写）——本路径原漏调=
-      //   角色无聊天时新建的对话在列表永无模式徽章（缺省=当前模式，与本路径打开语境一致）。
-      try {
-        const { classifyNewChat } = await import("./conversationManager.mjs");
-        classifyNewChat(newId, charName);
-      } catch { /* 分类失败不阻断新建主链 */ }
-      console.log(`[beilu-chat] 角色「${charName}」无聊天，新建空白 ${newId}`);
-      return newId;
+    const resp = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: charName } });
+    const chatModeId = resp?.modeChats?.chat;
+    if (chatModeId) {
+      console.log(`[beilu-chat] 角色「${charName}」无聊天，已建四窗口对话，chat=${chatModeId}`);
+      return chatModeId;
     }
   } catch (e) {
-    console.warn("[beilu-chat] 新建角色聊天失败:", e.message);
+    console.warn("[beilu-chat] 建四窗口对话失败，回退单建:", e.message);
+    // 回退：单建一条（兼容服务端未更新的场景）
+    try {
+      const newD = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
+      const newId = newD.chatid || newD.id;
+      if (newId) {
+        await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: newId }, payload: { charname: charName } });
+        return newId;
+      }
+    } catch (fallbackErr) {
+      console.warn("[beilu-chat] 回退单建也失败:", fallbackErr.message);
+    }
   }
   return "";
 }
@@ -434,21 +439,30 @@ export async function initializeChat() {
     }
   } else {
     // resolveChatIdForChar 已穷尽（含新建）后仍无 chatId = 系统里一个聊天都没有。
-    // 直接新建空白聊天（有当前角色则绑定），不跨角色回退。
+    // [0802 四窗口对话收口] 有当前角色时走 ensureModeChats 建四窗口对话（与规则3 同源）；
+    //   无角色时单建空白对话（无角色可绑=无意义建四线）。
     console.log("[beilu-chat] 无任何聊天，创建新空白聊天...");
     try {
-      // T6b批7：POST /new + POST /:chatId/char → sendAction shells:chat#new / #bindCharToChat。!ok 门面抛错走 catch。
-      const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-      const chatid = newData.chatid || newData.id;
-      if (chatid) {
-        if (_initChar) {
-          await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { charname: _initChar } });
-          // [D6 收口 0713] 补分类落位（同 resolveChatIdForChar 规则3；无角色时跳过——分类按角色线归属）
-          try {
-            const { classifyNewChat } = await import("./conversationManager.mjs");
-            classifyNewChat(chatid, _initChar);
-          } catch { /* 分类失败不阻断初始化主链 */ }
+      let chatid = null;
+      if (_initChar) {
+        // 有角色 → 四窗口对话
+        try {
+          const resp = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: _initChar } });
+          chatid = resp?.modeChats?.chat || null;
+          if (chatid) console.log(`[beilu-chat] 已为角色「${_initChar}」建四窗口对话，chat=${chatid}`);
+        } catch (e) {
+          console.warn("[beilu-chat] 建四窗口对话失败，回退单建:", e.message);
         }
+      }
+      // 回退/无角色：单建空白对话
+      if (!chatid) {
+        const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
+        chatid = newData.chatid || newData.id;
+        if (chatid && _initChar) {
+          await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { charname: _initChar } });
+        }
+      }
+      if (chatid) {
         window.location.hash = chatid;
         setCurrentChatId(chatid);
         refreshedData = await getInitialData();

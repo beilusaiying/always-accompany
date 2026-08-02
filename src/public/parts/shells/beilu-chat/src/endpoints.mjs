@@ -56,6 +56,7 @@
  * │                                                                       │
  * │ ■ 对话生命周期                                                         │
  * │   POST   new                    — 新建空对话                            │
+ * │   POST   ensure-mode-chats     — 确保角色卡四窗口对话（幂等，缺失线新建）│
  * │   POST   newbotchat             — bot 对话文件 ensure/新建（一平台一线，幂等）│
  * │   DELETE delete                 — 批量删除对话                          │
  * │   POST   :chatid/rename         — 对话改名（N39）                       │
@@ -1974,8 +1975,12 @@ export function setEndpoints(router) {
         logReq(
           `◀ POST /char addchar 完成, addcharCost=${Date.now() - tAddchar}ms, 准备返回 200`,
         );
+        // 自动补齐4模式对话：绑定角色时检测该角色是否已有四窗口对话，无则创建
+        let modeChats;
+        try { modeChats = await ensureModeChatsForChar(username, charname); } catch (e) { logReq(`四窗口对话补齐失败(非致命): ${e.message}`); }
         res.status(200).json({
           success: true,
+          modeChats,
           _diag: { reqDiagId, totalMs: Date.now() - reqStartAt },
         });
       } catch (err) {
@@ -2063,6 +2068,28 @@ export function setEndpoints(router) {
         res.status(200).json({ chatid: await newChat(username, mode) });
       } catch (err) {
         console.error("[chat/new] Error:", err.message);
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // [0802 四窗口对话收口] 确保角色卡在四个模式窗口（chat/smart/code/work）各有一条专属对话。
+  // 幂等（已有线返现值、缺失线新建）。前端 resolveChatIdForChar 规则3 / initializeChat 兜底 调用，
+  // 解决默认角色卡「新的开始」首次使用时只建 1 条对话被四窗共用的根因。
+  // 单源=chatOps.ensureModeChatsForChar（与 create-char/import-char 同一实现体）。
+  router.post(
+    "/api/parts/shells\\:chat/ensure-mode-chats",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const { charname } = req.body || {};
+        if (!charname || typeof charname !== "string" || !charname.trim())
+          return res.status(400).json({ error: "缺少 charname" });
+        const modeChats = await ensureModeChatsForChar(username, charname.trim());
+        res.status(200).json({ modeChats });
+      } catch (err) {
+        console.error("[chat/ensure-mode-chats] Error:", err.message);
         res.status(500).json({ error: err.message });
       }
     },

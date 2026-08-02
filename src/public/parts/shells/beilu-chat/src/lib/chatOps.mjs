@@ -318,7 +318,7 @@ export async function deleteMessage(chatid, index) {
   wbTrace(chatid, "chatOps", "deleteMessage:enter", { index });
   const chatMetadata = await loadChat(chatid);
   if (!chatMetadata) throw new Error("Chat not found");
-  if (index == null || index < 0 || !chatMetadata.chatLog[index]) throw new Error("Invalid index");
+  if (index == null || index < 0 || !chatMetadata.chatLog[index]) return;
   if (isDeleted(chatMetadata.chatLog[index])) return;
 
   const entry = chatMetadata.chatLog[index];
@@ -474,8 +474,8 @@ export async function editMessage(chatid, index, new_content) {
   const chatMetadata = await loadChat(chatid);
   if (!chatMetadata) throw new Error("Chat not found");
   // index 为原始数组下标（GetChatLog 不再过滤 _hidden）
-  if (index == null || index < 0 || !chatMetadata.chatLog[index]) throw new Error("Invalid index");
-  if (isDeleted(chatMetadata.chatLog[index])) throw new Error("Cannot edit a deleted message");
+  if (index == null || index < 0 || !chatMetadata.chatLog[index]) return { error: "index out of range", index };
+  if (isDeleted(chatMetadata.chatLog[index])) return { error: "message already deleted", index };
   const rawIndex = index;
 
   const _oldEntry = chatMetadata.chatLog[rawIndex];

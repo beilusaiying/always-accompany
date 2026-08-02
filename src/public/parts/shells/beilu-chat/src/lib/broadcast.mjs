@@ -49,6 +49,9 @@ export function setWebhookDispatcher(fn) { _webhookDispatcher = fn; }
 // v4 簇②：注入式拿到 chatid→{username} 索引（复用 registerChatUiSocket 已收的 getChatMetadatas，
 // 避免静态 import chatStorage 触发循环初始化）。用于把 sourceChatId 解析到 username 再查组。
 let _getChatMetadatas = null;
+/** 启动时注入 chatMetadatas 提供器——让 broadcastAllChatUi 在首个 WS 连接前就能解析 owner 索引。
+ *  与 registerChatUiSocket 内的赋值等价但时序更早（chat.mjs 初始化阶段），消除插件早期广播的 E_OWNER。 */
+export function setChatMetadatasProvider(fn) { if (typeof fn === "function") _getChatMetadatas = fn; }
 
 // ============================================================
 // StreamManager — 流式生成任务管理

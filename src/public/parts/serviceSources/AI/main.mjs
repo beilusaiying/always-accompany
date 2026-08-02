@@ -37,7 +37,7 @@ function loadAIsourceGenerator(username, AIsourcename) {
  * @returns {Promise<any>} 加载的服务源实例。
  */
 async function loadAIsourceFromConfigData(username, data, { SaveConfig }) {
-  const generatorName = data?.generator || "empty";
+  const generatorName = (data?.generator && data.generator.trim()) || "proxy";
   console.log(
     `[AI源诊断] loadAIsourceFromConfigData: generator="${generatorName}", data.generator="${data?.generator}", typeof="${typeof data?.generator}"`,
   );

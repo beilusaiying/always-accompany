@@ -1,0 +1,327 @@
+[
+  {
+    "pattern_id": "cycle_procrastination_guilt",
+    "pattern_type": "循环",
+    "description": "拖延→焦虑累积→爆发强压→精疲力竭→再拖延",
+    "stages": ["拖延", "焦虑累积", "爆发强压", "精疲力竭", "再拖延"],
+    "cross_domain_instances": {
+      "psychology": "拖延症恶性循环（焦虑驱动回避，回避加剧焦虑）",
+      "work": "截止日期前通宵赶工，完成后过度放松再拖",
+      "education": "期末临时抱佛脚循环，学期初松懈",
+      "informatics": "技术债务累积-sprint冲刺还债-新欠债"
+    },
+    "trigger_keywords": ["又拖了", "总是拖", "明天再说", "deadline到了才", "每次都这样", "恶性循环"]
+  },
+  {
+    "pattern_id": "cycle_binge_restrict",
+    "pattern_type": "循环",
+    "description": "放纵→内疚→严格限制→渴望→再放纵",
+    "stages": ["放纵", "内疚", "严格限制", "渴望反弹", "再放纵"],
+    "cross_domain_instances": {
+      "psychology": "暴食-节食循环，情绪性进食",
+      "work": "工作狂加班→强制休息→报复性休假→再次过载",
+      "sociology": "消费主义报复性消费循环",
+      "education": "刷题倦怠→完全放弃→愧疚后猛学"
+    },
+    "trigger_keywords": ["又控制不住", "破罐破摔", "管不住自己", "又犯了", "补偿", "报复性"]
+  },
+  {
+    "pattern_id": "cycle_conflict_reconciliation",
+    "pattern_type": "循环",
+    "description": "矛盾积累→爆发争吵→和好蜜月→问题未解→再积累",
+    "stages": ["矛盾积累", "爆发争吵", "和好蜜月", "问题未解决", "再积累"],
+    "cross_domain_instances": {
+      "psychology": "亲密关系暴力循环（Walker循环）",
+      "work": "团队积怨→会议冲突→表面和解→下次积怨更深",
+      "sociology": "邻里纠纷反复爆发",
+      "informatics": "系统故障→紧急修复→表面稳定→下次更大故障"
+    },
+    "trigger_keywords": ["总是吵架", "和好了又吵", "老问题", "说好了但", "反反复复", "又回到原点"]
+  },
+  {
+    "pattern_id": "cycle_learned_helplessness",
+    "pattern_type": "循环",
+    "description": "尝试→失败→放弃→后悔→再尝试→再失败",
+    "stages": ["尝试", "失败", "放弃", "后悔", "再尝试", "再失败"],
+    "cross_domain_instances": {
+      "psychology": "习得性无助循环（Seligman），固定型心智模式",
+      "work": "反复提案被否→停止创新→竞争落后",
+      "education": "数学恐惧循环，多次挂科后放弃",
+      "informatics": "技术栈迁移反复失败后维持遗留系统"
+    },
+    "trigger_keywords": ["反复失败", "每次都", "已经放弃了", "试了没用", "没意义", "怎么努力都"]
+  },
+  {
+    "pattern_id": "cycle_validation_seeking",
+    "pattern_type": "循环",
+    "description": "低自尊→寻求外部认可→短暂满足→认可消退→更低自尊",
+    "stages": ["低自尊", "寻求认可", "短暂满足", "认可消退", "更低自尊"],
+    "cross_domain_instances": {
+      "psychology": "外部动机依赖循环，自我价值感缺失",
+      "work": "绩效焦虑→过度展示→成果被忽视→更焦虑",
+      "sociology": "社交媒体点赞依赖循环",
+      "education": "只为别人期待学习，内驱力消失"
+    },
+    "trigger_keywords": ["需要认可", "别人怎么看我", "没人夸就", "想被肯定", "总在意别人"]
+  },
+  {
+    "pattern_id": "cycle_avoidance_anxiety",
+    "pattern_type": "循环",
+    "description": "焦虑刺激→回避行为→短期缓解→焦虑增强→更强回避",
+    "stages": ["焦虑刺激", "回避行为", "短期缓解", "焦虑增强", "更强回避"],
+    "cross_domain_instances": {
+      "psychology": "恐惧症维持机制，社交焦虑回避循环",
+      "work": "困难任务回避→积压更多→更难启动",
+      "education": "上台发言焦虑→请假逃避→下次更怕",
+      "informatics": "代码review焦虑→拖延提交→代码积压更难review"
+    },
+    "trigger_keywords": ["不敢面对", "一想到就怕", "能躲就躲", "越来越不敢", "回避"]
+  },
+  {
+    "pattern_id": "cycle_overcommit_resentment",
+    "pattern_type": "循环",
+    "description": "无法拒绝→过度承诺→怨恨积累→表面完成→再次无法拒绝",
+    "stages": ["无法拒绝", "过度承诺", "怨恨积累", "被动完成", "再次无法拒绝"],
+    "cross_domain_instances": {
+      "psychology": "讨好型人格循环，边界缺失",
+      "work": "优秀员工接所有任务→精力耗尽→默默抱怨",
+      "sociology": "家庭责任全包→情感耗竭→沉默付出",
+      "informatics": "核心开发者成为瓶颈，被所有人依赖"
+    },
+    "trigger_keywords": ["不好意思拒绝", "又答应了", "凭什么只有我", "说不出口", "被当成理所当然"]
+  },
+  {
+    "pattern_id": "cycle_crisis_reactive",
+    "pattern_type": "循环",
+    "description": "忽视预警→危机爆发→紧急响应→短暂修复→回到忽视",
+    "stages": ["忽视预警", "危机爆发", "紧急响应", "短暂修复", "回到忽视"],
+    "cross_domain_instances": {
+      "psychology": "健康焦虑：症状出现才关注，好了就放松",
+      "work": "项目救火循环，永远救火不做预防",
+      "informatics": "生产故障→紧急hotfix→未做根因分析→下次更大故障",
+      "sociology": "社会事件→舆论爆发→政策应急→热度退去→新事件"
+    },
+    "trigger_keywords": ["出事了", "救火", "又崩了", "每次到这一步", "治标不治本", "头痛医头"]
+  },
+  {
+    "pattern_id": "progressive_burnout",
+    "pattern_type": "渐进",
+    "description": "充满热情→高度投入→疲劳累积→去人性化→彻底耗竭",
+    "stages": ["充满热情", "高度投入", "慢性疲劳", "情感麻木去人性化", "彻底耗竭"],
+    "cross_domain_instances": {
+      "psychology": "职业倦怠三维度模型（Maslach）：情绪耗竭/去人性化/成就感降低",
+      "work": "初入职场满腔热血→三年后麻木上班",
+      "education": "高考学生逐渐丧失对学习本身的兴趣",
+      "sociology": "志愿者/公益人士长期付出后的耗竭"
+    },
+    "trigger_keywords": ["越来越累", "失去热情", "麻木了", "以前不这样的", "不知道为什么做这些", "撑不住了"]
+  },
+  {
+    "pattern_id": "progressive_trust_building",
+    "pattern_type": "渐进",
+    "description": "陌生→试探性接触→小风险披露→验证安全→深度信任",
+    "stages": ["陌生戒备", "试探性接触", "小风险披露", "正向反馈验证", "深度信任"],
+    "cross_domain_instances": {
+      "psychology": "依恋关系建立过程，亲密信任发展阶段",
+      "work": "新团队成员从边缘任务到核心职责的融入",
+      "sociology": "跨文化群体间信任积累",
+      "informatics": "开源社区新贡献者从小PR到核心维护者"
+    },
+    "trigger_keywords": ["慢慢信任", "一点点", "试着告诉你", "还不太熟", "越来越放心", "建立关系"]
+  },
+  {
+    "pattern_id": "progressive_skill_acquisition",
+    "pattern_type": "渐进",
+    "description": "无意识无能→有意识无能→有意识有能→无意识有能",
+    "stages": ["无意识无能", "有意识无能", "刻意练习阶段", "有意识有能", "无意识有能内化"],
+    "cross_domain_instances": {
+      "psychology": "四阶段能力模型（Noel Burch），技能学习心理曲线",
+      "work": "新技能培训到岗位胜任的过渡",
+      "education": "从不知道自己不会到融会贯通",
+      "informatics": "从看不懂代码到写出优雅架构"
+    },
+    "trigger_keywords": ["慢慢学会", "越来越熟练", "最开始很难", "不知道自己不会", "变自然了", "融会贯通"]
+  },
+  {
+    "pattern_id": "progressive_tolerance_escalation",
+    "pattern_type": "渐进",
+    "description": "初始刺激有效→适应产生耐受→需要更强刺激→耐受增强→依赖形成",
+    "stages": ["初始有效", "适应耐受", "需求升级", "强化耐受", "依赖形成"],
+    "cross_domain_instances": {
+      "psychology": "物质耐受性机制，感觉寻求行为升级",
+      "work": "绩效奖励习以为常，激励阈值不断上升",
+      "sociology": "媒体感官刺激升级，暴力内容阈值漂移",
+      "informatics": "系统性能优化收益递减，用户期望不断攀升"
+    },
+    "trigger_keywords": ["感觉不够了", "越来越需要", "没有就不行了", "以前少一点就够", "习惯了", "要更多"]
+  },
+  {
+    "pattern_id": "progressive_relationship_distance",
+    "pattern_type": "渐进",
+    "description": "亲密→偶尔冷漠→沟通减少→情感疏远→形同陌路",
+    "stages": ["亲密期", "偶尔冷漠", "沟通减少", "情感疏远", "形同陌路"],
+    "cross_domain_instances": {
+      "psychology": "关系冷却与情感撤离过程，依恋回避发展",
+      "work": "团队凝聚力渐进瓦解，核心成员逐渐边缘化",
+      "sociology": "朋友圈从密切互动到点赞之交到取消关注",
+      "education": "师生关系从亲近到例行公事"
+    },
+    "trigger_keywords": ["越来越远", "慢慢不联系了", "不知道什么时候开始", "感觉陌生了", "没以前那么", "渐渐"]
+  },
+  {
+    "pattern_id": "progressive_cognitive_narrowing",
+    "pattern_type": "渐进",
+    "description": "开放探索→形成偏好→固化偏见→主动回避异见→认知闭合",
+    "stages": ["开放探索", "形成偏好", "固化偏见", "主动回避异见", "认知闭合"],
+    "cross_domain_instances": {
+      "psychology": "确认偏见强化过程，认知闭合需求增长",
+      "work": "专家过度专业化，拒绝跨领域视角",
+      "sociology": "信息茧房形成机制，算法推荐强化偏见",
+      "informatics": "技术选型固化，抵制新工具评估"
+    },
+    "trigger_keywords": ["越来越固执", "听不进去了", "只看自己想看的", "不接受其他可能", "认准了"]
+  },
+  {
+    "pattern_id": "progressive_boundary_erosion",
+    "pattern_type": "渐进",
+    "description": "清晰边界→小让步→边界模糊→习惯侵入→完全丧失边界",
+    "stages": ["清晰边界", "小让步试探", "边界模糊", "侵入习以为常", "完全丧失边界"],
+    "cross_domain_instances": {
+      "psychology": "人际边界渐进侵蚀，讨好行为强化",
+      "work": "加班从偶尔到常态，私人时间被占用",
+      "sociology": "隐私渐进让渡，数据使用授权范围蔓延",
+      "informatics": "API权限蔓延，最小权限原则被逐渐突破"
+    },
+    "trigger_keywords": ["说好不这样的", "越界了", "不知不觉", "慢慢变成这样", "底线一直在后退"]
+  },
+  {
+    "pattern_id": "stage_hope_erosion",
+    "pattern_type": "阶段",
+    "description": "充满希望→初次受挫→坚持等待→失去信心→彻底死心",
+    "stages": ["充满希望", "初次受挫", "坚持等待", "失去信心", "彻底死心"],
+    "cross_domain_instances": {
+      "psychology": "希望理论（Snyder）中的路径封闭过程，习得性无助终点",
+      "work": "职业晋升通道关闭，员工最终离职或摆烂",
+      "sociology": "难民群体从抱有希望到绝望的不可逆历程",
+      "education": "学困生从努力到彻底放弃的心理历程"
+    },
+    "trigger_keywords": ["越来越不抱希望", "死心了", "一次次失望", "以前还期待", "不敢想了", "认命了"]
+  },
+  {
+    "pattern_id": "progressive_competence_plateau",
+    "pattern_type": "渐进",
+    "description": "快速提升→速度放缓→进入平台期→努力收益递减→突破或放弃",
+    "stages": ["快速提升期", "提升减缓", "平台期停滞", "努力收益递减", "突破或放弃"],
+    "cross_domain_instances": {
+      "psychology": "学习曲线平台期，心流体验需要匹配挑战",
+      "work": "职业成长从快速到停滞到瓶颈期",
+      "education": "外语学习中高级阶段进步放缓",
+      "informatics": "算法优化收益递减，帕累托最优前沿"
+    },
+    "trigger_keywords": ["到瓶颈了", "练了好久没进步", "卡在这里", "不知道怎么突破", "感觉停滞了"]
+  },
+  {
+    "pattern_id": "stage_grief_kubler_ross",
+    "pattern_type": "阶段",
+    "description": "否认→愤怒→讨价还价→抑郁→接受",
+    "stages": ["否认", "愤怒", "讨价还价", "抑郁", "接受"],
+    "cross_domain_instances": {
+      "psychology": "Kübler-Ross哀伤模型，失去重要事物后的心理过程",
+      "work": "失业/裁员后的心理适应阶段",
+      "sociology": "失去亲人的社会性哀悼过程",
+      "informatics": "技术被淘汰时开发者的心理历程（如Flash/IE时代结束）"
+    },
+    "trigger_keywords": ["不可能", "怎么会这样", "为什么是我", "如果当时", "慢慢接受了", "失去"]
+  },
+  {
+    "pattern_id": "stage_change_transtheoretical",
+    "pattern_type": "阶段",
+    "description": "无意图→意图形成→准备→行动→维持",
+    "stages": ["无意图", "意图形成", "准备期", "行动期", "维持期"],
+    "cross_domain_instances": {
+      "psychology": "跨理论模型（Prochaska），行为改变阶段",
+      "work": "职业转型从抵触到主动行动",
+      "education": "学生从不想学习到建立学习习惯",
+      "sociology": "公众健康行为改变（戒烟/运动）的政策干预阶段"
+    },
+    "trigger_keywords": ["开始想改变", "准备好了", "在行动了", "坚持下去", "从没想过到", "下定决心"]
+  },
+  {
+    "pattern_id": "stage_relationship_development",
+    "pattern_type": "阶段",
+    "description": "吸引→磨合→稳定→深化或破裂",
+    "stages": ["相互吸引", "热恋期", "现实磨合", "稳定深化", "成熟关系或破裂"],
+    "cross_domain_instances": {
+      "psychology": "依恋关系发展阶段论，亲密关系三角理论（Sternberg）",
+      "work": "团队建设阶段（Tuckman：形成/风暴/规范/执行）",
+      "sociology": "陌生人到朋友到知己的社会关系演变",
+      "education": "师生关系从陌生到信任的建立过程"
+    },
+    "trigger_keywords": ["关系进展", "从陌生到熟悉", "最开始多好现在", "到了哪个阶段", "磨合期"]
+  },
+  {
+    "pattern_id": "stage_project_lifecycle",
+    "pattern_type": "阶段",
+    "description": "概念→规划→执行→收尾→评估",
+    "stages": ["概念构思", "规划设计", "执行实施", "收尾交付", "回顾评估"],
+    "cross_domain_instances": {
+      "psychology": "目标追求的动机阶段模型（Heckhausen）",
+      "work": "PMBOK项目生命周期，产品从0到1",
+      "informatics": "软件开发生命周期（SDLC），敏捷迭代周期",
+      "education": "毕业论文从选题到答辩的不可逆阶段"
+    },
+    "trigger_keywords": ["项目到哪了", "还在规划", "快收尾了", "刚起步", "做完了要复盘"]
+  },
+  {
+    "pattern_id": "stage_identity_formation",
+    "pattern_type": "阶段",
+    "description": "身份混乱→积极探索→身份承诺→整合认同",
+    "stages": ["身份混乱", "积极探索", "危机重评", "身份承诺", "整合认同"],
+    "cross_domain_instances": {
+      "psychology": "Erikson自我同一性发展，Marcia身份状态模型",
+      "work": "职业身份认同从迷茫到清晰的过程",
+      "sociology": "移民文化身份整合阶段",
+      "education": "大学生从迷茫到专业认同的发展历程"
+    },
+    "trigger_keywords": ["不知道自己是谁", "找到自己了", "想清楚了", "一直在探索", "确定方向了", "认识自己"]
+  },
+  {
+    "pattern_id": "stage_recovery_addiction",
+    "pattern_type": "阶段",
+    "description": "意识问题→寻求帮助→早期康复→维持康复→长期稳定",
+    "stages": ["意识到问题", "寻求帮助", "早期康复挣扎", "维持康复", "长期稳定整合"],
+    "cross_domain_instances": {
+      "psychology": "成瘾康复阶段模型，复发预防理论（Marlatt）",
+      "work": "工作狂从崩溃到重建健康工作节奏",
+      "sociology": "社会支持网络在康复各阶段的不同作用",
+      "education": "游戏成瘾学生的干预与学习能力恢复"
+    },
+    "trigger_keywords": ["开始恢复了", "戒掉了", "还在挣扎", "一步步好起来", "康复", "慢慢走出来"]
+  },
+  {
+    "pattern_id": "stage_crisis_resolution",
+    "pattern_type": "阶段",
+    "description": "触发事件→失衡混乱→应对尝试→新平衡建立→成长整合",
+    "stages": ["触发事件", "失衡混乱", "应对尝试", "新平衡建立", "成长后整合"],
+    "cross_domain_instances": {
+      "psychology": "危机干预理论（Caplan），创伤后成长（PTG）",
+      "work": "企业危机管理：发现→响应→控制→恢复→重建",
+      "informatics": "系统故障从发现到恢复到事后分析",
+      "sociology": "社区灾后重建从混乱到新常态"
+    },
+    "trigger_keywords": ["度过了", "最难的时候", "慢慢走出来了", "危机", "重新站起来", "整合"]
+  },
+  {
+    "pattern_id": "stage_innovation_adoption",
+    "pattern_type": "阶段",
+    "description": "创新出现→早期采用→早期多数跟进→晚期多数→落后者",
+    "stages": ["创新出现", "创新者采用", "早期采用者", "早期多数", "晚期多数", "落后者"],
+    "cross_domain_instances": {
+      "psychology": "创新扩散理论（Rogers），变革抵制心理阶段",
+      "work": "企业新技术引入从试点到全面推广",
+      "sociology": "社会规范的扩散与主流化过程",
+      "informatics": "技术成熟度曲线（Gartner），从炒作到生产力"
+    },
+    "trigger_keywords": ["新技术", "大家都开始用了", "早就用了", "还没接受", "趋势", "普及"]
+  }
+]

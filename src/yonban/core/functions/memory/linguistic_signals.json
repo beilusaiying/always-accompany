@@ -1,0 +1,167 @@
+{
+ "sentence_final_particles": {
+  "吗": {
+   "signal": "question",
+   "direction": "knowledge_boost"
+  },
+  "嘛": {
+   "signal": "obvious",
+   "direction": "no_challenge"
+  },
+  "吧": {
+   "signal": "uncertain",
+   "direction": "gentle_guide"
+  },
+  "呢": {
+   "signal": "rhetorical",
+   "direction": "interaction_boost"
+  },
+  "啊": {
+   "signal": "exclaim",
+   "direction": "emotion_contain"
+  },
+  "呀": {
+   "signal": "exclaim",
+   "direction": "emotion_contain"
+  },
+  "哦": {
+   "signal": "cold_accept",
+   "direction": "reactivate"
+  },
+  "噢": {
+   "signal": "cold_accept",
+   "direction": "reactivate"
+  },
+  "啦": {
+   "signal": "state_change",
+   "direction": "note_transition"
+  },
+  "呐": {
+   "signal": "urge",
+   "direction": "action_orient"
+  }
+ },
+ "metadiscourse": {
+  "hedge": [
+   "可能",
+   "也许",
+   "大概",
+   "似乎",
+   "好像",
+   "或许",
+   "说不定",
+   "不太确定",
+   "不一定"
+  ],
+  "booster": [
+   "绝对",
+   "一定",
+   "真的",
+   "确实",
+   "必须",
+   "完全",
+   "肯定",
+   "当然",
+   "毫无疑问"
+  ],
+  "attitude": [
+   "遗憾的是",
+   "幸运的是",
+   "可惜",
+   "难得",
+   "居然",
+   "竟然",
+   "偏偏",
+   "反而"
+  ],
+  "self_mention": [
+   "我觉得",
+   "依我看",
+   "在我看来",
+   "我认为",
+   "我个人",
+   "我感觉",
+   "照我说"
+  ],
+  "engagement": [
+   "你知道吗",
+   "对吧",
+   "是不是",
+   "你说呢",
+   "不是吗",
+   "你觉得呢",
+   "对不对",
+   "为什么这么说",
+   "依据是什么",
+   "你怎么看",
+   "说说你的看法",
+   "凭什么这么说"
+  ],
+  "expression_difficulty": [
+   "我不知道怎么说",
+   "说不清楚",
+   "怎么说呢",
+   "不知道该怎么表达",
+   "形容不出来",
+   "很难描述"
+  ],
+  "honesty": [
+   "说实话",
+   "坦白讲",
+   "老实说",
+   "不瞒你说",
+   "实话实说"
+  ],
+  "repair": [
+   "不对",
+   "等等",
+   "我换个说法",
+   "不是这样",
+   "我说错了",
+   "让我想想"
+  ]
+ },
+ "burns_absolutizing": {
+  "all_or_nothing": {
+   "pattern": "总是|每次都|永远|从来|一直都是",
+   "type": "全有全无思维"
+  },
+  "overgeneralization": {
+   "pattern": "什么都|完全不|一点也不|根本没|谁都|没有人",
+   "type": "过度概括"
+  },
+  "should_statements": {
+   "pattern": "应该|必须|一定要|不能不|非得",
+   "type": "应该陈述"
+  },
+  "fortune_telling": {
+   "pattern": "永远不会|没有希望|不可能|绝不|肯定不行",
+   "type": "预言术"
+  },
+  "personalization": {
+   "pattern": "都是我的错|全怪我|我太|都怨我|要不是我",
+   "type": "个人化"
+  }
+ },
+ "metadiscourse_terms": {
+  "_comment": "元话语type→AT词条激活映射(词库线A 2026-07-03, 18新词见activation_terms_chat _batch=metadiscourse_20260703)。消费: p1_recall.recallV2 P1_METADISCOURSE_TERMS旋钮。保守4组: booster/attitude/honesty/self_mention不接(关联弱宁缺)。",
+  "engagement": [
+   "探询式提问",
+   "循环提问",
+   "引导式发现"
+  ],
+  "repair": [
+   "会话修正",
+   "他人启动修正",
+   "澄清请求"
+  ],
+  "hedge": [
+   "知晓感",
+   "元认知监控"
+  ],
+  "expression_difficulty": [
+   "重述确认",
+   "共同基础"
+  ]
+ }
+}

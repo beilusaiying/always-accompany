@@ -1,0 +1,29 @@
+{
+	"en-UK": {
+		"name": "P1 Self-Driven Recall",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "Local associative recall pipeline — SWOW + NB300 + multi-route divergence pool.",
+		"description_markdown": "**P1 Self-Driven Recall** runs the local associative recall pipeline (SWOW divergence + NB300 neighbors + multi-route pool) to produce direction words for the main AI, without calling any external LLM.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["p1", "recall", "self-driven", "swow", "divergence", "beilu"]
+	},
+	"zh-CN": {
+		"name": "P1 自驱动召回",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "本地联想召回管线——SWOW + NB300 + 多路发散池，产出方向词注入主 AI",
+		"description_markdown": "**P1 自驱动召回** 运行本地联想召回管线（SWOW 发散 + NB300 近邻 + 多路发散池），为主 AI 产出方向词，无需调用外部大模型。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["P1", "召回", "自驱动", "联想", "SWOW", "发散"]
+	},
+	"emoji": {
+		"name": "🧠⚡",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "🧠🔗➡️💡✨",
+		"description_markdown": "🧠 ➡️ 🔗\n⚡ ➡️ 💡",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": ["🧠", "⚡", "🔗", "💡"]
+	}
+}

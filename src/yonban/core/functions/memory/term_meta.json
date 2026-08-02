@@ -1,0 +1,5112 @@
+{
+  "返回结果": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "读取数据": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "显式": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "当前目录": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "变量名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "大小写": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "作用域": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "布局文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "包名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "创建对象": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "测试数据": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "端口号": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "复用": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "存储空间": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重新启动": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "抛出异常": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "类库": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "代码实现": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "标识符": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "方法调用": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "直接访问": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "编程语言": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "业务逻辑": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "序列化": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "成员函数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据存储": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "可执行": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "快捷键": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "字节数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "设计模式": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重定向": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "调用函数": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "可执行文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "代码块": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "方法名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "参考资料": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "线程安全": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "主键": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "命名空间": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "调用方法": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "迭代器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "软件开发": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "正常运行": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "存储数据": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "点击事件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "程序代码": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "目录结构": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "类型转换": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "构造器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "多态": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "访问权限": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "二叉树": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "内存地址": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "内部类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "监听器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "分隔符": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据库连接": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "表名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "分页": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "冒号": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "十六进制": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "网络连接": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "修饰符": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重新编译": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "开源项目": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "大数据": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "线程池": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "时间戳": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "元数据": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "属性设置": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "输入流": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "系统资源": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "双引号": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "内存分配": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "主机名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "用户界面": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "随机数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "结果集": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "应用层": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "实用建构": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "行为脚手架": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "算法级解析": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "效用最大化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "框架重塑": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "视域置换": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "意义重估": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "信念解构": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "叙事外化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "范式跃迁": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "认知解离": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "语义重锚": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "反事实推演": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "辩证统合": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "隐喻重构": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "边界消解": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_reframe"
+  },
+  "认知失调": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "确认偏误": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "习得性无助": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "沉没成本": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "达克效应": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "锚定效应": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "信息茧房": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "二元对立": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "过度泛化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "灾难化思维": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "心理账户": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "框架效应": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "cognitive_analysis"
+  },
+  "社会比较": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "向上比较": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "落差感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "差距感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "自我怀疑": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "优越感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "被超越感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "工作认同": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "职业认同": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "身份认同": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "贡献感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "被需要": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "归属感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "掌控感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "稳定感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "确定感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "松弛感": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "依恋需求": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "信任建立": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "关系修复": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "亲密感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "距离感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "边界感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "异地恋": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "relationship"
+  },
+  "情感联结": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "relationship"
+  },
+  "情感断联": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "relationship"
+  },
+  "家庭矛盾": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "relationship"
+  },
+  "原生家庭": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "relationship"
+  },
+  "散散步": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "看电影": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "刷剧": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "追番": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "打游戏": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "下厨": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "睡个懒觉": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "发呆": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "躺平": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "放空": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "咖啡馆": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "约朋友": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "逛街": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "没睡好": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "很疲惫": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "提不起劲": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "身心俱疲": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "精力不足": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "daily_life"
+  },
+  "幸福": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "positive_emotions"
+  },
+  "成就感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "positive_emotions"
+  },
+  "自豪感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "positive_emotions"
+  },
+  "满足感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "positive_emotions"
+  },
+  "充实感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "positive_emotions"
+  },
+  "恐惧": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "驱动程序": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "开发过程": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "报错了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "跑不通": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "编译失败": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "运行崩了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "复现不了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "偶发错误": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "线上出问题": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "紧急修复": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "打断点": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "加日志": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "追堆栈": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "看日志": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "已定位": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "找到原因": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "修好了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "待验证": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "调用链追踪": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "边界条件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "竞态条件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "空值传播": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "死锁风险": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "资源泄漏": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "内存泄漏": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "缓存失效": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "幂等性": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "向后兼容": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "重试风暴": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_workflow"
+  },
+  "需求评审": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "代码审查": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "单元测试": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "集成测试": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "持续集成": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "持续部署": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "版本管理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "技术方案": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "架构设计": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "重构计划": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "性能优化": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "执行过程": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "工具类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据传输": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "预处理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "获取数据": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "示例代码": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "文件路径": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "参数传递": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重置": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "新版本": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "偏移量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重命名": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "跨平台": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "文本文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "工作原理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "开发环境": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "依赖关系": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "子目录": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "系统调用": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据集": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "类对象": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "发送消息": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "句柄": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "下划线": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "浮点数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "面向对象": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "日志文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "持久化": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "二维": {
+    "pos": "Adj",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "配置信息": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "参数类型": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "资源文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "基本数据类型": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "绝对路径": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "打开文件": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "内存管理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "安装包": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "静态变量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "应用场景": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "基本类型": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "心理契约": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "团体迷思": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "建设性反馈": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "高语境沟通": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "沉默的螺旋": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "非暴力沟通": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "加班文化": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "打工人": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "社畜日常": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "摸鱼": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "当牛马": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "躺平摆烂": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "卷不动了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "佛系打工": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "职场政治": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "向上管理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "背锅侠": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "甩锅": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "功劳归属": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "信任危机": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "团队氛围": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "需求变更": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "需求蔓延": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "无效会议": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "信息孤岛": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "沟通成本": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "审批繁琐": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "job_culture"
+  },
+  "跳槽": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "入职": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "试用期": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "转正": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "辞职": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "被优化": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "大厂梦": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "创业公司": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "薪资谈判": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "期权": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "年终奖": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "绩效不好": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "职业瓶颈": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "闭环管理": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "资源瓶颈": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "阻塞依赖": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "偏差分析": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "交付里程碑": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "流程损耗": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "燃尽追踪": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "协同壁垒": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "任务拆解": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "动态调度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_execution"
+  },
+  "决策树模型": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "帕累托最优": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "敏感性分析": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "期望效用": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "贝叶斯推断": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "机会成本": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "蒙特卡洛模拟": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "启发式偏差": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "纳什均衡": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "风险敞口": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "灰度决策": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "decision_analysis"
+  },
+  "职业倦怠": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "情绪劳动": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "情绪耗竭": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "角色冲突": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "心理安全感": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "工作异化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "职场排斥": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "心流体验": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "冒名者综合征": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "情感勒索": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "意义感缺失": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "职场焦虑": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "emotion_at_work"
+  },
+  "沟通漏斗": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "权力距离": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "积极倾听": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "隐性知识": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_analysis"
+  },
+  "构造方法": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "结点": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "源文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "局部变量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "函数调用": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "复杂度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "赋值": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "自动生成": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "时间复杂度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "实现类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "堆栈": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "基类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "整型": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "函数返回": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "表单": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "运算符": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "只读": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "错误信息": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "寄存器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "主线程": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据源": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "正则表达式": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "操作符": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "缩放": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "抽象类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "回调函数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "静态方法": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "敏捷开发": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "迭代周期": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "每日站会": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "伏笔回收": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "冲突螺旋": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "时空折叠": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "麦高芬": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "情感弧线": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "具身共情": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "情感效价": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "动机溯源": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "心理防御": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "情绪唤醒": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "情感投射": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "创伤印记": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "情绪颗粒度": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "情感锚点": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "潜意识涌动": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_emotion"
+  },
+  "认知重构": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "创伤代偿": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "动机演化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "弧光跃迁": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "自我效能": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "价值锚点": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "阴暗面整合": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "阈限跨越": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "情感解离": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "镜像觉醒": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "韧性重塑": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "行为范式": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "character_growth"
+  },
+  "情感场域": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "scene_atmosphere"
+  },
+  "联觉映射": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "scene_atmosphere"
+  },
+  "阈限空间": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "scene_atmosphere"
+  },
+  "被接纳": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "情绪容纳": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "正常化感受": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "先共情再建议": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "压力山大": {
+    "pos": "Adj",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "内耗严重": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "情绪崩了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "心情低落": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "莫名难受": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "委屈感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "憋屈感": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "透不过气": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "情绪释放": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "情绪出口": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "发泄需求": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "倾诉需求": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "被理解感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "被接住感": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "安全感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "被认可": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "被重视": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "被陪伴": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "价值感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "存在感": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "psychological_needs"
+  },
+  "担忧": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "害怕": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "惶恐": {
+    "pos": "Adj",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "不安": {
+    "pos": "Adj",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "后悔": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "愧疚": {
+    "pos": "Adj",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "里程碑": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "技术债": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "接口文档": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "代码规范": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "dev_process"
+  },
+  "Root Cause Analysis": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Stack Trace Traceback": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "State Mutation Check": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Boundary Condition Test": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Memory Leak Probe": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Race Condition Audit": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Dependency Conflict": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Runtime Exception Analysis": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Execution Flow Graph": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Logic Gate Validation": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Asynchronous Deadlock Check": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Performance Bottleneck Profiling": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "debug_en"
+  },
+  "Microservices Pattern": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "System Scalability": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Event Driven Architecture": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Loose Coupling": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Data Consistency": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Fault Tolerance": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "API Gateway": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Latency Optimization": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Design Patterns": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Resource Bottleneck": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "Security Architecture": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "System Modularity": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "architecture_en"
+  },
+  "threat modeling": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "security_en"
+  },
+  "attack surface": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "security_en"
+  },
+  "停顿": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "重复": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "回环": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "变奏": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "主题": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "母题": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "原型": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "仪式": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "禁忌": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "创伤": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "愈合": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "执念": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "迷失": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "追寻": {
+    "pos": "V",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "回归": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "放下": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "和解": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "冲突": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "对抗": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "憎恨": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "爱慕": {
+    "pos": "V",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "嫉妒": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "悲悯": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "同情": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "厌恶": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "羞耻": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "负罪": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "自责": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "欺骗": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "背叛": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "narrative"
+  },
+  "节奏蒙太奇": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "心理时长": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "叙事加速": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "悬念留白": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "张力递进": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "叙事省略": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "节奏切分": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "情感波谷": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "闪回倒叙": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "叙事节拍": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_pacing"
+  },
+  "意识流": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "全知视角": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "不可靠叙述": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "极简主义": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "魔幻现实": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "复调叙事": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "白描手法": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "黑色幽默": {
+    "pos": "N",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "非线性叙事": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "互文性": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "沉浸式视角": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "陌生化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_style"
+  },
+  "情节拓扑": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "叙事弧线": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "嵌套叙事": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "因果链条": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "视角转换": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "叙事分形": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_structure"
+  },
+  "抽象分层": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "依赖注入": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "状态机": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "负载均衡": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "容错机制": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "异步通信": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "微服务": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "管道过滤器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "弹性伸缩": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_architecture"
+  },
+  "防御编程": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "异常捕获": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "边界检查": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "注入攻击": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "权限逃逸": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "死锁预防": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "沙箱隔离": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "缓冲区溢出": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "降级熔断": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "logic_safety"
+  },
+  "数据结构": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "算法复杂度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "递归调用": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "并发控制": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "抽象语法树": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "动态规划": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "垃圾回收": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "哈希映射": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "异步执行": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "it_core_terms"
+  },
+  "叙事陪伴": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "隐喻抚慰": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "留白倾听": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "创伤知情": {
+    "pos": "Adj",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "当下锚定": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "脆弱共担": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "积极关注": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "response_empathy"
+  },
+  "逆向推演": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "路径规划": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "步骤实例化": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "启发式寻优": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "目标锚定": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "迭代执行": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "决策树映射": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "response_action"
+  },
+  "有意义感": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "内卷压力": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "躺平念头": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "钝感力": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "收入安全": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "经济压力": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "财务焦虑": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "同伴压力": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "家庭期望": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "外界眼光": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "social_analysis"
+  },
+  "共情优先": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "接住情绪": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "陪伴优先": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "不评判": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "情感同调": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "被听见": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support"
+  },
+  "哀悼反应": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "客体丧失": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "依恋断裂": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "躯体化悲痛": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "存在性虚无": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "哀伤叙事": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "创伤性反刍": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "情感剥夺": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "心理性痛觉": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "悲伤沉浸": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_sadness"
+  },
+  "认知超载": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "移情疲劳": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "决策疲劳": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "自我损耗": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "慢性应激": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "情感迟钝": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "具身倦怠": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "心理熵增": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "存在性疲乏": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "边缘系统过载": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_fatigue"
+  },
+  "躯体化反应": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "预期性焦虑": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "反刍思维": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "杏仁核劫持": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "隧道视野": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "悬浮性焦虑": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "逃避性应对": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "侵入性思维": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "存在性危机": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "emotion_anxiety"
+  },
+  "解决方法": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "用户名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "头文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "命令行": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "实例化": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "递归": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "父类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "多线程": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "环境变量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "右键": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "服务器端": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "生命周期": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "类名": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "优先级": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "官网": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "上传": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "成员变量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "迭代": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "程序运行": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "服务端": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "根目录": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "链表": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "文件系统": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "开发人员": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "嵌套": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "全局变量": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "内存空间": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "版本号": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "下载地址": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "后缀": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "懊恼": {
+    "pos": "Adj",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "怨恨": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "觉得不公": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "心塞": {
+    "pos": "Adj",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "emo了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "破防了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "心里酸": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "好丧": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "整个人不好了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "心好累": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "真的烦": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "烦死了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "崩了": {
+    "pos": "V",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "裂开了": {
+    "pos": "Phrase",
+    "register": "colloquial",
+    "valence": "negative",
+    "mode": "chat",
+    "subCat": "negative_emotions"
+  },
+  "empathetic_validation": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "somatic_grounding": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "cognitive_reframing": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "narrative_restructuring": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "affective_mirroring": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "safe_haven_metaphor": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "distress_regulation": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "temporal_perspective_shift": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "compassionate_inquiry": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "sensory_anchoring": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "existential_reassurance": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "relational_support": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "chat",
+    "subCat": "emotion_support_en"
+  },
+  "Attachment Dynamics": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "chat",
+    "subCat": "relationship_en"
+  },
+  "零日漏洞": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "negative",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "进程调度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "异步并发": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "路由协议": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "守护进程": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "握手协议": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "容器编排": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "computer_domain"
+  },
+  "字符串": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "初始化": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数组": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "加载": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "客户端": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "应用程序": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "自定义": {
+    "pos": "V",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "配置文件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "封装": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "字段": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "解决方案": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "编译器": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "重启": {
+    "pos": "V",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "控件": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "子类": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "文件名": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "数据类型": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "构造函数": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "开发者": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "code",
+    "subCat": "core_it"
+  },
+  "アクティブリスニング": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "フィードバックループ": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "ナレッジマネジメント": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "ラポール形成": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "ステークホルダー調整": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "アサーティブネス": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "ハイコンテクスト文化": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "タスク依存性": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "共創的ダイアログ": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "communication_ja"
+  },
+  "material culture": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "worldbuilding_en"
+  },
+  "character voice consistency": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "subtextual intent": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "dialogue rhythm": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "sociolect markers": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "relational power dynamics": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "idiosyncratic lexicon": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "thematic exposition density": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "non-verbal cues": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "conversational turn-taking": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "affective modulation": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "elliptical syntax": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "dramatic tension arc": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "dialogue_en"
+  },
+  "Ethereal Ambience": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Oppressive Tension": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Melancholic Stasis": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Visceral Decay": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Technological Sterility": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Liminal Uncanniness": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Buoyant Optimism": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Cluttered Chaos": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Hallowed Sanctity": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Cinematic Grandeur": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Claustrophobic Enclosure": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "negative",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "Nostalgic Warmth": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_en"
+  },
+  "物語的没入": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative_ja"
+  },
+  "情動的共鳴": {
+    "pos": "Phrase",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative_ja"
+  },
+  "構造的整合性": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "narrative_ja"
+  },
+  "感覚的詳述": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_ja"
+  },
+  "時間的ペーシング": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "airp",
+    "subCat": "narrative_ja"
+  },
+  "神聖な静謐": {
+    "pos": "Phrase",
+    "register": "literary",
+    "valence": "positive",
+    "mode": "airp",
+    "subCat": "atmosphere_ja"
+  },
+  "工作分解": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "关键路径": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "敏捷迭代": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "资源调度": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "任务依赖": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "瓶颈识别": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "基线设定": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "目标对齐": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "风险前置": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "统筹规划": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "process_planning"
+  },
+  "晋升受阻": {
+    "pos": "Phrase",
+    "register": "neutral",
+    "valence": "negative",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "技能提升": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "跨行转型": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "职业规划": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "发展路径": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "长期价值": {
+    "pos": "N",
+    "register": "academic",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "career_development"
+  },
+  "优先级排序": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "目标拆解": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "任务分配": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "资源调配": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "风险评估": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "方案对比": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "取舍决策": {
+    "pos": "N",
+    "register": "neutral",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "复盘总结": {
+    "pos": "N",
+    "register": "colloquial",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "数据驱动": {
+    "pos": "Phrase",
+    "register": "technical",
+    "valence": "positive",
+    "mode": "work",
+    "subCat": "management_decision"
+  },
+  "根因分析": {
+    "pos": "N",
+    "register": "technical",
+    "valence": "neutral",
+    "mode": "work",
+    "subCat": "management_decision"
+  }
+}

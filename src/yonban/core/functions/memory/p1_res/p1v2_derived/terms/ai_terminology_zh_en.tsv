@@ -1,0 +1,2424 @@
+zh	en
+0-1损失函数	0-1 Loss Function
+绝对损失函数	Absolute Loss Function
+绝对值整流	Absolute Value Rectification
+接受-拒绝抽样法/接受-拒绝采样法	Accept-Reject Sampling Method
+接受分布	Acceptance Distribution
+访问参数	Access Parameters
+累积误差反向传播	Accumulated Error Backpropagation
+准确率	Accuracy
+声学	Acoustic
+声学建模	Acoustic Modeling
+采集函数	Acquisition Function
+动作	Action
+动作价值函数	Action Value Function
+行为主义	Actionism
+活性值	Activation
+激活函数	Activation Function
+主动学习	Active Learning
+演员	Actor
+演员-评论员算法	Actor-Critic Algorithm
+演员-评论员法	Actor-Critic Method
+自适应比特率算法	Adaptive Bitrate Algorithm
+Adam算法	Adaptive Moment Estimation Algorithm
+自适应谐振理论	Adaptive Resonance Theory
+加性模型	Additive Model
+对抗	Adversarial
+对抗样本	Adversarial Example
+对抗网络	Adversarial Networks
+对抗训练	Adversarial Training
+仿射层	Affine Layer
+仿射变换	Affine Transformation
+亲和矩阵	Affinity Matrix
+智能体	Agent
+聚合	Agglomerative
+不可知PAC可学习	Agnostic PAC Learnable
+算法	Algorithm
+几乎处处	Almost Everywhere
+几乎必然	Almost Sure
+几乎必然收敛	Almost Sure Convergence
+α-β修剪法	Alpha-Beta Pruning
+选择性剪接数据集	Alternative Splicing Dataset
+分歧	Ambiguity
+解析梯度	Analytic Gradient
+原始采样	Ancestral Sampling
+退火重要采样	Annealed Importance Sampling
+异常检测	Anomaly Detection
+非周期的	Aperiodic
+非周期性图	Aperiodic Graph
+专用集成电路	Application-Specific Integrated Circuit
+近似贝叶斯计算	Approximate Bayesian Computation
+近似动态规划	Approximate Dynamic Programming
+近似推断	Approximate Inference
+近似	Approximation
+近似误差	Approximation Error
+架构	Architecture
+AUC（ROC曲线下方面积，度量分类模型好坏的标准）	Area Under ROC Curve
+算术编码	Arithmetic Coding
+通用人工智能	Artificial General Intelligence
+人工智能	Artificial Intelligence
+人工神经网络	Artificial Neural Network
+人工神经元	Artificial Neuron
+关联分析	Association Analysis
+联想记忆	Associative Memory
+联想记忆模型	Associative Memory Model
+渐近无偏	Asymptotically Unbiased
+异步随机梯度下降	Asynchronous Stochastic Gradient Descent
+异步	Asynchronous
+空洞卷积	Atrous Convolution
+注意力	Attention
+注意力提示	Attention Cue
+注意力分布	Attention Distribution
+注意力机制	Attention Mechanism
+注意力模型	Attention Model
+吸引点	Attractor
+属性	Attribute
+属性条件独立性假设	Attribute Conditional Independence Assumption
+属性空间	Attribute Space
+属性值	Attribute Value
+增广拉格朗日法	Augmented Lagrangian
+自回归网络	Auto-Regressive Network
+自编码器	Autoencoder
+自动微分	Automatic Differentiation
+自动语音识别	Automatic Speech Recognition
+自动摘要	Automatic Summarization
+自回归生成模型	Autoregressive Generative Model
+自回归模型	Autoregressive Model
+自回归过程	Autoregressive Process
+平均梯度	Average Gradient
+平均汇聚层	Average Pooling Layer
+平均汇聚	Average-Pooling
+平均感知器	Averaged Perceptron
+反向传播	Back Propagation
+反向传播算法	Back Propagation Algorithm
+随时间反向传播	Back Propagation Through Time
+回退	Back-Off
+后向	Backward
+反向归纳	Backward Induction
+反向搜索	Backward Search
+词袋	Bag of Words
+袋装	Bagging
+赌博机/老虎机	Bandit
+带通滤波器	Bandpass Filter
+基	Base
+基分类器	Base Classifier
+基学习器	Base Learner
+基学习算法	Base Learning Algorithm
+基向量	Base Vector
+基准	Baseline
+吸引域	Basin of Attraction
+批量	Batch
+批量梯度下降法	Batch Gradient Descent
+批量学习	Batch Learning
+批量规范化	Batch Normalization
+批量大小	Batch Size
+Baum-Welch算法	Baum-Welch Algorithm
+贝叶斯分类器	Bayes Classifier
+贝叶斯决策准则	Bayes Decision Rule
+贝叶斯误差	Bayes Error
+贝叶斯模型平均	Bayes Model Averaging
+贝叶斯最优分类器	Bayes Optimal Classifier
+贝叶斯风险	Bayes Risk
+贝叶斯规则	Bayes' Rule
+贝叶斯定理	Bayes' Theorem
+贝叶斯决策理论	Bayesian Decision Theory
+贝叶斯估计	Bayesian Estimation
+贝叶斯推断	Bayesian Inference
+贝叶斯学习	Bayesian Learning
+贝叶斯线性回归	Bayesian Linear Regression
+贝叶斯网/贝叶斯网络	Bayesian Network
+贝叶斯优化	Bayesian Optimization
+贝叶斯概率	Bayesian Probability
+贝叶斯统计	Bayesian Statistics
+束搜索	Beam Search
+基准	Benchmark
+信念网/信念网络	Belief Network
+信念传播	Belief Propagation
+贝尔曼方程	Bellman Equation
+贝尔曼最优方程	Bellman Optimality Equation
+伯努利分布	Bernoulli Distribution
+伯努利输出分布	Bernoulli Output Distribution
+最优臂问题	Best-Arm Problem
+贝塔分布	Beta Distribution
+类间散度矩阵	Between-Class Scatter Matrix
+双向长短期记忆	Bi-Directional Long-Short Term Memory
+二分法	Bi-Partition
+偏差/偏置	Bias
+偏置	Bias In Affine Function
+偏差	Bias In Statistics
+偏置偏移	Bias Shift
+偏差 - 方差分解	Bias-Variance Decomposition
+偏差 - 方差困境	Bias-Variance Dilemma
+有偏	Biased
+有偏重要采样	Biased Importance Sampling
+双向语言模型	Bidirectional Language Model
+双向循环神经网络	Bidirectional Recurrent Neural Network
+二元语法	Bigram
+二分类	Binary Classification
+二元关系	Binary Relation
+二值稀疏编码	Binary Sparse Coding
+二项分布	Binomial Distribution
+二项对数几率回归	Binomial Logistic Regression Model
+二项检验	Binomial Test
+生物学合理性	Biological Plausibility
+比特	Bit
+块	Block
+块坐标下降	Block Coordinate Descent
+块吉布斯采样	Block Gibbs Sampling
+样板代码	Boilerplate Code
+玻尔兹曼	Boltzmann
+玻尔兹曼分布	Boltzmann Distribution
+玻尔兹曼因子	Boltzmann Factor
+玻尔兹曼机	Boltzmann Machine
+Boosting（一种模型训练加速方式）	Boosting
+提升树	Boosting Tree
+自助采样法	Bootstrap Sampling
+自助法/自举法	Bootstrapping
+瓶颈层	Bottleneck Layer
+自下而上	Bottom-Up
+边界框	Bounding Boxes
+平衡点	Break-Event Point
+桥式采样	Bridge Sampling
+广播	Broadcasting
+Broyden类算法	Broyden's Algorithm
+分桶	Bucketing
+预烧期	Burn-In Period
+磨合	Burning-In
+微积分	Calculus
+变分法	Calculus of Variations
+校准	Calibration
+正则的	Canonical
+典型相关分析	Canonical Correlation Analysis
+容量	Capacity
+笛卡尔坐标	Cartesian Coordinate
+级联	Cascade
+级联相关	Cascade-Correlation
+灾难性遗忘	Catastrophic Forgetting
+分类属性	Categorical Attribute
+类别分布	Categorical Distribution
+因果因子	Causal Factor
+因果模型	Causal Modeling
+单元	Cell
+中心差分	Centered Difference
+中心极限定理	Central Limit Theorem
+链式法则	Chain Rule
+通道	Channel
+混沌	Chaos
+切比雪夫距离	Chebyshev Distance
+弦	Chord
+弦图	Chordal Graph
+街区距离	City Block Distance
+类别	Class
+类标记	Class Label
+类条件概率	Class-Conditional Probability
+类别不平衡	Class-Imbalance
+分类	Classification
+分类与回归树	Classification And Regression Tree
+分类器	Classifier
+梯度截断	Clip Gradient
+截断梯度	Clipping The Gradient
+团	Clique
+团势能	Clique Potential
+时钟循环神经网络	Clockwork RNN
+闭式解	Closed Form Solution
+闭式	Closed-Form
+簇	Cluster
+聚类分析	Cluster Analysis
+聚类假设	Cluster Assumption
+聚类	Clustering
+聚类集成	Clustering Ensemble
+共适应	Co-Adapting
+共现	Co-Occurrence
+共现词频	Co-Occurrence Frequency
+协同训练	Co-Training
+编码	Code
+码书学习	Codebook Learning
+编码矩阵	Coding Matrix
+协同过滤	Collaborative Filtering
+收缩的吉布斯抽样	Collapsed Gibbs Sampling
+共线性	Collinearity
+国际学习理论会议	COLT
+列	Column
+列空间	Column Space
+组合优化	Combinatorial Optimization
+基于委员会的学习	Committee-Based Learning
+共因	Common Cause
+同父	Common Parent
+紧奇异值分解	Compact Singular Value Decomposition
+竞争型学习	Competitive Learning
+互补松弛	Complementary Slackness
+完全图	Complete Graph
+完全连接	Complete Linkage
+完全数据	Complete-Data
+复杂细胞	Complex Cell
+组件学习器	Component Learner
+组合性	Compositionality
+可解释性	Comprehensibility
+计算代价	Computation Cost
+计算图	Computation Graph
+计算学习理论	Computational Learning Theory
+计算语言学	Computational Linguistics
+计算机视觉	Computer Vision
+连结	Concatenate
+概念类	Concept Class
+概念漂移	Concept Drift
+概念学习系统	Concept Learning System
+概念偏移	Concept Shift
+条件计算	Conditional Computation
+条件熵	Conditional Entropy
+条件独立	Conditional Independence
+条件语言模型	Conditional Language Model
+条件互信息	Conditional Mutual Information
+条件概率	Conditional Probability
+条件概率密度函数	Conditional Probability Density Function
+条件概率分布	Conditional Probability Distribution
+条件概率表	Conditional Probability Table
+条件随机场	Conditional Random Field
+条件风险	Conditional Risk
+条件独立的	Conditionally Independent
+国际神经信息处理系统会议	Conference On Neural Information Processing Systems
+置信度	Confidence
+冲突消解	Conflict Resolution
+混淆矩阵	Confusion Matrix
+共轭	Conjugate
+共轭方向	Conjugate Directions
+共轭分布	Conjugate Distribution
+共轭梯度	Conjugate Gradient
+共轭先验	Conjugate Prior
+连接权	Connection Weight
+连接主义	Connectionism
+一致性	Consistency
+一致性收敛	Consistency Convergence
+约束优化	Constrained Optimization
+基于内容寻址的存储	Content-Addressable Memory
+上下文变量	Context Variable
+上下文向量	Context Vector
+上下文窗口	Context Window
+上下文词	Context Word
+特定上下文独立	Context-Specific Independences
+上下文赌博机/上下文老虎机	Contextual Bandit
+基于上下文的表示	Contextualized Representation
+列联表	Contingency Table
+连续词袋模型	Continous Bag-Of-Words Model
+延拓法	Continuation Method
+持续式任务	Continuing Task
+连续属性	Continuous Attribute
+持续学习	Continuous Learning
+连续优化	Continuous Optimization
+收缩	Contractive
+收缩自编码器	Contractive Autoencoder
+收缩神经网络	Contractive Neural Network
+对比散度	Contrastive Divergence
+控制器	Controller
+收敛	Convergence
+会话智能体	Conversational Agent
+凸优化	Convex Optimization
+凸二次规划	Convex Quadratic Programming
+凸集	Convex Set
+凸性	Convexity
+卷积	Convolution
+卷积玻尔兹曼机	Convolutional Boltzmann Machine
+卷积深度信念网络	Convolutional Deep Belief Network
+卷积核	Convolutional Kernel
+卷积网络	Convolutional Network
+卷积神经网络	Convolutional Neural Network
+坐标	Coordinate
+坐标上升	Coordinate Ascent
+坐标下降	Coordinate Descent
+共父	Coparent
+语料库	Corpus
+相关系数	Correlation
+相关系数	Correlation Coefficient
+余弦	Cosine
+余弦衰减	Cosine Decay
+余弦相似度	Cosine Similarity
+代价	Cost
+代价曲线	Cost Curve
+代价函数	Cost Function
+代价矩阵	Cost Matrix
+代价敏感	Cost-Sensitive
+协方差	Covariance
+协方差矩阵	Covariance Matrix
+协方差RBM	Covariance RBM
+协变量偏移	Covariate Shift
+覆盖	Coverage
+贡献度分配问题	Credit Assignment Problem
+准则	Criterion
+评论员	Critic
+评价网络	Critic Network
+临界点	Critical Point
+临界温度	Critical Temperatures
+互相关	Cross Correlation
+交叉熵	Cross Entropy
+交叉验证	Cross Validation
+交叉熵损失函数	Cross-Entropy Loss Function
+众包	Crowdsourcing
+累积分布函数	Cumulative Distribution Function
+累积函数	Cumulative Function
+课程学习	Curriculum Learning
+维数灾难	Curse of Dimensionality
+曲率	Curvature
+曲线拟合	Curve-Fitting
+截断点	Cut Point
+割平面法	Cutting Plane Algorithm
+控制论	Cybernetics
+循环学习率	Cyclic Learning Rate
+衰减	Damping
+阻尼因子	Damping Factor
+数据	Data
+数据增强	Data Augmentation
+数据生成分布	Data Generating Distribution
+数据生成过程	Data Generating Process
+数据样本	Data Instance
+数据挖掘	Data Mining
+数据并行	Data Parallelism
+数据点	Data Point
+数据预处理	Data Preprocessing
+数据集	Data Set
+数据整理	Data Wrangling
+数据集增强	Dataset Augmentation
+调试策略	Debugging Strategy
+决策边界	Decision Boundary
+决策函数	Decision Function
+决策树桩	Decision Stump
+决策平面	Decision Surface
+决策树	Decision Tree
+解码器	Decoder
+解码	Decoding
+分解	Decompose
+反卷积	Deconvolution
+反卷积网络	Deconvolutional Network
+演绎	Deduction
+深度信念网络	Deep Belief Network
+深度玻尔兹曼机	Deep Boltzmann Machine
+深度回路	Deep Circuit
+深度卷积生成对抗网络	Deep Convolutional Generative Adversarial Network
+深度前馈网络	Deep Feedforward Network
+深度生成模型	Deep Generative Model
+深度学习	Deep Learning
+深度模型	Deep Model
+深度网络	Deep Network
+深度神经网络	Deep Neural Network
+深度 Q 学习	Deep Q-Learning
+深度Q网络	Deep Q-Network
+深度强化学习	Deep Reinforcement Learning
+深度序列模型	Deep Sequence Model
+默认规则	Default Rule
+定积分	Definite Integral
+信任度	Degree Of Belief
+去噪	Denoising
+去噪自编码器	Denoising Autoencoder
+去躁分数匹配	Denoising Score Matching
+分母布局	Denominator Layout
+稠密	Dense
+密度估计	Density Estimation
+密度聚类	Density-Based Clustering
+依赖	Dependency
+深度	Depth
+导数	Derivative
+描述	Description
+设计矩阵	Design Matrix
+细致平衡	Detailed Balance
+细致平衡方程	Detailed Balance Equation
+探测级	Detector Stage
+行列式	Determinant
+确定性	Deterministic
+确定性模型	Deterministic Model
+确定性策略	Deterministic Policy
+开发集	Development Set
+对角矩阵	Diagonal Matrix
+直径	Diameter
+字典	Dictionary
+字典学习	Dictionary Learning
+可微函数	Differentiable Function
+可微分神经计算机	Differentiable Neural Computer
+微分熵	Differential Entropy
+微分方程	Differential Equation
+微分	Differentiation
+膨胀卷积	Dilated Convolution
+维度	Dimension
+降维	Dimension Reduction
+降维算法	Dimensionality Reduction Algorithm
+Dirac Delta函数	Dirac Delta Function
+Dirac分布	Dirac Distribution
+有向	Directed
+有向非循环图	Directed Acyclic Graph
+有向边	Directed Edge
+有向图	Directed Graph
+有向图模型	Directed Graphical Model
+有向模型	Directed Model
+有向分离	Directed Separation
+方向导数	Directional Derivative
+狄利克雷分布	Dirichlet Distribution
+不合度量	Disagreement Measure
+基于分歧的方法	Disagreement-Based Methods
+衰减系数	Discount Factor
+折扣回报	Discounted Return
+离散优化	Discrete Optimization
+判别函数	Discriminant Function
+判别方法	Discriminative Approach
+判别式模型	Discriminative Model
+判别RBM	Discriminative RBM
+判别器	Discriminator
+判别网络	Discriminator Network
+距离	Distance
+距离度量	Distance Measure
+距离度量学习	Distance Metric Learning
+分布式表示	Distributed Representation
+分布	Distribution
+发散	Diverge
+散度	Divergence
+多样性	Diversity
+多样性度量/差异性度量	Diversity Measure
+分而治之	Divide-And-Conquer
+分裂	Divisive
+领域	Domain
+领域自适应	Domain Adaptation
+主特征值	Dominant Eigenvalue
+主特征向量	Dominant Eigenvector
+占优策略	Dominant Strategy
+点积	Dot Product
+双反向传播	Double Backprop
+双重分块循环矩阵	Doubly Block Circulant Matrix
+下采样	Down Sampling
+下游任务	Downstream Task
+暂退法	Dropout
+暂退Boosting	Dropout Boosting
+暂退掩码	Dropout Mask
+暂退法	Dropout Method
+对偶算法	Dual Algorithm
+对偶问题	Dual Problem
+哑结点	Dummy Node
+死亡ReLU问题	Dying ReLU Problem
+动态贝叶斯网络	Dynamic Bayesian Network
+动态计算图	Dynamic Computational Graph
+动态融合	Dynamic Fusion
+动态规划	Dynamic Programming
+动态结构	Dynamic Structure
+动力系统	Dynamical System
+急切学习	Eager Learning
+早停	Early Stopping
+推土机距离	Earth-Mover's Distance
+回声状态网络	Echo State Network
+边	Edge
+边缘设备	Edge Device
+有效容量	Effective Capacity
+特征分解	Eigendecomposition
+特征值	Eigenvalue
+特征值分解	Eigenvalue Decomposition
+弹性网络正则化	Elastic Net Regularization
+弹性权重巩固	Elastic Weight Consolidation
+逐元素积	Element-Wise Product
+基本单位向量	Elementary Basis Vectors
+椭球法	Ellipsoid Method
+嵌入	Embedding
+嵌入表	Embedding Lookup Table
+情绪分析	Emotional Analysis
+经验条件熵	Empirical Conditional Entropy
+经验分布	Empirical Distribution
+经验熵	Empirical Entropy
+经验误差	Empirical Error
+经验频率	Empirical Frequency
+经验损失	Empirical Loss
+经验风险	Empirical Risk
+经验风险最小化	Empirical Risk Minimization
+编码器	Encoder
+编码器-解码器（模型）	Encoder-Decoder
+编码	Encoding
+端到端	End-To-End
+端到端学习	End-To-End Learning
+端到端记忆网络	End-To-End Memory Network
+能量函数	Energy Function
+能量差异	Energy Gap
+基于能量的模型	Energy-Based Model
+集成	Ensemble
+集成学习	Ensemble Learning
+集成修剪	Ensemble Pruning
+熵	Entropy
+熵编码	Entropy Encoding
+环境	Environment
+回合	Episode
+回合式任务	Episodic Task
+轮	Epoch
+等宽卷积	Equal-Width Convolution
+等式约束	Equality Constraint
+均衡分布	Equilibrium Distribution
+等变	Equivariance
+等变表示	Equivariant Representations
+误差	Error
+误差反向传播算法	Error Backpropagation Algorithm
+误差反向传播	Error Backpropagation
+误差条	Error Bar
+纠错输出编码	Error Correcting Output Codes
+误差函数	Error Function
+误差度量	Error Metric
+错误率	Error Rate
+误差－分歧分解	Error-Ambiguity Decomposition
+估计误差	Estimation Error
+数学期望估计	Estimation Of Mathematical Expectation
+估计/估计量	Estimator
+欧氏距离	Euclidean Distance
+欧几里得范数	Euclidean Norm
+欧氏空间	Euclidean Space
+欧拉-拉格朗日方程	Euler-Lagrange Equation
+评价准则	Evaluation Criterion
+证据	Evidence
+证据下界	Evidence Lower Bound
+演化	Evolution
+演化计算	Evolutionary Computation
+确切的	Exact
+精确推断	Exact Inference
+样例	Example
+额外误差	Excess Error
+可交换的	Exchangeable
+期望	Expectation
+期望极大算法	Expectation Maximization Algorithm
+期望最大化	Expectation Maximization
+E步	Expectation Step
+期望错误	Expected Error
+期望损失	Expected Loss
+期望回报	Expected Return
+期望风险	Expected Risk
+期望值	Expected Value
+经验	Experience
+经验回放	Experience Replay
+专家网络	Expert Network
+专家系统	Expert System
+相消解释	Explaining Away
+相消解释作用	Explaining Away Effect
+解释因子	Explanatory Factort
+显式密度模型	Explicit Density Model
+梯度爆炸	Exploding Gradient
+利用	Exploitation
+探索	Exploration
+探索-利用窘境	Exploration-Exploitation Dilemma
+指数衰减	Exponential Decay
+指数分布	Exponential Distribution
+指数线性单元	Exponential Linear Unit
+指数损失	Exponential Loss
+指数损失函数	Exponential Loss Function
+指数加权移动平均	Exponentially Weighted Moving Average
+曝光偏差	Exposure Bias
+外部记忆	External Memory
+超限学习机	Extreme Learning Machine
+F值	F Measure
+F分数	F-Score
+因子	Factor
+因子分析	Factor Analysis
+因子图	Factor Graph
+因子负荷量	Factor Loading
+因子分解	Factorization
+分解的	Factorized
+变差因素	Factors of Variation
+假负例	False Negative
+假正例	False Positive
+假正例率	False Positive Rate
+快速暂退法	Fast Dropout
+快速持续性对比散度	Fast Persistent Contrastive Divergence
+容错异步训练	Fault-Tolerant Asynchronous Training
+可行	Feasible
+特征	Feature
+特征工程	Feature Engineering
+特征抽取	Feature Extraction
+特征提取器	Feature Extractor
+特征函数	Feature Function
+特征图	Feature Map
+特征尺度变换	Feature Scaling Transform
+特征选择	Feature Selection
+特征空间	Feature Space
+特征向量	Feature Vector
+特征学习	Featured Learning
+反馈	Feedback
+前馈	Feedforward
+前馈分类器	Feedforward Classifier
+前馈网络	Feedforward Network
+前馈神经网络	Feedforward Neural Network
+少试学习	Few-Shot Learning
+逼真度	Fidelity
+现场可编程门阵列	Field Programmable Gated Array
+滤波器	Filter
+过滤式方法	Filter Method
+微调	Fine-Tuning
+有限差分	Finite Difference
+第一层	First Layer
+一阶方法	First-Order Method
+一阶规则	First-Order Rule
+Fisher信息矩阵	Fisher Information Matrix
+不动点方程	Fixed Point Equation
+不动点运算	Fixed-Point Arithmetic
+平坦最小值	Flat Minima
+翻转	Flip
+翻转法	Flipping Output
+浮点运算	Float-Point Arithmetic
+振荡	Fluctuation
+聚焦式注意力	Focus Attention
+无名氏定理	Folk Theorem
+遗忘门	Forget Gate
+前向	Forward
+前向KL散度	Forward KL Divergence
+前向模式累加	Forward Mode Accumulation
+前向传播/正向传播	Forward Propagation
+前向搜索	Forward Search
+前向分步算法	Forward Stagewise Algorithm
+前向-后向算法	Forward-Backward Algorithm
+傅立叶变换	Fourier Transform
+中央凹	Fovea
+微步卷积	Fractionally Strided Convolution
+自由能	Free Energy
+频率主义学派	Frequentist
+频率派概率	Frequentist Probability
+频率派统计	Frequentist Statistics
+Frobenius 范数	Frobenius Norm
+全	Full
+满条件分布	Full Conditional Distribution
+全条件概率	Full Conditional Probability
+全填充	Full Padding
+完全奇异值分解	Full Singular Value Decomposition
+满秩矩阵	Full-Rank Matrix
+全连接层	Fully Connected Layer
+全连接神经网络	Fully Connected Neural Network
+全卷积网络	Fully Convolutional Network
+函数	Function
+泛函	Functional
+泛函导数	Functional Derivative
+函数间隔	Functional Margin
+功能神经元	Functional Neuron
+Gabor函数	Gabor Function
+増益率	Gain Ratio
+博弈效用	Game Payoff
+博弈论	Game Theory
+Gamma分布	Gamma Distribution
+门	Gate
+门控循环神经网络	Gate Controlled RNN
+门控	Gated
+门控	Gated Control
+门控循环网络	Gated Recurrent Net
+门控循环单元	Gated Recurrent Unit
+门控RNN	Gated RNN
+选通器	Gater
+门控机制	Gating Mechanism
+高斯分布	Gaussian Distribution
+高斯误差线性单元	Gaussian Error Linear Unit
+高斯核	Gaussian Kernel
+高斯核函数	Gaussian Kernel Function
+高斯混合模型	Gaussian Mixture Model
+高斯混合（模型）	Gaussian Mixtures
+高斯输出分布	Gaussian Output Distribution
+高斯过程	Gaussian Process
+高斯过程回归	Gaussian Process Regression
+高斯RBM	Gaussian RBM
+高斯-伯努利RBM	Gaussian-Bernoulli RBM
+通用问题求解	General Problem Solving
+通用GPU	General Purpose GPU
+泛化能力	Generalization Ability
+泛化误差	Generalization Error
+泛化误差上界	Generalization Error Bound
+泛化	Generalize
+一般化 Bregman 散度	Generalized Bregman Divergence
+广义期望极大	Generalized Expectation Maximization
+广义函数	Generalized Function
+广义拉格朗日函数	Generalized Lagrange Function
+广义拉格朗日	Generalized Lagrangian
+广义线性模型	Generalized Linear Model
+广义伪似然	Generalized Pseudolikelihood
+广义伪似然估计	Generalized Pseudolikelihood Estimator
+广义瑞利商	Generalized Rayleigh Quotient
+广义得分匹配	Generalized Score Matching
+生成式对抗框架	Generative Adversarial Framework
+生成对抗网络	Generative Adversarial Network
+生成方法	Generative Approach
+生成式模型	Generative Model
+生成式建模	Generative Modeling
+生成矩匹配网络	Generative Moment Matching Network
+生成式预训练	Generative Pre-Training
+生成随机网络	Generative Stochastic Network
+生成权重	Generative Weight
+生成器	Generator
+生成器网络	Generator Network
+遗传算法	Genetic Algorithm
+几何间隔	Geometric Margin
+巨磁阻	Giant Magnetoresistance
+吉布斯分布	Gibbs Distribution
+吉布斯采样/吉布斯抽样	Gibbs Sampling
+吉布斯步数	Gibbs Steps
+基尼指数	Gini Index
+全局对比度规范化	Global Contrast Normalization
+全局马尔可夫性	Global Markov Property
+全局极小值	Global Minima
+全局极小解	Global Minimizer
+全局最小	Global Minimum
+全局优化	Global Optimization
+梯度	Gradient
+梯度上升	Gradient Ascent
+梯度上升法	Gradient Ascent Method
+梯度提升	Gradient Boosting
+梯度提升树	Gradient Boosting Tree
+梯度截断	Gradient Clipping
+梯度下降	Gradient Descent
+一维梯度下降	Gradient Descent In One-Dimensional Space
+梯度下降法	Gradient Descent Method
+梯度能量分布	Gradient Energy Distribution
+梯度估计	Gradient Estimation
+梯度爆炸问题	Gradient Exploding Problem
+梯度场	Gradient Field
+逐渐预热	Gradual Warmup
+Gram 矩阵	Gram Matrix
+图	Graph
+图分析	Graph Analytics
+图注意力网络	Graph Attention Network
+图卷积神经网络/图卷积网络	Graph Convolutional Network
+图神经网络	Graph Neural Network
+图论	Graph Theory
+图模型	Graphical Model
+图形处理器	Graphics Processing Unit
+贪心	Greedy
+贪心算法	Greedy Algorithm
+贪心逐层预训练	Greedy Layer-Wise Pretraining
+贪心逐层训练	Greedy Layer-Wise Training
+贪心逐层无监督预训练	Greedy Layer-Wise Unsupervised Pretraining
+贪心搜索	Greedy Search
+贪心监督预训练	Greedy Supervised Pretraining
+贪心无监督预训练	Greedy Unsupervised Pretraining
+网格搜索	Grid Search
+网格世界	Grid World
+真实值	Ground Truth
+增长函数	Growth Function
+Hadamard积	Hadamard Product
+汉明距离	Hamming Distance
+硬性注意力	Hard Attention
+硬聚类	Hard Clustering
+硬间隔	Hard Margin
+硬间隔最大化	Hard Margin Maximization
+硬专家混合体	Hard Mixture Of Experts
+硬双曲正切函数	Hard Tanh
+硬目标	Hard Target
+硬投票	Hard Voting
+调和平均	Harmonic Mean
+簧风琴	Harmonium
+哈里斯链	Harris Chain
+豪斯多夫距离	Hausdorff Distance
+赫布法则	Hebbian Rule
+赫布理论	Hebbian Theory
+Helmholtz机	Helmholtz Machine
+海赛矩阵	Hesse Matrix
+黑塞矩阵	Hessian Matrix
+异质信息网络	Heterogeneous Information Network
+异方差	Heteroscedastic
+隐动态模型	Hidden Dynamic Model
+隐藏层	Hidden Layer
+隐马尔可夫模型	Hidden Markov Model
+隐状态	Hidden State
+隐藏单元	Hidden Unit
+隐变量	Hidden Variable
+层次聚类	Hierarchical Clustering
+分层强化学习	Hierarchical Reinforcement Learning
+层序Softmax/层序软最大化	Hierarchical Softmax
+希尔伯特空间	Hilbert Space
+爬山	Hill Climbing
+合页损失函数/Hinge损失函数	Hinge Loss Function
+直方图方法	Histogram Method
+留出法	Hold-Out
+同质	Homogeneous
+Hopfield网络	Hopfield Network
+霍夫曼编码	Huffman Coding
+混合计算	Hybrid Computing
+双曲正切函数	Hyperbolic Tangent Function
+超参数	Hyperparameter
+超参数优化	Hyperparameter Optimization
+超平面	Hyperplane
+假设	Hypothesis
+假设空间	Hypothesis Space
+假设检验	Hypothesis Test
+独立同分布假设	I.I.D. Assumption
+同分布的	Identically Distributed
+可辨认的	Identifiable
+恒等函数	Identity Function
+恒等映射	Identity Mapping
+单位矩阵	Identity Matrix
+病态	Ill Conditioning
+病态问题	Ill-Formed Problem
+图像	Image
+图像还原	Image Restoration
+模仿学习	Imitation Learning
+不道德	Immorality
+不完美信息	Imperfect Information
+隐式密度模型	Implicit Density Model
+导入	Import
+重要性采样	Importance Sampling
+改进的迭代尺度法	Improved Iterative Scaling
+不完全数据	Incomplete-Data
+增量学习	Incremental Learning
+不定积分	Indefinite Integral
+独立	Independence
+相互独立的	Independent
+独立同分布	Independent and Identically Distributed
+独立成分分析	Independent Component Analysis
+独立子空间分析	Independent Subspace Analysis
+索引	Index of Matrix
+指示函数	Indicator Function
+个体学习器	Individual Learner
+归纳	Induction
+归纳偏好	Inductive Bias
+归纳学习	Inductive Learning
+归纳逻辑程序设计	Inductive Logic Programming
+归纳迁移学习	Inductive Transfer Learning
+不等式约束	Inequality Constraint
+推断	Inference
+无限	Infinite
+无限可交换	Infinitely Exchangeable
+信息散度	Information Divergence
+信息熵	Information Entropy
+信息增益	Information Gain
+信息增益比	Information Gain Ratio
+信息检索	Information Retrieval
+信息论	Information Theory
+内积	Inner Product
+输入	Input
+输入分布	Input Distribution
+输入门	Input Gate
+输入层	Input Layer
+输入空间	Input Space
+不敏感损失	Insensitive Loss
+示例	Instance
+实例分割	Instance Segmentation
+整数线性规划	Integer Linear Programming
+整数规划	Integer Programming
+积分	Integration
+簇间相似度	Inter-Cluster Similarity
+内部协变量偏移	Internal Covariate Shift
+内部结点	Internal Node
+国际机器学习大会	International Conference For Machine Learning
+干预查询	Intervention Query
+内部注意力	Intra-Attention
+簇内相似度	Intra-Cluster Similarity
+固有值	Intrinsic Value
+不变性	Invariance
+不变	Invariant
+逆矩阵	Inverse Matrix
+逆强化学习	Inverse Reinforcement Learning
+逆归结	Inverse Resolution
+逆时衰减	Inverse Time Decay
+求逆	Invert
+不可约的	Irreducible
+无关特征	Irrelevant Feature
+等度量映射	Isometric Mapping
+等分回归	Isotonic Regression
+各向同性	Isotropic
+各向同性高斯分布	Isotropic Gaussian Distribution
+迭代	Iteration
+迭代二分器	Iterative Dichotomiser
+雅克比	Jacobian
+雅可比矩阵	Jacobian Matrix
+Jensen不等式	Jensen Inequality
+JS散度	Jensen-Shannon Divergence
+联合概率密度函数	Joint Probability Density Function
+联合概率分布	Joint Probability Distribution
+联合树算法	Junction Tree Algorithm
+k-摇臂老虎机	K-Armed Bandit Problem
+k 折交叉验证	K-Fold Cross Validation
+k-均值聚类	K-Means Clustering
+k-近邻分类器	K-Nearest Neighbor Classifier
+k-近邻	K-Nearest Neighbor Method
+KKT条件	Karush-Kuhn-Tucker Condition
+Kd 树	Kd Tree
+核密度估计	Kernel Density Estimation
+核函数	Kernel Function
+核机器	Kernel Machine
+核矩阵	Kernel Matrix
+核方法	Kernel Method
+核回归	Kernel Regression
+核技巧	Kernel Trick
+核化	Kernelized
+核线性判别分析	Kernelized Linear Discriminant Analysis
+核主成分分析	Kernelized PCA
+键-值数据库	Key-Value Store
+KL散度	KL Divergence
+知识	Knowledge
+知识库	Knowledge Base
+知识蒸馏	Knowledge Distillation
+知识工程	Knowledge Engineering
+知识图谱	Knowledge Graph
+知识表征	Knowledge Representation
+Kronecker积	Kronecker Product
+Krylov方法	Krylov Method
+标签/标记	Label
+标记传播	Label Propagation
+标签平滑	Label Smoothing
+标记空间	Label Space
+标注	Labeled
+拉格朗日对偶问题	Lagrange Dual Problem
+拉格朗日对偶性	Lagrange Duality
+拉格朗日函数	Lagrange Function
+拉格朗日乘子	Lagrange Multiplier
+语言模型	Language Model
+语言模型化	Language Modeling
+Laplace分布	Laplace Distribution
+拉普拉斯平滑	Laplace Smoothing
+拉普拉斯修正	Laplacian Correction
+大学习步骤	Large Learning Step
+拉斯维加斯方法	Las Vegas Method
+潜在	Latent
+潜在狄利克雷分配	Latent Dirichlet Allocation
+潜层	Latent Layer
+潜在语义分析	Latent Semantic Analysis
+潜在语义索引	Latent Semantic Indexing
+潜变量/隐变量	Latent Variable
+大数定律	Law of Large Numbers
+层	Layer
+层规范化	Layer Normalization
+逐层的	Layer-Wise
+逐层适应率缩放	Layer-Wise Adaptive Rate Scaling
+逐层规范化	Layer-Wise Normalization
+逐层预训练	Layer-Wise Pretraining
+逐层训练	Layer-Wise Training
+懒惰学习	Lazy Learning
+叶结点	Leaf Node
+泄漏线性整流函数	Leaky Lelu Function
+泄漏修正线性单元/泄漏整流线性单元	Leaky Relu
+渗漏单元	Leaky Unit
+学成	Learned
+学习近似推断	Learned Approximate Inference
+学习器	Learner
+学习	Learning
+学习算法	Learning Algorithm
+类比学习	Learning By Analogy
+学习率	Learning Rate
+学习率退火	Learning Rate Annealing
+学习率衰减	Learning Rate Decay
+学习率预热	Learning Rate Warmup
+学习的学习	Learning To Learn
+学习向量量化	Learning Vector Quantization
+最小一般泛化	Least General Generalization
+最小均方	Least Mean Squares
+最小二乘法	Least Square Method
+最小二乘回归树	Least Squares Regression Tree
+留一交叉验证	Leave-One-Out Cross Validation
+留一法	Leave-One-Out
+勒贝格可积	Lebesgue-Integrable
+左特征向量	Left Eigenvector
+左奇异向量	Left Singular Vector
+莱布尼兹法则	Leibniz's Rule
+终身学习	Lifelong Learning
+似然	Likelihood
+线搜索	Line Search
+线性自回归网络	Linear Auto-Regressive Network
+线性链	Linear Chain
+线性链条件随机场	Linear Chain Conditional Random Field
+线性分类模型	Linear Classification Model
+线性分类器	Linear Classifier
+线性组合	Linear Combination
+线性相关	Linear Dependence
+线性判别分析	Linear Discriminant Analysis
+线性因子模型	Linear Factor Model
+线性映射	Linear Mapping
+线性模型	Linear Model
+线性规划	Linear Programming
+线性回归	Linear Regression
+线性缩放规则	Linear Scaling Rule
+线性扫描	Linear Scan
+线性空间	Linear Space
+线性支持向量机	Linear Support Vector Machine
+线性可分支持向量机	Linear Support Vector Machine In Linearly Separable Case
+线性阈值单元	Linear Threshold Units
+线性变换	Linear Transformation
+线性无关	Linearly Independent
+线性可分	Linearly Separable
+线性可分数据集	Linearly Separable Data Set
+链接分析	Link Analysis
+联系函数	Link Function
+链接预测	Link Prediction
+连接表	Link Table
+连接	Linkage
+链接重要采样	Linked Importance Sampling
+Lipschitz常数	Lipschitz Constant
+Lipschitz连续	Lipschitz Continuous
+流体状态机	Liquid State Machine
+局部条件概率分布	Local Conditional Probability Distribution
+局部不变性先验	Local Constancy Prior
+局部对比度规范化	Local Contrast Normalization
+局部曲率	Local Curvature
+局部下降	Local Descent
+局部不变性	Local Invariances
+局部核	Local Kernel
+局部马尔可夫性	Local Markov Property
+局部极大值	Local Maxima
+局部极大点	Local Maximum
+局部极小	Local Minima
+局部最小解	Local Minimizer
+局部极小	Local Minimum
+局部式表示/局部式表征	Local Representation
+局部响应规范化	Local Response Normalization
+局部线性嵌入	Locally Linear Embedding
+对数似然函数	Log Likelihood
+对数线性模型	Log Linear Model
+对数似然	Log-Likelihood
+对数似然损失函数	Log-Likelihood Loss Function
+对数线性回归	Log-Linear Regression
+对数损失函数	Logarithmic Loss Function
+对数尺度	Logarithmic Scale
+对数几率分布	Logistic Distribution
+对数几率函数	Logistic Function
+对率损失	Logistic Loss
+对数几率回归	Logistic Regression
+对数几率Sigmoid	Logistic Sigmoid
+对数几率	Logit
+长短期记忆	Long Short Term Memory
+长短期记忆网络	Long Short-Term Memory Network
+长程依赖问题	Long-Term Dependencies Problem
+长期依赖	Long-Term Dependency
+长期记忆	Long-Term Memory
+环	Loop
+环状信念传播	Loopy Belief Propagation
+损失	Loss
+损失函数	Loss Function
+低秩矩阵近似	Low Rank Matrix Approximation
+Lp距离	Lp Distance
+机器学习模型	Machine Learning Model
+机器学习	Machine Learning
+机器翻译	Machine Translation
+宏平均	Macro Average
+宏F1	Macro-F1
+宏查准率	Macro-P
+宏查全率	Macron-R
+马哈拉诺比斯距离	Mahalanobis Distance
+主对角线	Main Diagonal
+绝对多数投票	Majority Voting
+多数表决规则	Majority Voting Rule
+曼哈顿距离	Manhattan Distance
+流形	Manifold
+流形假设	Manifold Assumption
+流形学习	Manifold Learning
+流形正切分类器	Manifold Tangent Classifier
+间隔	Margin
+间隔理论	Margin Theory
+边缘分布	Marginal Distribution
+边缘独立性	Marginal Independence
+边缘似然函数	Marginal Likelihood
+边缘概率分布	Marginal Probability Distribution
+边缘化	Marginalization
+马尔可夫毯	Markov Blanket
+马尔可夫链	Markov Chain
+马尔可夫链蒙特卡罗	Markov Chain Monte Carlo
+马尔可夫决策过程	Markov Decision Process
+马尔可夫网络	Markov Network
+马尔可夫过程	Markov Process
+马尔可夫性质	Markov Property
+马尔可夫随机场	Markov Random Field
+掩码	Mask
+掩码语言模型化	Mask Language Modeling
+掩蔽自注意力	Masked Self-Attention
+数学优化	Mathematical Optimization
+矩阵	Matrix
+矩阵微积分	Matrix Calculus
+矩阵补全	Matrix Completion
+矩阵分解	Matrix Decomposition
+逆矩阵	Matrix Inversion
+矩阵乘积	Matrix Product
+最大范数	Max Norm
+最大汇聚	Max Pooling
+极大值	Maxima
+最大团	Maximal Clique
+极大	Maximization
+M步	Maximization Step
+极大-极大算法	Maximization-Maximization Algorithm
+最大后验	Maximum A Posteriori
+最大后验估计	Maximum A Posteriori Estimation
+最大熵模型	Maximum Entropy Model
+极大似然	Maximum Likelihood
+极大似然估计	Maximum Likelihood Estimation
+极大似然法	Maximum Likelihood Method
+最大间隔	Maximum Margin
+最大平均偏差	Maximum Mean Discrepancy
+最大后验概率估计	Maximum Posterior Probability Estimation
+最大带权生成树	Maximum Weighted Spanning Tree
+Maxout单元	Maxout Unit
+均值	Mean
+平均绝对误差	Mean Absolute Error
+均值和协方差RBM	Mean And Covariance RBM
+平均场	Mean Filed
+均值滤波	Mean Filter
+平均汇聚	Mean Pooling
+学生 t 分布均值乘积	Mean Product of Student t-Distribution
+均方误差	Mean Squared Error
+均值-协方差受限玻尔兹曼机	Mean-Covariance Restricted Boltzmann Machine
+平均场	Mean-Field
+均匀场	Meanfield
+测度论	Measure Theory
+零测度	Measure Zero
+中位数	Median
+记忆	Memory
+记忆增强神经网络	Memory Augmented Neural Network
+记忆容量	Memory Capacity
+记忆元	Memory Cell
+记忆网络	Memory Network
+记忆片段	Memory Segment
+Mercer 核	Mercer Kernel
+消息	Message
+消息传递	Message Passing
+消息传递神经网络	Message Passing Neural Network
+元学习器	Meta-Learner
+元学习	Meta-Learning
+元优化	Meta-Optimization
+元规则	Meta-Rule
+指标	Metric
+度量学习	Metric Learning
+微平均	Micro Average
+微F1	Micro-F1
+微査准率	Micro-P
+微查全率	Micro-R
+最小最大值规范化	Min-Max Normalization
+小批量梯度	Mini-Batch Gradient
+小批量梯度下降法	Mini-Batch Gradient Descent
+小批次随机梯度下降	Mini-Batch SGD
+小批量	Minibatch
+小批量随机	Minibatch Stochastic
+极小值	Minima
+最小描述长度	Minimal Description Length
+极小极大博弈	Minimax Game
+极小点	Minimum
+闵可夫斯基距离	Minkowski Distance
+误分类代价	Misclassification Cost
+混合	Mixing
+混合时间	Mixing Time
+混合密度网络	Mixture Density Network
+混合分布	Mixture Distribution
+混合专家模型	Mixture of Experts
+高斯混合	Mixture-of-Gaussian
+模态	Modality
+峰值	Mode
+模型	Model
+模型平均	Model Averaging
+模型坍塌	Model Collapse
+模型复杂度	Model Complexity
+模型压缩	Model Compression
+模型可辨识性	Model Identifiability
+模型并行	Model Parallelism
+模型参数	Model Parameter
+模型预测控制	Model Predictive Control
+模型选择	Model Selection
+模型无关的元学习	Model-Agnostic Meta-Learning
+有模型学习	Model-Based Learning
+基于模型的强化学习	Model-Based Reinforcement Learning
+免模型学习	Model-Free Learning
+模型无关的强化学习	Model-Free Reinforcement Learning
+矩	Moment
+矩匹配	Moment Matching
+动量	Momentum
+动量法	Momentum Method
+蒙特卡罗	Monte Carlo
+蒙特卡罗估计	Monte Carlo Estimate
+蒙特卡罗积分	Monte Carlo Integration
+蒙特卡罗方法	Monte Carlo Method
+摩尔定律	Moore's Law
+Moore-Penrose 伪逆	Moore-Penrose Pseudoinverse
+端正图/道德图	Moral Graph
+道德化	Moralization
+最一般合一置换	Most General Unifier
+移动平均	Moving Average
+多臂赌博机问题	Multi-Armed Bandit Problem
+多分类	Multi-Class Classification
+多分类器系统	Multi-Classifier System
+多文档摘要	Multi-Document Summarization
+多头注意力	Multi-Head Attention
+多头自注意力	Multi-Head Self-Attention
+多跳	Multi-Hop
+多核学习	Multi-Kernel Learning
+多标签分类	Multi-Label Classification
+多标记学习	Multi-Label Learning
+多层前馈神经网络	Multi-Layer Feedforward Neural Networks
+多层感知机	Multi-Layer Perceptron
+多项对数几率回归模型	Multi-Nominal Logistic Regression Model
+多预测深度玻尔兹曼机	Multi-Prediction Deep Boltzmann Machine
+多响应线性回归	Multi-Response Linear Regression
+多视图学习	Multi-View Learning
+多重共线性	Multicollinearity
+多峰值	Multimodal
+多模态学习	Multimodal Learning
+多项分布	Multinomial Distribution
+Multinoulli分布	Multinoulli Distribution
+Multinoulli输出分布	Multinoulli Output Distribution
+多维缩放	Multiple Dimensional Scaling
+多元线性回归	Multiple Linear Regression
+多任务学习	Multitask Learning
+多变量决策树	Multivariate Decision Tree
+多元高斯分布	Multivariate Gaussian Distribution
+多元正态分布	Multivariate Normal Distribution
+互信息	Mutual Information
+N元	N-Gram
+N元特征	N-Gram Feature
+N元模型	N-Gram Model
+朴素贝叶斯算法	Naive Bayes Algorithm
+朴素贝叶斯分类器	Naive Bayes Classifier
+朴素贝叶斯	Naive Bayes
+命名实体识别	Named Entity Recognition
+窄卷积	Narrow Convolution
+纳什均衡	Nash Equilibrium
+纳什回归	Nash Reversion
+奈特	Nats
+自然指数衰减	Natural Exponential Decay
+自然语言生成	Natural Language Generation
+自然语言处理	Natural Language Processing
+最近邻	Nearest Neighbor
+最近邻分类器	Nearest Neighbor Classifier
+最近邻图	Nearest Neighbor Graph
+最近邻回归	Nearest Neighbor Regression
+最近邻搜索	Nearest-Neighbor Search
+负类	Negative Class
+负相关法	Negative Correlation
+负定	Negative Definite
+负对数似然函数	Negative Log Likelihood
+负部函数	Negative Part Function
+负相	Negative Phase
+负例	Negative Sample
+负采样	Negative Sampling
+半负定	Negative Semidefinite
+近邻成分分析	Neighbourhood Component Analysis
+Nesterov加速梯度	Nesterov Accelerated Gradient
+Nesterov动量法	Nesterov Momentum
+净活性值	Net Activation
+净输入	Net Input
+网络	Network
+网络容量	Network Capacity
+神经架构搜索	Neural Architecture Search
+神经自回归密度估计器	Neural Auto-Regressive Density Estimator
+神经自回归网络	Neural Auto-Regressive Network
+神经语言模型	Neural Language Model
+神经机器翻译	Neural Machine Translation
+神经模型	Neural Model
+神经网络	Neural Network
+神经图灵机	Neural Turing Machine
+神经动力学	Neurodynamics
+神经形态计算	Neuromorphic Computing
+神经元	Neuron
+牛顿法	Newton Method
+没有免费午餐定理	No Free Lunch Theorem
+结点	Node
+噪声	Noise
+噪声分布	Noise Distribution
+噪声对比估计	Noise-Contrastive Estimation
+列名属性	Nominal Attribute
+非自回归过程	Non-Autoregressive Process
+非凸优化	Non-Convex Optimization
+无信息先验	Non-Informative Prior
+非线性模型	Non-Linear Model
+非线性振荡	Non-Linear Oscillation
+非线性支持向量机	Non-Linear Support Vector Machine
+非度量距离	Non-Metric Distance
+非负矩阵分解	Non-Negative Matrix Factorization
+无序属性	Non-Ordinal Attribute
+非参数	Non-Parametric
+非参数化模型	Non-Parametric Model
+非概率模型	Non-Probabilistic Model
+非饱和博弈	Non-Saturating Game
+不可分	Non-Separable
+非凸	Nonconvex
+非分布式	Nondistributed
+非分布式表示	Nondistributed Representation
+有外部输入的非线性自回归模型	Nonlinear Autoregressive With Exogenous Inputs Model
+非线性共轭梯度	Nonlinear Conjugate Gradients
+非线性独立成分估计	Nonlinear Independent Components Estimation
+非线性规划	Nonlinear Programming
+非参数密度估计	Nonparametric Density Estimation
+范数	Norm
+范数保持性	Norm-Preserving
+正态分布	Normal Distribution
+正规方程	Normal Equation
+规范化	Normalization
+规范化因子	Normalization Factor
+规范化的	Normalized
+标准初始化	Normalized Initialization
+核范数	Nuclear Norm
+零空间	Null Space
+轮数	Number of Epochs
+分子布局	Numerator Layout
+数值	Numeric Value
+数值属性	Numerical Attribute
+数值微分	Numerical Differentiation
+数值方法	Numerical Method
+数值优化	Numerical Optimization
+目标检测	Object Detection
+对象识别	Object Recognition
+目标	Objective
+目标函数	Objective Function
+斜决策树	Oblique Decision Tree
+观测变量	Observable Variable
+观测序列	Observation Sequence
+奥卡姆剃刀	Occam's Razor
+几率	Odds
+异策略	Off-Policy
+离线推断	Offline Inference
+偏移量	Offset
+偏移向量	Offset Vector
+同策略	On-Policy
+单试学习	One-Shot Learning
+独依赖估计	One-Dependent Estimator
+独热	One-Hot
+在线	Online
+在线推断	Online Inference
+在线学习	Online Learning
+操作	Operation
+运算符	Operator
+最佳容量	Optimal Capacity
+最优化	Optimization
+优化地形	Optimization Landscape
+优化器	Optimizer
+带序规则	Ordered Rule
+有序属性	Ordinal Attribute
+原点	Origin
+正交	Orthogonal
+正交初始化	Orthogonal Initialization
+正交矩阵	Orthogonal Matrix
+标准正交	Orthonormal
+包外估计	Out-Of-Bag Estimate
+外积	Outer Product
+异常点	Outlier
+输出	Output
+输出门	Output Gate
+输出层	Output Layer
+输出调制法	Output Smearing
+输出空间	Output Space
+过度参数化	Over-Parameterized
+过完备	Overcomplete
+过估计	Overestimation
+过拟合	Overfitting
+过拟合机制	Overfitting Regime
+上溢	Overflow
+过采样	Oversampling
+PAC学习	PAC Learning
+PAC可学习	Pac-Learnable
+填充	Padding
+成对 t 检验	Paired t -Test
+成对型	Pairwise
+成对马尔可夫性	Pairwise Markov Property
+分布式并行处理	Parallel Distributed Processing
+并行回火	Parallel Tempering
+参数	Parameter
+参数估计	Parameter Estimation
+参数服务器	Parameter Server
+参数共享	Parameter Sharing
+参数空间	Parameter Space
+调参	Parameter Tuning
+有参情况	Parametric Case
+参数密度估计	Parametric Density Estimation
+参数化模型	Parametric Model
+参数化修正线性单元/参数化整流线性单元	Parametric ReLU
+解析树	Parse Tree
+词性标注	Part-Of-Speech Tagging
+偏导数	Partial Derivative
+部分可观测马尔可夫决策过程	Partially Observable Markov Decision Processes
+粒子群优化算法	Particle Swarm Optimization
+划分	Partition
+配分函数	Partition Function
+路径	Path
+模式	Pattern
+模式识别	Pattern Recognition
+罚项	Penalty Term
+感知机	Perceptron
+性能度量	Performance Measure
+周期的	Periodic
+置换不变性	Permutation Invariant
+困惑度	Perplexity
+持续性对比散度	Persistent Contrastive Divergence
+音素	Phoneme
+语音	Phonetic
+图形结构	Pictorial Structure
+分段	Piecewise
+分段常数衰减	Piecewise Constant Decay
+流水线	Pipeline
+板块表示	Plate Notation
+即插即用生成网络	Plug And Play Generative Network
+相对多数投票	Plurality Voting
+点估计	Point Estimator
+指针网络	Pointer Network
+极性检测	Polarity Detection
+策略	Policy
+策略评估	Policy Evaluation
+策略梯度	Policy Gradient
+策略改进	Policy Improvement
+策略迭代	Policy Iteration
+策略搜索	Policy Search
+多项式基函数	Polynomial Basis Function
+多项式核函数	Polynomial Kernel Function
+一词多义性	Polysemy
+汇聚	Pool
+汇聚	Pooling
+汇聚函数	Pooling Function
+汇聚层	Pooling Layer
+病态条件	Poor Conditioning
+位置嵌入	Position Embedding
+位置编码	Positional Encoding
+正类	Positive Class
+正定	Positive Definite
+正定核函数	Positive Definite Kernel Function
+正定矩阵	Positive Definite Matrix
+正部函数	Positive Part Function
+正相	Positive Phase
+正常返的	Positive Recurrent
+正例	Positive Sample
+半正定	Positive Semidefinite
+半正定矩阵	Positive-Semidefinite Matrix
+后续检验	Post-Hoc Test
+后剪枝	Post-Pruning
+后验分布	Posterior Distribution
+后验推断	Posterior Inference
+后验概率	Posterior Probability
+势函数	Potential Function
+幂法	Power Method
+P-R曲线	PR Curve
+预训练初始化	Pre-Trained Initialization
+预训练	Pre-Training
+查准率/准确率	Precision
+精度矩阵	Precision Matrix
+预测稀疏分解	Predictive Sparse Decomposition
+预剪枝	Prepruning
+预训练语言模型	Pretrained Language Model
+主问题	Primal Problem
+初级视觉皮层	Primary Visual Cortex
+主成分分析	Principal Component Analysis
+多释原则	Principle Of Multiple Explanations
+先验	Prior
+先验知识	Prior Knowledge
+先验概率	Prior Probability
+先验概率分布	Prior Probability Distribution
+伪计数	Prior Pseudo-Counts
+先验偏移	Prior Shift
+优先级规则	Priority Rule
+概率上下文无关文法	Probabilistic Context-Free Grammar
+概率密度估计	Probabilistic Density Estimation
+概率生成模型	Probabilistic Generative Model
+概率图模型	Probabilistic Graphical Model
+概率潜在语义分析	Probabilistic Latent Semantic Analysis
+概率潜在语义索引	Probabilistic Latent Semantic Indexing
+概率模型	Probabilistic Model
+概率PCA	Probabilistic PCA
+概率无向图模型	Probabilistic Undirected Graphical Model
+概率	Probability
+概率密度函数	Probability Density Function
+概率分布	Probability Distribution
+概率质量函数	Probability Mass Function
+概率模型估计	Probability Model Estimation
+概率近似正确	Probably Approximately Correct
+专家之积	Product of Expert
+乘法法则	Product Rule
+恰PAC可学习	Properly PAC Learnable
+成比例	Proportional
+提议分布	Proposal Distribution
+原子命题	Propositional Atom
+命题规则	Propositional Rule
+原型聚类	Prototype-Based Clustering
+近端梯度下降	Proximal Gradient Descent
+剪枝	Pruning
+伪标记	Pseudo-Label
+伪似然	Pseudolikelihood
+Q函数	Q Function
+Q学习	Q-Learning
+Q网络	Q-Network
+平方损失函数	Quadratic Loss Function
+二次规划	Quadratic Programming
+象限对	Quadrature Pair
+量子化神经网络	Quantized Neural Network
+量子计算机	Quantum Computer
+量子计算	Quantum Computing
+量子机器学习	Quantum Machine Learning
+量子力学	Quantum Mechanics
+拟牛顿法	Quasi Newton Method
+拟凹	Quasi-Concave
+查询	Query
+查询向量	Query Vector
+查询-键-值	Query-Key-Value
+径向基函数	Radial Basis Function
+随机访问存储	Random Access Memory
+随机场	Random Field
+随机森林算法	Random Forest Algorithm
+随机森林	Random Forest
+随机初始化	Random Initialization
+随机采样	Random Sampling
+随机搜索	Random Search
+随机子空间	Random Subspace
+随机变量	Random Variable
+随机游走	Random Walk
+值域	Range
+秩	Rank
+比率匹配	Ratio Matching
+原始特征	Raw Feature
+再平衡	Re-Balance
+重采样	Re-Sampling
+重赋权	Re-Weighting
+读出函数	Readout Function
+实时循环学习	Real-Time Recurrent Learning
+查全率/召回率	Recall
+受试者工作特征	Receiver Operating Characteristic
+感受野	Receptive Field
+再循环	Recirculation
+认知权重	Recognition Weight
+推荐系统	Recommender System
+重构	Reconstruction
+重构误差	Reconstruction Error
+矩形对角矩阵	Rectangular Diagonal Matrix
+整流线性	Rectified Linear
+整流线性变换	Rectified Linear Transformation
+修正线性单元/整流线性单元	Rectified Linear Unit
+整流网络	Rectifier Network
+循环	Recurrence
+循环卷积网络	Recurrent Convolutional Network
+循环多层感知器	Recurrent Multi-Layer Perceptron
+循环网络	Recurrent Network
+循环神经网络	Recurrent Neural Network
+递归神经网络	Recursive Neural Network
+可约的	Reducible
+冗余特征	Redundant Feature
+参考模型	Reference Model
+区域	Region
+回归	Regression
+正则化	Regularization
+正则化项	Regularizer
+强化学习	Reinforcement Learning
+拒绝采样	Rejection Sampling
+关系	Relation
+关系型数据库	Relational Database
+相对熵	Relative Entropy
+相关特征	Relevant Feature
+再参数化/重参数化	Reparameterization
+重参数化技巧	Reparametrization Trick
+经验池	Replay Buffer
+表示	Representation
+表示学习	Representation Learning
+表示容量	Representational Capacity
+表示定理	Representer Theorem
+再生核希尔伯特空间	Reproducing Kernel Hilbert Space
+再缩放	Rescaling
+储层计算	Reservoir Computing
+重置门	Reset Gate
+残差块	Residual Blocks
+残差连接	Residual Connection
+残差映射	Residual Mapping
+残差网络	Residual Network
+残差单元	Residual Unit
+残差函数	Residue Function
+归结商	Resolution Quotient
+受限玻尔兹曼机	Restricted Boltzmann Machine
+限定等距性	Restricted Isometry Property
+总回报	Return
+反向相关	Reverse Correlation
+逆向KL散度	Reverse KL Divergence
+反向模式累加	Reverse Mode Accumulation
+可逆马尔可夫链	Reversible Markov Chain
+奖励	Reward
+奖励函数	Reward Function
+岭回归	Ridge Regression
+黎曼积分	Riemann Integral
+右特征向量	Right Eigenvector
+右奇异向量	Right Singular Vector
+风险	Risk
+风险函数	Risk Function
+稳健性	Robustness
+根结点	Root Node
+舍入误差	Round-Off Error
+行	Row
+规则引擎	Rule Engine
+规则学习	Rule Learning
+S 折交叉验证	S-Fold Cross Validation
+扫视	Saccade
+鞍点	Saddle Point
+无鞍牛顿法	Saddle-Free Newton Method
+显著图	Saliency Map
+基于显著性的注意力	Saliency-Based Attention
+相同	Same
+样本	Sample
+样本复杂度	Sample Complexity
+样本均值	Sample Mean
+样本空间	Sample Space
+样本方差	Sample Variance
+采样	Sampling
+采样法	Sampling Method
+饱和	Saturate
+饱和函数	Saturating Function
+标量	Scalar
+尺度不变性	Scale Invariance
+散布矩阵	Scatter Matrix
+计划采样	Scheduled Sampling
+得分	Score
+评分函数	Score Function
+分数匹配	Score Matching
+二阶导数	Second Derivative
+二阶导数测试	Second Derivative Test
+第二层	Second Layer
+二阶方法	Second-Order Method
+选择性注意力	Selective Attention
+选择性集成	Selective Ensemble
+自信息	Self Information
+自注意力	Self-Attention
+自注意力模型	Self-Attention Model
+自对比估计	Self-Contrastive Estimation
+自动驾驶	Self-Driving
+自门控	Self-Gated
+自组织映射网	Self-Organizing Map
+自学习	Self-Taught Learning
+自训练	Self-Training
+语义鸿沟	Semantic Gap
+语义哈希	Semantic Hashing
+语义分割	Semantic Segmentation
+语义相似度	Semantic Similarity
+半正定规划	Semi-Definite Programming
+半朴素贝叶斯分类器	Semi-Naive Bayes Classifiers
+半受限玻尔兹曼机	Semi-Restricted Boltzmann Machine
+半监督	Semi-Supervised
+半监督聚类	Semi-Supervised Clustering
+半监督学习	Semi-Supervised Learning
+半监督支持向量机	Semi-Supervised Support Vector Machine
+情感分析	Sentiment Analysis
+可分离的	Separable
+分离的	Separate
+分离超平面	Separating Hyperplane
+分离	Separation
+序列标注	Sequence Labeling
+序列到序列学习	Sequence To Sequence Learning
+序列到序列	Sequence-To-Sequence
+序贯覆盖	Sequential Covering
+序列最小最优化	Sequential Minimal Optimization
+时序模型优化	Sequential Model-Based Optimization
+顺序分区	Sequential Partitioning
+情景	Setting
+浅度回路	Shadow Circuit
+浅层学习	Shallow Learning
+香农熵	Shannon Entropy
+香农	Shannons
+塑造	Shaping
+尖锐最小值	Sharp Minima
+打散	Shattering
+平移不变性	Shift Invariance
+短期记忆	Short-Term Memory
+直连边	Shortcut Connection
+短列表	Shortlist
+孪生网络	Siamese Network
+Sigmoid（一种激活函数）	Sigmoid
+Sigmoid信念网络	Sigmoid Belief Network
+S 形曲线	Sigmoid Curve
+Sigmoid函数	Sigmoid Function
+符号函数	Sign Function
+带符号距离	Signed Distance
+相似度	Similarity
+相似度度量	Similarity Measure
+简单细胞	Simple Cell
+简单循环网络	Simple Recurrent Network
+简单循环神经网络	Simple Recurrent Neural Network
+单纯形	Simplex
+模拟退火	Simulated Annealing
+即时定位与地图构建	Simultaneous Localization And Mapping
+单分量Metropolis-Hastings	Single Component Metropolis-Hastings
+单连接	Single Linkage
+奇异的	Singular
+奇异值	Singular Value
+奇异值分解	Singular Value Decomposition
+奇异向量	Singular Vector
+大小	Size
+跳跃连接	Skip Connection
+跳元模型	Skip-Gram Model
+跳元模型加负采样	Skip-Gram Model With Negative Sampling
+松弛变量	Slack Variable
+慢特征分析	Slow Feature Analysis
+慢性原则	Slowness Principle
+平滑	Smoothing
+平滑先验	Smoothness Prior
+软性注意力机制	Soft Attention Mechanism
+软聚类	Soft Clustering
+软间隔	Soft Margin
+软间隔最大化	Soft Margin Maximization
+软目标	Soft Target
+软投票	Soft Voting
+Softmax/软最大化	Softmax
+Softmax函数/软最大化函数	Softmax Function
+Softmax回归/软最大化回归	Softmax Regression
+Softmax单元/软最大化单元	Softmax Unit
+Softplus函数	Softplus Function
+源领域	Source Domain
+张成子空间	Span
+稀疏	Sparse
+稀疏激活	Sparse Activation
+稀疏自编码器	Sparse Auto-Encoder
+稀疏编码	Sparse Coding
+稀疏连接	Sparse Connectivity
+稀疏初始化	Sparse Initialization
+稀疏交互	Sparse Interactions
+稀疏表示	Sparse Representation
+稀疏权重	Sparse Weights
+稀疏性	Sparsity
+特化	Specialization
+谱聚类	Spectral Clustering
+谱半径	Spectral Radius
+语音识别	Speech Recognition
+尖峰和平板	Spike And Slab
+尖峰和平板RBM	Spike And Slab RBM
+脉冲神经网络	Spiking Neural Nets
+切分点	Splitting Point
+切分变量	Splitting Variable
+虚假模态	Spurious Modes
+方阵	Square
+平方损失	Square Loss
+欧氏距离平方	Squared Euclidean Distance
+平方指数	Squared Exponential
+挤压函数	Squashing Function
+稳定性	Stability
+可塑性-稳定性窘境	Stability-Plasticity Dilemma
+稳定基学习器	Stable Base Learner
+堆叠自编码器	Stacked Auto-Encoder
+堆叠解卷积网络	Stacked Deconvolutional Network
+堆叠循环神经网络	Stacked Recurrent Neural Network
+标准基	Standard Basis
+标准差	Standard Deviation
+标准差	Standard Error
+标准正态分布	Standard Normal Distribution
+标准化	Standardization
+状态	State
+SARSA算法	State Action Reward State Action
+状态序列	State Sequence
+状态空间	State Space
+状态值函数	State Value Function
+状态-动作值函数	State-Action Value Function
+声明	Statement
+静态计算图	Static Computational Graph
+静态博弈	Static Game
+平稳的	Stationary
+平稳分布	Stationary Distribution
+驻点	Stationary Point
+统计效率	Statistic Efficiency
+统计学习	Statistical Learning
+统计学习理论	Statistical Learning Theory
+统计机器学习	Statistical Machine Learning
+统计关系学习	Statistical Relational Learning
+统计模拟方法	Statistical Simulation Method
+统计量	Statistics
+状态特征函数	Status Feature Function
+最速下降法	Steepest Descent
+阶梯衰减	Step Decay
+随机	Stochastic
+随机课程	Stochastic Curriculum
+随机动力系统	Stochastic Dynamical System
+随机梯度上升	Stochastic Gradient Ascent
+随机梯度下降	Stochastic Gradient Descent
+带热重启的随机梯度下降	Stochastic Gradient Descent With Warm Restarts
+随机矩阵	Stochastic Matrix
+随机最大似然	Stochastic Maximum Likelihood
+随机近邻嵌入	Stochastic Neighbor Embedding
+随机神经网络	Stochastic Neural Network
+随机性策略	Stochastic Policy
+随机过程	Stochastic Process
+停用词	Stop Words
+分层采样	Stratified Sampling
+流	Stream
+步幅	Stride
+字符串核函数	String Kernel Function
+强分类器	Strong Classifier
+强对偶性	Strong Duality
+强连通图	Strongly Connected Graph
+强可学习	Strongly Learnable
+结构风险	Structural Risk
+结构风险最小化	Structural Risk Minimization
+结构学习	Structure Learning
+结构化学习	Structured Learning
+结构化概率模型	Structured Probabilistic Model
+结构化变分推断	Structured Variational Inference
+学生网络	Student Network
+次最优	Sub-Optimal
+亚原子	Subatomic
+子采样	Subsample
+下采样	Subsampling
+子采样层	Subsampling Layer
+子集评价	Subset Evaluation
+子集搜索	Subset Search
+子空间	Subspace
+置换	Substitution
+逐次减半	Successive Halving
+求和法则	Sum Rule
+和积	Sum-Product
+和-积网络	Sum-Product Network
+超父	Super-Parent
+监督	Supervised
+监督学习	Supervised Learning
+监督学习算法	Supervised Learning Algorithm
+监督模型	Supervised Model
+监督预训练	Supervised Pretraining
+支持向量	Support Vector
+支持向量展式	Support Vector Expansion
+支持向量机	Support Vector Machine
+支持向量回归	Support Vector Regression
+替代损失	Surrogat Loss
+替代函数	Surrogate Function
+代理损失函数	Surrogate Loss Function
+符号	Symbol
+符号微分	Symbolic Differentiation
+符号学习	Symbolic Learning
+符号表示	Symbolic Representation
+符号主义	Symbolism
+对称	Symmetric
+对称矩阵	Symmetric Matrix
+多词一义性	Synonymy
+同义词集	Synset
+合成特征	Synthetic Feature
+T分布随机近邻嵌入	T-Distribution Stochastic Neighbour Embedding
+表格值函数	Tabular Value Function
+标注	Tagging
+切面距离	Tangent Distance
+切平面	Tangent Plane
+正切传播	Tangent Propagation
+目标	Target
+目标领域	Target Domain
+泰勒	Taylor
+泰勒公式	Taylor's Formula
+强制教学	Teacher Forcing
+教师网络	Teacher Network
+温度	Temperature
+回火转移	Tempered Transition
+回火	Tempering
+时序差分学习	Temporal-Difference Learning
+张量	Tensor
+张量处理单元	Tensor Processing Units
+单词频率-逆文本频率	Term Frequency-Inverse Document Frequency
+终止状态	Terminal State
+测试数据	Test Data
+测试误差	Test Error
+测试样本	Test Sample
+测试集	Test Set
+碰撞情况	The Collider Case
+阈值	Threshold
+阈值逻辑单元	Threshold Logic Unit
+阈值移动	Threshold-Moving
+捆绑权重	Tied Weight
+Tikhonov正则化	Tikhonov Regularization
+平铺卷积	Tiled Convolution
+时延神经网络	Time Delay Neural Network
+时间齐次马尔可夫链	Time Homogenous Markov Chain
+时间步	Time Step
+Toeplitz矩阵	Toeplitz Matrix
+词元	Token
+词元化	Tokenize
+词元化	Tokenization
+词元分析器	Tokenizer
+容差	Tolerance
+自顶向下	Top-Down
+话题	Topic
+话题模型	Topic Model
+话题分析	Topic Modeling
+话题向量空间	Topic Vector Space
+话题向量空间模型	Topic Vector Space Model
+话题-文本矩阵	Topic-Document Matrix
+地质ICA	Topographic ICA
+总体代价	Total Cost
+迹	Trace
+易处理的	Tractable
+训练	Training
+训练数据	Training Data
+训练误差	Training Error
+训练实例	Training Instance
+训练样本	Training Sample
+训练集	Training Set
+轨迹	Trajectory
+转录	Transcribe
+转录系统	Transcription System
+直推学习	Transductive Learning
+直推迁移学习	Transductive Transfer Learning
+迁移学习	Transfer Learning
+变换	Transform
+Transformer模型	Transformer Model
+转移	Transition
+转移核	Transition Kernel
+状态转移矩阵	Transition Matrix
+转移概率	Transition Probability
+转置	Transpose
+转置卷积	Transposed Convolution
+树结构的长短期记忆模型	Tree-Structured LSTM
+树库	Treebank
+试验	Trial
+试错	Trial And Error
+三角不等式	Triangle Inequality
+三角循环学习率	Triangular Cyclic Learning Rate
+三角形化	Triangulate
+三角形化图	Triangulated Graph
+三元语法	Trigram
+真负例	True Negative
+真正例	True Positive
+真正例率	True Positive Rate
+截断奇异值分解	Truncated Singular Value Decomposition
+截断误差	Truncation Error
+图灵完备	Turing Completeness
+图灵机	Turing Machine
+二次学习	Twice-Learning
+二维数组	Two-Dimensional Array
+丑小鸭定理	Ugly Duckling Theorem
+无偏	Unbiased
+无偏估计	Unbiased Estimate
+无偏样本方差	Unbiased Sample Variance
+无约束优化	Unconstrained Optimization
+欠完备	Undercomplete
+欠定的	Underdetermined
+欠估计	Underestimation
+欠拟合	Underfitting
+欠拟合机制	Underfitting Regime
+下溢	Underflow
+潜在	Underlying
+潜在成因	Underlying Cause
+欠采样	Undersampling
+可理解性	Understandability
+无向	Undirected
+无向图	Undirected Graph
+无向图模型	Undirected Graphical Model
+无向模型	Undirected Model
+非均等代价	Unequal Cost
+展开图	Unfolded Graph
+展开	Unfolding
+单向语言模型	Unidirectional Language Model
+合一	Unification
+均匀分布	Uniform Distribution
+均匀采样	Uniform Sampling
+均匀稳定性	Uniform Stability
+一元语法	Unigram
+单峰值	Unimodal
+单元	Unit
+单位范数	Unit Norm
+单元测试	Unit Test
+单位方差	Unit Variance
+单位向量	Unit Vector
+单位阶跃函数	Unit-Step Function
+酉矩阵	Unitary Matrix
+单变量决策树	Univariate Decision Tree
+通用近似定理	Universal Approximation Theorem
+通用近似器	Universal Approximator
+通用函数近似器	Universal Function Approximator
+未知词元	Unknown Token
+未标记	Unlabeled
+未规范化概率函数	Unnormalized Probability Function
+反投影	Unprojection
+非共享卷积	Unshared Convolution
+无监督	Unsupervised
+无监督特征学习	Unsupervised Feature Learning
+无监督逐层训练	Unsupervised Layer-Wise Training
+无监督学习算法	Unsupervised Learning Algorithm
+无监督学习	Unsupervised Learning
+无监督预训练	Unsupervised Pretraining
+更新门	Update Gate
+迭代模型参数	Update Model Parameter
+上置信界限	Upper Confidence Bounds
+上采样	Upsampling
+V型结构	V-Structure
+有效	Valid
+验证集	Validation Set
+有效性指标	Validity Index
+价值函数	Value Function
+值函数近似	Value Function Approximation
+值迭代	Value Iteration
+梯度消失与爆炸问题	Vanishing And Exploding Gradient Problem
+梯度消失	Vanishing Gradient
+梯度消失问题	Vanishing Gradient Problem
+VC维	Vapnik-Chervonenkis Dimension
+变量消去	Variable Elimination
+方差	Variance
+方差减小	Variance Reduction
+方差缩放	Variance Scaling
+变分自编码器	Variational Autoencoder
+变分贝叶斯	Variational Bayesian
+变分导数	Variational Derivative
+变分分布	Variational Distribution
+变分暂退法	Variational Dropout
+变分EM算法	Variational EM Algorithm
+变分自由能	Variational Free Energy
+变分推断	Variational Inference
+向量	Vector
+向量空间	Vector Space
+向量空间模型	Vector Space Model
+向量化	Vectorization
+版本空间	Version Space
+虚拟对抗样本	Virtual Adversarial Example
+虚拟对抗训练	Virtual Adversarial Training
+可见层	Visible Layer
+可见变量	Visible Variable
+维特比算法	Viterbi Algorithm
+词表	Vocabulary
+冯 · 诺伊曼架构	Von Neumann Architecture
+投票感知器	Voted Perceptron
+醒眠	Wake Sleep
+线程束	Warp
+Wasserstein距离	Wasserstein Distance
+Wasserstein生成对抗网络	Wasserstein GAN
+弱分类器	Weak Classifier
+弱对偶性	Weak Duality
+弱学习器	Weak Learner
+弱可学习	Weakly Learnable
+弱监督学习	Weakly Supervised Learning
+权重	Weight
+权重衰减	Weight Decay
+权重规范化	Weight Normalization
+权重比例推断规则	Weight Scaling Inference Rule
+权共享	Weight Sharing
+权重空间对称性	Weight Space Symmetry
+权值向量	Weight Vector
+加权距离	Weighted Distance
+加权投票	Weighted Voting
+白化	Whitening
+宽卷积	Wide Convolution
+宽度	Width
+胜者通吃	Winner-Take-All
+类内散度矩阵	Within-Class Scatter Matrix
+词嵌入	Word Embedding
+词义消歧	Word Sense Disambiguation
+词向量	Word Vector
+单词向量空间模型	Word Vector Space Model
+单词-文本矩阵	Word-Document Matrix
+单词-话题矩阵	Word-Topic Matrix
+工作记忆	Working Memory
+包裹式方法	Wrapper Method
+Z值规范化	Z-Score Normalization
+零均值	Zero Mean
+零填充	Zero Padding
+零张量	Zero Tensor
+零中心化的	Zero-Centered
+零数据学习	Zero-Data Learning
+零试学习	Zero-Shot Learning
+齐普夫定律	Zipf's Law
+ε-贪心法	ε-Greedy Method
+二维定量构效关系模型	2D Qsar Models
+三维笛卡尔（坐标）	3D Cartesian
+三维构象	3D Conformation
+三维（坐标）网格	3D Grids
+三维定量构效关系模型	3D Qsar Models
+像差矫正	Aberration-Corrected
+主动机器学习	Active Machine Learning
+自适应模糊神经网络	Adaptive Fuzzy Neural Network
+自适应采样	Adaptive Sampling
+毒性评估	Admet Evaluation
+阿尔法狗	Alphago
+自适应神经模糊推理系统	Adaptive Neuro Fuzzy Inference System
+近似概率模型	Approximate Probabilistic Models
+人工神经元	Artificial Neurons
+人工突触	Artificial Synapses
+基于注意力（机制）的	Attention-Based
+自动化综合规划	Automating Synthetic Planning
+自动化	Automation
+自主决策	Autonomous Decision-Making
+B树聚类算法	B-Clustering Algorithms
+平衡精度	Balanced Accuracy
+带隙能量	Bandgap Energy
+基准测试	Baseline Test
+盆地跳跃（算法）	Basin Hopping
+贝叶斯方法	Bayesian Approach
+贝叶斯归纳	Bayesian Induction
+贝叶斯马尔可夫链蒙特卡洛方法	Bayesian Mcmc Methods
+贝叶斯方法	Bayesian Methods
+贝叶斯分子（设计方法）	Bayesian Molecular
+贝叶斯先验	Bayesian Prior
+贝叶斯程序学习	Bayesian Program Learning
+贝叶斯正则化神经网络	Bayesian Regularized Neural Network
+波束扫描	Beam-Scanning
+最优分离	Best Separates
+有偏数据集	Biased Dataset
+字节碰撞/冲突	Bit Collisions
+黑盒子	Black Box
+黑盒攻击	Black-Box Attack
+成键环境	Bonding Environments
+邦弗朗尼校正	Bonferroni Correction
+引导聚合	Bootstrap Aggregation
+BFGS（算法）	Broyden–Fletcher–Goldfarb–Shanno
+Buchwald–Hartwig 偶联（反应）	Buchwald−Hartwig Cross-Coupling
+C4.5 算法	C4.5 Algorithm
+计算不确定性	Calculation Uncertainties
+经典机器学习方法	Canonical Ml Methods
+笛卡尔距离向量	Cartesian Distance Vector
+国际蛋白质结构预测竞赛	CASP
+分类数据	Categorical Data
+分类算法	Categorization Algorithms
+化学数据提取器	ChemDataExtractor
+卡方（分布）	Chi-Squared
+分类模型	Classification Model
+聚类分辨率特征选择	Cluster Resolution Feature Selection
+基于聚类的分离方法	Cluster-Based Splitting
+聚类方法	Clustering Methods
+代码流水线	Code Pipeline
+决定系数	Coefficient of Determination
+组合梯度（算法）	Combined Gradient
+复合数据	Complex Data
+计算成本	Computational Cost
+计算优化	Computational Optimisation
+计算科学	Computational Science
+计算毒理学	Computational Toxicology
+计算机科学	Computer Science
+计算机模拟	Computer Simulations
+计算机辅助	Computer-Aided
+约束	Constraint
+（电子能量损失谱中的）高能区域	Core-Loss Spectrum
+库仑矩阵	Coulomb Matrix
+耦合簇预测	Coupled-Cluster Predictions
+交叉验证的决定系数	Cross-Validated Coefficient of Determination
+交叉验证	Cross-Validation
+众包	Crowd-Sourcing
+切点	Cut-Points
+截断径向函数	Cutoff Radial Function
+数据可用性	Data Availability
+数据清洗	Data Cleaning
+数据采集	Data Collection
+数据注意事项	Data Considerations
+数据监管	Data Curation
+数据差异	Data Disparity
+数据挖掘	Data Dredging
+数据填补	Data Imputation
+数据标签	Data Labels
+数据泄露	Data Leakage
+数据预处理	Data Pre-Processing
+数据处理	Data Processing
+数据质量	Data Quality
+数据缩减	Data Reduction
+数据表示	Data Representation
+数据选择	Data Selection
+数据源	Data Sources
+数据拆分	Data Splitting
+数据转换	Data Transformation
+数据驱动	Data-Driven
+数据驱动的决策	Data-Driven Decision-Making
+数据驱动的方法	Data-Driven Methods
+数据驱动的光谱分析	Data-Driven Spectral Analysis
+数据挖掘	Data-Mining
+数据库	Database
+差分进化算法	DE Algorithm
+DeepLift模型	Deeplift
+树状图	Dendrogram
+密度泛函理论	Density Functional Theory
+DBSCAN密度聚类	Density-Based Spatial Clustering Of Applications With Noise
+描述符	Descriptor
+DFT计算	DFT Calculations
+戴斯相似度	Dice Similarity
+差分进化	Differential Evolution
+降维	Dimensionality Reduction
+正向神经网络建模	Direct Neural Network Modeling
+离散方式	Discrete Manner
+离散量子	Discrete Quanta
+离散化	Discretization
+蒸馏	Distillation
+动态数据集	Dynamic Datasets
+动态过滤网络	Dynamic Filter Networks
+动态采样	Dynamic Sampling
+动力学模拟	Dynamics Simulations
+特征函数	Eigenfunction
+电负性	Electronegativity
+埃尔曼	Elman
+经验模型	Empirical Models
+能源衍生品	Energy Derivatives
+能量潜力	Energy Potentials
+集成方法	Ensemble Methods
+实体规范化	Entity Normalisation
+道德考虑	Ethical Considerations
+欧几里得距离	Euclidean Distances
+进化算法	Evolutionary Algorithms
+进化方法	Evolutionary Method
+交换关联（的能量/泛函）	Exchange–Correlation
+激发态能量	Excited-State Potentials
+符合预期的失真减少	Expected Reduction In Distortion
+实验验证数据	Experimental Validation Data
+专家系统	Expert Systems
+扩展连接环形指纹	Extended-Connectivity Circular Fingerprint
+提取技术	Extraction Techniques
+面部识别	Facial Recognition
+FAIR数据原则	FAIR Data Principles
+假阴性	False Negatives
+假阳性	False Positives
+Fchl 表示	Fchl Representation
+特征二值化	Feature Binarization
+特征变换	Feature Transform
+特征向量	Feature Vectors
+特征	Features
+反馈	Feed Back
+前馈神经网络	Feed-Forward Neural Networks
+反馈结构	Feedback Structure
+最终评估	Final Evaluation
+可查找、可访问、可互操作、可重用	Findable, Accessible, Interoperable, Reusable
+第一性原理	First-Principles
+流速	Flow Rate
+前向交叉验证	Forward Cross-Validation
+前向预测	Forward Prediction
+前向反应预测	Forward Reaction Prediction
+模糊逻辑	Fuzzy Logic
+模糊神经网络	Fuzzy Neural Networks
+基于遗传算法的方法	Ga-Based Approaches
+无用数据入、无用数据出	Garbage In, Garbage Out
+气相网络	Gas-Phase Networks
+高斯核	Gaussian Kernels
+高斯型结构描述符	Gaussian-Type Structure Descriptors
+通用智能	General Intelligence
+广义梯度近似	Generalized Gradient Approximation
+生成对抗网络	Generative Adversarial Networks
+梯度提升决策树	Gradient Boosting Decision Tree
+基于梯度的	Gradient-Based
+粒面网络	Grain-Surface Networks
+图卷积	Graph Convolutional
+图模型	Graph Models
+图神经网络	Graph Neural Networks
+基于图形	Graph-Based
+基于图的模型	Graph-Based Models
+基于图的神经网络	Graph-Based Neural Networks
+基于图的表示	Graph-Based Representation
+图卷积神经网络	Graph-Convolutional Neural Network
+图形处理器	Graphics Processing Units
+比重聚合度	Gravimetric Polymerization Degree
+哈密顿矩阵	Hamiltonian Matrix
+哈密顿算符	Hamiltonian Operator
+异构数据	Heterogeneous Data
+隐藏层	Hidden Layers
+高数据吞吐量	High Data Throughput
+高通量	High Throughput
+高通量筛选	High Throughput Screening
+高方差模型	High Variance Models
+高维数据	High-Dimensional Data
+高维神经网络	High-Dimensional NN
+高维对象	High-Dimensional Objects
+高通量	High-Throughput
+高维空间	Higher-Dimensional Space
+高维光谱空间	Higher-Dimensional Spectral Space
+同质化	Homogenization
+同态加密	Homomorphic Encryption
+人脸识别	Human Face Recognition
+人工编码的	Human-Encoded
+混合模型	Hybrid Model
+混合技术	Hybrid Technique
+混合神经模型	Hybrid-Neural Model
+超参数优化	Hyperparameter Opimization
+超参数	Hyperparameters
+超平面分离	Hyperplanes Separate
+Id3 算法	Id3 Algorithm
+图像和语音识别	Image And Speech Recognition
+图像分类	Image Classification
+图像分类器	Image Classifier
+图像识别	Image Recognition
+信息先验	Informative Priors
+输入输出对	Input-Output Pairs
+基于实例的	Instance-Based
+智能机器	Intelligent Machine
+中间神经元	Intermediate Neurons
+物联网	Internet Of Things
+插值坐标	Interpolation Coordinate
+可解释性	Interpretability
+逆神经建模	Inverse Neural Modeling
+逆神经网络建模	Inverse Neural Network Modeling
+迭代学习	Iterative Learning
+联合分布	Joint Distribution
+Jordan-Elman 神经网络	Jordan-Elman Neural Networks
+K聚类	K Clusters
+K 最近点	K Nearest Points
+K-1 折	K-1 Folds
+K-边缘（O-K 边缘）	K-Edge (O-K Edge)
+K-均值	K-Means
+肯德尔等级相关系数	Kendall’S Tau
+核岭回归	Kernel Ridge Regression
+内核	Kernels
+动力学曲线	Kinetic Curve
+K 近邻模型	KNN Model
+知识提取	Knowledge Extraction
+知识梯度	Knowledge Gradient
+L1与L2正则化	L1 And L2 Regularization
+实验室级别	Laboratory Level
+语言处理	Language Processing
+拉普拉斯先验	Laplacian Prior
+大规模数据存储	Large-Scale Data Storage
+激光器	Lasers
+拉索回归	Lasso Regression
+局部二值模式	LBP
+Lasso回归	Least Absolute Shrinkage And Selection Operator
+最小二乘支持向量机	Least Square Support Vector Machine
+配位场	Ligand-Field
+线性的	Linear
+线性降维方法	Linear Dimension Reduction Methods
+线性振子耦合模型	Linear Vibronic Coupling Model
+本地卷积	Local Recurrent
+LHASA 程序	Logic And Heuristics Applied To Synthetic Analysis
+长期预测	Long-Range Prediction
+长期预测模型	Long-Range Prediction Models
+长期规划	Long-Term Planning
+长期回报	Long-Term Reward
+机器可读的数据	Machine-Readable Data
+平均绝对误差	Mae
+马氏距离	Mahalanobis Distances
+矩阵	Matrices
+马修斯相关系数	Matthews Correlation Coefficient
+最大似然法	Maximum Likelihood Methods
+最大似然估计法	Maximum Likelihood Procedures
+蒙特卡洛树搜索方法	MCTS Method
+均方误差	Mean-Squared Error
+机械同感，软硬件协同编程	Mechanical Sympathy
+合并	Merging
+消息传递神经网络	Message Passing Neural Networks
+微阵列数据	Microarray Data
+小批次	Mini Batch
+挖掘	Mining
+挖掘	Mining Out
+缺失值	Missing Values
+机器学习算法	ML Algorithm
+机器学习建模	ML Modelling
+机器学习势能	ML Potentials
+机器学习驱动的	ML-Driven
+机器学习驱动的最优化	ML-Driven Optimization
+多层感知机神经模型	MLP Neural Model
+模型构建	Model Construction
+模型评估	Model Evaluation
+模型性能	Model Performance
+模型统计	Model Statistics
+模型训练	Model Training
+模型验证	Model Validation
+基于模型的迭代重建	Model-Based Iterative Reconstruction
+模型构建	Model-Construction
+建模场景	Modelling Scenario
+分子图论	Molecular Graph Theory
+分子建模	Molecular Modelling
+蒙特卡洛树搜索	Monte Carlo Tree Search
+摩尔定律	Moore’S Law
+基于人工神经网络组合的结构生物学效应定量关系多尺度模型	ms-QSBER-EL Model
+多智能体控制系统	Multi-Agent Control System
+多核台式计算机	Multi-Core Desktop Computer
+多维度大数据分析	Multi-Dimensional Big Data Analysis
+多层前馈	Multi-Layer Feed-Forward
+多目标遗传算法	Multi-Objective Genetic Algorithm
+多目标优化	Multi-Objective Optimization
+多反应合成	Multi-Reaction Synthesis
+多层感知机	Multilayer Perceptron
+多变量回归	Multivariate Regression
+N维空间	N-Dimensional Space
+朴素贝叶斯	Naive Bayesian
+朴素贝叶斯方法	Naive Bayesian Methods
+命名实体识别	Named Entity Recognition，NER
+近邻	Nearest Neighbors
+近邻模型	Nearest Neighbour Model
+阴性预测值	Negative Predictive Value
+网络结构	Network Architecture
+网络几何	Network Geometry
+神经图灵机	Neural Turing Machines
+基于神经网络的函数	Neural-Network-Based Function
+神经元	Neurons
+核磁共振	Nuclear Magnetic Resonance
+噪声过滤器	Noise Filters
+无噪的	Noise-Free
+非线性	Non-Linear
+非线性相关	Non-Linear Correlation
+非线性	Non-Linearity
+非参数化学习算法	Non-Parametric Algorithm
+非安全关键型应用	Non-Safety-Critical Applications
+非稳态	Non-Steady-State
+非随机的	Non-Stochastic
+非模板	Non-Template
+非模板方法	Non-Template Methods
+非零权重	Non-Zero Weight
+运行中优化	On-The-Fly Optimization
+独热向量	One-Hot Vector
+开源	Open-Source
+开源数据集	Open-Source Dataset
+预测值	Predicted Label
+预测	Prediction
+预测准确率	Prediction Accuracy
+预测器/决策函数	Predictor
+蛋白折叠	Protein Folding
+量子化学	Quantum Chemistry
+量子理论	Quantum Theory
+随机选择	Random Selection
+原始数据集	Raw Datasets
+均方根	Root Mean Square Errors
+缩放	Scaling
+仿真	Simulation
+全局最小值	The Global Minimum
+图灵测试	Turing Test
+版本控制	Version Control
+工作流	Workflow
+序列-功能	Sequence-Function

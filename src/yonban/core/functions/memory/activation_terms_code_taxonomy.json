@@ -1,0 +1,1192 @@
+{
+  "logic": {
+    "调试": {
+      "二分排查": [
+        "Binary Search Debug",
+        "Git Bisect",
+        "二分排查",
+        "最小复现集",
+        "Minimal Reproduction",
+        "Diff Debugging",
+        "差分诊断",
+        "差分调试"
+      ],
+      "追踪定位": [
+        "Stack Trace Analysis",
+        "Call Chain Tracing",
+        "调用链追踪",
+        "Print Debugging",
+        "Conditional Breakpoint",
+        "断点调试",
+        "分布式追踪",
+        "console.log定位追踪"
+      ],
+      "隔离复现": [
+        "Fault Isolation",
+        "环境隔离复现",
+        "最小复现",
+        "Rubber Duck Debug",
+        "Hypothesis-Driven Debugging",
+        "假设验证循环",
+        "Assertion Testing"
+      ],
+      "回溯分析": [
+        "回滚路径",
+        "操作原子性",
+        "中间状态暴露",
+        "部分成功风险",
+        "部分故障",
+        "历史bug召回",
+        "共因分析"
+      ],
+      "方法论": [
+        "根因分析",
+        "5个为什么",
+        "五个为什么分析",
+        "鱼骨图分析",
+        "分层隔离",
+        "只改一个变量",
+        "环境复现",
+        "回归分析"
+      ],
+      "监控分析": [
+        "监控告警分析",
+        "日志关联分析",
+        "运行时验证",
+        "日志分析",
+        "性能剖析",
+        "状态残留",
+        "循环依赖"
+      ],
+      "诊断工具": [
+        "海森堡bug定位",
+        "海森堡bug",
+        "回归vs偶发",
+        "瓶颈定位",
+        "环境配置管理",
+        "Vue响应式调试",
+        "CSS层叠上下文排查",
+        "跨域CORS排查"
+      ]
+    },
+    "推理": {
+      "诊断推理": [
+        "观测副作用定位",
+        "未观测竞态状态",
+        "影响半径分析",
+        "存在原因溯源",
+        "Schema漂移检测",
+        "依赖锁死分析",
+        "技术债传播路径"
+      ],
+      "因果链": [
+        "副作用传播",
+        "错误向上传播",
+        "全局副作用",
+        "隐式依赖",
+        "隐式前提",
+        "上下文污染",
+        "必然vs偶然",
+        "时间局部化"
+      ],
+      "边界条件": [
+        "边界条件",
+        "空值传播",
+        "硬编码假设",
+        "魔法数字",
+        "配置项未验证",
+        "差一错误",
+        "浮点精度",
+        "边界case",
+        "Boundary Violation",
+        "Off-by-One",
+        "记忆化缺失",
+        "时间复杂度误判"
+      ],
+      "风险推断": [
+        "重试风暴",
+        "无限循环",
+        "死锁风险",
+        "资源泄漏",
+        "未释放句柄",
+        "并发写冲突",
+        "状态不同步",
+        "缓存失效",
+        "过期数据",
+        "数据竞争"
+      ],
+      "接口语义": [
+        "向后兼容",
+        "破坏性变更",
+        "调用方影响",
+        "用户侧影响",
+        "两端都要改",
+        "不可逆操作",
+        "幂等性",
+        "序列化"
+      ],
+      "设计漏洞": [
+        "错误被吞掉",
+        "异常静默失败",
+        "竞态条件",
+        "重复造轮子",
+        "多维压平",
+        "需求理解偏差",
+        "设计约束丢失",
+        "运行时行为差异"
+      ],
+      "流水线": [
+        "流水线分析",
+        "类型安全",
+        "认知灵活性",
+        "认知边界"
+      ],
+      "形式逻辑法": [
+        "logic:deductive",
+        "logic:abductive",
+        "logic:conditional",
+        "logic:modal",
+        "logic:propositional",
+        "logic:falsifiability",
+        "logic:disproof_method"
+      ],
+      "批判分析法": [
+        "logic:fallacy_informal",
+        "logic:fallacy_detection",
+        "logic:cognitive_bias_critical",
+        "logic:argumentation_theory",
+        "logic:counterfactual_analysis"
+      ],
+      "高阶推理法": [
+        "logic:thought_experiment",
+        "logic:metacognition",
+        "logic:socratic",
+        "logic:operationalization",
+        "logic:causal_inference",
+        "logic:first_principles_new"
+      ]
+    },
+    "架构": {
+      "设计原则": [
+        "缓存一致性",
+        "错误传播",
+        "重构",
+        "状态机",
+        "前端状态管理架构",
+        "API设计版本管理",
+        "Dependency Hell",
+        "不可变性与状态更新",
+        "数据库选型决策",
+        "分层架构设计",
+        "缓存策略设计"
+      ],
+      "架构模式": [
+        "Hexagonal Architecture",
+        "Onion Architecture",
+        "Strangler Fig Pattern",
+        "Anti-Corruption Layer",
+        "Event-Driven Architecture",
+        "Idempotency",
+        "消息队列引入决策"
+      ],
+      "架构决策": [
+        "Architecture Decision Record",
+        "Conway's Law",
+        "Technical Debt Quadrant",
+        "Twelve Factor App"
+      ],
+      "代码质量": [
+        "接口污染",
+        "魔法字符串",
+        "性能回归",
+        "火焰图",
+        "基准测试",
+        "N+1问题",
+        "静态分析"
+      ],
+      "安全推理": [
+        "软件物料清单SBOM",
+        "供应链攻击",
+        "权限越界",
+        "注入攻击面",
+        "跨域安全",
+        "输入未校验",
+        "越权访问",
+        "Null Pointer Dereference",
+        "Buffer Overflow",
+        "Stack Overflow",
+        "SQL Injection",
+        "Command Injection"
+      ],
+      "决策博弈法": [
+        "logic:expected_utility",
+        "logic:minimax",
+        "logic:pareto_optimality",
+        "logic:game_theory_formal"
+      ]
+    }
+  },
+  "informatics": {
+    "运行时": {
+      "前端运行时": [
+        "React Hooks边界条件",
+        "Vue响应式断链",
+        "CSS层叠重排",
+        "浏览器渲染关键路径",
+        "Web Worker通信隔离",
+        "DOM Bloat",
+        "Layout Thrashing",
+        "useEffect依赖缺失",
+        "陈旧闭包",
+        "水合不匹配",
+        "z-index层叠陷阱",
+        "Flexbox溢出",
+        "状态撕裂",
+        "累积布局偏移",
+        "Service Worker失效"
+      ],
+      "后端运行时": [
+        "Node事件循环饥饿",
+        "Python GIL锁竞争",
+        "JVM堆栈溢出",
+        "Go goroutine泄露",
+        "Rust借用检查冲突",
+        "GC停顿",
+        "背压",
+        "乐观锁冲突",
+        "服务雪崩",
+        "熔断降级",
+        "CSS-in-JS运行时开销",
+        "消息积压",
+        "长事务",
+        "幂等写入",
+        "幂等性缺失"
+      ],
+      "Bug类型": [
+        "Regression",
+        "Silent Failure",
+        "Race Condition",
+        "Schema Mismatch",
+        "Off-by-One Error",
+        "Null Reference",
+        "State Mutation",
+        "Memory Leak",
+        "Deadlock",
+        "Cascade Failure",
+        "Heisenbug",
+        "Type Coercion Bug",
+        "Drift",
+        "Dormant Bug",
+        "海森堡Bug"
+      ],
+      "异步网络Bug": [
+        "异步丢失",
+        "缓存不刷新",
+        "跨域问题",
+        "变量作用域",
+        "状态机错误",
+        "事件监听重复",
+        "路径错误",
+        "环境差异",
+        "Serialization Mismatch",
+        "Regression Bug",
+        "Data Loss",
+        "Encoding Mismatch"
+      ],
+      "运行时诊断": [
+        "静默失败",
+        "日志级别",
+        "依赖就绪",
+        "OOM",
+        "CORS",
+        "同源策略",
+        "预检请求",
+        "反向代理",
+        "贪婪匹配",
+        "转义",
+        "回溯爆炸",
+        "贪心局部最优"
+      ],
+      "错误码/协议": [
+        "空指针",
+        "栈溢出",
+        "内存溢出OOM",
+        "死循环",
+        "死锁",
+        "类型错误TypeError",
+        "404",
+        "500",
+        "502 Bad Gateway",
+        "503 Service Unavailable",
+        "504 Gateway Timeout",
+        "CORS跨域"
+      ],
+      "连接错误": [
+        "Connection Refused",
+        "ECONNRESET",
+        "Timeout超时",
+        "DNS解析失败",
+        "端口占用",
+        "SSL证书问题"
+      ],
+      "状态数据": [
+        "State Corruption",
+        "全局状态污染",
+        "Null Propagation",
+        "Stale Cache",
+        "Phantom Read",
+        "Resource Exhaustion",
+        "TOCTOU",
+        "事务死锁",
+        "模式漂移",
+        "热点数据竞争",
+        "索引失效",
+        "接口超时"
+      ]
+    },
+    "性能": {
+      "性能分析": [
+        "CPU热点分析",
+        "P99延迟",
+        "吞吐量瓶颈",
+        "N+1查询问题",
+        "缓存命中率",
+        "Little定律",
+        "背压控制",
+        "惊群效应",
+        "时间复杂度",
+        "Memory Profiling",
+        "性能分析"
+      ],
+      "性能优化": [
+        "Hot Path",
+        "Cold Start",
+        "Connection Pool",
+        "Backpressure",
+        "Rate Limiting",
+        "Graceful Degradation",
+        "内存泄漏",
+        "React组件重渲染优化",
+        "CSS重排重绘优化",
+        "性能剖析定位",
+        "高并发"
+      ],
+      "数据库性能": [
+        "缓存击穿",
+        "行锁",
+        "间隙锁",
+        "MVCC",
+        "脏读",
+        "幻读",
+        "热key",
+        "大key",
+        "缓存预热",
+        "读写分离",
+        "分库分表",
+        "乐观锁",
+        "连接泄漏",
+        "写放大",
+        "SQL索引覆盖扫描"
+      ],
+      "请求设计": [
+        "语义合并",
+        "错误分类",
+        "优雅降级",
+        "错误监控",
+        "缓存策略",
+        "接口幂等",
+        "请求竞争",
+        "异常吞噬",
+        "热更新",
+        "缓存穿透",
+        "缓存雪崩",
+        "慢查询"
+      ],
+      "算法": [
+        "动态规划",
+        "二分查找",
+        "滑动窗口",
+        "双指针",
+        "哈希表",
+        "merge conflict",
+        "rebase",
+        "rollback"
+      ]
+    },
+    "DevOps": {
+      "容器部署": [
+        "Docker layer缓存失效",
+        "K8s探针配置错误",
+        "CrashLoopBackOff",
+        "OOMKilled",
+        "ImagePullBackOff",
+        "蓝绿部署",
+        "金丝雀发布",
+        "滚动更新",
+        "配置漂移",
+        "健康检查失败",
+        "资源限制不足",
+        "环境变量未注入",
+        "镜像标签漂移",
+        "零停机部署",
+        "容器启动命令错误"
+      ],
+      "CI/CD": [
+        "CI缓存命中率优化",
+        "蓝绿部署回滚窗",
+        "配置中心一致性",
+        "容器OOM",
+        "滚动更新卡住",
+        "CI流水线失败",
+        "Docker层缓存",
+        "灰度发布",
+        "CD自动部署发布",
+        "CI流水线配置",
+        "容器化Docker部署"
+      ],
+      "可观测性": [
+        "可观测性",
+        "SLI",
+        "SLO",
+        "错误预算",
+        "混沌工程",
+        "Blameless Postmortem",
+        "MTTR",
+        "Error Budget",
+        "Distributed Tracing",
+        "Structured Logging",
+        "Alert Fatigue",
+        "Observability",
+        "SLA"
+      ],
+      "发布策略": [
+        "Feature Flag",
+        "灰度实验",
+        "flaky test",
+        "测试金字塔",
+        "测试替身",
+        "回归测试",
+        "代码冻结",
+        "Canary Release",
+        "Blue-Green Deployment",
+        "Trunk-Based Development",
+        "Canary Deploy"
+      ],
+      "分布式系统": [
+        "Retry Storm",
+        "接口联调",
+        "序列化反序列化",
+        "微服务调用链",
+        "服务熔断",
+        "消息队列积压",
+        "服务降级",
+        "限流",
+        "负载均衡",
+        "CAP Theorem",
+        "Consistent Hashing",
+        "Distributed Lock",
+        "Raft Consensus",
+        "Schema Registry"
+      ],
+      "云原生": [
+        "Immutable Infrastructure",
+        "GitOps",
+        "Infrastructure as Code",
+        "Service Mesh Advanced",
+        "Service Mesh",
+        "零信任架构",
+        "Serverless冷启动",
+        "monorepo依赖地狱",
+        "API网关",
+        "断路器模式"
+      ],
+      "SRE": [
+        "Incident Response",
+        "Postmortem",
+        "MTTR",
+        "Runbook",
+        "SRE站点可靠性工程",
+        "故障排查值班",
+        "部署上线回滚灰度",
+        "故障树分析"
+      ],
+      "前端工程": [
+        "Code Splitting",
+        "Tree Shaking",
+        "SSR",
+        "HMR",
+        "模块热替换HMR",
+        "白屏",
+        "无限重渲染",
+        "打包体积过大",
+        "样式污染",
+        "hydration mismatch",
+        "Core Web Vitals",
+        "Tree Shaking与打包优化",
+        "CSS动画GPU加速"
+      ],
+      "AI/ML基础": [
+        "Vector Database",
+        "RAG",
+        "Embedding",
+        "Prompt Engineering",
+        "Fine-tuning",
+        "Hallucination",
+        "Context Window",
+        "Tokenization"
+      ],
+      "LLM工程": [
+        "大语言模型",
+        "temperature参数",
+        "few-shot prompting",
+        "思维链",
+        "system prompt",
+        "语义检索",
+        "文本切分",
+        "重排序",
+        "AI幻觉",
+        "AI对齐",
+        "上下文管理",
+        "合成数据",
+        "模型评估"
+      ],
+      "AI系统": [
+        "AI Agent",
+        "多Agent协作",
+        "MCP协议",
+        "结构化输出",
+        "多模态模型",
+        "文生图",
+        "语音模型",
+        "推理性能",
+        "推理框架",
+        "推理模型",
+        "混合专家模型"
+      ],
+      "AI训练": [
+        "LoRA微调",
+        "SFT监督微调",
+        "RLHF对齐训练",
+        "模型量化",
+        "模型蒸馏"
+      ]
+    }
+  },
+  "psychology": {
+    "团队心理": {
+      "开发者心理": [
+        "冒充者综合征_开发者",
+        "完美主义陷阱",
+        "决策疲劳_技术选型",
+        "认知过载",
+        "拖延症_开发",
+        "调试挫败感",
+        "重构恐惧",
+        "学习焦虑"
+      ],
+      "认知偏差": [
+        "决策疲劳",
+        "确认偏误",
+        "认知负荷",
+        "沉没成本",
+        "现状偏差",
+        "过度工程心理",
+        "反馈回路依赖",
+        "锚定效应",
+        "现时偏差",
+        "选择困难",
+        "满意化",
+        "风险不对称"
+      ],
+      "团队情绪": [
+        "代码审查冲突",
+        "甩锅文化",
+        "技术债共识",
+        "知识孤岛",
+        "debug找了一整天",
+        "killing frustration",
+        "代码跑通但结果不对",
+        "环境怎么都配不好"
+      ],
+      "挫败与恐惧": [
+        "Security Vulnerability",
+        "Data Loss Risk",
+        "Breaking Change",
+        "Hardcoded Secret",
+        "Production Outage",
+        "Context Switching Cost",
+        "级联故障",
+        "单点故障",
+        "蝴蝶效应级联",
+        "代码越写越乱"
+      ],
+      "心理学概念": [
+        "认知失调",
+        "存在性孤独",
+        "自证预言",
+        "损失厌恶",
+        "群体思维",
+        "延迟满足",
+        "冒充者综合征",
+        "自我效能感",
+        "不确定性耐受",
+        "自我设障"
+      ],
+      "情绪调节": [
+        "习得性无助",
+        "反刍思维",
+        "合理化",
+        "心理安全感",
+        "认知灵活性"
+      ],
+      "心理治疗场景": [
+        "共情疲劳",
+        "预期焦虑",
+        "最小化",
+        "自我损耗",
+        "心理抗拒",
+        "趋避冲突",
+        "自我物化",
+        "许可寻求",
+        "讨好行为",
+        "矛盾心态",
+        "信任违背",
+        "愤怒压抑",
+        "身份固化",
+        "替代性创伤",
+        "急性悲伤"
+      ],
+      "学习成长": [
+        "被剥夺的悲伤",
+        "挫折容忍度",
+        "感知背叛",
+        "情感压缩",
+        "昼夜情绪变化",
+        "认命感",
+        "自我归咎",
+        "权力不对称",
+        "探索性搜索",
+        "约束满足",
+        "脚手架",
+        "刻意练习",
+        "反馈缺失",
+        "习惯回路",
+        "手段目的链"
+      ]
+    },
+    "用户体验(误入类)": {
+      "感知体验": [
+        "用户体验感知",
+        "视觉反馈",
+        "触觉反馈",
+        "响应延迟感知",
+        "界面直觉"
+      ],
+      "身体体验": [
+        "久坐疲劳",
+        "眼睛疲劳",
+        "手腕疼痛",
+        "颈椎不适",
+        "咖啡因依赖"
+      ],
+      "UX设计认知": [
+        "错误容忍设计",
+        "反馈循环设计",
+        "一致性原则感",
+        "可发现性设计",
+        "用户心智模型",
+        "交互负债积累",
+        "认知负荷设计"
+      ],
+      "ML认知": [
+        "欠拟合困境",
+        "偏差方差权衡",
+        "交叉验证策略",
+        "降维理解",
+        "样本外推焦虑",
+        "注意力机制理解",
+        "Transformer架构感",
+        "提示词设计感",
+        "向量嵌入理解",
+        "模型泛化能力"
+      ],
+      "知识管理": [
+        "信息搜寻策略",
+        "知识缺口识别",
+        "模型可解释性渴望",
+        "大语言模型幻觉",
+        "标签系统设计",
+        "内在动机",
+        "自我评估"
+      ]
+    }
+  },
+  "linguistics": {
+    "文档": {
+      "文档规范": [
+        "变更日志",
+        "语义化版本",
+        "Architecture Decision Record",
+        "RFC文化",
+        "设计评审",
+        "架构决策记录ADR"
+      ],
+      "注释规范": [
+        "Fallacious Comment",
+        "\"What\" Comment",
+        "Vertical Separation",
+        "Fallacious Method Name"
+      ],
+      "知识管理": [
+        "读文档查API",
+        "错误类型识别",
+        "流水线分析",
+        "正向反馈"
+      ],
+      "叙事": [
+        "项目生命周期",
+        "技术演进",
+        "Bug故事",
+        "重构历程",
+        "团队故事"
+      ]
+    },
+    "命名": {
+      "命名问题": [
+        "Naming Collision",
+        "Binary Operator in Name",
+        "Inconsistent Names",
+        "Type Embedded in Name",
+        "Inconsistent Style",
+        "Obscured Intent",
+        "Oddball Solution",
+        "Uncommunicative Name"
+      ],
+      "命名异味": [
+        "Afraid To Fail",
+        "Fate over Action",
+        "Boolean Blindness",
+        "Indecent Exposure",
+        "Null Check",
+        "Special Case"
+      ],
+      "命名原则": [
+        "单一职责",
+        "关注点分离",
+        "里氏替换",
+        "接口隔离",
+        "正交性",
+        "SOLID原则",
+        "DRY原则",
+        "YAGNI"
+      ]
+    },
+    "代码可读性": {
+      "结构异味": [
+        "Long Method",
+        "Long Parameter List",
+        "Large Class",
+        "Callback Hell",
+        "Complicated Boolean Expression",
+        "Complicated Regex Expression",
+        "Conditional Complexity",
+        "Imperative Loops",
+        "面条代码",
+        "样板代码"
+      ],
+      "抽象异味": [
+        "Dubious Abstraction",
+        "Clever Code",
+        "Speculative Generality",
+        "Anemic Domain Model",
+        "Premature Abstraction",
+        "鸭子类型"
+      ],
+      "冗余异味": [
+        "Base Class depends on Subclass",
+        "Combinatorial Explosion",
+        "Dead Code",
+        "Duplicated Code",
+        "Incomplete Library Class",
+        "Lazy Element",
+        "Magic Number",
+        "Message Chain",
+        "Middle Man",
+        "Primitive Obsession",
+        "Shotgun Surgery",
+        "Status Variable",
+        "Temporary Field"
+      ],
+      "继承异味": [
+        "Alternative Classes with Different Interfaces",
+        "Parallel Inheritance Hierarchies",
+        "Required Setup or Teardown Code",
+        "Refused Bequest"
+      ],
+      "可读性工具": [
+        "防抖",
+        "节流",
+        "柯里化",
+        "高阶函数",
+        "纯函数",
+        "语法糖",
+        "工厂模式",
+        "策略模式",
+        "装饰器模式",
+        "适配器模式"
+      ]
+    },
+    "沟通语用": {
+      "需求表达": [
+        "发出需求",
+        "发出任务",
+        "发出方向请求",
+        "描述困境",
+        "呈现矛盾",
+        "传递疲惫",
+        "暗示比较",
+        "声明立场",
+        "负面自我定义",
+        "宣告失望",
+        "表达预期落差",
+        "社交互动",
+        "寻求确认",
+        "陈述循环"
+      ],
+      "沟通策略": [
+        "整合性谈判",
+        "面子威胁",
+        "寒暄",
+        "正向反馈"
+      ]
+    }
+  },
+  "sociology": {
+    "团队协作": {
+      "协作模式": [
+        "pair编程",
+        "新人融入",
+        "远程协作",
+        "需求对齐",
+        "跨团队协作",
+        "开源社区",
+        "代码所有权",
+        "导师学徒",
+        "技术信任",
+        "协作"
+      ],
+      "沟通实践": [
+        "需求描述模糊",
+        "报错描述",
+        "求助措辞",
+        "进度汇报",
+        "技术讨论",
+        "拒绝需求",
+        "估时模糊",
+        "反馈委婉"
+      ],
+      "团队文化": [
+        "工程文化",
+        "事后回顾Blameless",
+        "双披萨原则",
+        "逆康威机动",
+        "团队拓扑",
+        "DRI直接负责人",
+        "心理安全感"
+      ],
+      "组织管理": [
+        "布鲁克斯法则",
+        "帕金森定律",
+        "邓巴数字",
+        "对齐税",
+        "需求腐烂",
+        "OKR对齐",
+        "向上管理",
+        "利益相关方",
+        "价值主张",
+        "复盘",
+        "技术领导力"
+      ],
+      "团队关系": [
+        "导师学徒",
+        "技术信任",
+        "竞争关系",
+        "依赖关系",
+        "上下级技术",
+        "三角化",
+        "工具性友谊",
+        "建设性冲突",
+        "冲突调解",
+        "合法性权力"
+      ],
+      "社会动力": [
+        "情绪劳动",
+        "边界侵犯",
+        "印象管理",
+        "群体动力",
+        "社交临场感",
+        "自我表露",
+        "社交孤立",
+        "归属需求",
+        "社会期望",
+        "社交退缩",
+        "权力距离",
+        "信息不对称"
+      ]
+    },
+    "代码review": {
+      "review规范": [
+        "分支策略",
+        "Cargo Cult Programming",
+        "Copy-Paste Programming",
+        "代码考古",
+        "Secret Leakage",
+        "Golden Hammer",
+        "Git工作流程",
+        "Git冲突"
+      ],
+      "耦合异味": [
+        "Feature Envy",
+        "Inappropriate Static",
+        "Insider Trading",
+        "Hidden Dependencies",
+        "Global Data",
+        "Mutable Data",
+        "Side Effects",
+        "Data Clump",
+        "Data Clumps",
+        "Tramp Data",
+        "Flag Argument",
+        "Inappropriate Intimacy",
+        "Divergent Change"
+      ],
+      "代码异味识别": [
+        "代码异味",
+        "技术债",
+        "屎山",
+        "火坑",
+        "银弹",
+        "Lava Flow",
+        "Boat Anchor",
+        "代码坏味道"
+      ],
+      "重构决策": [
+        "技术债务",
+        "遗留代码",
+        "偶然复杂度",
+        "过早优化",
+        "范围蔓延",
+        "过度工程",
+        "防御性编程",
+        "代码重构"
+      ],
+      "质量保证": [
+        "测试覆盖率低",
+        "契约测试",
+        "Chaos Engineering",
+        "Fault Injection",
+        "Contract Testing",
+        "API Versioning Strategy",
+        "Semantic Versioning",
+        "Blameless Postmortem"
+      ]
+    },
+    "工程实践": {
+      "设计模式": [
+        "Separation of Concerns",
+        "Single Responsibility",
+        "Defensive Programming",
+        "Domain-Driven Design",
+        "Event Sourcing",
+        "依赖倒置原则",
+        "技术债务",
+        "幂等性设计",
+        "微服务拆分边界",
+        "Circuit Breaker",
+        "Saga Pattern",
+        "Sidecar Pattern",
+        "CQRS",
+        "并行化",
+        "增量构建"
+      ],
+      "分布式一致性": [
+        "Eventual Consistency",
+        "写后读一致性",
+        "幂等键",
+        "Two-Phase Commit",
+        "接口契约",
+        "事务隔离级别冲突",
+        "分布式锁互斥",
+        "读写一致性保证",
+        "连接池资源耗尽",
+        "分布式事务"
+      ],
+      "数据工程": [
+        "Event Sourcing Advanced",
+        "CQRS Advanced",
+        "Change Data Capture",
+        "Encoding Mismatch"
+      ],
+      "前端架构": [
+        "微前端",
+        "CSS-in-JS运行时开销",
+        "CSS动画GPU加速",
+        "i18n",
+        "插件架构",
+        "发布订阅",
+        "观察者模式",
+        "单例模式",
+        "中间件模式",
+        "闭包",
+        "阻塞",
+        "事件驱动",
+        "事件溯源"
+      ],
+      "依赖管理": [
+        "依赖注入",
+        "耦合度",
+        "版本锁定",
+        "依赖管理",
+        "依赖版本冲突",
+        "隐式耦合",
+        "索引",
+        "执行计划"
+      ],
+      "技术管理": [
+        "布鲁克斯法则",
+        "故障树分析",
+        "SRE站点可靠性工程",
+        "第五项修炼",
+        "系统思考",
+        "涌现",
+        "双披萨原则",
+        "帕金森定律",
+        "邓巴数字",
+        "技术领导力",
+        "工程师思维",
+        "平台工程",
+        "逆康威机动",
+        "团队拓扑",
+        "架构决策记录ADR"
+      ],
+      "技术战略": [
+        "RFC文化",
+        "设计评审",
+        "技术布道",
+        "工程文化",
+        "技术策略",
+        "技术演进",
+        "对齐税",
+        "需求腐烂",
+        "认知负荷设计",
+        "DRI直接负责人"
+      ],
+      "空间认知": [
+        "代码架构层次",
+        "模块边界",
+        "命名空间",
+        "作用域",
+        "文件目录结构"
+      ],
+      "对象工具": [
+        "日志文件",
+        "配置文件",
+        "数据库表",
+        "API端点",
+        "环境变量"
+      ],
+      "状态极性": [
+        "成功失败",
+        "通过不通过",
+        "正常异常",
+        "稳定不稳定",
+        "优化退化"
+      ],
+      "诊断场景": [
+        "变量未定义",
+        "类型不匹配",
+        "异步不生效",
+        "接口不一致",
+        "页面加载慢",
+        "并发竞争",
+        "权限控制漏洞",
+        "日志管理",
+        "配置环境隔离",
+        "代码重构",
+        "性能瓶颈定位",
+        "错误边界处理",
+        "国际化适配",
+        "无障碍访问"
+      ],
+      "诊断场景2": [
+        "正则看不懂",
+        "API版本不兼容",
+        "插件系统设计",
+        "数据库查询慢",
+        "状态管理混乱",
+        "WebSocket断连",
+        "热更新不生效",
+        "依赖版本冲突",
+        "连接池耗尽",
+        "慢查询日志",
+        "部署内存泄漏",
+        "Alternative Classes with Different Interfaces",
+        "Parallel Inheritance Hierarchies",
+        "Required Setup or Teardown Code"
+      ],
+      "AI工程工具": [
+        "agent_orchestration",
+        "backup_safety",
+        "cache_optimization",
+        "code_investigation",
+        "dead_code",
+        "experiment_verify",
+        "handover",
+        "prompt_engineering",
+        "route_tracing",
+        "token_management"
+      ],
+      "安全攻击": [
+        "Injection Attack",
+        "Path Traversal",
+        "Privilege Escalation",
+        "Supply Chain Attack",
+        "XSS跨站脚本",
+        "CSRF跨站请求伪造",
+        "SSRF服务端请求伪造",
+        "Zero Trust",
+        "Least Privilege",
+        "Secret Rotation"
+      ],
+      "其他技术": [
+        "API版本管理",
+        "N+1查询",
+        "Null Propagation",
+        "Stale Cache",
+        "快速失败",
+        "契约式设计",
+        "依赖倒置",
+        "SQL查询优化",
+        "网络请求调试",
+        "跨站脚本攻击",
+        "跨站请求伪造",
+        "零信任安全",
+        "环境一致性",
+        "领域驱动设计"
+      ],
+      "认知误区": [
+        "全有全无思维",
+        "灾难化思维",
+        "过度概括",
+        "自我标签化",
+        "读写一致性保证",
+        "性能瓶颈定位",
+        "快感缺失",
+        "价格弹性",
+        "机会成本",
+        "CSS布局错乱",
+        "分布式锁"
+      ]
+    }
+  }
+}

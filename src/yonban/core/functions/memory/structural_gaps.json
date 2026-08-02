@@ -1,0 +1,17 @@
+[
+  {"mode":"chat","subCat":"physiology:sleep","triggers":"睡不着|失眠|熬夜|睡眠|睡醒|一直醒|凌晨|没睡好|入睡|辗转|翻来覆去","expectedTermSamples":["睡眠剥夺认知损耗","昼夜节律紊乱","入睡焦虑循环"]},
+  {"mode":"chat","subCat":"social:isolation","triggers":"没人懂|孤独|一个人|没有朋友|被孤立|社恐|不想社交|不合群|格格不入","expectedTermSamples":["社会认同缺失","孤独感慢性化","归属需求受挫"]},
+  {"mode":"chat","subCat":"cognitive:rumination","triggers":"反复想|一直想|停不下来|脑子里|走不出来|老想|想太多|执念|忘不了","expectedTermSamples":["反刍思维循环","侵入性思维","注意力劫持"]},
+  {"mode":"chat","subCat":"social:conflict","triggers":"吵架|冷战|闹翻|闹掰|争执|拌嘴|口角|不理我|闹别扭","expectedTermSamples":["人际冲突升级模式","防御性沟通循环","关系修复启动"]},
+  {"mode":"chat","subCat":"emotion:grief","triggers":"失去|去世|离开了|走了|再也|告别|悼念|葬礼|亲人|猫死了|狗死了","expectedTermSamples":["失落哀伤过程","依附断裂","持续性悲痛"]},
+  {"mode":"work","subCat":"process:burnout","triggers":"累了|倦了|心累|没动力|不想干|躺平|工作倦|提不起劲|身体透支","expectedTermSamples":["职业倦怠三维度","耗竭状态评估","恢复性资源调度"]},
+  {"mode":"work","subCat":"logic:priority","triggers":"不知道.*先|先做什么|优先级|排序|哪个重要|分不清主次|任务太多","expectedTermSamples":["四象限优先级矩阵","任务优先级排序框架","认知负荷分流"]},
+  {"mode":"work","subCat":"process:communication","triggers":"汇报|开会|发言|沟通|表达|讲清楚|说服|演讲|向上管理|怎么说","expectedTermSamples":["金字塔表达结构","SCQA叙事框架","向上沟通策略"]},
+  {"mode":"work","subCat":"logic:decision","triggers":"选哪个|怎么选|要不要|犹豫|拿不定主意|两难|决策|如何决定","expectedTermSamples":["决策框架构建","多准则决策分析","认知边界决策"]},
+  {"mode":"airp","subCat":"narrative:worldbuilding","triggers":"世界观|设定|构建世界|魔法体系|架构|宏观设定|种族|文明|历史背景","expectedTermSamples":["世界观内生逻辑","魔法体系一致性约束","宏观叙事层次"]},
+  {"mode":"airp","subCat":"narrative:pacing","triggers":"节奏|太快|太慢|推进|铺垫|高潮|转折点|剧情卡|卡文|卡住了","expectedTermSamples":["叙事节奏控制","场景张力弧线","剧情缓冲层"]},
+  {"mode":"airp","subCat":"writing:description","triggers":"怎么描写|描写.*不够|写景|细节描写|画面感|不够生动|干巴巴|太平淡","expectedTermSamples":["感官细节锚点","场景镜头化写法","具身描写层次"]},
+  {"mode":"code","subCat":"logic:debugging","triggers":"报错|bug|debug|为什么不对|查不出来|找不到.*问题|排查|error|exception","expectedTermSamples":["调用栈追踪分析","断点回溯法","五个为什么根因分析"]},
+  {"mode":"code","subCat":"process:refactoring","triggers":"重构|代码太乱|维护难|可读性|技术债|优化代码|代码质量|设计模式|耦合|解耦","expectedTermSamples":["单一职责原则重构","依赖反转解耦","渐进式重构策略"]},
+  {"mode":"code","subCat":"logic:architecture","triggers":"架构|怎么设计|系统设计|扩展性|分层|模块化|高并发|微服务|组件设计","expectedTermSamples":["系统边界划定原则","依赖关系图谱","模块化边界设计"]}
+]

@@ -1,0 +1,2305 @@
+{
+  "变量未定义": {
+    "diagnostic_path": [
+      "检查构建工具或环境变量配置（如Webpack/Vite/dotenv是否正确注入）",
+      "检查模块加载与依赖图谱（是否存在循环依赖或路径解析错误）",
+      "检查运行时作用域与执行上下文（词法作用域绑定及闭包状态）"
+    ],
+    "common_causes": [
+      "暂时性死区(TDZ)触发",
+      "模块循环依赖导致导出为undefined",
+      "解构赋值时属性拼写错误",
+      "异步数据未返回前进行了同步渲染"
+    ],
+    "avoid": [
+      "直接挂载到全局window对象上",
+      "使用try-catch强行压制报错而不查根源",
+      "随便赋一个初始值any绕过检查"
+    ],
+    "activation_terms": [
+      "Lexical Environment",
+      "Temporal Dead Zone",
+      "Execution Context",
+      "Circular Dependency",
+      "Hoisting"
+    ]
+  },
+  "类型不匹配": {
+    "diagnostic_path": [
+      "检查编译器配置（如tsconfig.json的strict模式及lib注入）",
+      "检查网络层/接口层的数据契约（API Schema与DTO定义）",
+      "检查应用层运行时类型断言与类型守卫逻辑"
+    ],
+    "common_causes": [
+      "后端接口字段类型变更未同步前端",
+      "隐式Any导致的类型推导失效",
+      "第三方库的@types声明文件版本不匹配",
+      "滥用强制类型转换"
+    ],
+    "avoid": [
+      "到处写@ts-ignore",
+      "把所有报错的变量都改成any类型",
+      "关闭编译器的严格模式"
+    ],
+    "activation_terms": [
+      "Structural Typing",
+      "Covariance and Contravariance",
+      "Type Guard",
+      "Generics Erasure",
+      "Soundness"
+    ]
+  },
+  "异步不生效": {
+    "diagnostic_path": [
+      "检查运行环境的事件循环配置（如Node.js版本或浏览器特性支持）",
+      "检查网络请求或I/O连接的底层状态（是否被挂起或拦截）",
+      "检查应用层Promise链、await语法及微任务执行顺序"
+    ],
+    "common_causes": [
+      "遗漏await关键字导致返回Promise对象",
+      "在forEach等不支持异步等待的循环中使用await",
+      "未捕获的Promise Rejection导致执行流中断",
+      "回调函数与Promise混合使用导致状态丢失"
+    ],
+    "avoid": [
+      "加个setTimeout延迟1000毫秒试试",
+      "把异步逻辑全改成同步阻塞代码",
+      "嵌套多层回调函数(回调地狱)来保证顺序"
+    ],
+    "activation_terms": [
+      "Event Loop",
+      "Microtask Queue",
+      "Race Condition",
+      "Promise Resolution Procedure",
+      "Concurrency Model"
+    ]
+  },
+  "接口不一致": {
+    "diagnostic_path": [
+      "检查API网关/反向代理配置（路由转发规则与Header重写）",
+      "检查网络层CORS策略与Content-Type协商",
+      "检查应用层序列化/反序列化逻辑及数据传输对象(DTO)"
+    ],
+    "common_causes": [
+      "前后端对枚举值或时间戳格式的理解分歧",
+      "网关层缓存了旧版接口的Schema",
+      "缺少接口版本控制(API Versioning)",
+      "跨域预检请求(OPTIONS)失败导致主请求被截断"
+    ],
+    "avoid": [
+      "前端硬编码写死Mock数据应付",
+      "忽略错误直接展示空白页面",
+      "要求后端把所有字段都改成String类型"
+    ],
+    "activation_terms": [
+      "Contract Testing",
+      "Data Transfer Object (DTO)",
+      "Content Negotiation",
+      "Idempotency",
+      "BFF (Backend For Frontend)"
+    ]
+  },
+  "页面加载慢": {
+    "diagnostic_path": [
+      "检查CDN/DNS解析及服务器Nginx/Apache的Gzip/Brotli配置",
+      "检查网络协议(HTTP/2)及资源请求并发连接数",
+      "检查应用层关键渲染路径(CRP)、主线程阻塞及代码分割策略"
+    ],
+    "common_causes": [
+      "未压缩的超大图片或第三方脚本阻塞渲染",
+      "缺少Tree Shaking导致打包体积过大",
+      "首屏请求了非必要的全量数据",
+      "DOM节点过多导致Layout/Paint耗时过长"
+    ],
+    "avoid": [
+      "只加个Loading菊花图就不管了",
+      "建议用户升级宽带或换个好电脑",
+      "把所有脚本都放到head标签里"
+    ],
+    "activation_terms": [
+      "Time to First Byte (TTFB)",
+      "Largest Contentful Paint (LCP)",
+      "Critical Rendering Path",
+      "Tree Shaking",
+      "Main Thread Blocking"
+    ]
+  },
+  "Git冲突": {
+    "diagnostic_path": [
+      "检查Git全局/局部配置（如autocrlf换行符及merge.tool）",
+      "检查远程追踪分支与本地分支的DAG（有向无环图）拓扑关系",
+      "检查应用层具体文件的Diff树及上下文修改历史(git blame)"
+    ],
+    "common_causes": [
+      "多人同时修改了同一文件的同一行代码",
+      "跨平台开发时的CRLF与LF换行符不一致",
+      "错误地使用了rebase导致历史基线错乱",
+      "分支长时间未同步导致偏离过大"
+    ],
+    "avoid": [
+      "直接把本地仓库删了重新clone",
+      "无脑使用git push --force覆盖远程",
+      "只保留自己的代码，把别人的修改全删了"
+    ],
+    "activation_terms": [
+      "Three-way Merge",
+      "Directed Acyclic Graph (DAG)",
+      "Fast-forward",
+      "Rebase Interactive",
+      "Merge Commit"
+    ]
+  },
+  "测试覆盖率低": {
+    "diagnostic_path": [
+      "检查测试框架配置（如Jest/Istanbul的collectCoverageFrom规则）",
+      "检查CI/CD流水线中的测试环境连接与Mock注入",
+      "检查应用层代码的可测试性（是否符合依赖反转与单一职责）"
+    ],
+    "common_causes": [
+      "代码高耦合，包含大量难以Mock的副作用(Side Effects)",
+      "遗漏了边界条件(Edge Cases)和异常分支的断言",
+      "配置文件排除了核心业务逻辑目录",
+      "异步测试未正确等待执行完毕"
+    ],
+    "avoid": [
+      "写没有断言(expect)的空测试只为跑通覆盖率",
+      "直接调低CI的覆盖率阈值要求",
+      "为了测试而把私有方法全部改成公开方法"
+    ],
+    "activation_terms": [
+      "Cyclomatic Complexity",
+      "Dependency Injection",
+      "Mocking vs Stubbing",
+      "Mutation Testing",
+      "Test Double"
+    ]
+  },
+  "连接池耗尽": {
+    "diagnostic_path": [
+      "检查数据库/中间件的最大连接数配置及OS文件描述符限制",
+      "检查网络拓扑中的防火墙超时策略与TCP KeepAlive状态",
+      "检查应用层ORM/驱动的连接释放逻辑与事务作用域"
+    ],
+    "common_causes": [
+      "长事务未提交导致连接被长期占用",
+      "异常分支缺少finally块释放连接(Connection Leak)",
+      "突发高并发流量击穿了最大池容量",
+      "死锁导致多个连接互相等待"
+    ],
+    "avoid": [
+      "直接把最大连接数改到10000",
+      "写个脚本定时重启数据库",
+      "关闭连接池改用短连接"
+    ],
+    "activation_terms": [
+      "Connection Multiplexing",
+      "Backpressure",
+      "Connection Leak",
+      "Transaction Isolation Level",
+      "Connection Starvation"
+    ]
+  },
+  "正则看不懂": {
+    "diagnostic_path": [
+      "检查正则引擎的Flavor（如PCRE/V8）及全局/多行修饰符配置",
+      "检查字符串的字符编码边界与上下文输入流",
+      "检查AST解析树与状态机(NFA/DFA)的执行回溯路径"
+    ],
+    "common_causes": [
+      "滥用贪婪匹配导致灾难性回溯(Catastrophic Backtracking)",
+      "嵌套了过多的无名捕获组导致逻辑混乱",
+      "未转义特殊字符导致语义突变",
+      "缺少注释和分行格式化(如使用x修饰符)"
+    ],
+    "avoid": [
+      "直接从StackOverflow复制粘贴且不写注释",
+      "用几十个split和indexOf代替正则",
+      "遇到匹配问题就随便加个.*试试"
+    ],
+    "activation_terms": [
+      "Catastrophic Backtracking",
+      "Lookahead/Lookbehind Assertion",
+      "Non-deterministic Finite Automaton (NFA)",
+      "Greedy vs Lazy Quantifiers",
+      "Atomic Grouping"
+    ]
+  },
+  "部署内存泄漏": {
+    "diagnostic_path": [
+      "检查容器/Pod的内存限制(Cgroups)及JVM/V8的GC启动参数",
+      "检查APM监控探针连接与Metrics指标趋势",
+      "检查应用层Heap Dump快照、分配时间线及GC Root引用链"
+    ],
+    "common_causes": [
+      "全局变量或单例模式中不断推入数据未清理",
+      "事件监听器(Event Listeners)重复绑定未解绑",
+      "闭包错误地持有了大对象的上下文引用",
+      "未关闭的Stream流或Socket连接"
+    ],
+    "avoid": [
+      "写个CronJob每隔两小时自动重启服务",
+      "无限度地增加服务器内存配置",
+      "在代码里到处手动调用gc()"
+    ],
+    "activation_terms": [
+      "Garbage Collection Roots",
+      "Mark-and-Sweep",
+      "Heap Dump Analysis",
+      "Memory Fragmentation",
+      "Retained Size"
+    ]
+  },
+  "插件系统设计": {
+    "diagnostic_path": [
+      "检查核心系统扩展点与沙箱环境配置（如Webpack/Babel配置、IoC容器注册）",
+      "检查插件加载机制与通信总线连接（如动态导入路径、EventBus事件分发）",
+      "检查应用层插件生命周期钩子实现与依赖注入逻辑"
+    ],
+    "common_causes": [
+      "核心与插件强耦合导致循环依赖",
+      "缺乏沙箱隔离导致全局变量污染",
+      "生命周期钩子执行顺序不可控"
+    ],
+    "avoid": [
+      "把所有逻辑写在主工程里",
+      "使用全局Window对象传递插件数据",
+      "让插件直接操作DOM或核心数据库"
+    ],
+    "activation_terms": [
+      "控制反转(IoC)",
+      "依赖注入(DI)",
+      "沙箱隔离(Sandboxing)",
+      "事件溯源(Event Sourcing)",
+      "微内核架构(Microkernel)"
+    ]
+  },
+  "数据库查询慢": {
+    "diagnostic_path": [
+      "检查数据库实例配置（如内存分配、连接池大小、慢查询日志阈值）",
+      "检查网络连接与执行计划（如EXPLAIN分析、索引命中率、锁等待时间）",
+      "检查应用层ORM生成的SQL语句与数据组装逻辑（如N+1查询、深分页）"
+    ],
+    "common_causes": [
+      "索引失效或缺失（如隐式类型转换、左模糊匹配）",
+      "N+1查询问题",
+      "大表全表扫描或未优化的JOIN操作",
+      "事务过长导致的锁竞争"
+    ],
+    "avoid": [
+      "直接加内存或升配服务器",
+      "重启数据库实例",
+      "把所有数据查到内存里再用代码过滤"
+    ],
+    "activation_terms": [
+      "执行计划(Execution Plan)",
+      "索引选择性(Index Selectivity)",
+      "B+树(B+ Tree)",
+      "N+1问题(N+1 Problem)",
+      "锁竞争(Lock Contention)",
+      "回表(Lookup)"
+    ]
+  },
+  "CSS布局错乱": {
+    "diagnostic_path": [
+      "检查全局样式配置与Viewport元标签（如Reset/Normalize CSS、box-sizing）",
+      "检查DOM结构与CSSOM渲染树的挂载关系（如父子节点层级、外部样式表加载状态）",
+      "检查应用层具体CSS属性冲突（如Flex/Grid属性、BFC触发、z-index层叠上下文）"
+    ],
+    "common_causes": [
+      "盒模型计算方式不一致（未统一border-box）",
+      "层叠上下文(Stacking Context)混乱导致z-index失效",
+      "浮动未清除或BFC未触发",
+      "CSS选择器优先级(Specificity)冲突"
+    ],
+    "avoid": [
+      "到处加!important",
+      "用绝对定位(absolute)硬调位置",
+      "写死固定像素高度(px)代替内容撑开"
+    ],
+    "activation_terms": [
+      "层叠上下文(Stacking Context)",
+      "块级格式化上下文(BFC)",
+      "选择器优先级(Specificity)",
+      "重排重绘(Reflow/Repaint)",
+      "CSS对象模型(CSSOM)"
+    ]
+  },
+  "状态管理混乱": {
+    "diagnostic_path": [
+      "检查状态库全局配置与中间件（如Redux Store/Vuex配置、严格模式开启状态）",
+      "检查组件与状态树的连接/订阅机制（如Provider包裹、Selector映射）",
+      "检查应用层Reducer/Mutation的纯函数实现与异步副作用(Side Effects)处理"
+    ],
+    "common_causes": [
+      "直接修改(Mutate)状态对象而非返回新引用",
+      "多数据源(Source of Truth)导致状态不同步",
+      "异步Action产生的竞态条件",
+      "过度使用全局状态代替局部组件状态"
+    ],
+    "avoid": [
+      "把所有变量都塞进全局Store",
+      "使用window.globalState绕过状态管理",
+      "通过强制刷新组件(forceUpdate)解决不渲染问题"
+    ],
+    "activation_terms": [
+      "单一数据源(Single Source of Truth)",
+      "不可变性(Immutability)",
+      "竞态条件(Race Condition)",
+      "副作用(Side Effects)",
+      "属性透传(Prop Drilling)"
+    ]
+  },
+  "API版本不兼容": {
+    "diagnostic_path": [
+      "检查API网关/反向代理的版本路由配置（如Nginx/Kong的路径重写规则）",
+      "检查HTTP请求头与内容协商机制（如Accept-Version、Content-Type）",
+      "检查应用层Controller路由映射与DTO(数据传输对象)的向下兼容逻辑"
+    ],
+    "common_causes": [
+      "破坏性更改(Breaking Change)未升级大版本号",
+      "客户端硬编码了旧版API路径",
+      "缺少字段级别的默认值或降级策略"
+    ],
+    "avoid": [
+      "直接覆盖旧接口代码",
+      "让用户强制刷新或重新下载APP",
+      "在同一个函数里写无数个if-else兼容不同版本"
+    ],
+    "activation_terms": [
+      "语义化版本(Semantic Versioning)",
+      "内容协商(Content Negotiation)",
+      "向下兼容(Backward Compatibility)",
+      "数据传输对象(DTO)",
+      "防腐层(Anti-Corruption Layer)"
+    ]
+  },
+  "跨域问题": {
+    "diagnostic_path": [
+      "检查服务端CORS策略配置（如Access-Control-Allow-Origin、Headers白名单）",
+      "检查网络层代理与预检请求(OPTIONS)的连通性（如Nginx反向代理、网关拦截）",
+      "检查应用层客户端请求参数（如withCredentials携带Cookie、自定义Header）"
+    ],
+    "common_causes": [
+      "服务端未正确响应OPTIONS预检请求",
+      "携带凭证时Origin设置为*（通配符）",
+      "前端开发环境未配置Proxy代理",
+      "自定义Header未加入Allow-Headers"
+    ],
+    "avoid": [
+      "让用户关闭浏览器的安全策略(Disable Web Security)",
+      "全部退化使用JSONP",
+      "在生产环境将Access-Control-Allow-Origin设为*"
+    ],
+    "activation_terms": [
+      "预检请求(Preflight Request)",
+      "同源策略(Same-Origin Policy)",
+      "反向代理(Reverse Proxy)",
+      "凭证(Credentials)",
+      "简单请求(Simple Request)"
+    ]
+  },
+  "WebSocket断连": {
+    "diagnostic_path": [
+      "检查负载均衡/网关的超时配置与协议升级头（如Nginx proxy_read_timeout、Upgrade: websocket）",
+      "检查TCP连接稳定性与底层Keep-Alive机制（如网络抖动、防火墙静默丢包）",
+      "检查应用层心跳保活(Ping/Pong)机制与指数退避重连逻辑"
+    ],
+    "common_causes": [
+      "Nginx等代理服务器默认超时主动断开连接",
+      "移动端网络切换或锁屏导致TCP连接假死",
+      "未实现心跳机制导致被防火墙回收",
+      "服务端未处理异常导致Socket进程崩溃"
+    ],
+    "avoid": [
+      "把超时时间设置为无限大",
+      "捕获异常后什么都不做(吞掉错误)",
+      "断线后立即死循环疯狂重连"
+    ],
+    "activation_terms": [
+      "心跳机制(Heartbeat/Ping-Pong)",
+      "背压(Backpressure)",
+      "指数退避(Exponential Backoff)",
+      "连接排空(Connection Draining)",
+      "半开连接(Half-Open Connection)"
+    ]
+  },
+  "热更新不生效": {
+    "diagnostic_path": [
+      "检查开发服务器配置（如publicPath、watchOptions、环境变量）",
+      "检查浏览器与DevServer的WebSocket连接及HMR事件流（如网络面板的ws消息）",
+      "检查应用层模块接受(module.hot.accept)逻辑与框架Loader配置（如React Refresh/Vue Loader）"
+    ],
+    "common_causes": [
+      "操作系统文件监听句柄达到上限(ENOSPC)",
+      "文件路径大小写不一致导致缓存失效",
+      "代码中存在未处理的循环依赖",
+      "组件状态在替换过程中丢失"
+    ],
+    "avoid": [
+      "手动F5刷新页面凑合用",
+      "无脑删除node_modules重新npm install",
+      "直接修改打包后的dist文件"
+    ],
+    "activation_terms": [
+      "模块热替换(HMR)",
+      "文件系统监听器(File System Watcher)",
+      "依赖图(Dependency Graph)",
+      "状态保留(State Preservation)",
+      "Inotify限制(Inotify Limit)"
+    ]
+  },
+  "打包体积过大": {
+    "diagnostic_path": [
+      "检查构建工具的优化配置（如mode: production、splitChunks、TerserPlugin）",
+      "检查模块解析与外部依赖连接（如externals配置、SourceMap分析、重复打包的库）",
+      "检查应用层代码的按需加载与Tree-Shaking有效性（如动态import、副作用标记）"
+    ],
+    "common_causes": [
+      "全量引入大型库（如lodash、moment）而非按需引入",
+      "Tree-Shaking失效（如使用了CommonJS规范或未配置sideEffects）",
+      "未配置路由懒加载导致首屏加载所有代码",
+      "包含过大的静态资源（如未压缩的图片、Base64滥用）"
+    ],
+    "avoid": [
+      "只靠Gzip压缩掩盖体积问题",
+      "忽略构建工具的体积警告",
+      "把所有第三方库都打包进一个vendor.js"
+    ],
+    "activation_terms": [
+      "摇树优化(Tree Shaking)",
+      "代码分割(Code Splitting)",
+      "死代码消除(Dead Code Elimination)",
+      "动态导入(Dynamic Import)",
+      "副作用(Side Effects)"
+    ]
+  },
+  "依赖版本冲突": {
+    "diagnostic_path": [
+      "检查包管理器配置与解析策略（如.npmrc、resolutions/overrides字段）",
+      "检查Lock文件与依赖树连接（如npm ls、幽灵依赖、扁平化算法结果）",
+      "检查应用层模块导入路径与PeerDependencies兼容性"
+    ],
+    "common_causes": [
+      "传递依赖(Transitive Dependency)底层版本不一致",
+      "PeerDependencies版本要求互斥",
+      "单例库（如React/Vue）被打包了多个版本",
+      "幽灵依赖导致本地能跑线上报错"
+    ],
+    "avoid": [
+      "直接删除package-lock.json并重新安装",
+      "盲目使用--force或--legacy-peer-deps",
+      "手动修改node_modules里的代码"
+    ],
+    "activation_terms": [
+      "传递依赖(Transitive Dependency)",
+      "幽灵依赖(Phantom Dependencies)",
+      "同等依赖(Peer Dependencies)",
+      "依赖解析(Dependency Resolution)",
+      "拓扑排序(Topological Sort)"
+    ]
+  },
+  "缓存失效": {
+    "diagnostic_path": [
+      "检查缓存中间件(如Redis/Memcached)的内存淘汰策略、最大内存限制及持久化配置",
+      "检查应用服务器与缓存集群的网络连通性、连接池状态及网络I/O延迟",
+      "检查应用层缓存键生成规则、TTL过期时间打散逻辑及缓存穿透/击穿的防御代码"
+    ],
+    "common_causes": [
+      "缓存雪崩(大批量Key同时过期)",
+      "缓存击穿(热点Key失效导致并发打穿DB)",
+      "缓存穿透(查询不存在的Key)",
+      "缓存与数据库双写不一致"
+    ],
+    "avoid": [
+      "建议直接清空全量缓存",
+      "建议重启Redis节点",
+      "建议无限期延长TTL"
+    ],
+    "activation_terms": [
+      "缓存一致性 (Cache Coherence)",
+      "缓存击穿 (Cache Stampede)",
+      "布隆过滤器 (Bloom Filter)",
+      "缓存预热 (Cache Warming)"
+    ]
+  },
+  "并发竞争": {
+    "diagnostic_path": [
+      "检查数据库事务隔离级别、锁超时配置及中间件的并发限制参数",
+      "检查数据库连接池的活跃连接数、死锁日志及RPC调用的并发排队情况",
+      "检查应用层临界区代码、分布式锁(如Redisson)的续期机制及CAS乐观锁重试逻辑"
+    ],
+    "common_causes": [
+      "缺乏乐观锁/悲观锁机制",
+      "非原子操作(Read-Modify-Write)",
+      "分布式锁未设置合理的过期时间或未续期",
+      "事务范围过大导致锁竞争激烈"
+    ],
+    "avoid": [
+      "建议在应用层加单机锁(如synchronized)解决分布式问题",
+      "建议在代码里增加Sleep时间来规避并发",
+      "建议直接关闭事务"
+    ],
+    "activation_terms": [
+      "竞态条件 (Race Condition)",
+      "乐观锁 (Optimistic Locking)",
+      "CAS语义 (Compare-And-Swap)",
+      "死锁检测 (Deadlock Detection)"
+    ]
+  },
+  "权限控制漏洞": {
+    "diagnostic_path": [
+      "检查网关层或安全框架(如Spring Security/Casbin)的鉴权拦截器及跨域(CORS)配置",
+      "检查身份认证服务(IdP)的通信链路、Token签名公钥分发及Session同步状态",
+      "检查应用层数据访问的越权校验逻辑(IDOR)、RBAC/ABAC策略及敏感接口的二次验证"
+    ],
+    "common_causes": [
+      "水平越权(未校验资源所有者ID)",
+      "垂直越权(普通用户访问管理员接口)",
+      "JWT密钥泄露或未校验签名",
+      "前端隐藏按钮但后端未做拦截"
+    ],
+    "avoid": [
+      "建议仅在前端隐藏敏感操作按钮",
+      "建议将用户权限明文存储在Cookie中",
+      "建议通过URL参数传递身份凭证"
+    ],
+    "activation_terms": [
+      "水平越权 (IDOR)",
+      "最小权限原则 (Principle of Least Privilege)",
+      "基于属性的访问控制 (ABAC)",
+      "零信任架构 (Zero Trust)"
+    ]
+  },
+  "日志管理": {
+    "diagnostic_path": [
+      "检查日志采集Agent(如Filebeat/Fluentd)的采集路径、日志级别及滚动切割(Log Rotation)配置",
+      "检查日志传输管道(如Kafka/Logstash)的吞吐量、网络背压及Elasticsearch集群的写入延迟",
+      "检查应用层MDC上下文(TraceId/SpanId)注入、异步日志打印阻塞情况及敏感信息脱敏逻辑"
+    ],
+    "common_causes": [
+      "同步写日志导致I/O阻塞主线程",
+      "日志级别设置过低导致磁盘打满",
+      "微服务间TraceId丢失导致链路断裂",
+      "日志格式不统一导致解析失败"
+    ],
+    "avoid": [
+      "建议直接关闭日志输出以提升性能",
+      "建议手动SSH到生产服务器grep查日志",
+      "建议将Base64编码的图片直接打入日志"
+    ],
+    "activation_terms": [
+      "链路追踪 (Distributed Tracing)",
+      "结构化日志 (Structured Logging)",
+      "背压 (Backpressure)",
+      "日志聚合 (Log Aggregation)"
+    ]
+  },
+  "配置环境隔离": {
+    "diagnostic_path": [
+      "检查CI/CD流水线的环境变量注入规则及配置中心(如Nacos/Apollo)的命名空间/Profile配置",
+      "检查应用启动时拉取配置中心的网络连通性、鉴权凭证及配置同步的推送通道",
+      "检查应用层配置热更新(Hot Reload)机制、降级默认值及不同环境的条件注解加载逻辑"
+    ],
+    "common_causes": [
+      "硬编码生产环境配置在代码中",
+      "环境变量优先级被本地配置文件覆盖",
+      "配置中心同步延迟或单点故障",
+      "测试环境连接到了生产环境的数据库"
+    ],
+    "avoid": [
+      "建议将生产环境密码提交到Git代码库",
+      "建议手动修改服务器上的配置文件",
+      "建议在代码里写if(env=='prod')的硬编码逻辑"
+    ],
+    "activation_terms": [
+      "不可变基础设施 (Immutable Infrastructure)",
+      "配置漂移 (Configuration Drift)",
+      "12要素应用 (Twelve-Factor App)",
+      "配置热加载 (Hot Reloading)"
+    ]
+  },
+  "代码重构": {
+    "diagnostic_path": [
+      "检查静态代码分析工具(如SonarQube)的质量门禁规则、依赖图谱及架构守护测试配置",
+      "检查微服务拆分/模块解耦时的数据库连接分离、API网关路由重定向及消息队列的兼容性",
+      "检查应用层领域模型边界、接口抽象(防腐层)、废弃代码标记及单元测试覆盖率"
+    ],
+    "common_causes": [
+      "强耦合导致牵一发而动全身",
+      "上帝类(God Class)承担过多职责",
+      "缺乏自动化测试保护导致重构引入回归Bug",
+      "领域边界模糊导致循环依赖"
+    ],
+    "avoid": [
+      "建议一次性推翻重写整个系统",
+      "建议在没有单元测试的情况下直接修改核心逻辑",
+      "建议为了设计模式而强行过度设计"
+    ],
+    "activation_terms": [
+      "传递闭包 (Transitive Closure)",
+      "依赖倒置 (Dependency Inversion)",
+      "绞杀者模式 (Strangler Fig Pattern)",
+      "防腐层 (Anti-Corruption Layer)"
+    ]
+  },
+  "性能瓶颈定位": {
+    "diagnostic_path": [
+      "检查OS内核参数(如ulimit/TCP backlog)、容器资源限制(Cgroups)及JVM/V8内存分配配置",
+      "检查数据库慢查询日志、网络I/O带宽占用、第三方API调用延迟及连接池耗尽情况",
+      "检查应用层CPU火焰图、内存泄漏(Heap Dump)、同步阻塞调用及核心算法的时间复杂度"
+    ],
+    "common_causes": [
+      "数据库N+1查询问题",
+      "内存泄漏导致频繁Full GC",
+      "缺乏索引或索引失效",
+      "同步调用外部耗时接口导致线程池耗尽"
+    ],
+    "avoid": [
+      "建议盲目增加服务器配置(Scale up)而不查代码",
+      "建议写定时脚本重启服务来释放内存",
+      "建议直接去掉所有数据校验以提升速度"
+    ],
+    "activation_terms": [
+      "火焰图 (Flame Graph)",
+      "尾延迟 (Tail Latency)",
+      "吞吐量饱和度 (Throughput Saturation)",
+      "N+1查询 (N+1 Problem)"
+    ]
+  },
+  "错误边界处理": {
+    "diagnostic_path": [
+      "检查全局异常处理器配置、监控告警阈值及网关层的统一错误响应格式",
+      "检查微服务间RPC调用的熔断器(Circuit Breaker)状态、超时设置及网络分区的容错机制",
+      "检查应用层组件树的错误捕获(如React Error Boundary)、重试幂等性及优雅降级UI兜底"
+    ],
+    "common_causes": [
+      "吞掉异常不抛出且不记录日志",
+      "未配置合理的超时时间导致级联雪崩",
+      "前端未做兜底导致整个页面白屏",
+      "重试风暴压垮下游服务"
+    ],
+    "avoid": [
+      "建议用大范围的try-catch包裹所有代码",
+      "建议向终端用户展示包含数据库SQL或堆栈信息的报错",
+      "建议发生错误时直接强制刷新页面"
+    ],
+    "activation_terms": [
+      "熔断器 (Circuit Breaker)",
+      "优雅降级 (Graceful Degradation)",
+      "故障隔离 (Fault Isolation)",
+      "重试风暴 (Retry Storm)"
+    ]
+  },
+  "国际化适配": {
+    "diagnostic_path": [
+      "检查构建工具的i18n插件配置、语言包按需加载策略及默认时区/Locale环境变量",
+      "检查CDN节点对多语言静态资源的缓存命中率、Accept-Language请求头传递及路由分发",
+      "检查应用层时区转换(统一UTC)、RTL(从右到左)布局兼容、复数规则及动态文案插值逻辑"
+    ],
+    "common_causes": [
+      "硬编码本地语言字符串在代码中",
+      "时间戳未统一使用UTC导致跨时区错乱",
+      "未考虑不同语言文本长度差异导致UI错位",
+      "复数规则和性别代词处理错误"
+    ],
+    "avoid": [
+      "建议根据IP强行绑定语言且不允许用户手动切换",
+      "建议在数据库中为每种语言单独建一个表",
+      "建议用字符串拼接代替模板插值"
+    ],
+    "activation_terms": [
+      "伪本地化 (Pseudolocalization)",
+      "字符编码 (Character Encoding)",
+      "国际化上下文 (i18n Context)",
+      "RTL布局 (Right-to-Left Layout)"
+    ]
+  },
+  "无障碍访问": {
+    "diagnostic_path": [
+      "检查Linter中的a11y规则集(如eslint-plugin-jsx-a11y)、自动化测试配置及构建时的语义化校验",
+      "检查SSR/CSR渲染链路中ARIA属性的完整性、动态内容更新时的Live Region通知传输",
+      "检查应用层键盘导航(Tab键)焦点陷阱、屏幕阅读器兼容性、色彩对比度及媒体替代文本(alt)"
+    ],
+    "common_causes": [
+      "滥用div/span代替语义化HTML标签(如button/nav)",
+      "图片缺失alt属性或表单缺失label",
+      "弹窗出现时未限制焦点(Focus Trap)",
+      "颜色对比度过低导致视障用户无法阅读"
+    ],
+    "avoid": [
+      "建议只关注鼠标交互而忽略键盘操作",
+      "建议用CSS的display:none隐藏元素而不处理屏幕阅读器焦点",
+      "建议去掉所有元素的outline导致键盘用户迷失焦点"
+    ],
+    "activation_terms": [
+      "语义化HTML (Semantic HTML)",
+      "焦点陷阱 (Focus Trap)",
+      "ARIA角色 (ARIA Roles)",
+      "屏幕阅读器 (Screen Reader)"
+    ]
+  },
+  "Afraid To Fail": {
+    "diagnostic_path": [
+      "检查函数返回值类型是否为状态码而非异常抛出",
+      "分析调用链中是否存在重复的条件判断逻辑",
+      "识别防御性编程导致的嵌套 if 语句级联现象",
+      "评估错误处理逻辑在调用栈中的传播方式"
+    ],
+    "common_causes": [
+      "过度依赖传统的 C 风格错误处理机制",
+      "对异常处理机制的性能或开销存在误解",
+      "缺乏统一的错误处理策略或异常层次结构",
+      "API 设计时未能区分业务逻辑与错误状态"
+    ],
+    "avoid": [
+      "在每一层调用中编写防御性 if 语句进行状态检查",
+      "通过返回状态码来处理本应由异常机制捕获的错误"
+    ],
+    "activation_terms": [
+      "Status Codes",
+      "Exception Handling",
+      "Defensive Programming",
+      "Call Chain",
+      "Error Propagation",
+      "Control Flow",
+      "Cascading Ifs"
+    ]
+  },
+  "Alternative Classes with Different Interfaces": {
+    "diagnostic_path": [
+      "检查系统中功能相似的类及其公共方法签名",
+      "分析不同类中实现相同业务逻辑的方法名称差异",
+      "识别是否存在可以通过统一接口或抽象类进行抽象的逻辑重复",
+      "评估重构为统一接口后对现有调用方代码的影响"
+    ],
+    "common_causes": [
+      "不同开发人员在未进行充分沟通的情况下独立实现相似功能",
+      "项目演进过程中缺乏统一的领域模型设计",
+      "代码库中存在历史遗留的碎片化实现",
+      "缺乏对接口抽象的统一规范和设计审查"
+    ],
+    "avoid": [
+      "在功能逻辑高度重叠时，为每个类定义完全不同的方法命名",
+      "忽略类之间的共性，导致重复逻辑在不同接口下分散实现"
+    ],
+    "activation_terms": [
+      "Interface Segregation",
+      "Abstraction",
+      "Method Signature",
+      "Code Duplication",
+      "Polymorphism",
+      "Refactoring",
+      "Domain Modeling",
+      "Encapsulation"
+    ]
+  },
+  "Base Class depends on Subclass": {
+    "diagnostic_path": [
+      "检查基类代码中是否存在对子类类型的显式引用",
+      "分析继承体系中是否存在向下转型（Downcasting）操作",
+      "识别基类是否依赖子类的具体实现细节",
+      "评估继承树结构是否存在反向依赖关系"
+    ],
+    "common_causes": [
+      "违反了依赖倒置原则（DIP）",
+      "基类试图实现通用逻辑但过度耦合了特定子类行为",
+      "继承体系设计不当导致职责分配混乱",
+      "在基类中硬编码了子类的实例化逻辑"
+    ],
+    "avoid": [
+      "在基类中直接引用子类类型",
+      "通过向下转型在基类中调用子类特有方法"
+    ],
+    "activation_terms": [
+      "Inheritance Tree",
+      "Downcasting",
+      "Dependency Inversion Principle",
+      "Coupling",
+      "Base Class",
+      "Subclass",
+      "Abstraction",
+      "Tight Coupling"
+    ]
+  },
+  "Binary Operator in Name": {
+    "diagnostic_path": [
+      "检查方法命名中是否包含逻辑连接词",
+      "分析方法内部逻辑是否执行了多项任务",
+      "识别违反单一职责原则的函数实现",
+      "评估将方法拆分为独立逻辑单元的可行性"
+    ],
+    "common_causes": [
+      "方法承担了过多的业务逻辑职责",
+      "开发人员倾向于通过连接词描述复合操作",
+      "缺乏对单一职责原则的严格遵循",
+      "为了减少方法调用次数而进行的过度合并"
+    ],
+    "avoid": [
+      "在方法命名中使用 and 或 or 连接词",
+      "编写执行多重逻辑判断或操作的复合方法"
+    ],
+    "activation_terms": [
+      "Single Responsibility Principle",
+      "Method Decomposition",
+      "Logical Operator",
+      "Code Refactoring",
+      "Function Extraction",
+      "Coupling",
+      "Clean Code"
+    ]
+  },
+  "Boolean Blindness": {
+    "diagnostic_path": [
+      "检查函数参数中是否存在裸露的布尔类型",
+      "分析布尔参数在函数逻辑中的语义表达是否模糊",
+      "识别代码中是否存在因布尔值含义不明导致的认知负载",
+      "评估类型系统对布尔值语义的约束能力"
+    ],
+    "common_causes": [
+      "函数参数设计过于通用导致语义丢失",
+      "过度依赖布尔值进行逻辑分支控制",
+      "缺乏对布尔值所代表业务含义的显式定义",
+      "代码可读性未考虑到阅读者对上下文的理解成本"
+    ],
+    "avoid": [
+      "在函数参数中使用裸露的布尔值",
+      "编写需要阅读者猜测布尔值含义的 API"
+    ],
+    "activation_terms": [
+      "Boolean Blindness",
+      "Type System",
+      "Semantic Information",
+      "Function Signature",
+      "Cognitive Load",
+      "Boolean Parameters",
+      "API Design",
+      "Code Readability"
+    ]
+  },
+  "Callback Hell": {
+    "diagnostic_path": [
+      "检查代码缩进层级以识别深度嵌套结构",
+      "分析异步操作的调用链条",
+      "识别闭包函数中嵌套的回调函数数量",
+      "评估代码逻辑在嵌套结构中的可读性与维护成本"
+    ],
+    "common_causes": [
+      "过度依赖异步回调处理流程",
+      "缺乏对异步控制流的抽象",
+      "在回调函数内部直接编写业务逻辑",
+      "未采用 Promise 或 Async/Await 等现代异步处理机制"
+    ],
+    "avoid": [
+      "在异步逻辑中进行多层嵌套的函数定义",
+      "将业务逻辑深埋于回调函数的缩进层级中"
+    ],
+    "activation_terms": [
+      "Asynchronous Programming",
+      "Nested Callbacks",
+      "Pyramid of Doom",
+      "Control Flow",
+      "Closure",
+      "Indentation",
+      "Promise",
+      "Async/Await"
+    ]
+  },
+  "Clever Code": {
+    "diagnostic_path": [
+      "检查代码逻辑是否通过过度压缩实现",
+      "分析是否存在对语言原生内置功能的重复实现",
+      "识别代码中是否滥用了语言特性或语法糖",
+      "评估代码的可维护性与团队成员的理解成本"
+    ],
+    "common_causes": [
+      "过度追求代码的简洁性与单行化",
+      "对语言底层特性或冷门语法的滥用",
+      "缺乏对标准库或内置函数的有效利用",
+      "开发者倾向于展示编程技巧而非追求可读性"
+    ],
+    "avoid": [
+      "为了追求单行代码而牺牲逻辑清晰度",
+      "在已有标准库功能的情况下重新发明轮子"
+    ],
+    "activation_terms": [
+      "One-liners",
+      "Language quirks",
+      "Built-ins",
+      "Code maintainability",
+      "Obfuscation",
+      "Syntactic sugar",
+      "Logic compaction"
+    ]
+  },
+  "Combinatorial Explosion": {
+    "diagnostic_path": [
+      "检查代码库中是否存在大量功能高度相似的方法",
+      "分析方法签名与实现逻辑的差异性",
+      "识别因新增功能导致方法数量呈指数级增长的趋势",
+      "评估现有变体在处理边界条件时的可维护性"
+    ],
+    "common_causes": [
+      "缺乏抽象导致逻辑重复",
+      "过度细化方法以应对单一场景",
+      "未能利用参数化或策略模式封装差异",
+      "在需求变更时倾向于新增方法而非重构现有逻辑"
+    ],
+    "avoid": [
+      "通过复制粘贴现有方法并修改少量细节来扩展功能",
+      "为每一个细微的业务场景创建独立的硬编码方法"
+    ],
+    "activation_terms": [
+      "Method Overloading",
+      "Code Duplication",
+      "Abstraction",
+      "Strategy Pattern",
+      "Parameterization",
+      "Refactoring",
+      "Edge Case",
+      "Complexity"
+    ]
+  },
+  "Complicated Boolean Expression": {
+    "diagnostic_path": [
+      "检查条件表达式的逻辑复杂度",
+      "分析布尔运算符的嵌套层级",
+      "识别逻辑判断中的否定词与连接词组合",
+      "评估表达式的可读性与业务意图匹配度"
+    ],
+    "common_causes": [
+      "过度使用逻辑非运算符",
+      "将多个无关的业务逻辑合并在单一条件判断中",
+      "缺乏对复杂逻辑的抽象封装",
+      "布尔表达式的逻辑结构与业务语义脱节"
+    ],
+    "avoid": [
+      "编写需要通过离散数学推理才能理解的条件语句",
+      "在单个if语句中堆砌过多的逻辑连接词"
+    ],
+    "activation_terms": [
+      "Boolean Expression",
+      "Conditional Logic",
+      "Negation",
+      "Conjunction",
+      "If-statement",
+      "Code Obfuscation",
+      "Logical Operator",
+      "Branching Logic"
+    ]
+  },
+  "Complicated Regex Expression": {
+    "diagnostic_path": [
+      "检查正则表达式的嵌套深度与字符密度",
+      "分析正则表达式的可读性与维护难度",
+      "识别是否存在未命名的复杂匹配逻辑",
+      "评估是否可以通过构建器模式重构表达式"
+    ],
+    "common_causes": [
+      "过度追求单行代码实现",
+      "缺乏对复杂模式的模块化拆解",
+      "未采用命名捕获组导致语义缺失",
+      "正则表达式逻辑过于冗长且缺乏注释"
+    ],
+    "avoid": [
+      "编写难以人工解析的超长正则表达式",
+      "在没有文档说明的情况下直接使用复杂模式"
+    ],
+    "activation_terms": [
+      "Regex Pattern",
+      "Named Capturing Groups",
+      "Builder Pattern",
+      "Self-documenting Code",
+      "Pattern Decomposition",
+      "Regex Engine",
+      "Code Obfuscation"
+    ]
+  },
+  "Conditional Complexity": {
+    "diagnostic_path": [
+      "检查代码库中是否存在长度超过50行的if/else或switch/case语句块",
+      "分析条件分支随功能迭代的增长趋势",
+      "识别逻辑分支中处理不同对象类型的代码片段",
+      "评估当前条件逻辑对系统可维护性及扩展性的影响"
+    ],
+    "common_causes": [
+      "随着新功能的增加不断向条件链中添加分支",
+      "在处理多种对象类型时未采用面向对象的设计模式",
+      "过度依赖过程式编程风格处理业务逻辑",
+      "对多态重构的延迟或规避"
+    ],
+    "avoid": [
+      "在新增功能时无限制地扩展if/else或switch/case分支",
+      "忽略代码逻辑随业务增长而产生的复杂性堆积"
+    ],
+    "activation_terms": [
+      "Conditional Complexity",
+      "Switch Statement",
+      "Polymorphism",
+      "Refactoring",
+      "Object Oriented Abusers",
+      "Conditional Logic",
+      "Branching Logic"
+    ]
+  },
+  "Data Clump": {
+    "diagnostic_path": [
+      "检查函数参数列表是否存在重复出现的变量组合",
+      "分析跨函数传递的参数集合是否具有逻辑相关性",
+      "识别多个函数中同时出现的相同参数集",
+      "评估将相关参数封装为独立对象的可行性"
+    ],
+    "common_causes": [
+      "缺乏面向对象设计意识",
+      "函数参数设计过于扁平化",
+      "数据结构定义不完整",
+      "代码演进过程中未及时重构参数列表"
+    ],
+    "avoid": [
+      "在多个函数间传递相同的一组基础类型变量",
+      "忽略数据项之间存在的逻辑聚合关系"
+    ],
+    "activation_terms": [
+      "Parameter List",
+      "Encapsulation",
+      "Primitive Obsession",
+      "Object-Oriented Design",
+      "Refactoring",
+      "Data Structure",
+      "Function Signature"
+    ]
+  },
+  "Dead Code": {
+    "diagnostic_path": [
+      "检查代码库中是否存在未被调用的函数或方法",
+      "分析控制流以识别无法到达的代码分支",
+      "识别被注释掉的废弃代码块",
+      "审查版本控制记录以确认最后一次执行时间",
+      "评估删除该代码对系统稳定性的潜在影响"
+    ],
+    "common_causes": [
+      "功能迭代后的遗留代码未及时清理",
+      "重构过程中被注释掉但未删除的逻辑",
+      "因逻辑判断条件冗余导致的不可达分支",
+      "过时的API接口或已废弃的业务模块",
+      "开发人员对删除代码的风险评估过于保守"
+    ],
+    "avoid": [
+      "将废弃代码通过注释方式保留在生产环境中",
+      "为了防止未来可能的需求变更而保留无用逻辑"
+    ],
+    "activation_terms": [
+      "Unreachable branches",
+      "Commented-out code",
+      "Dead code",
+      "Refactoring",
+      "Code maintenance",
+      "Control flow analysis",
+      "Legacy code",
+      "Runtime cost"
+    ]
+  },
+  "Divergent Change": {
+    "diagnostic_path": [
+      "检查类中是否存在多个不相关的职责领域",
+      "分析类中方法与属性的变更频率及触发原因",
+      "识别是否存在因不同业务逻辑导致频繁修改同一文件的现象",
+      "评估代码库中因该类引发的合并冲突频率"
+    ],
+    "common_causes": [
+      "单一职责原则（SRP）被违反",
+      "类承担了过多的业务逻辑职责",
+      "系统模块划分不清晰导致职责耦合",
+      "缺乏合理的抽象与接口隔离"
+    ],
+    "avoid": [
+      "将所有业务逻辑堆砌在同一个类中",
+      "忽略类变更原因的多样性而持续向其添加功能"
+    ],
+    "activation_terms": [
+      "Single Responsibility Principle",
+      "Coupling",
+      "Merge Conflicts",
+      "Refactoring",
+      "Class Decomposition",
+      "Business Logic",
+      "Code Maintenance"
+    ]
+  },
+  "Dubious Abstraction": {
+    "diagnostic_path": [
+      "检查方法内部是否同时包含业务逻辑编排与底层基础设施操作",
+      "分析代码中是否存在不同抽象层级的逻辑混杂",
+      "识别方法是否承担了与其职责不符的底层实现细节",
+      "评估代码的可读性与逻辑分层清晰度"
+    ],
+    "common_causes": [
+      "缺乏职责分离原则（Separation of Concerns）",
+      "方法职责过重，既负责业务流程又负责底层资源管理",
+      "代码重构时未及时提取底层实现逻辑",
+      "过度追求代码紧凑而忽略了抽象层级的划分"
+    ],
+    "avoid": [
+      "在业务逻辑方法中直接编写底层基础设施代码",
+      "将不同抽象层级的逻辑耦合在同一个函数体内"
+    ],
+    "activation_terms": [
+      "Abstraction Level",
+      "Business Workflow",
+      "Database Connection",
+      "Separation of Concerns",
+      "Plumbing",
+      "Strategy Pattern",
+      "Code Coupling",
+      "Refactoring"
+    ]
+  },
+  "Duplicated Code": {
+    "diagnostic_path": [
+      "检查代码库中是否存在逻辑完全相同或高度相似的代码片段",
+      "分析重复代码在不同模块或类中的分布情况",
+      "识别因复制粘贴导致的逻辑冗余点",
+      "评估重复逻辑在维护过程中产生行为偏差的风险"
+    ],
+    "common_causes": [
+      "开发人员为快速实现功能进行复制粘贴",
+      "缺乏对公共逻辑的抽象与封装意识",
+      "不同开发人员在不同模块中实现了相同的功能需求",
+      "项目初期缺乏统一的架构设计与代码复用规范"
+    ],
+    "avoid": [
+      "在多个位置复制粘贴相同的业务逻辑",
+      "忽视代码片段间的行为一致性维护"
+    ],
+    "activation_terms": [
+      "Code Clone",
+      "Logic Redundancy",
+      "Refactoring",
+      "Abstraction",
+      "Codebase Maintenance",
+      "DRY Principle",
+      "Modularization"
+    ]
+  },
+  "Fallacious Comment": {
+    "diagnostic_path": [
+      "检查代码逻辑与注释内容的一致性",
+      "分析方法签名与文档说明的匹配度",
+      "识别过时的代码注释片段",
+      "评估代码变更对现有注释的影响范围"
+    ],
+    "common_causes": [
+      "代码重构后未同步更新注释",
+      "开发人员维护代码时忽略了文档说明",
+      "代码逻辑发生演变导致原有描述失效",
+      "缺乏自动化工具检测注释与代码的漂移"
+    ],
+    "avoid": [
+      "在注释中描述代码的实现细节",
+      "保留与当前逻辑不符的陈旧注释"
+    ],
+    "activation_terms": [
+      "Code Drift",
+      "Linter",
+      "Method Signature",
+      "Attribute Signature",
+      "Refactoring",
+      "Documentation",
+      "Implementation",
+      "Logic"
+    ]
+  },
+  "Fallacious Method Name": {
+    "diagnostic_path": [
+      "检查方法命名与实际返回值类型是否一致",
+      "分析方法命名中的谓词（如get, set, is）是否符合语义约定",
+      "识别方法内部逻辑是否包含超出命名预期的副作用或额外计算",
+      "验证方法返回值是否与调用者预期的集合或单例模式匹配"
+    ],
+    "common_causes": [
+      "命名规范与实现逻辑脱节",
+      "方法职责过重导致语义模糊",
+      "开发者对命名惯例缺乏统一认知",
+      "API设计时未严格遵循单一职责原则"
+    ],
+    "avoid": [
+      "在以get为前缀的方法中执行复杂的业务逻辑或返回非预期类型",
+      "使用具有误导性的谓词命名方法",
+      "在布尔型命名的方法中返回非布尔值"
+    ],
+    "activation_terms": [
+      "Method Signature",
+      "Return Type",
+      "Side Effect",
+      "Boolean Predicate",
+      "Accessor",
+      "Semantic Convention",
+      "Single Responsibility Principle",
+      "API Design"
+    ]
+  },
+  "Fate over Action": {
+    "diagnostic_path": [
+      "检查类成员变量是否仅包含字段而缺乏公共方法",
+      "分析外部代码对该类实例的访问模式",
+      "识别是否存在外部逻辑频繁获取数据并执行决策的情况",
+      "评估该类是否仅作为数据传输对象存在",
+      "判断业务逻辑是否被剥离至类外部"
+    ],
+    "common_causes": [
+      "面向过程的编程思维导致逻辑与数据分离",
+      "过度使用贫血模型（Anemic Domain Model）",
+      "缺乏封装意识，将对象仅视为数据容器",
+      "为了简化对象设计而忽略了行为内聚性",
+      "数据访问层与业务逻辑层职责划分不清"
+    ],
+    "avoid": [
+      "在外部代码中频繁使用 getter/setter 对数据进行处理",
+      "将对象作为纯粹的数据结构而非行为主体进行设计"
+    ],
+    "activation_terms": [
+      "Data Class",
+      "Anemic Domain Model",
+      "Encapsulation",
+      "Information Hiding",
+      "Feature Envy",
+      "Domain Logic",
+      "Object-Oriented Design",
+      "Cohesion"
+    ]
+  },
+  "Feature Envy": {
+    "diagnostic_path": [
+      "检查方法内部对外部类字段的访问频率",
+      "分析方法所属类与被访问类之间的耦合度",
+      "识别该方法是否包含过多的 getter 调用",
+      "评估将该方法迁移至被访问类后的内聚性变化"
+    ],
+    "common_causes": [
+      "数据与行为分离导致的职责分配不当",
+      "过度依赖外部类的公共接口获取状态",
+      "为了复用逻辑而将方法放置在错误的类中",
+      "类职责划分不清晰导致的领域模型贫血"
+    ],
+    "avoid": [
+      "在不拥有数据的类中编写处理该数据的逻辑",
+      "通过频繁调用 getter 跨越对象边界进行计算"
+    ],
+    "activation_terms": [
+      "Coupling",
+      "Cohesion",
+      "Encapsulation",
+      "Getter Method",
+      "Data Locality",
+      "Refactoring",
+      "Domain Model",
+      "Method Migration"
+    ]
+  },
+  "Flag Argument": {
+    "diagnostic_path": [
+      "检查方法签名中是否存在布尔类型参数",
+      "分析调用方代码中硬编码的布尔字面量",
+      "识别方法内部基于布尔参数的条件分支逻辑",
+      "评估该参数是否导致了单一职责原则的违背"
+    ],
+    "common_causes": [
+      "方法试图通过单一入口处理多种逻辑分支",
+      "开发者为了避免重复代码而合并了功能相似但行为不同的操作",
+      "API 设计时缺乏对语义清晰度的考量",
+      "方法内部存在复杂的 if-else 或 switch 分支结构"
+    ],
+    "avoid": [
+      "在方法参数中使用布尔值来切换内部行为",
+      "通过布尔标志位将两个完全不同的功能耦合在同一个方法中"
+    ],
+    "activation_terms": [
+      "Boolean Parameter",
+      "Method Signature",
+      "Conditional Logic",
+      "Single Responsibility Principle",
+      "Code Coupling",
+      "Refactoring",
+      "API Design",
+      "Boolean Literal"
+    ]
+  },
+  "Global Data": {
+    "diagnostic_path": [
+      "检查全局作用域中声明的变量或对象",
+      "分析代码库中对特定变量的跨模块引用关系",
+      "识别导致状态异常的读写操作源头",
+      "评估全局变量对函数独立性的影响"
+    ],
+    "common_causes": [
+      "为了跨函数共享状态而滥用全局作用域",
+      "缺乏依赖注入机制导致数据传递困难",
+      "为了快速实现功能而忽略封装原则",
+      "遗留代码中未及时重构的静态变量"
+    ],
+    "avoid": [
+      "在全局作用域定义可变数据",
+      "通过全局变量在不同模块间隐式传递状态"
+    ],
+    "activation_terms": [
+      "Global Scope",
+      "Mutable State",
+      "Side Effects",
+      "Dependency Injection",
+      "Encapsulation",
+      "Static Variables",
+      "Coupling",
+      "Namespace Pollution"
+    ]
+  },
+  "Hidden Dependencies": {
+    "diagnostic_path": [
+      "检查类构造函数中的依赖注入完整性",
+      "分析运行时环境配置与环境变量依赖",
+      "识别代码中是否存在隐式全局状态引用",
+      "追踪堆栈跟踪中的异常来源与上下文环境",
+      "验证生产环境与开发环境的配置差异"
+    ],
+    "common_causes": [
+      "依赖项通过环境变量隐式解析",
+      "代码对特定运行环境配置存在硬编码依赖",
+      "缺乏显式的依赖注入机制",
+      "全局单例或静态变量导致的副作用",
+      "生产环境缺失必要的配置上下文"
+    ],
+    "avoid": [
+      "在构造函数或方法内部隐式获取环境依赖",
+      "依赖不可见的全局状态或系统环境变量",
+      "忽略环境配置差异导致的运行时异常"
+    ],
+    "activation_terms": [
+      "Dependency Injection",
+      "Stack Trace",
+      "Runtime Environment",
+      "Implicit Resolution",
+      "Constructor Injection",
+      "Global State",
+      "Configuration Context",
+      "Side Effects"
+    ]
+  },
+  "Imperative Loops": {
+    "diagnostic_path": [
+      "检查代码中是否存在基于索引的 for 循环结构",
+      "分析循环体内部是否存在手动累加结果的操作",
+      "识别循环逻辑是否可以通过高阶函数进行声明式重构",
+      "评估是否存在 off-by-one 边界条件错误风险"
+    ],
+    "common_causes": [
+      "开发者习惯于命令式编程思维",
+      "对语言内置的高阶函数库缺乏了解",
+      "代码库中存在大量遗留的 C 风格循环逻辑",
+      "在处理复杂数据转换时未采用函数式编程范式"
+    ],
+    "avoid": [
+      "手动维护循环索引变量",
+      "编写冗长的命令式循环逻辑来处理集合转换"
+    ],
+    "activation_terms": [
+      "Imperative Loops",
+      "Explicitly Indexed Loops",
+      "Map",
+      "Filter",
+      "Off-by-one Error",
+      "Declarative Programming",
+      "Higher-order Functions",
+      "Ceremony"
+    ]
+  },
+  "Inappropriate Static": {
+    "diagnostic_path": [
+      "检查代码库中是否存在被频繁调用的静态方法",
+      "分析静态方法对单元测试中Mock对象的影响",
+      "识别系统中因静态调用导致的隐式耦合关系",
+      "评估静态行为在多态扩展需求下的局限性"
+    ],
+    "common_causes": [
+      "为了方便调用而滥用静态修饰符",
+      "缺乏依赖注入机制导致依赖静态工具类",
+      "设计初期未考虑行为的可变性与扩展性",
+      "将全局状态或辅助逻辑硬编码为静态成员"
+    ],
+    "avoid": [
+      "在需要多态行为或逻辑替换的场景中使用静态方法",
+      "在单元测试难以覆盖的逻辑中过度依赖静态调用"
+    ],
+    "activation_terms": [
+      "Static Method",
+      "Override",
+      "Mocking",
+      "Tight Coupling",
+      "Polymorphism",
+      "Dependency Injection",
+      "Global State"
+    ]
+  },
+  "Incomplete Library Class": {
+    "diagnostic_path": [
+      "检查第三方库的功能覆盖率与业务需求匹配度",
+      "分析为弥补库功能缺失而编写的补丁代码量",
+      "识别补丁代码与原始库接口的耦合程度",
+      "评估维护这些变通方案（workarounds）的长期成本",
+      "审查是否存在更符合需求的替代方案或扩展机制"
+    ],
+    "common_causes": [
+      "第三方库提供的功能与特定业务需求存在偏差",
+      "库的API设计缺乏必要的扩展性或插件机制",
+      "开发者在选型时未能充分评估边界条件",
+      "项目需求在库选型后发生了演进",
+      "过度依赖单一库而忽视了组合式设计"
+    ],
+    "avoid": [
+      "在库外部编写大量重复逻辑的补丁代码",
+      "通过修改库源码或进行深度侵入式适配来强行集成",
+      "忽略因功能缺失导致的系统代码腐化与维护负担"
+    ],
+    "activation_terms": [
+      "Third-party Library",
+      "Workaround",
+      "Code Duplication",
+      "API Integration",
+      "Coupling",
+      "Abstraction Leak",
+      "Technical Debt",
+      "Dependency Management"
+    ]
+  },
+  "Inconsistent Names": {
+    "diagnostic_path": [
+      "检查代码库中执行相同逻辑操作的方法命名是否一致",
+      "分析不同类中实现相似功能的方法签名",
+      "识别由于命名差异导致的认知负担和模式匹配中断",
+      "评估现有命名规范与领域术语的一致性"
+    ],
+    "common_causes": [
+      "缺乏统一的命名规范或编码标准",
+      "不同开发人员对同一业务逻辑的语义理解存在偏差",
+      "代码库在不同时期由不同团队维护导致风格割裂",
+      "缺乏对领域模型术语的全局定义"
+    ],
+    "avoid": [
+      "在执行相同操作的类中随意使用不同的动词",
+      "忽略代码库中已有的命名习惯而引入新的同义词"
+    ],
+    "activation_terms": [
+      "Nomenclature",
+      "Method Signature",
+      "Cognitive Load",
+      "Domain Model",
+      "Pattern Matching",
+      "Semantic Consistency",
+      "API Design",
+      "Codebase Maintenance"
+    ]
+  },
+  "Inconsistent Style": {
+    "diagnostic_path": [
+      "检查代码库中的格式化规范一致性",
+      "分析函数定义与调用中的参数顺序一致性",
+      "识别项目中并存的多种编码约定",
+      "评估代码风格差异对可维护性的影响"
+    ],
+    "common_causes": [
+      "缺乏统一的编码规范文档",
+      "团队成员间缺乏代码审查共识",
+      "不同开发阶段引入了冲突的格式化工具",
+      "代码合并过程中未执行风格统一化处理"
+    ],
+    "avoid": [
+      "在同一项目中混用多种格式化风格",
+      "在函数重构时随意更改参数顺序"
+    ],
+    "activation_terms": [
+      "Formatting",
+      "Parameter Order",
+      "Coding Conventions",
+      "Codebase",
+      "Refactoring",
+      "Style Consistency",
+      "Code Review"
+    ]
+  },
+  "Indecent Exposure": {
+    "diagnostic_path": [
+      "检查类成员的访问修饰符设置",
+      "分析模块间的依赖关系与耦合程度",
+      "识别被外部调用者直接访问的内部实现细节",
+      "评估修改私有算法对现有调用方的影响范围"
+    ],
+    "common_causes": [
+      "过度使用 public 访问权限",
+      "缺乏对封装原则的严格执行",
+      "模块边界定义模糊",
+      "实现细节与接口定义未分离"
+    ],
+    "avoid": [
+      "将所有类成员默认设置为 public",
+      "暴露不应被外部感知的内部算法实现"
+    ],
+    "activation_terms": [
+      "Encapsulation",
+      "Access Modifier",
+      "Tight Coupling",
+      "Implementation Detail",
+      "Information Hiding",
+      "Module Dependency",
+      "API Design"
+    ]
+  },
+  "Insider Trading": {
+    "diagnostic_path": [
+      "检查类之间的访问修饰符设置",
+      "分析类之间是否存在对私有成员的直接调用或依赖",
+      "识别是否存在过度暴露内部实现细节的接口",
+      "评估类之间是否存在高耦合导致的连锁修改风险"
+    ],
+    "common_causes": [
+      "类之间过度共享内部实现细节",
+      "违反了封装原则（Encapsulation）",
+      "类之间存在过度的依赖关系",
+      "设计上缺乏清晰的抽象边界"
+    ],
+    "avoid": [
+      "在类之间暴露私有属性或方法",
+      "通过直接访问内部状态来实现功能交互"
+    ],
+    "activation_terms": [
+      "Encapsulation",
+      "Tight Coupling",
+      "Private Implementation",
+      "Information Hiding",
+      "Access Modifiers",
+      "Interface Segregation",
+      "Dependency Management"
+    ]
+  },
+  "Large Class": {
+    "diagnostic_path": [
+      "检查类中定义的成员变量与方法总数",
+      "分析类承担的职责是否违反单一职责原则",
+      "识别类中是否存在过多的业务逻辑耦合",
+      "评估类在单元测试中的覆盖难度与测试周期",
+      "检查类修改对系统其他模块的潜在影响范围"
+    ],
+    "common_causes": [
+      "类承担了过多的职责",
+      "缺乏合理的模块化拆分",
+      "业务逻辑在单一类中过度堆积",
+      "未能及时进行重构以应对功能增长"
+    ],
+    "avoid": [
+      "在现有类中无限制地添加新功能",
+      "忽视类规模增长带来的维护成本",
+      "将所有相关逻辑集中在单一对象中"
+    ],
+    "activation_terms": [
+      "Single Responsibility Principle",
+      "God Object",
+      "Coupling",
+      "Cohesion",
+      "Refactoring",
+      "Encapsulation",
+      "Modularization",
+      "Technical Debt"
+    ]
+  },
+  "Lazy Element": {
+    "diagnostic_path": [
+      "检查类成员数量是否仅包含单一字段",
+      "分析类方法是否仅执行简单的委托调用",
+      "评估抽象层级带来的复杂度与代码清晰度收益",
+      "识别是否存在过度设计的封装结构"
+    ],
+    "common_causes": [
+      "过度设计的抽象层",
+      "为了未来扩展预留的空壳类",
+      "重构过程中遗留的中间过渡类",
+      "对单一职责原则的机械化误用"
+    ],
+    "avoid": [
+      "为仅包含少量逻辑的简单功能创建独立类",
+      "创建仅用于委托调用的冗余抽象层"
+    ],
+    "activation_terms": [
+      "Delegation",
+      "Abstraction",
+      "Complexity",
+      "Encapsulation",
+      "Refactoring",
+      "Single Responsibility Principle",
+      "Over-engineering"
+    ]
+  },
+  "Long Method": {
+    "diagnostic_path": [
+      "检查方法体代码行数是否超过屏幕显示范围",
+      "分析方法内部逻辑的内聚性与单一职责原则执行情况",
+      "识别方法中隐藏的副作用与状态变更",
+      "评估代码阅读与维护的认知负荷"
+    ],
+    "common_causes": [
+      "缺乏方法拆分与重构意识",
+      "业务逻辑过度堆砌在单一函数中",
+      "代码演进过程中不断追加功能导致膨胀",
+      "缺乏对辅助方法的提取"
+    ],
+    "avoid": [
+      "在单一方法中实现多个业务逻辑步骤",
+      "忽略代码可读性而持续向长方法添加功能"
+    ],
+    "activation_terms": [
+      "Cyclomatic Complexity",
+      "Single Responsibility Principle",
+      "Method Extraction",
+      "Side Effects",
+      "Code Cohesion",
+      "Cognitive Load",
+      "Refactoring",
+      "Encapsulation"
+    ]
+  },
+  "Long Parameter List": {
+    "diagnostic_path": [
+      "检查函数签名中的参数个数",
+      "分析方法内部的逻辑职责是否单一",
+      "识别调用方是否需要依赖外部文档或提示才能正确传参",
+      "评估参数列表是否包含多个相关性较低的数据项"
+    ],
+    "common_causes": [
+      "函数承担了过多的职责",
+      "缺乏对参数进行对象封装",
+      "方法设计未遵循单一职责原则",
+      "过度传递数据而非传递对象"
+    ],
+    "avoid": [
+      "在函数签名中堆砌大量基本类型参数",
+      "为了满足调用需求而不断向方法添加新参数"
+    ],
+    "activation_terms": [
+      "Function Signature",
+      "Single Responsibility Principle",
+      "Parameter Object",
+      "Refactoring",
+      "Method Overloading",
+      "Code Smell",
+      "Encapsulation"
+    ]
+  },
+  "Magic Number": {
+    "diagnostic_path": [
+      "检查源代码中是否存在未命名的字面量数值",
+      "分析该数值在代码库中的分布频率与上下文语义",
+      "识别该数值是否代表特定的业务逻辑或配置参数",
+      "评估将字面量替换为命名常量对代码可维护性的影响"
+    ],
+    "common_causes": [
+      "开发者为了快速实现功能直接硬编码数值",
+      "缺乏对业务逻辑中常量定义的统一管理",
+      "代码重构过程中未对重复出现的字面量进行抽象",
+      "对数值背后的业务意图缺乏明确的命名规范"
+    ],
+    "avoid": [
+      "在代码逻辑中直接使用裸露的数字字面量",
+      "在多处重复硬编码相同的数值而不进行集中定义"
+    ],
+    "activation_terms": [
+      "Literal",
+      "Hard-coded",
+      "Constant",
+      "Refactoring",
+      "Maintainability",
+      "Abstraction",
+      "Intent",
+      "Configuration"
+    ]
+  },
+  "Message Chain": {
+    "diagnostic_path": [
+      "检查代码中是否存在连续的方法调用链",
+      "分析调用链中各中间对象是否暴露了内部结构",
+      "识别调用者是否过度依赖对象间的导航路径",
+      "评估当中间环节关系变更时对调用端的影响范围"
+    ],
+    "common_causes": [
+      "对象内部结构过度暴露",
+      "封装性不足导致内部属性被直接访问",
+      "调用者对数据结构关系了解过多",
+      "缺乏迪米特法则（Law of Demeter）的遵循"
+    ],
+    "avoid": [
+      "在客户端代码中直接进行多级导航调用",
+      "将对象间的内部关联关系暴露给外部调用者"
+    ],
+    "activation_terms": [
+      "Message Chain",
+      "Dependency",
+      "Encapsulation",
+      "Law of Demeter",
+      "Coupling",
+      "Navigation Path",
+      "Intermediate Link"
+    ]
+  },
+  "Middle Man": {
+    "diagnostic_path": [
+      "检查类的方法调用链以识别是否存在单纯的委托行为",
+      "分析类中方法与被调用对象方法的一致性",
+      "评估移除该类后对系统功能完整性的影响",
+      "识别是否存在过度封装导致的职责缺失"
+    ],
+    "common_causes": [
+      "过度使用委托模式导致职责分散",
+      "重构过程中遗留的中间层接口",
+      "对封装原则的误用导致不必要的间接调用",
+      "缺乏对类职责边界的清晰定义"
+    ],
+    "avoid": [
+      "在没有实际业务逻辑的情况下创建仅用于转发调用的类",
+      "为了追求形式上的解耦而引入过多的中间转发层"
+    ],
+    "activation_terms": [
+      "Delegation",
+      "Encapsulation",
+      "Indirection",
+      "Refactoring",
+      "Interface Segregation",
+      "Method Call Chain",
+      "Coupling"
+    ]
+  },
+  "Mutable Data": {
+    "diagnostic_path": [
+      "检查全局变量与共享状态的引用路径",
+      "分析多线程或异步操作中的数据竞争条件",
+      "识别导致状态非预期变更的副作用代码块",
+      "追踪对象生命周期内的属性变更时序"
+    ],
+    "common_causes": [
+      "全局作用域内的变量被多处引用并修改",
+      "多线程环境下缺乏同步机制导致的数据竞争",
+      "对象引用传递导致的状态被外部意外篡改",
+      "异步回调函数中对共享内存的并发访问"
+    ],
+    "avoid": [
+      "在全局作用域中暴露可变数据结构",
+      "在函数内部执行非预期的状态副作用",
+      "在多线程环境下直接共享非线程安全的对象"
+    ],
+    "activation_terms": [
+      "Mutable State",
+      "Race Condition",
+      "Side Effects",
+      "Shared Memory",
+      "Concurrency",
+      "Reference Passing",
+      "Thread Safety",
+      "Global Scope"
+    ]
+  },
+  "Null Check": {
+    "diagnostic_path": [
+      "检查代码库中是否存在重复的空值校验逻辑",
+      "分析条件判断语句中对 null 的依赖程度",
+      "识别因缺乏 Null Object 模式而导致的防御性编程痕迹",
+      "评估代码中空值检查对业务逻辑清晰度的干扰"
+    ],
+    "common_causes": [
+      "缺乏 Null Object 设计模式的应用",
+      "API 设计未能明确契约导致返回 null",
+      "防御性编程过度导致代码冗余",
+      "对空指针异常（NPE）的过度担忧"
+    ],
+    "avoid": [
+      "在业务逻辑中散布零散的 null 检查",
+      "使用 null 作为方法返回值的默认行为",
+      "将防御性校验作为解决设计缺陷的唯一手段"
+    ],
+    "activation_terms": [
+      "Null Object Pattern",
+      "Defensive Programming",
+      "NullPointerException",
+      "Conditional Logic",
+      "Billion-dollar mistake",
+      "Code Bloat",
+      "Contract Programming"
+    ]
+  },
+  "Obscured Intent": {
+    "diagnostic_path": [
+      "检查变量命名是否缺乏语义信息",
+      "分析代码中是否存在未定义的硬编码数值",
+      "识别代码排版与空白字符的使用规范",
+      "评估逻辑实现与业务意图的匹配度"
+    ],
+    "common_causes": [
+      "使用单字母变量名导致上下文缺失",
+      "在逻辑中直接使用未命名的魔法数字",
+      "缺乏必要的空白字符导致代码结构混乱",
+      "代码编写过程中缺乏重构意识",
+      "过度压缩代码逻辑导致可读性下降"
+    ],
+    "avoid": [
+      "使用缺乏描述性的单字母命名",
+      "在代码中直接硬编码业务逻辑数值",
+      "忽视代码格式化与排版规范"
+    ],
+    "activation_terms": [
+      "Single-letter variables",
+      "Magic numbers",
+      "Code obfuscation",
+      "Semantic naming",
+      "Whitespace formatting",
+      "Code readability",
+      "Intent clarity",
+      "Refactoring"
+    ]
+  },
+  "Parallel Inheritance Hierarchies": {
+    "diagnostic_path": [
+      "检查是否存在两个或多个平行的类继承体系",
+      "分析两个继承体系中子类之间的对应关系",
+      "识别在添加新功能时是否需要同时修改两个体系",
+      "评估两个体系之间是否存在紧密的耦合依赖"
+    ],
+    "common_causes": [
+      "类职责划分不合理导致逻辑分散",
+      "过度使用继承而非组合模式",
+      "系统设计初期缺乏抽象层级的统一规划",
+      "为了扩展功能而盲目复制现有的继承结构"
+    ],
+    "avoid": [
+      "在新增功能时机械地为每个子类创建对应的辅助类",
+      "忽略类之间逻辑关联而强行维持对称的继承结构"
+    ],
+    "activation_terms": [
+      "Inheritance Hierarchy",
+      "Subclass",
+      "Coupling",
+      "Abstraction",
+      "Composition",
+      "Design Pattern",
+      "Refactoring",
+      "Class Hierarchy"
+    ]
+  },
+  "Primitive Obsession": {
+    "diagnostic_path": [
+      "检查数据结构定义中是否存在使用基础类型（如String, Float, Int）表示复杂业务概念的情况",
+      "分析业务逻辑中是否存在针对特定数据格式的重复校验逻辑",
+      "识别是否存在因缺乏类型封装而导致的数据验证逻辑分散问题",
+      "评估将基础类型重构为领域对象（Value Object）的可行性与收益"
+    ],
+    "common_causes": [
+      "开发者为了快速实现功能而忽略了类型安全",
+      "对领域驱动设计（DDD）中值对象（Value Object）概念的缺失",
+      "过度依赖基础类型以简化数据持久化过程",
+      "缺乏对业务概念进行建模的意识"
+    ],
+    "avoid": [
+      "使用基础类型存储具有特定业务规则的数据",
+      "在多处代码中重复编写针对同一基础类型数据的校验逻辑"
+    ],
+    "activation_terms": [
+      "Primitive Obsession",
+      "Value Object",
+      "Domain Modeling",
+      "Type Safety",
+      "Data Validation",
+      "Encapsulation",
+      "Refactoring"
+    ]
+  },
+  "Refused Bequest": {
+    "diagnostic_path": [
+      "检查子类是否抛出了NotImplementedException或类似异常",
+      "分析父类与子类之间的继承契约一致性",
+      "识别子类中未被实际使用的父类公共方法",
+      "评估继承体系中是否存在不必要的行为强制约束"
+    ],
+    "common_causes": [
+      "继承体系设计不当导致子类被迫继承无关行为",
+      "违反了里氏替换原则（LSP）",
+      "父类接口定义过于臃肿，包含了非所有子类通用的方法",
+      "为了代码复用而盲目使用继承而非组合"
+    ],
+    "avoid": [
+      "在子类中通过抛出异常来拒绝父类方法",
+      "为了获取部分功能而强行继承包含大量无用方法的父类"
+    ],
+    "activation_terms": [
+      "Inheritance",
+      "Subclassing",
+      "Liskov Substitution Principle",
+      "NotImplementedException",
+      "Runtime Exception",
+      "Interface Segregation",
+      "Contract Violation",
+      "Object Oriented Design"
+    ]
+  },
+  "Required Setup or Teardown Code": {
+    "diagnostic_path": [
+      "检查对象生命周期管理逻辑",
+      "分析资源分配与释放的依赖关系",
+      "识别外部环境配置的强制性要求",
+      "评估状态重置逻辑的封装位置"
+    ],
+    "common_causes": [
+      "资源管理职责未封装在对象内部",
+      "环境配置检查逻辑外溢到调用方",
+      "状态重置逻辑依赖外部显式调用",
+      "缺乏自动化的生命周期管理机制"
+    ],
+    "avoid": [
+      "要求调用方手动执行清理或重置操作",
+      "将环境依赖检查暴露给外部接口"
+    ],
+    "activation_terms": [
+      "Socket",
+      "Environment Variables",
+      "State Reset",
+      "Encapsulation",
+      "Resource Management",
+      "Lifecycle Management",
+      "Teardown",
+      "Setup"
+    ]
+  },
+  "Shotgun Surgery": {
+    "diagnostic_path": [
+      "检查代码变更影响范围是否跨越多个模块",
+      "分析单一功能需求变更导致的受影响文件数量",
+      "识别系统中是否存在职责分散的逻辑片段",
+      "评估代码库中是否存在高耦合的跨文件依赖关系"
+    ],
+    "common_causes": [
+      "职责分配不明确",
+      "代码逻辑高度分散",
+      "缺乏统一的抽象层",
+      "系统模块化程度不足",
+      "过度耦合的架构设计"
+    ],
+    "avoid": [
+      "在多个文件中重复实现相似逻辑",
+      "忽略模块边界进行硬编码修改"
+    ],
+    "activation_terms": [
+      "Coupling",
+      "Cohesion",
+      "Modularization",
+      "Abstraction",
+      "Refactoring",
+      "Dependency Management",
+      "Encapsulation",
+      "Single Responsibility Principle"
+    ]
+  },
+  "Side Effects": {
+    "diagnostic_path": [
+      "检查函数命名与其内部逻辑实现的一致性",
+      "分析函数执行过程中对外部状态的修改行为",
+      "识别函数调用是否触发了预料之外的副作用",
+      "追踪函数执行流中隐藏的非预期行为逻辑"
+    ],
+    "common_causes": [
+      "函数职责单一性原则被破坏",
+      "在状态变更函数中耦合了UI渲染逻辑",
+      "在数据处理逻辑中混入了定时器重置操作",
+      "函数命名未能准确表达其完整行为意图",
+      "隐式状态依赖导致的行为不可预测"
+    ],
+    "avoid": [
+      "在命名简单的存取器方法中执行复杂的业务逻辑",
+      "将多个无关的系统行为封装在同一个函数中"
+    ],
+    "activation_terms": [
+      "Side Effects",
+      "Impure Functions",
+      "Hidden Behavior",
+      "State Mutation",
+      "Encapsulation",
+      "Single Responsibility Principle",
+      "Implicit Dependency"
+    ]
+  },
+  "Special Case": {
+    "diagnostic_path": [
+      "检查代码逻辑入口处的条件分支结构",
+      "分析是否存在针对特定边界值的独立处理逻辑",
+      "识别历史遗留的 Hotfix 代码片段",
+      "评估该分支对后续业务逻辑理解的认知负担",
+      "审查是否存在未被重构的特殊情况处理逻辑"
+    ],
+    "common_causes": [
+      "早期开发阶段为了快速修复 Bug 引入的临时补丁",
+      "缺乏后续重构导致临时方案固化在代码库中",
+      "对边界条件缺乏统一的抽象处理机制",
+      "业务逻辑演进过程中未能及时清理过时的特殊分支",
+      "过度依赖条件判断来处理异常状态而非使用多态"
+    ],
+    "avoid": [
+      "在核心业务逻辑前堆砌针对特殊情况的 if-statement",
+      "将临时性的 Hotfix 长期保留在生产代码中",
+      "忽视对边界条件处理逻辑的重构与抽象"
+    ],
+    "activation_terms": [
+      "Edge Case",
+      "Conditional Logic",
+      "Hotfix",
+      "Refactoring",
+      "Branching",
+      "Control Flow",
+      "Technical Debt",
+      "Abstraction"
+    ]
+  },
+  "Speculative Generality": {
+    "diagnostic_path": [
+      "检查抽象基类及其派生类层次结构",
+      "分析类成员与方法在实际业务中的调用频率",
+      "识别未被使用的参数与预留接口",
+      "评估抽象层级对系统复杂度的影响"
+    ],
+    "common_causes": [
+      "过度设计导致的预留扩展",
+      "对未来需求变化的错误预测",
+      "未能及时清理废弃的抽象逻辑",
+      "在未明确需求场景下过早进行泛化"
+    ],
+    "avoid": [
+      "在没有明确需求支撑的情况下构建复杂的抽象层次",
+      "为假设性的未来功能添加冗余参数"
+    ],
+    "activation_terms": [
+      "Abstract Base Class",
+      "Hierarchy",
+      "Over-engineering",
+      "Unused Generality",
+      "Abstraction",
+      "Redundant Parameters",
+      "Code Clutter"
+    ]
+  },
+  "Status Variable": {
+    "diagnostic_path": [
+      "检查循环结构中是否存在用于标记状态的布尔型变量",
+      "分析该变量在循环体内的赋值逻辑与后续的条件判断逻辑",
+      "识别是否存在可以通过提前返回（Early Return）替代的控制流",
+      "评估是否可以使用内置函数或集合操作简化逻辑表达"
+    ],
+    "common_causes": [
+      "开发者习惯使用命令式编程风格处理集合遍历",
+      "对语言内置的谓词函数或查找方法缺乏了解",
+      "逻辑分支设计过于复杂，导致无法直接使用返回语句",
+      "在循环中维护状态的思维惯性"
+    ],
+    "avoid": [
+      "在循环外部定义布尔标志位并在循环内部修改其状态",
+      "使用多个可变标志位来控制复杂的函数执行流程"
+    ],
+    "activation_terms": [
+      "Mutable Flag",
+      "Control Flow",
+      "Early Return",
+      "Boolean Flag",
+      "Imperative Programming",
+      "Predicate Function",
+      "Loop Invariant",
+      "Code Obfuscation"
+    ]
+  },
+  "Temporary Field": {
+    "diagnostic_path": [
+      "检查类中是否存在仅在特定方法中被赋值和使用的成员变量",
+      "分析成员变量的生命周期与对象生命周期的匹配度",
+      "识别在非计算逻辑期间始终保持为null的字段",
+      "评估该字段是否仅用于临时存储算法中间状态"
+    ],
+    "common_causes": [
+      "为了避免参数传递而将临时变量提升为类成员",
+      "复杂的算法逻辑被拆分为多个方法，导致状态共享需求",
+      "对象职责过重，试图在单一对象中维护所有计算上下文",
+      "设计时未考虑对象状态的瞬时性"
+    ],
+    "avoid": [
+      "将仅在特定算法中使用的临时变量声明为类成员变量",
+      "在对象中保留长期处于空置状态的字段以应对极少数场景"
+    ],
+    "activation_terms": [
+      "Null Reference",
+      "State Management",
+      "Encapsulation",
+      "Class Member",
+      "Method Scope",
+      "Object Lifecycle",
+      "Algorithm Context",
+      "Data Locality"
+    ]
+  },
+  "Tramp Data": {
+    "diagnostic_path": [
+      "检查方法调用链中是否存在未被当前函数逻辑使用的参数",
+      "分析函数签名以识别冗余的参数传递行为",
+      "识别数据流向中仅作为中转节点的中间函数",
+      "追踪参数的最终消费端以确定其原始来源"
+    ],
+    "common_causes": [
+      "函数接口设计未遵循最小知识原则",
+      "为了满足下游需求而盲目扩展上游函数签名",
+      "缺乏对数据封装的合理抽象",
+      "方法调用链过长导致耦合度过高"
+    ],
+    "avoid": [
+      "在中间层函数中传递不必要的参数",
+      "通过长链路传递数据以满足末端函数的依赖"
+    ],
+    "activation_terms": [
+      "Parameter Passing",
+      "Method Chaining",
+      "Data Encapsulation",
+      "Function Signature",
+      "Coupling",
+      "Dependency Injection",
+      "Refactoring",
+      "Interface Segregation"
+    ]
+  },
+  "Type Embedded in Name": {
+    "diagnostic_path": [
+      "检查变量命名是否包含数据类型后缀或前缀",
+      "分析变量的类型注解与命名是否语义重复",
+      "识别代码库中是否存在类型变更但命名未同步的陈旧标识符",
+      "评估命名规范对代码可维护性的负面影响"
+    ],
+    "common_causes": [
+      "开发者试图通过命名来弥补静态类型检查的缺失",
+      "缺乏统一的命名规范导致类型信息被硬编码进标识符",
+      "代码重构过程中仅修改了类型定义而遗漏了变量名更新",
+      "对强类型语言特性的过度补偿心理"
+    ],
+    "avoid": [
+      "在变量名中显式包含数据类型描述",
+      "在类型系统已经提供明确约束的情况下进行冗余命名"
+    ],
+    "activation_terms": [
+      "Type Annotation",
+      "Redundant Naming",
+      "Identifier",
+      "Static Typing",
+      "Code Refactoring",
+      "Semantic Coupling",
+      "Type Safety",
+      "Maintainability"
+    ]
+  },
+  "Uncommunicative Name": {
+    "diagnostic_path": [
+      "检查变量与函数命名是否包含缩写或无意义字符",
+      "分析标识符是否能准确表达其业务逻辑或数据含义",
+      "识别代码中是否存在需要通过逆向工程才能理解的命名",
+      "评估命名是否依赖作者主观认为的自明性"
+    ],
+    "common_causes": [
+      "开发者过度使用简写或占位符命名",
+      "缺乏对领域模型术语的统一规范",
+      "代码编写时未考虑后续维护者的可读性",
+      "命名过于宽泛导致上下文信息丢失"
+    ],
+    "avoid": [
+      "使用 data, val, temp 等通用且模糊的命名",
+      "使用无法直观反映功能意图的缩写命名"
+    ],
+    "activation_terms": [
+      "Identifier",
+      "Variable Naming",
+      "Function Signature",
+      "Semantic Clarity",
+      "Code Readability",
+      "Abstraction",
+      "Domain Modeling"
+    ]
+  },
+  "Vertical Separation": {
+    "diagnostic_path": [
+      "检查方法内部变量声明与首次使用位置之间的行数距离",
+      "分析方法体内的逻辑复杂度与代码块长度",
+      "识别是否存在跨越长距离逻辑的变量引用",
+      "评估变量声明位置对代码可读性及认知负荷的影响"
+    ],
+    "common_causes": [
+      "方法体过长导致逻辑分散",
+      "未遵循变量就近声明原则",
+      "单一职责原则缺失，方法承担了过多逻辑",
+      "缺乏对复杂逻辑进行方法拆解的重构意识"
+    ],
+    "avoid": [
+      "在方法顶部集中声明所有变量",
+      "编写超出屏幕显示范围的冗长方法"
+    ],
+    "activation_terms": [
+      "Variable Declaration",
+      "Method Length",
+      "Cognitive Load",
+      "Scope",
+      "Refactoring",
+      "Single Responsibility Principle",
+      "Locality of Reference"
+    ]
+  },
+  "\"What\" Comment": {
+    "diagnostic_path": [
+      "检查代码注释内容是否仅在复述逻辑执行步骤",
+      "分析注释是否掩盖了代码逻辑复杂或命名不规范的问题",
+      "识别可以通过重构提取为独立方法来消除的注释片段",
+      "评估注释是否提供了代码意图（Why）而非执行过程（What）"
+    ],
+    "common_causes": [
+      "代码逻辑过于复杂导致难以理解",
+      "方法命名或变量命名缺乏描述性",
+      "开发者试图通过注释掩盖代码异味",
+      "未能遵循代码自解释原则"
+    ],
+    "avoid": [
+      "编写描述代码执行过程的注释",
+      "使用注释来弥补糟糕的命名",
+      "在代码逻辑清晰的情况下添加冗余说明"
+    ],
+    "activation_terms": [
+      "Code Smell",
+      "Refactoring",
+      "Extract Method",
+      "Self-documenting Code",
+      "Implementation Detail",
+      "Intentionality",
+      "Clean Code"
+    ]
+  },
+  "Oddball Solution": {
+    "diagnostic_path": [
+      "检查项目中处理同一问题的不同实现方式",
+      "分析不同文件间解决相同逻辑的差异性",
+      "识别是否存在多种不一致的解决方案导致难以判断正确性"
+    ],
+    "common_causes": [
+      "缺乏统一的架构规范",
+      "开发人员对现有解决方案缺乏了解",
+      "在不同模块中重复造轮子",
+      "代码库演进过程中引入了不一致的实现模式"
+    ],
+    "avoid": [
+      "针对同一问题在不同文件中采用截然不同的实现逻辑",
+      "在不明确哪种方案更优的情况下随意引入新的实现方式"
+    ],
+    "activation_terms": [
+      "Adapter",
+      "Socket logic",
+      "Inconsistent solution",
+      "Bloaters",
+      "Duplication"
+    ]
+  }
+}

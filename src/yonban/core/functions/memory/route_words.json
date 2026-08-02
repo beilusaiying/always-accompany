@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "purpose": "路线词降权列表: 含这些词的方向词→×0.3(非名词,对P1无信息量)",
+    "source": "从p1_transfer.mjs硬编码正则外化(#41)",
+    "date": "2026-05-26"
+  },
+  "zh": [
+    "建议", "应该", "需要", "可以试试", "不妨", "或许",
+    "方法", "步骤", "技巧", "策略",
+    "方式", "途径", "措施", "手段", "办法",
+    "尝试", "考虑", "注意", "记住", "学会"
+  ],
+  "en": [
+    "should", "could", "try", "consider", "method", "strategy",
+    "technique", "approach", "step", "tip"
+  ],
+  "debug": [
+    "SRE", "Git", "Debug", "Race Condition", "Deadlock", "Memory Leak",
+    "Stack", "CORS", "Deploy", "Container", "OOM", "Lock",
+    "Assertion", "Bisect", "Breakpoint", "Heisenbug"
+  ]
+}

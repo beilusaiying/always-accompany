@@ -1,0 +1,9 @@
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\bias-graph.png	185542
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\conceptnet-numberbatch.png	19396
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\eval-graph.png	207634
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\LICENSE.txt	1317
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\mini.h5	10555480
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\numberbatch-19.08.txt.gz	3191580656
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\package.sh	230
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\README.md	16323
+D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\conceptnet-numberbatch\text_to_uri.py	2930

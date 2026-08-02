@@ -1,0 +1,11 @@
+{
+  "_ERROR": "此文件已废弃。请使用per-mode文件(activation_terms_chat/airp/code/work.json)。如果你看到这个错误,说明代码还在读主AT,需要修改消费路径。",
+  "_deprecated": "2026-05-22",
+  "_reason": "主AT含5366个未优化口语术语,eligible未标,导致信息词泄漏。已物理隔离。",
+  "_use_instead": [
+    "activation_terms_chat.json",
+    "activation_terms_airp.json",
+    "activation_terms_code.json",
+    "activation_terms_work.json"
+  ]
+}

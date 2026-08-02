@@ -1,0 +1,711 @@
+"what" comment	Comments that narrate what the code does instead of why — a deodorant sprayed over smelly code, where extracting a well-named method would eliminate both the smell and the comment.
++1	A vote in favor of something.
+68-95-99.7 rule	Expresses the fact that 68% of values lie within one standard deviation of the mean, 95% lie within two, and 99.7% lie within three. Conversely, about 0.3% of values lie more than three standard deviations above or below the mean in most cases.
+abandonware	Software that is no longer being maintained.
+absolute error	The difference between the measured or inferred value of a quantity and its actual value, sometimes with the absolute value taken.
+absolute path	A path that points to the same location in a filesystem regardless of where it is evaluated. An absolute path is the equivalent of latitude and longitude in geography.
+absolute row number	The sequential index of a row in a table, regardless of what section of the table is being displayed.
+abstract method	It is used in object-oriented programming and is a method that is defined but not implemented. Programmers will define an abstract method in a parent class to specify operations that child classes must provide.
+abstract syntax tree	A deeply nested data structure, or tree, that represents the structure of a program. For example, the AST might have a node representing a `while` loop with one child representing the loop condition and another representing the loop body.
+accuracy	Accuracy measures how close results are to the true or known value. A statistical measure of a classification model which gives the proportion of correct predictions among a total number of cases. It is calculated as Accuracy = (TP+TN)/(TP+TN+FP+FN). - TP = True Positive - FP = False Positive - FN = False Negative - TN = True Negative Accuracy and precision are both ways to measure results. Accuracy measures how close results are to the true or known value. Precision, on the other hand, measures how close results are to one another.
+actual result (of test)	The outcome or value of performing a statistical test. If this matches the expected result, the test passes; if the two are different, the test fails.
+affordance	Fields you can interact with such as a handle or button.
+afraid to fail	Every caller has to check whether things actually worked, because this code returns status codes instead of throwing exceptions. The defensive ifs cascade up the entire call chain.
+agents	Autonomous systems that use LLMs for reasoning and decision-making to accomplish complex tasks.
+aggregation	To combine many values into one, e.g., by summing a set of numbers or linking a set of strings.
+aggregation function	A function that combines many values into one, such as `sum` or `max`.
+agile development	A software development methodology that emphasizes lots of small steps and continuous feedback instead of up-front planning and long-term scheduling. Exploratory programming is often agile.
+algorithm	An algorithm is a set of steps, intructions, or rules followed to accomplish a specific task. In computer science, an algorithm is a set of instructions in a computer program that solves a computational problem.
+algorithmic bias	Repeatable results that show bias, or skewed treatment, found in an algorithm. For example, social media algorithms may prioritize or stigmatize content from certain groups of users.
+aliasing	To have two or more references to the same thing, such as a data structure in memory or a file on disk.
+alternative classes with different interfaces	Two classes. Same job. Different spelling. One says hug_zombie(), the other says hug_snowman(), and neither realizes they're duplicating logic behind method names that could share a single interface.
+anaconda	Anaconda is a software distribution of R and Python. It is also a repository of open-source Python and R programs for data science, packaged using the conda package manager. Anaconda also creates Anaconda Navigator, a suite of desktop tools including an IDE and the Jupyter Notebook application.
+anchor	In a regular expression, a symbol that fixes a position without matching characters. `^` matches the start of the line, while `$` matches the end of the line and `\b` matches a break between word and non-word characters.
+anonymous function	A function that has not been assigned a name. Anonymous functions are usually quite short, and are usually defined where they are used, e.g., as callbacks. In Python, these are called lambda functions and are created through use of the lambda reserved word.
+anti join	A join that keeps rows from table A whose keys do *not* match keys in table B.
+append mode	To add data to the end of an existing file instead of overwriting the previous contents of that file. Overwriting is the default, so most programming languages require programs to be explicit about wanting to append instead.
+application programming interface	A set of functions and procedures provided by one software library or web service through which another application can communicate with it. An API is not the code, the database, or the server: it's the access point.
+argument	The term should not be confused with, and is not a synonym for, parameter. An argument is one of possibly several expressions that are passed to a function. It is the actual value that is passed. Parameters and arguments are distinct, but related concepts. Parameters are variables and arguments are the values assigned to those variables.
+arithmetic mean	See mean. Calculated from a set of n numbers by summing those numbers, and dividing the result by n. See mean.
+artificial intelligence (ai)	Intelligence demonstrated by machines, as opposed to humans or other animals. AI can be exhibited through perceiving, synthesizing and inference of information. Example tasks include natural language processing, computer vision, and [machine learning] (#machine_learning).
+ascii	A standard way to represent the characters commonly used in the Western European languages as 7- or 8-bit integers, now superseded by Unicode.
+assertion	A Boolean expression that must be true at a certain point in a program. Assertions may be built into the language (e.g., Python's `assert` statement) or provided as functions (e.g., R's `stopifnot`). They are often used in testing, but are also put in production code to check that it is behaving correctly. In many languages, assertions should not be used to perform data validation as they may be silently dropped by compilers and interpreters under optimization conditions. Using assertions for data validation can therefore introduce security risks. Unlike many languages, R does not have an `assert` statement which can be disabled, and so use of a package such as `assertr` for data validation does not create security holes.
+associative array	See dictionary.
+asynchronous	Not happening at the same time. In programming, an asynchronous operation is one that runs independently of another, or that starts at one time and ends at another.
+attention mechanism	A technique that allows models to focus on relevant parts of the input when processing each token.
+attribute	A name-value pair associated with an object, used to store metadata about the object such as an array's dimensions.
+auto-completion	A feature that allows the user to finish a word or code quickly by pressing the TAB key to list possible words or code from which the user can select.
+autocorrelation	The degree of similarity between observations in the same series but separated by a time interval (known as the "lag"). Autocorrelation analysis can be used to gain insight into time series datasets by detecting repeating patterns that may be partially concealed by random noise, among other uses.
+automatic variable	A variable that is automatically given a value in a build rule. For example, Make automatically assigns the name of a rule's target to the automatic variable `$@`. Automatic variables are frequently used when writing pattern rules.
+backpropagation	An algorithm that iteratively adjusts the weights used in a neural network. Backpropagation is often used to implement gradient descent.
+backward-compatible	A property of a system, hardware or software, that allows for interoperability with an older legacy system, or with input designed for such a system. For example, a function written in Python 3 that can be run successfully with Python 2 is backward-compatible.
+base class depends on subclass	When a parent class reaches down to reference its own children, the inheritance tree grows upside down. Change a leaf, redeploy the trunk.
+base r	The basic functions making up the R language. The base packages can be found in `src/library` and are not updated outside of R; their version numbers follow R version numbering. Base packages are installed and loaded with R, while priority packages are installed with base R but must be loaded prior to use.
+bayes' rule	See Bayes' Theorem.
+bayes' theorem	An equation for calculating the probability that something is true if something related to it is true. If P(X) is the probability that X is true and P(X`|`Y) is the probability that X is true given Y is true, then P(X`|`Y) = P(Y`|`X) * P(X) / P(Y).
+bayesian network	A graph that represents the relationships among random variables for a given problem.
+bias	A statistic is biased if it is systematically or consistently different from the parameter it is supposed to estimate.
+big data	Any data that until recently was too big for most people to work with on a single computer.
+binary	A system which can have one of two possible states. In computing, often represented as being in the state 0 or 1. Represented in Boolean logic as false (0) or true (1). Computers are built upon systems which store 0s and 1s as bits.
+binary expression	An expression which has two parameters and takes two arguments, such as `1 + 2`.
+binary large object	Data that is stored in a database without being interpreted in any way, such as an audio file. The term is also now used to refer to data transferred over a network or stored in a version control repository as uninterpreted bits.
+binary operator in name	If a method has "and" or "or" in its name, it's confessing to doing two things, and that confession is an invitation to split it in half.
+binomial distribution	A probability distribution that arises when there are a fixed number of trials, each of which can produce one of two outcomes, and the probability of those outcomes does not change. As the number of trials increases, the binomial distribution approximates a normal distribution.
+bit	A unit of information representing alternatives, yes/no, true/false. In computing, a state of either 0 or 1.
+block comment	A comment that spans multiple lines. Block comments may be marked with special start and end symbols, like `/*` and `*/` in C and its descendents, or each line may be prefixed with a marker like `#`.
+boilerplate	Standard text that is included in legal contracts, licenses, and so on. Also parts of the source code that have to be repeated very often to get basic functionality. In object-oriented programs these segments are used to encapsulate variables of objects. Some languages require a lot of these statements and are termed boilerplate languages, e.g. Java, which means that they are frequently generated automatically or by using auto-completion.
+boolean	Relating to a variable or data type that can have either a logical value of true or false. Named for George Boole, a 19th century mathematician. Binary systems, like all computers, are built on this foundation of systems of logical evaluations between states of true and false, 1 or 0.
+boolean blindness	Does filter(true) mean take or drop? When a function operates on raw booleans, it destroys the information about what those values represent. The type system knows; the reader doesn't.
+branch	See Git branch.
+branch-per-feature workflow	A common strategy for managing work with Git and other version control systems in which a separate branch is created for work on each new feature or each bug fix and merged when that work is completed. This isolates changes from one another until they are completed.
+breadcrumbs	A set of supplementary navigational links included in many websites, usually placed at the top of the page. Breadcrumbs show the users where the current page lies in the website; the term comes from a fairy tale in which children left a trail of breadcrumbs behind themselves so that they could find their way home.
+breadth first	To go through a nested data structure such as a tree by exploring all of one level, then going on to the next level and so on, or to explore a problem by examining the first step of each possible solution, and then trying the next step for each.
+browser cache	A place where web browsers keep copies of previously retrieved files (web pages, data files) in order to save time when they're requested again. Sometimes, issues may arise if there is a newer version of the file online, but the browser doesn't notice it.
+bug	A missing or undesirable feature of a piece of software; the digital equivalent of a weed.
+bug report	A collection of files, logs, or related information that describes either an unexpected output of some code or program, or an unexpected error or warning. This information is used to help find and fix a bug in the program or code.
+bug tracker	A system that tracks and manages reported bugs for a software program, to make it easier to address and fix the bugs.
+build manager	A program that keeps track of how files depend on one another and runs commands to update any files that are out-of-date. Build managers were invented to compile only those parts of programs that had changed, but are now often used to implement workflows in which plots depend on results files, which in turn depend on raw data files or configuration files.
+build recipe	The part of a build rule that describes how to update something that has fallen out-of-date.
+build rule	A specification for a build manager that describes how some files depend on others and what to do if those files are out-of-date.
+build target	The file(s) that a build rule will update if they are out-of-date compared to their dependencies.
+byte	A unit of digital information that typically consists of eight binary digits, or bits.
+byte code	A set of instructions designed to be executed efficiently by an interpreter.
+cache	Something that stores copies of data so that future requests for it can be satisfied more quickly. The CPU in a computer uses a hardware cache to hold recently-accessed values; many programs rely on a software cache to reduce network traffic and latency. Figuring out when something in a cache is out-of-date and should be replaced is one of the two hard problems in computer science.
+caching	To save a copy of some data in a local cache to make future access faster.
+call stack	A data structure that stores information about the subroutines currently being executed.
+callback function	A function A that is passed to another function B so that B can call it at some later point. Callbacks can be used synchronously, as in generic functions like `map` that invoke a callback function once for each element in a collection, or asynchronously, as in a client that runs a callback when a response is received in answer to a request.
+callback hell	Nested callbacks indented so deep the closing brackets cascade like a staircase to nowhere. The actual logic hides somewhere around indent level five.
+camel case	A style of writing code that involves naming variables and objects with no space, underscore (`_`), dot (`.`), or dash (`-`) characters, with each word being capitalized. Examples include `CalculateSum` and `findPattern`.
+cascading style sheets	A way to control the appearance of HTML. CSS is typically used to specify fonts, colors, and layout.
+catch (an exception)	To accept responsibility for handling an error or other unexpected event. R prefers "handling a condition" to "catching an exception." Python, on the other hand, encourages raising and catching exceptions, and in some situations, requires it.
+causation	A relationship between distinct events, where it is asserted that one event is responsible for producing or affecting change in the other.
+cc-0	A Creative Commons license waiver that imposes no restrictions whatsover, thereby putting a work in the public domain.
+cc-by	The Creative Commons - Attribution license, which requires people to give credit to the author of a work, but imposes no other restrictions.
+central processing unit	The principal hardware of any digital computer. The CPU constitutes the essential electronic circuitry that interprets and executes instructions from the software or other hardware. Also called a central processor, main processor, or microprocessor.
+centroid	The center or anchor of a group created by a clustering algorithm.
+character encoding	A specification of how characters are stored as bytes. The most commonly-used encoding today is UTF-8.
+chi-square test	A statistical method for estimating whether two variables in a cross tabulation are correlated. A chi-square distribution varies from a normal distribution based on the degrees of freedom used to calculate it.
+child (in a tree)	A node in a tree that is below another node (call the parent).
+child class	In object-oriented programming, a class derived from another class (called the parent class).
+class	In object-oriented programming, a structure that combines data and operations (called methods). The program then uses a constructor to create an object with those properties and methods. Programmers generally put generic or reusable behavior in parent classes, and more detailed or specific behavior in child classes.
+class imbalance	Class imbalance refers to the problem in machine learning where there is an unequal distribution of classes in the dataset.
+classification	The process of identifying which predefined category an item belongs to, such as deciding whether an email message is spam or not. Many machine learning algorithms perform classification.
+clever code	Code that works but makes you feel stupid for not understanding it. Reinvented built-ins, abused language quirks, logic compacted into one-liners that nobody else can maintain.
+client	Typically, a program such as a web browser that gets data from a server and displays it to, or interacts with, users. The term is used more generally to refer to any program A that makes requests of another program B. A single program can be both a client and a server.
+closure	A set of variables defined in the same scope whose existence has been preserved after that scope has ended.
+clustering	The process of dividing data into groups when the groups themselves are not known in advance.
+code coverage (in testing)	How much of a library or program is executed when tests run. This is normally reported as a percentage of lines of code: for example, if 40 out of 50 lines in a file are run during testing, those tests have 80% code coverage.
+code review	To check a program or a change to a program by inspecting its source code.
+coercion	See type coercion.
+cognitive load	The amount of working memory needed to accomplish a set of simultaneous tasks.
+collection	An abstract data type that groups an arbitrary, variable number of data items (possibly zero), to allow processing them in a uniform fashion. Common examples of collections are lists, variable-size arrays and sets. Fixed-size arrays are usually not considered collections.
+combinatorial explosion	Dozens of methods that do almost the same thing, each differing by one small detail. Add a new feature and the count multiplies again. Good luck remembering which variant handles which edge case.
+comma-separated values	A text format for tabular data in which each record is one row and fields are separated by commas. There are many minor variations, particularly around quoting of strings.
+command	An instruction telling a computer program to perform a specific task.
+command history	An automatically created list of previously executed commands. Most read-eval-print loops (REPLs), including the Unix shell, record history and allow users to play back recent commands.
+command-line argument	A filename or control flag given to a command-line program when it is run.
+command-line interface	A user interface that relies solely on text for commands and output, typically running in a shell.
+comment	Text written in a script that is not treated as code to be run, but rather as text that describes what the code is doing. These are usually short notes, often beginning with a `#` (in many programming languages).
+commit	As a verb, the act of saving a set of changes to a database or version control repository. As a noun, the changes saved.
+commit message	A comment attached to a commit that explains what was done and why.
+compile	To translate textual source into another form. Programs in compiled languages are translated into machine instructions for a computer to run, and Markdown is usually translated into HTML for display.
+compiled language	Originally, a language such as C or Fortran that is translated into machine instructions for execution. Languages such as Java are also compiled before execution, but into byte code instead of machine instructions, while interpreted languages like Python are compiled to byte code on the fly.
+compiler	An application that translates programs written in some languages into machine instructions or byte code.
+complicated boolean expression	Reading it feels like solving a discrete math problem. The if-statement just checks whether a timer expired, but between the negations and conjunctions, you'd never guess that at a glance.
+complicated regex expression	A regex pattern so dense it needs an online decomposer to parse. Named variables and a builder function would make the same expression self-documenting.
+comprehensive r archive network	A public repository of R packages.
+computational linguistics	The study or application of computational methods for parsing or understanding human languages. Early approaches were algorithmic; most modern approaches are statistical.
+computational notebook	A combination of a document format that allows users to mix prose and code in a single file, and an application that executes that code interactively and in place. The Jupyter Notebook and R Markdown files are both examples of computational notebooks.
+compute shader	A general purpose shader program for use in parallel processing. Often used for machine learning, simulations, and other fields which benifit from parallel computation.
+concatenate	In general programming, to join two strings or collections together. In terms of data tables (for example, a python pandas DataFrame or R tibble), append/stack two tables by either columns (axis=1) or rows (axis=0) by end-to-end joining of data.
+conda	A package manager and environment management system, particularly popular for Python programs.
+condition	An error or other unexpected event that disrupts the normal flow of control.
+conditional complexity	The if/else chain that grows a new branch with every feature. First it's readable. Then it's manageable. Then it's a 200-line switch statement, and suddenly the polymorphism refactor everyone avoided is the only option left.
+conditional expression	A ternary expression that serves the role of an if/else statement. For example, C and similar languages use the syntax `test : ifTrue ? ifFalse` to mean "choose the value `ifTrue` if `test` is true, or the value `ifFalse` if it is not."
+confidence interval	A range around an estimate that indicates the margin of error, combined with a probability that the actual value falls in that range.
+configuration file	A file that specifies the parameters and initial settings of a software program. Configuration, or config, files are often used for information subject to changes, such as environment-specific settings.
+confusion matrix	A NxN matrix that describes the performance of a classification model, where N is the number of classes or outputs. Each row in the matrix represents the instances of actual classes and each column represents the predicted classes. For a binary classification model the confusion matrix gives the True Positives (TP), False Negatives (FN), False Positives (FP) and True Negatives (TN) in the 1st, 2nd, 3rd and 4th quadrants, respectively. The table can be used to calculate Accuracy, Sensitivity and Specificity amongst other measures of the model.
+console	A computer terminal where a user may enter commands, or a program, such as a shell that simulates such a device.
+constant	A constant in programming is a name associated with a value that never changes during the execution of a program. You can only access the constant’s value but not change it over time, as opposed to a variable
+constructor	A function that creates an object of a particular class. In the S3 object system, constructors are a convention rather than a requirement.
+context window	The maximum number of tokens an LLM can process in a single interaction, including both input and output.
+continuation prompt	A prompt that indicates that the command currently being typed is not yet complete, and will not be run until it is.
+continuous integration	A software development practice in which changes are automatically merged as soon as they become available.
+continuous random variable	A variable whose value can be any real value, either within a range, or unbounded, such as age or distance.
+control flow	The logical flow through a program's code. May be linear (i.e. just a series of commands), but may also include loops or conditional execution (i.e. if a condition is met).
+convolutional neural network (cnn)	A class of artificial neural network that is primarily used to analyze images. A CNN has layers that perform convolutions, where a filter is shifted over the data, instead of the general matrix multiplications that we see in fully connected neural network layers.
+copy-on-modify	The practice of creating a new copy of aliased data whenever there is an attempt to modify it so that each reference will believe theirs is the only one.
+correlation	A measure of how well two variables agree with each other. Correlation is usually measured by calculating a correlation coefficient, and does not imply causation.
+correlation coefficient	A measure of how well-correlated two variables are. If the correlation coefficient between X and Y is 1.0, knowing X allows perfect prediction of Y. If the correlation coefficient is 0.0, knowing X tells you nothing about Y, and if it is -1.0, then X predicts Y, but a change in X causes an opposite change in Y.
+covariance	How well two variables agree with each other. The correlation coefficient is a normalized measure of covariance.
+creative commons license	A set of licenses that can be applied to published work. Each license is formed by concatenating one or more of `-BY` (Attribution): users must cite the original source; `-SA` (ShareAlike): users must share their own work under a similar license; `-NC` (NonCommercial): work may not be used for commercial purposes without the creator's permission; `-ND` (NoDerivatives): no derivative works (e.g., translations) can be created without the creator's permission. Thus, `CC-BY-NC` means "users must give attribution and cannot use commercially without permission." The term `CC-0` (zero, not letter 'O') is sometimes used to mean "no restrictions," i.e., the work is in the public domain.
+cross join	A join that produces all possible combinations of rows from two tables.
+cross-validation	A technique that divides data into training data and test data. The training data and correct answers are used to find parameters, and the algorithm's effectiveness is then measured by examining the answers it gives on the test data.
+cryptographic hash function	A hash function that produces a random value for any input.
+current working directory	The folder or directory location in which the program operates. Any action taken by the program occurs relative to this directory.
+data clump	red, green, and blue passed separately to every function that needs a color. The same variables travel together everywhere, never packaged into the object they're quietly begging to become.
+data collison	Occurs when two or more devices or nodes try to transmit signals at the same time on the same network. Similarly a data collision can also occur when hashing if two distinct pieces of data have the same hash value.
+data engineer	Someone who sets up and runs data analyses. Data engineers are often responsible for installing software, managing databases, generating reports, and archiving results.
+data engineering	The pragmatic steps taken to make data usable, such as writing short programs to put mailing addresses in a uniform format.
+data frame	A two-dimensional data structure for storing tabular data in memory. Rows represent records and columns represent variables.
+data masking	Altering data in a dataset to anonymize or otherwise remove identifying information. For example, real names might be swapped out with fictional names to provide name-based data without referencing actual people.
+data mining	The use of computers to search for patterns in large datasets. The term data science is now more commonly used.
+data package	A software package that, mostly, contains only data. Is used to make it simpler to disseminate data for easier use.
+data science	The combination of statistics, programming, and hard work used to extract knowledge from data.
+data scientist	Someone who uses programming skills to solve statistical problems.
+data structure	A format for the organisation, management, and efficient access of data. Typically it will characterise a set of data values and their representation (or encoding), the relationships between values, and ways to access or manipulate those data, such as reading, altering, or writing.
+data visualization	The creation of charts, maps, graphs, or infographics to translate datasets into something visual. Sometimes called "dataviz" or "data viz."
+data wrangling	A colloquial name for small-scale data engineering.
+dead code	You read past it wondering if it's safe to delete. Unreachable branches, commented-out blocks, functions that last ran in 2019. They cost nothing at runtime but tax every developer who encounters them.
+debug	In a computer environment 'debug' refers to the process of finding and resolving errors (also known as 'bugs') within computer programs or systems.
+decision tree	A tree whose nodes are questions and whose branches eventually lead to a decision or classification.
+decorator pattern	A design pattern in which a function adds additional features to another function or a class after its initial definition. Decorators are a feature of Python and can be implemented in most other languages as well.
+decrement	A unary operation that decreases the value of a variable, usually by 1.
+deep learning	A family of neural network algorithms that use multiple layers to extract features at successively higher levels.
+default target	The build target that is used when none is specified explicitly.
+default value	A value assigned to a function parameter when the caller does not specify a value. Default values are specified as part of the function's definition.
+defensive programming	A set of programming practices that assumes mistakes will happen and either reports or corrects them, such as inserting assertions to report situations that are not ever supposed to occur.
+degrees of freedom	In statistics, the degrees of freedom (often "DF") is a measure of how much independent information, in the form data and calculations, has been combined to produce a given statistical parameter. Put another way, the DF is the number of values that are free to vary in the calculation of a given statistical parameter. For a statistic calculated from data which are indepdendent (i.e., the values are uncorrelated), the DF can be generally estimated as the sample size minus the number of individual parameters calculated to obtain the final statistic.
+delegate pattern	A design pattern in which an object does most of the work to complete a task, but uses one of a set of other objects to complete some specific parts of the work. Delegation is often used instead of inheritance to customize objects' behavior.
+dependency	See prerequisite.
+dependent variable	A variable whose value depends on the value of another variable, which is called the independent variable.
+depth first	To go through a nested data structure such as a tree by going as far as possible down one path, then as far as possible down the next and so on, or to explore a problem by following one solution to its conclusion and then trying the next.
+design pattern	A recurring pattern in software design that is specific enough to be worth naming, but not so specific that a single best implementation can be provided by a library. For example, data frames and database tables are instances of the same pattern.
+destructuring assignment	Unpacking values from data structures and assigning them to multiple variables in a single statement.
+dictionary	A data structure that allows items to be looked up by value, sometimes called an associative array. Dictionaries are often implemented using hash tables.
+digital object identifier	A unique persistent identifier for a book, paper, report, dataset, software release, or other digital artefact.
+dimension reduction	Reducing the number of dimensions in a dataset, typically by finding the dimensions along which it varies most.
+directory	An item within a filesystem that can contain files and other directories. Also known as a folder.
+discrete random variable	A variable whose value can take on only one of a fixed set of values, such as true or false.
+distro	See software distribution.
+divergent change	A class that changes for database reasons on Monday, calculation reasons on Wednesday, and display reasons on Friday. Same file, different reasons, and the merge conflicts pile up every sprint.
+docstring	Short for "documentation string," a string appearing at the start of a module, class, or function in Python that automatically becomes that object's documentation.
+document object model	A standard, in-memory representation of HTML and XML. Each element is stored as a node in a tree with a set of named attributes; contained elements are child nodes. Modern programming languages provide many libraries for searching and modifying the DOM.
+documentation generator	A software tool that extracts specially formatted comments or dostrings from code and generates cross-referenced developer documentation.
+dom selector	A pattern that identifies nodes in a DOM tree. For example, `#alpha` matches nodes whose `id` attribute is "alpha", while `.beta` matches nodes whose `class` attribute is "beta".
+domain knowledge	Understanding of a specific problem domain, e.g., knowledge of transportation logistics.
+don't repeat yourself principle	The Don't Repeat Yourself (DRY) principle states that — Every piece of knowledge must have a single, unambiguous, authoritative representation within a system. The term comes from The Pragmatic Programmer, by Andrew Hunt and David Thomas. Programs that follow the DRY Principle avoid duplication of definitions and logic, so that a change in their behaviour only requires each modification to be made in one part of the code. The goal is to create code that is easier to maintain.
+double	Short for "double-precision floating-point number", meaning a 64-bit numeric value with a fractional part and an exponent.
+double square brackets	An index enclosed in `[[...]]`, used to return a single value of the underlying type.
+down-vote	A vote against something.
+dubious abstraction	A method that orchestrates a business workflow but also opens its own database connection, mixing strategy with plumbing until you can't tell what level of abstraction you're reading.
+duplicated code	The same logic in five places. Change one, miss another, and watch the behavior quietly diverge. According to Fowler, this is the single worst smell in a codebase.
+dynamic loading	To import a module into the memory of a program while it is already running. Most interpreted languages use dynamic loading, and provide tools so that programs can find and load modules dynamically to configure themselves.
+dynamic lookup	To find a function or a property of an object by name while a program is running. For example, instead of getting a specific property of an object using `obj.name`, a program might use `obj[someVariable]`, where `someVariable` could hold `"name"` or some other property name.
+dynamic scoping	To find the value of a variable by looking at what is on the call stack at the moment the lookup is done. Almost all programming languages use lexical_scoping instead, since it is more predictable.
+edge	A connection between two nodes in a graph. An edge may have data associated with it, such as a name or distance.
+electronic mail	Electronic mail is a method for delivering messages between people over a computer network. Messages are sent via an SMTP server and retrieved using either an IMAP or POP server.
+element	A named component in an HTML or XML document. Elements are usually written `<name>`...`</name>`, where "..." represents the content of the element. Elements often have attributes.
+emacs (editor)	A text editor that is popular among Unix programmers.
+embeddings	Dense vector representations of text that capture semantic meaning.
+empty element	An element of an HTML or XML document that has no children. Empty elements can always be written as `<name></name>`, but may also be written using the shorthand notation `<name/>` (with a slash after the name inside the angle brackets).
+empty vector	A vector that contains no elements. Empty vectors have a type such as logical or character, and are *not* the same as null.
+encoding	The process of putting a sequence of characters such as letters, numbers, punctuation, and certain symbols, into a specialized format for efficient transmission or storage.
+environment	A structure that stores a set of variable names and the values they refer to.
+epoch (deep learning)	In deep learning, an epoch is one cycle in the deep learning process where all the training data has been fed to the algorithm once. Training a deep neural networks usually consists of multiple epochs.
+error (in a test)	Signalled when something goes wrong in a unit test itself rather than in the system being tested. In this case, we do not know anything about the correctness of the system.
+error handling	What a program does to detect and correct for errors. Examples include printing a message and using a default configuration if the user-specified configuration cannot be found.
+escape sequence	A sequence of characters added as a prefix to some other character that would otherwise have a special meaning, temporarily altering the meaning of the character. For example, the escape sequence `\"` is used to represent a double-quote character inside a double-quoted string.
+evaluation	The process of taking an expression such as `1+2*3/4` and turning it into a single, irreducible value.
+exception	An object that stores information about an error or other unusual event in a program. One part of a program will create and raise an exception to signal that something unexpected has happened; another part will catch it.
+exception handler	A piece of code that deals with an exception after it is caught, e.g., by writing a log message, retrying the operation that failed, or performing an alternate operation.
+expected result (of test)	The value that a piece of software is supposed to produce when tested in a certain way, or the state in which it is supposed to leave the system.
+exploratory programming	A software development methodology in which requirements emerge or change as the software is being written, often in response to results from early runs.
+export	To make something visible outside a module so that other parts of a program can import it. In most languages a module must export things explicitly in an attempt to avoid name collision.
+fail (a test)	A test fails if the actual result does not match the expected result.
+fallacious comment	A comment that was true once but now lies. The code changed, the comment didn't, and there's no linter that catches the drift.
+fallacious method name	getItems() returns a single item. isValid() returns a string. setValue() quietly returns a value too. Method names that betray every convention programmers have built over decades.
+false	The logical (Boolean) state opposite of "true". Used in logic and programming to represent a binary state of something.
+false negative	Data points which are actually true but incorrectly predicted as false.
+false positive	Data points which are actually false but incorrectly predicted as true.
+falsy	Evaluating to false in a Boolean context.
+fasta	A file format for storing amino acid or genomic sequence information. Information for each sequence is broken up into a block of 2 lines. Line 1 contains information about the sequence and begins with a greater than symbol, ‘>’. Line 2 contains the actual amino acid or genomic sequence using single-letter codes.
+fastq	A file format for storing genomic sequence information and the corresponding quality scores. Information for each sequence is broken up into a block of four lines. Line 1 contains information about the sequence and begins with ‘@’. Line 2 contains the actual genomic sequence using single-letter codes to represent nucleotides. Line 3 is a separator that begins with a `+`. Line 4 has a string of quality characters for each base in the genomic sequence.
+fate over action	A class that holds data but owns none of the behavior operating on it. External code reaches in, pulls values out, and makes decisions the object never learned to make for itself.
+feature	An individual characteristic or property of a phenomenon that is measurable (e.g. length, height, number of petals) and used as the input to a model. Finding or selecting features that are highly independent and discriminatory is a fundamental part of classification.
+feature (in data)	A variable or observable in a dataset.
+feature (in software)	Some aspect of software that was deliberately designed or built. A bug is an undesired feature.
+feature branch	A branch within a Git repository containing commits dedicated to a specific feature, e.g., a bug fix or a new function. This branch can be merged into another branch.
+feature engineering	The process of choosing the variables to be used as inputs to a model. Choosing good features often depends on domain knowledge.
+feature envy	A method that touches another class's fields more than its own. It was written in the wrong place and belongs closer to the data it can't stop reaching for.
+feature request	A request to the maintainers or developers of a software program to add a specific functionality (a feature) to that program.
+field	A component of a record containing a single value. Every record in a tibble or database table has the same fields.
+filename extension	The last part of a filename, usually following the '.' symbol. Filename extensions are commonly used to indicate the type of content in the file, though there is no guarantee that this is correct.
+filename stem	The part of the filename that does not include the extension. For example, the stem of `glossary.yml` is `glossary`.
+filesystem	The part of the operating system that manages how files are stored and retrieved. Also used to refer to all of those files and directories or the specific way they are stored (as in "the Unix filesystem").
+filter	As a verb, to choose a set of records (i.e., rows of a table) based on the values they contain. As a noun, a command-line program that reads lines of text from files or standard input, performs some operation on them (such as filtering), and writes to a file or stdout.
+fine-tuning	Adapting a pre-trained model to specific tasks or domains using smaller, task-specific datasets.
+fine-tuning (deep learning)	Fine-tuning is an approach to transfer learning in which a pre-trained network is adapted to the specifics of a new dataset.
+fixture	The thing on which a test is run, such as the parameters to the function being tested or the file being processed.
+flag argument	A boolean parameter that forces the caller to write book(marcel, false) — and everyone who reads it to wonder: false what?
+folder	Another term for a directory.
+for loop	A construct in a program that repeats one or more other statements (the loop body) once for each item in a sequence, such as each number in a range or each element of a list.
+fork	A copy of one person's Git repository that lives in another person's GitHub account. Changes to the content of a fork can be submitted to the upstream repository via a pull request.
+fragment shader	The shader stage in the rendering pipeline designated towards calculating colours for each fragment on the screen. For each pixel covered by a primitive, a fragment is generated. All fragments for each pixel will have their colours combined based on depth and opacity after the fragment shader stage is complete.
+frequently asked questions	A curated list of questions commonly asked about a subject, along with answers.
+full identifier (of a commit)	A unique 160-bit identifier for a commit in a Git repository, usually written as a 20-character hexadecimal character string.
+full join	A join that returns all rows and all columns from two tables A and B. Where the keys of A and B match, values are combined; where they do not, missing values from either table are filled with null, NA, or some other missing value signifier.
+fully-qualified name	An unambiguous name of the form `package::thing`, indicating the original source of the object in question.
+function	A code block which gathers a sequence of operations into a whole, preserving it for ongoing use by defining a set of tasks that takes zero or more required and optional arguments as inputs and returns expected outputs (return values), if any. Functions enable repeating these defined tasks with one command, known as a function call.
+function calling / tool use	Capability allowing LLMs to invoke external functions or APIs with structured parameters.
+functional programming	A style of programming in which data is transformed through successive application of functions, rather than by using control structures such as loops. In functional programming, there must be a direct relationship between the input to a function and the output produced by the function, meaning the result should not be affected by the current values of global variables or other parts of the global program state. It also requires that functions do not produce side effects, meaning they do not modify the global program state, or do anything other than computing the return value, such as writing output to a log file, or printing to the console.
+garbage in, garbage out	The idea that messy data as an input will result in messy data as an output.
+generator function	A function whose state is automatically saved when it returns a value so that execution can be restarted from that point the next time it is called. One example of generator functions use is to produce streams of values that can be processed by for loops.
+generic function	A collection of functions with similar purpose, each operating on a different class of data.
+geometric mean	Calculated from a set of n numbers by first computing the product of those numbers, and then computing the n-th root of the result. In contrast to the arithmetic mean, which measures central tendancy in an "additive" way, the geometric mean measures central tendancy in a "multiplicative" way, and hence is often appropriate when estimating an average rates of change or some other multiplicative constant.
+geometry shader	The shader stage in the rendering pipeline designated towards processing primitives. Not to be confused with tessellation shaders, geometry shaders are focused on modifying the shape of primitives to create new results. For example, pixels may be converted into particles using a geometry shader.
+ggplot2	A package in R that implements a layered grammar of graphics for generating plots. It is a popular alternative to plotting with base R and part of the tidyverse.
+git	A version control tool to record and manage changes to a project.
+git branch	A snapshot of a version of a Git repository. Multiple branches can capture multiple versions of the same repository.
+git clone	Copies (and usually downloads) of a Git remote repository on a local computer.
+git conflict	A situation in which incompatible or overlapping changes have been made on different branches that are now being merged.
+git fork	To make a new copy of a Git repository on a server, or the copy that is made.
+git merge	Merging branches in Git incorporates development histories of two branches in one. If changes are made to similar parts of the branches on both branches, a conflict will occur and
+git pull	Downloads and synchronizes changes between a remote repository and a local repository.
+git push	Uploads and synchronizes changes between a local repository and a remote repository.
+git remote	A short name for a remote repository (like a bookmark).
+github	A cloud-based platform built around Git that allows you to save versions of your project online and collaborate with other Git users.
+global data	Any code, anywhere, can read and write these variables. When something breaks, every function in the codebase is a suspect.
+global environment	The environment that holds top-level definitions in a programming language, e.g., those written directly in the interpreter.
+global installation	Installing a package in a location where it can be accessed by all users and projects.
+global variable	A variable defined outside any particular function or package namespace, which is therefore visible to all functions.
+globbing	To specify a set of filenames using a simplified form of regular expressions, such as `*.dat` to mean "all files whose names end in `.dat`". The name is derived from "global".
+gnu operating system	"GNU" is an operating system that is free software. GNU is a recursive acronym for "GNU is Not Unix!". The GNU operating system consists of GNU packages as well as free software realeased by third parties.
+gnu public license	A license that allows people to re-use software as long as they distribute the source of their changes.
+gradient boosting	A machine learning technique that produces an ensemble of weak prediction models (typically decision trees) in a stepwise fashion.
+gradient descent	An optimization algorithm that repeatedly calculates the gradient at the current point takes a small step in the direction in which the gradient is decreasing, and then recalculates the gradient.
+graph	1. A plot or a chart that displays data, or 2. a data structure in which nodes are connected to one another by edges.
+graphical user interface	A user interface that relies on windows, menus, pointers, and other graphical elements, as opposed to a command-line interface or voice-driven interface.
+graphics processing unit	Specialized processor designed to run many instances of a single program in parallel. Orginally designed for use in graphics, but is also used for general computation in the form of compute shaders.
+group	To divide data into subsets according to a set of criteria while leaving records in a single structure.
+handle (condition)	To accept responsibility for handling an error or other unexpected event. R prefers "handling a condition" to "catching an exception". Python, on the other hand, encourages raising and catching exceptions, and in some situations, requires it.
+hardware	Any physical component of a computer system. Hardware can be internal, such as CPU, memory, and graphics cards; or external, such as monitors and keyboards. Hardware operates in conjunction with software to produce a functioning computer system.
+harmonic mean	Calculated from a set of n numbers by first computing the sum of the reciprocals of those numbers, and then dividing n by the resulting sum. Alternatively, it can be computed as the reciprocal of the arithmetic mean of the reciprocal values. Similarly to the geometric mean, the harmonic mean is often used as an alternative measure of central tendancy to the usual arithmetic mean when estimating an average rates of change or some other multiplicative constant. For a set of positive numbers that are not all equal, the min < HM < GM < AM < max where min is the minimum value, max is the maximum value, and HM GM and AM are the harmonic, geometric, and arithmetic means respectively.
+hash function	A function that turns arbitrary data into a bit array, or a key, of a fixed size. Hash functions are used to determine where data should be stored in a hash table.
+hash table	A data structure that calculates a pseudo-random key (location) for each value passed to it and stores the value in that location. Hash tables enable fast lookup for arbitrary data. This occurs at the cost of extra memory because hash tables must always be larger than the amount of information they need to store, to avoid the possibility of data collisions, when the hash function returns the same key for two different values.
+header row	If present, the first row of a data file that defines column names (but not their data types or units).
+heterogeneous	Containing mixed data types. For example, in Python and R, a list can contain a mix of numbers, character strings, and values of other types.
+hexadecimal	A base-16 number system. Hexadecimal values are usually written using the digits 0-9 and the characters A-F in either upper or lower case. Hexadecimal is often used to represent binary values, since two hexadecimal digits use exactly one byte of storage.
+hidden dependencies	The class works perfectly in the developer's environment and crashes in production. You read the stack trace, search every constructor, and find nothing. The dependency was silently resolved from the environment.
+hidden layer (deep learning)	A hidden layer in a neural network refers to the layers of neurons that are not directly connected to input or output. The layers are "hidden" because you do not directly observe their input and output values.
+high performance computing	When computing power is drawn from multiple powerful processors that work together in parallel, rather than from a single desktop computer, laptop, or work station. This significantly speeds up analysis and reduces computing time, which allows people to work with big data.
+higher-order function	A function that operates on other functions. For example, the higher-order function `map` executes a given function once on each value in a list. Higher-order functions are heavily used in functional programming.
+hippocratic license	An ethical software license that allows free use for any purpose that does not contravene the Universal Declaration of Human Rights.
+histogram	A graphical representation of the distribution of a set of numeric data, usually a vertical bar graph.
+hitchhiker	Someone who is part of a project but does not actually do any work on it.
+home directory	A directory that contains a user's files. Each user on a multi-user computer will have their own home directory; a personal computer will often only have one home directory.
+homogeneous	Containing a single data type. For example, a vector must be homogeneous: its values must all be numeric, logical, etc.
+http header	A key-value pair at the top of an HTTP request or response that carries additional information such as the user's preferred language or the length of the data being transferred.
+http request	A message sent from a client to a server using the HTTP protocol asking for data. A request usually asks for a web page, image, or other data.
+http response	A reply sent from a server to a client using the HTTP protocol in response to a request. The response usually contains a web page, image, or data.
+humaneval	Coding benchmark measuring ability to generate functionally correct Python code from docstrings.
+hypertext markup language	The standard markup language used for web pages. HTML is represented in memory using DOM (Document Object Model).
+hypertext transfer protocol	The standard protocol for data transfer on the World-Wide Web. HTTP defines the format of requests and responses, the meanings of standard error codes, and other features.
+icon	In computing, an icon is a graphic symbol that is displayed on a computer screen to help a user navigate the computer system.
+immutable type	Immutable is when no change is possible over time. An object of this type can not be changed and its state can not be modified after it is created.
+imperative loops	for(i=0; i<len; i++) — the ceremony of manually tracking indexes, accumulating results, and handling off-by-one errors, when a map, filter, or built-in says the same thing in one line.
+import	To bring things from a module into a program for use. In most languages a program can only import things that the module explicitly exports.
+impostor syndrome	The false belief that one's successes are a result of accident or luck rather than ability.
+in-place operator	An operator that updates one of its operands. For example, the expression `x += 2` uses the in-place operator `+=` to add 2 to the current value of `x` and assign the result back to `x`.
+inappropriate static	Impossible to override. Painful to mock. Silently coupling everything that calls them. Static methods are convenient right up until the behavior needs to vary: then they're a dead end.
+incomplete library class	A third-party library that does 95% of what you need. The missing 5% means building workarounds that duplicate effort, drift from the original, and never feel like first-class code.
+inconsistent names	The mental shortcuts that let developers navigate by pattern break when one class calls it store(), another says add(), and a third insists on put(). Same operation. Three names. Zero muscle memory.
+inconsistent style	Mixed formatting, flipped parameter orders, and clashing conventions in the same codebase. The code works, but the inconsistency saps trust. If they couldn't agree on style, what else didn't they agree on?
+increment	A unary operation that increases the value of a variable, usually by 1.
+indecent exposure	Everything's public. Nothing's hidden. Other modules couple to implementation details they were never meant to see, and now you can't change a private algorithm without breaking six callers who shouldn't have known it existed.
+independent variable	The factor that you purposely change or control in order to see what effect it has on the dependent variable.
+index	Each of the elements of an array. Indexes represent the position by numerical representation.
+infinite loop	A loop where the exit condition is never met, so the loop continues to repeat itself. Often a programming error.
+inner join	A join that returns the combination of rows from two tables, A and B, whose keys exist in both tables.
+insider trading	Two classes exchanging private implementation details they shouldn't have access to — the kind of under-the-table knowledge sharing that makes either one impossible to change without breaking the other.
+instance	An object of a particular class.
+integrated development environment	An application that helps programmers develop software. IDEs typically have a built-in editor, a console to execute code immediately, and browsers for exploring data structures in memory and files on disk.
+integration test	A test that checks whether the parts of a system work properly when put together.
+interface	A ubiquitously used phrase in computing that describes a point of contact. This could be a user interface (e.g. graphical user interface or command line), the interface of an object with the rest of the code or how a program can interact with web services through an API.
+internet message access protocol	A standard internet protocol used by email clients to retrieve messages from an email server. Messages are left on the server so that they can be accessed from multiple email clients.
+interpreted language	A high-level language that is not executed directly by the computer, but instead is run by an interpreter that translates program instructions into machine commands on the fly.
+interpreter	A program whose job it is to run programs written in a high-level interpreted language. Interpreters can run interactively, but may also execute commands saved in a file.
+invariant	Something that must be true at all times inside of a program or during the lifecycle of an object. Invariants are often expressed using assertions. If an invariant expression is not true, this is indicative of a problem, and may result in failure or early termination of the program.
+ipython	Short for "Interactive Python", it is a console designed to assist interactive and exploratory programming with features such as coloured text, tab-completion, filesystem navigation, quick access to documentation and shell commands.
+iso date format	An international for formatting dates. While the full standard is complex, the most common form is `YYYY-MM-DD`, i.e., a four-digit year, a two-digit month, and a two-digit day, separated by hyphens.
+issue	A bug report, feature request, or other to-do item associated with a project. Also called a ticket.
+issue tracking system	Similar to a bug tracking system in that it tracks issues made to a repository, usually in the form of feature requests, bug reports, or some other to-do item.
+iterator pattern	A design pattern in which a temporary object or generator function produces each value from a collection in turn for processing. This pattern hides the differences between different kinds of data structures so that everything can be processed using loops.
+java	Java is a high-level, cross-platform, object-oriented and general-purpose programming language. Programs written in Java will run on any platform that supports the Java software platform without having to be recompiled. This feature gave rise to the slogan "Write Once Run Anywhere". Java syntax is similar to that of C and C++.
+javascript object notation	A way to represent data by combining basic values like numbers and character strings in lists and key/value structures. The acronym stands for "JavaScript Object Notation"; unlike better-defined standards like XML, it is unencumbered by a syntax for comments or ways to define a schema.
+join	One of several operations that combine values from two tables.
+jupyter	Project Jupyter is a non-profit, open-source project that was born out of the IPython Project in 2014 as IPython evolved to support interactive data science and scientific computing in many different programming languages.
+jupyter notebook	An open-source, web-based computational notebook that allows the user to write and share live code, equations, visualisations, and narrative text.
+jupyterlab	A next-generation interface to Jupyter Notebooks. JupyterLab is open-source, web-based and has a multiple-document interface which supports working with multiple notebooks and Markdown files in a single browser tab. JupyterLab also supports opening terminal/console windows in the browser.
+k-means clustering	An unsupervised_learning algorithm that forms *k* groups by repeatedly calculating the centroid of the current groups and then reallocating data points to the nearest centroid until the centroids no longer move.
+k-nearest neighbors	A classification algorithm that classifies data points based on their similarity to their *k* nearest neighbours.
+kebab case	A naming convention in which the parts of a name are separated with dashes, as in `first-second-third`.
+key	1. A field or combination of fields whose value(s) uniquely identify a record within a table or dataset. Keys are often used to select specific records and in joins. 2. Part of a key/value pair, used as a unique identifier in a data structure such as a dictionary.
+keyword arguments	Extra (often optional) arguments given to a function as key/value pairs.
+label (an issue)	A short textual tag associated with an issue to categorize it. Common labels include `bug` and `feature request`.
+large class	The God Class. Too many methods, too many fields, too many reasons to exist. Reading it takes a morning, testing it takes a sprint, and changing it is a gamble that affects everything it touches.
+large language model	A neural network trained on massive text datasets to understand and generate human-like text. LLMs use deep learning architectures (typically Transformers) with billions to trillions of parameters to capture patterns in language.
+latent variable	A variable that is not observed directly but instead is inferred from the states or values of other variables.
+latex	A typesetting system for document preparation that uses a specialized markup language to define a document structure (e.g., headings), stylise text, insert mathematical equations, and manage citations and cross-references. LaTeX is widely used in academia, in particular for scientific papers and theses in mathematics, physics, engineering, and computer science.
+lazy element	The meeting that could have been an email — except it's a class. One field, one method that just delegates to another, an abstraction that costs more in complexity than it ever returns in clarity.
+lazy evaluation	Delaying evaluation of an expression until the value is actually needed or, in the case of a conditional expression, only evaluating as much of the expression as is necessary. For instance, the second half of `A and B` will only be evaluated if A is truthy.
+learning rate (deep learning)	In artificial neural networks, the learning rate is a hyper-parameter that determines the pace at which the network adjusts the weights to move down the loss gradient. A large learning rate can speed up training, but the network might overshoot and miss the minimum. A small learning rate will overshoot less, but will be slower. It can also get more easily stuck in local minima.
+left join	A join that combines data from two tables, A and B, where keys in table A match keys in table B, fields are concatenated. Where a key in table A does *not* match a key in table B, columns from table B are filled with null, NA, or some other missing value. Keys from table B that do not match keys from table A are excluded for the result.
+lexical scoping	To look up the value associated with a name according to the textual structure of a program. Most programming languages use lexical scoping instead of dynamic scoping because the latter is less predictable.
+library	A reusable software package, also often called a module.
+license	A legal document describing how something can be used, and by whom.
+lifecycle	The steps that something is allowed or required to go through. The lifecycle of an object runs from its construction through the operations it can or must perform before it is destroyed; the lifecycle of an issue may be: "created", "assigned", "in progress", "ready for review", and "completed".
+lift	How well a model predicts or classifies things, measured as the ratio of the response in the segment identified to the response in the population as a whole. A lift of 1 means the model does no better than chance; higher lift means the model is doing better.
+line comment	A comment in a program that spans part of a single line, as opposed to a block comment that may span multiple lines.
+linear regression	A method for finding the best straight-line fit between two datasets, typically by minimizing the squares of the distances between the points and a regression line.
+linter	A program that checks for common problems in software, such as violations of indentation rules or variable naming conventions. The name comes from the first tool of its kind, called `lint`.
+lisp	A family of programming languages that represent programs and data as nested lists. Many other programming languages have borrowed ideas from Lisp.
+list	A vector that can contain values of many different (heterogeneous) types.
+list comprehension	In Python, an expression that creates a new list in place. For example, `[2*x for x in values]` creates a new list whose items are the doubles of those in `values`.
+literate programming	A programming paradigm that mixes prose and code.
+local installation	Placing a package inside a particular project so that it is only accessible within that project.
+local variable	A variable defined inside a function which is only visible within that function.
+log	A record of a program's execution containing messages written via a logging framework for later inspection.
+log message	A single entry in a log of a program's execution. Log messages are usually highly structured so that data (such as the time or the severity) can be recovered later.
+logging framework	A software library that manages internal reporting for programs.
+logging level	A setting that controls how much information is generated by a logging framework. Typical logging levels include `DEBUG`, `WARNING`, and `ERROR`.
+logical indexing	To index a vector or other structure with a vector of Booleans, keeping only the values that correspond to true values. Also referred to as masking.
+logistic regression	A method for fitting a model to some data that uses logistic (S-shaped) curves instead of straight lines.
+long identifier (of commit)	See full identifier.
+long method	A method so long you scroll past the beginning before reaching the end. Every change requires re-reading the whole thing, every piece of logic is trapped inside, and the side effects could be hiding three screens away.
+long option	A full-word identifier for a command-line argument. While most common flags are a single letter preceded by a dash, such as `-v`, long options typically use two dashes and a readable name, such as `--verbose`.
+long parameter list	Five arguments. Six. Seven. At some point the function signature becomes a riddle, the caller needs a cheat sheet, and the method is clearly trying to do more than one thing.
+loop	A structure that repeatedly executes a section of code until a specific exit condition is met.
+loop body	The statement or statements executed by a loop.
+low-rank adaptation	An efficient fine-tuning technique that adds small, trainable rank decomposition matrices to model layers while keeping original weights frozen.
+lsof	UNIX command to see the list of open files being used by processes.
+machine learning	The study or use of algorithms whose performance improves as they are given more data. Machine learning algorithms often use training data to build a model. Their performance is then measured by how well they predict the properties of test data.
+magic number	A bare 86400 in the code — is that seconds in a day, a timeout, or a config limit? Unnamed numbers hide intent, and when the same literal appears in five places, changing one means hunting for the rest.
+magic number	An unnamed numerical constant that appears in a program without explanation.
+make	The original build manager for Unix, still in daily use after more than forty years.
+makefile	A file containing commands for Make, often actually called `Makefile`.
+markdown	A markup language with a simple syntax intended as a replacement for HTML. Markdown is often used for README files, and is the basis for R markdown.
+markov chain	Any model describing a series of events in which the probability of each event depends only on the current state, not on the path taken to reach that state.
+markup language	A set of rules for annotating text to define its meaning or how it should be displayed. The markup is usually not displayed, but instead controls how the underlying text is interpreted or shown. Markdown and HTML are widely-used markup languages for web pages.
+martha's rules	A simple set of rules for making decisions in small groups.
+masking	[TODO] to be defined
+master branch	A dedicated, permanent, central branch which should contain a "ready product". After a new feature is developed on a separate branch to avoid breaking the main code, it can be merged into the master branch.
+maximum likelihood estimation	To choose the parameters for a probability distribution in order to maximize the likelihood of obtaining observed data.
+mean	The average value of a dataset, more properly known as the arithmetic mean to distinguish it from the geometric and harmonic means.
+mean absolute error	The average error of all predicted values compared with actual values.
+mean squared error	The average of the squares of all the errors of all predicted values compared with actual values. Squaring makes larger errors count for more, and transforms negative errors into positive values, making this a more popular measure than mean absolute error.
+median	A value separating the upper and lower halves of a sorted dataset. The median often gives a better idea of what is typical of the dataset than the mean, which can be influenced by a small number of extreme outliers. If the dataset contains an even number of elements, this is the average of the two central elements.
+merge (git)	See Git merge
+message chain	object.getA().getB().getC().getD() — the caller knows the entire relationship chain, and every intermediate link becomes a dependency that breaks when any relationship changes.
+method	An implementation of a generic function that handles objects of a specific class.
+middle man	Half its methods just call the same method on another class. It exists, it delegates, and its author can't explain what it adds. Remove it, and nothing breaks.
+milestone	A target that a project is trying to meet, often represented as a set of issues that all have to be resolved by a certain time.
+mime type	A standard way to identify the contents of files on the internet. The term is an acronym of "multi-purpose Internet mail extension", and MIME types are often identified by filename extensions, such as `.png` for PNG-formatted images.
+minimum spanning tree	A minimum spanning tree is a data structure that describes the unique set of edges that connect all of the nodes in a graph while minimizing the weights of all included edges. The minimum spanning tree may refer to either the algorithm to calculate the structure or the resulting structure itself.
+missing value	A special value such as null or NA used to indicate the absence of data. Missing values can signal that data was not collected or that the data did not exist in the first place (e.g., the middle name of someone who does not have one).
+mit license	A license that allows people to re-use software with no restrictions.
+mixture of experts	An architecture that uses multiple specialized "expert" networks, activating only relevant experts for each input.
+mmlu	Benchmark measuring knowledge across 57 subjects including STEM, humanities, and social sciences.
+mock object	A simplified replacement for part of a program whose behavior is easy to control and predict. Mock objects are used in unit tests to simulate databases, web services, and other complex systems.
+mode	The value, or values, that occurs most frequently in a dataset.
+model	A specification of the mathematical relationship between different variables.
+model serving	Infrastructure and techniques for deploying LLMs in production.
+module	A reusable software package, also often called a library.
+monte carlo method	Any method or algorithm that relies on artificially-injected randomness.
+moving average	The mean of each set of several consecutive values from time series data.
+multi-threaded	Capable of performing several operations simultaneously. Multi-threaded programs are usually more efficient than single-threaded ones, but also harder to understand and debug.
+mutable data	Data that anything can modify at any time. The bug reproduces instantly in production and vanishes in your debugger — by the time you pause execution, something else already changed the value.
+mutable type	An object of this type may be changed and its state can be modified after it is created.
+mutation	Changing data in place, such as modifying an element of an array or adding a record to a database.
+n-gram	A sequence of $N$ items, typically words in natural language. For example, a trigram is a sequence of three words. N-grams are often used as input in computational linguistics.
+n-th root	The n-th root of a positive number x is the number that when multiplied by itself n times produces x. This can commonly be calculated by raising x to the power of the reciprocal of n.
+na	A special value used to represent data that is not available.
+naive bayes classifier	Any classification algorithm based on Bayes' Theorem that assumes every feature being classified is independent of every other feature.
+name collision	The ambiguity that arises when two or more things in a program that have the same name are active at the same time. Most languages use namespaces to prevent such collisions.
+named argument	A function parameter that is given a value by explicitly naming it in a function call.
+namespace	A collection of names in a program that exists in isolation from other namespaces. Each function, object, class, or module in a program typically has its own namespace so that references to "X" in one part of a program do not accidentally refer to something called "X" in another part of the program. Scope is a distinct, but related, concept.
+nano (editor)	A very simple text editor found on most Unix systems.
+natural language processing	See computational linguistics.
+negative selection	To specify the elements of a vector or other data structure that are not desired by negating their indices.
+neural network	One of a large family of algorithms for identifying patterns in data by mimicking the way neurons interact. A neural network consists of one or more layers of nodes, each of which is connected to nodes in the preceding and subsequent layer. If enough of a node's inputs are active, that node activates as well.
+node	An element of a graph that is connected to other nodes by edges. Nodes typically have data associated with them, such as names or weights.
+non-blocking execution	To allow a program to continue running while an operation is in progress. For example, many systems support non-blocking execution for file I/O so that the program can continue doing work while it waits for data to be read from or written to the filesystem (which is typically much slower than the CPU).
+non-parametric (statistics)	A branch of statistical tests which do not assume a known distribution of the population which the samples were taken from (Kruskal-Wallis and Dunn test are examples of non-parametric tests).
+normal distribution	A continuous random distribution with a symmetric bell-curve shape. As datasets get larger, some of their most important statistical properties can be modeled using a normal distribution.
+nosql database	Any database that does not use the relational model. The name comes from the fact that such databases do not use SQL as a query language.
+null	A special value used to represent a missing object. Null is not the same as NA, and neither is it the same as an empty vector.
+null check	Defensive null checks scattered everywhere like a nervous tic — each one a band-aid over a missing Null Object, and each a reminder that Tony Hoare called his invention a billion-dollar mistake.
+null hypothesis	The claim that any patterns seen in data are entirely due to chance. Other claims (e.g., "X causes Y") must be much more likely than the null hypothesis in order to be substantiated.
+nullary expression	An "expression" with no arguments, such as the value 3.
+numpy	An open source Python package that works with arrays, vectors and matrices of dimension N, in a comparable method and with a syntax similar at Matlab software. You can find functions and sophisticated operations, focused in multidimensional arrays, linear algebra, Fourrier transform and generation of random values.
+object	In object-oriented programming, a structure that contains the data for a specific instance of a class. The operations the object is capable of are defined by the class's methods.
+object-oriented programming	A style of programming in which functions and data are bound together in objects that only interact with each other through well-defined interfaces.
+objective function	A function of one or more variables used to measure or compare the goodness of different solutions in an optimization problem.
+obscured intent	You stare at the function for five minutes before realizing it calculates overtime pay. Between the single-letter variables, the magic numbers, and the missing whitespace, the intent is buried under layers of accidental obfuscation.
+observation	A value or property of a specific member of a population.
+oddball solution	Same problem, two solutions, different files. One uses an adapter, the other rolls its own socket logic, and you can't tell which approach is the correct one. Or if either is.
+off-by-one error	A common error in programming in which the program refers to element `i` of a structure when it should refer to element `i-1` or `i+1`, or processes `N` elements when it should process `N-1` or `N+1`.
+open license	A license that permits general re-use, such as the MIT License or GPL for software and CC-BY or CC-0 for data, prose, or other creative outputs.
+open science	A generic term for making scientific software, data, and publications generally available.
+openrefine	A standalone, open source desktop application for data cleanup and transformations, also know as data wrangling.
+operating system	A program that provides a standard interface to whatever hardware it is running on. Theoretically, any program that only interacts with the operating system should run on any computer that operating system runs on.
+optional_parameter	A parameter that does not have to be given a value when a function is called. Most programming languages require programmers to define default values for optional parameters, or assign them a special value automatically. Arguments passed to optional parameters will often be specified using keyword arguments.
+orcid	An Open Researcher and Contributor ID that uniquely and persistently identifies an author of scholarly works. ORCIDs are for people what DOIs are for documents.
+orthogonality	The ability to use various features of software in any order or combination. Orthogonal systems tend to be easier to understand, since features can be combined without worrying about unexpected interactions.
+outlier	Extreme values that might be measurement or recording errors, or might actually be rare events. Outliers are sometimes ignored when doing statistics, or handled or visualized separately.
+overfitting	Fitting a model so closely to one dataset that it does not generalize to others.
+p value	The probability of obtaining a result at least as strong as the one observed if the null_hypothesis is true (i.e., if variation is purely due to chance). The lower the p-value, the more likely it is that something other than chance is having an effect.
+package	A collection of code, data, and documentation that can be distributed and re-used. Also referred to in some languages as a library or module.
+package manager	A program that does its best to keep track of the different software installed on a computer and their dependencies on one another.
+pager	A program that displays a few lines of text at a time.
+pandas	An open source Python package that offers fast, flexible, and expressive data structures to make working with structured data, and time series easy and intuitive. It is a powerful tool for data analysis and data manipulation.
+parallel inheritance hierarchies	Add a BasicUser, and you need a BasicFunctions. Add a PremiumUser, and here comes PremiumFunctions. Every subclass in one hierarchy demands a mirror in the other, and the cost of every new feature doubles.
+parameter	A variable specified in a function definition whose value is passed to the function when the function is called. Parameters and arguments are distinct, but related concepts. Parameters are variables and arguments are the values assigned to those variables.
+parametric (statistics)	A branch of statistical tests which assume a known distribution of the population which the samples were taken from (ANOVA and Student’s t-tests are examples of parametric tests).
+parent (in a tree)	A node in a tree that is above another node (call a child). Every node in a tree except the root node has a single parent.
+parent class	In object-oriented programming, the class from which a sub class (called the child class) is derived.
+parent directory	The directory that contains another directory of interest. Going from a directory to its parent, then its parent, and so on eventually leads to the root directory of the filesystem.
+parse	To translate the text of a program or web page into a data structure in memory that the program can then manipulate.
+pass (a test)	A test passes if the actual result matches the expected result.
+patch	A single file containing a set of changes to a set of files, separated by markers that indicate where each individual change should be applied.
+path (in filesystem)	A string that specifies a location in a filesystem. In Unix, the directories in a path are joined using `/`.
+pattern rule	A generic build rule that describes how to update any file whose name matches a pattern. Pattern rules often use automatic variables to represent the actual filenames.
+peanuts	An American comic strip by Charles M. Schulz which has inspired the names of R versions.
+perceptron	The simplest kind of [neural network])(#neural_network), which approximates a single neuron with _N_ binary inputs by computing a weighted sum of its inputs and firing if that value is zero or greater.
+permalink	Short for "permanent link", a URL that is intended to last forever.
+perplexity	A measurement of how well a probability model predicts a sample. Lower perplexity indicates better model performance.
+phony target	A build target that does not correspond to an actual file. Phony targets are often used to store commonly used commands in a Makefile.
+pip install packages	The standard package manager for Python. pip enables the download and installation of Python packages not included in the standard library.
+pipe (in the unix shell)	The `|` used to make the output of one command the input of the next.
+pipe operator	The `%>%` used to make the output of one function the input of the next.
+pivot table	A technique for summarizing tabular data in which each cell represents the sum, average, or other function of the subset of the original data identified by the cell's row and column heading.
+pointcloud	A set of discrete data points in three-dimensional space.
+poisson distribution	A discrete random distribution that expresses the probability of $N$ events occurring in a fixed time interval if the events occur at a constant rate, independent of the time since the last event.
+positional argument	An argument to a function that gets its value according to its place in the function's definition, as opposed to a named argument that is explicitly matched by name.
+post office protocol	A standard internet protocol used by email clients to retrieve messages from an email server. Messages are generally downloaded and deleted from the server, making it difficult to access messages from multiple email clients. POP3 (version 3) is the version of POP in common use.
+posterior distribution	Probability distribution summarizing the prior distribution and the likelihood function.
+pothole case	A naming style that separates the parts of a name with underscores, as in `first_second_third`.
+pre-training	The initial phase where models learn general language understanding from large unlabeled datasets.
+preamble	A series of commands, either placed in the main document, or kept in a separate document, that are included prior to the \begin{document} command. The preamble defines the type of the document, along with other formatting attributes and parameters. This is also the section of the document where packages are added using the command \usepackage{} to enable additional functionalities, and where custom commands can be defined.
+prerequisite	Something that a build target depends on.
+primitive obsession	A phone number stored as a string. A price stored as a float. Concepts that deserve their own types get crammed into primitives, losing validation, scattering logic, and pretending a bare string is something it's not.
+principal component analysis	An algorithm that find the axis along which data varies most, then the axis that accounts for the largest part of the remaining variation, and so on.
+prior distribution	The probability distribution that is assumed as a starting point when using Bayes' Theorem and used to construct a more accurate posterior_distribution.
+probability distribution	A mathematical description of all possible outcomes of a random event, and the probability of each occurring.
+procedural generation	A method of generating data algorithmically rather than manually. Typically this is done to reduce file sizes, increase the overall amount of content, and/or incorporate randomness at the expense of processing power.
+procedural programming	A style of programming in which functions operate on data that is passed into them. The term is used in contrast to other programming styles, such as object-oriented programming and functional programming.
+process	An operating system's representation of a running program. A process typically has some memory, the identity of the user who is running it, and a set of connections to open files.
+product manager	The person responsible for defining what features a product should have.
+production code	Software that is delivered to an end user. The term is used to distinguish such code from test code, deployment infrastructure, and everything else that programmers write along the way.
+profiling	The process of measuring where run time is spent in the code (e.g. in which function or associated with which line number). Memory profiling looks at the amount of data moved from and to memory.
+project manager	The person responsible for ensuring that a project moves forward.
+prompt	The text printed by an REPL or shell that indicates it is ready to accept another command. The default prompt in the Unix shell is usually `$`, while in Python it is `>>>`, and in R it is `>`.
+prompt engineering	The practice of designing inputs (prompts) to effectively communicate with and guide LLMs toward desired outputs.
+protocol	Any standard specifying how two pieces of software interact. A network protocol such as HTTP defines the messages that clients and servers exchange on the World-Wide Web; object-oriented programs often define protocols for interactions between objects of different classes.
+provenance	A record of where data originally came from and what was done to process it.
+pseudo-random number	A value generated in a repeatable way that resembles the true randomness of the universe well enough to fool observers.
+pseudo-random number generator	A function that can generate pseudo-random numbers.
+pull indexing	Vectorized indexing in which the value at location `i` in the index vector specifies which element of the source vector is being pulled into that location in the result vector, i.e., `result[i] = source[index[i]]`.
+pull request	The request to merge a new feature or correction created on a user's fork of a Git repository into the upstream repository. The developer will be notified of the change, review it, make or suggest changes, and potentially merge it.
+push indexing	Vectorized indexing in which the value at location `i` in the index vector specifies an element of the result vector that gets the corresponding element of the source vector, i.e., `result[index[i]] = source[i]`. Push indexing can easily produce gaps and collisions.
+python	A popular interpreted open-source programming language that relies on indentation to define control structure.
+python package index	The official third-party software repository for Python. Anyone can upload a package to PyPI. PyPI packages may install via executed scripts or pre-compiled, system-specific wheels.
+python software foundation	A non-profit organization that oversees and promotes the development and use of Python.
+quantile	If a set of sorted values are divided into groups of each size, each group is called a quantile. For example, if there are five groups, each is called a *quintile*; the bottom quintile contains the lowest 20% of the values, while the top quintile contains the highest 20%.
+quantization	Reducing model precision (e.g., from 32-bit to 8-bit or 4-bit) to decrease memory usage and increase inference speed.
+query string	The portion of a URL after the question mark `?` that specifies extra parameters for the HTTP request as name-value pairs.
+quosure	A data structure containing an unevaluated expression and its environment.
+quoting function	A function that is passed expressions rather than the values of those expressions.
+r (programming language)	A popular open-source programming language used primarily for data science.
+r consortium	A group that supports the worldwide community of users, maintainers and developers of R. Its members include leading institutions and companies dedicated to the use, development, and growth of R.
+r foundation	A non-profit founded by the R development core team providing support for R. It is a member of the R Consortium.
+r hub	A free platform available to check an R package on several different platforms in preparation for the CRAN submission process.
+r markdown	A dialect of Markdown that allows authors to mix prose and code (usually written in R) in a single document.
+raise (an exception)	To signal that something unexpected or unusual has happened in a program by creating an exception and handing it to the error-handling system, which then tries to find a point in the program that will catch it.
+random forests	An algorithm used for regression or classification that uses a collection of decision trees, called a forest. Each tree votes for a classification, and the algorithm chooses the classification having the most votes over all the trees in the forest.
+raster image	An image stored as a matrix of pixels.
+reactive programming	A style of programming in which actions are triggered by external events.
+reactive variable	A variable whose value is automatically updated when some other value or values change. Reactive variables are used extensively in Shiny.
+read-eval-print loop	An interactive program that reads a command typed in by a user, executes it, prints the result, and then waits patiently for the next command. REPLs are often used to explore new ideas, or for debugging.
+readme	A plain text file containing important information about a project or software package.
+reciprocal	The reciprocal of a number x is 1 / x, or alternatively x raised to the power of -1.
+record	A group of related values that are stored together. A record may be represented as a tuple or as a row in a table; in the latter case, every record in the table has the same fields.
+recurrent neural network	A class of artificial neural networks where connections between nodes can create a cycle. This allows the network to exhibit behavior that is dynamic over time. This type of network is applicable to tasks like speech and handwriting recognition.
+recursion	Calling a function from within a call to that function, or defining a term using a simpler version of the same term.
+recycle	To re-use values from a shorter vector in order to generate a sequence of the same length as a longer one. In Python NumPy, this is called broadcasting.
+redirection	To send a request for a web page or web service to a different page or service.
+refactoring	Reorganizing software without changing its behavior.
+refused bequest	A Tower that extends Minion but throws NotImplemented on move(). The inheritance contract promises full support; the subclass delivers a runtime exception and an apology.
+regression testing	Testing software to ensure that things which used to work have not been broken.
+regular expression	A pattern for matching text, written as text itself. Regular expressions are sometimes called "regexp", "regex", or "RE", and are powerful tools for working with text.
+reinforcement learning	Any machine learning algorithm which is not given specific goals to meet, but instead is given feedback on whether or not it is making progress.
+reinforcement learning from human feedback	Training approach that uses human preferences to align model outputs with desired behaviors.
+relational database	A database that organizes information into tables, each of which has a fixed set of named fields (shown as columns) and a variable number of records (shown as rows).
+relative error	The absolute value of the difference between the actual and correct value divided by the correct value. For example, if the actual value is 9 and the correct value is 10, the relative error is 0.1. Relative error is usually more useful than absolute error.
+relative path	A path whose destination is interpreted relative to some other location, such as the current working directory. A relative path is the equivalent of giving directions using terms like "straight" and "left".
+relative row number	The index of a row in a displayed portion of a table, which may or may not be the same as the absolute row number within the table.
+remote login	Starting an interactive session on one computer from another computer, e.g., by using SSH.
+remote repository	A repository located on another computer. Tools such as Git are designed to synchronize changes between local and remote repositories in order to share work.
+repository	A place where a version control system stores the files that make up a project and the metadata that describes their history.
+reprex	A reproducible example. When asking questions about coding problems online or filing issues on GitHub, you should always include a reprex so others can reproduce your problem and help. The reprex package can help!
+reproducible example	See reprex.
+reproducible research	The practice of describing and documenting research results in such a way that another researcher or person can re-run the analysis code on the same data to obtain the same result.
+required setup or teardown code	Close the socket when you're done. Check the environment variables before you start. Reset the state after every call. The object could handle all of this internally. Instead, it made it your problem.
+research software engineer	Someone whose primary responsibility is to build the specialized software that other researchers depend on.
+research software engineering	The practice of and methods for building the specialized software that other researchers depend on.
+reserved word	A word (character string) with a distinct meaning for a programming or scripting language. Typically, reserved words cannot be used as names for variables or constants, as this would confuse the compiler or interpreter.
+restructured text	A plaintext markup format used primarily in Python documentation.
+retrieval-augmented generation	Architecture combining LLMs with external knowledge retrieval to ground responses in factual information.
+revision	See commit.
+right join	A join that combines data from two tables, A and B. Where keys in table A match keys in table B, fields are concatenated. Where a key in table B does *not* match a key in table A, columns from table A are filled with null, NA, or some other missing value signifier. Keys from table A that do not exist in table B are dropped.
+roc curve	A ROC curve (Receiver Operating Characteristic curve) is a graph that displays the performance of a binary classifier at different classification thresholds. The curve is obtained by plotting the True Positive Rate (also known as Recall or Sensitivity) along the vertical axis and the False Positive Rate along the horizontal axis.
+root (in a tree)	The node in a tree of which all other nodes are direct or indirect children, or equivalently the only node in the tree that has no parent.
+root directory	The directory that contains everything else, either directly or indirectly. The root directory is written `/` (a bare forward slash).
+root mean squared error	The square root of the mean squared error. Like the standard deviation, it is in the same units as the original data.
+rotating file	A set of files used to store recent information. For example, there might be one file with results for each day of the week, so that results from last Tuesday are overwritten this Tuesday.
+s	A language originally developed in Bell Labs for data analysis, statistical modeling, and graphics. R is a dialect of S.
+s3	A framework for object-oriented programming in R.
+s4	A framework for object-oriented programming in R.
+sandbox	A testing environment that is separate from the production system, or an environment that is only allowed to perform a restricted set of operations for security reasons.
+sanity check	A basic test to see if the outcome of a calculation, script or analysis makes sense or is true. This can be performed by visualisation or by simply inspecting the outcome.
+scalar	A single value of a particular type, such as 1 or "a". Scalars exist in most languages, but do not really exist in R; in R, values that appear to be scalars are actually vectors of unit length.
+schema	A specification of the format of a dataset, including the name, format, and content of each table.
+scope	The portion of a program within which a definition can be seen and used. See closure, global variable, and local variable.
+script	Originally, a program written in a language too user-friendly for "real" programmers to take seriously; the term is now synonymous with program.
+search path	The list of directories that a program searches to find something. For example, the Unix shell uses the search path stored in the `PATH` variable when trying to find a program whose name it has been given.
+secure shell	A protocol and the program that implements it which allows remote access to a server through a secure channel where all information is encrypted.
+seed	A value used to initialize a pseudo-random number generator.
+select	To choose entire columns or rows from a table by name or location.
+selecting on the dependent variable bias	A study that only includes cases where the dependent variable shows the same value, instead of cases with different values in the dependent variable, is a study affected by selecting on the dependent variable bias.
+self join	A join that combines a table with itself.
+semantic versioning	A standard for identifying software releases. In the version identifier `major.minor.patch`, `major` changes when a new version of software is incompatible with old versions, `minor` changes when new features are added to an existing version, and `patch` changes when small bugs are fixed.
+sense vote	A preliminary vote used to determine whether further discussion is needed in a meeting.
+sensitivity	Statistical measure of a classification model which gives the True Positive rate. For example, the proportion of people who have a disease that test positive. Calculated as Sensitivity = TP/(TP+FN).
+sequential data	Any list of data items where the order is an inherent property of the list. Often the next item in the list is dependent on the previous item or items.
+server	Typically, a program such as a database manager or web server that provides data to a client upon request.
+shader	A program designed to run on the [GPU][gpu]. Generally used in graphics to calculate lighting or position vertices in a scene, though can be used for more general programming through the use of [compute shaders][#compute_shader].
+shebang	In Unix, a character sequence such as `#!/usr/bin/python` in the first line of an executable file that tells the shell what program to use to run that file.
+shell	A command-line interface that allows a user to interact with the operating system, such as Bash (for Unix and MacOS) or PowerShell (for Windows).
+shell script	A set of commands for the shell stored in a file so that they can be re-executed. A shell script is effectively a program.
+shell variable	A variable set and used in the Unix shell. Commonly used shell variables include `HOME` (the user's home directory) and `PATH` (their search path).
+shiny	A R package that makes it simple to build web applications to interactively visualise and manipulate data. Often used to make interactive graphs and tables straight from R without having to know HTML, CSS or JavaScript.
+short circuit test	A logical test that only evaluates as many arguments as it needs to. For example, if `A` is false, then most languages never evaluate `B` in the expression `A and B`.
+short identifier (of commit)	The first few characters of a full identifier. Short identifiers are easy for people to type and say aloud, and are usually unique within a repository's recent history.
+short option	A single-letter identifier for a command-line argument. Most common flags are a single letter preceded by a dash, such as `-v`.
+shotgun surgery	One small feature change. A dozen files to edit. You submit the PR, then find two more files you missed.
+side effect	A change made by a function while it runs that is visible after the function finishes, such as modifying a global variable or writing to a file. Side effects make programs harder for people to understand, since the effects are not necessarily clear at the point in the program where the function is called.
+side effects	set_gold(amount) sounds simple enough. Except it also triggers a dancing animation and resets the payday timer. Methods that do more than their name promises hide behavior callers never asked for and debuggers never suspect.
+signal (a condition)	A way of indicating that something has gone wrong in a program, or that some other unexpected event has occurred. R prefers "signalling a condition" to "raising an exception". Python, on the other hand, encourages raising and catching exceptions, and in some situations, requires it.
+simple mail transfer protocol	A standard internet communication protocol for transmitting email.
+simple mail transfer protocol secure	A method for securing SMTP using TLS.
+single square brackets	One set of square brackets `[ ]`, used to select a structure from another structure based on an index value, or range of values, inside the square brackets.
+single-threaded	A model of program execution in which only one thing can happen at a time. Single-threaded execution is easier for people to understand, but less efficient than multi-threaded execution.
+singleton	A set with only one element, or a class with only one instance.
+singleton pattern	A design pattern that creates a singleton object to manage some resource or service, such as a database or cache. In object-oriented programming, the pattern is usually implemented by hiding the constructor of the class in some way so that it can only be called once.
+slug	An abbreviated portion of a page's URL that uniquely identifies it. In the example `https://www.mysite.com/category/post-name`, the slug is `post-name`.
+snake case	See pothole case.
+software distribution	A set of programs that are built, tested, and distributed as a collection so that they can run together.
+source code	Source code or, simply, code, is the origin of executed code (either by means of an interpreter or compiler). It's the primarily human-produced series of commands that make up a program. (Note: Automatic code generators exist for some applications)
+source distribution	A software distribution that includes the source code, typically so that programs can be recompiled on the target computer when they are installed.
+special case	The if-statement that handles "one weird edge case" before the real logic begins. It was a hotfix once. It was never properly refactored. Now every future reader has to hold that branch in their head alongside everything else.
+specificity	Statistical measure of a classification model which gives the True Negative rate. For example, the proportion of people who do not have a disease that test negative. Calculated as Specificity = TN/(TN+FP).
+spectral analysis	From a finite record of a stationary data sequence, estimate how the total power is distributed over frequency. See also "spectrum analysis problem".
+speculative generality	An abstract base class for a hierarchy that never grew. Three extra parameters for a feature you were sure someone would request. Abstractions built for a future that never arrived, cluttering the code with unused generality.
+sprint	A short, intense period of work on a project.
+sql	The language used for writing queries for a relational database. The term is an acronym for Structured Query Language.
+square root	A special case of the n-th root for which n = 2, i.e. the 2-nd root has the special name "square root".
+ssh key	A string of random bits stored in a file that is used to identify a user for SSH. Each SSH key has separate public and private parts; the public part can safely be shared, but if the private part becomes known, the key is compromised.
+stack frame	A section of the call stack that records details of a single call to a specific function.
+stack overflow	A question-and-answer site popular among programmers.
+stale (in build)	To be out-of-date compared to a prerequisite. A build manager's job is to find and update things that are stale.
+standard deviation	How widely values in a dataset differ from the mean. It is calculated as the square root of the variance.
+standard error	A predefined communication channel for a process, typically used for error messages.
+standard input	A predefined communication channel for a process, typically used to read input from the keyboard or from the previous process in a pipe.
+standard normal distribution	A normal distribution with a mean of 0 and a standard deviation of 1. Values from normal distributions with other parameters can easily be rescaled to be on a standard normal distribution.
+standard output	A predefined communication channel for a process, typically used to send output to the screen or to the next process in a pipe.
+status variable	found = False. Then a loop. Then found = True somewhere inside. Then a check after. Mutable flags that complicate control flow when a direct return or a built-in would express the same logic in a single line.
+stratified sampling	Selecting values by dividing the overall population into homogeneous
+stream	A sequential flow of data, such as the bits arriving across a network connection or the bytes read from a file.
+string	A block of text in a program. The term is short for "character string".
+string interpolation	The process of inserting text corresponding to specified values into a string, usually to make output human-readable.
+student's t-distribution	See t-distribution.
+subcommand	A command that is part of a larger family of commands. For example, `git commit` is a subcommand of Git.
+subdirectory	A directory that is below another directory.
+supervised learning	A machine learning algorithm in which a system is taught to classify values given training data containing previously-classified values.
+support vector machine	A supervised learning algorithm that seeks to divide points in a dataset so that the empty space between the resultant sets is as wide as possible.
+synchronous	To happen at the same time. In programming, synchronous operations are ones that have to run simultaneously, or complete at the same time.
+systematic error	See bias.
+t-distribution	A variation on the normal distribution that is adjusted to account for estimating variance from the sample instead of knowing it in advance.
+tab completion	A technique implemented by most REPLs, shells, and programming editors that completes a command, variable name, filename, or other text when the TAB key is pressed.
+table	A set of records in a relational database or observations in a data frame. Tables are usually displayed as rows (each of which represents one record or observation and columns (each of which represents a field or variable.
+tag (in version control)	A readable label attached to a specific commit so that it can easily be referenced later.
+temperature	A hyperparameter controlling randomness in text generation.
+template method pattern	A design pattern in which a parent class defines an overall sequence of operations by calling abstract methods that child classes must then implement. Each child class then behaves in the same general way, but implements the steps differently.
+temporary field	A field that's null eleven months of the year and suddenly matters during one specific calculation. The object carries it everywhere, for one brief moment of relevance.
+ternary expression	An expression that has three parts. Conditional expressions are the only ternary expressions in most languages.
+tessellation shader	The shader stage in the rendering pipeline designated towards subdividing primitives to increase the resolution of a mesh without impacting memory. Not to be confused with geometry shaders which change the overall shape.
+test data	Test data is a portion of a dataset used to evaluate the correctness of a machine learning algorithm after it has been trained. It should always be separated from the training data to ensure that the model is properly tested with unseen data.
+test runner	A program that finds and runs software tests and reports their results.
+test-driven development	A programming practice in which tests are written before a new feature is added or a bug is fixed in order to clarify the goal.
+three vs	The volume, velocity, and variety that distinguish big data.
+throw (exception)	Another term for raising an exception.
+tibble	A modern replacement for R's data frame, which stores tabular data in columns and rows, defined and used in the tidyverse.
+ticket	See issue.
+ticketing system	See issue tracking system.
+tidy data	Tabular data that satisfies three conditions that facilitate initial cleaning, and later exploration and analysis—(1) each variable forms a column, (2) each observation forms a row, and (3) each type of observation unit forms a table.
+tidymodels	A collection of R packages for modeling and statistical analysis designed with a shared philosophy.
+tidyverse	A collection of R packages for operating on tabular data in consistent ways.
+time series	A set of measurements taken at different times, which may or may not be regular intervals.
+timestamp	A digital identifier showing the time at which something was created or accessed. Timestamps should use ISO date format for portability.
+token	The fundamental unit of text processed by language models. Tokens are typically subword pieces that represent common character sequences.
+tolerance	How closely the actual result of a test must agree with the expected result in order for the test to pass. Tolerances are usually expressed in terms of relative error.
+top-k and top-p sampling	Techniques to constrain token selection during generation.
+training data	Training data is a portion of a dataset used to train machine learning algorithm to recognise similar data. It should always be separated from the test data to ensure that the model is properly tested with data it has never seen before.
+tramp data	Data hitchhiking through a chain of methods that never use it. Each function accepts the parameter, ignores it, and passes it along — just so the one at the end of the line can finally read it.
+transfer learning (deep learning)	Transfer learning is a specific form of deep learning that has 2 stages. First, in the pre-training phase, a neural network is trained on a (typically large) generic dataset. Second, the fine-tuning phase, the neural network is adapted to the specifics of a (typically smaller) new dataset. The idea is that the network will capture generic knowledge in the pre-training phase that is relevant for learning in the fine-tuning task.
+transformer	The foundational neural network architecture for modern LLMs, introduced in 2017. Uses self-attention mechanisms to process sequences in parallel.
+transitive dependency	If A depends on B and B depends on C, C is a transitive dependency of A.
+transport layer security	A cryptographic protocol for securing communications over a computer network.
+tree	A graph in which every node except the root has exactly one parent.
+triage	To go through the issues associated with a project and decide which are currently priorities. Triage is one of the key responsibilities of a project manager.
+true	The logical (Boolean) state opposite of "false". Used in logic and programming to represent a binary state of something.
+true negative	Data points which are actually false and correctly predicted as false.
+true positive	Data points which are actually true and correctly predicted as true.
+truthy	Evaluating to true in a Boolean context.
+tuple	A data type that has a fixed number of parts, such as the three color components of a red-green-blue color specification. In "Python", tuples are immutable (their values cannot be reset.)
+two hard problems in computer science	Refers to a quote by Phil Karlton—"There are only two hard problems in computer science—cache invalidation and naming things." Many variations add a third problem (most often "off-by-one errors").
+type coercion	To convert data from one type to another, e.g., from the integer `4` to the equivalent floating point number `4.0`.
+type embedded in name	playerName, dateString, userList: the type is already in the annotation, and now it's in the name too. Redundant today, misleading tomorrow when the type changes but the name doesn't.
+unary expression	An expression with one argument, such as `log 5`.
+uncommunicative name	data, val, m1, temp, get_f(). The code compiles fine. Understanding it requires reverse-engineering every abbreviation the original author thought was self-evident.
+unicode	A standard that defines numeric codes for many thousands of characters and symbols. Unicode does not define how those numbers are stored; that is done by standards like UTF-8.
+uniform resource locator	A unique address on the World-Wide Web. URLs originally identified web pages, but may also represent datasets or database queries, particularly if they include a query string.
+unit test	A test that exercises one function or feature of a piece of software and produces pass, fail, or error.
+unix	UNIX is a family of operating systems developed during 1969 at AT&T Bell Labs. Its main features are simple tools, well-defined functionality and being portable by nature.
+unsupervised learning	Algorithms that cluster data without knowing in advance what the groups will be.
+up-vote	A vote in favor of something.
+update operator	See in-place operator.
+upstream repository	The remote repository from which this repository was derived. Programmers typically save changes in their own repository and then submit a pull request to the upstream repository where changes from other programmers are also collected.
+user interface	Platform for interaction between a user and a machine. The interaction may occur via text (a command line interface), graphics and windows (a graphical user interface), or other methods such as voice-driven interfaces.
+utf-8	A way to store the numeric codes representing Unicode characters in memory that is backward-compatible with the older ASCII standard.
+variable (data)	Some attribute of a population that can be measured or observed.
+variable (program)	A name in a program that has some data associated with it. A variable's value can be changed after definition.
+variable arguments	In a function, the ability to take any number of arguments. R uses `...` to capture the "extra" arguments. Python uses `*args` and `**kwargs` to capture unnamed, and named, "extra" arguments, respectively.
+variance	How widely values in a dataset differ from the mean. It is calculated as the average of the squared differences between the values and the mean. The standard deviation is often used instead, since it has the same units as the data, while the variance is expressed in units squared.
+vector	A sequence of values, usually of homogeneous type. Vectors are the fundamental data structure in R; a scalar is just a vector with exactly one element.
+vectorize	To write code so that operations are performed on entire vectors, rather than element-by-element within loops.
+version control system	A system for managing changes made to software during its development.
+vertex shader	The shader stage in the rendering pipeline designated towards handling operations on individual vertices in a scene. A vertex shader can be used to calculate properties of a single vertex, such as position and per-vertex lighting. Not to be confused with fragment shaders which are used to determine the actual colour being rendered to each pixel of the screen.
+vertical separation	Variables declared at the top of a method, used fifty lines later. By the time you reach the logic that needs them, you've already forgotten what half the variables were for.
+vignette	A long-form guide used to provide details of a package beyond the README.md or function documentation.
+vim (editor)	The default text editor on Unix. Vim is a very powerful text editor, with a steeper learning curve than nano, but that allows the user to execute shell commands and use regular expressions to alter files programmatically.
+virtual environment	In Python, the `virtualenv` package allows you to create virtual, disposable, Python software environments containing only the packages and versions of packages you want to use for a particular project or task, and to install new packages into the environment without affecting other virtual environments, or the system-wide default environment.
+virtual machine	A program that pretends to be a computer. This may seem a bit redundant, but VMs are quick to create and start up, and changes made inside the virtual machine are contained within that VM so we can install new packages or run a completely different operating system without affecting the underlying computer.
+visitor pattern	A design pattern in which the operation to be done is taken to each element of a data structure in turn. It is usually implemented by having a generator "visitor" that knows how to reach the structure's elements, which is given a function or method to call for each in turn, and that carries out the specific operation.
+walk (a tree)	To visit each node in a tree in some order, typically depth-first or breadth-first.
+while loop	A statement in a program that repeats one or more other statements (the loop body) as long as a condition is true.
+whitespace	The space, newline, carriage return, and horizontal and vertical tab characters that take up space but do not create a visible mark. The name comes from their appearance on a printed page in the era of typewriters.
+wildcard	A character expression that can match text, such as the `*` in `*.csv` (which matches any filename whose name ends with `.csv`).
+workflow	A way of describing work to be done as a set of tasks, typically with dependencies on external inputs or the outputs of other tasks, which can later be executed by a program. An example is a Makefile which can be executed by the make Unix command.
+xml	A set of rules for defining HTML-like tags and using them to format documents (typically data). XML was popular in the early 2000s, but its complexity led many programmers to adopt JSON, instead.
+yaml	Short for "YAML Ain't Markup Language", a way to represent nested data using indentation rather than the parentheses and commas of JSON. YAML is often used in configuration files and to define parameters for various flavours of Markdown documents.

@@ -7,24 +7,8 @@
   "version": 1,
 
   "confidential": {
-    "_doc": "机密件：原创算法 + 原创加工词库。仅私仓保留，exe 与公共仓一律剔除。",
-    "_verified": "getPromptHandler.mjs:1355 门 `if (_p1Feat.config.selfDriven === true)` — 5 个 modes/*.json 全声明 selfDriven:false（chat:31/code:28/work:28/smart:32/bot:27），故 P1 管线与词库在产品运行时零加载，剔除对功能影响为 0。aiP1 走 AI 路不依赖 JS 词库。",
-    "exclude": [
-      "src/yonban/core/functions/memory/p1/",
-      "src/yonban/core/functions/memory/p1_coord/",
-      "src/yonban/core/functions/memory/p1_res/",
-      "src/yonban/core/functions/memory/test/",
-      "src/yonban/core/functions/memory/nlp/",
-      "src/yonban/core/functions/memory/*.json",
-      "src/yonban/core/functions/memory/*.txt",
-      "src/yonban/core/functions/memory/*.bin"
-    ],
-    "keep": [
-      "src/yonban/core/functions/memory/nlp/tokenizer.mjs"
-    ],
-    "_keepWhy": "tokenizer.mjs 是 nlp/ 内唯一产品正路依赖，4 个消费者全在 P1 之外：beilu-chat/src/lib/requestBuilder.mjs:27、prompt/preset/main.mjs:61、memory/handler/setDataActions.mjs:174、memory/handler/getPromptHandler.mjs:143。其自身零 import、零资源读取（纯自包含估算），不拖词库。",
-    "_cutSafety": "已穷尽 grep 核验：保留侧（index.mjs/main.mjs/ai/data/handler/storage_mod/tools/nlp:tokenizer）对删除侧零 import；删除侧对 p1/p1_resdir.mjs 的 9 处依赖（nlp 下 wordCoords/wordClassify/techDiverge/queryExpand/escalationLex/enEmotion/bccTokenize/bccDomain/axisLex）全封闭在删除侧内部，同批剔除故无悬空。",
-    "_keptByOwner": "wiki/p1-recall（7 章 × 4 语言，含 ch3-algorithms 实现摘录）经凛倾 2026-07-27 拍板【保留】，不列入本表。"
+    "_doc": "凛倾 2026-08-02 决策变更：P1 算法+词库全部随发布物同步，不再排除。超 100MB 的 .bin 文件由 .gitignore 排除（zip 版本在 p1_res/ 内，首次启动自解压）。",
+    "_history": "原 2026-07-27 决策为剔除全部 P1，0802 因 P1 已成熟（Python 独立服务+资源打包+自解压）改为全量发布。"
   },
 
   "internalDocs": {
@@ -67,8 +51,6 @@
       "tools/",
       "docs/",
       "specs/",
-      "src/public/parts/shells/p1/",
-      "src/public/parts/plugins/beilu-p1-selfdriven/",
       "desktop-eye/user-models/",
       "test_preset_writelock.mjs",
       "_shot2.mjs",
@@ -117,9 +99,9 @@
     ],
     "confidentialLeak": [
       {
-        "id": "p1-algo-body", "severity": "block",
+        "id": "p1-algo-body", "severity": "warn",
         "pattern": "export\\s+(?:async\\s+)?function\\s+(runPipeline|recallV2|axis6|axis47|swowDiverge|spaceVote)\\b",
-        "why": "P1 算法函数体被复制到发布物里。按【实现】匹配而非文件名——文件名提及是代理指标，抓不到真泄漏却大量误报（0727 实测：runPipeline( 命中的是 beilu-ppt 自己的同名函数）。算法文件整体残留由 residue 检查覆盖，与此互补。",
+        "why": "P1 算法函数体（0802 起随发布物公开，降为 warn 仅标记位置）。",
         "allowFileGlobs": ["**/wiki/**"],
         "allowWhy": "wiki/p1-recall 经凛倾 0727 拍板保留"
       },

@@ -1,0 +1,1002 @@
+[
+  {
+    "input": "又加班了好累",
+    "mode": "chat",
+    "top_dims": [
+      "embodied",
+      "arousal",
+      "emotion"
+    ],
+    "reason": "表达了加班带来的身体疲惫感及负面情绪状态。"
+  },
+  {
+    "input": "失恋了好难受",
+    "mode": "chat",
+    "top_dims": [
+      "valence",
+      "arousal",
+      "emotion"
+    ],
+    "reason": "直接表达了极度负面的情感方向及强烈的情绪强度。"
+  },
+  {
+    "input": "感觉最近很迷茫不知道在做什么",
+    "mode": "chat",
+    "top_dims": [
+      "cognitive",
+      "temporal",
+      "emotion"
+    ],
+    "reason": "反映了对近期生活状态的认知困惑及迷茫情绪。"
+  },
+  {
+    "input": "今天和朋友吵架了心里很不舒服",
+    "mode": "chat",
+    "top_dims": [
+      "narrative",
+      "temporal",
+      "emotion"
+    ],
+    "reason": "叙述了具体的冲突事件及其引发的心理不适。"
+  },
+  {
+    "input": "一个人吃饭感觉好孤独",
+    "mode": "chat",
+    "top_dims": [
+      "spatial",
+      "scene",
+      "emotion"
+    ],
+    "reason": "通过独自进食的场景意象表达了孤独感。"
+  },
+  {
+    "input": "终于考过了太开心了",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "valence",
+      "arousal"
+    ],
+    "reason": "强调了目标达成后的时间节点及高强度的正向情绪。"
+  },
+  {
+    "input": "最近睡不好老做噩梦",
+    "mode": "chat",
+    "top_dims": [
+      "embodied",
+      "temporal",
+      "sensory"
+    ],
+    "reason": "描述了生理睡眠障碍及梦境的感官体验。"
+  },
+  {
+    "input": "感觉自己什么都做不好",
+    "mode": "chat",
+    "top_dims": [
+      "cognitive",
+      "emotion",
+      "valence"
+    ],
+    "reason": "体现了自我评价的认知偏差及负面的自我否定情绪。"
+  },
+  {
+    "input": "我妈又催我找对象了烦死了",
+    "mode": "chat",
+    "top_dims": [
+      "narrative",
+      "emotion",
+      "arousal"
+    ],
+    "reason": "叙述了家庭互动带来的烦躁情绪及高强度心理压力。"
+  },
+  {
+    "input": "好想有人陪着说说话",
+    "mode": "chat",
+    "top_dims": [
+      "emotion",
+      "process",
+      "object"
+    ],
+    "reason": "表达了对社交陪伴过程的渴望及对交流互动的需求。"
+  },
+  {
+    "input": "今天下雨坐在窗边发呆",
+    "mode": "chat",
+    "top_dims": [
+      "sensory",
+      "spatial",
+      "temporal"
+    ],
+    "reason": "通过雨天和窗边的空间位置构建感官场景，并隐含了当下的时间切片。"
+  },
+  {
+    "input": "突然很想家",
+    "mode": "chat",
+    "top_dims": [
+      "emotion",
+      "arousal",
+      "valence"
+    ],
+    "reason": "表达了突发的情绪波动，具有明确的负向情感倾向和较高的心理唤醒度。"
+  },
+  {
+    "input": "明明很努力为什么还是没结果",
+    "mode": "chat",
+    "top_dims": [
+      "logic",
+      "cognitive",
+      "valence"
+    ],
+    "reason": "试图通过因果逻辑分析努力与结果的失衡，反映了认知上的挫败感。"
+  },
+  {
+    "input": "感觉心里有什么东西堵着",
+    "mode": "chat",
+    "top_dims": [
+      "embodied",
+      "metaphor",
+      "emotion"
+    ],
+    "reason": "使用身体感受的隐喻来具象化难以言说的心理压抑感。"
+  },
+  {
+    "input": "好久没和你聊天了",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "narrative",
+      "emotion"
+    ],
+    "reason": "以时间跨度为线索，表达了对人际互动缺失的遗憾情绪。"
+  },
+  {
+    "input": "我觉得我可能不适合这份工作",
+    "mode": "chat",
+    "top_dims": [
+      "cognitive",
+      "valence",
+      "emotion"
+    ],
+    "reason": "体现了对自我能力与环境匹配度的认知评估，带有消极的情感色彩。"
+  },
+  {
+    "input": "今天遇到一件很暖心的事想分享给你",
+    "mode": "chat",
+    "top_dims": [
+      "narrative",
+      "valence",
+      "emotion"
+    ],
+    "reason": "以叙事意图开启对话，传递积极的情感价值。"
+  },
+  {
+    "input": "我是不是太敏感了",
+    "mode": "chat",
+    "top_dims": [
+      "cognitive",
+      "emotion",
+      "logic"
+    ],
+    "reason": "通过自我审视的认知模式，对自身情绪特质进行逻辑反思。"
+  },
+  {
+    "input": "又一个人过节",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "scene",
+      "emotion"
+    ],
+    "reason": "通过节日场景与孤独状态的对比，强化了时间维度下的情感体验。"
+  },
+  {
+    "input": "最近情绪很不稳定不知道为什么",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "arousal",
+      "cognitive"
+    ],
+    "reason": "描述了近期持续的唤醒状态，并体现了对情绪成因认知的缺失。"
+  },
+  {
+    "input": "朋友背叛了我很难过",
+    "mode": "chat",
+    "top_dims": [
+      "valence",
+      "arousal",
+      "emotion"
+    ],
+    "reason": "表达了明确的负面情绪及其强度，核心在于人际关系带来的心理感受。"
+  },
+  {
+    "input": "感觉被孤立了",
+    "mode": "chat",
+    "top_dims": [
+      "valence",
+      "embodied",
+      "emotion"
+    ],
+    "reason": "描述了一种心理上的疏离感，带有强烈的负面情感色彩和主观感受。"
+  },
+  {
+    "input": "拿到offer了但不知道要不要去",
+    "mode": "chat",
+    "top_dims": [
+      "cognitive",
+      "valence",
+      "narrative"
+    ],
+    "reason": "处于决策冲突的认知状态，涉及对未来选择的评估。"
+  },
+  {
+    "input": "好久没睡一个好觉了",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "embodied",
+      "sensory"
+    ],
+    "reason": "强调了时间跨度上的生理状态缺失，直接关联身体感受。"
+  },
+  {
+    "input": "其实我一直都有点怕黑",
+    "mode": "chat",
+    "top_dims": [
+      "temporal",
+      "emotion",
+      "sensory"
+    ],
+    "reason": "表达了持续性的心理恐惧，并与特定的感官环境（黑暗）相关联。"
+  },
+  {
+    "input": "这段代码报错了TypeError: Cannot read properties of undefined",
+    "mode": "code",
+    "top_dims": [
+      "object",
+      "logic",
+      "process"
+    ],
+    "reason": "直接引用代码对象，指出逻辑执行过程中的具体错误。"
+  },
+  {
+    "input": "为什么async函数里的await没有等待",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "process",
+      "cognitive"
+    ],
+    "reason": "探讨异步编程的执行逻辑与预期不符的认知困惑。"
+  },
+  {
+    "input": "我已经重启了三次还是报同样的错",
+    "mode": "code",
+    "top_dims": [
+      "temporal",
+      "process",
+      "logic"
+    ],
+    "reason": "描述了重复尝试的调试过程，并指出逻辑错误依然存在的状态。"
+  },
+  {
+    "input": "eslint报警告但我不知道怎么改",
+    "mode": "code",
+    "top_dims": [
+      "object",
+      "cognitive",
+      "logic"
+    ],
+    "reason": "针对代码规范工具的反馈，表达了缺乏解决路径的认知状态。"
+  },
+  {
+    "input": "这个接口返回200但数据是空的",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "object",
+      "process"
+    ],
+    "reason": "指出网络请求过程中的逻辑矛盾，即状态码与数据内容不匹配。"
+  },
+  {
+    "input": "git merge之后项目跑不起来了",
+    "mode": "code",
+    "top_dims": [
+      "temporal",
+      "process",
+      "logic"
+    ],
+    "reason": "描述了操作后的时间序列变化及导致的功能性逻辑故障。"
+  },
+  {
+    "input": "数据库连接超时是什么原因",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "process",
+      "cognitive"
+    ],
+    "reason": "针对特定现象进行因果逻辑推演和认知归因。"
+  },
+  {
+    "input": "React组件重复渲染怎么优化",
+    "mode": "code",
+    "top_dims": [
+      "process",
+      "cognitive",
+      "logic"
+    ],
+    "reason": "关注程序运行过程的效率优化及相关的认知模式调整。"
+  },
+  {
+    "input": "这个正则匹配不上不知道哪里错了",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "emotion",
+      "cognitive"
+    ],
+    "reason": "表达了对逻辑匹配失败的困惑及寻求认知纠偏。"
+  },
+  {
+    "input": "打包之后CSS样式消失了",
+    "mode": "code",
+    "top_dims": [
+      "temporal",
+      "process",
+      "spatial"
+    ],
+    "reason": "描述了构建流程中状态改变导致的可视化空间表现缺失。"
+  },
+  {
+    "input": "怎么用Python写一个批量重命名文件的脚本",
+    "mode": "code",
+    "top_dims": [
+      "process",
+      "object",
+      "logic"
+    ],
+    "reason": "请求关于文件对象处理的自动化流程逻辑。"
+  },
+  {
+    "input": "Promise.all里有一个失败了其他的还会继续吗",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "process",
+      "cognitive"
+    ],
+    "reason": "探讨异步并发执行过程中的逻辑分支与运行规则。"
+  },
+  {
+    "input": "我感觉我写的这段逻辑有问题但不确定哪里",
+    "mode": "code",
+    "top_dims": [
+      "emotion",
+      "cognitive",
+      "logic"
+    ],
+    "reason": "表达了对代码逻辑的主观不确定性及认知焦虑。"
+  },
+  {
+    "input": "npm install报错ERESOLVE unable to resolve dependency",
+    "mode": "code",
+    "top_dims": [
+      "object",
+      "process",
+      "logic"
+    ],
+    "reason": "针对依赖包对象在安装过程中产生的逻辑冲突报错。"
+  },
+  {
+    "input": "用Docker部署之后内存一直涨",
+    "mode": "code",
+    "top_dims": [
+      "temporal",
+      "process",
+      "logic"
+    ],
+    "reason": "描述了部署后随时间推移的资源消耗过程及潜在逻辑问题。"
+  },
+  {
+    "input": "WebSocket断开了怎么做重连",
+    "mode": "code",
+    "top_dims": [
+      "process",
+      "logic",
+      "temporal"
+    ],
+    "reason": "关注连接中断后的恢复流程及逻辑时序。"
+  },
+  {
+    "input": "这个函数写了100行感觉太复杂了怎么重构",
+    "mode": "code",
+    "top_dims": [
+      "cognitive",
+      "emotion",
+      "process"
+    ],
+    "reason": "对代码复杂度的认知评价及重构过程的心理诉求。"
+  },
+  {
+    "input": "CORS跨域问题怎么解决",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "spatial",
+      "object"
+    ],
+    "reason": "涉及不同域之间的空间边界问题及逻辑解决路径。"
+  },
+  {
+    "input": "JWT token过期后前端怎么自动刷新",
+    "mode": "code",
+    "top_dims": [
+      "temporal",
+      "process",
+      "logic"
+    ],
+    "reason": "基于时间触发的自动处理流程。"
+  },
+  {
+    "input": "索引加了还是很慢查询",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "process",
+      "cognitive"
+    ],
+    "reason": "对查询性能预期与实际结果不符的认知偏差分析。"
+  },
+  {
+    "input": "Python多线程和多进程我应该用哪个",
+    "mode": "code",
+    "top_dims": [
+      "cognitive",
+      "logic",
+      "process"
+    ],
+    "reason": "在不同执行模式间的决策与逻辑选择。"
+  },
+  {
+    "input": "这段递归会不会栈溢出",
+    "mode": "code",
+    "top_dims": [
+      "logic",
+      "process",
+      "spatial"
+    ],
+    "reason": "对程序运行空间边界及逻辑执行过程的推演。"
+  },
+  {
+    "input": "测试覆盖率怎么提升",
+    "mode": "code",
+    "top_dims": [
+      "process",
+      "logic",
+      "cognitive"
+    ],
+    "reason": "关注提升质量指标的方法论与过程。"
+  },
+  {
+    "input": "CI/CD跑到一半失败了日志看不懂",
+    "mode": "code",
+    "top_dims": [
+      "process",
+      "sensory",
+      "emotion"
+    ],
+    "reason": "对自动化流程中断的感知困惑及负面情绪表达。"
+  },
+  {
+    "input": "API文档写得很烂我只能靠猜",
+    "mode": "code",
+    "top_dims": [
+      "emotion",
+      "cognitive",
+      "object"
+    ],
+    "reason": "对文档质量的负面评价及被迫进行的认知猜测。"
+  },
+  {
+    "input": "明天要交报告但我还没开始写",
+    "mode": "work",
+    "top_dims": [
+      "temporal",
+      "emotion",
+      "process"
+    ],
+    "reason": "强调了紧迫的时间节点、焦虑的情绪状态以及未启动的工作过程。"
+  },
+  {
+    "input": "领导说我的方案不够有创意",
+    "mode": "work",
+    "top_dims": [
+      "cognitive",
+      "valence",
+      "emotion"
+    ],
+    "reason": "涉及对工作成果的认知评价、负向情感倾向及受挫的情绪体验。"
+  },
+  {
+    "input": "这个项目三个人做三个方向根本协调不了",
+    "mode": "work",
+    "top_dims": [
+      "logic",
+      "spatial",
+      "process"
+    ],
+    "reason": "描述了多主体在逻辑结构上的冲突及协作过程中的混乱。"
+  },
+  {
+    "input": "开会开了两个小时什么都没决定",
+    "mode": "work",
+    "top_dims": [
+      "temporal",
+      "process",
+      "emotion"
+    ],
+    "reason": "突出了时间成本的浪费、无效的会议过程及随之产生的挫败感。"
+  },
+  {
+    "input": "KPI定得太高根本完不成",
+    "mode": "work",
+    "top_dims": [
+      "logic",
+      "valence",
+      "cognitive"
+    ],
+    "reason": "通过逻辑判断评估目标可行性，并表达了负向的评价倾向。"
+  },
+  {
+    "input": "帮我写一封请假邮件",
+    "mode": "work",
+    "top_dims": [
+      "object",
+      "process",
+      "narrative"
+    ],
+    "reason": "明确了具体的文档对象，并请求协助完成特定的沟通流程。"
+  },
+  {
+    "input": "面试下周三我不知道怎么准备",
+    "mode": "work",
+    "top_dims": [
+      "temporal",
+      "cognitive",
+      "emotion"
+    ],
+    "reason": "指向未来的时间点，反映了认知上的迷茫及焦虑情绪。"
+  },
+  {
+    "input": "新来的实习生问我问题我讲不清楚",
+    "mode": "work",
+    "top_dims": [
+      "process",
+      "cognitive",
+      "emotion"
+    ],
+    "reason": "描述了知识传递过程中的认知障碍及自我效能感低下的情绪。"
+  },
+  {
+    "input": "这个需求描述很模糊我不知道从哪里开始",
+    "mode": "work",
+    "top_dims": [
+      "cognitive",
+      "process",
+      "emotion"
+    ],
+    "reason": "反映了对信息处理的认知困难，导致工作启动过程受阻。"
+  },
+  {
+    "input": "客户临时改需求怎么和领导沟通",
+    "mode": "work",
+    "top_dims": [
+      "narrative",
+      "logic",
+      "process"
+    ],
+    "reason": "构建了一个职场冲突场景，寻求逻辑上的沟通策略与处理流程。"
+  },
+  {
+    "input": "感觉自己在公司没有存在感",
+    "mode": "work",
+    "top_dims": [
+      "emotion",
+      "valence",
+      "cognitive"
+    ],
+    "reason": "表达了对自我价值的负面评价及心理感受。"
+  },
+  {
+    "input": "跨部门合作对方完全不配合",
+    "mode": "work",
+    "top_dims": [
+      "narrative",
+      "emotion",
+      "logic"
+    ],
+    "reason": "描述了一个冲突性的职场事件及由此产生的情绪。"
+  },
+  {
+    "input": "我想换工作但不知道方向",
+    "mode": "work",
+    "top_dims": [
+      "cognitive",
+      "valence",
+      "process"
+    ],
+    "reason": "反映了职业规划中的认知困境与迷茫状态。"
+  },
+  {
+    "input": "年终总结怎么写比较出彩",
+    "mode": "work",
+    "top_dims": [
+      "process",
+      "cognitive",
+      "object"
+    ],
+    "reason": "关注具体任务的执行方法与策略优化。"
+  },
+  {
+    "input": "事情太多不知道先做哪个",
+    "mode": "work",
+    "top_dims": [
+      "process",
+      "logic",
+      "cognitive"
+    ],
+    "reason": "涉及任务优先级排序的认知负荷与逻辑处理。"
+  },
+  {
+    "input": "升职的机会被同事抢了很委屈",
+    "mode": "work",
+    "top_dims": [
+      "emotion",
+      "arousal",
+      "narrative"
+    ],
+    "reason": "叙述了导致强烈负面情绪的职场挫折事件。"
+  },
+  {
+    "input": "会议纪要怎么写",
+    "mode": "work",
+    "top_dims": [
+      "process",
+      "object",
+      "cognitive"
+    ],
+    "reason": "询问特定文档格式的执行流程与规范。"
+  },
+  {
+    "input": "我的汇报总被领导打断",
+    "mode": "work",
+    "top_dims": [
+      "narrative",
+      "process",
+      "emotion"
+    ],
+    "reason": "描述了重复发生的互动过程及其带来的挫败感。"
+  },
+  {
+    "input": "需要做竞品分析不知道从哪里入手",
+    "mode": "work",
+    "top_dims": [
+      "cognitive",
+      "process",
+      "logic"
+    ],
+    "reason": "体现了对复杂分析任务的认知启动与方法论需求。"
+  },
+  {
+    "input": "被安排做不在我职责范围内的事",
+    "mode": "work",
+    "top_dims": [
+      "narrative",
+      "valence",
+      "logic"
+    ],
+    "reason": "陈述了角色边界冲突及由此引发的心理不适。"
+  },
+  {
+    "input": "团队氛围很差大家都不说话",
+    "mode": "work",
+    "top_dims": [
+      "emotion",
+      "scene",
+      "sensory"
+    ],
+    "reason": "描述了职场环境的压抑氛围及具体的感官观察。"
+  },
+  {
+    "input": "加班费一直没发怎么催",
+    "mode": "work",
+    "top_dims": [
+      "temporal",
+      "logic",
+      "process"
+    ],
+    "reason": "涉及薪资发放的时间滞后及解决问题的行动流程。"
+  },
+  {
+    "input": "想申请远程办公不知道怎么提",
+    "mode": "work",
+    "top_dims": [
+      "cognitive",
+      "process",
+      "emotion"
+    ],
+    "reason": "体现了对沟通策略的认知困惑及心理预设。"
+  },
+  {
+    "input": "项目延期了要给客户发邮件解释",
+    "mode": "work",
+    "top_dims": [
+      "temporal",
+      "process",
+      "logic"
+    ],
+    "reason": "针对项目进度延误这一时间节点，需要构建合理的解释逻辑。"
+  },
+  {
+    "input": "PPT做到一半不知道逻辑怎么组织",
+    "mode": "work",
+    "top_dims": [
+      "process",
+      "cognitive",
+      "object"
+    ],
+    "reason": "描述了制作PPT这一过程中的思维组织障碍。"
+  },
+  {
+    "input": "我想写一个女主从小被抛弃但最后找到自己价值的故事",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "temporal",
+      "valence"
+    ],
+    "reason": "构建了一个跨越时间线、具有情感成长弧度的叙事框架。"
+  },
+  {
+    "input": "两个角色相爱但身份是敌人怎么写好这个矛盾",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "logic",
+      "emotion"
+    ],
+    "reason": "探讨角色冲突的逻辑构建及情感张力的处理。"
+  },
+  {
+    "input": "反派应该有自己的逻辑不然不真实",
+    "mode": "airp",
+    "top_dims": [
+      "logic",
+      "cognitive",
+      "object"
+    ],
+    "reason": "强调角色塑造需要内在的逻辑自洽性。"
+  },
+  {
+    "input": "写到高潮部分感觉很空洞不知道怎么写出情绪",
+    "mode": "airp",
+    "top_dims": [
+      "arousal",
+      "emotion",
+      "process"
+    ],
+    "reason": "关注叙事高潮的情绪强度表达及写作技巧。"
+  },
+  {
+    "input": "男主角老是写得很工具人感觉没有个性",
+    "mode": "airp",
+    "top_dims": [
+      "object",
+      "cognitive",
+      "narrative"
+    ],
+    "reason": "对角色符号化倾向的认知反思及叙事改进需求。"
+  },
+  {
+    "input": "写战场场景怎么让读者感受到紧张感",
+    "mode": "airp",
+    "top_dims": [
+      "arousal",
+      "scene",
+      "sensory"
+    ],
+    "reason": "通过感官细节构建场景，旨在激发读者的紧张情绪强度。"
+  },
+  {
+    "input": "我想给两个角色设计一个长久分离后重逢的场景",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "scene",
+      "emotion"
+    ],
+    "reason": "侧重于叙事结构中的关键节点，通过场景布置引发情感共鸣。"
+  },
+  {
+    "input": "故事背景是废土世界但我不知道怎么建世界观",
+    "mode": "airp",
+    "top_dims": [
+      "spatial",
+      "object",
+      "narrative"
+    ],
+    "reason": "世界观构建依赖于空间设定和物件符号来支撑叙事逻辑。"
+  },
+  {
+    "input": "写雨夜的场景应该用什么细节",
+    "mode": "airp",
+    "top_dims": [
+      "sensory",
+      "scene",
+      "embodied"
+    ],
+    "reason": "通过感官细节和身体感受来渲染雨夜的场景氛围。"
+  },
+  {
+    "input": "角色A失去了记忆但B还记得这段感情怎么推进",
+    "mode": "airp",
+    "top_dims": [
+      "cognitive",
+      "narrative",
+      "emotion"
+    ],
+    "reason": "涉及认知模式差异对叙事推进及情感张力的影响。"
+  },
+  {
+    "input": "我想写一段告别的对话但感觉太煽情了不自然",
+    "mode": "airp",
+    "top_dims": [
+      "emotion",
+      "valence",
+      "logic"
+    ],
+    "reason": "探讨情感表达的尺度与逻辑合理性，以避免过度煽情。"
+  },
+  {
+    "input": "给我生成一段角色内心独白她在等一个不会来的人",
+    "mode": "airp",
+    "top_dims": [
+      "emotion",
+      "temporal",
+      "narrative"
+    ],
+    "reason": "通过时间维度的等待感，强化角色的内心叙事与情绪表达。"
+  },
+  {
+    "input": "故事节奏太快读者还没来得及共情",
+    "mode": "airp",
+    "top_dims": [
+      "process",
+      "temporal",
+      "emotion"
+    ],
+    "reason": "节奏控制属于过程管理，通过时间节奏影响读者的情感共鸣。"
+  },
+  {
+    "input": "我在写恐怖故事但感觉吓不到人",
+    "mode": "airp",
+    "top_dims": [
+      "arousal",
+      "sensory",
+      "scene"
+    ],
+    "reason": "恐怖效果依赖于感官刺激和场景构建，以达到特定的情绪唤醒。"
+  },
+  {
+    "input": "两个人从陌生到信任的过程怎么让它不突兀",
+    "mode": "airp",
+    "top_dims": [
+      "process",
+      "logic",
+      "narrative"
+    ],
+    "reason": "关注人际关系发展的逻辑过程，确保叙事转折的自然性。"
+  },
+  {
+    "input": "我想在故事里埋一个三章后才解释的伏笔",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "temporal",
+      "cognitive"
+    ],
+    "reason": "涉及叙事结构安排，强调时间跨度上的认知预设。"
+  },
+  {
+    "input": "写角色吃东西的场景能让人感受到他的孤独",
+    "mode": "airp",
+    "top_dims": [
+      "sensory",
+      "embodied",
+      "valence"
+    ],
+    "reason": "通过感官和身体行为投射情感状态。"
+  },
+  {
+    "input": "这段对话读起来很假像在背台词",
+    "mode": "airp",
+    "top_dims": [
+      "cognitive",
+      "logic",
+      "emotion"
+    ],
+    "reason": "对语言真实性的认知判断，涉及逻辑与情感表达的匹配度。"
+  },
+  {
+    "input": "角色有个习惯性动作能反映他的内心状态",
+    "mode": "airp",
+    "top_dims": [
+      "embodied",
+      "object",
+      "cognitive"
+    ],
+    "reason": "通过身体动作作为心理状态的外部符号化表达。"
+  },
+  {
+    "input": "故事结尾是开放式的但我不知道怎么收",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "process",
+      "cognitive"
+    ],
+    "reason": "对叙事过程终结方式的认知困惑。"
+  },
+  {
+    "input": "我想写一个从恶变善的角色弧",
+    "mode": "airp",
+    "top_dims": [
+      "process",
+      "narrative",
+      "valence"
+    ],
+    "reason": "描述角色在叙事过程中的情感价值取向转变。"
+  },
+  {
+    "input": "写角色哭的场景不想用那种常见表达",
+    "mode": "airp",
+    "top_dims": [
+      "sensory",
+      "emotion",
+      "metaphor"
+    ],
+    "reason": "寻求对感官情绪表达的创新隐喻化处理。"
+  },
+  {
+    "input": "想给两个角色的关系加一些隐喻",
+    "mode": "airp",
+    "top_dims": [
+      "metaphor",
+      "narrative",
+      "cognitive"
+    ],
+    "reason": "通过隐喻构建角色关系的认知框架。"
+  },
+  {
+    "input": "写古风对话感觉用词很别扭",
+    "mode": "airp",
+    "top_dims": [
+      "cognitive",
+      "logic",
+      "sensory"
+    ],
+    "reason": "对语言风格与语境逻辑匹配度的认知感知。"
+  },
+  {
+    "input": "故事里有三条线索同时推进结构很乱",
+    "mode": "airp",
+    "top_dims": [
+      "narrative",
+      "process",
+      "spatial"
+    ],
+    "reason": "对多线叙事过程在空间结构上的组织混乱感。"
+  }
+]

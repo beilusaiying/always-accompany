@@ -1,0 +1,711 @@
+"what" comment	comments,code,deodorant,smell,comment
++1	vote,favor
+68-95-99.7 rule	fact,values,deviation,mean,deviations,cases
+abandonware	software
+absolute error	difference,value,quantity
+absolute path	path,location,filesystem,equivalent,latitude,longitude,geography
+absolute row number	index,row,table,section
+abstract method	object,programming,programmers,parent,class,operations,child,classes
+abstract syntax tree	data,structure,tree,program,ast,node,loop,child,condition,body
+accuracy	accuracy,results,value,measure,classification,model,proportion,predictions,cases,negative,precision,ways,hand
+actual result (of test)	outcome,value,test
+affordance	fields,handle,button
+afraid to fail	caller,things,code,status,codes,exceptions,ifs,call,chain
+agents	systems,llms,reasoning,decision,tasks
+aggregation	values,numbers,strings
+aggregation function	function,values,sum,max
+agile development	software,development,methodology,lots,steps,feedback,planning,scheduling,programming
+algorithm	algorithm,steps,intructions,rules,task,computer,science,instructions,program,problem
+algorithmic bias	results,bias,treatment,algorithm,media,algorithms,content,groups,users
+aliasing	references,data,structure,memory,file,disk
+alternative classes with different interfaces	classes,job,spelling,hug_zombie,hug_snowman,logic,names,interface
+anaconda	anaconda,software,distribution,python,repository,source,programs,data,science,conda,package,manager,navigator,suite,desktop,tools,ide,jupyter,notebook,application
+anchor	expression,symbol,position,characters,start,`\b`,break,word
+anonymous function	function,functions,callbacks,python,lambda,word
+anti join	join,rows,table,keys
+append mode	data,file,contents,overwriting,default,programming,languages,programs
+application programming interface	functions,procedures,software,library,web,service,application,api,code,database,server,access
+argument	synonym,parameter,argument,expressions,function,value,parameters,arguments,concepts,variables,values
+arithmetic mean	numbers
+artificial intelligence (ai)	intelligence,machines,humans,animals,inference,information,tasks,language,processing,computer,vision,machine,learning,#machine_learning
+ascii	characters,languages,bit,integers,unicode
+assertion	expression,program,assertions,language,python,assert`,statement,functions,stopifnot,testing,production,code,languages,data,validation,compilers,interpreters,optimization,conditions,security,risks,package,assertr,holes
+associative array	dictionary
+asynchronous	programming,operation
+attention mechanism	technique,models,parts,input,token
+attribute	value,pair,object,metadata,array,dimensions
+auto-completion	feature,user,word,code,tab,key,words
+autocorrelation	degree,similarity,observations,series,interval,lag,autocorrelation,analysis,insight,datasets,patterns,noise,uses
+automatic variable	variable,value,build,rule,target,`$@,variables,pattern,rules
+backpropagation	algorithm,weights,network,backpropagation,gradient,descent
+backward-compatible	property,hardware,software,interoperability,legacy,input,function,python
+base class depends on subclass	parent,class,children,inheritance,tree,leaf,trunk
+base r	functions,language,base,packages,src,library,version,numbers,priority
+bayes' rule	bayes,theorem
+bayes' theorem	equation,probability
+bayesian network	graph,relationships,variables,problem
+bias	statistic,parameter
+big data	data,people,computer
+binary	states,computing,boolean,logic,computers,systems,bits
+binary expression	expression,parameters,arguments
+binary large object	data,database,audio,file,network,version,control,repository,bits
+binary operator in name	things,confession,invitation,half
+binomial distribution	probability,distribution,trials,outcomes
+bit	unit,information,alternatives,computing
+block comment	comment,lines,block,comments,start,symbols,`/*`,`*/`,descendents,marker
+boilerplate	text,contracts,licenses,parts,source,code,functionality,object,programs,segments,variables,objects,languages,lot,statements,java,auto-completion
+boolean	data,value,george,boole,century,mathematician,systems,computers,foundation,evaluations,states
+boolean blindness	filter,function,booleans,information,values,reader
+branch	git,branch
+branch-per-feature workflow	strategy,work,git,version,control,systems,branch,feature,bug,fix,changes
+breadcrumbs	links,websites,top,page,breadcrumbs,users,website,fairy,tale,children,trail
+breadth first	data,structure,tree,problem,step,solution
+browser cache	web,browsers,copies,files,pages,data,issues,version,file,browser
+bug	feature,piece,software,equivalent,weed
+bug report	collection,files,logs,information,output,code,program,error,warning,bug
+bug tracker	bugs,software,program
+build manager	program,track,files,commands,date,managers,parts,programs,workflows,plots,results,turn,data,configuration
+build recipe	build,rule,date
+build rule	specification,build,manager,files,others,date
+build target	file,build,rule,date,dependencies
+byte	unit,information,digits,bits
+byte code	instructions,interpreter
+cache	copies,data,requests,cpu,computer,hardware,cache,values,programs,software,network,traffic,latency,date,problems,science
+caching	copy,data,cache,access
+call stack	data,structure,information,subroutines
+callback function	function,callbacks,functions,map,callback,element,collection,client,response,answer,request
+callback hell	callbacks,closing,brackets,staircase,logic,indent
+camel case	style,writing,code,variables,objects,space,`_`,dot,`.`,dash,`-`,characters,word,examples,calculatesum,findpattern
+cascading style sheets	appearance,html,css,fonts,colors,layout
+catch (an exception)	responsibility,error,event,condition,exception,python,hand,raising,exceptions,situations
+causation	relationship,events,event,change
+cc-0	commons,license,waiver,restrictions,work,domain
+cc-by	commons,attribution,license,people,credit,author,work,restrictions
+central processing unit	hardware,computer,cpu,circuitry,instructions,software,processor,microprocessor
+centroid	center,anchor,algorithm
+character encoding	specification,characters,bytes,encoding,today,utf
+chi-square test	variables,cross,tabulation,chi-square,distribution,degrees,freedom
+child (in a tree)	node,tree,parent
+child class	object,programming,class,parent
+class	object,programming,structure,data,operations,methods,program,constructor,properties,programmers,behavior,parent,classes,child
+class imbalance	class,imbalance,problem,machine,learning,distribution,classes,dataset
+classification	category,item,email,message,spam,machine,learning,algorithms,classification
+clever code	code,ins,language,quirks,logic,liners
+client	program,web,browser,data,server,users,requests,client
+closure	variables,scope,existence
+clustering	data,groups,advance
+code coverage (in testing)	library,program,tests,percentage,lines,code,file,testing,coverage
+code review	program,change,source,code
+coercion	coercion
+cognitive load	amount,working,memory,tasks
+collection	data,items,fashion,examples,collections,lists,size,arrays,sets
+combinatorial explosion	dozens,methods,detail,feature,count,luck,variant,edge
+comma-separated values	text,format,data,record,row,fields,commas,variations,quoting,strings
+command	instruction,computer,program,task
+command history	list,commands,read,eval,print,loops,repls,unix,shell,record,history,users
+command-line argument	filename,control,flag,command,program
+command-line interface	user,interface,text,commands,output,shell
+comment	script,code,text,notes,programming,languages
+commit	verb,act,changes,database,version,control,repository,noun
+commit message	comment,commit
+compile	source,programs,languages,machine,instructions,computer,markdown,html,display
+compiled language	language,fortran,machine,instructions,execution,languages,java,byte,code,python,fly
+compiler	application,programs,languages,machine,instructions,byte,code
+complicated boolean expression	math,problem,statement,timer,negations,conjunctions,glance
+complicated regex expression	regex,pattern,decomposer,variables,builder,function,expression,self
+comprehensive r archive network	repository,packages
+computational linguistics	study,application,methods,languages,approaches
+computational notebook	combination,document,format,users,prose,code,file,application,jupyter,notebook,markdown,files,examples,notebooks
+compute shader	purpose,shader,program,processing,machine,learning,simulations,fields,computation
+concatenate	programming,strings,collections,terms,data,tables,python,pandas,dataframe,tibble,columns,axis=1,rows,axis=0,joining
+conda	package,manager,environment,management,python,programs
+condition	error,event,flow,control
+conditional complexity	chain,branch,feature,switch,statement,polymorphism,refactor,option
+conditional expression	ternary,expression,role,statement,languages,syntax,test,false`,value,iftrue
+confidence interval	range,estimate,margin,error,probability,value
+configuration file	file,parameters,settings,software,program,configuration,config,files,information,changes,environment
+confusion matrix	nxn,matrix,performance,classification,model,classes,outputs,row,instances,column,confusion,positives,negatives,1st,2nd,3rd,quadrants,table,accuracy,sensitivity,specificity,measures
+console	computer,terminal,user,commands,program,shell,device
+constant	constant,programming,value,execution,program,variable
+constructor	function,object,class,constructors,convention,requirement
+context window	tokens,llm,interaction,input,output
+continuation prompt	prompt,command
+continuous integration	software,development,practice,changes
+continuous random variable	variable,value,range,age,distance
+control flow	flow,program,code,series,commands,loops,execution,condition
+convolutional neural network (cnn)	class,network,images,cnn,layers,convolutions,filter,data,matrix,multiplications
+copy-on-modify	practice,copy,data,attempt,reference
+correlation	measure,variables,correlation,coefficient,causation
+correlation coefficient	measure,variables,correlation,coefficient,prediction,change
+covariance	variables,correlation,coefficient,measure,covariance
+creative commons license	licenses,work,license,by`,attribution,users,source,sa`,sharealike,nc`,noncommercial,purposes,creator,permission,nd`,noderivatives,works,translations,letter,restrictions,domain
+cross join	join,combinations,rows,tables
+cross-validation	technique,data,training,test,answers,parameters,algorithm,effectiveness
+cryptographic hash function	hash,function,value,input
+current working directory	folder,directory,location,program,action
+data clump	function,color,variables,object
+data collison	devices,nodes,signals,network,data,collision,pieces,hash,value
+data engineer	data,analyses,engineers,software,databases,reports,archiving,results
+data engineering	steps,data,programs,mailing,addresses,format
+data frame	data,structure,memory,rows,records,columns,variables
+data masking	data,dataset,information,names,people
+data mining	computers,patterns,datasets,data,science
+data package	software,package,data
+data science	combination,statistics,programming,work,knowledge,data
+data scientist	programming,skills,problems
+data structure	format,organisation,management,access,data,values,representation,encoding,relationships,ways,reading,writing
+data visualization	creation,charts,maps,graphs,infographics,datasets,data
+data wrangling	scale,data,engineering
+dead code	branches,blocks,functions,runtime,developer
+debug	computer,environment,debug,errors,bugs,programs,systems
+decision tree	tree,nodes,questions,branches,decision,classification
+decorator pattern	design,pattern,function,features,class,definition,decorators,feature,python,languages
+decrement	operation,value,variable
+deep learning	family,network,algorithms,layers,features,levels
+default target	build,target
+default value	value,function,parameter,caller,default,values,definition
+defensive programming	programming,practices,mistakes,assertions,situations
+degrees of freedom	statistics,degrees,freedom,measure,information,data,calculations,parameter,values,calculation,statistic,sample,size,parameters
+delegate pattern	design,pattern,object,work,task,objects,parts,delegation,inheritance,behavior
+dependency	prerequisite
+dependent variable	variable,value
+depth first	data,structure,tree,path,problem,solution,conclusion
+design pattern	pattern,software,design,implementation,library,data,frames,database,tables,instances
+destructuring assignment	values,data,structures,variables,statement
+dictionary	data,structure,items,value,array,dictionaries,hash,tables
+digital object identifier	identifier,book,paper,report,dataset,software,release,artefact
+dimension reduction	dimensions,dataset
+directory	item,filesystem,files,directories,folder
+discrete random variable	variable,value,values
+distro	software,distribution
+divergent change	class,database,reasons,monday,calculation,wednesday,display,friday,file,merge,conflicts,sprint
+docstring	documentation,string,start,module,class,function,python,object
+document object model	memory,representation,html,xml,element,node,tree,attributes,elements,child,nodes,programming,languages,libraries,dom
+documentation generator	software,tool,comments,dostrings,code,developer,documentation
+dom selector	pattern,nodes,dom,tree,#alpha,attribute,alpha,beta`,class,beta
+domain knowledge	understanding,problem,domain,knowledge,transportation,logistics
+don't repeat yourself principle	dry,principle,piece,knowledge,representation,programmer,andrew,hunt,david,thomas,programs,duplication,definitions,logic,change,behaviour,modification,code,goal
+double	precision,bit,value,exponent
+double square brackets	index,value
+down-vote	vote
+dubious abstraction	business,workflow,database,connection,strategy,plumbing,abstraction
+duplicated code	logic,places,behavior,fowler,smell,codebase
+dynamic loading	module,memory,program,languages,loading,tools,programs,modules
+dynamic lookup	function,property,object,program,obj.name,obj,somevariable
+dynamic scoping	value,variable,call,stack,moment,lookup,programming,languages,_scoping
+edge	connection,nodes,graph,edge,data,distance
+electronic mail	mail,messages,people,computer,network,smtp,server,imap,pop
+element	component,html,xml,document,elements,`...`</,content,element,attributes
+emacs (editor)	text,editor,unix,programmers
+embeddings	vector,representations,text,meaning
+empty element	element,html,xml,document,children,elements,shorthand,notation,slash,angle,brackets
+empty vector	vector,elements,vectors,character,null
+encoding	sequence,characters,letters,numbers,punctuation,symbols,format,transmission,storage
+environment	structure,names,values
+epoch (deep learning)	learning,epoch,cycle,training,data,algorithm,networks,epochs
+error (in a test)	unit,test,correctness
+error handling	program,errors,examples,message,default,configuration,user
+escape sequence	sequence,characters,prefix,character,meaning,escape,quote,string
+evaluation	expression,value
+exception	object,information,error,event,program,exception
+exception handler	piece,code,exception,log,message,operation
+expected result (of test)	value,piece,software
+exploratory programming	software,development,methodology,requirements,response,results,runs
+export	module,parts,program,languages,things,attempt,collision
+fail (a test)	test
+fallacious comment	comment,code,linter,drift
+fallacious method name	getitems,item,string,value,names,convention,programmers,decades
+false	boolean,logic,programming
+false negative	data,points
+false positive	data,points
+falsy	context
+fasta	file,format,amino,acid,sequence,information,block,lines,symbol,‘>’,letter,codes
+fastq	file,format,sequence,information,quality,scores,block,lines,letter,codes,nucleotides,separator,`+`,string,characters,base
+fate over action	class,data,behavior,code,values,decisions,object
+feature	characteristic,property,phenomenon,length,height,petals,input,model,features,classification
+feature (in data)	dataset
+feature (in software)	aspect,software,bug,feature
+feature branch	branch,git,repository,commits,feature,bug,fix,function
+feature engineering	variables,inputs,model,features,domain,knowledge
+feature envy	class,fields,data
+feature request	request,maintainers,developers,software,program,functionality,feature
+field	component,record,value,tibble,database,table,fields
+filename extension	filename,symbol,extensions,content,file,guarantee
+filename stem	filename,extension,stem,glossary.,glossary
+filesystem	operating,files,directories,unix,filesystem
+filter	verb,records,rows,table,values,noun,command,program,lines,text,files,input,operation,filtering,file,stdout
+fine-tuning	model,tasks,domains,task,datasets
+fine-tuning (deep learning)	tuning,approach,learning,network,specifics,dataset
+fixture	test,parameters,function,file
+flag argument	parameter,caller,book
+folder	directory
+for loop	construct,program,statements,loop,body,item,sequence,range,element,list
+fork	copy,person,git,repository,github,account,changes,content,fork,pull,request
+fragment shader	shader,stage,rendering,pipeline,colours,fragment,screen,pixel,fragments,depth,opacity
+frequently asked questions	list,questions,subject,answers
+full identifier (of a commit)	bit,identifier,commit,git,repository,character,string
+full join	join,rows,columns,tables,keys,match,values,table,null,value,signifier
+fully-qualified name	package,source,object,question
+function	code,block,sequence,operations,whole,tasks,arguments,inputs,outputs,return,values,functions,command,function,call
+function calling / tool use	capability,llms,functions,apis,parameters
+functional programming	style,programming,data,application,functions,control,structures,loops,relationship,input,function,output,values,variables,parts,program,effects,return,value,writing,log,file,printing,console
+garbage in, garbage out	idea,data,input,output
+generator function	function,value,execution,generator,functions,streams,values,loops
+generic function	collection,functions,purpose,class,data
+geometric mean	numbers,product,root,contrast,arithmetic,mean,tendancy,rates,change
+geometry shader	shader,stage,rendering,pipeline,primitives,tessellation,shaders,geometry,shape,results,pixels,particles
+ggplot2	package,grammar,graphics,plots,alternative,base,tidyverse
+git	version,control,tool,changes,project
+git branch	snapshot,version,git,repository,branches,versions
+git clone	copies,downloads,git,repository,computer
+git conflict	situation,changes,branches
+git fork	copy,git,repository,server
+git merge	branches,git,development,histories,changes,parts,conflict
+git pull	downloads,changes,repository
+git push	uploads,changes,repository
+git remote	repository,bookmark
+github	cloud,platform,git,versions,project,users
+global data	code,variables,function,codebase,suspect
+global environment	environment,definitions,programming,language,interpreter
+global installation	package,location,users,projects
+global variable	variable,function,package,namespace,functions
+globbing	filenames,expressions,`*.,dat`,files,names,`.dat
+gnu operating system	gnu,operating,software,acronym,unix,packages,parties
+gnu public license	license,people,software,source,changes
+gradient boosting	machine,learning,technique,ensemble,prediction,models,decision,trees,fashion
+gradient descent	optimization,algorithm,gradient,step,direction
+graph	plot,chart,data,structure,nodes,edges
+graphical user interface	user,interface,windows,menus,pointers,elements,command,voice
+graphics processing unit	processor,instances,program,graphics,computation,compute,shaders
+group	data,subsets,criteria,records,structure
+handle (condition)	responsibility,error,event,condition,exception,python,hand,raising,exceptions,situations
+hardware	component,computer,hardware,cpu,memory,graphics,cards,monitors,keyboards,conjunction,software
+harmonic mean	numbers,sum,reciprocals,reciprocal,arithmetic,mean,values,measure,tendancy,rates,change,min,max,value,means
+hash function	function,data,bit,array,key,size,hash,functions,table
+hash table	data,structure,key,location,value,hash,tables,lookup,cost,memory,amount,information,possibility,collisions,function,values
+header row	row,data,file,column,names,types,units
+heterogeneous	data,types,python,list,mix,numbers,character,strings,values
+hexadecimal	base,values,digits,characters,hexadecimal,byte,storage
+hidden dependencies	class,developer,environment,crashes,production,stack,trace,constructor,dependency
+hidden layer (deep learning)	layer,network,layers,neurons,input,output,values
+high performance computing	computing,power,processors,desktop,computer,laptop,work,station,analysis,people,data
+higher-order function	function,functions,map,value,list,programming
+hippocratic license	software,license,purpose,declaration,rights
+histogram	representation,distribution,data,bar,graph
+hitchhiker	project,work
+home directory	directory,user,files,computer,home
+homogeneous	data,vector,values,etc
+http header	value,pair,top,http,request,response,information,user,language,length,data
+http request	message,client,server,http,protocol,data,request,web,page,image
+http response	reply,server,client,http,protocol,response,request,web,page,image,data
+humaneval	coding,benchmark,measuring,ability,python,code,docstrings
+hypertext markup language	markup,language,web,pages,html,memory,dom,document,object,model
+hypertext transfer protocol	protocol,data,transfer,world,web.,http,format,requests,responses,meanings,error,codes,features
+icon	computing,icon,symbol,computer,screen,user
+immutable type	change,object
+imperative loops	len,ceremony,tracking,indexes,results,errors,map,filter
+import	things,module,program,languages
+impostor syndrome	belief,successes,accident,luck,ability
+in-place operator	operator,operands,expression,`+=`,value
+inappropriate static	methods,behavior
+incomplete library class	party,library,building,workarounds,effort,class,code
+inconsistent names	shortcuts,developers,pattern,break,class,store,third,operation,names,muscle,memory
+inconsistent style	formatting,parameter,orders,conventions,codebase,code,inconsistency,trust,style
+increment	operation,value,variable
+indecent exposure	modules,couple,implementation,details,algorithm,callers
+independent variable	factor,effect,variable
+index	elements,array,indexes,position,representation
+infinite loop	loop,exit,condition,programming,error
+inner join	join,combination,rows,tables,keys
+insider trading	classes,implementation,details,access,table,knowledge,sharing
+instance	object,class
+integrated development environment	application,programmers,software,ides,editor,console,code,browsers,data,structures,memory,files,disk
+integration test	test,parts
+interface	phrase,computing,contact,user,interface,command,object,rest,code,program,web,services,api
+internet message access protocol	internet,protocol,email,clients,messages,server
+interpreted language	language,computer,interpreter,program,instructions,machine,commands,fly
+interpreter	program,job,programs,language,interpreters,commands,file
+invariant	times,program,lifecycle,object,invariants,assertions,expression,problem,failure,termination
+ipython	python,console,programming,features,text,tab,completion,filesystem,navigation,access,documentation,shell,commands
+iso date format	international,formatting,dates,standard,yyyy,digit,year,month,day,hyphens
+issue	bug,report,feature,request,item,project,ticket
+issue tracking system	bug,tracking,issues,repository,feature,requests,reports,item
+iterator pattern	design,pattern,object,generator,function,value,collection,turn,processing,differences,kinds,data,structures,loops
+java	java,object,purpose,programming,language,programs,platform,software,feature,rise,slogan,run,syntax
+javascript object notation	data,values,numbers,character,strings,lists,value,structures,acronym,javascript,object,notation,standards,xml,syntax,comments,ways,schema
+join	operations,values,tables
+jupyter	project,jupyter,source,ipython,data,science,computing,programming,languages
+jupyter notebook	source,web,notebook,user,code,equations,visualisations,text
+jupyterlab	generation,interface,jupyter,notebooks,jupyterlab,source,web,-based,document,markdown,files,browser,tab,console,windows
+k-means clustering	_learning,algorithm,*k*,groups,centroid,data,points,centroids
+k-nearest neighbors	classification,algorithm,data,points,similarity,*k*,neighbours
+kebab case	naming,convention,parts,dashes
+key	field,combination,fields,value,record,table,dataset,keys,records,pair,identifier,data,structure,dictionary
+keyword arguments	arguments,function,value,pairs
+label (an issue)	tag,issue,labels,bug,feature,request
+large class	god,class,methods,fields,reasons,morning,sprint,gamble
+large language model	network,text,datasets,llms,learning,architectures,transformers,billions,trillions,parameters,patterns,language
+latent variable	variable,states,values,variables
+latex	typesetting,document,preparation,markup,language,structure,headings,stylise,text,equations,citations,cross-references,latex,academia,papers,theses,mathematics,physics,engineering,computer,science
+lazy element	meeting,email,class,field,abstraction,complexity,clarity
+lazy evaluation	evaluation,expression,value,instance,half
+learning rate (deep learning)	networks,learning,rate,hyper,parameter,pace,network,weights,loss,gradient,training,minimum,minima
+left join	join,data,tables,keys,table,match,fields,key,columns,null,value
+lexical scoping	value,structure,program,programming,languages,scoping,latter
+library	software,package,module
+license	document
+lifecycle	steps,lifecycle,object,construction,operations,issue,progress,review
+lift	model,things,ratio,response,segment,population,whole,lift,chance
+line comment	comment,program,block,lines
+linear regression	fit,datasets,squares,distances,points,regression
+linter	program,problems,software,violations,indentation,rules,naming,conventions,tool,lint
+lisp	family,programming,languages,programs,data,lists,ideas,lisp
+list	vector,values,types
+list comprehension	python,expression,list,values,items,doubles
+literate programming	programming,paradigm,prose,code
+local installation	package,project
+local variable	variable,function
+log	record,program,execution,messages,logging,framework,inspection
+log message	entry,log,program,execution,messages,data,severity
+logging framework	software,library,reporting,programs
+logging level	setting,information,logging,framework,levels,debug,warning,error
+logical indexing	vector,structure,booleans,values,masking
+logistic regression	model,data,curves,lines
+long identifier (of commit)	identifier
+long method	beginning,change,piece,logic,effects,screens
+long option	word,identifier,command,argument,flags,letter,dash,options,dashes
+long parameter list	arguments,function,signature,riddle,caller,cheat,sheet
+loop	structure,section,code,exit,condition
+loop body	statement,statements,loop
+low-rank adaptation	tuning,technique,rank,decomposition,matrices,model,layers,weights
+lsof	unix,command,list,files,processes
+machine learning	study,algorithms,performance,data,machine,learning,training,model,properties,test
+magic number	code,seconds,day,timeout,config,limit,numbers,intent,literal,places,hunting,rest
+magic number	constant,program,explanation
+make	build,manager,unix,years
+makefile	file,commands,makefile
+markdown	markup,language,syntax,replacement,html,markdown,readme,files,basis
+markov chain	model,series,events,probability,event,path
+markup language	rules,text,meaning,markup,markdown,html,languages,web,pages
+martha's rules	rules,decisions,groups
+masking	todo
+master branch	branch,product,feature,code,master
+maximum likelihood estimation	parameters,probability,distribution,likelihood,data
+mean	value,dataset,arithmetic,means
+mean absolute error	error,values
+mean squared error	average,squares,errors,values,squaring,measure,error
+median	value,halves,dataset,median,idea,mean,outliers,elements,average
+merge (git)	git
+message chain	object.geta(,.getb,.getc(,caller,relationship,chain,link,dependency
+method	implementation,function,objects,class
+middle man	methods,class,author
+milestone	target,project,issues
+mime type	contents,files,internet,acronym,purpose,mail,extension,mime,types,filename,extensions,`.png,png,images
+minimum spanning tree	tree,data,structure,edges,nodes,graph,weights,spanning,algorithm
+missing value	value,null,absence,data,values
+mit license	license,people,software,restrictions
+mixture of experts	architecture,expert,networks,experts,input
+mmlu	benchmark,knowledge,subjects,stem,humanities,sciences
+mock object	replacement,program,behavior,mock,objects,unit,tests,databases,web,services,systems
+mode	value,values,dataset
+model	specification,relationship,variables
+model serving	infrastructure,techniques,llms,production
+module	software,package,library
+monte carlo method	algorithm,randomness
+moving average	mean,values,series,data
+multi-threaded	operations,programs,ones
+mutable data	data,bug,production,debugger,execution,value
+mutable type	object
+mutation	data,element,array,record,database
+n-gram	sequence,items,words,language,trigram,grams,input,linguistics
+n-th root	root,times,power,reciprocal
+na	value,data
+naive bayes classifier	classification,algorithm,bayes,theorem,feature
+name collision	ambiguity,things,program,languages,namespaces,collisions
+named argument	function,parameter,value,call
+namespace	collection,names,program,isolation,namespaces,function,object,class,module,namespace,references,scope,concept
+nano (editor)	text,editor,unix,systems
+natural language processing	linguistics
+negative selection	elements,vector,data,structure,indices
+neural network	family,algorithms,patterns,data,neurons,network,layers,nodes,layer,node,inputs
+node	element,graph,nodes,edges,data,names,weights
+non-blocking execution	program,operation,progress,systems,execution,file,work,data,filesystem,cpu
+non-parametric (statistics)	branch,tests,distribution,population,samples,kruskal,wallis,dunn,test,examples
+normal distribution	distribution,bell,curve,shape,datasets,properties
+nosql database	database,model,fact,databases,sql,query,language
+null	value,object,null,vector
+null check	null,checks,tic,band,aid,object,reminder,tony,hoare,invention,dollar,mistake
+null hypothesis	claim,patterns,data,chance,claims,hypothesis
+nullary expression	expression,arguments,value
+numpy	source,python,package,arrays,vectors,matrices,dimension,syntax,matlab,software,functions,operations,algebra,fourrier,transform,generation,values
+object	object,programming,structure,data,instance,class,operations,methods
+object-oriented programming	style,programming,functions,data,objects,interfaces
+objective function	function,variables,goodness,solutions,optimization,problem
+obscured intent	function,minutes,overtime,pay,letter,variables,magic,numbers,whitespace,intent,layers,obfuscation
+observation	value,property,member,population
+oddball solution	problem,solutions,files,adapter,socket,logic,approach
+off-by-one error	error,programming,program,element,structure,+1`,elements
+open license	license,re-use,mit,gpl,software,data,prose,outputs
+open science	software,data,publications
+openrefine	source,desktop,application,data,cleanup,transformations,wrangling
+operating system	program,interface,hardware,operating,computer
+optional_parameter	parameter,value,function,programming,languages,programmers,default,values,parameters,arguments,keyword
+orcid	researcher,contributor,author,works,orcids,people,dois,documents
+orthogonality	ability,features,software,combination,systems,interactions
+outlier	values,measurement,recording,errors,events,outliers,statistics
+overfitting	model,dataset,others
+p value	probability,null_hypothesis,variation,chance,p-value,effect
+package	collection,code,data,documentation,languages,library,module
+package manager	program,track,software,computer,dependencies
+pager	program,lines,text
+pandas	source,python,package,data,structures,series,tool,analysis,manipulation
+parallel inheritance hierarchies	basicuser,basicfunctions,premiumuser,premiumfunctions,subclass,hierarchy,mirror,cost,feature
+parameter	variable,function,definition,value,parameters,arguments,concepts,variables,values
+parametric (statistics)	branch,tests,distribution,population,samples,anova,student,examples
+parent (in a tree)	node,tree,child,root,parent
+parent class	object,programming,class,sub,child
+parent directory	directory,interest,parent,root,filesystem
+parse	text,program,web,page,data,structure,memory
+pass (a test)	test
+patch	file,changes,files,markers,individual,change
+path (in filesystem)	string,location,filesystem,unix,directories,path,`/`
+pattern rule	build,rule,file,pattern,rules,variables,filenames
+peanuts	comic,strip,charles,schulz,names,versions
+perceptron	network,#neural_network,neuron,_n_,inputs,sum,firing,value
+permalink	link,url
+perplexity	measurement,probability,model,sample,perplexity,performance
+phony target	build,target,file,targets,commands,makefile
+pip install packages	package,manager,python,pip,download,installation,packages,library
+pipe (in the unix shell)	`|`,output,input
+pipe operator	output,input
+pivot table	technique,data,cell,sum,average,function,subset,row,column
+pointcloud	data,points,space
+poisson distribution	distribution,probability,events,interval,rate,event
+positional argument	argument,function,value,definition
+post office protocol	internet,protocol,email,clients,messages,server,pop3,version,pop
+posterior distribution	probability,distribution,likelihood,function
+pothole case	naming,style,parts
+pre-training	phase,models,language,understanding,datasets
+preamble	series,commands,document,\begin{document},command,preamble,formatting,attributes,parameters,section,packages,\usepackage{},functionalities
+prerequisite	build,target
+primitive obsession	phone,string,price,float,concepts,types,primitives,validation,logic
+principal component analysis	algorithm,axis,data,variation
+prior distribution	probability,distribution,starting,bayes,theorem,posterior_distribution
+probability distribution	description,outcomes,event,probability
+procedural generation	data,file,sizes,amount,content,randomness,expense,processing,power
+procedural programming	style,programming,functions,data,contrast,styles,object
+process	operating,representation,program,memory,identity,user,connections,files
+product manager	person,features,product
+production code	software,user,code,test,deployment,infrastructure,programmers
+profiling	code,function,memory,profiling,amount,data
+project manager	person,project
+prompt	text,repl,shell,command,default,prompt,unix,python
+prompt engineering	practice,inputs,prompts,llms,outputs
+protocol	standard,pieces,software,network,protocol,http,messages,clients,servers,world,web,object,programs,protocols,interactions,objects,classes
+provenance	record,data
+pseudo-random number	value,randomness,universe,observers
+pseudo-random number generator	function,numbers
+pull indexing	indexing,value,location,index,vector,element,source
+pull request	request,feature,correction,user,fork,git,repository,developer,change,changes
+push indexing	indexing,value,location,index,vector,element,source,gaps,collisions
+python	source,programming,language,indentation,control,structure
+python package index	party,software,repository,python,package,pypi,packages,scripts,wheels
+python software foundation	organization,development,python
+quantile	values,groups,size,quantile,quintile
+quantization	model,precision,bit,memory,usage,inference,speed
+query string	portion,url,question,mark,parameters,http,request,value,pairs
+quosure	data,structure,expression,environment
+quoting function	function,expressions,values
+r (programming language)	source,programming,language,data,science
+r consortium	community,users,maintainers,developers,members,institutions,companies,development,growth
+r foundation	non-profit,development,core,team,support,member,consortium
+r hub	platform,package,platforms,preparation,cran,submission
+r markdown	dialect,markdown,authors,prose,code,document
+raise (an exception)	program,exception,error,handling
+random forests	algorithm,regression,classification,collection,decision,trees,forest,tree,votes
+raster image	image,matrix,pixels
+reactive programming	style,programming,actions,events
+reactive variable	variable,value,values,variables,shiny
+read-eval-print loop	program,command,user,repls,ideas
+readme	text,file,information,project,software,package
+reciprocal	reciprocal,power
+record	values,record,tuple,row,table,fields
+recurrent neural network	class,networks,connections,nodes,cycle,network,behavior,tasks,speech,handwriting,recognition
+recursion	function,call,version
+recycle	values,vector,sequence,length,python,numpy,broadcasting
+redirection	request,web,page,service
+refactoring	software,behavior
+refused bequest	tower,minion,notimplemented,move,inheritance,contract,support,subclass,runtime,exception,apology
+regression testing	testing,software,things
+regular expression	pattern,text,expressions,regexp,regex,tools
+reinforcement learning	machine,learning,algorithm,goals,feedback,progress
+reinforcement learning from human feedback	training,approach,preferences,model,outputs,behaviors
+relational database	database,information,tables,fields,columns,records,rows
+relative error	value,difference,error
+relative path	path,destination,location,working,directory,equivalent,directions,terms
+relative row number	index,row,portion,table
+remote login	session,computer,ssh
+remote repository	repository,computer,tools,git,changes,repositories,work
+repository	version,control,files,project,metadata,history
+reprex	questions,coding,problems,filing,issues,github,reprex,others,problem,package
+reproducible example	reprex
+reproducible research	practice,research,results,researcher,person,analysis,code,data
+required setup or teardown code	socket,environment,variables,call,object,problem
+research software engineer	responsibility,software,researchers
+research software engineering	practice,methods,software,researchers
+reserved word	word,character,string,meaning,programming,scripting,language,words,names,variables,constants,compiler,interpreter
+restructured text	plaintext,markup,format,python,documentation
+retrieval-augmented generation	architecture,llms,knowledge,retrieval,ground,responses,information
+revision	commit
+right join	join,data,tables,keys,table,match,fields,key,columns,null,value,signifier
+roc curve	roc,curve,receiver,operating,graph,performance,classifier,classification,thresholds,rate,recall,sensitivity,axis
+root (in a tree)	node,tree,nodes,children,parent
+root directory	directory,root,slash
+root mean squared error	root,error,deviation,units,data
+rotating file	files,information,file,results,day,week,tuesday
+s	language,bell,labs,data,analysis,modeling,graphics,dialect
+s3	framework,object,programming
+s4	framework,object,programming
+sandbox	testing,environment,production,operations,security,reasons
+sanity check	test,outcome,calculation,script,analysis,sense,visualisation
+scalar	value,scalars,languages,values,vectors,unit,length
+schema	specification,format,dataset,content,table
+scope	portion,program,definition,closure
+script	program,language,user,programmers
+search path	list,directories,program,unix,shell,search,path,variable
+secure shell	protocol,program,access,server,channel,information
+seed	value,generator
+select	columns,rows,table,location
+selecting on the dependent variable bias	study,cases,variable,value,values,bias
+self join	join,table
+semantic versioning	standard,software,releases,version,identifier,major.minor.patch,changes,versions,features,bugs
+sense vote	vote,discussion,meeting
+sensitivity	measure,classification,model,rate,proportion,people,disease,sensitivity
+sequential data	list,data,items,property,item
+server	program,database,manager,web,server,data,client,request
+shader	program,gpu,graphics,lighting,position,vertices,scene,programming,compute,shaders,#compute_shader
+shebang	unix,character,sequence,`#!/usr,bin,python,file,shell,program
+shell	command,interface,user,operating,bash,unix,macos,powershell,windows
+shell script	commands,shell,file,script,program
+shell variable	unix,shell,variables,home`,user,home,directory,path`,search,path
+shiny	package,web,applications,data,graphs,tables,html,css,javascript
+short circuit test	test,arguments,languages,expression
+short identifier (of commit)	characters,identifier,identifiers,people,repository,history
+short option	letter,identifier,command,argument,flags,dash
+shotgun surgery	feature,change,files
+side effect	change,function,finishes,variable,writing,file,effects,programs,people,program
+side effects	set_gold,amount,dancing,animation,payday,timer,methods,behavior,callers,debuggers
+signal (a condition)	program,event,condition,exception,python,hand,raising,exceptions,situations
+simple mail transfer protocol	internet,communication,protocol,email
+simple mail transfer protocol secure	smtp,tls
+single square brackets	brackets,structure,index,value,range,values
+single-threaded	model,program,execution,people
+singleton	element,class,instance
+singleton pattern	design,pattern,singleton,object,resource,service,database,cache,programming,constructor,class
+slug	portion,page,url,https://www.mysite.com/category/post-name`,,slug,post
+snake case	pothole
+software distribution	programs,collection
+source code	source,code,origin,means,interpreter,compiler,series,commands,program,note,generators,applications
+source distribution	software,distribution,source,code,programs,target,computer
+special case	statement,edge,logic,hotfix,reader,branch,head
+specificity	measure,classification,model,rate,proportion,people,disease,specificity
+spectral analysis	record,data,sequence,power,frequency,spectrum,analysis,problem
+speculative generality	base,class,hierarchy,parameters,feature,abstractions,future,code,generality
+sprint	period,work,project
+sql	language,writing,queries,database,acronym,query
+square root	root
+ssh key	string,bits,file,user,ssh,key,parts
+stack frame	section,call,stack,details,function
+stack overflow	question,answer,site,programmers
+stale (in build)	date,prerequisite,build,manager,job,things
+standard deviation	values,dataset,mean,root,variance
+standard error	communication,channel,error,messages
+standard input	communication,channel,input,keyboard,pipe
+standard normal distribution	distribution,mean,deviation,values,distributions,parameters
+standard output	communication,channel,output,screen,pipe
+status variable	loop,check,flags,control,flow,return,logic
+stratified sampling	values,population
+stream	flow,data,bits,network,connection,bytes,file
+string	block,text,program,character,string
+string interpolation	text,values,string,output
+student's t-distribution	distribution
+subcommand	command,family,commands,git,commit`,subcommand
+subdirectory	directory
+supervised learning	machine,learning,algorithm,values,training,data
+support vector machine	learning,algorithm,points,dataset,space,sets
+synchronous	programming,operations,ones
+systematic error	bias
+t-distribution	variation,distribution,variance,sample,advance
+tab completion	technique,repls,shells,programming,editors,command,filename,text,tab,key
+table	records,database,observations,data,frame,tables,rows,record,observation,columns,field,variable
+tag (in version control)	label,commit
+temperature	hyperparameter,randomness,text,generation
+template method pattern	design,pattern,parent,class,sequence,operations,methods,child,classes,steps
+temporary field	field,months,year,calculation,object,moment,relevance
+ternary expression	expression,parts,expressions,ternary,languages
+tessellation shader	shader,stage,rendering,pipeline,primitives,resolution,mesh,memory,geometry,shaders,shape
+test data	test,data,portion,dataset,correctness,machine,learning,algorithm,training,model
+test runner	program,software,tests,results
+test-driven development	programming,practice,tests,feature,bug,goal
+three vs	volume,velocity,variety,data
+throw (exception)	exception
+tibble	replacement,data,frame,columns,rows,tidyverse
+ticket	issue
+ticketing system	issue,tracking
+tidy data	data,conditions,cleaning,exploration,analysis,variable,column,observation,row,unit,table
+tidymodels	collection,packages,modeling,analysis,philosophy
+tidyverse	collection,packages,data,ways
+time series	measurements,times,intervals
+timestamp	identifier,timestamps,iso,date,format,portability
+token	unit,text,language,models,tokens,pieces,character,sequences
+tolerance	test,tolerances,terms,error
+top-k and top-p sampling	techniques,token,selection,generation
+training data	training,data,portion,dataset,machine,learning,algorithm,test,model
+tramp data	data,chain,methods,function,parameter
+transfer learning (deep learning)	transfer,learning,stages,pre-training,phase,network,dataset,tuning,specifics,idea,knowledge,task
+transformer	network,architecture,llms,self,attention,mechanisms,sequences
+transitive dependency	dependency
+transport layer security	protocol,communications,computer,network
+tree	graph,node,root,parent
+triage	issues,project,priorities,triage,responsibilities,manager
+true	boolean,logic,programming
+true negative	data,points
+true positive	data,points
+truthy	context
+tuple	data,parts,color,components,specification,python,tuples,values
+two hard problems in computer science	quote,phil,karlton,problems,computer,science,cache,invalidation,naming,things,variations,problem,errors
+type coercion	data,integer
+type embedded in name	playername,datestring,userlist,annotation,today,tomorrow
+unary expression	expression,argument,log
+uncommunicative name	data,val,temp,get_f,code,reverse,engineering,abbreviation,author,self
+unicode	standard,codes,thousands,characters,symbols,unicode,numbers,standards,utf
+uniform resource locator	address,world,web.,urls,web,pages,datasets,database,queries,query,string
+unit test	test,function,feature,piece,software,pass,error
+unix	unix,family,operating,systems,at&t,bell,labs,features,tools,functionality,nature
+unsupervised learning	algorithms,data,advance,groups
+up-vote	vote,favor
+update operator	operator
+upstream repository	repository,programmers,changes,pull,request
+user interface	platform,interaction,user,machine,text,command,interface,graphics,windows,methods,voice,interfaces
+utf-8	codes,unicode,characters,memory,ascii,standard
+variable (data)	attribute,population
+variable (program)	program,data,variable,value,definition
+variable arguments	function,ability,arguments,python,args,`**,kwargs
+variance	values,dataset,mean,average,differences,deviation,units,data,variance
+vector	sequence,values,vectors,data,structure,scalar,vector,element
+vectorize	code,operations,vectors,element,loops
+version control system	changes,software,development
+vertex shader	shader,stage,rendering,pipeline,operations,vertices,scene,vertex,properties,position,per-vertex,lighting,fragment,shaders,colour,pixel,screen
+vertical separation	variables,top,lines,logic
+vignette	guide,details,package,readme,function,documentation
+vim (editor)	default,text,editor,unix,vim,learning,curve,nano,user,shell,commands,expressions,files
+virtual environment	python,virtualenv`,package,software,environments,packages,versions,project,task,environment,default
+virtual machine	program,computer,bit,vms,changes,machine,packages,operating
+visitor pattern	design,pattern,operation,element,data,structure,turn,generator,visitor,elements,function
+walk (a tree)	node,tree,depth,breadth
+while loop	statement,program,statements,loop,body,condition
+whitespace	space,newline,carriage,return,tab,characters,mark,appearance,page,era,typewriters
+wildcard	character,expression,text,`*.csv,filename,`.csv
+workflow	work,tasks,dependencies,inputs,outputs,program,makefile,make,unix,command
+xml	rules,html,tags,documents,data,xml,2000s,complexity,programmers,json
+yaml	yaml,markup,language,data,indentation,parentheses,commas,json,configuration,files,parameters,flavours,markdown,documents

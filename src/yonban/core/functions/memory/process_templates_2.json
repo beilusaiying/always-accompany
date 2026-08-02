@@ -1,0 +1,621 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "P1过程类比模板集合 第26-50号，覆盖恶性循环/良性循环/U型曲线/J型曲线/S型曲线/螺旋上升等独特模式",
+    "range": "26-50",
+    "pattern_distribution": {
+      "循环型": "26-33（8个，含恶性循环4+良性循环4）",
+      "渐进型": "34-41（8个，含J型4+S型4）",
+      "阶段型": "42-50（9个，含U型3+螺旋上升3+其他3）"
+    }
+  },
+  "templates": [
+    {
+      "pattern_id": 26,
+      "pattern_type": "循环型_恶性循环",
+      "description": "焦虑引发回避，回避导致能力退化，退化加重焦虑，形成自我强化的下行螺旋。每轮循环比上轮更深。",
+      "stages": [
+        { "stage": 1, "name": "触发点", "description": "压力/失败/负面评价触发初始焦虑" },
+        { "stage": 2, "name": "回避行为", "description": "为缓解焦虑选择逃避、拖延、放弃" },
+        { "stage": 3, "name": "能力退化", "description": "回避导致练习缺失、技能下滑、机会流失" },
+        { "stage": 4, "name": "确认偏误", "description": "退化被解读为'我果然不行'，强化原有信念" },
+        { "stage": 5, "name": "焦虑加重", "description": "比上轮更强的焦虑，进入下一轮循环" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "心理",
+          "example": "社交焦虑→回避社交→社交技能退化→更怕社交"
+        },
+        {
+          "domain": "学业",
+          "example": "数学不好→不做题→成绩更差→更厌数学"
+        },
+        {
+          "domain": "编程",
+          "example": "代码烂→不重构→债务积累→越来越难改"
+        }
+      ],
+      "trigger_keywords": ["越来越怕", "干脆不做了", "反正我也不行", "逃避", "拖着不动", "越陷越深", "好像绕不出去"]
+    },
+    {
+      "pattern_id": 27,
+      "pattern_type": "循环型_恶性循环",
+      "description": "信任被破坏后引发过度监控，监控本身制造新的破坏，形成控制-反叛死循环。",
+      "stages": [
+        { "stage": 1, "name": "裂缝出现", "description": "一次欺骗/失信/误解损伤信任基础" },
+        { "stage": 2, "name": "过度补偿", "description": "受伤方以检查/追问/限制试图重建安全感" },
+        { "stage": 3, "name": "窒息反应", "description": "被控制方感到不被信任，产生反抗或隐瞒" },
+        { "stage": 4, "name": "验证恐惧", "description": "新的隐瞒/反抗被解读为'果然有问题'" },
+        { "stage": 5, "name": "信任进一步崩塌", "description": "双方距离拉大，进入下一轮更深的不信任" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "亲密关系",
+          "example": "出轨后查手机→被查者撒谎掩护→发现撒谎→更严格监控"
+        },
+        {
+          "domain": "管理",
+          "example": "员工迟到→打卡监控→员工消极怠工→管理更严"
+        },
+        {
+          "domain": "网络安全",
+          "example": "系统被攻击→过度防火墙→正常流量被拦→绕行出现→更多攻击面"
+        }
+      ],
+      "trigger_keywords": ["查手机", "不相信我", "管太多了", "越查越藏", "信任没了", "互相猜", "管控"]
+    },
+    {
+      "pattern_id": 28,
+      "pattern_type": "循环型_恶性循环",
+      "description": "负面情绪驱动冲动行为，冲动行为带来后果，后果再次产生或加重负面情绪，循环加速。",
+      "stages": [
+        { "stage": 1, "name": "情绪积压", "description": "愤怒/委屈/绝望累积到临界点" },
+        { "stage": 2, "name": "冲动释放", "description": "爆发性言语攻击、自我破坏、冲动消费等行为" },
+        { "stage": 3, "name": "即时缓解", "description": "短暂的情绪出口，假性平静" },
+        { "stage": 4, "name": "后果浮现", "description": "关系破裂、债务、悔恨、外部惩罚" },
+        { "stage": 5, "name": "情绪反弹", "description": "后果引发更强烈的羞耻/愤怒/绝望，重启循环" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "情绪健康",
+          "example": "压力大→暴饮暴食→自责→更大压力→再次暴食"
+        },
+        {
+          "domain": "财务",
+          "example": "焦虑→冲动购物→债务→更焦虑→更多购物"
+        },
+        {
+          "domain": "社交媒体",
+          "example": "孤独→发泄性发帖→引发争论→更情绪化→更依赖发帖"
+        }
+      ],
+      "trigger_keywords": ["控制不住", "发泄完又后悔", "冲动消费", "气头上", "爆发", "循环发作", "一犯再犯"]
+    },
+    {
+      "pattern_id": 29,
+      "pattern_type": "循环型_恶性循环",
+      "description": "资源不足→无法投入改善→问题恶化→资源更少，贫困陷阱和系统性资源剥夺的普遍模式。",
+      "stages": [
+        { "stage": 1, "name": "资源起点低", "description": "时间/金钱/精力/社会资本的初始匮乏" },
+        { "stage": 2, "name": "短视决策", "description": "资源稀缺迫使优先解决眼前危机而非长期投资" },
+        { "stage": 3, "name": "改善机会流失", "description": "无法学习技能/健康投入/建立人脉/储蓄" },
+        { "stage": 4, "name": "位置下降", "description": "相对竞争力下滑，获取新资源的通道收窄" },
+        { "stage": 5, "name": "资源进一步减少", "description": "陷入更深的匮乏，下一轮选择空间更小" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "经济",
+          "example": "穷→为维持生存无法教育投资→下代起点更低"
+        },
+        {
+          "domain": "健康",
+          "example": "睡眠不足→无力运动→更疲惫→更难入睡"
+        },
+        {
+          "domain": "项目管理",
+          "example": "人手不足→无暇写文档→新人上手慢→更需要人手"
+        }
+      ],
+      "trigger_keywords": ["顾不上", "太累了没时间", "先过了眼前再说", "恶性循环", "一穷二白", "资源不够", "撑不住"]
+    },
+    {
+      "pattern_id": 30,
+      "pattern_type": "循环型_良性循环",
+      "description": "小成功积累自信，自信提升投入度，投入带来更大成功，形成自我强化的上升飞轮。",
+      "stages": [
+        { "stage": 1, "name": "初始胜利", "description": "一次可感知的小成功或正向反馈" },
+        { "stage": 2, "name": "自信提升", "description": "成功经验修正自我评估，降低恐惧" },
+        { "stage": 3, "name": "主动投入", "description": "更愿意尝试、更多练习、更高目标" },
+        { "stage": 4, "name": "技能/资源积累", "description": "投入带来能力增长和资源扩展" },
+        { "stage": 5, "name": "更大成功", "description": "能力和资源支撑更高水平的成就，进入下一轮" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "学习",
+          "example": "读懂一本书→自信读第二本→建立阅读习惯→知识积累"
+        },
+        {
+          "domain": "创业",
+          "example": "第一个付费用户→信心→更好产品→更多用户"
+        },
+        {
+          "domain": "健身",
+          "example": "第一周坚持→身体感觉好→更想练→体能提升"
+        }
+      ],
+      "trigger_keywords": ["越来越顺", "找到感觉了", "做成了一件", "开始有点信心", "越做越想做", "飞轮转起来了"]
+    },
+    {
+      "pattern_id": 31,
+      "pattern_type": "循环型_良性循环",
+      "description": "互惠行为产生正向连接，连接促进合作，合作创造共同收益，共同收益强化互惠意愿。",
+      "stages": [
+        { "stage": 1, "name": "主动给予", "description": "一方主动提供帮助/价值/善意" },
+        { "stage": 2, "name": "互惠触发", "description": "接受方感知到善意并产生回馈冲动" },
+        { "stage": 3, "name": "关系深化", "description": "双向给予建立信任与情感连接" },
+        { "stage": 4, "name": "协同效应", "description": "基于信任的合作产生超出个人的成果" },
+        { "stage": 5, "name": "共同收益分享", "description": "成果强化双方继续互惠合作的动机" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "社群",
+          "example": "分享知识→有人回答我的问题→更愿意分享→社群活跃"
+        },
+        {
+          "domain": "生态",
+          "example": "蜜蜂采蜜传粉→花朵繁殖→更多花蜜→蜂群壮大"
+        },
+        {
+          "domain": "开源软件",
+          "example": "贡献代码→被他人使用改进→反馈回自己项目→更强的工具"
+        }
+      ],
+      "trigger_keywords": ["互相帮", "你来我往", "良性互动", "合作很顺", "彼此支持", "共赢", "一起变好"]
+    },
+    {
+      "pattern_id": 32,
+      "pattern_type": "循环型_良性循环",
+      "description": "好奇心驱动探索，探索带来发现，发现激发更深层好奇心，形成自我驱动的认知扩张循环。",
+      "stages": [
+        { "stage": 1, "name": "好奇触发", "description": "遇到未知/矛盾/有趣现象激发探索欲" },
+        { "stage": 2, "name": "主动调查", "description": "阅读/实验/询问/尝试以满足好奇心" },
+        { "stage": 3, "name": "新知获得", "description": "发现新概念、新关联、新技能" },
+        { "stage": 4, "name": "视野扩展", "description": "新知识打开更多'已知未知'的边界" },
+        { "stage": 5, "name": "更多好奇", "description": "扩大的视野产生更多有质量的好奇心" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "科研",
+          "example": "一个实验结果→更多假设→更多实验→更多发现"
+        },
+        {
+          "domain": "阅读",
+          "example": "书里提到一个词→查资料→发现一个领域→更多书单"
+        },
+        {
+          "domain": "旅行",
+          "example": "去一个地方→了解当地文化→想看更多文化→计划下一程"
+        }
+      ],
+      "trigger_keywords": ["越了解越想知道", "发现新大陆", "好奇心被勾起来", "越学越有意思", "停不下来", "打开了新世界"]
+    },
+    {
+      "pattern_id": 33,
+      "pattern_type": "循环型_良性循环",
+      "description": "健康习惯通过生理正反馈相互支撑，形成整体健康状态的自我维持与强化系统。",
+      "stages": [
+        { "stage": 1, "name": "基础习惯建立", "description": "一个核心健康行为开始稳定执行（睡眠/运动/饮食其一）" },
+        { "stage": 2, "name": "生理状态改善", "description": "精力/情绪/认知功能提升" },
+        { "stage": 3, "name": "第二习惯更易建立", "description": "更好的状态降低其他健康行为的阻力" },
+        { "stage": 4, "name": "协同效应", "description": "多个健康习惯相互强化，效果叠加" },
+        { "stage": 5, "name": "整体状态跃升", "description": "新的高基准状态使所有习惯更易维持" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "个人健康",
+          "example": "睡好→精力充沛→想运动→睡得更好→饮食变好"
+        },
+        {
+          "domain": "组织",
+          "example": "团队氛围好→成员发挥好→项目成功→更好氛围"
+        },
+        {
+          "domain": "城市规划",
+          "example": "绿化增加→空气好→居民户外活动→社区活跃→更多绿化投入"
+        }
+      ],
+      "trigger_keywords": ["状态好了很多", "好习惯带动", "连带效应", "整体都上来了", "良性循环", "状态稳了"]
+    },
+    {
+      "pattern_id": 34,
+      "pattern_type": "渐进型_J型曲线",
+      "description": "投入初期无效果甚至退步，越过临界点后指数级增长。需要在看不到收益阶段坚持投入。",
+      "stages": [
+        { "stage": 1, "name": "投入启动", "description": "开始系统性投入资源（时间/金钱/精力）" },
+        { "stage": 2, "name": "负向缓冲期", "description": "短期内成本显现但收益未显，可能略有退步" },
+        { "stage": 3, "name": "沉默期", "description": "内部积累正在发生但外部指标无变化" },
+        { "stage": 4, "name": "临界突破", "description": "越过某个阈值，系统开始正向响应" },
+        { "stage": 5, "name": "指数增长", "description": "网络效应/复利/规模效应驱动非线性增长" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "语言学习",
+          "example": "学外语前期听不懂→临界词汇量后→输入突然可理解"
+        },
+        {
+          "domain": "创业",
+          "example": "烧钱无用户→病毒传播临界→用户爆发增长"
+        }
+      ],
+      "trigger_keywords": ["一直没起色", "感觉在白费力气", "坚持有用吗", "还要多久才有效果", "看不到进展", "等爆发"]
+    },
+    {
+      "pattern_id": 35,
+      "pattern_type": "渐进型_J型曲线",
+      "description": "技能习得早期充满挫败感，但越过'自觉无能'阶段后进入高速学习通道。",
+      "stages": [
+        { "stage": 1, "name": "不知道自己不会", "description": "对领域难度无感知，盲目乐观" },
+        { "stage": 2, "name": "知道自己不会", "description": "接触真实难度，挫败感最强的阶段" },
+        { "stage": 3, "name": "刻意练习期", "description": "需要高度专注才能勉强完成基础任务" },
+        { "stage": 4, "name": "自动化起步", "description": "基础动作开始内化，注意力可分配到更高层" },
+        { "stage": 5, "name": "进阶加速", "description": "基础自动化后学习速度显著加快" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "编程",
+          "example": "刚学编程感觉太难→熟悉语法→开始看架构→快速成长"
+        },
+        {
+          "domain": "乐器",
+          "example": "练琴痛苦→基本功熟→开始流畅演奏→进步加速"
+        }
+      ],
+      "trigger_keywords": ["感觉自己太蠢", "怎么一直不会", "学了半天没用", "到底什么时候才能懂", "越学越挫败", "坚持得了吗"]
+    },
+    {
+      "pattern_id": 36,
+      "pattern_type": "渐进型_J型曲线",
+      "description": "变革初期阻力远大于推力，但随着联盟扩大和惯性消除，变化速度超过预期。",
+      "stages": [
+        { "stage": 1, "name": "变革发起", "description": "少数人提出新做法，遭遇体制性阻力" },
+        { "stage": 2, "name": "阻力高峰", "description": "既得利益者反击，早期成本最高" },
+        { "stage": 3, "name": "盟友积累", "description": "成功案例开始出现，首批跟随者加入" },
+        { "stage": 4, "name": "临界质量", "description": "支持者超过阻碍者，惯性转向" },
+        { "stage": 5, "name": "雪崩式扩散", "description": "变革速度超过原有系统的自我修复能力" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "社会运动",
+          "example": "少数人倡导→被打压→积累支持→一夜扩散"
+        },
+        {
+          "domain": "技术替代",
+          "example": "新技术被嘲笑→小圈子用→企业采用→旧技术被淘汰"
+        }
+      ],
+      "trigger_keywords": ["推不动", "都不接受", "一个人说没用", "等时机成熟", "还没到时候", "改变太难了"]
+    },
+    {
+      "pattern_id": 37,
+      "pattern_type": "渐进型_J型曲线",
+      "description": "复利投资短期收益微不足道，但时间越长增长越快，最终总收益由最后阶段主导。",
+      "stages": [
+        { "stage": 1, "name": "本金投入", "description": "初始资源/技能/关系开始积累" },
+        { "stage": 2, "name": "微小增长", "description": "复利效果对小基数几乎不可感知" },
+        { "stage": 3, "name": "基数扩大", "description": "绝对增量开始明显但相对增速未变" },
+        { "stage": 4, "name": "自我加速", "description": "较大基数上的复利开始产生显著跃升" },
+        { "stage": 5, "name": "指数收获", "description": "绝大多数总收益集中在最后阶段实现" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "投资",
+          "example": "早期存款利息少→10年后利息可观→30年后本利翻几倍"
+        },
+        {
+          "domain": "专业积累",
+          "example": "知识点→知识体系→解决复杂问题能力→专家影响力"
+        }
+      ],
+      "trigger_keywords": ["看不出效果", "一点一点攒", "长期主义", "现在看不到回报", "慢慢来", "复利"]
+    },
+    {
+      "pattern_id": 38,
+      "pattern_type": "渐进型_S型曲线",
+      "description": "创新从小众起步，经历快速增长后趋于饱和。系统性替代发生在S曲线末端与新S曲线起点的交叠处。",
+      "stages": [
+        { "stage": 1, "name": "萌芽期", "description": "少数早期采用者接触，市场渗透率极低" },
+        { "stage": 2, "name": "跨越鸿沟", "description": "越过早期采用者与主流市场的鸿沟" },
+        { "stage": 3, "name": "爆发增长", "description": "网络效应+口碑驱动，增速最快阶段" },
+        { "stage": 4, "name": "增速放缓", "description": "市场饱和，边际新用户获取成本上升" },
+        { "stage": 5, "name": "成熟平台期", "description": "增长趋于平缓，竞争转向存量优化" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "技术扩散",
+          "example": "智能手机从极客→主流→普及→存量市场"
+        },
+        {
+          "domain": "疾病传播",
+          "example": "疫情初发→指数扩散→高峰→群体免疫后平稳"
+        }
+      ],
+      "trigger_keywords": ["刚开始没人用", "突然火了", "已经饱和了", "增速下来了", "还有多少空间", "扩散规律"]
+    },
+    {
+      "pattern_id": 39,
+      "pattern_type": "渐进型_S型曲线",
+      "description": "能力/技能的习得呈S型：基础阶段缓慢，进入临界后快速掌握，最终在精通边界趋于平稳。",
+      "stages": [
+        { "stage": 1, "name": "入门摸索", "description": "基本概念建立，进展缓慢且费力" },
+        { "stage": 2, "name": "模式识别", "description": "开始识别规律，学习加速" },
+        { "stage": 3, "name": "快速进步期", "description": "框架已建，吸收新知识效率最高" },
+        { "stage": 4, "name": "收益递减", "description": "基础已固，进一步提升需要更大投入" },
+        { "stage": 5, "name": "精通平台期", "description": "高水平平稳，突破需要新的S曲线" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "写作",
+          "example": "从写不出→写得通顺→风格形成→突破瓶颈需大量刻意练习"
+        },
+        {
+          "domain": "管理",
+          "example": "带团队笨手笨脚→摸出节奏→管10人轻松→带100人需新能力"
+        }
+      ],
+      "trigger_keywords": ["感觉到瓶颈了", "进步变慢", "已经不是新手但还差得远", "越来越难提升", "平台期"]
+    },
+    {
+      "pattern_id": 40,
+      "pattern_type": "渐进型_S型曲线",
+      "description": "情感关系的深化遵循S曲线：激情期快速深入，稳定期趋于平稳，需主动注入新刺激避免停滞。",
+      "stages": [
+        { "stage": 1, "name": "陌生吸引", "description": "初始好奇和新鲜感驱动靠近，进展缓慢" },
+        { "stage": 2, "name": "蜜月加速", "description": "多巴胺驱动的高速相互了解和亲密建立" },
+        { "stage": 3, "name": "稳定深化", "description": "真实了解替代幻想，深层连接建立" },
+        { "stage": 4, "name": "习惯化平台", "description": "新鲜感耗尽，关系进入稳态" },
+        { "stage": 5, "name": "重启或停滞", "description": "需要新的共同经历/成长注入第二条S曲线" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "爱情",
+          "example": "初见→热恋→磨合→平稳期→需要共同新体验维持活力"
+        },
+        {
+          "domain": "友谊",
+          "example": "新朋友→频繁互动→了解深化→日常化→需要刺激维持"
+        }
+      ],
+      "trigger_keywords": ["越来越平淡", "没了最初的感觉", "进入舒适区了", "需要新鲜感", "不知道还能聊什么", "关系变了"]
+    },
+    {
+      "pattern_id": 41,
+      "pattern_type": "渐进型_S型曲线",
+      "description": "组织能力在创业期野蛮生长，规范化后放缓，大企业病出现时需要第二增长曲线重新激活。",
+      "stages": [
+        { "stage": 1, "name": "创业混沌期", "description": "快速试错，非正式沟通，灵活但不稳定" },
+        { "stage": 2, "name": "系统化加速", "description": "流程建立后执行效率快速提升" },
+        { "stage": 3, "name": "规模扩张期", "description": "组织能力和市场覆盖同步高速增长" },
+        { "stage": 4, "name": "官僚化减速", "description": "协调成本上升，创新速度下降" },
+        { "stage": 5, "name": "转型或衰退", "description": "需要内部创业/新产品线/文化重塑启动新曲线" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "企业",
+          "example": "小团队→快速扩张→规范化→大企业病→需第二增长曲线"
+        },
+        {
+          "domain": "个人职业",
+          "example": "新人冲劲→经验积累→职级瓶颈→需转型或深耕"
+        }
+      ],
+      "trigger_keywords": ["感觉公司变了", "没有创业时的劲了", "效率越来越低", "需要变革", "增长见顶", "组织老化"]
+    },
+    {
+      "pattern_id": 42,
+      "pattern_type": "阶段型_U型曲线",
+      "description": "适应新环境时先经历满意度下降（离开熟悉），触底后逐渐重建，最终超越原点。",
+      "stages": [
+        { "stage": 1, "name": "出发前兴奋", "description": "对变化抱有期待，满意度高" },
+        { "stage": 2, "name": "文化冲击", "description": "现实与期待落差，迷失感、孤独感上升" },
+        { "stage": 3, "name": "触底期", "description": "最深的挫败感、想放弃或返回原点" },
+        { "stage": 4, "name": "适应重建", "description": "开始找到节奏，建立新支撑系统" },
+        { "stage": 5, "name": "整合超越", "description": "融合新旧，以更宽视角重新定位自我" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "移居异国",
+          "example": "兴奋→文化冲击→孤独触底→融入→双文化视角"
+        },
+        {
+          "domain": "换工作",
+          "example": "新工作期待→适应期低谷→熟悉后重获自信→超越前岗"
+        }
+      ],
+      "trigger_keywords": ["来之前以为会好一点", "现在很难熬", "想回去", "还在适应期", "慢慢好了", "重新找到感觉了"]
+    },
+    {
+      "pattern_id": 43,
+      "pattern_type": "阶段型_U型曲线",
+      "description": "失去重要事物后的悲伤经历否认-愤怒-协议-抑郁-接受的U型轨迹，触底是转化的前提。",
+      "stages": [
+        { "stage": 1, "name": "震惊否认", "description": "无法接受失去，麻木或否认现实" },
+        { "stage": 2, "name": "愤怒抗拒", "description": "对损失来源/自己/命运的愤怒" },
+        { "stage": 3, "name": "抑郁触底", "description": "最深的悲伤和无力感，接近底部" },
+        { "stage": 4, "name": "接受萌发", "description": "开始对现实的初步接纳和意义重建" },
+        { "stage": 5, "name": "整合成长", "description": "失去被纳入自我叙事，形成新的完整感" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "失恋",
+          "example": "不相信→怪罪→最低谷→慢慢接受→重建自我"
+        },
+        {
+          "domain": "重病诊断",
+          "example": "否认→愤怒→谈判→抑郁→接受现状重新生活"
+        }
+      ],
+      "trigger_keywords": ["还没接受", "一直在想为什么", "最难熬的时候", "慢慢好一点了", "走出来了", "哀悼过程"]
+    },
+    {
+      "pattern_id": 44,
+      "pattern_type": "阶段型_U型曲线",
+      "description": "重大系统重构期间，旧系统拆解导致暂时能力下降，但在重建完成后能力显著超越原水平。",
+      "stages": [
+        { "stage": 1, "name": "系统运行", "description": "原有系统/方法正常工作，效率稳定" },
+        { "stage": 2, "name": "开始拆解", "description": "决定重构，旧路径关闭，新路径未就绪" },
+        { "stage": 3, "name": "能力真空", "description": "两套系统都不完整，效率跌至最低" },
+        { "stage": 4, "name": "新系统成形", "description": "重构逐步完成，新路径开始工作" },
+        { "stage": 5, "name": "新水平稳定", "description": "重构后能力、效率、可维护性全面提升" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "代码重构",
+          "example": "正常运行→大重构→混乱期→新架构清晰→性能提升"
+        },
+        {
+          "domain": "组织变革",
+          "example": "旧架构→调整期混乱→新团队磨合→效率超过以前"
+        }
+      ],
+      "trigger_keywords": ["重构期间乱成一团", "新旧交接最难熬", "先破后立", "暂时会更差", "重构会好很多", "忍过这段"]
+    },
+    {
+      "pattern_id": 45,
+      "pattern_type": "阶段型_螺旋上升",
+      "description": "问题不是线性解决的，而是每次以更高视角回到相似主题，每轮理解更深、处理更成熟。",
+      "stages": [
+        { "stage": 1, "name": "第一轮接触", "description": "首次遭遇某个核心主题，以当时能力部分处理" },
+        { "stage": 2, "name": "暂时解决", "description": "问题表面平息，但根源未触达" },
+        { "stage": 3, "name": "更深呈现", "description": "同一主题以更复杂形式再次出现" },
+        { "stage": 4, "name": "高位重访", "description": "以积累的理解重新面对，看到以前看不到的层次" },
+        { "stage": 5, "name": "整合深化", "description": "不是解决了问题，而是与问题建立了更成熟的关系" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "心理治疗",
+          "example": "童年创伤→表面应对→成年再触发→更深疗愈→整合"
+        },
+        {
+          "domain": "哲学思考",
+          "example": "第一次思考死亡→暂时安慰→中年危机再触→更深理解"
+        }
+      ],
+      "trigger_keywords": ["又回到这个问题了", "感觉在兜圈子", "这个问题一直来", "深一层看", "现在理解不一样了", "以前以为解决了"]
+    },
+    {
+      "pattern_id": 46,
+      "pattern_type": "阶段型_螺旋上升",
+      "description": "能力迭代不是直线上升，而是在实践-反思-重构循环中螺旋提升，每轮覆盖同一基础但层次更高。",
+      "stages": [
+        { "stage": 1, "name": "初始实践", "description": "按当前理解动手执行" },
+        { "stage": 2, "name": "收到反馈", "description": "实际结果与预期的差距提供信息" },
+        { "stage": 3, "name": "反思调整", "description": "理解框架被更新" },
+        { "stage": 4, "name": "更高层实践", "description": "带着新框架重新执行同类任务" },
+        { "stage": 5, "name": "元认知发展", "description": "对'如何学习'本身的理解也在提升" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "设计",
+          "example": "做设计→用户反馈差→反思用户思维→更好设计→理解设计本质"
+        },
+        {
+          "domain": "写作",
+          "example": "写文章→反馈→改风格→再写→理解读者而非自我表达"
+        }
+      ],
+      "trigger_keywords": ["一直在进步但感觉有些东西没变", "理解越来越深", "现在回看以前的自己", "同样的事做法不一样了", "层次高了"]
+    },
+    {
+      "pattern_id": 47,
+      "pattern_type": "阶段型_螺旋上升",
+      "description": "文明/思想在遗忘与重新发现中螺旋，每次重访古老智慧都以更高的复杂度重新理解。",
+      "stages": [
+        { "stage": 1, "name": "初始创造", "description": "某观念/技术/文化形式首次被创造" },
+        { "stage": 2, "name": "失传沉淀", "description": "原初语境消失，知识部分遗失" },
+        { "stage": 3, "name": "重新发现", "description": "后来者以新工具/语言重新接触" },
+        { "stage": 4, "name": "现代诠释", "description": "注入当代语境重新理解，含义扩展" },
+        { "stage": 5, "name": "超越原版", "description": "现代版本在某些维度超过原始，但也可能失去原汁味" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "哲学",
+          "example": "古希腊原子论→中世纪遗失→近代原子物理重发现→量子诠释"
+        },
+        {
+          "domain": "建筑",
+          "example": "传统建筑工艺→工业化替代→现代重新发现→高端复古"
+        }
+      ],
+      "trigger_keywords": ["古人早说了", "历史又来了", "以为新的其实是旧的", "重新发现", "传统的智慧", "轮回"]
+    },
+    {
+      "pattern_id": 48,
+      "pattern_type": "阶段型_相变跃迁",
+      "description": "系统在临界点发生非线性跃变，量变积累到质变。跨越临界点前后是本质不同的系统状态。",
+      "stages": [
+        { "stage": 1, "name": "量变积累", "description": "大量小变化在系统内部发生，外部无明显变化" },
+        { "stage": 2, "name": "临界接近", "description": "系统开始出现不稳定信号/波动加大/小扰动影响增大" },
+        { "stage": 3, "name": "临界点", "description": "极小的触发导致系统状态突然改变（蝴蝶效应窗口）" },
+        { "stage": 4, "name": "跃迁发生", "description": "系统在极短时间进入全新稳态" },
+        { "stage": 5, "name": "新稳态建立", "description": "新状态具有不同于旧状态的涌现特性" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "物理",
+          "example": "水温升至99.9°→加热→沸腾气化→完全不同状态"
+        },
+        {
+          "domain": "社会",
+          "example": "不满积压→导火索事件→运动爆发→社会重组"
+        }
+      ],
+      "trigger_keywords": ["突然就变了", "好像一夜之间", "之前还没感觉", "一下子崩了", "拐点", "质变", "彻底不一样了"]
+    },
+    {
+      "pattern_id": 49,
+      "pattern_type": "阶段型_振荡收敛",
+      "description": "系统围绕目标值来回振荡，每次振幅缩小，最终收敛到稳态。常见于反馈控制和学习调整过程。",
+      "stages": [
+        { "stage": 1, "name": "初始偏离", "description": "起点远离目标，第一次校正动作" },
+        { "stage": 2, "name": "过度修正", "description": "校正过头越过目标，到另一侧" },
+        { "stage": 3, "name": "再次修正", "description": "更小幅度修正，比上次偏差小" },
+        { "stage": 4, "name": "振幅收缩", "description": "每次振荡幅度都在缩小" },
+        { "stage": 5, "name": "稳态收敛", "description": "波动趋于消失，系统稳定在目标值附近" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "心理调节",
+          "example": "情绪失控→过度压制→小爆发→压制→逐渐平稳"
+        },
+        {
+          "domain": "工程控制",
+          "example": "温控系统过热→制冷过头→回暖→平衡→稳态"
+        }
+      ],
+      "trigger_keywords": ["矫枉过正了", "又跑到另一个极端", "一会这样一会那样", "慢慢找到平衡", "过头了再拉回来", "调整中"]
+    },
+    {
+      "pattern_id": 50,
+      "pattern_type": "阶段型_分叉决策树",
+      "description": "关键节点处的微小选择导致截然不同的路径，路径依赖使得后来的代价越来越大。",
+      "stages": [
+        { "stage": 1, "name": "共同起点", "description": "所有路径从同一初始条件出发" },
+        { "stage": 2, "name": "第一分叉", "description": "关键节点处的选择，可能看起来微不足道" },
+        { "stage": 3, "name": "路径锁定", "description": "选择激活特定资源/习惯/机会，其他路径逐渐关闭" },
+        { "stage": 4, "name": "路径分化", "description": "两条路径之间的差异越来越明显" },
+        { "stage": 5, "name": "路径依赖固化", "description": "切换路径的成本变得极高，继续走已有路径是理性选择" }
+      ],
+      "cross_domain_instances": [
+        {
+          "domain": "职业",
+          "example": "某年接受/拒绝一个机会→完全不同的职业轨迹→现在很难切换"
+        },
+        {
+          "domain": "技术标准",
+          "example": "QWERTY键盘被采用→路径依赖→优化版本无法替代"
+        }
+      ],
+      "trigger_keywords": ["当初要是", "那个时候决定的", "现在改不了了", "一步走错", "路径锁定了", "回头太难", "命运的岔路口"]
+    }
+  ]
+}

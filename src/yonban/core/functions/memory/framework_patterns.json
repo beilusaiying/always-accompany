@@ -1,0 +1,882 @@
+{
+  "_meta": {
+    "version": "2.0",
+    "description": "P1框架识别层v2: 补充chat/work/airp跨域类比模式，修复airp心理学污染",
+    "base": "framework_patterns.json v1.0",
+    "changes": "work新增5个pattern(共8个); airp新增4个pattern+移除已有4个psychology跨域; chat新增3个pattern(共18个); 保留code原样",
+    "design_ref": "任务MD 20260506 + 97号MD + activation_terms_zh/work/airp.json",
+    "cfn_lex": "CFN-Lex参考帧: Seeking/Communication/Causation/Intentionally_affect/Statement"
+  },
+  "code": {
+    "Regression": {
+      "trigger": [
+        "改了",
+        "坏了",
+        "之前好的",
+        "突然不行",
+        "白屏",
+        "报错了",
+        "崩了"
+      ],
+      "structure": "change→cascade→scope_check",
+      "direction": [
+        "连锁影响",
+        "回归验证",
+        "影响边界",
+        "范围检查"
+      ],
+      "cross_domain": {
+        "psychology": "改变引发阻抗",
+        "economics": "蝴蝶效应",
+        "medicine": "代偿反应"
+      }
+    },
+    "Silent_Failure": {
+      "trigger": [
+        "不报错",
+        "没反应",
+        "不工作",
+        "没效果",
+        "静默"
+      ],
+      "structure": "surface_ok→internal_broken→deep_dig",
+      "direction": [
+        "隐匿问题",
+        "深层排查",
+        "日志追踪",
+        "状态验证"
+      ],
+      "cross_domain": {
+        "medicine": "隐匿性疾病",
+        "psychology": "压抑情绪"
+      }
+    },
+    "Drift": {
+      "trigger": [
+        "不一致",
+        "对不上",
+        "两边",
+        "同步",
+        "不对齐"
+      ],
+      "structure": "A_updated→B_stale→sync",
+      "direction": [
+        "两端同步",
+        "版本对齐",
+        "一致性检查"
+      ],
+      "cross_domain": {
+        "relationship": "渐行渐远",
+        "physics": "相位偏移"
+      }
+    },
+    "Race_Condition": {
+      "trigger": [
+        "异步",
+        "时序",
+        "偶发",
+        "有时候",
+        "不稳定"
+      ],
+      "structure": "concurrent→race→order_matters",
+      "direction": [
+        "时序控制",
+        "并发安全",
+        "锁机制",
+        "原子操作"
+      ],
+      "cross_domain": {
+        "social": "抢资源冲突",
+        "traffic": "死锁十字路口"
+      }
+    },
+    "Schema_Mismatch": {
+      "trigger": [
+        "字段",
+        "格式",
+        "对不上",
+        "映射",
+        "类型"
+      ],
+      "structure": "definition_mismatch→mapping_table",
+      "direction": [
+        "字段映射",
+        "格式转换",
+        "接口契约",
+        "类型校验"
+      ],
+      "cross_domain": {
+        "language": "翻译失真",
+        "culture": "文化误读"
+      }
+    }
+  },
+  "chat": {
+    "依恋断裂": {
+      "trigger": [
+        "分手",
+        "失去",
+        "离开",
+        "再也",
+        "走了"
+      ],
+      "structure": "bond_broken→search→adaptation",
+      "direction": [
+        "哀悼过程",
+        "连接替代",
+        "自我修复",
+        "新锚点"
+      ],
+      "cross_domain": {
+        "network": "断网重连",
+        "biology": "断肢再生"
+      }
+    },
+    "边界侵入": {
+      "trigger": [
+        "控制",
+        "PUA",
+        "越界",
+        "逼",
+        "强迫",
+        "不让"
+      ],
+      "structure": "other_enters_private→defense→boundary",
+      "direction": [
+        "边界划定",
+        "自我保护",
+        "拒绝权利",
+        "安全距离"
+      ],
+      "cross_domain": {
+        "security": "防火墙规则",
+        "territory": "领土主权"
+      }
+    },
+    "价值否定": {
+      "trigger": [
+        "白费",
+        "不被认可",
+        "没用",
+        "不值得",
+        "看不起"
+      ],
+      "structure": "effort→no_return→meaning_collapse",
+      "direction": [
+        "意义重建",
+        "内在价值",
+        "外部评价脱钩"
+      ],
+      "cross_domain": {
+        "economics": "沉没成本谬误",
+        "philosophy": "存在主义"
+      }
+    },
+    "安全感缺失": {
+      "trigger": [
+        "害怕",
+        "焦虑",
+        "不确定",
+        "万一",
+        "担心",
+        "紧张"
+      ],
+      "structure": "threat→defense→need_anchor",
+      "direction": [
+        "确定性锚点",
+        "最坏预案",
+        "当下着陆",
+        "掌控感恢复"
+      ],
+      "cross_domain": {
+        "architecture": "地基加固",
+        "military": "战略纵深"
+      }
+    },
+    "倾诉需求": {
+      "trigger": [
+        "烦死了",
+        "想说",
+        "没人听",
+        "憋",
+        "受不了"
+      ],
+      "structure": "pressure→need_outlet→be_heard",
+      "direction": [
+        "情绪出口",
+        "被听见",
+        "不评判",
+        "陪着就好"
+      ],
+      "cross_domain": {
+        "physics": "泄压阀",
+        "hydrology": "泄洪"
+      }
+    },
+    "失眠困境": {
+      "trigger": [
+        "睡不着",
+        "失眠",
+        "睡不好",
+        "熬夜",
+        "凌晨",
+        "入睡难",
+        "翻来覆去",
+        "半夜",
+        "早醒",
+        "脑子停不下来"
+      ],
+      "structure": "arousal→thought_loop→no_sleep",
+      "direction": [
+        "身体着陆",
+        "感官切换",
+        "放下解决",
+        "接受清醒"
+      ],
+      "cross_domain": {
+        "programming": "进程停不下来"
+      }
+    },
+    "空洞无聊": {
+      "trigger": [
+        "无聊",
+        "没意思",
+        "没事做",
+        "闲",
+        "发呆",
+        "不知道做什么",
+        "空虚",
+        "没劲",
+        "百无聊赖"
+      ],
+      "structure": "understimulation→drift→meaning_void",
+      "direction": [
+        "微刺激启动",
+        "感官激活",
+        "好奇触点",
+        "流动状态"
+      ],
+      "cross_domain": {
+        "physics": "势能待激活"
+      }
+    },
+    "考试焦虑": {
+      "trigger": [
+        "考试",
+        "考研",
+        "高考",
+        "面试",
+        "考核",
+        "期末",
+        "成绩",
+        "分数",
+        "挂科",
+        "没过"
+      ],
+      "structure": "performance_pressure→threat_appraisal→freeze",
+      "direction": [
+        "任务分解",
+        "情绪接纳",
+        "过程聚焦",
+        "备战状态"
+      ],
+      "cross_domain": {
+        "sports": "赛前热身稳定"
+      }
+    },
+    "职场甩锅": {
+      "trigger": [
+        "甩锅",
+        "背锅",
+        "被骂",
+        "错怪",
+        "冤枉",
+        "都说是我",
+        "黑锅",
+        "替人背"
+      ],
+      "structure": "blame_misdirected→self_defend→justice_need",
+      "direction": [
+        "责任还原",
+        "证据链",
+        "向上沟通",
+        "边界表达"
+      ],
+      "cross_domain": {
+        "law": "无罪推定"
+      }
+    },
+    "家庭冲突": {
+      "trigger": [
+        "和父母吵",
+        "爸妈",
+        "催婚",
+        "催就业",
+        "不理解",
+        "管我",
+        "家庭矛盾",
+        "和妈妈吵",
+        "和爸爸吵"
+      ],
+      "structure": "generational_gap→control_vs_autonomy→collision",
+      "direction": [
+        "代际理解",
+        "自主边界",
+        "课题分离",
+        "爱的语言差异"
+      ],
+      "cross_domain": {
+        "ecology": "老树新枝各需空间"
+      }
+    },
+    "未来焦虑": {
+      "trigger": [
+        "以后怎么办",
+        "要是",
+        "到时候",
+        "如果将来",
+        "万一以后",
+        "想到未来",
+        "不知道以后"
+      ],
+      "structure": "future_threat→rumination→paralysis",
+      "direction": [
+        "当下聚焦",
+        "可控圈",
+        "最小化不确定",
+        "下一步"
+      ],
+      "cross_domain": {
+        "programming": "提前优化是万恶之源"
+      }
+    },
+    "回避拖延": {
+      "trigger": [
+        "拖",
+        "不想做",
+        "一直没",
+        "明天再说",
+        "拖延",
+        "逃避",
+        "启动不了",
+        "懒得"
+      ],
+      "structure": "aversion→avoidance→guilt_loop",
+      "direction": [
+        "最小启动",
+        "两分钟规则",
+        "完成优于完美",
+        "自我慈悲"
+      ],
+      "cross_domain": {
+        "physics": "静摩擦力最大"
+      }
+    },
+    "喜悦分享": {
+      "trigger": [
+        "开心",
+        "高兴",
+        "好消息",
+        "表扬",
+        "被夸",
+        "成功",
+        "升职",
+        "录取",
+        "拿到",
+        "涨工资",
+        "太好了",
+        "耶",
+        "终于"
+      ],
+      "structure": "positive_event→need_witness→amplify_joy",
+      "direction": [
+        "见证喜悦",
+        "放大成就",
+        "值得庆祝",
+        "共同欢庆"
+      ],
+      "cross_domain": {
+        "physics": "能量共振增幅"
+      }
+    },
+    "共鸣寻找": {
+      "trigger": [
+        "你懂吗",
+        "你明白吗",
+        "也这样",
+        "我以为只有我",
+        "终于有人",
+        "一样的感觉",
+        "感同身受",
+        "有共鸣"
+      ],
+      "structure": "isolation→seek_resonance→connection",
+      "direction": [
+        "共同经验",
+        "被理解",
+        "不孤单",
+        "相似处"
+      ],
+      "cross_domain": {
+        "physics": "共振频率",
+        "music": "和弦共鸣"
+      }
+    },
+    "信任试探": {
+      "trigger": [
+        "能告诉你吗",
+        "不知道该不该说",
+        "先说个事",
+        "你会帮我吗",
+        "不会骗我吧",
+        "真的假的"
+      ],
+      "structure": "uncertainty→test_signal→calibrate_trust",
+      "direction": [
+        "回应稳定",
+        "一致性积累",
+        "不评判确认",
+        "边界温和"
+      ],
+      "cross_domain": {
+        "engineering": "负载测试",
+        "ecology": "渐进适应"
+      }
+    },
+    "陪伴渴望": {
+      "trigger": [
+        "一个人",
+        "太孤了",
+        "没人陪",
+        "寂寞",
+        "孤单",
+        "好想有人",
+        "想被陪",
+        "陪我"
+      ],
+      "structure": "alone→longing_contact→need_presence",
+      "direction": [
+        "临在感",
+        "小的连接",
+        "不需要解决",
+        "陪着"
+      ],
+      "cross_domain": {
+        "physics": "引力场",
+        "literature": "相守"
+      }
+    },
+    "思维循环打断": {
+      "trigger": [
+        "放不下",
+        "一直想",
+        "忘不了",
+        "反复",
+        "还是",
+        "又想起"
+      ],
+      "structure": "loop→escalation→no_exit",
+      "direction": [
+        "循环打断",
+        "锚点转移",
+        "时间衰减",
+        "外部中断"
+      ],
+      "cross_domain": {
+        "programming": "死循环",
+        "economics": "沉没成本",
+        "literature": "余韵回声"
+      }
+    },
+    "极端推论校准": {
+      "trigger": [
+        "完蛋了",
+        "毁了",
+        "怎么办",
+        "一定会",
+        "肯定",
+        "全完了",
+        "没救了",
+        "完了"
+      ],
+      "structure": "bad_event→catastrophic_extrapolation→paralysis",
+      "direction": [
+        "概率校准",
+        "情境还原",
+        "最坏预案",
+        "当下着地"
+      ],
+      "cross_domain": {
+        "statistics": "小样本过度推论"
+      }
+    },
+    "责任归因校准": {
+      "trigger": [
+        "都是我的错",
+        "我不好",
+        "我太差",
+        "我不配",
+        "怪我",
+        "我不行",
+        "自责",
+        "后悔死了"
+      ],
+      "structure": "error→self_blame→worth_collapse",
+      "direction": [
+        "责任校准",
+        "自我慈悲",
+        "人类共通性",
+        "错误不等于身份"
+      ],
+      "cross_domain": {
+        "law": "罪与罚的比例"
+      }
+    }
+  },
+  "work": {
+    "需求蠕变": {
+      "trigger": [
+        "需求又变",
+        "加功能",
+        "范围",
+        "一直改"
+      ],
+      "structure": "scope_blur→expansion→out_of_control",
+      "direction": [
+        "范围冻结",
+        "变更审批",
+        "优先级排序",
+        "砍需求"
+      ],
+      "cross_domain": {
+        "biology": "细胞增殖",
+        "economics": "通货膨胀"
+      }
+    },
+    "责任扩散": {
+      "trigger": [
+        "没人管",
+        "谁负责",
+        "互相推",
+        "不知道找谁"
+      ],
+      "structure": "unclear_owner→everyone_waits→stagnation",
+      "direction": [
+        "责任到人",
+        "明确owner",
+        "决策权下放"
+      ],
+      "cross_domain": {
+        "physics": "熵增",
+        "social": "旁观者效应"
+      }
+    },
+    "信息不对称": {
+      "trigger": [
+        "不知道",
+        "被蒙",
+        "没告诉",
+        "才发现"
+      ],
+      "structure": "one_side_knows→other_blind→power_imbalance",
+      "direction": [
+        "信息透明",
+        "主动同步",
+        "信任验证"
+      ],
+      "cross_domain": {
+        "poker": "底牌",
+        "economics": "柠檬市场"
+      }
+    },
+    "决策僵局": {
+      "trigger": [
+        "定不下来",
+        "开了很多次会",
+        "迟迟没结果",
+        "一直在讨论",
+        "拍不了板",
+        "没人拍板",
+        "悬而未决"
+      ],
+      "structure": "options_open→no_commit→drift",
+      "direction": [
+        "最小可行决策",
+        "期限倒逼",
+        "信息充分性评估",
+        "试点验证"
+      ],
+      "cross_domain": {
+        "game_theory": "协调博弈",
+        "history": "拖延比错误代价更高"
+      }
+    },
+    "目标飘移": {
+      "trigger": [
+        "越来越偏",
+        "不知道做什么",
+        "做着做着忘了",
+        "方向不清",
+        "绕圈子",
+        "跑题了"
+      ],
+      "structure": "initial_goal→distraction_accumulation→lost_direction",
+      "direction": [
+        "北极星指标",
+        "减法思维",
+        "原点校准",
+        "关键路径"
+      ],
+      "cross_domain": {
+        "navigation": "航偏修正",
+        "physics": "惯性偏转"
+      }
+    },
+    "Deadline压力": {
+      "trigger": [
+        "来不及",
+        "时间不够",
+        "明天就要",
+        "快截止了",
+        "赶工",
+        "压缩",
+        "拖不起了",
+        "deadline"
+      ],
+      "structure": "time_shrink→priority_compress→triage",
+      "direction": [
+        "必须做 vs 可以砍",
+        "缓冲清零",
+        "最小交付",
+        "沟通期望管理"
+      ],
+      "cross_domain": {
+        "military": "战时决策压缩",
+        "surgery": "分诊优先级"
+      }
+    },
+    "团队摩擦": {
+      "trigger": [
+        "和同事",
+        "配合不上",
+        "说不通",
+        "对方不配合",
+        "沟通不了",
+        "闹矛盾",
+        "部门",
+        "跨团队",
+        "协作"
+      ],
+      "structure": "misaligned_interests→friction→stuck",
+      "direction": [
+        "利益显性化",
+        "共同目标重建",
+        "上移决策",
+        "工作接口清晰"
+      ],
+      "cross_domain": {
+        "mechanics": "齿轮咬合不良",
+        "economics": "外部性内化"
+      }
+    },
+    "效率瓶颈": {
+      "trigger": [
+        "卡住",
+        "卡在",
+        "一直等",
+        "等审批",
+        "流程太长",
+        "效率低",
+        "推不动",
+        "阻塞"
+      ],
+      "structure": "bottleneck_identified→upstream_constraint→flow_design",
+      "direction": [
+        "约束理论",
+        "最薄弱环节",
+        "并行化",
+        "授权绕过"
+      ],
+      "cross_domain": {
+        "manufacturing": "精益生产瓶颈机器",
+        "hydrology": "限流阀"
+      }
+    }
+  },
+  "airp": {
+    "契诃夫之枪": {
+      "trigger": [
+        "之前提到",
+        "伏笔",
+        "那个",
+        "回来了",
+        "又出现"
+      ],
+      "structure": "setup→must_payoff→tension",
+      "direction": [
+        "伏笔回收",
+        "前后呼应",
+        "张力累积"
+      ],
+      "cross_domain": {
+        "literature": "首尾呼应",
+        "mythology": "命运回响"
+      }
+    },
+    "英雄之旅_黑暗时刻": {
+      "trigger": [
+        "绝望",
+        "最低点",
+        "没希望",
+        "放弃",
+        "完了"
+      ],
+      "structure": "rock_bottom→inner_awakening→rebound",
+      "direction": [
+        "触底反弹",
+        "内在觉醒",
+        "蜕变契机"
+      ],
+      "cross_domain": {
+        "mythology": "冥界下行",
+        "literature": "凤凰涅槃"
+      }
+    },
+    "角色弧光": {
+      "trigger": [
+        "变了",
+        "成长",
+        "不一样了",
+        "觉醒",
+        "转变"
+      ],
+      "structure": "initial→catalyst→new_state",
+      "direction": [
+        "性格弧线",
+        "催化事件",
+        "内在冲突",
+        "蜕变节点"
+      ],
+      "cross_domain": {
+        "literature": "人物成长弧",
+        "aesthetics": "形式演化"
+      }
+    },
+    "叙事张力": {
+      "trigger": [
+        "紧张",
+        "悬念",
+        "揭晓",
+        "秘密",
+        "真相"
+      ],
+      "structure": "tension_build→suspension→release",
+      "direction": [
+        "悬念递进",
+        "信息差",
+        "延迟满足",
+        "节奏控制"
+      ],
+      "cross_domain": {
+        "literature": "希区柯克炸弹理论",
+        "music": "解决感延迟"
+      }
+    },
+    "魔法体系自洽": {
+      "trigger": [
+        "魔法",
+        "法术",
+        "能力设定",
+        "规则",
+        "为什么能",
+        "为什么不能",
+        "体系",
+        "世界观",
+        "逻辑漏洞",
+        "说不通"
+      ],
+      "structure": "power_defined→cost_rule→consistency_check",
+      "direction": [
+        "等价交换律",
+        "边界即戏剧",
+        "代价显性化",
+        "内在逻辑闭环"
+      ],
+      "cross_domain": {
+        "physics": "守恒定律",
+        "game_design": "规则对称"
+      }
+    },
+    "诗意凝结": {
+      "trigger": [
+        "怎么写",
+        "意境",
+        "诗",
+        "怎么表达",
+        "语言",
+        "太平了",
+        "没感觉",
+        "不够美",
+        "想写出"
+      ],
+      "structure": "meaning_diffuse→image_anchor→crystallize",
+      "direction": [
+        "具象载体",
+        "感官细节",
+        "留白",
+        "意象叠加"
+      ],
+      "cross_domain": {
+        "literature": "意象压缩",
+        "aesthetics": "物哀"
+      }
+    },
+    "世界观深度": {
+      "trigger": [
+        "世界观",
+        "设定",
+        "历史",
+        "文化",
+        "为什么这个世界",
+        "背景",
+        "传说",
+        "神话",
+        "规则体系"
+      ],
+      "structure": "detail_flat→layering→lived_in_world",
+      "direction": [
+        "矛盾驱动历史",
+        "细节锚定真实感",
+        "未说出的比说出的更多",
+        "不同视角的同一事实"
+      ],
+      "cross_domain": {
+        "mythology": "创世叙事结构",
+        "architecture": "地层剖面"
+      }
+    },
+    "意象转化": {
+      "trigger": [
+        "比喻",
+        "用什么比",
+        "怎么形容",
+        "像什么",
+        "找个意象",
+        "形象化",
+        "抽象变具体",
+        "譬如"
+      ],
+      "structure": "abstract_concept→vehicle→tenor_illuminated",
+      "direction": [
+        "跨感官映射",
+        "反向意象",
+        "陌生化手法",
+        "类比扩展"
+      ],
+      "cross_domain": {
+        "literature": "隐喻认知",
+        "aesthetics": "通感"
+      }
+    }
+  }
+}

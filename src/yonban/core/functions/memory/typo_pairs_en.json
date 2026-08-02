@@ -1,0 +1,4927 @@
+[
+  {
+    "from": "nbresult",
+    "to": "nresult",
+    "freq": 32
+  },
+  {
+    "from": "gryfindor",
+    "to": "gryffindor",
+    "freq": 14
+  },
+  {
+    "from": "instalation",
+    "to": "installation",
+    "freq": 12
+  },
+  {
+    "from": "slot",
+    "to": "slots",
+    "freq": 9
+  },
+  {
+    "from": "licencse",
+    "to": "license",
+    "freq": 8
+  },
+  {
+    "from": "zookeepr",
+    "to": "zookeeper",
+    "freq": 8
+  },
+  {
+    "from": "setclosewindowlebel",
+    "to": "setclosewindowlevel",
+    "freq": 8
+  },
+  {
+    "from": "modifacation",
+    "to": "modification",
+    "freq": 8
+  },
+  {
+    "from": "propertorder",
+    "to": "propertyorder",
+    "freq": 8
+  },
+  {
+    "from": "ressources",
+    "to": "resources",
+    "freq": 7
+  },
+  {
+    "from": "mininum",
+    "to": "minimum",
+    "freq": 7
+  },
+  {
+    "from": "paramaters",
+    "to": "parameters",
+    "freq": 7
+  },
+  {
+    "from": "defaultoverides",
+    "to": "defaultoverrides",
+    "freq": 6
+  },
+  {
+    "from": "descriptino",
+    "to": "description",
+    "freq": 6
+  },
+  {
+    "from": "licence",
+    "to": "license",
+    "freq": 6
+  },
+  {
+    "from": "javascipt",
+    "to": "javascript",
+    "freq": 6
+  },
+  {
+    "from": "constraint",
+    "to": "constraints",
+    "freq": 6
+  },
+  {
+    "from": "changlog",
+    "to": "changelog",
+    "freq": 5
+  },
+  {
+    "from": "paramters",
+    "to": "parameters",
+    "freq": 5
+  },
+  {
+    "from": "thats",
+    "to": "that",
+    "freq": 5
+  },
+  {
+    "from": "devleop",
+    "to": "develop",
+    "freq": 5
+  },
+  {
+    "from": "deattachservice",
+    "to": "detachservice",
+    "freq": 5
+  },
+  {
+    "from": "colums",
+    "to": "columns",
+    "freq": 4
+  },
+  {
+    "from": "javacript",
+    "to": "javascript",
+    "freq": 4
+  },
+  {
+    "from": "basemeun",
+    "to": "basemenu",
+    "freq": 4
+  },
+  {
+    "from": "sicne",
+    "to": "since",
+    "freq": 4
+  },
+  {
+    "from": "prerequsites",
+    "to": "prerequisites",
+    "freq": 4
+  },
+  {
+    "from": "componentwillunount",
+    "to": "componentwillunmount",
+    "freq": 4
+  },
+  {
+    "from": "deprecated",
+    "to": "depreciated",
+    "freq": 4
+  },
+  {
+    "from": "uunconfirmed",
+    "to": "unconfirmed",
+    "freq": 4
+  },
+  {
+    "from": "appendcapabilites",
+    "to": "appendcapabilities",
+    "freq": 4
+  },
+  {
+    "from": "extentions",
+    "to": "extensions",
+    "freq": 4
+  },
+  {
+    "from": "documenation",
+    "to": "documentation",
+    "freq": 4
+  },
+  {
+    "from": "agust",
+    "to": "august",
+    "freq": 4
+  },
+  {
+    "from": "lattitude",
+    "to": "latitude",
+    "freq": 4
+  },
+  {
+    "from": "tempalte",
+    "to": "template",
+    "freq": 4
+  },
+  {
+    "from": "primatives",
+    "to": "primitives",
+    "freq": 4
+  },
+  {
+    "from": "propstypes",
+    "to": "proptypes",
+    "freq": 4
+  },
+  {
+    "from": "lockpassowrd",
+    "to": "lockpassword",
+    "freq": 4
+  },
+  {
+    "from": "quaterly",
+    "to": "quarterly",
+    "freq": 4
+  },
+  {
+    "from": "ilicit",
+    "to": "illicit",
+    "freq": 4
+  },
+  {
+    "from": "simpleparamaters",
+    "to": "simpleparameters",
+    "freq": 4
+  },
+  {
+    "from": "subsciber",
+    "to": "subscriber",
+    "freq": 4
+  },
+  {
+    "from": "enviroment",
+    "to": "environment",
+    "freq": 3
+  },
+  {
+    "from": "witefrequency",
+    "to": "writefrequency",
+    "freq": 3
+  },
+  {
+    "from": "slidesnavli",
+    "to": "slidesnav",
+    "freq": 3
+  },
+  {
+    "from": "sumbitbuttons",
+    "to": "submitbuttons",
+    "freq": 3
+  },
+  {
+    "from": "resnt",
+    "to": "resnet",
+    "freq": 3
+  },
+  {
+    "from": "target",
+    "to": "targets",
+    "freq": 3
+  },
+  {
+    "from": "contstructor",
+    "to": "constructor",
+    "freq": 3
+  },
+  {
+    "from": "wrappesisbody",
+    "to": "wrapperisbody",
+    "freq": 3
+  },
+  {
+    "from": "udpateoffset",
+    "to": "updateoffset",
+    "freq": 3
+  },
+  {
+    "from": "dags",
+    "to": "dag",
+    "freq": 3
+  },
+  {
+    "from": "wescentralus",
+    "to": "westcentralus",
+    "freq": 3
+  },
+  {
+    "from": "compatability",
+    "to": "compatibility",
+    "freq": 3
+  },
+  {
+    "from": "javscript",
+    "to": "javascript",
+    "freq": 3
+  },
+  {
+    "from": "membersip",
+    "to": "membership",
+    "freq": 3
+  },
+  {
+    "from": "createstorem",
+    "to": "createstore",
+    "freq": 3
+  },
+  {
+    "from": "contructor",
+    "to": "constructor",
+    "freq": 3
+  },
+  {
+    "from": "intervall",
+    "to": "interval",
+    "freq": 3
+  },
+  {
+    "from": "hightlight",
+    "to": "highlight",
+    "freq": 3
+  },
+  {
+    "from": "interaction",
+    "to": "interactive",
+    "freq": 3
+  },
+  {
+    "from": "videbandwidthlimit",
+    "to": "videobandwidthlimit",
+    "freq": 3
+  },
+  {
+    "from": "minturm",
+    "to": "minterm",
+    "freq": 3
+  },
+  {
+    "from": "inhertidoc",
+    "to": "inheritdoc",
+    "freq": 3
+  },
+  {
+    "from": "mychoosenone",
+    "to": "mychosenone",
+    "freq": 3
+  },
+  {
+    "from": "prompte",
+    "to": "promote",
+    "freq": 3
+  },
+  {
+    "from": "import",
+    "to": "imports",
+    "freq": 3
+  },
+  {
+    "from": "nostarytest",
+    "to": "notarytest",
+    "freq": 3
+  },
+  {
+    "from": "parimarykey",
+    "to": "primarykey",
+    "freq": 3
+  },
+  {
+    "from": "filter",
+    "to": "filters",
+    "freq": 3
+  },
+  {
+    "from": "brances",
+    "to": "branches",
+    "freq": 3
+  },
+  {
+    "from": "grapqhl",
+    "to": "graphql",
+    "freq": 3
+  },
+  {
+    "from": "axisxlebelgap",
+    "to": "axisxlabelgap",
+    "freq": 3
+  },
+  {
+    "from": "mintue",
+    "to": "minute",
+    "freq": 3
+  },
+  {
+    "from": "automaticaly",
+    "to": "automatically",
+    "freq": 3
+  },
+  {
+    "from": "serverreponsetime",
+    "to": "serverresponsetime",
+    "freq": 3
+  },
+  {
+    "from": "ciclebutton",
+    "to": "circlebutton",
+    "freq": 3
+  },
+  {
+    "from": "framdspersec",
+    "to": "framespersec",
+    "freq": 3
+  },
+  {
+    "from": "hmtl",
+    "to": "html",
+    "freq": 3
+  },
+  {
+    "from": "documantation",
+    "to": "documentation",
+    "freq": 3
+  },
+  {
+    "from": "sine",
+    "to": "since",
+    "freq": 3
+  },
+  {
+    "from": "videotemproallayers",
+    "to": "videotemporallayers",
+    "freq": 2
+  },
+  {
+    "from": "finnally",
+    "to": "finally",
+    "freq": 2
+  },
+  {
+    "from": "clientid",
+    "to": "client",
+    "freq": 2
+  },
+  {
+    "from": "respository",
+    "to": "repository",
+    "freq": 2
+  },
+  {
+    "from": "tranlations",
+    "to": "translations",
+    "freq": 2
+  },
+  {
+    "from": "screenshosts",
+    "to": "screenshots",
+    "freq": 2
+  },
+  {
+    "from": "settransluscentcolor",
+    "to": "settranslucentcolor",
+    "freq": 2
+  },
+  {
+    "from": "chekmark",
+    "to": "checkmark",
+    "freq": 2
+  },
+  {
+    "from": "istall",
+    "to": "install",
+    "freq": 2
+  },
+  {
+    "from": "febuary",
+    "to": "february",
+    "freq": 2
+  },
+  {
+    "from": "iseditble",
+    "to": "iseditable",
+    "freq": 2
+  },
+  {
+    "from": "totorial",
+    "to": "tutorial",
+    "freq": 2
+  },
+  {
+    "from": "referrences",
+    "to": "references",
+    "freq": 2
+  },
+  {
+    "from": "sever",
+    "to": "server",
+    "freq": 2
+  },
+  {
+    "from": "formettedpublishedat",
+    "to": "formattedpublishedat",
+    "freq": 2
+  },
+  {
+    "from": "useage",
+    "to": "usage",
+    "freq": 2
+  },
+  {
+    "from": "autofocuss",
+    "to": "autofocus",
+    "freq": 2
+  },
+  {
+    "from": "event",
+    "to": "events",
+    "freq": 2
+  },
+  {
+    "from": "pattarn",
+    "to": "pattern",
+    "freq": 2
+  },
+  {
+    "from": "ismoblie",
+    "to": "ismobile",
+    "freq": 2
+  },
+  {
+    "from": "mobliemenu",
+    "to": "mobilemenu",
+    "freq": 2
+  },
+  {
+    "from": "requried",
+    "to": "required",
+    "freq": 2
+  },
+  {
+    "from": "visibile",
+    "to": "visible",
+    "freq": 2
+  },
+  {
+    "from": "require",
+    "to": "requires",
+    "freq": 2
+  },
+  {
+    "from": "descendents",
+    "to": "descendants",
+    "freq": 2
+  },
+  {
+    "from": "relase",
+    "to": "release",
+    "freq": 2
+  },
+  {
+    "from": "diffrence",
+    "to": "difference",
+    "freq": 2
+  },
+  {
+    "from": "reference",
+    "to": "references",
+    "freq": 2
+  },
+  {
+    "from": "sequencee",
+    "to": "sequence",
+    "freq": 2
+  },
+  {
+    "from": "implemenation",
+    "to": "implementation",
+    "freq": 2
+  },
+  {
+    "from": "floatinpoint",
+    "to": "floatingpoint",
+    "freq": 2
+  },
+  {
+    "from": "borwser",
+    "to": "browser",
+    "freq": 2
+  },
+  {
+    "from": "systemcock",
+    "to": "systemclock",
+    "freq": 2
+  },
+  {
+    "from": "installtion",
+    "to": "installation",
+    "freq": 2
+  },
+  {
+    "from": "node",
+    "to": "note",
+    "freq": 2
+  },
+  {
+    "from": "synposis",
+    "to": "synopsis",
+    "freq": 2
+  },
+  {
+    "from": "expirytimstring",
+    "to": "expirytimestring",
+    "freq": 2
+  },
+  {
+    "from": "metadate",
+    "to": "metadata",
+    "freq": 2
+  },
+  {
+    "from": "returs",
+    "to": "returns",
+    "freq": 2
+  },
+  {
+    "from": "err",
+    "to": "errs",
+    "freq": 2
+  },
+  {
+    "from": "grovy",
+    "to": "groovy",
+    "freq": 2
+  },
+  {
+    "from": "bircore",
+    "to": "bitcore",
+    "freq": 2
+  },
+  {
+    "from": "restric",
+    "to": "restrict",
+    "freq": 2
+  },
+  {
+    "from": "historam",
+    "to": "histogram",
+    "freq": 2
+  },
+  {
+    "from": "boostrap",
+    "to": "bootstrap",
+    "freq": 2
+  },
+  {
+    "from": "calss",
+    "to": "class",
+    "freq": 2
+  },
+  {
+    "from": "collaboraters",
+    "to": "collaborators",
+    "freq": 2
+  },
+  {
+    "from": "initailizetaskbar",
+    "to": "initializetaskbar",
+    "freq": 2
+  },
+  {
+    "from": "audtitime",
+    "to": "audittime",
+    "freq": 2
+  },
+  {
+    "from": "bugfixe",
+    "to": "bugfixes",
+    "freq": 2
+  },
+  {
+    "from": "beneficaries",
+    "to": "beneficiaries",
+    "freq": 2
+  },
+  {
+    "from": "inlinenotificaton",
+    "to": "inlinenotification",
+    "freq": 2
+  },
+  {
+    "from": "javasript",
+    "to": "javascript",
+    "freq": 2
+  },
+  {
+    "from": "checkum",
+    "to": "checksum",
+    "freq": 2
+  },
+  {
+    "from": "dimmensions",
+    "to": "dimensions",
+    "freq": 2
+  },
+  {
+    "from": "coarsemultipiler",
+    "to": "coarsemultiplier",
+    "freq": 2
+  },
+  {
+    "from": "loadbalacerip",
+    "to": "loadbalancerip",
+    "freq": 2
+  },
+  {
+    "from": "compatable",
+    "to": "compatible",
+    "freq": 2
+  },
+  {
+    "from": "prerequesites",
+    "to": "prerequisites",
+    "freq": 2
+  },
+  {
+    "from": "witdh",
+    "to": "width",
+    "freq": 2
+  },
+  {
+    "from": "decription",
+    "to": "description",
+    "freq": 2
+  },
+  {
+    "from": "heigth",
+    "to": "height",
+    "freq": 2
+  },
+  {
+    "from": "intenal",
+    "to": "internal",
+    "freq": 2
+  },
+  {
+    "from": "organizations",
+    "to": "organization",
+    "freq": 2
+  },
+  {
+    "from": "haskkeyelementname",
+    "to": "hashkeyelementname",
+    "freq": 2
+  },
+  {
+    "from": "haskkeyelementtype",
+    "to": "hashkeyelementtype",
+    "freq": 2
+  },
+  {
+    "from": "orcale",
+    "to": "oracle",
+    "freq": 2
+  },
+  {
+    "from": "contibutors",
+    "to": "contributors",
+    "freq": 2
+  },
+  {
+    "from": "hasstopedsandbox",
+    "to": "hasstoppedsandbox",
+    "freq": 2
+  },
+  {
+    "from": "hasstopedcontainer",
+    "to": "hasstoppedcontainer",
+    "freq": 2
+  },
+  {
+    "from": "healthchech",
+    "to": "healthcheck",
+    "freq": 2
+  },
+  {
+    "from": "scolltolast",
+    "to": "scrolltolast",
+    "freq": 2
+  },
+  {
+    "from": "examles",
+    "to": "examples",
+    "freq": 2
+  },
+  {
+    "from": "dependancies",
+    "to": "dependencies",
+    "freq": 2
+  },
+  {
+    "from": "ouptut",
+    "to": "output",
+    "freq": 2
+  },
+  {
+    "from": "lockaquired",
+    "to": "lockacquired",
+    "freq": 2
+  },
+  {
+    "from": "share",
+    "to": "shares",
+    "freq": 2
+  },
+  {
+    "from": "recurisive",
+    "to": "recursive",
+    "freq": 2
+  },
+  {
+    "from": "flat",
+    "to": "float",
+    "freq": 2
+  },
+  {
+    "from": "cmastenrodeping",
+    "to": "cmasternodeping",
+    "freq": 2
+  },
+  {
+    "from": "hclust",
+    "to": "hcluster",
+    "freq": 2
+  },
+  {
+    "from": "eexceptions",
+    "to": "exceptions",
+    "freq": 2
+  },
+  {
+    "from": "unkown",
+    "to": "unknown",
+    "freq": 2
+  },
+  {
+    "from": "overrieds",
+    "to": "overrides",
+    "freq": 2
+  },
+  {
+    "from": "retryforavaiability",
+    "to": "retryforavailability",
+    "freq": 2
+  },
+  {
+    "from": "sponsosrs",
+    "to": "sponsors",
+    "freq": 2
+  },
+  {
+    "from": "arithemetic",
+    "to": "arithmetic",
+    "freq": 2
+  },
+  {
+    "from": "miscellanious",
+    "to": "miscellaneous",
+    "freq": 2
+  },
+  {
+    "from": "pupperty",
+    "to": "puppetry",
+    "freq": 2
+  },
+  {
+    "from": "consonanants",
+    "to": "consonants",
+    "freq": 2
+  },
+  {
+    "from": "beforedestory",
+    "to": "beforedestroy",
+    "freq": 2
+  },
+  {
+    "from": "mutiple",
+    "to": "multiple",
+    "freq": 2
+  },
+  {
+    "from": "restoreas",
+    "to": "restore",
+    "freq": 2
+  },
+  {
+    "from": "montlyactivity",
+    "to": "monthlyactivity",
+    "freq": 2
+  },
+  {
+    "from": "inclyude",
+    "to": "include",
+    "freq": 2
+  },
+  {
+    "from": "requirments",
+    "to": "requirements",
+    "freq": 2
+  },
+  {
+    "from": "adressescommunemap",
+    "to": "addressescommunemap",
+    "freq": 2
+  },
+  {
+    "from": "reflesh",
+    "to": "refresh",
+    "freq": 2
+  },
+  {
+    "from": "failanimatiom",
+    "to": "failanimation",
+    "freq": 2
+  },
+  {
+    "from": "selfdesctruct",
+    "to": "selfdestruct",
+    "freq": 2
+  },
+  {
+    "from": "ragequadradtic",
+    "to": "ragequadratic",
+    "freq": 2
+  },
+  {
+    "from": "refernces",
+    "to": "references",
+    "freq": 2
+  },
+  {
+    "from": "persisence",
+    "to": "persistence",
+    "freq": 2
+  },
+  {
+    "from": "getinstalledplugns",
+    "to": "getinstalledplugins",
+    "freq": 2
+  },
+  {
+    "from": "assignmenr",
+    "to": "assignment",
+    "freq": 2
+  },
+  {
+    "from": "prerequisits",
+    "to": "prerequisites",
+    "freq": 2
+  },
+  {
+    "from": "transtionspec",
+    "to": "transitionspec",
+    "freq": 2
+  },
+  {
+    "from": "notimetamp",
+    "to": "notimestamp",
+    "freq": 2
+  },
+  {
+    "from": "destory",
+    "to": "destroy",
+    "freq": 2
+  },
+  {
+    "from": "acceptedfile",
+    "to": "acceptedfiles",
+    "freq": 2
+  },
+  {
+    "from": "manualy",
+    "to": "manually",
+    "freq": 2
+  },
+  {
+    "from": "documention",
+    "to": "documentation",
+    "freq": 2
+  },
+  {
+    "from": "virutallist",
+    "to": "virtuallist",
+    "freq": 2
+  },
+  {
+    "from": "candecolors",
+    "to": "candlecolors",
+    "freq": 2
+  },
+  {
+    "from": "domcontianer",
+    "to": "domcontainer",
+    "freq": 2
+  },
+  {
+    "from": "inheritence",
+    "to": "inheritance",
+    "freq": 2
+  },
+  {
+    "from": "outuput",
+    "to": "output",
+    "freq": 2
+  },
+  {
+    "from": "langaugesettings",
+    "to": "languagesettings",
+    "freq": 2
+  },
+  {
+    "from": "lenght",
+    "to": "length",
+    "freq": 2
+  },
+  {
+    "from": "dropcanceled",
+    "to": "dropcancelled",
+    "freq": 2
+  },
+  {
+    "from": "psuedovalue",
+    "to": "pseudovalue",
+    "freq": 2
+  },
+  {
+    "from": "makefakegeomtry",
+    "to": "makefakegeometry",
+    "freq": 2
+  },
+  {
+    "from": "page",
+    "to": "pages",
+    "freq": 2
+  },
+  {
+    "from": "introduciton",
+    "to": "introduction",
+    "freq": 2
+  },
+  {
+    "from": "instllation",
+    "to": "installation",
+    "freq": 2
+  },
+  {
+    "from": "acount",
+    "to": "account",
+    "freq": 2
+  },
+  {
+    "from": "desription",
+    "to": "description",
+    "freq": 2
+  },
+  {
+    "from": "counavailable",
+    "to": "countavailable",
+    "freq": 2
+  },
+  {
+    "from": "screnshots",
+    "to": "screenshots",
+    "freq": 2
+  },
+  {
+    "from": "pos",
+    "to": "apos",
+    "freq": 2
+  },
+  {
+    "from": "conole",
+    "to": "console",
+    "freq": 2
+  },
+  {
+    "from": "convertions",
+    "to": "conversions",
+    "freq": 2
+  },
+  {
+    "from": "contentss",
+    "to": "contents",
+    "freq": 2
+  },
+  {
+    "from": "clickunselectday",
+    "to": "clickunselectsday",
+    "freq": 2
+  },
+  {
+    "from": "uniue",
+    "to": "unique",
+    "freq": 2
+  },
+  {
+    "from": "deleteid",
+    "to": "deletedid",
+    "freq": 2
+  },
+  {
+    "from": "getwindownsname",
+    "to": "getwindowsname",
+    "freq": 2
+  },
+  {
+    "from": "resouregroup",
+    "to": "resourcegroup",
+    "freq": 2
+  },
+  {
+    "from": "coffess",
+    "to": "coffees",
+    "freq": 2
+  },
+  {
+    "from": "horitontalspacing",
+    "to": "horizontalspacing",
+    "freq": 2
+  },
+  {
+    "from": "facotries",
+    "to": "factories",
+    "freq": 2
+  },
+  {
+    "from": "hasequivilantsibling",
+    "to": "hasequivalentsibling",
+    "freq": 2
+  },
+  {
+    "from": "iwallet",
+    "to": "wallet",
+    "freq": 2
+  },
+  {
+    "from": "anguage",
+    "to": "language",
+    "freq": 2
+  },
+  {
+    "from": "typscript",
+    "to": "typescript",
+    "freq": 2
+  },
+  {
+    "from": "usemininmalputs",
+    "to": "useminimalputs",
+    "freq": 2
+  },
+  {
+    "from": "visisble",
+    "to": "visible",
+    "freq": 2
+  },
+  {
+    "from": "script",
+    "to": "scripts",
+    "freq": 2
+  },
+  {
+    "from": "jenknisfilebackup",
+    "to": "jenkinsfilebackup",
+    "freq": 2
+  },
+  {
+    "from": "deutsche",
+    "to": "deutsch",
+    "freq": 1
+  },
+  {
+    "from": "nocoments",
+    "to": "nocomments",
+    "freq": 1
+  },
+  {
+    "from": "excerpt",
+    "to": "excerpts",
+    "freq": 1
+  },
+  {
+    "from": "baching",
+    "to": "batching",
+    "freq": 1
+  },
+  {
+    "from": "udpatemessage",
+    "to": "updatemessage",
+    "freq": 1
+  },
+  {
+    "from": "goruppalettecolors",
+    "to": "grouppalettecolors",
+    "freq": 1
+  },
+  {
+    "from": "synopis",
+    "to": "synopsis",
+    "freq": 1
+  },
+  {
+    "from": "stroyboard",
+    "to": "storyboard",
+    "freq": 1
+  },
+  {
+    "from": "initalizestatevalue",
+    "to": "initializestatevalue",
+    "freq": 1
+  },
+  {
+    "from": "acionherocluster",
+    "to": "actionherocluster",
+    "freq": 1
+  },
+  {
+    "from": "isclickinisdeeditor",
+    "to": "isclickinsideeditor",
+    "freq": 1
+  },
+  {
+    "from": "subsciptionhandlers",
+    "to": "subscriptionhandlers",
+    "freq": 1
+  },
+  {
+    "from": "websockect",
+    "to": "websocket",
+    "freq": 1
+  },
+  {
+    "from": "wcket",
+    "to": "wicket",
+    "freq": 1
+  },
+  {
+    "from": "miscelaneous",
+    "to": "miscellaneous",
+    "freq": 1
+  },
+  {
+    "from": "typoraphy",
+    "to": "typography",
+    "freq": 1
+  },
+  {
+    "from": "etition",
+    "to": "petition",
+    "freq": 1
+  },
+  {
+    "from": "becnhmarks",
+    "to": "benchmarks",
+    "freq": 1
+  },
+  {
+    "from": "organisations",
+    "to": "organizations",
+    "freq": 1
+  },
+  {
+    "from": "input",
+    "to": "inputs",
+    "freq": 1
+  },
+  {
+    "from": "campaingncontext",
+    "to": "campaigncontext",
+    "freq": 1
+  },
+  {
+    "from": "invalidnumber",
+    "to": "validnumber",
+    "freq": 1
+  },
+  {
+    "from": "alreadycommited",
+    "to": "alreadycommitted",
+    "freq": 1
+  },
+  {
+    "from": "cosumers",
+    "to": "consumers",
+    "freq": 1
+  },
+  {
+    "from": "constribute",
+    "to": "contribute",
+    "freq": 1
+  },
+  {
+    "from": "sposnsored",
+    "to": "sponsored",
+    "freq": 1
+  },
+  {
+    "from": "asset",
+    "to": "assets",
+    "freq": 1
+  },
+  {
+    "from": "grphos",
+    "to": "graphos",
+    "freq": 1
+  },
+  {
+    "from": "doesnotexists",
+    "to": "doesnotexist",
+    "freq": 1
+  },
+  {
+    "from": "remcommendations",
+    "to": "recommendations",
+    "freq": 1
+  },
+  {
+    "from": "heigh",
+    "to": "height",
+    "freq": 1
+  },
+  {
+    "from": "doker",
+    "to": "docker",
+    "freq": 1
+  },
+  {
+    "from": "addresss",
+    "to": "address",
+    "freq": 1
+  },
+  {
+    "from": "orientaion",
+    "to": "orientation",
+    "freq": 1
+  },
+  {
+    "from": "enumrations",
+    "to": "enumerations",
+    "freq": 1
+  },
+  {
+    "from": "toturial",
+    "to": "tutorial",
+    "freq": 1
+  },
+  {
+    "from": "megaytes",
+    "to": "megabytes",
+    "freq": 1
+  },
+  {
+    "from": "liscence",
+    "to": "license",
+    "freq": 1
+  },
+  {
+    "from": "writable",
+    "to": "writeable",
+    "freq": 1
+  },
+  {
+    "from": "coffeee",
+    "to": "coffee",
+    "freq": 1
+  },
+  {
+    "from": "exeuctors",
+    "to": "executors",
+    "freq": 1
+  },
+  {
+    "from": "provoders",
+    "to": "providers",
+    "freq": 1
+  },
+  {
+    "from": "readbility",
+    "to": "readability",
+    "freq": 1
+  },
+  {
+    "from": "installatation",
+    "to": "installation",
+    "freq": 1
+  },
+  {
+    "from": "cirlce",
+    "to": "circle",
+    "freq": 1
+  },
+  {
+    "from": "release",
+    "to": "releases",
+    "freq": 1
+  },
+  {
+    "from": "getnowplayings",
+    "to": "getnowplaying",
+    "freq": 1
+  },
+  {
+    "from": "categorie",
+    "to": "categories",
+    "freq": 1
+  },
+  {
+    "from": "handlreaddir",
+    "to": "handlereaddir",
+    "freq": 1
+  },
+  {
+    "from": "succcessfully",
+    "to": "successfully",
+    "freq": 1
+  },
+  {
+    "from": "reuesturi",
+    "to": "requesturi",
+    "freq": 1
+  },
+  {
+    "from": "referers",
+    "to": "referrers",
+    "freq": 1
+  },
+  {
+    "from": "naviagtion",
+    "to": "navigation",
+    "freq": 1
+  },
+  {
+    "from": "threshhold",
+    "to": "threshold",
+    "freq": 1
+  },
+  {
+    "from": "item",
+    "to": "items",
+    "freq": 1
+  },
+  {
+    "from": "develpment",
+    "to": "development",
+    "freq": 1
+  },
+  {
+    "from": "preprequisites",
+    "to": "prerequisites",
+    "freq": 1
+  },
+  {
+    "from": "isprovisonalaccount",
+    "to": "isprovisionalaccount",
+    "freq": 1
+  },
+  {
+    "from": "compatbility",
+    "to": "compatibility",
+    "freq": 1
+  },
+  {
+    "from": "defautlvalue",
+    "to": "defaultvalue",
+    "freq": 1
+  },
+  {
+    "from": "syle",
+    "to": "style",
+    "freq": 1
+  },
+  {
+    "from": "appdir",
+    "to": "appdirs",
+    "freq": 1
+  },
+  {
+    "from": "feautures",
+    "to": "features",
+    "freq": 1
+  },
+  {
+    "from": "initiallized",
+    "to": "initialized",
+    "freq": 1
+  },
+  {
+    "from": "desctiption",
+    "to": "description",
+    "freq": 1
+  },
+  {
+    "from": "budle",
+    "to": "bundle",
+    "freq": 1
+  },
+  {
+    "from": "hurray",
+    "to": "hurry",
+    "freq": 1
+  },
+  {
+    "from": "contentchildred",
+    "to": "contentchildren",
+    "freq": 1
+  },
+  {
+    "from": "anyof",
+    "to": "oneof",
+    "freq": 1
+  },
+  {
+    "from": "stylessoucemap",
+    "to": "stylessourcemap",
+    "freq": 1
+  },
+  {
+    "from": "hrml",
+    "to": "html",
+    "freq": 1
+  },
+  {
+    "from": "connetions",
+    "to": "connections",
+    "freq": 1
+  },
+  {
+    "from": "tranclude",
+    "to": "transclude",
+    "freq": 1
+  },
+  {
+    "from": "uselegacypromse",
+    "to": "uselegacypromise",
+    "freq": 1
+  },
+  {
+    "from": "macfrac",
+    "to": "maxfrac",
+    "freq": 1
+  },
+  {
+    "from": "datepikcer",
+    "to": "datepicker",
+    "freq": 1
+  },
+  {
+    "from": "featres",
+    "to": "features",
+    "freq": 1
+  },
+  {
+    "from": "koean",
+    "to": "korea",
+    "freq": 1
+  },
+  {
+    "from": "markerwatchoptions",
+    "to": "markerswatchoptions",
+    "freq": 1
+  },
+  {
+    "from": "cilck",
+    "to": "click",
+    "freq": 1
+  },
+  {
+    "from": "priviewimage",
+    "to": "previewimage",
+    "freq": 1
+  },
+  {
+    "from": "omited",
+    "to": "omitted",
+    "freq": 1
+  },
+  {
+    "from": "editbuttton",
+    "to": "editbutton",
+    "freq": 1
+  },
+  {
+    "from": "reaplysettings",
+    "to": "reapplysettings",
+    "freq": 1
+  },
+  {
+    "from": "deprecate",
+    "to": "deprecated",
+    "freq": 1
+  },
+  {
+    "from": "directoy",
+    "to": "directory",
+    "freq": 1
+  },
+  {
+    "from": "handeled",
+    "to": "handled",
+    "freq": 1
+  },
+  {
+    "from": "writen",
+    "to": "written",
+    "freq": 1
+  },
+  {
+    "from": "plugin",
+    "to": "plugins",
+    "freq": 1
+  },
+  {
+    "from": "deprectaions",
+    "to": "deprecations",
+    "freq": 1
+  },
+  {
+    "from": "divide",
+    "to": "divided",
+    "freq": 1
+  },
+  {
+    "from": "commmentstart",
+    "to": "commentstart",
+    "freq": 1
+  },
+  {
+    "from": "deafaultlanguage",
+    "to": "defaultlanguage",
+    "freq": 1
+  },
+  {
+    "from": "bockindex",
+    "to": "blockindex",
+    "freq": 1
+  },
+  {
+    "from": "isxaxiscateogry",
+    "to": "isxaxiscategory",
+    "freq": 1
+  },
+  {
+    "from": "distrbutedtest",
+    "to": "distributedtest",
+    "freq": 1
+  },
+  {
+    "from": "tresurer",
+    "to": "treasurer",
+    "freq": 1
+  },
+  {
+    "from": "systeml",
+    "to": "systemml",
+    "freq": 1
+  },
+  {
+    "from": "inclues",
+    "to": "includes",
+    "freq": 1
+  },
+  {
+    "from": "insigtful",
+    "to": "insightful",
+    "freq": 1
+  },
+  {
+    "from": "mar",
+    "to": "may",
+    "freq": 1
+  },
+  {
+    "from": "exludes",
+    "to": "excludes",
+    "freq": 1
+  },
+  {
+    "from": "desriptin",
+    "to": "description",
+    "freq": 1
+  },
+  {
+    "from": "overtemerature",
+    "to": "overtemperature",
+    "freq": 1
+  },
+  {
+    "from": "sanbox",
+    "to": "sandbox",
+    "freq": 1
+  },
+  {
+    "from": "serialier",
+    "to": "serializer",
+    "freq": 1
+  },
+  {
+    "from": "unsollicited",
+    "to": "unsolicited",
+    "freq": 1
+  },
+  {
+    "from": "propertis",
+    "to": "properties",
+    "freq": 1
+  },
+  {
+    "from": "entitelments",
+    "to": "entitlements",
+    "freq": 1
+  },
+  {
+    "from": "recdatasetfromink",
+    "to": "recdatasetfromint",
+    "freq": 1
+  },
+  {
+    "from": "than",
+    "to": "then",
+    "freq": 1
+  },
+  {
+    "from": "pase",
+    "to": "case",
+    "freq": 1
+  },
+  {
+    "from": "warinings",
+    "to": "warnings",
+    "freq": 1
+  },
+  {
+    "from": "commandresuld",
+    "to": "commandresult",
+    "freq": 1
+  },
+  {
+    "from": "swageryamlurl",
+    "to": "swaggeryamlurl",
+    "freq": 1
+  },
+  {
+    "from": "exampels",
+    "to": "examples",
+    "freq": 1
+  },
+  {
+    "from": "tooking",
+    "to": "tooling",
+    "freq": 1
+  },
+  {
+    "from": "daysabrev",
+    "to": "daysabbrev",
+    "freq": 1
+  },
+  {
+    "from": "addconformace",
+    "to": "addconformance",
+    "freq": 1
+  },
+  {
+    "from": "configutation",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "dumptokensyntaxs",
+    "to": "dumptokensyntax",
+    "freq": 1
+  },
+  {
+    "from": "county",
+    "to": "country",
+    "freq": 1
+  },
+  {
+    "from": "artefacts",
+    "to": "artifacts",
+    "freq": 1
+  },
+  {
+    "from": "colectionofone",
+    "to": "collectionofone",
+    "freq": 1
+  },
+  {
+    "from": "identifers",
+    "to": "identifiers",
+    "freq": 1
+  },
+  {
+    "from": "defrenestrate",
+    "to": "defenestrate",
+    "freq": 1
+  },
+  {
+    "from": "copnsumers",
+    "to": "consumers",
+    "freq": 1
+  },
+  {
+    "from": "bootstap",
+    "to": "bootstrap",
+    "freq": 1
+  },
+  {
+    "from": "onfiguration",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "insterting",
+    "to": "inserting",
+    "freq": 1
+  },
+  {
+    "from": "raturn",
+    "to": "return",
+    "freq": 1
+  },
+  {
+    "from": "uikitj",
+    "to": "uikit",
+    "freq": 1
+  },
+  {
+    "from": "logbal",
+    "to": "global",
+    "freq": 1
+  },
+  {
+    "from": "iswaring",
+    "to": "iswarning",
+    "freq": 1
+  },
+  {
+    "from": "indices",
+    "to": "indexes",
+    "freq": 1
+  },
+  {
+    "from": "vpstatee",
+    "to": "vpstate",
+    "freq": 1
+  },
+  {
+    "from": "nota",
+    "to": "note",
+    "freq": 1
+  },
+  {
+    "from": "responsabilities",
+    "to": "responsibilities",
+    "freq": 1
+  },
+  {
+    "from": "menunavigationitems",
+    "to": "menunavigationitem",
+    "freq": 1
+  },
+  {
+    "from": "dependecies",
+    "to": "dependencies",
+    "freq": 1
+  },
+  {
+    "from": "elae",
+    "to": "else",
+    "freq": 1
+  },
+  {
+    "from": "publush",
+    "to": "publish",
+    "freq": 1
+  },
+  {
+    "from": "result",
+    "to": "results",
+    "freq": 1
+  },
+  {
+    "from": "proccess",
+    "to": "process",
+    "freq": 1
+  },
+  {
+    "from": "propogate",
+    "to": "propagate",
+    "freq": 1
+  },
+  {
+    "from": "getcesiumserivce",
+    "to": "getcesiumservice",
+    "freq": 1
+  },
+  {
+    "from": "achine",
+    "to": "machine",
+    "freq": 1
+  },
+  {
+    "from": "formatetime",
+    "to": "formattime",
+    "freq": 1
+  },
+  {
+    "from": "beweeen",
+    "to": "between",
+    "freq": 1
+  },
+  {
+    "from": "fashon",
+    "to": "fashion",
+    "freq": 1
+  },
+  {
+    "from": "asciidctor",
+    "to": "asciidoctor",
+    "freq": 1
+  },
+  {
+    "from": "itemfroup",
+    "to": "itemgroup",
+    "freq": 1
+  },
+  {
+    "from": "coutinue",
+    "to": "continue",
+    "freq": 1
+  },
+  {
+    "from": "starupprojectfile",
+    "to": "startupprojectfile",
+    "freq": 1
+  },
+  {
+    "from": "updatedexperssion",
+    "to": "updatedexpression",
+    "freq": 1
+  },
+  {
+    "from": "udpateposition",
+    "to": "updateposition",
+    "freq": 1
+  },
+  {
+    "from": "noth",
+    "to": "north",
+    "freq": 1
+  },
+  {
+    "from": "reolve",
+    "to": "resolve",
+    "freq": 1
+  },
+  {
+    "from": "netowrkid",
+    "to": "networkid",
+    "freq": 1
+  },
+  {
+    "from": "isgoaldefiniton",
+    "to": "isgoaldefinition",
+    "freq": 1
+  },
+  {
+    "from": "winningoutcome",
+    "to": "winningoutcomes",
+    "freq": 1
+  },
+  {
+    "from": "appplypolyfills",
+    "to": "applypolyfills",
+    "freq": 1
+  },
+  {
+    "from": "throubleshooting",
+    "to": "troubleshooting",
+    "freq": 1
+  },
+  {
+    "from": "anouncement",
+    "to": "announcement",
+    "freq": 1
+  },
+  {
+    "from": "funcion",
+    "to": "function",
+    "freq": 1
+  },
+  {
+    "from": "attatchment",
+    "to": "attachment",
+    "freq": 1
+  },
+  {
+    "from": "leyend",
+    "to": "legend",
+    "freq": 1
+  },
+  {
+    "from": "namespaecs",
+    "to": "namespaces",
+    "freq": 1
+  },
+  {
+    "from": "bottomsize",
+    "to": "bottomside",
+    "freq": 1
+  },
+  {
+    "from": "copywright",
+    "to": "copyright",
+    "freq": 1
+  },
+  {
+    "from": "conenctions",
+    "to": "connections",
+    "freq": 1
+  },
+  {
+    "from": "conect",
+    "to": "connect",
+    "freq": 1
+  },
+  {
+    "from": "amazonn",
+    "to": "amazon",
+    "freq": 1
+  },
+  {
+    "from": "err",
+    "to": "error",
+    "freq": 1
+  },
+  {
+    "from": "souce",
+    "to": "source",
+    "freq": 1
+  },
+  {
+    "from": "ensuretablenoexists",
+    "to": "ensuretablenotexists",
+    "freq": 1
+  },
+  {
+    "from": "enlish",
+    "to": "english",
+    "freq": 1
+  },
+  {
+    "from": "respestively",
+    "to": "respectively",
+    "freq": 1
+  },
+  {
+    "from": "msssage",
+    "to": "message",
+    "freq": 1
+  },
+  {
+    "from": "datalbsettingoptinos",
+    "to": "datalbsettingoptions",
+    "freq": 1
+  },
+  {
+    "from": "masterinstacnetype",
+    "to": "masterinstancetype",
+    "freq": 1
+  },
+  {
+    "from": "configuraions",
+    "to": "configurations",
+    "freq": 1
+  },
+  {
+    "from": "billingcylce",
+    "to": "billingcycle",
+    "freq": 1
+  },
+  {
+    "from": "hiddden",
+    "to": "hidden",
+    "freq": 1
+  },
+  {
+    "from": "magicnumer",
+    "to": "magicnumber",
+    "freq": 1
+  },
+  {
+    "from": "uncommitedblocks",
+    "to": "uncommittedblocks",
+    "freq": 1
+  },
+  {
+    "from": "fhz",
+    "to": "fhi",
+    "freq": 1
+  },
+  {
+    "from": "prettyify",
+    "to": "prettify",
+    "freq": 1
+  },
+  {
+    "from": "javascsript",
+    "to": "javascript",
+    "freq": 1
+  },
+  {
+    "from": "necesary",
+    "to": "necessary",
+    "freq": 1
+  },
+  {
+    "from": "isformdiry",
+    "to": "isformdirty",
+    "freq": 1
+  },
+  {
+    "from": "port",
+    "to": "ports",
+    "freq": 1
+  },
+  {
+    "from": "databse",
+    "to": "database",
+    "freq": 1
+  },
+  {
+    "from": "alignemnts",
+    "to": "alignments",
+    "freq": 1
+  },
+  {
+    "from": "expots",
+    "to": "exports",
+    "freq": 1
+  },
+  {
+    "from": "comv",
+    "to": "conv",
+    "freq": 1
+  },
+  {
+    "from": "quorom",
+    "to": "quorum",
+    "freq": 1
+  },
+  {
+    "from": "exmples",
+    "to": "examples",
+    "freq": 1
+  },
+  {
+    "from": "mailergenericbuiler",
+    "to": "mailergenericbuilder",
+    "freq": 1
+  },
+  {
+    "from": "unreleaseed",
+    "to": "unreleased",
+    "freq": 1
+  },
+  {
+    "from": "setp",
+    "to": "setup",
+    "freq": 1
+  },
+  {
+    "from": "ndex",
+    "to": "index",
+    "freq": 1
+  },
+  {
+    "from": "defailt",
+    "to": "default",
+    "freq": 1
+  },
+  {
+    "from": "metaysnc",
+    "to": "metasync",
+    "freq": 1
+  },
+  {
+    "from": "funkd",
+    "to": "funk",
+    "freq": 1
+  },
+  {
+    "from": "limitaions",
+    "to": "limitations",
+    "freq": 1
+  },
+  {
+    "from": "swtichvideo",
+    "to": "switchvideo",
+    "freq": 1
+  },
+  {
+    "from": "draghelperhight",
+    "to": "draghelperheight",
+    "freq": 1
+  },
+  {
+    "from": "aproach",
+    "to": "approach",
+    "freq": 1
+  },
+  {
+    "from": "liscense",
+    "to": "license",
+    "freq": 1
+  },
+  {
+    "from": "equilvalent",
+    "to": "equivalent",
+    "freq": 1
+  },
+  {
+    "from": "filname",
+    "to": "filename",
+    "freq": 1
+  },
+  {
+    "from": "soecies",
+    "to": "species",
+    "freq": 1
+  },
+  {
+    "from": "packaged",
+    "to": "package",
+    "freq": 1
+  },
+  {
+    "from": "getaddressesorderer",
+    "to": "getaddressesordered",
+    "freq": 1
+  },
+  {
+    "from": "defaultistemplat",
+    "to": "defaultistemplate",
+    "freq": 1
+  },
+  {
+    "from": "iotimeiout",
+    "to": "iotimeout",
+    "freq": 1
+  },
+  {
+    "from": "defautfontweight",
+    "to": "defaultfontweight",
+    "freq": 1
+  },
+  {
+    "from": "funcitons",
+    "to": "functions",
+    "freq": 1
+  },
+  {
+    "from": "peerdependendices",
+    "to": "peerdependencies",
+    "freq": 1
+  },
+  {
+    "from": "ontinue",
+    "to": "continue",
+    "freq": 1
+  },
+  {
+    "from": "insepctors",
+    "to": "inspectors",
+    "freq": 1
+  },
+  {
+    "from": "screnshot",
+    "to": "screenshot",
+    "freq": 1
+  },
+  {
+    "from": "isfullhieght",
+    "to": "isfullheight",
+    "freq": 1
+  },
+  {
+    "from": "prameters",
+    "to": "parameters",
+    "freq": 1
+  },
+  {
+    "from": "stryct",
+    "to": "struct",
+    "freq": 1
+  },
+  {
+    "from": "refinment",
+    "to": "refinement",
+    "freq": 1
+  },
+  {
+    "from": "propagagte",
+    "to": "propagate",
+    "freq": 1
+  },
+  {
+    "from": "authorsa",
+    "to": "authors",
+    "freq": 1
+  },
+  {
+    "from": "recieps",
+    "to": "recipes",
+    "freq": 1
+  },
+  {
+    "from": "fidexsys",
+    "to": "fixedsys",
+    "freq": 1
+  },
+  {
+    "from": "feature",
+    "to": "features",
+    "freq": 1
+  },
+  {
+    "from": "unconstrucable",
+    "to": "unconstructable",
+    "freq": 1
+  },
+  {
+    "from": "inovked",
+    "to": "invoked",
+    "freq": 1
+  },
+  {
+    "from": "preprocesors",
+    "to": "preprocessors",
+    "freq": 1
+  },
+  {
+    "from": "mqtpt",
+    "to": "mqtt",
+    "freq": 1
+  },
+  {
+    "from": "customstlye",
+    "to": "customstyle",
+    "freq": 1
+  },
+  {
+    "from": "cpoyright",
+    "to": "copyright",
+    "freq": 1
+  },
+  {
+    "from": "builtpack",
+    "to": "buildpack",
+    "freq": 1
+  },
+  {
+    "from": "builtpackpush",
+    "to": "buildpackpush",
+    "freq": 1
+  },
+  {
+    "from": "middeware",
+    "to": "middleware",
+    "freq": 1
+  },
+  {
+    "from": "descrpiption",
+    "to": "description",
+    "freq": 1
+  },
+  {
+    "from": "figura",
+    "to": "figure",
+    "freq": 1
+  },
+  {
+    "from": "dynamiheightgrid",
+    "to": "dynamicheightgrid",
+    "freq": 1
+  },
+  {
+    "from": "shelldispather",
+    "to": "shelldispatcher",
+    "freq": 1
+  },
+  {
+    "from": "congraulations",
+    "to": "congratulations",
+    "freq": 1
+  },
+  {
+    "from": "manitainers",
+    "to": "maintainers",
+    "freq": 1
+  },
+  {
+    "from": "devlopment",
+    "to": "development",
+    "freq": 1
+  },
+  {
+    "from": "certifcatebuffer",
+    "to": "certificatebuffer",
+    "freq": 1
+  },
+  {
+    "from": "syncawailable",
+    "to": "syncavailable",
+    "freq": 1
+  },
+  {
+    "from": "errcodeembedcisabled",
+    "to": "errcodeembeddisabled",
+    "freq": 1
+  },
+  {
+    "from": "emial",
+    "to": "email",
+    "freq": 1
+  },
+  {
+    "from": "boarder",
+    "to": "border",
+    "freq": 1
+  },
+  {
+    "from": "consise",
+    "to": "concise",
+    "freq": 1
+  },
+  {
+    "from": "clssifiers",
+    "to": "classifiers",
+    "freq": 1
+  },
+  {
+    "from": "asignee",
+    "to": "assignee",
+    "freq": 1
+  },
+  {
+    "from": "verison",
+    "to": "version",
+    "freq": 1
+  },
+  {
+    "from": "implentations",
+    "to": "implementations",
+    "freq": 1
+  },
+  {
+    "from": "cvdatatableheadnig",
+    "to": "cvdatatableheading",
+    "freq": 1
+  },
+  {
+    "from": "captialize",
+    "to": "capitalize",
+    "freq": 1
+  },
+  {
+    "from": "accellerated",
+    "to": "accelerated",
+    "freq": 1
+  },
+  {
+    "from": "deployement",
+    "to": "deployment",
+    "freq": 1
+  },
+  {
+    "from": "pairder",
+    "to": "pairsder",
+    "freq": 1
+  },
+  {
+    "from": "customappearce",
+    "to": "customappearance",
+    "freq": 1
+  },
+  {
+    "from": "withdrawhistory",
+    "to": "withdrawalhistory",
+    "freq": 1
+  },
+  {
+    "from": "appsdir",
+    "to": "appdirs",
+    "freq": 1
+  },
+  {
+    "from": "sgdisk",
+    "to": "gdisk",
+    "freq": 1
+  },
+  {
+    "from": "warniglist",
+    "to": "warninglist",
+    "freq": 1
+  },
+  {
+    "from": "representaitons",
+    "to": "representations",
+    "freq": 1
+  },
+  {
+    "from": "aquiregcvote",
+    "to": "acquiregcvote",
+    "freq": 1
+  },
+  {
+    "from": "wrapper",
+    "to": "wrappers",
+    "freq": 1
+  },
+  {
+    "from": "mary",
+    "to": "may",
+    "freq": 1
+  },
+  {
+    "from": "atributes",
+    "to": "attributes",
+    "freq": 1
+  },
+  {
+    "from": "requriement",
+    "to": "requirement",
+    "freq": 1
+  },
+  {
+    "from": "reutrn",
+    "to": "return",
+    "freq": 1
+  },
+  {
+    "from": "referencies",
+    "to": "references",
+    "freq": 1
+  },
+  {
+    "from": "charater",
+    "to": "character",
+    "freq": 1
+  },
+  {
+    "from": "retruns",
+    "to": "returns",
+    "freq": 1
+  },
+  {
+    "from": "pickledatase",
+    "to": "pickledataset",
+    "freq": 1
+  },
+  {
+    "from": "finish",
+    "to": "finnish",
+    "freq": 1
+  },
+  {
+    "from": "ehnancements",
+    "to": "enhancements",
+    "freq": 1
+  },
+  {
+    "from": "resultsconig",
+    "to": "resultsconfig",
+    "freq": 1
+  },
+  {
+    "from": "footersattrubite",
+    "to": "footersattribute",
+    "freq": 1
+  },
+  {
+    "from": "nvironment",
+    "to": "environment",
+    "freq": 1
+  },
+  {
+    "from": "guidlines",
+    "to": "guidelines",
+    "freq": 1
+  },
+  {
+    "from": "endianesscheckflag",
+    "to": "endiannesscheckflag",
+    "freq": 1
+  },
+  {
+    "from": "widnows",
+    "to": "windows",
+    "freq": 1
+  },
+  {
+    "from": "compontent",
+    "to": "component",
+    "freq": 1
+  },
+  {
+    "from": "match",
+    "to": "march",
+    "freq": 1
+  },
+  {
+    "from": "endtempeature",
+    "to": "endtemperature",
+    "freq": 1
+  },
+  {
+    "from": "referenences",
+    "to": "references",
+    "freq": 1
+  },
+  {
+    "from": "metionrole",
+    "to": "mentionrole",
+    "freq": 1
+  },
+  {
+    "from": "metionuser",
+    "to": "mentionuser",
+    "freq": 1
+  },
+  {
+    "from": "cmdledbinding",
+    "to": "cmdletbinding",
+    "freq": 1
+  },
+  {
+    "from": "torchvison",
+    "to": "torchvision",
+    "freq": 1
+  },
+  {
+    "from": "succeedss",
+    "to": "succeeds",
+    "freq": 1
+  },
+  {
+    "from": "troubleshotting",
+    "to": "troubleshooting",
+    "freq": 1
+  },
+  {
+    "from": "smoething",
+    "to": "something",
+    "freq": 1
+  },
+  {
+    "from": "quie",
+    "to": "quiet",
+    "freq": 1
+  },
+  {
+    "from": "gatewaytimedout",
+    "to": "gatewaytimeout",
+    "freq": 1
+  },
+  {
+    "from": "defiend",
+    "to": "defined",
+    "freq": 1
+  },
+  {
+    "from": "logroate",
+    "to": "logrotate",
+    "freq": 1
+  },
+  {
+    "from": "inpossible",
+    "to": "impossible",
+    "freq": 1
+  },
+  {
+    "from": "cotext",
+    "to": "context",
+    "freq": 1
+  },
+  {
+    "from": "environemnt",
+    "to": "environment",
+    "freq": 1
+  },
+  {
+    "from": "mapdisptchtoprops",
+    "to": "mapdispatchtoprops",
+    "freq": 1
+  },
+  {
+    "from": "serivces",
+    "to": "services",
+    "freq": 1
+  },
+  {
+    "from": "view",
+    "to": "views",
+    "freq": 1
+  },
+  {
+    "from": "overivew",
+    "to": "overview",
+    "freq": 1
+  },
+  {
+    "from": "auhors",
+    "to": "authors",
+    "freq": 1
+  },
+  {
+    "from": "plagarism",
+    "to": "plagiarism",
+    "freq": 1
+  },
+  {
+    "from": "addcallbacko",
+    "to": "addcallback",
+    "freq": 1
+  },
+  {
+    "from": "udpate",
+    "to": "update",
+    "freq": 1
+  },
+  {
+    "from": "infrastructre",
+    "to": "infrastructure",
+    "freq": 1
+  },
+  {
+    "from": "adminsitrators",
+    "to": "administrators",
+    "freq": 1
+  },
+  {
+    "from": "sokceteventlistener",
+    "to": "socketeventlistener",
+    "freq": 1
+  },
+  {
+    "from": "colaborate",
+    "to": "collaborate",
+    "freq": 1
+  },
+  {
+    "from": "altanta",
+    "to": "atlanta",
+    "freq": 1
+  },
+  {
+    "from": "roudwork",
+    "to": "roadwork",
+    "freq": 1
+  },
+  {
+    "from": "modal",
+    "to": "model",
+    "freq": 1
+  },
+  {
+    "from": "dimentions",
+    "to": "dimensions",
+    "freq": 1
+  },
+  {
+    "from": "patricipants",
+    "to": "participants",
+    "freq": 1
+  },
+  {
+    "from": "contributers",
+    "to": "contributors",
+    "freq": 1
+  },
+  {
+    "from": "neworkmanager",
+    "to": "networkmanager",
+    "freq": 1
+  },
+  {
+    "from": "nigthmare",
+    "to": "nightmare",
+    "freq": 1
+  },
+  {
+    "from": "controld",
+    "to": "controls",
+    "freq": 1
+  },
+  {
+    "from": "optionnal",
+    "to": "optional",
+    "freq": 1
+  },
+  {
+    "from": "httpreponsetime",
+    "to": "httpresponsetime",
+    "freq": 1
+  },
+  {
+    "from": "agregate",
+    "to": "aggregate",
+    "freq": 1
+  },
+  {
+    "from": "shoudlbefolded",
+    "to": "shouldbefolded",
+    "freq": 1
+  },
+  {
+    "from": "delte",
+    "to": "delete",
+    "freq": 1
+  },
+  {
+    "from": "signaturesencetive",
+    "to": "signaturesensitive",
+    "freq": 1
+  },
+  {
+    "from": "comitted",
+    "to": "committed",
+    "freq": 1
+  },
+  {
+    "from": "pythoni",
+    "to": "python",
+    "freq": 1
+  },
+  {
+    "from": "dillonroah",
+    "to": "dillonroach",
+    "freq": 1
+  },
+  {
+    "from": "multdict",
+    "to": "multidict",
+    "freq": 1
+  },
+  {
+    "from": "setuptool",
+    "to": "setuptools",
+    "freq": 1
+  },
+  {
+    "from": "pyavro",
+    "to": "pyarrow",
+    "freq": 1
+  },
+  {
+    "from": "summery",
+    "to": "summary",
+    "freq": 1
+  },
+  {
+    "from": "commads",
+    "to": "commands",
+    "freq": 1
+  },
+  {
+    "from": "servicess",
+    "to": "services",
+    "freq": 1
+  },
+  {
+    "from": "vxlans",
+    "to": "vlans",
+    "freq": 1
+  },
+  {
+    "from": "dummyextention",
+    "to": "dummyextension",
+    "freq": 1
+  },
+  {
+    "from": "parseemtpycommand",
+    "to": "parseemptycommand",
+    "freq": 1
+  },
+  {
+    "from": "terminiology",
+    "to": "terminology",
+    "freq": 1
+  },
+  {
+    "from": "replacment",
+    "to": "replacement",
+    "freq": 1
+  },
+  {
+    "from": "minquotaperod",
+    "to": "minquotaperiod",
+    "freq": 1
+  },
+  {
+    "from": "newgroupmetadfactory",
+    "to": "newgroupmetafactory",
+    "freq": 1
+  },
+  {
+    "from": "inpsect",
+    "to": "inspect",
+    "freq": 1
+  },
+  {
+    "from": "thursdayv",
+    "to": "thursday",
+    "freq": 1
+  },
+  {
+    "from": "clsoe",
+    "to": "close",
+    "freq": 1
+  },
+  {
+    "from": "parameteres",
+    "to": "parameters",
+    "freq": 1
+  },
+  {
+    "from": "unlabaled",
+    "to": "unlabeled",
+    "freq": 1
+  },
+  {
+    "from": "withintparamaters",
+    "to": "withintparameters",
+    "freq": 1
+  },
+  {
+    "from": "tersion",
+    "to": "version",
+    "freq": 1
+  },
+  {
+    "from": "crobject",
+    "to": "cropject",
+    "freq": 1
+  },
+  {
+    "from": "validpermisison",
+    "to": "validpermission",
+    "freq": 1
+  },
+  {
+    "from": "inititalconfig",
+    "to": "initialconfig",
+    "freq": 1
+  },
+  {
+    "from": "exampl",
+    "to": "example",
+    "freq": 1
+  },
+  {
+    "from": "notofications",
+    "to": "notifications",
+    "freq": 1
+  },
+  {
+    "from": "targetsservice",
+    "to": "targetservice",
+    "freq": 1
+  },
+  {
+    "from": "adust",
+    "to": "adjust",
+    "freq": 1
+  },
+  {
+    "from": "deciml",
+    "to": "decimal",
+    "freq": 1
+  },
+  {
+    "from": "destoryrepl",
+    "to": "destroyrepl",
+    "freq": 1
+  },
+  {
+    "from": "txpool",
+    "to": "txtool",
+    "freq": 1
+  },
+  {
+    "from": "filosophy",
+    "to": "philosophy",
+    "freq": 1
+  },
+  {
+    "from": "reciever",
+    "to": "receiver",
+    "freq": 1
+  },
+  {
+    "from": "algoritm",
+    "to": "algorithm",
+    "freq": 1
+  },
+  {
+    "from": "edsdata",
+    "to": "esdata",
+    "freq": 1
+  },
+  {
+    "from": "modifies",
+    "to": "modifiers",
+    "freq": 1
+  },
+  {
+    "from": "pci",
+    "to": "psi",
+    "freq": 1
+  },
+  {
+    "from": "ignormissingfields",
+    "to": "ignoremissingfields",
+    "freq": 1
+  },
+  {
+    "from": "rot",
+    "to": "root",
+    "freq": 1
+  },
+  {
+    "from": "didclosehanlder",
+    "to": "didclosehandler",
+    "freq": 1
+  },
+  {
+    "from": "contrbutions",
+    "to": "contributions",
+    "freq": 1
+  },
+  {
+    "from": "utilsdepeqndencies",
+    "to": "utilsdependencies",
+    "freq": 1
+  },
+  {
+    "from": "infinte",
+    "to": "infinite",
+    "freq": 1
+  },
+  {
+    "from": "themeconumser",
+    "to": "themeconsumer",
+    "freq": 1
+  },
+  {
+    "from": "serverconumser",
+    "to": "serverconsumer",
+    "freq": 1
+  },
+  {
+    "from": "elipsoid",
+    "to": "ellipsoid",
+    "freq": 1
+  },
+  {
+    "from": "premitivecollection",
+    "to": "primitivecollection",
+    "freq": 1
+  },
+  {
+    "from": "saveareaguides",
+    "to": "safeareaguides",
+    "freq": 1
+  },
+  {
+    "from": "runningd",
+    "to": "running",
+    "freq": 1
+  },
+  {
+    "from": "tranpose",
+    "to": "transpose",
+    "freq": 1
+  },
+  {
+    "from": "comptuations",
+    "to": "computations",
+    "freq": 1
+  },
+  {
+    "from": "visibiletodos",
+    "to": "visibletodos",
+    "freq": 1
+  },
+  {
+    "from": "dist",
+    "to": "disk",
+    "freq": 1
+  },
+  {
+    "from": "dcostitle",
+    "to": "docstitle",
+    "freq": 1
+  },
+  {
+    "from": "versionl",
+    "to": "version",
+    "freq": 1
+  },
+  {
+    "from": "negetable",
+    "to": "negatable",
+    "freq": 1
+  },
+  {
+    "from": "lobal",
+    "to": "global",
+    "freq": 1
+  },
+  {
+    "from": "group",
+    "to": "groups",
+    "freq": 1
+  },
+  {
+    "from": "cpu",
+    "to": "cpus",
+    "freq": 1
+  },
+  {
+    "from": "rubjob",
+    "to": "runjob",
+    "freq": 1
+  },
+  {
+    "from": "getexecuter",
+    "to": "getexecutor",
+    "freq": 1
+  },
+  {
+    "from": "juatgage",
+    "to": "justgage",
+    "freq": 1
+  },
+  {
+    "from": "distritcs",
+    "to": "districts",
+    "freq": 1
+  },
+  {
+    "from": "sript",
+    "to": "script",
+    "freq": 1
+  },
+  {
+    "from": "nosript",
+    "to": "noscript",
+    "freq": 1
+  },
+  {
+    "from": "autors",
+    "to": "authors",
+    "freq": 1
+  },
+  {
+    "from": "funcions",
+    "to": "functions",
+    "freq": 1
+  },
+  {
+    "from": "require",
+    "to": "required",
+    "freq": 1
+  },
+  {
+    "from": "farmimgmode",
+    "to": "farmingmode",
+    "freq": 1
+  },
+  {
+    "from": "atribution",
+    "to": "attribution",
+    "freq": 1
+  },
+  {
+    "from": "ciruits",
+    "to": "circuits",
+    "freq": 1
+  },
+  {
+    "from": "virtulization",
+    "to": "virtualization",
+    "freq": 1
+  },
+  {
+    "from": "heirarchy",
+    "to": "hierarchy",
+    "freq": 1
+  },
+  {
+    "from": "deadmou",
+    "to": "deadmau",
+    "freq": 1
+  },
+  {
+    "from": "commensts",
+    "to": "comments",
+    "freq": 1
+  },
+  {
+    "from": "doalog",
+    "to": "dialog",
+    "freq": 1
+  },
+  {
+    "from": "tilingscheule",
+    "to": "tilingschedule",
+    "freq": 1
+  },
+  {
+    "from": "bod",
+    "to": "body",
+    "freq": 1
+  },
+  {
+    "from": "developement",
+    "to": "development",
+    "freq": 1
+  },
+  {
+    "from": "invironment",
+    "to": "environment",
+    "freq": 1
+  },
+  {
+    "from": "commiting",
+    "to": "committing",
+    "freq": 1
+  },
+  {
+    "from": "unqiue",
+    "to": "unique",
+    "freq": 1
+  },
+  {
+    "from": "wishlish",
+    "to": "wishlist",
+    "freq": 1
+  },
+  {
+    "from": "comunication",
+    "to": "communication",
+    "freq": 1
+  },
+  {
+    "from": "soringoptions",
+    "to": "sortingoptions",
+    "freq": 1
+  },
+  {
+    "from": "unsubscrive",
+    "to": "unsubscribe",
+    "freq": 1
+  },
+  {
+    "from": "recuctions",
+    "to": "reductions",
+    "freq": 1
+  },
+  {
+    "from": "exapmle",
+    "to": "example",
+    "freq": 1
+  },
+  {
+    "from": "converage",
+    "to": "coverage",
+    "freq": 1
+  },
+  {
+    "from": "prereqisites",
+    "to": "prerequisites",
+    "freq": 1
+  },
+  {
+    "from": "urguay",
+    "to": "uruguay",
+    "freq": 1
+  },
+  {
+    "from": "deprecatd",
+    "to": "deprecated",
+    "freq": 1
+  },
+  {
+    "from": "manfiestlayers",
+    "to": "manifestlayers",
+    "freq": 1
+  },
+  {
+    "from": "exaples",
+    "to": "examples",
+    "freq": 1
+  },
+  {
+    "from": "feeback",
+    "to": "feedback",
+    "freq": 1
+  },
+  {
+    "from": "premise",
+    "to": "premises",
+    "freq": 1
+  },
+  {
+    "from": "defautconfig",
+    "to": "defaultconfig",
+    "freq": 1
+  },
+  {
+    "from": "versionning",
+    "to": "versioning",
+    "freq": 1
+  },
+  {
+    "from": "preperation",
+    "to": "preparation",
+    "freq": 1
+  },
+  {
+    "from": "abstrctionsesists",
+    "to": "abstractionsexists",
+    "freq": 1
+  },
+  {
+    "from": "discrimnatorcolumn",
+    "to": "discriminatorcolumn",
+    "freq": 1
+  },
+  {
+    "from": "serrepository",
+    "to": "userrepository",
+    "freq": 1
+  },
+  {
+    "from": "expended",
+    "to": "expanded",
+    "freq": 1
+  },
+  {
+    "from": "intuative",
+    "to": "intuitive",
+    "freq": 1
+  },
+  {
+    "from": "katp",
+    "to": "kapt",
+    "freq": 1
+  },
+  {
+    "from": "kvuknown",
+    "to": "kvunknown",
+    "freq": 1
+  },
+  {
+    "from": "ariables",
+    "to": "variables",
+    "freq": 1
+  },
+  {
+    "from": "actuatext",
+    "to": "actualtext",
+    "freq": 1
+  },
+  {
+    "from": "rangemapemtter",
+    "to": "rangemapemitter",
+    "freq": 1
+  },
+  {
+    "from": "conceptuall",
+    "to": "conceptual",
+    "freq": 1
+  },
+  {
+    "from": "troubleshootig",
+    "to": "troubleshooting",
+    "freq": 1
+  },
+  {
+    "from": "sessionrespsone",
+    "to": "sessionresponse",
+    "freq": 1
+  },
+  {
+    "from": "undeflow",
+    "to": "underflow",
+    "freq": 1
+  },
+  {
+    "from": "signedwithbulider",
+    "to": "signedwithbuilder",
+    "freq": 1
+  },
+  {
+    "from": "dropdowns",
+    "to": "dropdown",
+    "freq": 1
+  },
+  {
+    "from": "ubunt",
+    "to": "ubuntu",
+    "freq": 1
+  },
+  {
+    "from": "boomark",
+    "to": "bookmark",
+    "freq": 1
+  },
+  {
+    "from": "lisence",
+    "to": "license",
+    "freq": 1
+  },
+  {
+    "from": "newletters",
+    "to": "newsletters",
+    "freq": 1
+  },
+  {
+    "from": "scatch",
+    "to": "scratch",
+    "freq": 1
+  },
+  {
+    "from": "scroltop",
+    "to": "scrolltop",
+    "freq": 1
+  },
+  {
+    "from": "pubish",
+    "to": "publish",
+    "freq": 1
+  },
+  {
+    "from": "refeshtabicon",
+    "to": "refreshtabicon",
+    "freq": 1
+  },
+  {
+    "from": "completing",
+    "to": "competing",
+    "freq": 1
+  },
+  {
+    "from": "receipes",
+    "to": "recipes",
+    "freq": 1
+  },
+  {
+    "from": "midlleware",
+    "to": "middleware",
+    "freq": 1
+  },
+  {
+    "from": "browserslit",
+    "to": "browserslist",
+    "freq": 1
+  },
+  {
+    "from": "weigthedwidth",
+    "to": "weightedwidth",
+    "freq": 1
+  },
+  {
+    "from": "datdisplacment",
+    "to": "datdisplacement",
+    "freq": 1
+  },
+  {
+    "from": "occured",
+    "to": "occurred",
+    "freq": 1
+  },
+  {
+    "from": "contine",
+    "to": "continue",
+    "freq": 1
+  },
+  {
+    "from": "scaleability",
+    "to": "scalability",
+    "freq": 1
+  },
+  {
+    "from": "protwods",
+    "to": "protwords",
+    "freq": 1
+  },
+  {
+    "from": "refreshexectuor",
+    "to": "refreshexecutor",
+    "freq": 1
+  },
+  {
+    "from": "strech",
+    "to": "stretch",
+    "freq": 1
+  },
+  {
+    "from": "introdcution",
+    "to": "introduction",
+    "freq": 1
+  },
+  {
+    "from": "handelkey",
+    "to": "handlekey",
+    "freq": 1
+  },
+  {
+    "from": "ranomizedpotterwand",
+    "to": "randomizedpotterwand",
+    "freq": 1
+  },
+  {
+    "from": "workspacutils",
+    "to": "workspaceutils",
+    "freq": 1
+  },
+  {
+    "from": "guage",
+    "to": "gauge",
+    "freq": 1
+  },
+  {
+    "from": "splitnumbwe",
+    "to": "splitnumber",
+    "freq": 1
+  },
+  {
+    "from": "difinitions",
+    "to": "definitions",
+    "freq": 1
+  },
+  {
+    "from": "recprd",
+    "to": "record",
+    "freq": 1
+  },
+  {
+    "from": "pintrest",
+    "to": "pinterest",
+    "freq": 1
+  },
+  {
+    "from": "machanism",
+    "to": "mechanism",
+    "freq": 1
+  },
+  {
+    "from": "namespce",
+    "to": "namespace",
+    "freq": 1
+  },
+  {
+    "from": "atasks",
+    "to": "tasks",
+    "freq": 1
+  },
+  {
+    "from": "featrues",
+    "to": "features",
+    "freq": 1
+  },
+  {
+    "from": "enojy",
+    "to": "enjoy",
+    "freq": 1
+  },
+  {
+    "from": "configurtion",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "requrements",
+    "to": "requirements",
+    "freq": 1
+  },
+  {
+    "from": "exemple",
+    "to": "example",
+    "freq": 1
+  },
+  {
+    "from": "publiched",
+    "to": "published",
+    "freq": 1
+  },
+  {
+    "from": "retuired",
+    "to": "required",
+    "freq": 1
+  },
+  {
+    "from": "preqrequisites",
+    "to": "prerequisites",
+    "freq": 1
+  },
+  {
+    "from": "intruduction",
+    "to": "introduction",
+    "freq": 1
+  },
+  {
+    "from": "fowards",
+    "to": "forwards",
+    "freq": 1
+  },
+  {
+    "from": "time",
+    "to": "times",
+    "freq": 1
+  },
+  {
+    "from": "neccessary",
+    "to": "necessary",
+    "freq": 1
+  },
+  {
+    "from": "reponsive",
+    "to": "responsive",
+    "freq": 1
+  },
+  {
+    "from": "augementative",
+    "to": "augmentative",
+    "freq": 1
+  },
+  {
+    "from": "inferece",
+    "to": "inference",
+    "freq": 1
+  },
+  {
+    "from": "unodrered",
+    "to": "unordered",
+    "freq": 1
+  },
+  {
+    "from": "constains",
+    "to": "contains",
+    "freq": 1
+  },
+  {
+    "from": "clotingstore",
+    "to": "clothingstore",
+    "freq": 1
+  },
+  {
+    "from": "phthon",
+    "to": "python",
+    "freq": 1
+  },
+  {
+    "from": "worflow",
+    "to": "workflow",
+    "freq": 1
+  },
+  {
+    "from": "basedonstyle",
+    "to": "basedonstyles",
+    "freq": 1
+  },
+  {
+    "from": "loggerr",
+    "to": "logger",
+    "freq": 1
+  },
+  {
+    "from": "readingg",
+    "to": "reading",
+    "freq": 1
+  },
+  {
+    "from": "managers",
+    "to": "manager",
+    "freq": 1
+  },
+  {
+    "from": "patrocnadores",
+    "to": "patrocinadores",
+    "freq": 1
+  },
+  {
+    "from": "garbarge",
+    "to": "garbage",
+    "freq": 1
+  },
+  {
+    "from": "contributer",
+    "to": "contributor",
+    "freq": 1
+  },
+  {
+    "from": "requresbuttonpress",
+    "to": "requiresbuttonpress",
+    "freq": 1
+  },
+  {
+    "from": "connection",
+    "to": "connections",
+    "freq": 1
+  },
+  {
+    "from": "classificaton",
+    "to": "classification",
+    "freq": 1
+  },
+  {
+    "from": "repostories",
+    "to": "repositories",
+    "freq": 1
+  },
+  {
+    "from": "delimilters",
+    "to": "delimiters",
+    "freq": 1
+  },
+  {
+    "from": "backgorund",
+    "to": "background",
+    "freq": 1
+  },
+  {
+    "from": "refinemnet",
+    "to": "refinement",
+    "freq": 1
+  },
+  {
+    "from": "artefacts",
+    "to": "artifact",
+    "freq": 1
+  },
+  {
+    "from": "cylindrialpanel",
+    "to": "cylindricalpanel",
+    "freq": 1
+  },
+  {
+    "from": "getabsolutpath",
+    "to": "getabsolutepath",
+    "freq": 1
+  },
+  {
+    "from": "pacakge",
+    "to": "package",
+    "freq": 1
+  },
+  {
+    "from": "poyhedral",
+    "to": "polyhedral",
+    "freq": 1
+  },
+  {
+    "from": "symbol",
+    "to": "symbols",
+    "freq": 1
+  },
+  {
+    "from": "villians",
+    "to": "villains",
+    "freq": 1
+  },
+  {
+    "from": "rtlgetrandomptr",
+    "to": "rtlgenrandomptr",
+    "freq": 1
+  },
+  {
+    "from": "confug",
+    "to": "config",
+    "freq": 1
+  },
+  {
+    "from": "toke",
+    "to": "token",
+    "freq": 1
+  },
+  {
+    "from": "cosntruction",
+    "to": "construction",
+    "freq": 1
+  },
+  {
+    "from": "asexualityonredditt",
+    "to": "asexualityonreddit",
+    "freq": 1
+  },
+  {
+    "from": "getlastrelasetag",
+    "to": "getlastreleasetag",
+    "freq": 1
+  },
+  {
+    "from": "construstor",
+    "to": "constructor",
+    "freq": 1
+  },
+  {
+    "from": "crropper",
+    "to": "cropper",
+    "freq": 1
+  },
+  {
+    "from": "objectice",
+    "to": "objective",
+    "freq": 1
+  },
+  {
+    "from": "retpositories",
+    "to": "repositories",
+    "freq": 1
+  },
+  {
+    "from": "applyobrine",
+    "to": "applyonline",
+    "freq": 1
+  },
+  {
+    "from": "discaimer",
+    "to": "disclaimer",
+    "freq": 1
+  },
+  {
+    "from": "reponses",
+    "to": "responses",
+    "freq": 1
+  },
+  {
+    "from": "defeault",
+    "to": "default",
+    "freq": 1
+  },
+  {
+    "from": "dropzoneelemenets",
+    "to": "dropzoneelements",
+    "freq": 1
+  },
+  {
+    "from": "fieldnumebr",
+    "to": "fieldnumber",
+    "freq": 1
+  },
+  {
+    "from": "conatainer",
+    "to": "container",
+    "freq": 1
+  },
+  {
+    "from": "cudos",
+    "to": "kudos",
+    "freq": 1
+  },
+  {
+    "from": "archtecture",
+    "to": "architecture",
+    "freq": 1
+  },
+  {
+    "from": "sourcode",
+    "to": "sourcecode",
+    "freq": 1
+  },
+  {
+    "from": "searchrecurive",
+    "to": "searchrecursive",
+    "freq": 1
+  },
+  {
+    "from": "irrlict",
+    "to": "irrlicht",
+    "freq": 1
+  },
+  {
+    "from": "radiump",
+    "to": "radium",
+    "freq": 1
+  },
+  {
+    "from": "fomaniic",
+    "to": "fomantic",
+    "freq": 1
+  },
+  {
+    "from": "wservicevm",
+    "to": "servicevm",
+    "freq": 1
+  },
+  {
+    "from": "installationg",
+    "to": "installation",
+    "freq": 1
+  },
+  {
+    "from": "individualy",
+    "to": "individually",
+    "freq": 1
+  },
+  {
+    "from": "sumbitclicked",
+    "to": "submitclicked",
+    "freq": 1
+  },
+  {
+    "from": "necessarly",
+    "to": "necessarily",
+    "freq": 1
+  },
+  {
+    "from": "logoutbuttom",
+    "to": "logoutbutton",
+    "freq": 1
+  },
+  {
+    "from": "descritpion",
+    "to": "description",
+    "freq": 1
+  },
+  {
+    "from": "argument",
+    "to": "arguments",
+    "freq": 1
+  },
+  {
+    "from": "complecity",
+    "to": "complexity",
+    "freq": 1
+  },
+  {
+    "from": "corretionlevel",
+    "to": "correctionlevel",
+    "freq": 1
+  },
+  {
+    "from": "linkdedata",
+    "to": "linkeddata",
+    "freq": 1
+  },
+  {
+    "from": "uninhavited",
+    "to": "uninhabited",
+    "freq": 1
+  },
+  {
+    "from": "slse",
+    "to": "else",
+    "freq": 1
+  },
+  {
+    "from": "goversioni",
+    "to": "goversion",
+    "freq": 1
+  },
+  {
+    "from": "authentification",
+    "to": "authentication",
+    "freq": 1
+  },
+  {
+    "from": "orientationpareright",
+    "to": "orientationpageright",
+    "freq": 1
+  },
+  {
+    "from": "propegate",
+    "to": "propagate",
+    "freq": 1
+  },
+  {
+    "from": "passwort",
+    "to": "password",
+    "freq": 1
+  },
+  {
+    "from": "thorough",
+    "to": "through",
+    "freq": 1
+  },
+  {
+    "from": "thumbail",
+    "to": "thumbnail",
+    "freq": 1
+  },
+  {
+    "from": "thens",
+    "to": "then",
+    "freq": 1
+  },
+  {
+    "from": "odules",
+    "to": "modules",
+    "freq": 1
+  },
+  {
+    "from": "synatax",
+    "to": "syntax",
+    "freq": 1
+  },
+  {
+    "from": "styled",
+    "to": "styles",
+    "freq": 1
+  },
+  {
+    "from": "contributuion",
+    "to": "contribution",
+    "freq": 1
+  },
+  {
+    "from": "storrypoints",
+    "to": "storypoints",
+    "freq": 1
+  },
+  {
+    "from": "thevrefore",
+    "to": "therefore",
+    "freq": 1
+  },
+  {
+    "from": "canceled",
+    "to": "cancelled",
+    "freq": 1
+  },
+  {
+    "from": "paramenters",
+    "to": "parameters",
+    "freq": 1
+  },
+  {
+    "from": "sugestparent",
+    "to": "suggestparent",
+    "freq": 1
+  },
+  {
+    "from": "autoamtiquement",
+    "to": "automatiquement",
+    "freq": 1
+  },
+  {
+    "from": "selctor",
+    "to": "selector",
+    "freq": 1
+  },
+  {
+    "from": "goolebenchmark",
+    "to": "googlebenchmark",
+    "freq": 1
+  },
+  {
+    "from": "detch",
+    "to": "detach",
+    "freq": 1
+  },
+  {
+    "from": "geoelectric",
+    "to": "geoelectrics",
+    "freq": 1
+  },
+  {
+    "from": "conditoons",
+    "to": "conditions",
+    "freq": 1
+  },
+  {
+    "from": "versionchanghed",
+    "to": "versionchanged",
+    "freq": 1
+  },
+  {
+    "from": "plattforms",
+    "to": "platforms",
+    "freq": 1
+  },
+  {
+    "from": "virthualenv",
+    "to": "virtualenv",
+    "freq": 1
+  },
+  {
+    "from": "repositoties",
+    "to": "repositories",
+    "freq": 1
+  },
+  {
+    "from": "forkk",
+    "to": "fork",
+    "freq": 1
+  },
+  {
+    "from": "copyibong",
+    "to": "copying",
+    "freq": 1
+  },
+  {
+    "from": "onlayotrows",
+    "to": "onlayoutrows",
+    "freq": 1
+  },
+  {
+    "from": "licences",
+    "to": "licenses",
+    "freq": 1
+  },
+  {
+    "from": "commiter",
+    "to": "committer",
+    "freq": 1
+  },
+  {
+    "from": "setopacitiy",
+    "to": "setopacity",
+    "freq": 1
+  },
+  {
+    "from": "issuess",
+    "to": "issues",
+    "freq": 1
+  },
+  {
+    "from": "reaadinputtoeof",
+    "to": "readinputtoeof",
+    "freq": 1
+  },
+  {
+    "from": "sparsse",
+    "to": "sparse",
+    "freq": 1
+  },
+  {
+    "from": "acknowledgemts",
+    "to": "acknowledgements",
+    "freq": 1
+  },
+  {
+    "from": "visable",
+    "to": "visible",
+    "freq": 1
+  },
+  {
+    "from": "idomhepler",
+    "to": "idomhelper",
+    "freq": 1
+  },
+  {
+    "from": "memache",
+    "to": "memcache",
+    "freq": 1
+  },
+  {
+    "from": "popuplateparsers",
+    "to": "populateparsers",
+    "freq": 1
+  },
+  {
+    "from": "adminster",
+    "to": "administer",
+    "freq": 1
+  },
+  {
+    "from": "axisylebelgap",
+    "to": "axisylabelgap",
+    "freq": 1
+  },
+  {
+    "from": "exclued",
+    "to": "exclude",
+    "freq": 1
+  },
+  {
+    "from": "uidbumber",
+    "to": "uidnumber",
+    "freq": 1
+  },
+  {
+    "from": "prettydiffi",
+    "to": "prettydiff",
+    "freq": 1
+  },
+  {
+    "from": "descriotion",
+    "to": "description",
+    "freq": 1
+  },
+  {
+    "from": "waht",
+    "to": "what",
+    "freq": 1
+  },
+  {
+    "from": "configur",
+    "to": "configure",
+    "freq": 1
+  },
+  {
+    "from": "artihmetic",
+    "to": "arithmetic",
+    "freq": 1
+  },
+  {
+    "from": "staement",
+    "to": "statement",
+    "freq": 1
+  },
+  {
+    "from": "noesape",
+    "to": "noescape",
+    "freq": 1
+  },
+  {
+    "from": "setbarpostion",
+    "to": "setbarposition",
+    "freq": 1
+  },
+  {
+    "from": "loation",
+    "to": "location",
+    "freq": 1
+  },
+  {
+    "from": "operat",
+    "to": "opera",
+    "freq": 1
+  },
+  {
+    "from": "valueformmatted",
+    "to": "valueformatted",
+    "freq": 1
+  },
+  {
+    "from": "menyqueryprovider",
+    "to": "menuqueryprovider",
+    "freq": 1
+  },
+  {
+    "from": "mainresoruce",
+    "to": "mainresource",
+    "freq": 1
+  },
+  {
+    "from": "musefxaa",
+    "to": "usefxaa",
+    "freq": 1
+  },
+  {
+    "from": "exmaples",
+    "to": "examples",
+    "freq": 1
+  },
+  {
+    "from": "dandelions",
+    "to": "dandelion",
+    "freq": 1
+  },
+  {
+    "from": "disclamer",
+    "to": "disclaimer",
+    "freq": 1
+  },
+  {
+    "from": "seperator",
+    "to": "separator",
+    "freq": 1
+  },
+  {
+    "from": "overide",
+    "to": "override",
+    "freq": 1
+  },
+  {
+    "from": "kansa",
+    "to": "kansas",
+    "freq": 1
+  },
+  {
+    "from": "expresion",
+    "to": "expression",
+    "freq": 1
+  },
+  {
+    "from": "systemsysetm",
+    "to": "systemsystem",
+    "freq": 1
+  },
+  {
+    "from": "subytpes",
+    "to": "subtypes",
+    "freq": 1
+  },
+  {
+    "from": "avaliable",
+    "to": "available",
+    "freq": 1
+  },
+  {
+    "from": "liceneservers",
+    "to": "licenseservers",
+    "freq": 1
+  },
+  {
+    "from": "signinpropmt",
+    "to": "signinprompt",
+    "freq": 1
+  },
+  {
+    "from": "someblockingfuncion",
+    "to": "someblockingfunction",
+    "freq": 1
+  },
+  {
+    "from": "septembe",
+    "to": "september",
+    "freq": 1
+  },
+  {
+    "from": "architecures",
+    "to": "architectures",
+    "freq": 1
+  },
+  {
+    "from": "tensorbaorddataistio",
+    "to": "tensorboarddataistio",
+    "freq": 1
+  },
+  {
+    "from": "jupyiter",
+    "to": "jupyter",
+    "freq": 1
+  },
+  {
+    "from": "emition",
+    "to": "emission",
+    "freq": 1
+  },
+  {
+    "from": "prssure",
+    "to": "pressure",
+    "freq": 1
+  },
+  {
+    "from": "crashses",
+    "to": "crashes",
+    "freq": 1
+  },
+  {
+    "from": "sufix",
+    "to": "suffix",
+    "freq": 1
+  },
+  {
+    "from": "installd",
+    "to": "installed",
+    "freq": 1
+  },
+  {
+    "from": "thusdays",
+    "to": "thursdays",
+    "freq": 1
+  },
+  {
+    "from": "shel",
+    "to": "shell",
+    "freq": 1
+  },
+  {
+    "from": "occuring",
+    "to": "occurring",
+    "freq": 1
+  },
+  {
+    "from": "bigrations",
+    "to": "migrations",
+    "freq": 1
+  },
+  {
+    "from": "susbcriptions",
+    "to": "subscriptions",
+    "freq": 1
+  },
+  {
+    "from": "cusror",
+    "to": "cursor",
+    "freq": 1
+  },
+  {
+    "from": "worksop",
+    "to": "workshop",
+    "freq": 1
+  },
+  {
+    "from": "coobook",
+    "to": "cookbook",
+    "freq": 1
+  },
+  {
+    "from": "eader",
+    "to": "header",
+    "freq": 1
+  },
+  {
+    "from": "greeding",
+    "to": "greeting",
+    "freq": 1
+  },
+  {
+    "from": "unoin",
+    "to": "union",
+    "freq": 1
+  },
+  {
+    "from": "southfricawest",
+    "to": "southafricawest",
+    "freq": 1
+  },
+  {
+    "from": "exepcted",
+    "to": "expected",
+    "freq": 1
+  },
+  {
+    "from": "hander",
+    "to": "handler",
+    "freq": 1
+  },
+  {
+    "from": "showids",
+    "to": "showbids",
+    "freq": 1
+  },
+  {
+    "from": "nbevel",
+    "to": "bevel",
+    "freq": 1
+  },
+  {
+    "from": "librar",
+    "to": "library",
+    "freq": 1
+  },
+  {
+    "from": "liuetenantdormitz",
+    "to": "lieutenantdormitz",
+    "freq": 1
+  },
+  {
+    "from": "colapsecolumnbutton",
+    "to": "collapsecolumnbutton",
+    "freq": 1
+  },
+  {
+    "from": "grodable",
+    "to": "gridable",
+    "freq": 1
+  },
+  {
+    "from": "publsh",
+    "to": "publish",
+    "freq": 1
+  },
+  {
+    "from": "componengs",
+    "to": "components",
+    "freq": 1
+  },
+  {
+    "from": "eplilogue",
+    "to": "epilogue",
+    "freq": 1
+  },
+  {
+    "from": "oframes",
+    "to": "frames",
+    "freq": 1
+  },
+  {
+    "from": "scoremulitmodel",
+    "to": "scoremultimodel",
+    "freq": 1
+  },
+  {
+    "from": "imporant",
+    "to": "important",
+    "freq": 1
+  },
+  {
+    "from": "thumprint",
+    "to": "thumbprint",
+    "freq": 1
+  },
+  {
+    "from": "stroage",
+    "to": "storage",
+    "freq": 1
+  },
+  {
+    "from": "https",
+    "to": "http",
+    "freq": 1
+  },
+  {
+    "from": "indentifier",
+    "to": "identifier",
+    "freq": 1
+  },
+  {
+    "from": "persistance",
+    "to": "persistence",
+    "freq": 1
+  },
+  {
+    "from": "intallation",
+    "to": "installation",
+    "freq": 1
+  },
+  {
+    "from": "template",
+    "to": "templates",
+    "freq": 1
+  },
+  {
+    "from": "mjluadestroye",
+    "to": "mjluadestroy",
+    "freq": 1
+  },
+  {
+    "from": "generaic",
+    "to": "generic",
+    "freq": 1
+  },
+  {
+    "from": "colletcd",
+    "to": "collectd",
+    "freq": 1
+  },
+  {
+    "from": "paramter",
+    "to": "parameter",
+    "freq": 1
+  },
+  {
+    "from": "defaulvalue",
+    "to": "defaultvalue",
+    "freq": 1
+  },
+  {
+    "from": "intall",
+    "to": "install",
+    "freq": 1
+  },
+  {
+    "from": "onbulletcolides",
+    "to": "onbulletcollides",
+    "freq": 1
+  },
+  {
+    "from": "mantainers",
+    "to": "maintainers",
+    "freq": 1
+  },
+  {
+    "from": "addresing",
+    "to": "addressing",
+    "freq": 1
+  },
+  {
+    "from": "sepember",
+    "to": "september",
+    "freq": 1
+  },
+  {
+    "from": "chiphersuites",
+    "to": "ciphersuites",
+    "freq": 1
+  },
+  {
+    "from": "unrelease",
+    "to": "unreleased",
+    "freq": 1
+  },
+  {
+    "from": "troublshooting",
+    "to": "troubleshooting",
+    "freq": 1
+  },
+  {
+    "from": "volumemount",
+    "to": "volumemounts",
+    "freq": 1
+  },
+  {
+    "from": "pushbover",
+    "to": "pushover",
+    "freq": 1
+  },
+  {
+    "from": "secret",
+    "to": "secrets",
+    "freq": 1
+  },
+  {
+    "from": "insall",
+    "to": "install",
+    "freq": 1
+  },
+  {
+    "from": "thottled",
+    "to": "throttled",
+    "freq": 1
+  },
+  {
+    "from": "orientstion",
+    "to": "orientation",
+    "freq": 1
+  },
+  {
+    "from": "fingeprint",
+    "to": "fingerprint",
+    "freq": 1
+  },
+  {
+    "from": "gittrak",
+    "to": "gittrac",
+    "freq": 1
+  },
+  {
+    "from": "gibibytes",
+    "to": "gigabytes",
+    "freq": 1
+  },
+  {
+    "from": "ukranian",
+    "to": "ukrainian",
+    "freq": 1
+  },
+  {
+    "from": "offine",
+    "to": "offline",
+    "freq": 1
+  },
+  {
+    "from": "juine",
+    "to": "june",
+    "freq": 1
+  },
+  {
+    "from": "delclineimmediately",
+    "to": "declineimmediately",
+    "freq": 1
+  },
+  {
+    "from": "exclduemetadata",
+    "to": "excludemetadata",
+    "freq": 1
+  },
+  {
+    "from": "introdution",
+    "to": "introduction",
+    "freq": 1
+  },
+  {
+    "from": "endif",
+    "to": "end",
+    "freq": 1
+  },
+  {
+    "from": "languaue",
+    "to": "language",
+    "freq": 1
+  },
+  {
+    "from": "unsbscribe",
+    "to": "unsubscribe",
+    "freq": 1
+  },
+  {
+    "from": "armindex",
+    "to": "armsindex",
+    "freq": 1
+  },
+  {
+    "from": "varaibles",
+    "to": "variables",
+    "freq": 1
+  },
+  {
+    "from": "lanaguage",
+    "to": "language",
+    "freq": 1
+  },
+  {
+    "from": "gloablquery",
+    "to": "globalquery",
+    "freq": 1
+  },
+  {
+    "from": "mainainers",
+    "to": "maintainers",
+    "freq": 1
+  },
+  {
+    "from": "screeshot",
+    "to": "screenshot",
+    "freq": 1
+  },
+  {
+    "from": "bookeeping",
+    "to": "bookkeeping",
+    "freq": 1
+  },
+  {
+    "from": "failled",
+    "to": "failed",
+    "freq": 1
+  },
+  {
+    "from": "historican",
+    "to": "historian",
+    "freq": 1
+  },
+  {
+    "from": "defauldeviceid",
+    "to": "defaultdeviceid",
+    "freq": 1
+  },
+  {
+    "from": "contribuiting",
+    "to": "contributing",
+    "freq": 1
+  },
+  {
+    "from": "updatedrecentlly",
+    "to": "updatedrecently",
+    "freq": 1
+  },
+  {
+    "from": "fricton",
+    "to": "friction",
+    "freq": 1
+  },
+  {
+    "from": "ariases",
+    "to": "aliases",
+    "freq": 1
+  },
+  {
+    "from": "scmap",
+    "to": "hcmap",
+    "freq": 1
+  },
+  {
+    "from": "bosy",
+    "to": "body",
+    "freq": 1
+  },
+  {
+    "from": "trouleshooting",
+    "to": "troubleshooting",
+    "freq": 1
+  },
+  {
+    "from": "configruation",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "configration",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "todoreducder",
+    "to": "todoreducer",
+    "freq": 1
+  },
+  {
+    "from": "compatiblity",
+    "to": "compatibility",
+    "freq": 1
+  },
+  {
+    "from": "matix",
+    "to": "matrix",
+    "freq": 1
+  },
+  {
+    "from": "gallary",
+    "to": "gallery",
+    "freq": 1
+  },
+  {
+    "from": "assests",
+    "to": "assets",
+    "freq": 1
+  },
+  {
+    "from": "addressconponents",
+    "to": "addresscomponents",
+    "freq": 1
+  },
+  {
+    "from": "tipstrics",
+    "to": "tipstricks",
+    "freq": 1
+  },
+  {
+    "from": "sate",
+    "to": "state",
+    "freq": 1
+  },
+  {
+    "from": "benchamrk",
+    "to": "benchmark",
+    "freq": 1
+  },
+  {
+    "from": "exptected",
+    "to": "expected",
+    "freq": 1
+  },
+  {
+    "from": "reguest",
+    "to": "request",
+    "freq": 1
+  },
+  {
+    "from": "nstallation",
+    "to": "installation",
+    "freq": 1
+  },
+  {
+    "from": "componentwillumount",
+    "to": "componentwillunmount",
+    "freq": 1
+  },
+  {
+    "from": "buildind",
+    "to": "building",
+    "freq": 1
+  },
+  {
+    "from": "parametre",
+    "to": "parameter",
+    "freq": 1
+  },
+  {
+    "from": "conjuctions",
+    "to": "conjunctions",
+    "freq": 1
+  },
+  {
+    "from": "isdetailexapnded",
+    "to": "isdetailexpanded",
+    "freq": 1
+  },
+  {
+    "from": "postinitilize",
+    "to": "postinitialize",
+    "freq": 1
+  },
+  {
+    "from": "overrirde",
+    "to": "override",
+    "freq": 1
+  },
+  {
+    "from": "bestfiddisabled",
+    "to": "bestfitdisabled",
+    "freq": 1
+  },
+  {
+    "from": "sucessful",
+    "to": "successful",
+    "freq": 1
+  },
+  {
+    "from": "exlcude",
+    "to": "exclude",
+    "freq": 1
+  },
+  {
+    "from": "serivceaccountname",
+    "to": "serviceaccountname",
+    "freq": 1
+  },
+  {
+    "from": "segmenatation",
+    "to": "segmentation",
+    "freq": 1
+  },
+  {
+    "from": "dependnecies",
+    "to": "dependencies",
+    "freq": 1
+  },
+  {
+    "from": "architechture",
+    "to": "architecture",
+    "freq": 1
+  },
+  {
+    "from": "willunount",
+    "to": "willunmount",
+    "freq": 1
+  },
+  {
+    "from": "confiiguration",
+    "to": "configuration",
+    "freq": 1
+  },
+  {
+    "from": "contirbutors",
+    "to": "contributors",
+    "freq": 1
+  },
+  {
+    "from": "cansskforcredentials",
+    "to": "canaskforcredentials",
+    "freq": 1
+  },
+  {
+    "from": "sovak",
+    "to": "slovak",
+    "freq": 1
+  }
+]

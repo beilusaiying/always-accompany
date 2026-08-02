@@ -1,0 +1,68 @@
+[
+  {
+    "from": "辩",
+    "to": "辨",
+    "type": "similar_shape",
+    "note": "辩/辨混用(辩=争辩,辨=辨别)"
+  },
+  {
+    "from": "辨",
+    "to": "辩",
+    "type": "similar_shape",
+    "note": "辨/辩混用"
+  },
+  {
+    "from": "候",
+    "to": "侯",
+    "type": "similar_shape",
+    "note": "候字候选(候=等候,侯=侯爵)"
+  },
+  {
+    "from": "侯",
+    "to": "候",
+    "type": "similar_shape",
+    "note": "侯/候混用"
+  },
+  {
+    "from": "那",
+    "to": "哪",
+    "type": "homophone",
+    "note": "那/哪疑问句混用"
+  },
+  {
+    "from": "哪",
+    "to": "那",
+    "type": "homophone",
+    "note": "哪/那混用"
+  },
+  {
+    "from": "厉",
+    "to": "历",
+    "type": "similar_shape",
+    "note": "厉/历混用"
+  },
+  {
+    "from": "历",
+    "to": "厉",
+    "type": "similar_shape",
+    "note": "历/厉混用"
+  },
+  {
+    "from": "熟悉",
+    "to": "熟习",
+    "type": "word",
+    "note": "熟悉/熟习"
+  },
+  {
+    "from": "熟习",
+    "to": "熟悉",
+    "type": "word",
+    "note": "熟习/熟悉"
+  },
+  {
+    "from": "座右铭",
+    "to": "座右铭",
+    "type": "word",
+    "note": "正确形式"
+  }
+]

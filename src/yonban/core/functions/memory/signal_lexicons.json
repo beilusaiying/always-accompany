@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "version": "0.1",
+    "date": "2026-04-30",
+    "note": "信号词库：mode检测/问候/AIRP安全，从语料+联网搜索持续扩充，不硬编码"
+  },
+  "chat_signals": {
+    "_doc": "闲聊/情感信号词——命中时work/code降级到chat池",
+    "zh": ["开心","难过","伤心","焦虑","害怕","生气","无聊","烦","累","困","饿","渴","疼","冷","热","想你","喜欢","爱你","亲爱","宝贝","老公","老婆","亲亲","抱抱","撒娇","嘿嘿","哈哈","呜呜","哼","嗯嗯","唉","哎","好吃","好喝","好看","好玩","搞笑","可爱","笨蛋","傻瓜","心情","感觉","其实","说实话","梦","吃饭","睡觉","听歌","游戏","电影","动漫","音乐","逛街","奶茶","火锅","零食","甜点","出去玩","约会","聊天","朋友","一起","见面","回家","洗澡","化妆","购物","旅行","散步","跑步","健身","生日","节日","礼物","惊喜","浪漫","温柔","害羞","紧张","兴奋","期待","失望","后悔","纠结","矛盾","孤独","寂寞","委屈","心疼","感动","感谢","幸福","满足","安心","放松","自由","快乐","悲伤","愤怒","恐惧","厌恶","惊讶","困惑","尴尬","羞耻","嫉妒","内疚","思念","怀念","回忆","童年","以前","小时候","长大","未来","希望","担心","压力","崩溃","受不了","算了","随便","无所谓","不管了","管他呢","就这样","爱咋咋"],
+    "en": ["happy","sad","angry","tired","bored","stressed","anxious","excited","lonely","scared","hungry","sleepy","love","miss","like","hate","cute","funny","amazing","awesome","terrible","horrible","lol","lmao","bruh","ngl","tbh","imo","omg","wtf","smh","fr","no cap","vibe","mood","bestie","babe","honey","darling","sweetheart","dude","bro","sis","queen","king","slay","cringe","based","wholesome","lowkey","highkey","literally","honestly","actually","basically","okay","fine","whatever","idc","idk","nvm","same","relatable","uwu","owo","hug","cuddle","kiss","sleep","eat","game","movie","music","chill","hang out","wanna","gonna","kinda","sorta"],
+    "ja": ["嬉しい","悲しい","寂しい","怖い","疲れた","楽しい","好き","大好き","かわいい","やばい","草","推し","尊い","エモい","きゅん","どきどき","わくわく","ほっ","うるうる","ね","よ","な","わ","だよね","かな"],
+    "ko": ["행복","슬프다","화나다","피곤해","사랑해","보고싶어","대박","헐","ㅋㅋ","ㅎㅎ"]
+  },
+  "work_signals": {
+    "_doc": "工作/技术信号词——命中时阻止降级，确认确实在讨论工作",
+    "zh": ["代码","bug","框架","接口","API","数据库","服务器","部署","测试","前端","后端","算法","函数","变量","类","模块","依赖","编译","运行","调试","报错","异常","日志","配置","环境","版本","分支","提交","合并","发布","上线","回滚","监控","性能","优化","缓存","并发","线程","队列","需求","排期","迭代","sprint","backlog","里程碑","原型","设计稿","交互","产品","功能","文档","会议","汇报","KPI","OKR","预算","成本","客户","合同","方案","甲方","论文","研究","实验","数据","分析","假设","结论","方法论","架构","重构","lint","CI","CD","pipeline","docker","k8s","微服务","中间件"],
+    "en": ["code","bug","framework","API","database","server","deploy","test","frontend","backend","algorithm","function","variable","module","dependency","compile","runtime","debug","error","exception","config","version","branch","commit","merge","release","rollback","performance","optimize","cache","concurrency","requirement","sprint","backlog","milestone","prototype","design","product","feature","documentation","meeting","review","PR","issue","ticket","deadline","budget","client","contract","proposal","research","experiment","data","analysis","hypothesis","architecture","refactor","pipeline","docker","kubernetes"]
+  },
+  "greeting_signals": {
+    "_doc": "问候/社交礼节——命中时走meta_signal不输出术语",
+    "zh": ["你好","早安","晚安","早上好","下午好","晚上好","午安","谢谢","感谢","多谢","辛苦了","好的","可以","行","嗯","哦","对","没事","没关系","拜拜","再见","下次见","回见","嗨","嘿","哈喽","生日快乐","新年快乐","圣诞快乐","节日快乐"],
+    "en": ["hi","hey","hello","sup","yo","howdy","good morning","good night","good evening","thanks","thank you","thx","ty","bye","goodbye","see ya","later","cya","gtg","lol","haha","hehe","lmao","yes","no","ok","okay","sure","yeah","yep","nah","nope","alright","merry christmas","happy birthday","happy new year"],
+    "ja": ["こんにちは","おはよう","おやすみ","ありがとう","さようなら","お疲れ様"],
+    "ko": ["안녕","감사합니다","고마워","잘자","수고"]
+  },
+  "airp_suppress": {
+    "_doc": "AIRP模式抑制词——术语名包含这些词时降权，避免引导主AI走向暴力/绝望",
+    "terms": ["毁灭","致命","缺陷","低谷","创伤","阴影","暴力","恐惧","死亡","战斗","困境","崩溃","绝望","压抑","反抗","对抗","攻击","伤害","撕裂","摧毁","危机","失控","怒火","三我冲突","Hamartiā","自我毁灭","复仇","杀","血","痛苦","挣扎","destruction","fatal","violence","despair","trauma","attack","collapse","murder","revenge","blood","agony","torment"]
+  }
+}

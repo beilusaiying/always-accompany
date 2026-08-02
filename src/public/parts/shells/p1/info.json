@@ -1,0 +1,43 @@
+{
+	"en-UK": {
+		"name": "P1 Recall Service",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "Self-driven memory recall as an independent pluggable Python service.",
+		"description_markdown": "**P1 Recall Service** — self-driven memory recall pipeline running as an independent Python process. The shell is a thin HTTP relay: the service starts, tests and runs entirely without the host. Unplug the service and the host degrades gracefully.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"memory",
+			"recall",
+			"python",
+			"service"
+		]
+	},
+	"zh-CN": {
+		"name": "P1 召回服务",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "自驱动记忆召回，独立可插拔 Python 服务",
+		"description_markdown": "**P1 召回服务** — 自驱动记忆召回管线，以独立 Python 进程运行。本 shell 只是薄 HTTP 传导层：服务可完全脱离本体单独启动、测试、运行；拔掉服务本体优雅降级。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"记忆",
+			"召回",
+			"python",
+			"独立服务"
+		]
+	},
+	"emoji": {
+		"name": "🧠🐍",
+		"avatar": "https://api.iconify.design/mdi/brain.svg",
+		"description": "🧠🔌🐍✨",
+		"description_markdown": "🧠 🔍\n🐍 🔌\n✨ 📚",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🧠",
+			"🐍",
+			"🔌"
+		]
+	}
+}

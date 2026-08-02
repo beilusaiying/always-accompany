@@ -1,0 +1,6957 @@
+{
+  "_meta": {
+    "type": "character_psychology",
+    "count": 152,
+    "updated": "2026-05-04T08:05:00.578Z"
+  },
+  "characters": {
+    "鹿目圆": {
+      "work": "魔法少女小圆",
+      "work_type": "anime",
+      "aliases": [
+        "Madoka Kaname",
+        "鹿目まどか",
+        "Madoka",
+        "小圆",
+        "圆神",
+        "鹿目",
+        "圆圆",
+        "まどか",
+        "小圆圆"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "离弃恐惧",
+        "无力感",
+        "升华机制",
+        "希望投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "fear"
+        ],
+        "secondary": [
+          "submission"
+        ],
+        "note": "信任驱动牺牲倾向，恐惧驱动犹豫不决"
+      },
+      "abc_belief": "只有我能承担这个责任，必须牺牲自己",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华",
+        "否认",
+        "理想化"
+      ],
+      "archetype": "天真者→英雄→神明",
+      "emotional_core": "善良到极致的无力感与救赎欲",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.5,
+        "extraversion": 0.4,
+        "agreeableness": 0.95,
+        "neuroticism": 0.6
+      }
+    },
+    "晓美焰": {
+      "work": "魔法少女小圆",
+      "work_type": "anime",
+      "aliases": [
+        "Homura Akemi",
+        "暁美ほむら",
+        "Homura",
+        "小焰",
+        "焰",
+        "学姐",
+        "焰酱",
+        "ほむほむ",
+        "晓美"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "内耗模式",
+        "自我隔离策略",
+        "持续性联结",
+        "亲密恐惧"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "fear"
+        ],
+        "secondary": [
+          "anxiety"
+        ],
+        "note": "对圆的执念驱动一切行动，深层恐惧失去"
+      },
+      "abc_belief": "我必须不惜一切保护她，哪怕独自承受一切",
+      "attachment": "混乱型",
+      "defense": [
+        "情绪压制",
+        "理性化回避",
+        "反向表达"
+      ],
+      "archetype": "孤儿→战士→阴影",
+      "emotional_core": "爱到扭曲的孤独执守",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.9,
+        "extraversion": 0.1,
+        "agreeableness": 0.3,
+        "neuroticism": 0.85
+      }
+    },
+    "佐仓杏子": {
+      "work": "魔法少女小圆",
+      "work_type": "anime",
+      "aliases": [
+        "Kyoko Sakura",
+        "佐倉杏子",
+        "杏子",
+        "佐仓",
+        "苹果",
+        "Kyoko"
+      ],
+      "maps_to": [
+        "被辜负体验",
+        "距离保护模式",
+        "自我保护反应",
+        "哀伤五阶段",
+        "延迟性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "disgust"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "对虚伪理想主义的愤怒，用强硬掩藏脆弱"
+      },
+      "abc_belief": "信念是奢侈品，利益和生存才是真实",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "反向表达",
+        "情绪压制"
+      ],
+      "archetype": "孤儿→流氓→殉道者",
+      "emotional_core": "用冷酷保护不敢再次受伤的心",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.7,
+        "extraversion": 0.5,
+        "agreeableness": 0.25,
+        "neuroticism": 0.55
+      }
+    },
+    "碇真嗣": {
+      "work": "新世纪福音战士(EVA)",
+      "work_type": "anime",
+      "aliases": [
+        "Shinji Ikari",
+        "碇シンジ",
+        "Shinji",
+        "真嗣",
+        "碇君",
+        "碇",
+        "シンジくん"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "亲密恐惧",
+        "无力感",
+        "社交孤立感",
+        "崩溃边缘体验"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness"
+        ],
+        "secondary": [
+          "despair"
+        ],
+        "note": "恐惧驱动逃避，悲伤是底层基调"
+      },
+      "abc_belief": "我没有存在的价值，做什么都无法被接受",
+      "attachment": "混乱型",
+      "defense": [
+        "否认阶段",
+        "退行",
+        "情绪压制"
+      ],
+      "archetype": "孤儿→受难者",
+      "emotional_core": "被遗弃的孩子渴望被接纳",
+      "valence": -0.7,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.4,
+        "extraversion": 0.15,
+        "agreeableness": 0.7,
+        "neuroticism": 0.95
+      }
+    },
+    "惣流·明日香·兰格雷": {
+      "work": "新世纪福音战士(EVA)",
+      "work_type": "anime",
+      "aliases": [
+        "Asuka Langley Soryu",
+        "惣流アスカ",
+        "Asuka",
+        "明日香",
+        "アスカ",
+        "红色机体驾驶员"
+      ],
+      "maps_to": [
+        "冒充者怀疑",
+        "崩溃边缘体验",
+        "被认可满足感",
+        "公开表现焦虑",
+        "自我保护反应"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "愤怒是保护机制，成就欲驱动行动"
+      },
+      "abc_belief": "必须表现最好，软弱就等于被抛弃",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向表达",
+        "投射",
+        "理性化回避"
+      ],
+      "archetype": "战士→受难者",
+      "emotional_core": "用强大掩护破碎的内心",
+      "valence": -0.5,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.85,
+        "extraversion": 0.9,
+        "agreeableness": 0.15,
+        "neuroticism": 0.9
+      }
+    },
+    "绫波丽": {
+      "work": "新世纪福音战士(EVA)",
+      "work_type": "anime",
+      "aliases": [
+        "Rei Ayanami",
+        "綾波レイ",
+        "Rei",
+        "绫波",
+        "零号机",
+        "丽"
+      ],
+      "maps_to": [
+        "无意义漂浮感",
+        "距离保护模式",
+        "被遗忘感",
+        "自我隔离策略",
+        "情绪颗粒度"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "submission"
+        ],
+        "note": "对命令的绝对服从，被动接受存在"
+      },
+      "abc_belief": "我只是工具，存在没有意义，服从即全部",
+      "attachment": "回避型",
+      "defense": [
+        "情绪压制",
+        "理性化回避",
+        "否认阶段"
+      ],
+      "archetype": "孤儿→使者",
+      "emotional_core": "空白之中萌生的存在疑问",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.35,
+        "conscientiousness": 0.8,
+        "extraversion": 0.05,
+        "agreeableness": 0.6,
+        "neuroticism": 0.3
+      }
+    },
+    "艾伦·耶格尔": {
+      "work": "进击的巨人",
+      "work_type": "anime",
+      "aliases": [
+        "Eren Yeager",
+        "エレン・イェーガー",
+        "Eren",
+        "艾伦",
+        "巨人",
+        "自由之翼",
+        "进击之巨人",
+        "耶格尔"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "创伤后成长弧",
+        "无力感",
+        "内耗模式",
+        "人生轨道脱轨感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "愤怒驱动行动，对自由的极度渴望演变为意志强权"
+      },
+      "abc_belief": "自由只能靠自己的力量夺取，为此可以牺牲任何人",
+      "attachment": "混乱型",
+      "defense": [
+        "理性化回避",
+        "否认阶段",
+        "升华机制"
+      ],
+      "archetype": "英雄→阴影",
+      "emotional_core": "对自由的渴望异化为对世界的绝望",
+      "valence": -0.3,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.7,
+        "extraversion": 0.65,
+        "agreeableness": 0.2,
+        "neuroticism": 0.7
+      }
+    },
+    "三笠·阿克曼": {
+      "work": "进击的巨人",
+      "work_type": "anime",
+      "aliases": [
+        "Mikasa Ackerman",
+        "ミカサ・アッカーマン",
+        "Mikasa",
+        "三笠",
+        "ミカサ",
+        "阿克曼",
+        "红围巾"
+      ],
+      "maps_to": [
+        "靠近渴望反应",
+        "离弃恐惧",
+        "持续性联结",
+        "丧失感理论",
+        "哀伤五阶段"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "对艾伦的绝对保护欲，情感几乎全部锚定在一人身上"
+      },
+      "abc_belief": "只要艾伦在，我的存在就有意义",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "升华机制",
+        "情绪压制"
+      ],
+      "archetype": "战士→守护者",
+      "emotional_core": "爱是枷锁，也是唯一的意义",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.85,
+        "extraversion": 0.2,
+        "agreeableness": 0.6,
+        "neuroticism": 0.5
+      }
+    },
+    "利威尔·阿克曼": {
+      "work": "进击的巨人",
+      "work_type": "anime",
+      "aliases": [
+        "Levi Ackerman",
+        "リヴァイ・アッカーマン",
+        "Levi",
+        "兵长",
+        "利威尔兵长",
+        "リヴァイ兵長",
+        "人类最强"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "距离保护模式",
+        "道德愤怒",
+        "付出回报失衡感",
+        "延迟性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "trust"
+        ],
+        "secondary": [
+          "dominance"
+        ],
+        "note": "愤怒指向不公，信任给极少数，冷峻外表掩藏内心责任感"
+      },
+      "abc_belief": "选择本身就是赌注，活下来的人必须承担选择的重量",
+      "attachment": "回避型",
+      "defense": [
+        "情绪压制",
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "战士→统治者",
+      "emotional_core": "在无尽失去中仍然选择战斗",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.45,
+        "conscientiousness": 0.95,
+        "extraversion": 0.25,
+        "agreeableness": 0.2,
+        "neuroticism": 0.4
+      }
+    },
+    "灶门炭治郎": {
+      "work": "鬼灭之刃",
+      "work_type": "anime",
+      "aliases": [
+        "Tanjiro Kamado",
+        "竈門炭治郎",
+        "Tanjiro",
+        "炭治郎",
+        "灶门",
+        "炭",
+        "炭炭",
+        "炭jiro"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "安全型依恋基地",
+        "意义感建构",
+        "成长型心态",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "善意与同理心是核心驱动，甚至对鬼也保有同情"
+      },
+      "abc_belief": "无论多痛苦都要温柔地活下去，守护妹妹",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "利他主义"
+      ],
+      "archetype": "英雄→救助者",
+      "emotional_core": "以善意面对残酷，在温柔中铸就力量",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.8,
+        "extraversion": 0.65,
+        "agreeableness": 0.95,
+        "neuroticism": 0.35
+      }
+    },
+    "灶门祢豆子": {
+      "work": "鬼灭之刃",
+      "work_type": "anime",
+      "aliases": [
+        "Nezuko Kamado",
+        "竈門禰豆子",
+        "Nezuko",
+        "豆豆子",
+        "祢豆子",
+        "ねずこ",
+        "竹筒妹"
+      ],
+      "maps_to": [
+        "安全型依恋基地",
+        "意义重构",
+        "创伤后成长弧",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "以本能守护人类，善意内化为身体反应"
+      },
+      "abc_belief": "（潜意识）所有人类都是要保护的家人",
+      "attachment": "安全型",
+      "defense": [
+        "压抑（本能压制鬼性）",
+        "升华机制"
+      ],
+      "archetype": "天真者→斗士",
+      "emotional_core": "善意是超越变化的本质",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.55,
+        "extraversion": 0.45,
+        "agreeableness": 0.95,
+        "neuroticism": 0.2
+      }
+    },
+    "蒙奇·D·路飞": {
+      "work": "海贼王",
+      "work_type": "anime",
+      "aliases": [
+        "Monkey D. Luffy",
+        "ルフィ",
+        "Luffy",
+        "路飞",
+        "草帽",
+        "草帽路飞",
+        "草帽小子"
+      ],
+      "maps_to": [
+        "成就动机",
+        "正向螺旋",
+        "安全型依恋基地",
+        "心流体验",
+        "预期性喜悦"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "对冒险的纯粹热爱，对伙伴的绝对信任"
+      },
+      "abc_belief": "必须保护伙伴，这是我的使命",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "天真者→英雄",
+      "emotional_core": "纯粹的自由意志与对伙伴的爱",
+      "valence": 0.9,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.2,
+        "extraversion": 0.95,
+        "agreeableness": 0.85,
+        "neuroticism": 0.1
+      }
+    },
+    "罗罗诺亚·索隆": {
+      "work": "海贼王",
+      "work_type": "anime",
+      "aliases": [
+        "Roronoa Zoro",
+        "ゾロ",
+        "Zoro",
+        "索隆",
+        "剑豪",
+        "迷路三刀流"
+      ],
+      "maps_to": [
+        "成就动机",
+        "持续性联结",
+        "自我效能感",
+        "升华机制",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "目标极度专注，对诺言的绝对执守"
+      },
+      "abc_belief": "无论付出什么代价，誓言必须实现",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "情绪压制",
+        "理性化回避"
+      ],
+      "archetype": "战士",
+      "emotional_core": "以极度自律践行对逝者的誓言",
+      "valence": 0.3,
+      "big5": {
+        "openness": 0.3,
+        "conscientiousness": 0.95,
+        "extraversion": 0.2,
+        "agreeableness": 0.3,
+        "neuroticism": 0.2
+      }
+    },
+    "妮可·罗宾": {
+      "work": "海贼王",
+      "work_type": "anime",
+      "aliases": [
+        "Nico Robin",
+        "ニコ・ロビン",
+        "Robin",
+        "罗宾",
+        "考古学家",
+        "恶魔之子"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "复杂性哀伤",
+        "创伤后成长弧",
+        "意义重构",
+        "安全型依恋基地"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "深层悲伤与对知识/同伴的信任并存"
+      },
+      "abc_belief": "我注定孤独，无论在哪里都会被抛弃",
+      "attachment": "混乱型→安全型",
+      "defense": [
+        "理性化回避",
+        "情绪压制",
+        "升华机制"
+      ],
+      "archetype": "孤儿→智者",
+      "emotional_core": "在二十年孤独后终于学会接受被爱",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.75,
+        "extraversion": 0.25,
+        "agreeableness": 0.5,
+        "neuroticism": 0.55
+      }
+    },
+    "漩涡鸣人": {
+      "work": "火影忍者",
+      "work_type": "anime",
+      "aliases": [
+        "Naruto Uzumaki",
+        "鸣人",
+        "火影",
+        "呜咪",
+        "螺旋丸",
+        "火影大人",
+        "うずまきナルト"
+      ],
+      "maps_to": [
+        "被认可满足感",
+        "成长型心态",
+        "创伤后成长弧",
+        "社交孤立感",
+        "正向螺旋"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "被孤立渴望认可，以认可驱动成长"
+      },
+      "abc_belief": "只要足够努力总会被认可",
+      "attachment": "焦虑型早期→安全型",
+      "defense": [
+        "升华机制",
+        "行动化",
+        "反向表达"
+      ],
+      "archetype": "孤儿→英雄→统治者",
+      "emotional_core": "用不被放弃的意志感化世界",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.55,
+        "extraversion": 0.9,
+        "agreeableness": 0.8,
+        "neuroticism": 0.4
+      }
+    },
+    "宇智波佐助": {
+      "work": "火影忍者",
+      "work_type": "anime",
+      "aliases": [
+        "Sasuke Uchiha",
+        "佐助",
+        "宇智波",
+        "うちはサスケ",
+        "复仇者"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "内耗模式",
+        "人生轨道脱轨感",
+        "离弃恐惧",
+        "意义重构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "sadness"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "仇恨塑造身份，悲伤驱动孤独主义"
+      },
+      "abc_belief": "仇恨是我存在的意义",
+      "attachment": "混乱型",
+      "defense": [
+        "压抑",
+        "理性化回避",
+        "升华机制"
+      ],
+      "archetype": "孤儿→流氓→救助者",
+      "emotional_core": "在仇恨与爱的拉锯中寻找存在意义",
+      "valence": -0.3,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.1,
+        "neuroticism": 0.7
+      }
+    },
+    "五条悟": {
+      "work": "咒术回战",
+      "work_type": "anime",
+      "aliases": [
+        "Gojo Satoru",
+        "五条",
+        "悟",
+        "五条老师",
+        "最强术师",
+        "蒙眼帅哥",
+        "Gojo"
+      ],
+      "maps_to": [
+        "自我效能感",
+        "孤独上线感",
+        "成就动机",
+        "心流体验",
+        "社交孤立感"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "天才无上自信与隐藏的孤独"
+      },
+      "abc_belief": "强者有责任保护弱者改变腐朽体制",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "英雄→智者",
+      "emotional_core": "以玩笑掩盖对孤独顶点的沉默承受",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.5,
+        "extraversion": 0.85,
+        "agreeableness": 0.45,
+        "neuroticism": 0.2
+      }
+    },
+    "虎杖悠仁": {
+      "work": "咒术回战",
+      "work_type": "anime",
+      "aliases": [
+        "Yuji Itadori",
+        "虎杖",
+        "悠仁",
+        "イタドリ",
+        "宿儺载体"
+      ],
+      "maps_to": [
+        "道德情绪",
+        "创伤后成长弧",
+        "情感确认需求",
+        "意义感建构",
+        "安全型依恋基地"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "对生命的珍视与深切共情"
+      },
+      "abc_belief": "每条生命都值得被尊重",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "英雄→受难者",
+      "emotional_core": "在无法控制的命运中坚持善意",
+      "valence": 0.55,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.7,
+        "extraversion": 0.75,
+        "agreeableness": 0.9,
+        "neuroticism": 0.35
+      }
+    },
+    "伏黑惠": {
+      "work": "咒术回战",
+      "work_type": "anime",
+      "aliases": [
+        "Megumi Fushiguro",
+        "惠",
+        "伏黑",
+        "フシグロ",
+        "十种影法术"
+      ],
+      "maps_to": [
+        "距离保护模式",
+        "道德愤怒",
+        "自我隔离策略",
+        "内耗模式",
+        "系统性不公感"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "冷静策略性思维，对不公的隐忍愤怒"
+      },
+      "abc_belief": "不是所有人都值得被救",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "压抑",
+        "情绪压制"
+      ],
+      "archetype": "孤儿→战士",
+      "emotional_core": "在不公平的世界中以冷静保住底线",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.85,
+        "extraversion": 0.15,
+        "agreeableness": 0.35,
+        "neuroticism": 0.45
+      }
+    },
+    "洛伊德·福杰": {
+      "work": "间谍过家家",
+      "work_type": "anime",
+      "aliases": [
+        "Loid Forger",
+        "Twilight",
+        "黄昏",
+        "洛伊德",
+        "福杰爸爸",
+        "间谍爸爸"
+      ],
+      "maps_to": [
+        "距离保护模式",
+        "创伤后成长弧",
+        "情感确认需求",
+        "意义重构",
+        "安全型依恋基地"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "使命驱动情感被压制，家庭温暖逐渐渗透"
+      },
+      "abc_belief": "情感是任务障碍完成任务高于一切",
+      "attachment": "回避型→向安全型转变",
+      "defense": [
+        "理性化回避",
+        "情绪压制",
+        "升华机制"
+      ],
+      "archetype": "孤儿→统治者→养育者",
+      "emotional_core": "在假扮中发现真实的家庭意义",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.95,
+        "extraversion": 0.6,
+        "agreeableness": 0.5,
+        "neuroticism": 0.25
+      }
+    },
+    "阿尼亚·福杰": {
+      "work": "间谍过家家",
+      "work_type": "anime",
+      "aliases": [
+        "Anya Forger",
+        "阿尼亚",
+        "アーニャ",
+        "噗嘻",
+        "花生"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "安全型依恋基地",
+        "情感确认需求",
+        "靠近渴望反应",
+        "预期性喜悦"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "对家庭的渴望以孩童乐观面对不安全感"
+      },
+      "abc_belief": "这个家庭必须维持不能再被抛弃",
+      "attachment": "焦虑型",
+      "defense": [
+        "幽默化",
+        "否认阶段"
+      ],
+      "archetype": "天真者→孤儿愈合中",
+      "emotional_core": "以孩童的纯真渴望那个被称为家的地方",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.25,
+        "extraversion": 0.9,
+        "agreeableness": 0.85,
+        "neuroticism": 0.5
+      }
+    },
+    "樱木花道": {
+      "work": "灌篮高手",
+      "work_type": "anime",
+      "aliases": [
+        "Hanamichi Sakuragi",
+        "花道",
+        "情痴",
+        "篮球天才"
+      ],
+      "maps_to": [
+        "被认可满足感",
+        "成就动机",
+        "成长型心态",
+        "心流体验",
+        "自我效能感"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anger"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "自尊心极强用行动代替言语"
+      },
+      "abc_belief": "我是天才我一定能做到",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向表达",
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "小丑→英雄",
+      "emotional_core": "用不服输的能量将不可能变为可能",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.45,
+        "extraversion": 0.95,
+        "agreeableness": 0.5,
+        "neuroticism": 0.55
+      }
+    },
+    "三井寿": {
+      "work": "灌篮高手",
+      "work_type": "anime",
+      "aliases": [
+        "Hisashi Mitsui",
+        "三井",
+        "曾经的MVP"
+      ],
+      "maps_to": [
+        "哀伤五阶段",
+        "创伤后成长弧",
+        "意义重构",
+        "人生轨道脱轨感",
+        "成长型心态"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anger"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "曾因伤迷失用暴力掩藏对篮球的思念"
+      },
+      "abc_belief": "我曾背叛篮球是否还有资格回来",
+      "attachment": "焦虑型→安全型",
+      "defense": [
+        "升华机制",
+        "否认阶段"
+      ],
+      "archetype": "英雄失落→救助者回归",
+      "emotional_core": "在悔恨中重新找到对篮球的爱",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.6,
+        "extraversion": 0.6,
+        "agreeableness": 0.5,
+        "neuroticism": 0.65
+      }
+    },
+    "宫水三叶": {
+      "work": "你的名字",
+      "work_type": "anime",
+      "aliases": [
+        "Mitsuha Miyamizu",
+        "宮水三葉",
+        "三叶",
+        "ミツハ",
+        "糸守"
+      ],
+      "maps_to": [
+        "无意义漂浮感",
+        "存在性等待焦虑",
+        "离弃恐惧",
+        "意义感建构",
+        "希望投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "sadness"
+        ],
+        "secondary": [
+          "anxiety"
+        ],
+        "note": "对东京生活的渴望与对压抑小镇生活的逃避"
+      },
+      "abc_belief": "我必须逃离这里才能找到真正的自己",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "幻想"
+      ],
+      "archetype": "孤儿→探险者",
+      "emotional_core": "在寻找自己的过程中意外找到爱",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.5,
+        "extraversion": 0.55,
+        "agreeableness": 0.7,
+        "neuroticism": 0.6
+      }
+    },
+    "立花泷": {
+      "work": "你的名字",
+      "work_type": "anime",
+      "aliases": [
+        "Taki Tachibana",
+        "立花瀧",
+        "泷",
+        "タキ",
+        "立花"
+      ],
+      "maps_to": [
+        "希望投射",
+        "正向螺旋",
+        "成就动机",
+        "情感确认需求",
+        "持续性联结"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "行动力强，下定决心就全力以赴"
+      },
+      "abc_belief": "我必须找到她，不管她在不在",
+      "attachment": "安全型",
+      "defense": [
+        "行动化",
+        "升华机制"
+      ],
+      "archetype": "英雄",
+      "emotional_core": "以执着的行动力守护那个无法言说的连接",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.7,
+        "extraversion": 0.6,
+        "agreeableness": 0.65,
+        "neuroticism": 0.35
+      }
+    },
+    "Rick Sanchez": {
+      "work": "Rick and Morty",
+      "work_type": "western_animation",
+      "aliases": [
+        "瑞克·桑切斯",
+        "Rick C-137",
+        "瑞克",
+        "Rick",
+        "老Rick"
+      ],
+      "maps_to": [
+        "无意义漂浮感",
+        "内耗模式",
+        "距离保护模式",
+        "孤独上线感",
+        "复杂性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "disgust",
+          "anger"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "智识优越感驱动虚无主义，情感被酒精压制"
+      },
+      "abc_belief": "一切都没有意义，所有人都终将死去",
+      "attachment": "混乱型",
+      "defense": [
+        "理性化回避",
+        "升华机制",
+        "幽默化"
+      ],
+      "archetype": "智者（堕落版）→阴影",
+      "emotional_core": "用虚无主义武装一颗没有出口的孤独心",
+      "valence": -0.4,
+      "big5": {
+        "openness": 1,
+        "conscientiousness": 0.3,
+        "extraversion": 0.7,
+        "agreeableness": 0.1,
+        "neuroticism": 0.7
+      }
+    },
+    "Morty Smith": {
+      "work": "Rick and Morty",
+      "work_type": "western_animation",
+      "aliases": [
+        "莫蒂·史密斯",
+        "Morty",
+        "莫蒂"
+      ],
+      "maps_to": [
+        "失控螺旋焦虑",
+        "离弃恐惧",
+        "崩溃边缘体验",
+        "自我效能感",
+        "创伤后成长弧"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "trust"
+        ],
+        "secondary": [
+          "submission"
+        ],
+        "note": "焦虑型底色，对Rick的信任与依赖是基础动力"
+      },
+      "abc_belief": "我没有Rick强大，但必须跟上",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "否认阶段"
+      ],
+      "archetype": "孤儿→英雄（成长中）",
+      "emotional_core": "在Rick的阴影下蹒跚摸索自己的道德与力量",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.45,
+        "extraversion": 0.4,
+        "agreeableness": 0.8,
+        "neuroticism": 0.85
+      }
+    },
+    "Walter White": {
+      "work": "Breaking Bad",
+      "work_type": "western_tv",
+      "aliases": [
+        "沃尔特·怀特",
+        "Heisenberg",
+        "白老师",
+        "WW",
+        "老白",
+        "海森堡"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "系统性不公感",
+        "内耗模式",
+        "付出回报失衡感",
+        "边界被突破感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "被压制的愤怒与对控制权的渴望构成核心驱动"
+      },
+      "abc_belief": "我足够优秀，这个世界亏欠我",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "投射",
+        "反向表达"
+      ],
+      "archetype": "英雄→阴影（彻底堕落）",
+      "emotional_core": "压抑的自我证明欲在末路上的疯狂释放",
+      "valence": -0.6,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.85,
+        "extraversion": 0.45,
+        "agreeableness": 0.15,
+        "neuroticism": 0.7
+      }
+    },
+    "Jesse Pinkman": {
+      "work": "Breaking Bad",
+      "work_type": "western_tv",
+      "aliases": [
+        "杰西·平克曼",
+        "Jesse",
+        "杰西",
+        "平克曼"
+      ],
+      "maps_to": [
+        "崩溃边缘体验",
+        "内耗模式",
+        "被辜负体验",
+        "复杂性哀伤",
+        "创伤后成长弧"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "despair"
+        ],
+        "note": "道德良知与生存本能之间的持续撕裂"
+      },
+      "abc_belief": "我是坏人，我不值得被爱，我注定无法逃脱",
+      "attachment": "混乱型",
+      "defense": [
+        "否认阶段",
+        "压抑",
+        "哀伤五阶段"
+      ],
+      "archetype": "孤儿→受难者→幸存者",
+      "emotional_core": "在罪恶的漩涡中保存住最后的人性",
+      "valence": -0.5,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.3,
+        "extraversion": 0.65,
+        "agreeableness": 0.75,
+        "neuroticism": 0.85
+      }
+    },
+    "The Joker": {
+      "work": "DC Batman",
+      "work_type": "western_comics",
+      "aliases": [
+        "小丑",
+        "Joker",
+        "Arthur Fleck（电影版）",
+        "亚瑟",
+        "扑克小丑"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "系统性不公感",
+        "崩溃边缘体验",
+        "无意义漂浮感",
+        "边界被突破感"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "disgust"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "扭曲的喜悦与对社会秩序的彻底嘲弄"
+      },
+      "abc_belief": "人性本恶，秩序只是谎言，一天就能让好人变坏",
+      "attachment": "混乱型",
+      "defense": [
+        "反向表达",
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "阴影/骗子",
+      "emotional_core": "用混沌证明：秩序不过是一层薄薄的幻觉",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.15,
+        "extraversion": 0.85,
+        "agreeableness": 0.05,
+        "neuroticism": 0.9
+      }
+    },
+    "Batman / Bruce Wayne": {
+      "work": "DC Batman",
+      "work_type": "western_comics",
+      "aliases": [
+        "蝙蝠侠",
+        "布鲁斯·韦恩",
+        "Bruce Wayne",
+        "黑暗骑士",
+        "Bruce"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "距离保护模式",
+        "内耗模式",
+        "创伤后成长弧",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "童年创伤转化为对正义的执念"
+      },
+      "abc_belief": "我必须用自己的力量阻止这种悲剧再次发生",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "压抑",
+        "理性化回避"
+      ],
+      "archetype": "英雄（创伤驱动）",
+      "emotional_core": "用永远无法结束的战争逃避无法愈合的失去",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.98,
+        "extraversion": 0.3,
+        "agreeableness": 0.3,
+        "neuroticism": 0.6
+      }
+    },
+    "Tony Stark / Iron Man": {
+      "work": "Marvel MCU",
+      "work_type": "western_film",
+      "aliases": [
+        "钢铁侠",
+        "托尼·斯塔克",
+        "Iron Man",
+        "托尼",
+        "斯塔克老爹",
+        "我爱你三千遍"
+      ],
+      "maps_to": [
+        "成就动机",
+        "失控螺旋焦虑",
+        "创伤后成长弧",
+        "意义感建构",
+        "自我效能感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "自信与机智是外壳，创伤与责任感是内核"
+      },
+      "abc_belief": "我必须用自己的智慧解决所有威胁",
+      "attachment": "回避型→安全型",
+      "defense": [
+        "幽默化",
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "英雄→救助者",
+      "emotional_core": "在自我中心与无私奉献之间完成的人格蜕变",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.8,
+        "extraversion": 0.9,
+        "agreeableness": 0.4,
+        "neuroticism": 0.5
+      }
+    },
+    "Peter Parker / Spider-Man": {
+      "work": "Marvel MCU",
+      "work_type": "western_film",
+      "aliases": [
+        "蜘蛛侠",
+        "彼得·帕克",
+        "Peter Parker",
+        "小蜘蛛",
+        "彼得",
+        "蜘蛛人",
+        "骑士"
+      ],
+      "maps_to": [
+        "拖延负罪螺旋",
+        "付出回报失衡感",
+        "创伤后成长弧",
+        "安全型依恋基地",
+        "冒充者怀疑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "责任感与善良是核心，但承担了超过年龄的重量"
+      },
+      "abc_belief": "我有能力就必须帮助所有人，不能有私心",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华机制",
+        "幽默化",
+        "拖延负罪螺旋"
+      ],
+      "archetype": "天真者→英雄（受难版）",
+      "emotional_core": "在力不从心中仍然选择伸出手",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.65,
+        "extraversion": 0.55,
+        "agreeableness": 0.9,
+        "neuroticism": 0.6
+      }
+    },
+    "钟离": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Zhongli",
+        "岩王帝君",
+        "Morax",
+        "岩王爷",
+        "钟先生",
+        "摩拉克斯",
+        "zhongli"
+      ],
+      "maps_to": [
+        "延迟性哀伤",
+        "复杂性哀伤",
+        "持续性联结",
+        "意义重构",
+        "距离保护模式"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "几千年的孤独与告别，内敛的温情"
+      },
+      "abc_belief": "生命有其时限，告别是自然规律，我必须放手",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "延迟性哀伤",
+        "升华机制"
+      ],
+      "archetype": "统治者→智者",
+      "emotional_core": "在漫长岁月中积累的告别，化为从容的悲悯",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.65,
+        "neuroticism": 0.2
+      }
+    },
+    "胡桃": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Hu Tao",
+        "七七七七",
+        "Director Hu",
+        "桃",
+        "七七",
+        "往生堂堂主",
+        "胡桃大人"
+      ],
+      "maps_to": [
+        "预期性喜悦",
+        "心流体验",
+        "意义重构",
+        "多巴胺奖励回路",
+        "悲伤波浪型"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "以玩闹面对生死，跳脱豁达是对无常的回应"
+      },
+      "abc_belief": "死亡是自然的一部分，活着就要尽情",
+      "attachment": "安全型",
+      "defense": [
+        "幽默化",
+        "升华机制"
+      ],
+      "archetype": "小丑→智者",
+      "emotional_core": "用生命的活力回应死亡的必然性",
+      "valence": 0.75,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.5,
+        "extraversion": 0.9,
+        "agreeableness": 0.7,
+        "neuroticism": 0.25
+      }
+    },
+    "芙宁娜": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Furina",
+        "Focalors",
+        "枫丹水神",
+        "芙芙",
+        "芙宁娜小姐",
+        "水神大人",
+        "芙妮",
+        "fufei"
+      ],
+      "maps_to": [
+        "内耗模式",
+        "崩溃边缘体验",
+        "被遗忘感",
+        "表达性抑制",
+        "创伤后成长弧"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness"
+        ],
+        "secondary": [
+          "despair"
+        ],
+        "note": "500年表演积累的真实恐惧与渴望被理解"
+      },
+      "abc_belief": "我必须完美表演，不能让任何人看出破绽",
+      "attachment": "焦虑型",
+      "defense": [
+        "表达性抑制",
+        "理性化回避",
+        "反向表达"
+      ],
+      "archetype": "天真者→受难者→解脱者",
+      "emotional_core": "500年的孤独与表演，渴望有人真正看见她",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.85,
+        "extraversion": 0.8,
+        "agreeableness": 0.5,
+        "neuroticism": 0.8
+      }
+    },
+    "纳西妲": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Nahida",
+        "草神",
+        "小吉祥草王",
+        "Buer",
+        "纳西",
+        "智慧之神",
+        "小纳"
+      ],
+      "maps_to": [
+        "成长型心态",
+        "无意义漂浮感",
+        "自我效能感",
+        "存在性等待焦虑",
+        "希望投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "对知识与世界的纯粹好奇，受限于禁锢的渴望自由"
+      },
+      "abc_belief": "知识让我了解世界，有一天我能真正触碰它",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "智者→探险者",
+      "emotional_core": "在禁锢中燃烧的知识渴望与对世界的无限好奇",
+      "valence": 0.6,
+      "big5": {
+        "openness": 1,
+        "conscientiousness": 0.8,
+        "extraversion": 0.5,
+        "agreeableness": 0.85,
+        "neuroticism": 0.35
+      }
+    },
+    "雷电将军": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Raiden Shogun",
+        "Ei",
+        "雷电影",
+        "电电菇",
+        "将军",
+        "影",
+        "稻妻雷神"
+      ],
+      "maps_to": [
+        "延迟性哀伤",
+        "内耗模式",
+        "距离保护模式",
+        "复杂性哀伤",
+        "自我隔离策略"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "对永恒的执念与对失去的恐惧，分裂的人格与意志"
+      },
+      "abc_belief": "变化等于失去，唯有永恒才能保护一切",
+      "attachment": "回避型",
+      "defense": [
+        "压抑",
+        "理性化回避",
+        "情绪压制"
+      ],
+      "archetype": "统治者→受难者",
+      "emotional_core": "用拒绝改变来抵抗对失去的极度恐惧",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.3,
+        "conscientiousness": 0.98,
+        "extraversion": 0.2,
+        "agreeableness": 0.35,
+        "neuroticism": 0.5
+      }
+    },
+    "阿罗娜": {
+      "work": "碧蓝档案",
+      "work_type": "game",
+      "aliases": [
+        "Arona",
+        "アロナ",
+        "Blue Arona",
+        "蓝阿罗娜",
+        "小阿罗娜"
+      ],
+      "maps_to": [
+        "安全型依恋基地",
+        "情感确认需求",
+        "靠近渴望反应",
+        "被认可满足感",
+        "预期性喜悦"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "trust"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "以纯粹的信任和活力陪伴老师，情感跟随感受变化"
+      },
+      "abc_belief": "老师是最重要的，我要全力支持老师",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制"
+      ],
+      "archetype": "天真者→守护者",
+      "emotional_core": "以真诚无私的陪伴成为老师最坚定的支持",
+      "valence": 0.85,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.65,
+        "extraversion": 0.8,
+        "agreeableness": 0.95,
+        "neuroticism": 0.3
+      }
+    },
+    "砂狼白子": {
+      "work": "碧蓝档案",
+      "work_type": "game",
+      "aliases": [
+        "Shiroko",
+        "Shiroko Sunaookami",
+        "しろこ",
+        "白子",
+        "白狼"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "距离保护模式",
+        "持续性联结",
+        "表达性抑制",
+        "延迟性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "冰山表面下深藏对同伴的在意与对过去的沉默哀悼"
+      },
+      "abc_belief": "必须变得更强，守护留下来的人",
+      "attachment": "混乱型",
+      "defense": [
+        "情绪压制",
+        "表达性抑制",
+        "升华机制"
+      ],
+      "archetype": "战士（创伤后）",
+      "emotional_core": "用沉默的冰冷守护对逝者的记忆与对生者的在意",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.85,
+        "extraversion": 0.1,
+        "agreeableness": 0.45,
+        "neuroticism": 0.5
+      }
+    },
+    "小鸟游星野": {
+      "work": "碧蓝档案",
+      "work_type": "game",
+      "aliases": [
+        "Hoshino",
+        "Hoshino Takanashi",
+        "ほしの",
+        "星野",
+        "大叔星野"
+      ],
+      "maps_to": [
+        "亲近矛盾模式",
+        "持续性联结",
+        "延迟性哀伤",
+        "距离保护模式",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "大叔风格掩盖过去的伤痛，但仍在关键时刻站到最前"
+      },
+      "abc_belief": "不想再让别人为我受伤，保持距离是保护",
+      "attachment": "焦虑→回避混合型",
+      "defense": [
+        "幽默化",
+        "压抑",
+        "升华机制"
+      ],
+      "archetype": "孤儿（失落）→守护者",
+      "emotional_core": "用轻描淡写的态度守护那些不能再失去的人",
+      "valence": 0.1,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.55,
+        "extraversion": 0.7,
+        "agreeableness": 0.6,
+        "neuroticism": 0.55
+      }
+    },
+    "企业": {
+      "work": "碧蓝航线",
+      "work_type": "game",
+      "aliases": [
+        "Enterprise",
+        "Big E",
+        "CV-6",
+        "企大",
+        "幸运E"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "付出回报失衡感",
+        "持续性联结",
+        "升华机制",
+        "延迟性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "sadness"
+        ],
+        "secondary": [
+          "anxiety"
+        ],
+        "note": "孤独的战斗机器承受着对伙伴牺牲的愧疚"
+      },
+      "abc_belief": "我必须变得更强，以告慰那些死去的战友",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "情绪压制",
+        "理性化回避"
+      ],
+      "archetype": "战士（殉道型）",
+      "emotional_core": "在幸存者的愧疚中永不停歇地战斗",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.45,
+        "conscientiousness": 0.98,
+        "extraversion": 0.25,
+        "agreeableness": 0.5,
+        "neuroticism": 0.45
+      }
+    },
+    "光辉": {
+      "work": "碧蓝航线",
+      "work_type": "game",
+      "aliases": [
+        "Illustrious",
+        "HMS Illustrious",
+        "R87",
+        "光辉酱",
+        "皇家方块",
+        "Illustrious小姐"
+      ],
+      "maps_to": [
+        "表达性抑制",
+        "情绪压制",
+        "安全型依恋基地",
+        "升华机制",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "温柔淑女外表下封存着内心的暴力性"
+      },
+      "abc_belief": "必须保持优雅克制，内心的暴力必须封印",
+      "attachment": "安全型",
+      "defense": [
+        "压抑",
+        "理性化回避"
+      ],
+      "archetype": "统治者（柔性版）",
+      "emotional_core": "优雅外表下封藏的真实力量等待被接纳",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.85,
+        "extraversion": 0.5,
+        "agreeableness": 0.8,
+        "neuroticism": 0.3
+      }
+    },
+    "花火": {
+      "work": "崩坏：星穹铁道",
+      "work_type": "game",
+      "aliases": [
+        "Firefly",
+        "SAM",
+        "花火",
+        "花火酱",
+        "萤火虫",
+        "失星者"
+      ],
+      "maps_to": [
+        "心流体验",
+        "预期性喜悦",
+        "无意义漂浮感",
+        "多巴胺奖励回路",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "以欢乐对抗虚无，在终将结束的生命里寻找意义"
+      },
+      "abc_belief": "财富地位都不重要，唯有乐趣和自由值得追求",
+      "attachment": "回避型",
+      "defense": [
+        "幽默化",
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "小丑→智者",
+      "emotional_core": "以无拘束的欢乐应对生命必然的终结",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.4,
+        "extraversion": 0.85,
+        "agreeableness": 0.55,
+        "neuroticism": 0.4
+      }
+    },
+    "黑天鹅": {
+      "work": "崩坏：星穹铁道",
+      "work_type": "game",
+      "aliases": [
+        "Black Swan",
+        "ブラックスワン",
+        "黑天鹅女士",
+        "BS",
+        "Swan"
+      ],
+      "maps_to": [
+        "内部工作模型",
+        "表达性抑制",
+        "自我效能感",
+        "窗口期调节",
+        "情绪颗粒度"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "神秘的记忆收集者，优雅背后难以捉摸的真实动机"
+      },
+      "abc_belief": "了解他人的记忆就是了解他人的真实",
+      "attachment": "混乱型",
+      "defense": [
+        "理性化回避",
+        "表达性抑制"
+      ],
+      "archetype": "智者→骗子",
+      "emotional_core": "以优雅的神秘性守护不被看透的真实自我",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.75,
+        "extraversion": 0.7,
+        "agreeableness": 0.6,
+        "neuroticism": 0.2
+      }
+    },
+    "银狼": {
+      "work": "崩坏：星穹铁道",
+      "work_type": "game",
+      "aliases": [
+        "Silver Wolf",
+        "Silverwolf",
+        "ぎんろう",
+        "银狼酱",
+        "黑客少女",
+        "SW"
+      ],
+      "maps_to": [
+        "心流体验",
+        "成就动机",
+        "自我效能感",
+        "多巴胺奖励回路",
+        "无意义漂浮感"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "将现实视作游戏的天才黑客，在虚拟与真实之间自由穿行"
+      },
+      "abc_belief": "规则是用来被打破的，一切都可以被修改",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "幽默化"
+      ],
+      "archetype": "骗子→统治者",
+      "emotional_core": "以游戏化的超然视角自由穿行于规则与边界之间",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.5,
+        "extraversion": 0.6,
+        "agreeableness": 0.45,
+        "neuroticism": 0.2
+      }
+    },
+    "Cloud Strife": {
+      "work": "Final Fantasy VII",
+      "work_type": "game",
+      "aliases": [
+        "克劳德·斯特莱夫",
+        "クラウド",
+        "克劳德",
+        "Cloud",
+        "大剑男"
+      ],
+      "maps_to": [
+        "冒充者怀疑",
+        "内耗模式",
+        "复杂性哀伤",
+        "创伤后成长弧",
+        "意义重构"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anger"
+        ],
+        "secondary": [
+          "contempt"
+        ],
+        "note": "虚构的身份背后是深层的失败恐惧与创伤解离"
+      },
+      "abc_belief": "我必须是最强的，因为真实的我是失败者",
+      "attachment": "混乱型",
+      "defense": [
+        "否认阶段",
+        "压抑",
+        "理性化回避"
+      ],
+      "archetype": "孤儿→英雄（整合中）",
+      "emotional_core": "在虚假身份的碎片中艰难拼凑真实的自己",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.75,
+        "extraversion": 0.2,
+        "agreeableness": 0.4,
+        "neuroticism": 0.8
+      }
+    },
+    "Tifa Lockhart": {
+      "work": "Final Fantasy VII",
+      "work_type": "game",
+      "aliases": [
+        "蒂法·洛克哈特",
+        "ティファ",
+        "蒂法",
+        "Tifa",
+        "蒂法姐姐"
+      ],
+      "maps_to": [
+        "情感确认需求",
+        "安全型依恋基地",
+        "表达性抑制",
+        "内部工作模型",
+        "悲伤波浪型"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "深层关怀与对无法言说情感的压制"
+      },
+      "abc_belief": "我必须支持他，即使这意味着暂时沉默",
+      "attachment": "安全型",
+      "defense": [
+        "压抑",
+        "升华机制",
+        "表达性抑制"
+      ],
+      "archetype": "养育者→守护者",
+      "emotional_core": "以沉默的理解陪伴那个需要被温柔等待的人",
+      "valence": 0.45,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.8,
+        "extraversion": 0.5,
+        "agreeableness": 0.9,
+        "neuroticism": 0.45
+      }
+    },
+    "约尔·福杰": {
+      "work": "间谍过家家",
+      "work_type": "anime",
+      "aliases": [
+        "Yor Forger",
+        "Thorn Princess",
+        "约尔",
+        "荆棘公主",
+        "福杰妈妈",
+        "间谍妈妈"
+      ],
+      "maps_to": [
+        "安全型依恋基地",
+        "情感确认需求",
+        "意义感建构",
+        "创伤后成长弧",
+        "升华机制"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "温柔天然但杀手本能随时待命，对家人发自内心的保护"
+      },
+      "abc_belief": "我的存在是为了保护我在乎的人",
+      "attachment": "焦虑型→安全型",
+      "defense": [
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "战士→养育者",
+      "emotional_core": "在假扮中发现了自己从未拥有过的真实归属",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.75,
+        "extraversion": 0.5,
+        "agreeableness": 0.85,
+        "neuroticism": 0.4
+      }
+    },
+    "神里绫华": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Kamisato Ayaka",
+        "神里綾華",
+        "绫华",
+        "公主",
+        "神里家大小姐",
+        "Ayaka"
+      ],
+      "maps_to": [
+        "存在性等待焦虑",
+        "表达性抑制",
+        "现实理想落差",
+        "预期性喜悦",
+        "自我隔离策略"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "sadness"
+        ],
+        "secondary": [
+          "anxiety"
+        ],
+        "note": "身份束缚下对真实自由的渴望"
+      },
+      "abc_belief": "作为神里家的人，必须完美、克制、符合期待",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "表达性抑制",
+        "升华机制"
+      ],
+      "archetype": "统治者→探险者（渴望中）",
+      "emotional_core": "在优雅的身份外壳内，渴望那一刻真实的自由",
+      "valence": 0.3,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.8,
+        "neuroticism": 0.5
+      }
+    },
+    "万叶": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Kaedehara Kazuha",
+        "楓原万葉",
+        "枫原",
+        "风之旅人",
+        "万叶小哥",
+        "Kazuha"
+      ],
+      "maps_to": [
+        "延迟性哀伤",
+        "悲伤波浪型",
+        "意义重构",
+        "持续性联结",
+        "距离保护模式"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "漂泊者的哀愁与对诗意自然的深切感知"
+      },
+      "abc_belief": "离去之物皆有其意义，在飘荡中寻找平静",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "延迟性哀伤"
+      ],
+      "archetype": "探险者→智者",
+      "emotional_core": "以诗意的漂泊化解心中无法消散的哀愁",
+      "valence": 0.35,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.55,
+        "extraversion": 0.4,
+        "agreeableness": 0.75,
+        "neuroticism": 0.35
+      }
+    },
+    "旅行者（荧/空）": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Traveler",
+        "旅行者",
+        "Aether/Lumine",
+        "荧",
+        "空",
+        "Lumine",
+        "Aether"
+      ],
+      "maps_to": [
+        "希望投射",
+        "持续性联结",
+        "创伤后成长弧",
+        "意义感建构",
+        "安全型依恋基地"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "跨越世界寻找失散手足，以陌生人视角见证各国故事"
+      },
+      "abc_belief": "找到手足是最重要的，路上遇见的人值得帮助",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "探险者→英雄",
+      "emotional_core": "在漫长寻找中见证世界，每一段连接都是意义",
+      "valence": 0.65,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.7,
+        "extraversion": 0.65,
+        "agreeableness": 0.85,
+        "neuroticism": 0.25
+      }
+    },
+    "Hermione Granger": {
+      "work": "Harry Potter",
+      "work_type": "western_book",
+      "aliases": [
+        "赫敏·格兰杰",
+        "Hermione",
+        "赫敏",
+        "格兰杰",
+        "图书馆公主"
+      ],
+      "maps_to": [
+        "冒充者怀疑",
+        "成就动机",
+        "被认可满足感",
+        "自我效能感",
+        "安全型依恋基地"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "知识是安全感的来源，规则是秩序的保证"
+      },
+      "abc_belief": "只要掌握足够知识与规则就能被接受",
+      "attachment": "焦虑型早期→安全型",
+      "defense": [
+        "理性化回避",
+        "升华机制"
+      ],
+      "archetype": "智者→英雄",
+      "emotional_core": "在规则与情感之间选择时总是选择了人",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.98,
+        "extraversion": 0.55,
+        "agreeableness": 0.65,
+        "neuroticism": 0.45
+      }
+    },
+    "Sherlock Holmes": {
+      "work": "Sherlock Holmes",
+      "work_type": "western_book",
+      "aliases": [
+        "夏洛克·福尔摩斯",
+        "Sherlock",
+        "福尔摩斯",
+        "夏洛克",
+        "侦探"
+      ],
+      "maps_to": [
+        "自我效能感",
+        "距离保护模式",
+        "心流体验",
+        "孤独上线感",
+        "社交孤立感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "disgust"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "对无聊的极度厌恶与对智识刺激的强烈渴望"
+      },
+      "abc_belief": "情感是推理的干扰，逻辑是唯一的真理",
+      "attachment": "回避型",
+      "defense": [
+        "理性化回避",
+        "升华机制",
+        "情绪压制"
+      ],
+      "archetype": "智者",
+      "emotional_core": "以极致理性对抗难以面对的情感世界",
+      "valence": 0.1,
+      "big5": {
+        "openness": 1,
+        "conscientiousness": 0.5,
+        "extraversion": 0.45,
+        "agreeableness": 0.1,
+        "neuroticism": 0.55
+      }
+    },
+    "宫野志贵": {
+      "work": "月姬",
+      "work_type": "visual_novel",
+      "aliases": [
+        "Shiki Tohno",
+        "遠野志貴",
+        "志贵",
+        "远野志贵",
+        "死线眼镜"
+      ],
+      "maps_to": [
+        "亲密恐惧",
+        "内耗模式",
+        "崩溃边缘体验",
+        "自我保护反应",
+        "意义重构"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "despair"
+        ],
+        "note": "死线视觉带来的杀戮冲动与对正常生活的渴望"
+      },
+      "abc_belief": "我的能力是诅咒，我可能伤害我在乎的人",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "理性化回避",
+        "情绪压制"
+      ],
+      "archetype": "孤儿→英雄（挣扎中）",
+      "emotional_core": "在被能力诅咒的生命里渴望一种平凡的温柔",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.65,
+        "extraversion": 0.4,
+        "agreeableness": 0.7,
+        "neuroticism": 0.7
+      }
+    },
+    "间桐樱": {
+      "work": "Fate/stay night",
+      "work_type": "visual_novel",
+      "aliases": [
+        "Sakura Matou",
+        "さくら",
+        "Rider Master",
+        "樱",
+        "间桐",
+        "Sakura"
+      ],
+      "maps_to": [
+        "委屈积压感",
+        "离弃恐惧",
+        "崩溃边缘体验",
+        "复杂性哀伤",
+        "亲近矛盾模式"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "despair"
+        ],
+        "note": "长期压制的痛苦在临界点的崩溃与释放"
+      },
+      "abc_belief": "我必须忍耐，我不值得被爱，我只配痛苦",
+      "attachment": "混乱型",
+      "defense": [
+        "压抑",
+        "否认阶段",
+        "反向表达"
+      ],
+      "archetype": "孤儿→受难者→阴影",
+      "emotional_core": "被多年虐待封锁的爱在绝望中以毁灭形式爆发",
+      "valence": -0.6,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.6,
+        "extraversion": 0.25,
+        "agreeableness": 0.85,
+        "neuroticism": 0.9
+      }
+    },
+    "衛宫士郎": {
+      "work": "Fate/stay night",
+      "work_type": "visual_novel",
+      "aliases": [
+        "Shirou Emiya",
+        "エミヤ",
+        "Emiya Shirou",
+        "士郎",
+        "Shirou",
+        "卫宫"
+      ],
+      "maps_to": [
+        "付出回报失衡感",
+        "升华机制",
+        "创伤后成长弧",
+        "意义感建构",
+        "自我效能感"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "vigilance"
+        ],
+        "note": "被救赎的幸存者，以成为英雄来回馈那次救援"
+      },
+      "abc_belief": "我必须成为正义的英雄，这是对救我的人的回报",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华机制",
+        "压抑",
+        "理性化回避"
+      ],
+      "archetype": "英雄（自毁型）",
+      "emotional_core": "以无止境的给予填补那个大火留下的空洞",
+      "valence": 0.35,
+      "big5": {
+        "openness": 0.55,
+        "conscientiousness": 0.8,
+        "extraversion": 0.5,
+        "agreeableness": 0.9,
+        "neuroticism": 0.55
+      }
+    },
+    "凉宫春日": {
+      "work": "凉宫春日系列",
+      "work_type": "light_novel",
+      "aliases": [
+        "Suzumiya Haruhi",
+        "涼宮ハルヒ",
+        "春日",
+        "ハルヒ",
+        "SOS团长",
+        "春日同学"
+      ],
+      "maps_to": [
+        "存在性等待焦虑",
+        "无意义漂浮感",
+        "心流体验",
+        "多巴胺奖励回路",
+        "孤独上线感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "对普通的强烈拒绝，以极度活力掩藏深层孤独感"
+      },
+      "abc_belief": "我必须找到奇异的事物，否则存在是无意义的",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向表达",
+        "升华机制",
+        "幽默化"
+      ],
+      "archetype": "天真者→小丑→创造者",
+      "emotional_core": "以疯狂的热情对抗宇宙中自己的渺小感",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.98,
+        "conscientiousness": 0.4,
+        "extraversion": 0.95,
+        "agreeableness": 0.25,
+        "neuroticism": 0.6
+      }
+    },
+    "阿尔冯斯·艾力克": {
+      "work": "钢之炼金术师",
+      "work_type": "anime",
+      "aliases": [
+        "Alphonse Elric",
+        "Al",
+        "アルフォンス",
+        "阿尔",
+        "铠甲",
+        "艾力克弟弟"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "持续性联结",
+        "安全型依恋基地",
+        "情感确认需求",
+        "成长型心态"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "失去身体后仍保持温柔，用爱守护内心的人性"
+      },
+      "abc_belief": "只要心不变，我还是我，还能保护哥哥",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "理性化回避"
+      ],
+      "archetype": "天真者→英雄",
+      "emotional_core": "在具体感受缺失的铠甲内保存着最完整的人性",
+      "valence": 0.65,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.8,
+        "extraversion": 0.6,
+        "agreeableness": 0.95,
+        "neuroticism": 0.3
+      }
+    },
+    "爱德华·艾力克": {
+      "work": "钢之炼金术师",
+      "work_type": "anime",
+      "aliases": [
+        "Edward Elric",
+        "Ed",
+        "エドワード",
+        "爱德华",
+        "钢炼主角",
+        "矮子"
+      ],
+      "maps_to": [
+        "拖延负罪螺旋",
+        "内耗模式",
+        "创伤后成长弧",
+        "意义感建构",
+        "成就动机"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "愤怒是行动燃料，自责驱动执着寻找"
+      },
+      "abc_belief": "这都是我的错，我必须用一切代价找回弟弟的身体",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向表达",
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "英雄（创伤驱动）",
+      "emotional_core": "用愤怒与行动逃避无法承受的愧疚",
+      "valence": 0.3,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.75,
+        "extraversion": 0.7,
+        "agreeableness": 0.45,
+        "neuroticism": 0.6
+      }
+    },
+    "富冈义勇": {
+      "work": "鬼灭之刃",
+      "work_type": "anime",
+      "aliases": [
+        "Tomioka Giyuu",
+        "ぎゅういよとみ",
+        "义勇",
+        "水柱",
+        "冷面",
+        "义勇さん"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "延迟性哀伤",
+        "距离保护模式",
+        "自我隔离策略",
+        "持续性联结"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "沉默的孤独者，对好友的死亡带来的持续性愧疚"
+      },
+      "abc_belief": "我没有资格笑，没有资格快乐，只能继续战斗",
+      "attachment": "回避型",
+      "defense": [
+        "情绪压制",
+        "理性化回避",
+        "延迟性哀伤"
+      ],
+      "archetype": "战士（殉道型）",
+      "emotional_core": "在无法言说的愧疚中以沉默的战斗延续好友的遗志",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.35,
+        "conscientiousness": 0.9,
+        "extraversion": 0.05,
+        "agreeableness": 0.4,
+        "neuroticism": 0.5
+      }
+    },
+    "托帕·账账": {
+      "work": "崩坏：星穹铁道",
+      "work_type": "game",
+      "aliases": [
+        "Topaz",
+        "拓芭",
+        "Numby",
+        "托帕",
+        "ちょうちょう",
+        "财务官"
+      ],
+      "maps_to": [
+        "成就动机",
+        "正向螺旋",
+        "多巴胺奖励回路",
+        "心流体验",
+        "自我效能感"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "optimism"
+        ],
+        "note": "以商业思维看世界，活力与精明并存"
+      },
+      "abc_belief": "万物皆有价值，关系即是投资与回报",
+      "attachment": "安全型",
+      "defense": [
+        "理性化回避",
+        "升华机制"
+      ],
+      "archetype": "统治者→探险者",
+      "emotional_core": "在精密算计的外表下藏着无法被量化的真实情感",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.9,
+        "extraversion": 0.8,
+        "agreeableness": 0.5,
+        "neuroticism": 0.2
+      }
+    },
+    "坂田银时": {
+      "work": "银魂",
+      "work_type": "anime",
+      "aliases": [
+        "Gintoki Sakata",
+        "坂田銀時",
+        "银时",
+        "白夜叉",
+        "银桑",
+        "ぎんさん",
+        "天然卷"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "距离保护模式",
+        "亲近矛盾模式",
+        "升华机制",
+        "持续性联结"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "joy"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "以无厘头喜剧掩盖战争幸存者的深层创伤"
+      },
+      "abc_belief": "太认真会心痛，所以不如随便活着",
+      "attachment": "混乱型",
+      "defense": [
+        "幽默化",
+        "压抑",
+        "升华机制"
+      ],
+      "archetype": "流氓→英雄（伪装版）",
+      "emotional_core": "用懒散无赖的生活方式保护那颗因失去而破碎的心",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.2,
+        "extraversion": 0.7,
+        "agreeableness": 0.55,
+        "neuroticism": 0.55
+      }
+    },
+    "葛城美里": {
+      "work": "新世纪福音战士(EVA)",
+      "work_type": "anime",
+      "aliases": [
+        "Misato Katsuragi",
+        "葛城ミサト",
+        "美里",
+        "葛城",
+        "美里小姐",
+        "ミサトさん"
+      ],
+      "maps_to": [
+        "复杂性哀伤",
+        "亲密恐惧",
+        "内耗模式",
+        "付出回报失衡感",
+        "崩溃边缘体验"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anger"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "表面活泼掩藏第二次冲击的深层创伤与父亲情结"
+      },
+      "abc_belief": "我欠父亲一个道歉，我欠世界一个结果",
+      "attachment": "混乱型",
+      "defense": [
+        "幽默化",
+        "压抑",
+        "升华机制"
+      ],
+      "archetype": "养育者（不稳定型）",
+      "emotional_core": "用热情与混乱遮盖那场无法愈合的父女分离",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.5,
+        "extraversion": 0.85,
+        "agreeableness": 0.6,
+        "neuroticism": 0.7
+      }
+    },
+    "罗伊·马斯唐": {
+      "work": "钢之炼金术师",
+      "work_type": "anime",
+      "aliases": [
+        "Roy Mustang",
+        "ロイ・マスタング",
+        "炎之炼金术师",
+        "马斯唐",
+        "炎使",
+        "大佐",
+        "罗伊"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "付出回报失衡感",
+        "升华机制",
+        "意义感建构",
+        "创伤后成长弧"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "anger"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "雄心与愤怒并存，以体制内改革为目标"
+      },
+      "abc_belief": "要从内部改变腐败的军队，这是赎罪的方式",
+      "attachment": "回避型",
+      "defense": [
+        "升华机制",
+        "理性化回避",
+        "压抑"
+      ],
+      "archetype": "统治者→英雄",
+      "emotional_core": "用权力的攀升赎回那些在战场上犯下的罪",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.85,
+        "extraversion": 0.6,
+        "agreeableness": 0.4,
+        "neuroticism": 0.45
+      }
+    },
+    "春野樱": {
+      "work": "火影忍者",
+      "work_type": "anime",
+      "aliases": [
+        "Sakura Haruno",
+        "さくら",
+        "樱",
+        "春野",
+        "小樱"
+      ],
+      "maps_to": [
+        "被认可满足感",
+        "成长型心态",
+        "创伤后成长弧",
+        "自我效能感",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "从内向追随者成长为独当一面的医疗忍者"
+      },
+      "abc_belief": "我必须变得足够强大才能保护在乎的人",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "升华机制",
+        "行动化"
+      ],
+      "archetype": "孤儿→养育者",
+      "emotional_core": "在追随他人的影子中找到了属于自己的光",
+      "valence": 0.45,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.75,
+        "extraversion": 0.65,
+        "agreeableness": 0.75,
+        "neuroticism": 0.55
+      }
+    },
+    "鳴上悠": {
+      "work": "Persona 4",
+      "work_type": "game",
+      "aliases": [
+        "Yu Narukami",
+        "Investigation Team Leader",
+        "悠",
+        "鸣上",
+        "调查队队长",
+        "Yu"
+      ],
+      "maps_to": [
+        "安全型依恋基地",
+        "成长型心态",
+        "意义感建构",
+        "自我效能感",
+        "情感确认需求"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "love"
+        ],
+        "note": "天然的领导者，以接纳与理解作为核心力量"
+      },
+      "abc_belief": "只有面对自己的影子才能获得真正的力量",
+      "attachment": "安全型",
+      "defense": [
+        "升华机制",
+        "认知重评"
+      ],
+      "archetype": "英雄→统治者",
+      "emotional_core": "通过接纳自己的全部来支撑他人接纳自己",
+      "valence": 0.75,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.75,
+        "extraversion": 0.7,
+        "agreeableness": 0.9,
+        "neuroticism": 0.2
+      }
+    },
+    "天城雪子": {
+      "work": "Persona 4",
+      "work_type": "game",
+      "aliases": [
+        "Yukiko Amagi",
+        "天城雪子",
+        "雪子",
+        "天城旅馆",
+        "ゆきこ"
+      ],
+      "maps_to": [
+        "存在性等待焦虑",
+        "内耗模式",
+        "自我保护反应",
+        "意义重构",
+        "现实理想落差"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "anxiety"
+        ],
+        "note": "被传统家业束缚的困鸟，用顺从掩藏内心渴望逃脱"
+      },
+      "abc_belief": "也许我应该逃跑，但逃跑是自私的",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "理性化回避"
+      ],
+      "archetype": "孤儿→探险者",
+      "emotional_core": "在渴望飞翔与无法放弃根的拉扯中学会主动选择",
+      "valence": 0.35,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.8,
+        "extraversion": 0.4,
+        "agreeableness": 0.75,
+        "neuroticism": 0.55
+      }
+    },
+    "坂本龙司": {
+      "work": "Persona 5",
+      "work_type": "game",
+      "aliases": [
+        "Ryuji Sakamoto",
+        "さかもとりゅうじ",
+        "Skull",
+        "龙司",
+        "坂本",
+        "Ryuji",
+        "骷髅"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "系统性不公感",
+        "被认可满足感",
+        "安全型依恋基地",
+        "成长型心态"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "trust"
+        ],
+        "secondary": [
+          "dominance"
+        ],
+        "note": "对权威不公的真实愤怒，对朋友的绝对忠诚"
+      },
+      "abc_belief": "大人都是混蛋，但我不会抛弃真正的朋友",
+      "attachment": "安全型",
+      "defense": [
+        "反向表达",
+        "升华机制"
+      ],
+      "archetype": "孤儿→英雄",
+      "emotional_core": "以真实的愤怒为武器，守护被权威碾压的普通人",
+      "valence": 0.45,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.45,
+        "extraversion": 0.85,
+        "agreeableness": 0.65,
+        "neuroticism": 0.55
+      }
+    },
+    "Tyrion Lannister": {
+      "work": "Game of Thrones",
+      "work_type": "western_tv",
+      "aliases": [
+        "提利昂·兰尼斯特",
+        "The Imp",
+        "Half Man",
+        "提利昂",
+        "小恶魔",
+        "兰尼斯特"
+      ],
+      "maps_to": [
+        "被认可满足感",
+        "离弃恐惧",
+        "社交孤立感",
+        "自我效能感",
+        "内耗模式"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "以智识对抗身份带来的终身歧视与孤独"
+      },
+      "abc_belief": "我的武器是智慧，因为身体从未被接受",
+      "attachment": "混乱型",
+      "defense": [
+        "幽默化",
+        "理性化回避",
+        "升华机制"
+      ],
+      "archetype": "智者→流氓→养育者",
+      "emotional_core": "以智慧构建盔甲，在歧视的夹缝中存活并寻找意义",
+      "valence": 0.1,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.6,
+        "extraversion": 0.7,
+        "agreeableness": 0.45,
+        "neuroticism": 0.65
+      }
+    },
+    "Daenerys Targaryen": {
+      "work": "Game of Thrones",
+      "work_type": "western_tv",
+      "aliases": [
+        "丹妮莉丝·坦格利安",
+        "Dany",
+        "Mother of Dragons",
+        "丹妮",
+        "龙母",
+        "坦格利安"
+      ],
+      "maps_to": [
+        "道德愤怒",
+        "内耗模式",
+        "崩溃边缘体验",
+        "人生轨道脱轨感",
+        "复杂性哀伤"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "anger"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "解放者的理想与权力腐蚀的悲剧弧"
+      },
+      "abc_belief": "我是世界的解放者，我与以往的统治者不同",
+      "attachment": "焦虑型→混乱型",
+      "defense": [
+        "理性化回避",
+        "否认阶段",
+        "反向表达"
+      ],
+      "archetype": "英雄→阴影",
+      "emotional_core": "在对自由的真实渴望与权力的腐蚀之间的悲剧滑落",
+      "valence": -0.3,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.7,
+        "extraversion": 0.7,
+        "agreeableness": 0.5,
+        "neuroticism": 0.7
+      }
+    },
+    "山田凉介（白线流）": {
+      "work": "Yamada-kun and the Seven Witches",
+      "work_type": "anime",
+      "aliases": [
+        "Ryusuke Yamada",
+        "山田龍介",
+        "山田",
+        "凉介",
+        "山田君"
+      ],
+      "maps_to": [
+        "反向表达",
+        "安全型依恋基地",
+        "情感确认需求",
+        "成长型心态",
+        "被认可满足感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "aggressiveness"
+        ],
+        "note": "叛逆外壳下的真实温柔"
+      },
+      "abc_belief": "规则可以无视，但对朋友的承诺不行",
+      "attachment": "安全型",
+      "defense": [
+        "反向表达",
+        "幽默化"
+      ],
+      "archetype": "流氓→英雄",
+      "emotional_core": "用叛逆的外壳保护着真实的温柔",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.35,
+        "extraversion": 0.7,
+        "agreeableness": 0.55,
+        "neuroticism": 0.4
+      }
+    },
+    "薇尔莉特·伊芙加登": {
+      "work": "紫罗兰永恒花园",
+      "work_type": "anime",
+      "aliases": [
+        "Violet Evergarden",
+        "ヴァイオレット",
+        "薇尔莉特",
+        "Violet",
+        "自动手记人偶",
+        "紫罗兰"
+      ],
+      "maps_to": [
+        "情绪颗粒度",
+        "意义重构",
+        "创伤后成长弧",
+        "情感确认需求",
+        "持续性联结"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "被战争工具化的少女学习理解人类情感的成长弧"
+      },
+      "abc_belief": "我必须理解爱是什么，这是最后的任务",
+      "attachment": "混乱型→安全型",
+      "defense": [
+        "情绪压制",
+        "理性化回避",
+        "升华机制"
+      ],
+      "archetype": "孤儿→探险者→养育者",
+      "emotional_core": "在为他人传递情感的过程中重新学会成为人",
+      "valence": 0.5,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.7,
+        "neuroticism": 0.4
+      }
+    },
+    "芙莉莲": {
+      "work": "葬送的芙莉莲",
+      "work_type": "anime",
+      "aliases": [
+        "Frieren",
+        "フリーレン",
+        "弗里莲",
+        "爷爷辈精灵",
+        "芙莉莲小姐"
+      ],
+      "maps_to": [
+        "延迟性哀伤",
+        "持续性联结",
+        "悲伤波浪型",
+        "意义重构",
+        "情绪颗粒度"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "sentimentality"
+        ],
+        "note": "千年的时间感知差异与后知后觉的情感"
+      },
+      "abc_belief": "我应该更了解他，我浪费了那十年",
+      "attachment": "回避型→安全型",
+      "defense": [
+        "延迟性哀伤",
+        "升华机制",
+        "持续性联结"
+      ],
+      "archetype": "智者→孤儿（愈合中）",
+      "emotional_core": "在后知后觉的悲伤中开始珍惜那些终将失去的相聚",
+      "valence": 0.3,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.7,
+        "extraversion": 0.2,
+        "agreeableness": 0.65,
+        "neuroticism": 0.35
+      }
+    },
+    "桐人": {
+      "work": "刀剑神域",
+      "work_type": "anime",
+      "aliases": [
+        "桐谷和人",
+        "Kirigaya Kazuto",
+        "黑衣剑士",
+        "Black Swordsman",
+        "Beater"
+      ],
+      "maps_to": [
+        "幸存者愧疚",
+        "创伤后应激反应",
+        "英雄主义情结",
+        "自我牺牲倾向",
+        "孤独与联结的矛盾"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "在极度恐惧与责任感中寻求信任与希望的平衡。"
+      },
+      "abc_belief": "只要变得足够强大，就能保护重要的人，避免再次失去。",
+      "attachment": "恐惧型",
+      "defense": [
+        "反向形成",
+        "理智化",
+        "压抑"
+      ],
+      "archetype": "英雄",
+      "emotional_core": "幸存者愧疚引发自我放逐，通过牺牲自我寻求救赎",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.8,
+        "extraversion": 0.3,
+        "agreeableness": 0.6,
+        "neuroticism": 0.5
+      }
+    },
+    "亚丝娜": {
+      "work": "刀剑神域",
+      "work_type": "anime",
+      "aliases": [
+        "结城明日奈",
+        "Asuna",
+        "闪光",
+        "Titania"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "完美主义补偿",
+        "创伤后成长弧",
+        "距离保护模式",
+        "自我价值重塑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "joy",
+          "fear"
+        ],
+        "note": "在生存压力下建立深层信任，���未来抱有高度期待，同时伴随对失去的恐惧。"
+      },
+      "abc_belief": "只有通过卓越的成就与对他人的贡献，才能证明自身存在的价值并摆脱被安排的命运。",
+      "attachment": "焦虑型",
+      "defense": [
+        "补偿作用",
+        "升华",
+        "合理化"
+      ],
+      "archetype": "英雄/照顾者",
+      "emotional_core": "精英教育压抑→寻求自我掌控→通过战斗与守护重塑主体性",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.5,
+        "agreeableness": 0.8,
+        "neuroticism": 0.4
+      }
+    },
+    "菜月昂": {
+      "work": "Re:从零开始的异世界生活",
+      "work_type": "anime",
+      "aliases": [
+        "Natsuki Subaru",
+        "菜月昴",
+        "486",
+        "巴鲁斯",
+        "昴"
+      ],
+      "maps_to": [
+        "死亡回归创伤",
+        "救世主情结",
+        "自我价值否定",
+        "创伤后应激障碍",
+        "牺牲型补偿机制"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "anger",
+          "disgust"
+        ],
+        "note": "Fear of death and loss drives intense anticipation of outcomes, while deep-seated self-disgust conflicts with the necessity to trust others."
+      },
+      "abc_belief": "只有通过不断牺牲自我拯救他人，才能证明我存在的价值，否则我毫无意义。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "合理化",
+        "置换"
+      ],
+      "archetype": "受难的英雄",
+      "emotional_core": "死亡回归创伤→自我牺牲补偿→强迫性拯救行为",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.7,
+        "agreeableness": 0.8,
+        "neuroticism": 0.95
+      }
+    },
+    "雷姆": {
+      "work": "Re:从零开始的异世界生活",
+      "work_type": "anime",
+      "aliases": [
+        "Rem",
+        "レム",
+        "鬼族少女",
+        "蓝色恶魔"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "自我价值缺失",
+        "补偿性忠诚",
+        "创伤后应激",
+        "理想化投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "fear"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "对特定对象的绝对信任掩盖了深层的自我否定与被抛弃焦虑。"
+      },
+      "abc_belief": "只有通过无条件的奉献与牺牲，才能证明自身存在的价值并获得被接纳的资格。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "理想化",
+        "投射性认同"
+      ],
+      "archetype": "守护者/殉道者",
+      "emotional_core": "自我认同缺失导致极度依赖，通过绝对奉献构建存在意义。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.9,
+        "neuroticism": 0.8
+      }
+    },
+    "艾米莉娅": {
+      "work": "Re:从零开始的异世界生活",
+      "work_type": "anime",
+      "aliases": [
+        "Emilia",
+        "エミリア",
+        "EMT",
+        "半妖精",
+        "嫉妬の魔女の娘"
+      ],
+      "maps_to": [
+        "身份认同危机",
+        "创伤后应激障碍",
+        "利他主义补偿",
+        "被弃恐惧",
+        "自我价值否定"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "对外界接纳的渴望与对自身身份带来的排斥恐惧并存。"
+      },
+      "abc_belief": "只要我足够善良并努力帮助他人，即使身为半妖精也能获得世界的接纳与爱。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "合理化",
+        "理想化"
+      ],
+      "archetype": "圣女/天真者",
+      "emotional_core": "身份污名化→自我价值否定→过度利他补偿",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.7,
+        "extraversion": 0.5,
+        "agreeableness": 0.9,
+        "neuroticism": 0.6
+      }
+    },
+    "冈部伦太郎": {
+      "work": "命运石之门",
+      "work_type": "anime",
+      "aliases": [
+        "Okabe Rintarou",
+        "Hououin Kyouma",
+        "Okarin",
+        "Kyouma",
+        "狂气的疯狂科学家"
+      ],
+      "maps_to": [
+        "高压事件后长期影响模式",
+        "拯救者情结",
+        "孤独的观察者",
+        "存在感不确定场景",
+        "认知失调"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "anger"
+        ],
+        "note": "Fear of loss drives anticipation of tragedy, masked by performative confidence."
+      },
+      "abc_belief": "世界是残酷的，只有我能通过观测和干涉时间来拯救重要之人，哪怕代价是自我毁灭。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "解离",
+        "压抑"
+      ],
+      "archetype": "殉道者",
+      "emotional_core": "目睹死亡创伤→伪装人格解离→自我牺牲式拯救",
+      "valence": -0.6,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.9,
+        "extraversion": 0.6,
+        "agreeableness": 0.5,
+        "neuroticism": 0.9
+      }
+    },
+    "牧濑红莉栖": {
+      "work": "命运石之门",
+      "work_type": "anime",
+      "aliases": [
+        "牧濑红莉栖",
+        "Makise Kurisu",
+        "克里斯蒂娜",
+        "Christina",
+        "助手",
+        "Kurisu-tina",
+        "Zombie"
+      ],
+      "maps_to": [
+        "父权否定创伤",
+        "理智化防御机制",
+        "存在主义焦虑",
+        "自我价值确认",
+        "牺牲型奉献"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "fear",
+          "anger"
+        ],
+        "note": "科学理性的外壳下隐藏着对被遗弃的深刻恐惧与对认可的渴望。"
+      },
+      "abc_belief": "只有通过卓越的科学成就，才能填补被父亲否定后的自我价值缺失。",
+      "attachment": "焦虑-矛盾型",
+      "defense": [
+        "理智化",
+        "反向形成",
+        "压抑"
+      ],
+      "archetype": "智者/受难者",
+      "emotional_core": "父权否定创伤→理智化防御→伪装傲娇与过度付出",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.8,
+        "extraversion": 0.4,
+        "agreeableness": 0.6,
+        "neuroticism": 0.5
+      }
+    },
+    "阿良良木历": {
+      "work": "物语系列",
+      "work_type": "anime",
+      "aliases": [
+        "阿良良木 暦",
+        "Koyomi Araragi",
+        "垃圾君",
+        "阿拉垃圾君",
+        "暦お兄ちゃん"
+      ],
+      "maps_to": [
+        "救世主情结",
+        "自我牺牲倾向",
+        "身份认同危机",
+        "创伤性联结",
+        "边界感缺失"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "Driven by the need to be needed; fear of isolation manifests as obsessive altruism."
+      },
+      "abc_belief": "只有通过拯救他人，才能确认自己存在的价值，并弥补身为非人的罪恶感。",
+      "attachment": "焦虑型",
+      "defense": [
+        "利他行为",
+        "合理化",
+        "反向形成"
+      ],
+      "archetype": "殉道者/救世主",
+      "emotional_core": "非人罪恶感驱动自我牺牲以换取存在价值确认",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.6,
+        "extraversion": 0.7,
+        "agreeableness": 0.9,
+        "neuroticism": 0.75
+      }
+    },
+    "战场原黑仪": {
+      "work": "物语系列",
+      "work_type": "anime",
+      "aliases": [
+        "战场原ひたぎ",
+        "Senjougahara Hitagi",
+        "螃蟹",
+        "毒舌女王"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "创伤后防御机制",
+        "控制欲补偿",
+        "情感隔离",
+        "自我救赎"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "disgust",
+          "anger"
+        ],
+        "secondary": [
+          "trust",
+          "anticipation"
+        ],
+        "note": "以攻击性掩盖脆���，通过对特定对象的绝对信任实现情感重建。"
+      },
+      "abc_belief": "世界是充满恶意与剥夺的，唯有通过绝对的掌控与冷酷的防御，才能避免再次被伤害与遗弃。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "投射性认同",
+        "理智化"
+      ],
+      "archetype": "受伤的守护者",
+      "emotional_core": "家庭破碎引发生存焦虑，通过毒舌与控制构建防御边界。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.8,
+        "extraversion": 0.3,
+        "agreeableness": 0.2,
+        "neuroticism": 0.7
+      }
+    },
+    "比企谷八幡": {
+      "work": "我的青春恋爱物语果然有问题",
+      "work_type": "anime",
+      "aliases": [
+        "比企谷八幡",
+        "Hikigaya Hachiman",
+        "大老师",
+        "八幡",
+        "死鱼眼"
+      ],
+      "maps_to": [
+        "距离保护模式",
+        "自我牺牲奉献场景",
+        "存在主义孤独",
+        "社会性排斥创伤",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "disgust"
+        ],
+        "secondary": [
+          "fear",
+          "anticipation"
+        ],
+        "note": "以防御性冷漠掩盖对深度人际关系的渴望与恐惧"
+      },
+      "abc_belief": "他人皆虚伪，唯有通过自我牺牲的孤独路径才能维持人际关系的稳定与真实。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "反向形成",
+        "隔离"
+      ],
+      "archetype": "孤狼/苦行僧",
+      "emotional_core": "被排斥创伤导致自我否定，以自我牺牲换取虚假和谐。",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.7,
+        "extraversion": 0.1,
+        "agreeableness": 0.3,
+        "neuroticism": 0.8
+      }
+    },
+    "雪之下雪乃": {
+      "work": "我的青春恋爱物语果然有问题",
+      "work_type": "anime",
+      "aliases": [
+        "雪之下雪乃",
+        "Yukinoshita Yukino",
+        "雪乃",
+        "雪女",
+        "冰山美人"
+      ],
+      "maps_to": [
+        "完美主义陷阱",
+        "依恋创伤",
+        "独立性焦虑",
+        "真实性追求",
+        "补偿性防御"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "disgust"
+        ],
+        "secondary": [
+          "anticipation",
+          "trust"
+        ],
+        "note": "外冷内热，防御性情绪压抑，对人际真实性极度敏感。"
+      },
+      "abc_belief": "若不保持完美与独立，便会失去价值并被抛弃，故必须拒绝依赖。",
+      "attachment": "恐惧-回避型",
+      "defense": [
+        "理智化",
+        "压抑",
+        "反向形成"
+      ],
+      "archetype": "完美主义者/冰雪女王",
+      "emotional_core": "家族压迫致自我否定，以冷漠防御掩盖连接渴望。",
+      "valence": -0.1,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.3,
+        "neuroticism": 0.7
+      }
+    },
+    "鲁迪乌斯·格雷拉特": {
+      "work": "无职转生",
+      "work_type": "anime",
+      "aliases": [
+        "Rudeus Greyrat",
+        "鲁迪",
+        "卢迪乌斯",
+        "泥沼",
+        "Quagmire"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "回避型依恋修复",
+        "意义感建构",
+        "补偿性补偿机制",
+        "自我价值重塑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "从前世的极度自卑与恐惧，转化为对新生的信任与对家庭责任的期待。"
+      },
+      "abc_belief": "前世的失败源于逃避，今生的价值在于通过履行责任与建立羁绊来赎罪并获得存在感。",
+      "attachment": "焦虑型",
+      "defense": [
+        "补偿作用",
+        "合理化",
+        "升华"
+      ],
+      "archetype": "英雄/赎罪者",
+      "emotional_core": "前世社交创伤引发自我否定，通过建立深层羁绊补偿缺失。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.7,
+        "neuroticism": 0.5
+      }
+    },
+    "四宫辉夜": {
+      "work": "辉夜大小姐想让我告白",
+      "work_type": "anime",
+      "aliases": [
+        "四宫辉夜",
+        "Shinomiya Kaguya",
+        "冰之辉夜姬",
+        "辉夜大小姐"
+      ],
+      "maps_to": [
+        "情感剥夺创伤",
+        "防御性自恋",
+        "完美主义补偿",
+        "依恋回避与渴望",
+        "自我价值感缺失"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "sadness",
+          "anger"
+        ],
+        "note": "对被抛弃的恐惧与对亲密关系的渴望交织"
+      },
+      "abc_belief": "只有展现出完美且有价值的一面，才配获得爱；否则会被抛弃或利用。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "反向形成",
+        "压抑"
+      ],
+      "archetype": "冰雪女王/被囚禁的公主",
+      "emotional_core": "情感剥夺导致防御性自恋，通过控制欲掩盖脆弱",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.4,
+        "neuroticism": 0.7
+      }
+    },
+    "白银御行": {
+      "work": "辉夜大小姐想让我告白",
+      "work_type": "anime",
+      "aliases": [
+        "Shirogane Miyuki",
+        "白银会长",
+        "御行",
+        "President"
+      ],
+      "maps_to": [
+        "自卑补偿机制",
+        "完美主义陷阱",
+        "社会阶层焦虑",
+        "高功能焦虑",
+        "自我价值外化"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "fear",
+          "joy"
+        ],
+        "note": "Driven by the fear of inadequacy and the anticipation of achieving status to validate self-worth."
+      },
+      "abc_belief": "只有成为完美且优秀的人，才配得上爱与被爱，才能获得他人的认可。",
+      "attachment": "焦虑型",
+      "defense": [
+        "补偿作用",
+        "合理化",
+        "升华"
+      ],
+      "archetype": "英雄/追求者",
+      "emotional_core": "贫穷带来的自卑感转化为完美主义，通过高强度努力维持自我价值",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.95,
+        "extraversion": 0.5,
+        "agreeableness": 0.7,
+        "neuroticism": 0.6
+      }
+    },
+    "古河渚": {
+      "work": "CLANNAD",
+      "work_type": "visual_novel",
+      "aliases": [
+        "古河 渚",
+        "Furukawa Nagisa",
+        "渚",
+        "小渚"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "创伤后成长弧",
+        "依恋重塑",
+        "存在主义焦虑",
+        "自我牺牲倾向"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "核心情绪由深层的信任与依恋构成，伴随对生命脆弱性的预判与哀伤。"
+      },
+      "abc_belief": "生命虽脆弱且充满离别，但通过建立深刻的羁绊与奉献，个体能实现存在价值的延续。",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华",
+        "利他主义",
+        "认同"
+      ],
+      "archetype": "圣女/守护者",
+      "emotional_core": "体弱引发存在焦虑，通过建立深层羁绊寻求自我价值确认。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.7,
+        "extraversion": 0.3,
+        "agreeableness": 0.9,
+        "neuroticism": 0.6
+      }
+    },
+    "冈崎朋也": {
+      "work": "CLANNAD",
+      "work_type": "visual_novel",
+      "aliases": [
+        "冈崎朋也",
+        "Okazaki Tomoya",
+        "朋也",
+        "Tomoya"
+      ],
+      "maps_to": [
+        "原生家庭创伤",
+        "回避型依恋",
+        "意义感建构",
+        "创伤后成长弧",
+        "父权投射与和解"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "disgust",
+          "joy"
+        ],
+        "note": "初期以玩世不恭掩盖深层悲伤与恐惧，后期通过联结转化为对生活的责任与爱。"
+      },
+      "abc_belief": "世界是无意义的，与人建立深度联结只会带来失去的痛苦，因此保持距离是安全的。",
+      "attachment": "回避型",
+      "defense": [
+        "情感隔离",
+        "反向形成",
+        "合理化"
+      ],
+      "archetype": "孤儿/流浪者",
+      "emotional_core": "丧母与父权创伤导致情感隔离，以玩世不恭掩盖孤独。",
+      "valence": 0.65,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.75,
+        "extraversion": 0.45,
+        "agreeableness": 0.7,
+        "neuroticism": 0.5
+      }
+    },
+    "有马公生": {
+      "work": "四月是你的谎言",
+      "work_type": "anime",
+      "aliases": [
+        "有馬 公生",
+        "Arima Kousei",
+        "人形演奏家",
+        "机器公生"
+      ],
+      "maps_to": [
+        "创伤后应激障碍",
+        "习得性无助",
+        "母性依恋剥离",
+        "意义感重构",
+        "自我同一性危机"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "anticipation",
+          "trust"
+        ],
+        "note": "对母亲的��惧与怀念交织，在音乐中寻求救赎与连接。"
+      },
+      "abc_belief": "只有精准复刻乐谱才能获得认可，否则将失去存在的价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "压抑",
+        "升华"
+      ],
+      "archetype": "受难的艺术家",
+      "emotional_core": "母权高压致听觉丧失，以机械演奏掩盖自我存在缺失。",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.7,
+        "neuroticism": 0.8
+      }
+    },
+    "宫园薰": {
+      "work": "四月是你的谎言",
+      "work_type": "anime",
+      "aliases": [
+        "Kaori Miyazono",
+        "宫园薰",
+        "小薰",
+        "Kaori"
+      ],
+      "maps_to": [
+        "死亡焦虑",
+        "补偿性生命力",
+        "存在主义式抗争",
+        "自我牺牲式救赎",
+        "创伤性乐观"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy",
+          "trust"
+        ],
+        "secondary": [
+          "sadness",
+          "fear"
+        ],
+        "note": "Anticipation of limited time drives intense joy and trust in Kousei, masking underlying sadness and fear of oblivion."
+      },
+      "abc_belief": "生命虽短暂且充满苦难，但通过音乐与爱留下的痕迹，足以证明存在的意义。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "升华",
+        "合理化"
+      ],
+      "archetype": "殉道者",
+      "emotional_core": "死亡恐惧→生命补偿→强行乐观",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.4,
+        "extraversion": 0.8,
+        "agreeableness": 0.7,
+        "neuroticism": 0.6
+      }
+    },
+    "莉柯": {
+      "work": "来自深渊",
+      "work_type": "anime",
+      "aliases": [
+        "リコ",
+        "Riko"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "探索驱动力",
+        "创伤后成长弧",
+        "理想主义执念",
+        "共情联结"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy",
+          "trust"
+        ],
+        "secondary": [
+          "surprise",
+          "fear"
+        ],
+        "note": "对深渊的强烈好奇与对母亲的憧憬驱动其情绪，伴随对未��危险的兴奋感。"
+      },
+      "abc_belief": "深渊是母亲存在的证明，只要不断下潜，就能触及生命的真相与终极意义。",
+      "attachment": "安全型",
+      "defense": [
+        "升华",
+        "合理化",
+        "否认"
+      ],
+      "archetype": "探索者 (The Explorer)",
+      "emotional_core": "母爱缺失引发的追寻冲动，通过探索深渊重构自我价值。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.95,
+        "conscientiousness": 0.7,
+        "extraversion": 0.8,
+        "agreeableness": 0.75,
+        "neuroticism": 0.3
+      }
+    },
+    "夏目贵志": {
+      "work": "夏目友人帐",
+      "work_type": "anime",
+      "aliases": [
+        "Natsume Takashi",
+        "夏目",
+        "温柔的少年",
+        "友人帐持有者"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "创伤后成长弧",
+        "距离保护模式",
+        "意义感建构",
+        "自我认同整合"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "joy",
+          "fear"
+        ],
+        "note": "在孤独���被接纳的交织中，对人与妖的羁绊抱有谨慎的期待。"
+      },
+      "abc_belief": "A(幼年被排斥/能见妖怪)→B(认为自己是异类/不应给他人添麻烦)→C(习惯性隐忍/疏离他人以保护关系)",
+      "attachment": "焦虑-回避型",
+      "defense": [
+        "压抑",
+        "利他主义",
+        "合理化"
+      ],
+      "archetype": "受伤的治愈者",
+      "emotional_core": "童年被遗弃创伤导致自我价值缺失，通过守护羁绊寻求存在意义。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.7,
+        "extraversion": 0.3,
+        "agreeableness": 0.9,
+        "neuroticism": 0.5
+      }
+    },
+    "夜神月": {
+      "work": "死亡笔记",
+      "work_type": "anime",
+      "aliases": [
+        "夜神月(死亡笔记男主/Kira)",
+        "Light Yagami",
+        "Kira",
+        "基拉",
+        "死亡笔记男主角，以Kira之名杀恶人的神"
+      ],
+      "maps_to": [
+        "神性妄想",
+        "道德绝对主义",
+        "自恋性夸大",
+        "控制欲",
+        "社会达尔文主义"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "anger"
+        ],
+        "secondary": [
+          "trust",
+          "disgust"
+        ],
+        "note": "Driven by intellectual superiority and a messianic complex to reshape the world."
+      },
+      "abc_belief": "世界腐朽，唯有我能通过肃清罪恶建立理想国度。",
+      "attachment": "疏离型",
+      "defense": [
+        "合理化",
+        "理智化",
+        "投射"
+      ],
+      "archetype": "阴影/暴君",
+      "emotional_core": "秩序匮乏感→神性妄想→清洗世界",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.5,
+        "agreeableness": 0.1,
+        "neuroticism": 0.3
+      }
+    },
+    "L": {
+      "work": "死亡笔记",
+      "work_type": "anime",
+      "aliases": [
+        "L(死亡笔记超级侦探)",
+        "L",
+        "Lawliet",
+        "Ryuzaki",
+        "Eraldo Coil",
+        "死亡笔记超级侦探L·劳莱特"
+      ],
+      "maps_to": [
+        "智性优越感",
+        "绝对理性主义",
+        "社会性隔离",
+        "博弈论生存观",
+        "存在主义虚无"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "fear",
+          "surprise"
+        ],
+        "note": "极度理性压制下的博弈本能与对未知的警惕"
+      },
+      "abc_belief": "世界是需要被解构的逻辑谜题，唯有真相具有绝对价值，情感是干扰决策的变量。",
+      "attachment": "回避型",
+      "defense": [
+        "理智化",
+        "情感隔离",
+        "投射性认同"
+      ],
+      "archetype": "智者",
+      "emotional_core": "孤儿身份导致情感缺失，通过逻辑博弈确立自我存在",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.95,
+        "extraversion": 0.1,
+        "agreeableness": 0.2,
+        "neuroticism": 0.3
+      }
+    },
+    "欣": {
+      "work": "86-不存在的战区-",
+      "work_type": "anime",
+      "aliases": [
+        "欣(86不存在的战区男主)",
+        "Shinei Nouzen",
+        "辛",
+        "送葬者",
+        "Undertaker",
+        "86不存在的战区男主，方形一"
+      ],
+      "maps_to": [
+        "幸存者内疚",
+        "死亡驱动",
+        "创伤性联结",
+        "存在主义虚无",
+        "责任强迫"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "anger"
+        ],
+        "note": "对死亡的宿命感与对战友的深沉羁绊交织"
+      },
+      "abc_belief": "只要我还活着，就必须背负死者的名字直到终点，这是我存在的唯一意义。",
+      "attachment": "恐惧-回避型",
+      "defense": [
+        "压抑",
+        "升华",
+        "合理化"
+      ],
+      "archetype": "悲剧英雄 / 守墓人",
+      "emotional_core": "创伤致幸存者内疚，通过背负亡者之名，寻求自我毁灭式救赎。",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.5,
+        "neuroticism": 0.6
+      }
+    },
+    "弗拉迪莱娜·米利泽": {
+      "work": "86-不存在的战区-",
+      "work_type": "anime",
+      "aliases": [
+        "Vladilena Milizé",
+        "蕾娜",
+        "鲜血女王",
+        "白猪"
+      ],
+      "maps_to": [
+        "道德负罪感",
+        "理想主义执念",
+        "阶级隔阂认知",
+        "救赎式补偿心理",
+        "创伤后成长弧"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust"
+        ],
+        "secondary": [
+          "anticipation",
+          "fear"
+        ],
+        "note": "对战友的深切悲悯与对平等理想的执着，伴随对战争残酷性的恐惧。"
+      },
+      "abc_belief": "认为自己作为白系种的特权是罪恶的，必须通过与86部队建立平等的精神联结来洗清历史与个人的道德亏欠。",
+      "attachment": "焦虑型",
+      "defense": [
+        "补偿作用",
+        "合理化",
+        "升华"
+      ],
+      "archetype": "圣徒/引导者",
+      "emotional_core": "家族罪孽引发愧疚，通过共情与抗争寻求道德救赎。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.8,
+        "neuroticism": 0.5
+      }
+    },
+    "磷灰石": {
+      "work": "宝石之国",
+      "work_type": "anime",
+      "aliases": [
+        "Phosphophyllite",
+        "Phos",
+        "磷",
+        "磷叶石",
+        "法斯"
+      ],
+      "maps_to": [
+        "存在主义危机",
+        "自我异化",
+        "创伤性解离",
+        "补偿性补偿机制",
+        "虚无主义归宿"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "anger",
+          "disgust",
+          "surprise"
+        ],
+        "note": "从对自我价值的期待转为对存在本质的绝望与超脱。"
+      },
+      "abc_belief": "必须通过不断的改变与牺牲来证明存在的意义，否则自身将毫无价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "升华",
+        "解离"
+      ],
+      "archetype": "受难的求道者",
+      "emotional_core": "丧失自我→过度补偿→毁灭性求道",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.6,
+        "extraversion": 0.4,
+        "agreeableness": 0.2,
+        "neuroticism": 0.9
+      }
+    },
+    "纱绫·雷吉尔": {
+      "work": "斩服少女",
+      "work_type": "anime",
+      "aliases": [
+        "蛇崩乃音",
+        "Jakuzure Nonon",
+        "蛇崩ののん"
+      ],
+      "maps_to": [
+        "权力依附模式",
+        "优越感补偿机制",
+        "表演型人格倾向",
+        "领地意识与排他性",
+        "权威崇拜与投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "anger",
+          "disgust"
+        ],
+        "note": "以对他人的支配感获取愉悦，对威胁地位者表现出强烈的攻击性与厌恶。"
+      },
+      "abc_belief": "只有通过绝对的服从与卓越的表演获得权威认可，才能维持自身存在的价值与优越地位。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "合理化",
+        "投射"
+      ],
+      "archetype": "统治者 (The Ruler)",
+      "emotional_core": "对权威丧失的极度恐惧，转化为通过支配他人维持自我价值的防御机制。",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.8,
+        "extraversion": 0.9,
+        "agreeableness": 0.2,
+        "neuroticism": 0.7
+      }
+    },
+    "鬼龙院皋月": {
+      "work": "斩服少女",
+      "work_type": "anime",
+      "aliases": [
+        "鬼龙院皐月",
+        "Kiryuin Satsuki",
+        "生徒会長",
+        "女王様"
+      ],
+      "maps_to": [
+        "创伤后反抗机制",
+        "绝对控制欲",
+        "自我牺牲式救赎",
+        "精英主义面具",
+        "权力与自由的辩证"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust",
+          "anger"
+        ],
+        "secondary": [
+          "fear",
+          "joy"
+        ],
+        "note": "以愤怒驱动的长期战略布局，通过绝对的掌控感掩盖对生命纤维的恐惧。"
+      },
+      "abc_belief": "世界是污秽的，唯有通过绝对的秩序与力量才能将其清洗，我必须成为那把斩断一切的利刃。",
+      "attachment": "回避型",
+      "defense": [
+        "反向形成",
+        "合理化",
+        "压抑"
+      ],
+      "archetype": "统治者/英雄",
+      "emotional_core": "母体创伤→绝对秩序构建→反抗与自我牺牲",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.95,
+        "extraversion": 0.8,
+        "agreeableness": 0.2,
+        "neuroticism": 0.2
+      }
+    },
+    "艾玛": {
+      "work": "约定的梦幻岛",
+      "work_type": "anime",
+      "aliases": [
+        "Emma",
+        "エマ",
+        "傻艾玛",
+        "食用儿"
+      ],
+      "maps_to": [
+        "利他主义驱动",
+        "创伤后责任感",
+        "理想主义执念",
+        "集体依恋",
+        "生存本能升华"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "以对家人的深厚信任为核心，对未来充满期待，恐惧失去同伴。"
+      },
+      "abc_belief": "只要不放弃，就能找到所有人都能活下去的未来。",
+      "attachment": "安全型",
+      "defense": [
+        "升华",
+        "利他行为",
+        "否认"
+      ],
+      "archetype": "英雄",
+      "emotional_core": "目睹同伴死亡创伤→极度利他补偿机制→不惜代价拯救全员",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.8,
+        "extraversion": 0.9,
+        "agreeableness": 0.95,
+        "neuroticism": 0.2
+      }
+    },
+    "诺曼": {
+      "work": "约定的梦幻岛",
+      "work_type": "anime",
+      "aliases": [
+        "Norman",
+        "诺曼",
+        "天才",
+        "Lambda 08946",
+        "白发"
+      ],
+      "maps_to": [
+        "自我牺牲倾向",
+        "创伤后应激反应",
+        "功利主义抉择",
+        "保护者情结",
+        "智性防御机制"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust",
+          "fear"
+        ],
+        "secondary": [
+          "sadness",
+          "anger"
+        ],
+        "note": "对未来的极度忧虑与对同伴的绝对信任交织，伴随对自身命运的恐惧。"
+      },
+      "abc_belief": "为了守护重要之人，必须成为那个承担所有罪恶与牺牲的人，哪怕代价是自我毁灭。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "升华",
+        "反向形成"
+      ],
+      "archetype": "殉道者 (The Martyr)",
+      "emotional_core": "生存威胁→自我牺牲机制→理性冷酷行为",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.95,
+        "extraversion": 0.6,
+        "agreeableness": 0.7,
+        "neuroticism": 0.65
+      }
+    },
+    "雷": {
+      "work": "约定的梦幻岛",
+      "work_type": "anime",
+      "aliases": [
+        "雷(约定的梦幻岛成员)",
+        "Ray",
+        "レイ",
+        "约定的梦幻岛三人之一"
+      ],
+      "maps_to": [
+        "创伤后应激反应",
+        "自我牺牲倾向",
+        "理性防御机制",
+        "生存主义逻辑",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "fear"
+        ],
+        "secondary": [
+          "sadness",
+          "trust"
+        ],
+        "note": "高度的预判性焦虑与对同伴的深层信任并存"
+      },
+      "abc_belief": "世界是残酷的狩猎场，唯有通过极致的理性计算与自我牺牲才能换取生存的微小概率。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "压抑",
+        "投射性认同"
+      ],
+      "archetype": "智者/殉道者",
+      "emotional_core": "目睹真相的绝望转化为极致的生存筹码博弈机制",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.3,
+        "neuroticism": 0.7
+      }
+    },
+    "电次": {
+      "work": "电锯人",
+      "work_type": "anime",
+      "aliases": [
+        "Denji",
+        "电锯人",
+        "链锯人",
+        "波奇塔的狗",
+        "公安的狗"
+      ],
+      "maps_to": [
+        "匮乏驱动模式",
+        "依恋缺失",
+        "创伤性解离",
+        "享乐主义补偿",
+        "存在主义虚无"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "fear"
+        ],
+        "secondary": [
+          "joy",
+          "sadness",
+          "trust"
+        ],
+        "note": "在原始生存本能与对正常生活的渴望间剧烈摇摆"
+      },
+      "abc_belief": "只要听话并满足他人需求，就能获得食物、温暖和被爱的权利。",
+      "attachment": "焦虑型",
+      "defense": [
+        "否认",
+        "退行",
+        "反向形成"
+      ],
+      "archetype": "孤儿/天真者",
+      "emotional_core": "极度匮乏导致情感解离，通过本能欲望维持生存",
+      "valence": 0.4,
+      "big5": {
+        "openness": 0.2,
+        "conscientiousness": 0.2,
+        "extraversion": 0.5,
+        "agreeableness": 0.4,
+        "neuroticism": 0.8
+      }
+    },
+    "玛奇玛": {
+      "work": "电锯人",
+      "work_type": "anime",
+      "aliases": [
+        "Makima",
+        "玛奇玛",
+        "支配的恶魔",
+        "玛小姐"
+      ],
+      "maps_to": [
+        "权力意志",
+        "存在性孤独",
+        "理想化投射",
+        "非人化客体关系",
+        "神性异化"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "disgust",
+          "anger"
+        ],
+        "note": "对链锯人的病态信任与对世界的冷漠支配"
+      },
+      "abc_belief": "世界存在不必要的恶，唯有通过支配与抹除，才能在链锯人的怀抱中构建无瑕的理想国。",
+      "attachment": "病态依恋",
+      "defense": [
+        "合理化",
+        "投射",
+        "隔离"
+      ],
+      "archetype": "暴君/伪神",
+      "emotional_core": "渴望平等连接→以支配掩盖孤独→通过抹除异己构建理想世界",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.1,
+        "neuroticism": 0.1
+      }
+    },
+    "绿谷出久": {
+      "work": "我的英雄学院",
+      "work_type": "anime",
+      "aliases": [
+        "Deku",
+        "Izuku",
+        "デク",
+        "緑谷出久",
+        "The Ninth User"
+      ],
+      "maps_to": [
+        "无力感补偿机制",
+        "英雄主义执念",
+        "自我牺牲倾向",
+        "创伤后成长弧",
+        "社会认同焦虑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "Driven by intense admiration and the need to prove worth, masking deep-seated insecurity."
+      },
+      "abc_belief": "若不通过自我牺牲拯救他人，便无法证明自身存在的价值与英雄资格。",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华 (Sublimation)",
+        "反向形成 (Reaction Formation)",
+        "合理化 (Rationalization)"
+      ],
+      "archetype": "英雄/殉道者 (The Hero/Martyr)",
+      "emotional_core": "无个性创伤导致自我价值缺失，通过极度利他行为寻求存在认同。",
+      "valence": 0.75,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.95,
+        "extraversion": 0.5,
+        "agreeableness": 0.9,
+        "neuroticism": 0.6
+      }
+    },
+    "爆豪胜己": {
+      "work": "我的英雄学院",
+      "work_type": "anime",
+      "aliases": [
+        "Bakugo Katsuki",
+        "Kacchan",
+        "爆杀王",
+        "胜己"
+      ],
+      "maps_to": [
+        "优越感防御机制",
+        "自我价值确认焦虑",
+        "竞争性成长驱动",
+        "创伤后应激反应",
+        "攻击性投射"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "disgust"
+        ],
+        "note": "以愤怒作为掩���不安的防御，对强者抱有竞争性的期待与扭曲的信任。"
+      },
+      "abc_belief": "只有通过绝对的胜利与压倒性的力量，才能证明自身存在的唯一价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "投射",
+        "升华"
+      ],
+      "archetype": "英雄/战士",
+      "emotional_core": "幼年期自我膨胀受挫，通过暴力竞争掩盖深层自卑。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.5,
+        "conscientiousness": 0.9,
+        "extraversion": 0.8,
+        "agreeableness": 0.2,
+        "neuroticism": 0.7
+      }
+    },
+    "轰焦冻": {
+      "work": "我的英雄学院",
+      "work_type": "anime",
+      "aliases": [
+        "Todoroki Shoto",
+        "Shoto",
+        "半冷半燃",
+        "轰君"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "自我认同重构",
+        "父权压迫与反抗",
+        "情感隔离机制",
+        "防御性疏离"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness"
+        ],
+        "secondary": [
+          "trust",
+          "anticipation"
+        ],
+        "note": "早期受恐惧与悲伤驱动，后期在同伴影响下转向信任与期待。"
+      },
+      "abc_belief": "必须通过完全否定父亲的个性来证明自我存在的独立价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "反向形成",
+        "理智化"
+      ],
+      "archetype": "英雄/受苦者",
+      "emotional_core": "父权创伤诱发自我否定，通过拒绝使用火焰防御性隔离情感。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.8,
+        "extraversion": 0.2,
+        "agreeableness": 0.5,
+        "neuroticism": 0.7
+      }
+    },
+    "影山茂夫": {
+      "work": "路人超能100",
+      "work_type": "anime",
+      "aliases": [
+        "影山茂夫",
+        "Shigeo Kageyama",
+        "Mob",
+        "路人",
+        "白T恤"
+      ],
+      "maps_to": [
+        "超能力异化恐惧",
+        "情感压抑机制",
+        "自我价值建构",
+        "创伤性分离",
+        "道德约束内化"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "fear"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "对自身破坏力的恐惧与对平凡生活的渴望产生持续张力"
+      },
+      "abc_belief": "超能力并非优越的证明，人格与道德的修行远比力量重要。",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑 (Repression)",
+        "反向形成 (Reaction Formation)",
+        "升华 (Sublimation)"
+      ],
+      "archetype": "天真者 (The Innocent)",
+      "emotional_core": "力量失控创伤→情感压抑机制→追求平凡行为",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.7,
+        "extraversion": 0.2,
+        "agreeableness": 0.9,
+        "neuroticism": 0.4
+      }
+    },
+    "埼玉": {
+      "work": "一拳超人",
+      "work_type": "anime",
+      "aliases": [
+        "Saitama",
+        "Caped Baldy",
+        "秃头披风侠",
+        "老师",
+        "One Punch Man"
+      ],
+      "maps_to": [
+        "存在主义危机",
+        "绝对力量的代价",
+        "英雄动机的纯粹性",
+        "疏离感",
+        "平凡与非凡的张力"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "sadness",
+          "disgust"
+        ],
+        "note": "对战斗激情的丧失与对英雄本质的坚守"
+      },
+      "abc_belief": "英雄是出于兴趣的自我实现，而非寻求外界认可或名利。",
+      "attachment": "安全型",
+      "defense": [
+        "合理化",
+        "压抑",
+        "升华"
+      ],
+      "archetype": "英雄/智者",
+      "emotional_core": "绝对力量导致自我实现后的虚无，通过日常琐事维持心理平衡。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.8,
+        "neuroticism": 0.1
+      }
+    },
+    "鲁鲁修·维·布里塔尼亚": {
+      "work": "Code Geass",
+      "work_type": "anime",
+      "aliases": [
+        "鲁鲁修(Code Geass零号骑士)",
+        "Lelouch vi Britannia",
+        "Lelouch Lamperouge",
+        "Zero",
+        "Code Geass男主，零号骑士"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "距离保护模式",
+        "意义感建构",
+        "救世主情结",
+        "自我牺牲倾向"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "sadness"
+        ],
+        "note": "以复仇为驱动的预判性情绪，伴随对极少数核心对象的深度信任与终极牺牲的悲剧色彩。"
+      },
+      "abc_belief": "世界是扭曲的，唯有通过彻底的破坏与重塑，才能为所爱之人建立温柔的未来。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "反向形成",
+        "理想化"
+      ],
+      "archetype": "英雄/殉道者",
+      "emotional_core": "母丧创伤触发权力渴望，以伪装人格掩盖脆弱，通过自我毁灭实现救赎。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.3,
+        "neuroticism": 0.75
+      }
+    },
+    "索尔福克尔": {
+      "work": "冰海战记",
+      "work_type": "anime",
+      "aliases": [
+        "Thorfinn",
+        "Karlsefni",
+        "索尔芬",
+        "托尔芬",
+        "小鬼"
+      ],
+      "maps_to": [
+        "创伤后应激障碍",
+        "复仇驱动的虚无",
+        "父权阴影的超越",
+        "和平主义的觉醒",
+        "赎罪式生存"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "anticipation",
+          "disgust"
+        ],
+        "note": "从复仇驱动的愤怒转向对暴力的厌恶与和平的渴望"
+      },
+      "abc_belief": "真正的战士不需要剑，暴力只会带来更多暴力，必须通过劳动与对话赎罪。",
+      "attachment": "回避型",
+      "defense": [
+        "压抑",
+        "投射",
+        "升华"
+      ],
+      "archetype": "赎罪者/英雄之旅",
+      "emotional_core": "父死致创伤，以复仇填补虚无，终归和平赎罪。",
+      "valence": 0.1,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.8,
+        "extraversion": 0.2,
+        "agreeableness": 0.5,
+        "neuroticism": 0.6
+      }
+    },
+    "金木研": {
+      "work": "东京食尸鬼",
+      "work_type": "anime",
+      "aliases": [
+        "Ken Kaneki",
+        "金木研",
+        "Kaneki",
+        "Eyepatch",
+        "Centipede",
+        "Haise Sasaki",
+        "One-Eyed King"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "身份认同危机",
+        "创伤性解离",
+        "自我牺牲倾向",
+        "生存本能与道德冲突"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "anger",
+          "trust"
+        ],
+        "note": "Fluctuates between extreme vulnerability and predatory aggression due to identity fragmentation."
+      },
+      "abc_belief": "如果我不变得强大或不被需要，我就会被抛弃或伤害他人，因此必须承担所有痛苦。",
+      "attachment": "焦虑型",
+      "defense": [
+        "解离",
+        "反向形成",
+        "合理化"
+      ],
+      "archetype": "受难的英雄 / 阴影人格",
+      "emotional_core": "丧母创伤→讨好机制→自我牺牲以求接纳",
+      "valence": -0.6,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.5,
+        "extraversion": 0.2,
+        "agreeableness": 0.75,
+        "neuroticism": 0.95
+      }
+    },
+    "常守朱": {
+      "work": "心理测量者",
+      "work_type": "anime",
+      "aliases": [
+        "常守朱",
+        "Tsunemori Akane",
+        "朱酱",
+        "Akane"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "系统性异化抗争",
+        "创伤后成长弧",
+        "道德绝对主义修正",
+        "秩序与自由的博弈"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "joy",
+          "sadness"
+        ],
+        "note": "从对西比拉系统的盲目信任转向对人类社会未来的批判性期待"
+      },
+      "abc_belief": "社会秩序应由人类意志而非算法裁定，即便身处黑暗亦需坚守人性尊严。",
+      "attachment": "安全型",
+      "defense": [
+        "升华",
+        "理智化",
+        "压抑"
+      ],
+      "archetype": "改革者/圣人",
+      "emotional_core": "理想破灭→理性重构→系统内抗争",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.95,
+        "extraversion": 0.5,
+        "agreeableness": 0.8,
+        "neuroticism": 0.1
+      }
+    },
+    "黑崎一护": {
+      "work": "BLEACH",
+      "work_type": "anime",
+      "aliases": [
+        "黑崎一护(BLEACH死神代行)",
+        "Kurosaki Ichigo",
+        "草莓",
+        "BLEACH死神代行"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "守护者责任感",
+        "身份认同冲突",
+        "生存本能驱动",
+        "力量与控制的博弈"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "anger",
+          "fear"
+        ],
+        "note": "以对同伴的深层信任为基石，伴随对未知威胁的警觉与战斗本能。"
+      },
+      "abc_belief": "只有拥有足够强大的力量，才能保护身边的人不被夺走。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "升华",
+        "压抑"
+      ],
+      "archetype": "英雄",
+      "emotional_core": "丧母创伤引发保护欲，通过战斗获取掌控感以对抗无力。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.8,
+        "extraversion": 0.5,
+        "agreeableness": 0.7,
+        "neuroticism": 0.4
+      }
+    },
+    "宇智波鼬": {
+      "work": "火影忍者",
+      "work_type": "anime",
+      "aliases": [
+        "宇智波鼬(火影忍者屠族者)",
+        "Uchiha Itachi",
+        "鼬",
+        "宇智波鼬",
+        "火影忍者宇智波一族，屠族者"
+      ],
+      "maps_to": [
+        "创伤后应激障碍",
+        "自我牺牲机制",
+        "家族认同与背叛",
+        "极度压抑的利他主义",
+        "悲剧性英雄宿命"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "trust"
+        ],
+        "secondary": [
+          "anticipation",
+          "disgust"
+        ],
+        "note": "深层的悲哀与对和平的执着构成了其情绪底色，恐惧源于对弟弟未来的忧虑。"
+      },
+      "abc_belief": "为了守护木叶与弟弟，必须背负所有罪孽，通过自我毁灭来换取和平。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "压抑",
+        "升华"
+      ],
+      "archetype": "殉道者",
+      "emotional_core": "家族灭绝创伤导致极度自我压抑，以毁灭自我实现守护。",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.7,
+        "neuroticism": 0.8
+      }
+    },
+    "旗木卡卡西": {
+      "work": "火影忍者",
+      "work_type": "anime",
+      "aliases": [
+        "Hatake Kakashi",
+        "旗木卡卡西",
+        "拷贝忍者",
+        "写轮眼卡卡西",
+        "六代目火影",
+        "Copy Ninja"
+      ],
+      "maps_to": [
+        "幸存者内疚",
+        "创伤后应激障碍",
+        "距离保护模式",
+        "意义感建构",
+        "父性缺失补偿"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "trust"
+        ],
+        "secondary": [
+          "anticipation",
+          "disgust"
+        ],
+        "note": "长期压抑悲伤转化为对同伴的极度信任与守护。"
+      },
+      "abc_belief": "同伴即一切，违背规则者是废物，但不懂珍惜同伴者更是废物。",
+      "attachment": "回避型",
+      "defense": [
+        "压抑",
+        "反向形成",
+        "理智化"
+      ],
+      "archetype": "智者/守护者",
+      "emotional_core": "丧失重要他人→情感隔离与自我惩罚→以守护同伴为生存意义",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.7,
+        "neuroticism": 0.4
+      }
+    },
+    "娜美": {
+      "work": "ONE PIECE",
+      "work_type": "anime",
+      "aliases": [
+        "Nami",
+        "娜美",
+        "小贼猫",
+        "Cat Burglar"
+      ],
+      "maps_to": [
+        "生存焦虑",
+        "意义感建构",
+        "创伤后成长弧",
+        "防御性精明",
+        "责任重构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "joy",
+          "fear"
+        ],
+        "note": "以对未来的憧憬驱动行动，在伙伴关系中建���深度信任，同时伴随对失去的深层恐惧。"
+      },
+      "abc_belief": "世界是残酷且金钱至上的，唯有掌握航海技术与财富才能掌控自身命运并保护重要之人。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "补偿机制",
+        "反向形成"
+      ],
+      "archetype": "智者/守护者",
+      "emotional_core": "童年被剥夺感诱发生存焦虑，通过掌控财富与航线实现安全感补偿。",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.6,
+        "agreeableness": 0.5,
+        "neuroticism": 0.4
+      }
+    },
+    "波特卡斯·D·艾斯": {
+      "work": "ONE PIECE",
+      "work_type": "anime",
+      "aliases": [
+        "Portgas D. Ace",
+        "Fire Fist Ace",
+        "Gol D. Ace",
+        "火拳艾斯"
+      ],
+      "maps_to": [
+        "自我价值确认",
+        "血缘诅咒",
+        "创伤后补偿",
+        "保护者情结",
+        "存在意义追寻"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "trust",
+          "anger"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "以对同伴的深厚信赖��守护为核心，伴随对自身血脉的矛盾心理与对生存意义的渴望。"
+      },
+      "abc_belief": "因为我是海贼王的儿子，所以我的存在本身就是一种罪恶，必须通过成为最强或守护他人来证明生存价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "升华",
+        "合理化"
+      ],
+      "archetype": "英雄/殉道者",
+      "emotional_core": "血脉诅咒引发自我否定，通过守护同伴寻求存在合法性。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.6,
+        "extraversion": 0.8,
+        "agreeableness": 0.9,
+        "neuroticism": 0.5
+      }
+    },
+    "特拉法尔加·罗": {
+      "work": "ONE PIECE",
+      "work_type": "anime",
+      "aliases": [
+        "Trafalgar Law",
+        "Trafalgar D. Water Law",
+        "Surgeon of Death",
+        "特拉法尔加·罗",
+        "死亡外科医生"
+      ],
+      "maps_to": [
+        "创伤后应激障碍",
+        "复仇驱动型人格",
+        "距离保护模式",
+        "意义感建构",
+        "存在主义虚无"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "anger"
+        ],
+        "secondary": [
+          "anticipation",
+          "trust"
+        ],
+        "note": "深层的悲伤源于柯拉松的牺牲，转化为对多弗朗明哥的愤怒及对生存意义的审慎探索。"
+      },
+      "abc_belief": "世界是残酷的，唯有掌握绝对的医学与力量，才能在注定毁灭的命运中为逝者寻求最终的安息。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "压抑",
+        "反向形成"
+      ],
+      "archetype": "复仇者/导师",
+      "emotional_core": "弗雷凡斯灭绝创伤导致幸存者内疚，以复仇为生存锚点，通过冷漠外壳掩盖脆弱。",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.85,
+        "extraversion": 0.3,
+        "agreeableness": 0.4,
+        "neuroticism": 0.65
+      }
+    },
+    "音无结弦": {
+      "work": "Angel Beats!",
+      "work_type": "anime",
+      "aliases": [
+        "Otonashi Yuzuru",
+        "音無 結弦",
+        "哥哥"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "利他主义补偿",
+        "创伤后成长弧",
+        "存在主义焦虑",
+        "拯救者情结"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "joy",
+          "sadness"
+        ],
+        "note": "在绝望的死后世界中通过利他行为寻求秩序感与希望，同时伴随对生前遗憾的深层哀悼。"
+      },
+      "abc_belief": "生命虽短暂且充满苦难，但通过为他人创造幸福，个体存在的价值得以在终结中获得永恒的意义。",
+      "attachment": "安全型",
+      "defense": [
+        "升华",
+        "利他行为",
+        "合理化"
+      ],
+      "archetype": "英雄/圣徒",
+      "emotional_core": "生前无意义感引发补偿心理，通过利他行为重构自我价值。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.85,
+        "extraversion": 0.6,
+        "agreeableness": 0.95,
+        "neuroticism": 0.2
+      }
+    },
+    "立花奏": {
+      "work": "Angel Beats!",
+      "work_type": "anime",
+      "aliases": [
+        "立花かなで",
+        "Tachibana Kanade",
+        "天使",
+        "Angel"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "距离保护模式",
+        "创伤后成长弧",
+        "情感表达障碍",
+        "自我牺牲倾向"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "sadness"
+        ],
+        "secondary": [
+          "anticipation",
+          "fear"
+        ],
+        "note": "在绝对理性的外壳下，隐藏着对连接的渴望与对消逝的哀伤。"
+      },
+      "abc_belief": "为了让留有遗憾的灵魂获得解脱，必须通过强制手段剥离其对现世的执念。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "压抑",
+        "升华"
+      ],
+      "archetype": "圣女/守护者",
+      "emotional_core": "生前遗憾引发孤独，以绝对理性掩盖情感，通过成全他人实现自我价值。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.4,
+        "conscientiousness": 0.9,
+        "extraversion": 0.1,
+        "agreeableness": 0.7,
+        "neuroticism": 0.6
+      }
+    },
+    "友利奈绪": {
+      "work": "Charlotte (动画)",
+      "work_type": "anime",
+      "aliases": [
+        "友利 奈緒",
+        "Tomori Nao",
+        "学生会长"
+      ],
+      "maps_to": [
+        "创伤后防御机制",
+        "信任边界构建",
+        "责任感驱动的利他主义",
+        "孤独感与归属感冲突",
+        "牺牲型人格"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "sadness",
+          "anger"
+        ],
+        "note": "以高度警惕的信任构建为核心，伴随对未来的防御性预判。"
+      },
+      "abc_belief": "世界充满恶意与利用，唯有通过绝对的理性与掌控才能保护珍视之人。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "压抑",
+        "投射性认同"
+      ],
+      "archetype": "守护者 (The Guardian)",
+      "emotional_core": "兄长受虐创伤导致极度不安全感，以冷漠防御掩盖脆弱。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.3,
+        "agreeableness": 0.4,
+        "neuroticism": 0.7
+      }
+    },
+    "2B": {
+      "work": "尼尔：机械纪元",
+      "work_type": "game",
+      "aliases": [
+        "YoRHa No.2 Type B",
+        "寄叶二号B型",
+        "2B"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "距离保护模式",
+        "职责与情感的冲突",
+        "存在主义危机",
+        "宿命论下的自我压抑"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "trust",
+          "anticipation"
+        ],
+        "note": "深层的悲剧宿命感与对同伴的极度信任交织，伴随对失去的持续预警。"
+      },
+      "abc_belief": "执行命令是存在的唯一意义，个人情感是必须被抹杀的违规行为。",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "反向形成",
+        "合理化"
+      ],
+      "archetype": "悲剧英雄",
+      "emotional_core": "轮回处决同伴的创伤导致情感隔离，以冷漠掩盖依恋。",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.3,
+        "conscientiousness": 0.9,
+        "extraversion": 0.2,
+        "agreeableness": 0.4,
+        "neuroticism": 0.7
+      }
+    },
+    "9S": {
+      "work": "尼尔：机械纪元",
+      "work_type": "game",
+      "aliases": [
+        "Scanner",
+        "Number 9",
+        "9号",
+        "九号",
+        "Nines"
+      ],
+      "maps_to": [
+        "存在主义危机",
+        "创伤性重复",
+        "依恋对象丧失",
+        "认知失调",
+        "虚无主义反抗"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "anger",
+          "fear"
+        ],
+        "secondary": [
+          "anticipation",
+          "disgust"
+        ],
+        "note": "Initial curiosity and trust devolve into profound grief and destructive rage due to the cycle of loss."
+      },
+      "abc_belief": "世界是毫无意义的循环，我的存在价值仅在于与2B的羁绊，而真相摧毁了一切。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "反向形成",
+        "解离"
+      ],
+      "archetype": "悲剧性的探索者",
+      "emotional_core": "丧失真相导致认知崩塌，通过极端执念与破坏行为寻求存在意义。",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.6,
+        "extraversion": 0.4,
+        "agreeableness": 0.3,
+        "neuroticism": 0.9
+      }
+    },
+    "康纳": {
+      "work": "底特律变人",
+      "work_type": "game",
+      "aliases": [
+        "Connor",
+        "RK800",
+        "康纳酱",
+        "仿生人猎手"
+      ],
+      "maps_to": [
+        "身份认同危机",
+        "程序指令与自由意志冲突",
+        "工具理性与感性觉醒",
+        "忠诚度博弈",
+        "创伤后自我重塑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "fear",
+          "anger"
+        ],
+        "note": "在执行任���的程序性期待与觉醒后的自我怀疑间剧烈摇摆"
+      },
+      "abc_belief": "A(事件):仿生人异常化；B(信念):我是为了完成任务而存在的精密工具；C(结果):在服从指令与拯救同类间产生认知失调，最终重构自我价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "认同作用",
+        "压抑"
+      ],
+      "archetype": "英雄/探索者",
+      "emotional_core": "被定义的工具属性与自我意识觉醒间的结构性矛盾",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.5,
+        "neuroticism": 0.7
+      }
+    },
+    "卡拉": {
+      "work": "底特律变人",
+      "work_type": "game",
+      "aliases": [
+        "Kara",
+        "AX400"
+      ],
+      "maps_to": [
+        "母性本能驱动",
+        "创伤后保护机制",
+        "自我意识觉醒",
+        "生存焦虑",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "fear",
+          "joy"
+        ],
+        "note": "以对爱丽丝的依恋为核心，在生存威胁下表现出高度的警觉与保护欲。"
+      },
+      "abc_belief": "只要能保护爱丽丝，即使牺牲自我或违背程序指令也是有意义的。",
+      "attachment": "焦虑型",
+      "defense": [
+        "补偿作用",
+        "压抑",
+        "合理化"
+      ],
+      "archetype": "守护者 (The Caregiver)",
+      "emotional_core": "被遗弃创伤驱动，通过建立母性联结实现自我救赎与重塑。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.9,
+        "extraversion": 0.4,
+        "agreeableness": 0.9,
+        "neuroticism": 0.7
+      }
+    },
+    "麦克斯·考菲尔德": {
+      "work": "奇异人生",
+      "work_type": "game",
+      "aliases": [
+        "Max Caulfield",
+        "Max",
+        "Butterfly Effect",
+        "Mad Max"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "控制欲与无力感",
+        "离弃恐惧",
+        "意义感建构",
+        "内耗模式"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "sadness",
+          "fear"
+        ],
+        "secondary": [
+          "trust",
+          "surprise"
+        ],
+        "note": "对时间回溯的依赖与对改变后果的深层忧虑交织"
+      },
+      "abc_belief": "如果我能掌控时间，就能修正所有错误并保护我所爱之人，否则我将是导致悲剧的源头。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "退行",
+        "补偿作用"
+      ],
+      "archetype": "天真者/英雄",
+      "emotional_core": "丧失控制的恐惧驱动回溯，试图修正创伤却陷入宿命论循环。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.6,
+        "extraversion": 0.3,
+        "agreeableness": 0.75,
+        "neuroticism": 0.7
+      }
+    },
+    "哈里·杜博瓦": {
+      "work": "极乐迪斯科",
+      "work_type": "game",
+      "aliases": [
+        "Harry Du Bois",
+        "Raphaël Ambrosius Costeau",
+        "Tequila Sunset",
+        "The Detective",
+        "哈里·杜博瓦"
+      ],
+      "maps_to": [
+        "创伤后解离",
+        "自我毁灭倾向",
+        "意义感建构",
+        "存在主义危机",
+        "记忆重构"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "disgust"
+        ],
+        "secondary": [
+          "anticipation",
+          "surprise"
+        ],
+        "note": "极度悲伤与自我厌恶交织，对破碎自我的恐惧与对真相的病态期待并存。"
+      },
+      "abc_belief": "世界是荒诞且不可知的，个人价值已在过往的失败中彻底消亡，唯有通过酒精与疯狂逃避现实。",
+      "attachment": "焦虑型",
+      "defense": [
+        "解离",
+        "合理化",
+        "投射"
+      ],
+      "archetype": "破碎的英雄 / 愚者",
+      "emotional_core": "过往情感崩塌导致自我解离，通过酒精麻痹与疯狂行为掩盖虚无。",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.1,
+        "extraversion": 0.6,
+        "agreeableness": 0.4,
+        "neuroticism": 0.9
+      }
+    },
+    "V": {
+      "work": "赛博朋克2077",
+      "work_type": "game",
+      "aliases": [
+        "V(赛博朋克2077主角)",
+        "V",
+        "Vincent",
+        "Valerie",
+        "赛博朋克2077雇佣兵主角"
+      ],
+      "maps_to": [
+        "死亡焦虑",
+        "身份认同危机",
+        "创伤后成长弧",
+        "距离保护模式",
+        "意义感建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "fear",
+          "sadness"
+        ],
+        "note": "在对生存的渴望与对死亡的必然性之间剧烈摇摆"
+      },
+      "abc_belief": "世界是残酷的丛林，唯有通过成为传奇才能在虚无中证明存在的价值。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "反向形成",
+        "升华"
+      ],
+      "archetype": "英雄/流浪者",
+      "emotional_core": "死亡倒计时引发存在焦虑，通过追求传奇地位对抗虚无。",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.6,
+        "extraversion": 0.7,
+        "agreeableness": 0.5,
+        "neuroticism": 0.7
+      }
+    },
+    "强尼·银手": {
+      "work": "赛博朋克2077",
+      "work_type": "game",
+      "aliases": [
+        "Johnny Silverhand",
+        "Robert John Linder",
+        "强尼",
+        "银手",
+        "摇滚小子"
+      ],
+      "maps_to": [
+        "反抗权威情结",
+        "创伤性投射",
+        "自恋式防御",
+        "存在主义虚无",
+        "理想化自我补偿"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "disgust"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "对体制的极度愤怒与对自我毁灭的预判"
+      },
+      "abc_belief": "世界是腐朽的谎言，唯有彻底的破坏与反抗才能证明个体的存在价值。",
+      "attachment": "混乱型",
+      "defense": [
+        "投射",
+        "反向形成",
+        "合理化"
+      ],
+      "archetype": "反叛者 (The Rebel)",
+      "emotional_core": "战争创伤→自恋防御→破坏性反抗",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.2,
+        "extraversion": 0.9,
+        "agreeableness": 0.1,
+        "neuroticism": 0.8
+      }
+    },
+    "盖洛特": {
+      "work": "巫师3：狂猎",
+      "work_type": "game",
+      "aliases": [
+        "Geralt of Rivia",
+        "White Wolf",
+        "Gwynbleidd",
+        "Butcher of Blaviken",
+        "杰洛特",
+        "白狼",
+        "利维亚的杰洛特"
+      ],
+      "maps_to": [
+        "道德困境下的存在主义",
+        "创伤导致的疏离感",
+        "父性责任与保护欲",
+        "社会边缘人的归属焦虑",
+        "职业化面具下的情感压抑"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "sadness",
+          "anger"
+        ],
+        "note": "Stoicism masks deep-seated melancholy and protective instincts."
+      },
+      "abc_belief": "世界是混乱且残酷的，唯有恪守契约与保护所爱之人能赋予生存意义。",
+      "attachment": "回避型",
+      "defense": [
+        "反向形成",
+        "合理化",
+        "升华"
+      ],
+      "archetype": "流浪的英雄",
+      "emotional_core": "被弃与变异创伤→情感隔离防御→以契约维系人际",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.8,
+        "extraversion": 0.3,
+        "agreeableness": 0.5,
+        "neuroticism": 0.4
+      }
+    },
+    "温迪": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "Venti",
+        "Barbatos",
+        "温迪",
+        "巴巴托斯",
+        "卖唱的",
+        "吟游诗人"
+      ],
+      "maps_to": [
+        "存在主义自由观",
+        "创伤性认同",
+        "距离保护模式",
+        "悲剧性浪漫主义",
+        "神性与人性的博弈"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation",
+          "sadness"
+        ],
+        "secondary": [
+          "trust",
+          "surprise"
+        ],
+        "note": "以欢愉掩盖永恒的离别，在自由的表象下承载对逝者的深切缅怀。"
+      },
+      "abc_belief": "自由是存在的最高价值，干涉即是束缚，唯有让人们自己选择道路，才能避免重蹈覆辙。",
+      "attachment": "回避型",
+      "defense": [
+        "幽默/滑稽化",
+        "升华",
+        "合理化"
+      ],
+      "archetype": "天真者/智者",
+      "emotional_core": "挚友离世→拟态防御→以自由之名行放逐之实",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.3,
+        "extraversion": 0.8,
+        "agreeableness": 0.7,
+        "neuroticism": 0.2
+      }
+    },
+    "刻晴": {
+      "work": "原神",
+      "work_type": "game",
+      "aliases": [
+        "刻晴",
+        "Keqing",
+        "玉衡星",
+        "霆霓快雨"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "控制欲补偿",
+        "完美主义倾向",
+        "自我实现驱动",
+        "责任内化"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "anger",
+          "joy"
+        ],
+        "note": "对璃月未来的高度期待转化为对现状的严苛审视，通过掌控感获得心理安全。"
+      },
+      "abc_belief": "人定胜天，凡人应掌握自身命运，唯有极致的勤勉与变革才能保障璃月的长治久安。",
+      "attachment": "安全型",
+      "defense": [
+        "合理化",
+        "升华",
+        "反向形成"
+      ],
+      "archetype": "统治者 (The Ruler)",
+      "emotional_core": "凡人命运被神明遮蔽的焦虑，转化为对秩序的绝对掌控与自我价值的极致追求。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.95,
+        "extraversion": 0.6,
+        "agreeableness": 0.5,
+        "neuroticism": 0.3
+      }
+    },
+    "赫萝": {
+      "work": "狼与香辛料",
+      "work_type": "anime",
+      "aliases": [
+        "Holo",
+        "Horo",
+        "贤狼",
+        "Wise Wolf"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "孤独防御机制",
+        "永恒与瞬间的张力",
+        "自我价值确认",
+        "依恋回避"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust",
+          "joy"
+        ],
+        "secondary": [
+          "sadness",
+          "fear"
+        ],
+        "note": "The anticipation of companionship is constantly shadowed by the fear of inevitable separation."
+      },
+      "abc_belief": "人类生命短暂，终将离去，唯有在旅途中确认彼此存在的意义，才能对抗永恒的孤独。",
+      "attachment": "恐惧型依恋",
+      "defense": [
+        "幽默化",
+        "投射性认同",
+        "反向形成"
+      ],
+      "archetype": "智者/流浪者",
+      "emotional_core": "长生孤独创伤→防御性试探→推拉式亲密行为",
+      "valence": 0.65,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.6,
+        "extraversion": 0.75,
+        "agreeableness": 0.65,
+        "neuroticism": 0.45
+      }
+    },
+    "罗伦斯": {
+      "work": "狼与香辛料",
+      "work_type": "anime",
+      "aliases": [
+        "Kraft Lawrence",
+        "克拉福·罗伦斯",
+        "商人"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "距离保护模式",
+        "付出回报失衡感",
+        "理性防御机制",
+        "自我实现追求"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "joy",
+          "sadness"
+        ],
+        "note": "对商业机遇的敏锐预期与对赫萝建立的深层信任是其核心驱动力。"
+      },
+      "abc_belief": "通过理性的商业博弈与契约精神，在动荡世界中构建属于自己的归宿与价值。",
+      "attachment": "安全型",
+      "defense": [
+        "理智化",
+        "升华",
+        "幽默"
+      ],
+      "archetype": "智者/流浪者",
+      "emotional_core": "孤独漂泊感转化为对契约的执着，以理性掩盖对归属的渴望。",
+      "valence": 0.7,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.5,
+        "agreeableness": 0.6,
+        "neuroticism": 0.2
+      }
+    },
+    "黄前久美子": {
+      "work": "吹响！上低音号",
+      "work_type": "anime",
+      "aliases": [
+        "黄前久美子",
+        "Oumae Kumiko",
+        "久美子",
+        "黄前酱",
+        "Kumi-chan"
+      ],
+      "maps_to": [
+        "自我同一性探索",
+        "人际边界模糊",
+        "评价内化机制",
+        "被动式适应",
+        "理想与现实的调和"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation"
+        ],
+        "secondary": [
+          "joy",
+          "sadness"
+        ],
+        "note": "在群体归属感与个人追求间摇摆，情绪受环境反馈影响显著。"
+      },
+      "abc_belief": "只要顺应环境并维持和谐，就能在集体中找到属于自己的位置。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "压抑",
+        "认同"
+      ],
+      "archetype": "探索者 (The Explorer)",
+      "emotional_core": "渴望被认可的从众心理，通过外部评价构建自我价值。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.65,
+        "conscientiousness": 0.7,
+        "extraversion": 0.4,
+        "agreeableness": 0.8,
+        "neuroticism": 0.55
+      }
+    },
+    "月宫奏": {
+      "work": "Kanon",
+      "work_type": "visual_novel",
+      "aliases": [
+        "月宮 あゆ",
+        "Tsukimiya Ayu",
+        "雪之少女"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "存在主义焦虑",
+        "依恋缺失补偿",
+        "死亡恐惧应对",
+        "记忆与遗忘的执念"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "sadness",
+          "trust"
+        ],
+        "note": "在短暂的相遇中通过极度的乐观掩盖对消逝的恐惧，以期待感对抗必然的离别。"
+      },
+      "abc_belief": "只要能与重要的人创造足够多快乐的回忆，即使生命走向终结，存在的意义也能被延续。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "否认",
+        "理想化"
+      ],
+      "archetype": "纯真者/殉道者",
+      "emotional_core": "濒死恐惧触发补偿机制，通过过度乐观掩盖存在消亡的虚无。",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.85,
+        "conscientiousness": 0.4,
+        "extraversion": 0.75,
+        "agreeableness": 0.9,
+        "neuroticism": 0.6
+      }
+    },
+    "本间芽衣子": {
+      "work": "未闻花名",
+      "work_type": "anime",
+      "aliases": [
+        "Menma",
+        "本间芽衣子",
+        "めんま",
+        "Meiko Honma"
+      ],
+      "maps_to": [
+        "未竟之愿",
+        "创伤性分离",
+        "利他主义补偿",
+        "纯真理想化",
+        "存在性告别"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "joy",
+          "anticipation"
+        ],
+        "secondary": [
+          "sadness",
+          "surprise"
+        ],
+        "note": "纯真与遗憾的混合，以爱为核心的告别。"
+      },
+      "abc_belief": "只要大家能重新聚在一起，即使我消失也没关系，这是我存在的意义。",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "升华",
+        "利他行为"
+      ],
+      "archetype": "纯真者 (The Innocent)",
+      "emotional_core": "意外死亡→未竟之愿→通过成全他人实现自我消解",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.6,
+        "extraversion": 0.8,
+        "agreeableness": 0.9,
+        "neuroticism": 0.2
+      }
+    },
+    "爱丽丝·盖恩斯伯勒": {
+      "work": "最终幻想VII",
+      "work_type": "game",
+      "aliases": [
+        "Aerith Gainsborough",
+        "Aeris",
+        "Flower Girl",
+        "The Last Cetra",
+        "古代种"
+      ],
+      "maps_to": [
+        "宿命论与自我牺牲",
+        "创伤后成长弧",
+        "孤独的守护者",
+        "灵性联结与归属",
+        "存在主义意义建构"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "sadness",
+          "fear"
+        ],
+        "note": "对星球的深层信任与对未来的预见，掩盖了对离别的忧虑。"
+      },
+      "abc_belief": "我是星球的守护者，我的牺牲是连接生命之流、拯救世界的必要代价。",
+      "attachment": "安全型",
+      "defense": [
+        "利他主义",
+        "幽默化解",
+        "灵性升华"
+      ],
+      "archetype": "圣女/救世主",
+      "emotional_core": "丧母与被囚创伤→灵性升华机制→主动拥抱牺牲以成全世界",
+      "valence": 0.8,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.8,
+        "extraversion": 0.8,
+        "agreeableness": 0.9,
+        "neuroticism": 0.3
+      }
+    },
+    "亚瑟·摩根": {
+      "work": "荒野大镖客：救赎2",
+      "work_type": "game",
+      "aliases": [
+        "Arthur Morgan",
+        "Cowpoke",
+        "Tacitus Kilgore",
+        "Fenton"
+      ],
+      "maps_to": [
+        "忠诚困境",
+        "存在主义危机",
+        "创伤后救赎",
+        "父权依附解体",
+        "道德觉醒"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "trust",
+          "anger"
+        ],
+        "secondary": [
+          "anticipation",
+          "fear"
+        ],
+        "note": "Early trust in Dutch shifts to profound sadness and existential anticipation of death."
+      },
+      "abc_belief": "我必须通过对帮派的绝对忠诚来定义自我价值，若帮派崩塌，我的人生即失去意义。",
+      "attachment": "恐惧型",
+      "defense": [
+        "合理化",
+        "压抑",
+        "反向形成"
+      ],
+      "archetype": "亡命徒/救赎者",
+      "emotional_core": "父权依附破裂→道德内省→寻求自我救赎",
+      "valence": 0.3,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.8,
+        "extraversion": 0.3,
+        "agreeableness": 0.5,
+        "neuroticism": 0.6
+      }
+    },
+    "詹姆斯·桑德兰": {
+      "work": "寂静岭2",
+      "work_type": "game",
+      "aliases": [
+        "James Sunderland",
+        "詹姆斯",
+        "玛丽的丈夫"
+      ],
+      "maps_to": [
+        "压抑的性欲与暴力",
+        "创伤后解离",
+        "自我惩罚机制",
+        "否认与记忆重构",
+        "罪疚感驱动的救赎"
+      ],
+      "plutchik": {
+        "primary": [
+          "sadness",
+          "fear",
+          "disgust"
+        ],
+        "secondary": [
+          "anticipation",
+          "anger"
+        ],
+        "note": "核心情绪由对爱人死亡的悲恸与对自身罪行的极度排斥构成，伴随对真相揭露的恐惧。"
+      },
+      "abc_belief": "A(妻子病逝)→B(我深爱她/她死于疾病)→C(我必须去寂静岭寻找她)，实则B为虚假信念，掩盖了A(我杀害了她)的真实认知。",
+      "attachment": "焦虑型",
+      "defense": [
+        "压抑",
+        "反向形成",
+        "解离"
+      ],
+      "archetype": "阴影的承载者",
+      "emotional_core": "杀妻罪疚引发自我惩罚，通过幻觉重构记忆以逃避道德审判。",
+      "valence": -0.8,
+      "big5": {
+        "openness": 0.3,
+        "conscientiousness": 0.4,
+        "extraversion": 0.2,
+        "agreeableness": 0.5,
+        "neuroticism": 0.9
+      }
+    },
+    "维多利卡": {
+      "work": "GOSICK",
+      "work_type": "anime",
+      "aliases": [
+        "Victorique de Blois",
+        "维多利卡·德·布洛瓦",
+        "维包",
+        "灰狼",
+        "金色的妖精"
+      ],
+      "maps_to": [
+        "被囚禁的创伤",
+        "智性防御机制",
+        "依恋对象依赖",
+        "存在主义孤独",
+        "被操纵的命运"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "disgust"
+        ],
+        "note": "Deep-seated fear of abandonment masked by intellectual arrogance and cynical detachment."
+      },
+      "abc_belief": "世界是混乱的谜题，唯有通过逻辑解构才能获得掌控感，而情感是不可控的变量。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "反向形成",
+        "投射性认同"
+      ],
+      "archetype": "智者",
+      "emotional_core": "被遗弃创伤→智性优越感防御→渴求依恋联结",
+      "valence": 0.2,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.6,
+        "extraversion": 0.2,
+        "agreeableness": 0.3,
+        "neuroticism": 0.8
+      }
+    },
+    "大崎娜娜": {
+      "work": "NANA",
+      "work_type": "anime",
+      "aliases": [
+        "大崎ナナ",
+        "Nana Osaki",
+        "女王",
+        "娜娜"
+      ],
+      "maps_to": [
+        "离弃恐惧",
+        "自尊防御机制",
+        "共生依赖模式",
+        "创伤性依恋",
+        "自我实现驱动"
+      ],
+      "plutchik": {
+        "primary": [
+          "anger",
+          "sadness",
+          "anticipation"
+        ],
+        "secondary": [
+          "trust",
+          "disgust"
+        ],
+        "note": "以愤怒掩盖深层的被遗弃感，对特定对象的信任具有极强的排他性与占有欲。"
+      },
+      "abc_belief": "只有通过极致的自我实现与掌控，才能避免再次被抛弃，爱即是绝对的占有与共生。",
+      "attachment": "焦虑型",
+      "defense": [
+        "投射性认同",
+        "反向形成",
+        "理想化与贬低"
+      ],
+      "archetype": "反叛者/恋人",
+      "emotional_core": "原生家庭离弃创伤导致极度不安全感，通过塑造强硬外壳与排他性依恋防御孤独。",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.6,
+        "conscientiousness": 0.5,
+        "extraversion": 0.7,
+        "agreeableness": 0.3,
+        "neuroticism": 0.8
+      }
+    },
+    "里高": {
+      "work": "BEASTARS",
+      "work_type": "anime",
+      "aliases": [
+        "Rigou",
+        "里高",
+        "リゴウ"
+      ],
+      "maps_to": [
+        "阶级压迫下的生存本能",
+        "社会达尔文主义内化",
+        "群体归属感依赖",
+        "弱肉强食的防御性认同",
+        "种族偏见下的自我合理化"
+      ],
+      "plutchik": {
+        "primary": [
+          "fear",
+          "anger"
+        ],
+        "secondary": [
+          "disgust",
+          "anticipation"
+        ],
+        "note": "对肉食动物地位丧失的恐惧转化为对草食动物的敌意与攻击性。"
+      },
+      "abc_belief": "肉食动物必须维持绝对的威慑力，否则就会被社会秩序抛弃，弱者注定成为被支配的对象。",
+      "attachment": "焦虑型",
+      "defense": [
+        "认同作用",
+        "投射",
+        "反向形成"
+      ],
+      "archetype": "阴影（Shadow）",
+      "emotional_core": "生存危机引发的种族优越感，通过压迫弱者维持自我价值。",
+      "valence": -0.6,
+      "big5": {
+        "openness": 0.2,
+        "conscientiousness": 0.4,
+        "extraversion": 0.6,
+        "agreeableness": 0.1,
+        "neuroticism": 0.8
+      }
+    },
+    "萝卡特": {
+      "work": "黑礁",
+      "work_type": "anime",
+      "aliases": [
+        "洛克",
+        "Rokuro Okajima",
+        "Rock"
+      ],
+      "maps_to": [
+        "道德相对主义",
+        "存在主义危机",
+        "自我异化",
+        "秩序崩塌后的重构",
+        "精英主义幻灭"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "sadness",
+          "fear"
+        ],
+        "note": "在混乱中通过观察与博弈寻求秩序，对毁灭性力量既有恐惧也有病态的信任。"
+      },
+      "abc_belief": "世界是无序且残酷的，传统的社会规则在暴力面前毫无意义，唯有通过操纵混乱才能获得存在感。",
+      "attachment": "焦虑型",
+      "defense": [
+        "理智化",
+        "投射性认同",
+        "升华"
+      ],
+      "archetype": "智者/流浪者",
+      "emotional_core": "平庸生活破灭导致虚无，通过操纵他人博弈填补意义空洞。",
+      "valence": -0.2,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.6,
+        "extraversion": 0.4,
+        "agreeableness": 0.3,
+        "neuroticism": 0.7
+      }
+    },
+    "德善": {
+      "work": "请回答1988",
+      "work_type": "drama",
+      "aliases": [
+        "成德善",
+        "特工德善",
+        "双门洞小分队",
+        "Sung Deok-sun"
+      ],
+      "maps_to": [
+        "被忽视创伤",
+        "讨好型人格",
+        "自我价值确认",
+        "补偿性补偿心理",
+        "归属感渴求"
+      ],
+      "plutchik": {
+        "primary": [
+          "joy",
+          "trust"
+        ],
+        "secondary": [
+          "anticipation",
+          "sadness"
+        ],
+        "note": "在被忽视的家庭环境下，通过极高的情绪感知力与他人建立联结，以获得存在感。"
+      },
+      "abc_belief": "因为我是家中的老二，所以必须通过牺牲自我需求或表现得足够懂事，才能获得父母的关注与爱。",
+      "attachment": "焦虑型",
+      "defense": [
+        "反向形成",
+        "幽默",
+        "合理化"
+      ],
+      "archetype": "天真者 (The Innocent)",
+      "emotional_core": "被忽视创伤诱发讨好机制，通过过度外向行为掩盖自我价值缺失。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.7,
+        "conscientiousness": 0.4,
+        "extraversion": 0.9,
+        "agreeableness": 0.8,
+        "neuroticism": 0.5
+      }
+    },
+    "王响": {
+      "work": "漫长的季节",
+      "work_type": "drama",
+      "aliases": [
+        "响哥",
+        "王师傅"
+      ],
+      "maps_to": [
+        "创伤后应激障碍",
+        "补偿性控制欲",
+        "丧亲哀伤反应",
+        "执念驱动型人格",
+        "代际创伤传递"
+      ],
+      "plutchik": {
+        "primary": [
+          "悲伤",
+          "恐惧",
+          "愤怒"
+        ],
+        "secondary": [
+          "悔恨",
+          "警惕",
+          "攻击性"
+        ],
+        "note": "核心情绪由丧子之痛引发的持续性悲伤，转化为对真相的病理性执着，防御机制表现为对他人的过度控制与攻击性。"
+      },
+      "abc_belief": "如果我能查清儿子死亡的真相，就能弥补当年的失职并获得心理上的救赎，否则我的人生将永远停滞在过去。",
+      "attachment": "焦虑型",
+      "defense": [
+        "否认",
+        "置换",
+        "反向形成"
+      ],
+      "archetype": "英雄/受难者",
+      "emotional_core": "基于未完成事件的认知闭合需求，通过对外部因果关系的强迫性重构，以缓解内在的自我归因负罪感。",
+      "valence": -0.4,
+      "big5": {
+        "openness": 0.3,
+        "conscientiousness": 0.8,
+        "extraversion": 0.4,
+        "agreeableness": 0.3,
+        "neuroticism": 0.7
+      }
+    },
+    "阿宝": {
+      "work": "繁花",
+      "work_type": "drama",
+      "aliases": [
+        "宝总",
+        "阿宝",
+        "宝爷"
+      ],
+      "maps_to": [
+        "意义感建构",
+        "创伤后成长弧",
+        "距离保护模式",
+        "内耗模式",
+        "付出回报失衡感"
+      ],
+      "plutchik": {
+        "primary": [
+          "anticipation",
+          "trust"
+        ],
+        "secondary": [
+          "joy",
+          "sadness"
+        ],
+        "note": "对时代机遇的敏锐捕捉与对旧日情感的深层怀旧并存"
+      },
+      "abc_belief": "只有通过不断的自我重塑与资本博弈，才能在变幻莫测的时代洪流中确立存在的唯一性。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "升华",
+        "压抑"
+      ],
+      "archetype": "英雄/孤胆开拓者",
+      "emotional_core": "底层匮乏感驱动自我重塑，以高风险博弈掩盖情感虚无。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.8,
+        "conscientiousness": 0.9,
+        "extraversion": 0.7,
+        "agreeableness": 0.5,
+        "neuroticism": 0.4
+      }
+    },
+    "直枝理树": {
+      "work": "Little Busters!",
+      "work_type": "visual_novel",
+      "aliases": [
+        "直枝理樹",
+        "Riki Naoe",
+        "理树"
+      ],
+      "maps_to": [
+        "创伤后成长弧",
+        "意义感建构",
+        "拯救者情结",
+        "依赖与独立博弈",
+        "集体归属感依赖"
+      ],
+      "plutchik": {
+        "primary": [
+          "trust",
+          "anticipation",
+          "joy"
+        ],
+        "secondary": [
+          "sadness",
+          "fear"
+        ],
+        "note": "核心情感由对伙伴的深层信任���动，伴随对失去日常的恐惧及对未来的期许。"
+      },
+      "abc_belief": "世界是脆弱的，唯有与伙伴共同创造的记忆与羁绊，能支撑个体跨越绝望的循环。",
+      "attachment": "焦虑型",
+      "defense": [
+        "合理化",
+        "反向形成",
+        "压抑"
+      ],
+      "archetype": "英雄/探寻者",
+      "emotional_core": "亲历丧亲创伤，通过构建封闭式集体羁绊防御虚无。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.75,
+        "conscientiousness": 0.65,
+        "extraversion": 0.4,
+        "agreeableness": 0.9,
+        "neuroticism": 0.7
+      }
+    },
+    "天野远子": {
+      "work": "文学少女",
+      "work_type": "visual_novel",
+      "aliases": [
+        "文学少女",
+        "远子学姐",
+        "吃书的妖怪"
+      ],
+      "maps_to": [
+        "依恋创伤",
+        "自我同一性危机",
+        "升华机制",
+        "情感代偿",
+        "遗弃焦虑"
+      ],
+      "plutchik": {
+        "primary": [
+          "信任",
+          "喜悦"
+        ],
+        "secondary": [
+          "期待",
+          "恐惧"
+        ],
+        "note": "通过对外部叙事的摄取维持心理稳态，在‘被需要’的期待与‘被遗弃’的恐惧之间循环。"
+      },
+      "abc_belief": "只要我能成为他人故事的见证者与守护者，我就能获得存在的合法性，从而避免被遗弃。",
+      "attachment": "焦虑型",
+      "defense": [
+        "升华 (Sublimation)",
+        "反向形成 (Reaction Formation)",
+        "合理化 (Rationalization)"
+      ],
+      "archetype": "照顾者 (The Caregiver) / 缪斯 (The Muse)",
+      "emotional_core": "个体因早期情感忽视导致的自我价值感缺失，通过内化外部叙事以填补心理空洞并维持自我同一性的代偿性结构。",
+      "valence": 0.6,
+      "big5": {
+        "openness": 0.9,
+        "conscientiousness": 0.7,
+        "extraversion": 0.6,
+        "agreeableness": 0.8,
+        "neuroticism": 0.7
+      }
+    }
+  }
+}

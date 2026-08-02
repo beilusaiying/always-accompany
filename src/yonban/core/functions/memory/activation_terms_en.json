@@ -1,0 +1,144 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "date": "2026-05-05",
+    "source": "NRC-VAD v>0.75 a>0.6 (544 words filtered) + sentiment_en + manual code/work/airp",
+    "note": "英文激活词库 (Step 3). 与 activation_terms.json 同结构, 运行时合并到同 mode 池. cat 名加 _en 后缀避免与中文池冲突. concepts 为英文触发词, term 为概念短语."
+  },
+  "chat": {
+    "emotion:joy_excitement_en": {
+      "joy excitement breakthrough": {
+        "pe": 0.78,
+        "concepts": ["thrilled", "stoked", "pumped", "hyped", "ecstatic", "euphoric", "exhilarated", "elated", "overjoyed", "giddy", "psyched", "buzzing", "lit up", "over the moon", "on cloud nine", "can't wait", "so ready", "freaking out happy", "jubilant", "rapturous"]
+      },
+      "celebration moment": {
+        "pe": 0.7,
+        "concepts": ["yay", "yes!", "let's go", "woohoo", "yippee", "bravo", "we did it", "let's freaking go", "amazing", "incredible", "fantastic", "brilliant", "cheering", "celebration", "festivities"]
+      }
+    },
+    "emotion:achievement_en": {
+      "achievement celebration moment": {
+        "pe": 0.78,
+        "concepts": ["nailed it", "crushed it", "killed it", "smashed it", "aced it", "passed", "got the offer", "got in", "made it", "we shipped", "launched", "deployed", "delivered", "milestone hit", "promotion", "raise", "first try"]
+      },
+      "pride breakthrough": {
+        "pe": 0.7,
+        "concepts": ["so proud", "proud of myself", "earned this", "worked hard for", "finally happened", "paid off", "long road but", "all the prep", "victory lap", "triumphantly"]
+      }
+    },
+    "emotion:daily_low_en": {
+      "daily low mood quiet": {
+        "pe": 0.72,
+        "concepts": ["can't even", "i'm done", "just done", "low-key sad", "kind of empty", "feel invisible", "feel hollow", "going through the motions", "barely keeping up", "just pushing through", "drained", "depleted", "no spark", "feels gray", "everything is meh", "blah day"]
+      },
+      "loneliness quiet ache": {
+        "pe": 0.7,
+        "concepts": ["nobody gets me", "no one understands", "alone in this", "feel alone", "no one to talk to", "drift apart", "left out", "left behind", "missed out", "nobody texted me", "wish someone cared", "outsider", "don't fit in", "isolated"]
+      }
+    },
+    "emotion:frustration_en": {
+      "frustration overload": {
+        "pe": 0.72,
+        "concepts": ["so fed up", "at my limit", "can't take it", "had it up to here", "this is too much", "ugh", "i give up", "what's the point", "why bother", "broken record", "same shit different day", "stuck in a loop", "going nowhere", "spinning my wheels", "infuriating", "maddening"]
+      },
+      "burnout depletion": {
+        "pe": 0.68,
+        "concepts": ["burned out", "running on fumes", "dead inside", "totally cooked", "depleted", "fried", "wiped out", "exhausted to the bone", "can't even think straight", "brain fog", "everything is heavy"]
+      }
+    },
+    "social:sharing_en": {
+      "casual sharing impulse": {
+        "pe": 0.6,
+        "concepts": ["you won't believe", "wait till I tell you", "guess what", "ok so", "story time", "the funniest thing", "i have to tell you", "heard the news", "small win today", "minor flex", "weird thing happened", "random update"]
+      }
+    }
+  },
+  "code": {
+    "architecture:protocol_en": {
+      "websocket realtime channel": {
+        "pe": 0.78,
+        "concepts": ["websocket", "ws connection", "connection upgrade", "handshake", "ping pong heartbeat", "socket.io", "stomp protocol", "subprotocol", "binary frame", "text frame", "close code", "reconnect backoff"]
+      },
+      "server sent events stream": {
+        "pe": 0.72,
+        "concepts": ["sse", "server sent events", "event stream", "event-source", "text/event-stream", "retry interval", "last-event-id", "stream heartbeat"]
+      },
+      "mqtt pubsub broker": {
+        "pe": 0.7,
+        "concepts": ["mqtt", "qos level", "retained message", "topic filter", "wildcard subscribe", "broker", "mosquitto", "paho", "publish subscribe", "pub/sub", "kafka topic", "partition offset", "consumer group", "rebalance", "redis pub/sub", "amqp", "rabbitmq exchange", "dead letter queue", "dlq"]
+      },
+      "delivery semantics guarantees": {
+        "pe": 0.74,
+        "concepts": ["at-least-once delivery", "at-most-once", "exactly-once semantics", "idempotent consumer", "message idempotency", "ordering guarantee", "partition key", "back pressure", "flow control", "circuit breaker", "bulkhead pattern", "retry with backoff", "poison message"]
+      }
+    },
+    "debug:async_en": {
+      "async race condition": {
+        "pe": 0.78,
+        "concepts": ["race condition", "race", "concurrent modification", "data race", "deadlock", "livelock", "starvation", "lock contention", "non-deterministic", "interleaving bug", "happens-before", "memory ordering", "stale read"]
+      },
+      "event loop block": {
+        "pe": 0.72,
+        "concepts": ["event loop blocking", "event loop starvation", "microtask queue", "macrotask", "long task", "main thread blocked", "promise unhandled", "promise.race", "settled later", "tick boundary", "i/o starved"]
+      }
+    },
+    "debug:infra_en": {
+      "container runtime crash": {
+        "pe": 0.7,
+        "concepts": ["oom kill", "out of memory", "container crash loop", "crashloopbackoff", "evicted", "node not ready", "imagepullbackoff", "readiness probe failed", "liveness probe failed", "throttled cpu", "noisy neighbor", "disk pressure", "memory pressure"]
+      }
+    }
+  },
+  "work": {
+    "team:delivery_en": {
+      "missed deadlines team friction": {
+        "pe": 0.78,
+        "concepts": ["missing deadlines", "deadline slipped", "behind schedule", "behind on the milestone", "sprint blowout", "velocity drop", "burndown stalled", "scope creep reality", "over-committed", "capacity crunch", "resource contention", "blocked dependency", "critical path slip", "hand-off delay"]
+      },
+      "ownership accountability gap": {
+        "pe": 0.7,
+        "concepts": ["unclear ownership", "no DRI", "diffusion of responsibility", "everybody and nobody", "hand-off chaos", "accountability gap", "raci unclear", "follow-through dropped", "no one picked it up", "stalled in handoff"]
+      }
+    },
+    "system_design:en": {
+      "legacy migration architecture": {
+        "pe": 0.72,
+        "concepts": ["monolith to microservices", "strangler fig pattern", "big ball of mud", "technical debt paydown", "legacy modernization", "platform migration", "evolutionary architecture", "architecture fitness function", "service decomposition", "bounded context", "domain-driven", "anti-corruption layer", "branch by abstraction"]
+      }
+    },
+    "team:culture_en": {
+      "psychological safety culture": {
+        "pe": 0.72,
+        "concepts": ["psychological safety", "blame culture", "fear of speaking up", "speaking truth to power", "blameless postmortem", "five whys", "learning org", "growth mindset team", "feedback culture", "praise in public criticize in private", "high trust low ego"]
+      }
+    }
+  },
+  "airp": {
+    "poetry:occasion_en": {
+      "tribute and dedication poem": {
+        "pe": 0.8,
+        "concepts": ["tribute poem", "dedication poem", "ode to mother", "ode to father", "poem as gift", "occasional poem", "thank you poem", "praise poem", "encomium", "panegyric", "celebratory verse", "anniversary poem"]
+      },
+      "elegy mourning poem": {
+        "pe": 0.78,
+        "concepts": ["elegy", "elegiac", "lament", "mourning poem", "in memoriam", "eulogy verse", "requiem", "threnody", "loss poem", "remembrance verse", "absence poem"]
+      },
+      "ode and birthday verse": {
+        "pe": 0.7,
+        "concepts": ["birthday ode", "birthday verse", "wedding poem", "epithalamium", "farewell poem", "valediction", "love poem for someone", "letter poem", "epistolary verse", "blessing poem"]
+      }
+    },
+    "worldbuilding:genre_en": {
+      "genre worldbuilding tropes": {
+        "pe": 0.7,
+        "concepts": ["grimdark", "noblebright", "solarpunk", "hopepunk", "biopunk", "dieselpunk", "cyberpunk dystopia", "post-apocalyptic", "low fantasy", "high fantasy", "magical realism", "weird fiction", "new weird", "soft scifi", "hard scifi", "space opera", "sword and sorcery"]
+      }
+    },
+    "narrative:subgenre_en": {
+      "cozy and dark subgenre": {
+        "pe": 0.68,
+        "concepts": ["cozy mystery", "cottagecore", "dark academia", "light academia", "fairy core", "gothic romance", "regency romance", "enemies to lovers", "slow burn", "found family", "chosen family", "morally gray", "anti-hero arc", "redemption arc"]
+      }
+    }
+  }
+}

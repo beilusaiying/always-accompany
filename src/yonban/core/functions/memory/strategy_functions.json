@@ -1,0 +1,97 @@
+{
+  "_meta": {
+    "type": "strategy_function",
+    "desc": "ESConv策略→对话阶段→术语提权",
+    "updated": "2026-05-01T16:01:47.406Z"
+  },
+  "question_probe": {
+    "stage": [
+      "zero",
+      "early"
+    ],
+    "terms": [
+      "感情求建议",
+      "确认一下理解对不对",
+      "口语化确认",
+      "情感确认需求",
+      "无人倾听感"
+    ],
+    "trigger_words": [
+      "怎么办",
+      "怎么想",
+      "为什么",
+      "什么感觉",
+      "怎么回事",
+      "怎么说",
+      "why",
+      "how",
+      "what happened",
+      "?",
+      "？"
+    ]
+  },
+  "restatement": {
+    "stage": [
+      "early",
+      "mid"
+    ],
+    "terms": [
+      "确认一下理解对不对",
+      "口语化确认",
+      "正向共情共鸣",
+      "社会支持缓冲"
+    ],
+    "trigger_words": [
+      "就是说",
+      "你的意思是",
+      "所以",
+      "也就是",
+      "so you mean",
+      "in other words"
+    ]
+  },
+  "affirmation": {
+    "stage": [
+      "mid",
+      "late"
+    ],
+    "terms": [
+      "无条件积极关注感",
+      "情感确认需求",
+      "自我效能确认",
+      "陪伴满足感",
+      "安全感确认",
+      "AI陪伴治愈时刻"
+    ],
+    "trigger_words": [
+      "你做的对",
+      "很棒",
+      "不容易",
+      "辛苦了",
+      "理解你",
+      "that makes sense",
+      "I understand",
+      "you did well"
+    ]
+  },
+  "suggestion": {
+    "stage": [
+      "late"
+    ],
+    "terms": [
+      "感情求建议",
+      "确认一下理解对不对",
+      "社会支持缓冲"
+    ],
+    "trigger_words": [
+      "建议",
+      "试试",
+      "或许可以",
+      "不如",
+      "要不",
+      "maybe try",
+      "how about",
+      "you could"
+    ]
+  }
+}

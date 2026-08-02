@@ -1,0 +1,4 @@
+jieba>=0.42
+fastapi>=0.110
+uvicorn>=0.29
+numpy>=1.26

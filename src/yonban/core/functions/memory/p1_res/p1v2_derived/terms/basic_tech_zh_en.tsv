@@ -1,0 +1,291 @@
+代码	code
+程序	program
+函数	function
+变量	variable
+类型	type
+接口	interface
+类	class
+对象	object
+方法	method
+属性	property
+参数	parameter
+返回	return
+循环	loop
+条件	condition
+数组	array
+字符串	string
+数字	number
+布尔	boolean
+空值	null
+异常	exception
+错误	error
+调试	debug
+测试	test
+编译	compile
+运行	run
+执行	execute
+输入	input
+输出	output
+模块	module
+包	package
+库	library
+框架	framework
+依赖	dependency
+版本	version
+分支	branch
+合并	merge
+提交	commit
+回滚	rollback
+部署	deploy
+前端	frontend
+后端	backend
+页面	page
+组件	component
+样式	style
+布局	layout
+响应式	responsive
+路由	route
+请求	request
+响应	response
+渲染	render
+状态	state
+事件	event
+回调	callback
+异步	async
+同步	sync
+缓存	cache
+存储	storage
+数据库	database
+表格	table
+查询	query
+索引	index
+记录	record
+字段	field
+配置	configuration
+环境	environment
+服务	service
+服务器	server
+客户端	client
+容器	container
+镜像	image
+日志	log
+监控	monitor
+性能	performance
+优化	optimize
+安全	security
+权限	permission
+认证	authentication
+授权	authorization
+加密	encryption
+协议	protocol
+端口	port
+域名	domain
+证书	certificate
+报错	error
+崩溃	crash
+卡住	stuck
+超时	timeout
+泄漏	leak
+死锁	deadlock
+并发	concurrency
+线程	thread
+进程	process
+内存	memory
+磁盘	disk
+网络	network
+带宽	bandwidth
+延迟	latency
+吞吐	throughput
+负载	load
+扩展	scale
+重构	refactor
+迭代	iteration
+需求	requirement
+功能	feature
+插件	plugin
+模板	template
+脚本	script
+命令	command
+终端	terminal
+编辑器	editor
+构建	build
+打包	bundle
+抽象层	abstraction layer
+活动目录	active directory
+适配器	adapter
+绑定	binding
+代理	agent
+聚合	aggregate
+模拟	analog
+动画	animation
+反模式	anti-pattern
+构建物	artifact
+程序集	assembly
+关联数组	associative array
+原子操作	atomic operation
+原子性	atomicity
+身份验证	authentication
+自动化	automation
+独立性	autonomy
+可用性	availability
+行为	behavior
+大数据	big data
+二进制	binary
+比特	bit
+瓶颈	bottleneck
+装箱	boxing
+断点	breakpoint
+缺陷	bug
+字节	byte
+调用堆栈	call stack
+回车	carriage return
+单元	unit
+字符	character
+签入	check in
+签出	check out
+校验和	checksum
+芯片	chip
+云计算	cloud computing
+云服务	cloud service
+集群	cluster
+代码味道	code smell
+通信	communication
+社区	community
+兼容性	compatibility
+一致性	consistency
+构造函数	constructor
+内容	content
+上下文	context
+持续集成	continuous integration
+贡献	contribute
+约定	convention
+转换	convert
+故障转储	crash dump
+凭证	credential
+跨域	cross domain
+跨浏览器	cross-browser
+跨平台	cross-platform
+密码术	cryptography
+光标	cursor
+圈复杂度	cyclomatic complexity
+仪表盘	dashboard
+数据层	data layer
+数据挖掘	data mining
+继承	inheritance
+设计模式	design pattern
+设备	device
+诊断	diagnostics
+有向图	directed graph
+指令	directive
+持久性	durability
+端点	endpoint
+实体	entity
+异常处理	exception handling
+可扩展性	extensibility
+容错转移	failover
+微调	fine-tuning
+第一方	first-party
+外键	foreign key
+转发	forward
+免费	free
+全双工	full-duplex
+泛化	generalization
+生成器	generator
+全局状态	global state
+句柄	handle
+钩子	hook
+水平缩放	horizontal scale
+宿主	host
+混合云	hybrid cloud
+幂等性	idempotence
+映像	image
+实例	instance
+实例化	instantiation
+隔离性	isolation
+可迭代	iterable
+迭代器	iterator
+作业	job
+密钥	key
+大型	large
+分层架构	layered architecture
+遗留系统	legacy system
+许可证	license
+生命周期	lifetime
+链接	link
+松散耦合	loose coupling
+主机	mainframe
+可维护性	maintainability
+清单	manifest
+映射	map
+元数据	metadata
+元编程	metaprogramming
+中间件	middleware
+多租户	multitenancy
+节点	node
+规格化	normalize
+通知	notification
+混淆器	obfuscator
+编排	orchestration
+重写	overriding
+概览	overview
+分区	partition
+模式	pattern
+轮询	polling
+多态	polymorphism
+表现层	presentation layer
+主存储	primary storage
+私有云	private cloud
+探测器	probe
+生产者	producer
+概念验证	proof of concept
+原型	prototype
+公有云	public cloud
+推送	push
+队列	queue
+配额	quota
+机架	rack
+递归	recursion
+冗余	redundancy
+地域	region
+中继	relay
+可靠性	reliability
+报表	reporting
+解析	parse
+角色	role
+路由器	router
+缩放性	scalability
+缩放	scale
+可序列化	serializable
+服务总线	service bus
+设置	setting
+登录	sign in
+注销	sign out
+签名	signature
+快照	snapshot
+无状态	stateless
+结构	structure
+子网	subnet
+订阅	subscription
+符号表	symbol table
+语法糖	syntactic sugar
+租户	tenant
+线程池	thread pool
+吞吐量	throughput
+时间戳	timestamp
+令牌	token
+主题	topic
+拓扑结构	topology
+事务	transaction
+瞬时错误	transient error
+拆箱	unboxing
+工作单元	unit of work
+单元测试	unit test
+垂直缩放	vertical scale
+虚拟机	virtual machine
+虚拟网络	virtual network
+网络爬虫	web scraping
+网络服务	web service
+网站	website
+工作流	workflow
+工作组	workgroup
+区域	zone

@@ -1,0 +1,356 @@
+abbr	full_en
+abbv	Full Name
+aadd	Active Admin Driven Development
+ac	Acceptance Criteria
+acid	Atomicity Consistency Isolation Durability
+ack	Acknowledgement
+acl	Access Control List
+acl	Anti Corruption Layer
+ad	Active Directory
+ad	Architectural Decision
+ad	Architectural Design
+adl	Architecture Decision Log
+adp	Acyclic Dependencies Principle
+adr	Action Domain Responder
+adr	Architectural Decision Records
+aes	Advanced Encryption Standard
+ai	Artificial Intelligence
+akm	Architectural Knowledge Management
+alm	Application Lifecycle Management
+aml	Anti Money Laundering
+amqp	Advanced Message Queuing Protocol
+aof	Append Only File
+api	Application Programming Interface
+apm	Agile Project Management
+apm	Application Performance Monitoring
+apm	Application Portfolio Management
+ascii	American Standard Code For Information Interchange
+asd	Adaptive Software Development
+asp	Application Service Provider
+asr	Architecturally Significant Requirement
+atdd	Acceptance Test Driven Development
+aui	Attentive User Interface
+aup	Agile Unified Process
+aws	Amazon Web Services
+ban	Body Area Network
+base	Basically Available Soft State Eventually Consistent
+bc	Business Continuity
+bcp	Business Continuity Planning
+bdd	Behavior Driven Development
+bduf	Big Design Up Front
+bff	Backend For Frontend
+bgdd	Bug Driven Development
+bi	Business Intelligence
+blob	Binary Large Object
+bson	Binary JSON
+ca	Certificate Authority
+caas	Container As A Service
+can	Campus Area Network
+cap	Consistency Availability Partition Tolerance
+case	Computer Aided Software Engineering
+cbse	Component Based Software Engineering
+ccp	Common Closure Principle
+cdc	Change Data Capture
+cdd	Configuration Driven Development
+cdn	Content Delivery Network
+cep	Complex Event Processing
+cfd	Control Flow Diagram
+cfd	Cumulative Flow Diagram
+cl	ChangeList
+cli	Command Line Interface
+clob	Character Large Object
+clt	Command Line Tools
+cmp	Certificate Management Protocol
+cms	Content Management System
+co	Commitment Ordering
+cps	Connections Per Second
+cpu	Central Processing Unit
+cqrs	Command Query Responsibility Segregation
+cqs	Command Query Separation
+crm	Customer Relationship Management
+crp	Common Reuse Principle
+crud	Create Read Update Delete
+csa	Cloud Security Alliance
+csp	Cloud Service Provider
+css	Cascading Style Sheets
+csv	Comma Separated Values
+ctdd	Continuous Test Driven Development
+cui	Conversational User Interface
+daas	Data As A Service
+daas	Desktop As A Service
+dad	Disciplined Agile Delivery
+dal	Data Access Layer
+dao	Data Access Object
+db	Database
+dba	Database Administrator
+dbaas	Database As A Service
+dbms	Database Management System
+dc	Data Center
+dci	Data Center Interconnect
+dcl	Data Control Language
+ddd	Domain Driven Design
+ddl	Data Definition Language
+ddos	Distributed Denial Of Service
+des	Data Encryption Standard
+dfd	Data Flow Diagram
+dhcp	Dynamic Host Configuration Protocol
+dht	Distributed Hash Table
+dm	Dimensional Modeling
+dml	Data Manipulation Language
+dns	Domain Name System
+dom	Document Object Model
+dora	DevOps Research Assessment
+dql	Database Query Language
+dr	Disaster Recovery
+drp	Disaster Recovery Plan
+dry	Dont Repeat Yourself
+dsdm	Dynamic Systems Development Method
+dsv	Delimiter Separated Values
+dtsttcpw	Do The Simplest Thing That Could Possibly Work
+dut	Device Under Test
+dw	Data Warehouse
+dwim	Do What I Mean
+eai	Enterprise Application Integration
+ec	Eventual Consistency
+ecb	Entity Control Boundary
+eco	Extended Commitment Ordering
+eda	Event Driven Architecture
+edh	Enterprise Data Hub
+elk	Elasticsearch Logstash Kibana
+elt	Extract Load Transform
+emv	Europay Mastercard Visa
+er	Entity Relationship
+erd	Entity Relationship Diagram
+erp	Enterprise Resource Planning
+es	Event Sourcing
+esb	Enterprise Service Bus
+esp	Event Stream Processing
+etl	Extract Transform Load
+faas	Function As A Service
+facta	Fair Accurate Credit Transactions Act
+fat	File Allocation Table
+fdd	Feature Driven Development
+fifo	First In First Out
+fk	Foreign Key
+fp	Functional Programming
+fsm	Finite State Machine
+ftp	File Transfer Protocol
+fwiw	For What Its Worth
+gan	Global Area Network
+gc	Garbage Collection
+gcp	Google Cloud Platform
+gfs	Google File System
+grasp	General Responsibility Assignment Software Patterns
+gsm	Goals Signals Measures
+gui	Graphical User Interface
+han	Home Area Network
+hdd	Hard Disk Drive
+hdfs	Hadoop Distributed File System
+hipaa	Health Insurance Portability Accountability Act
+hmvc	Hierarchical Model View Controller
+hood	Hierarchic Object Oriented Design
+hpc	High Performance Computing
+hsm	Hardware Security Module
+html	HyperText Markup Language
+http	Hypertext Transfer Protocol
+https	Hypertext Transfer Protocol Secure
+iaas	Infrastructure As A Service
+icn	Information Centric Networking
+ide	Integrated Development Environment
+idl	Interface Definition Language
+imap	Internet Message Access Protocol
+ip	Internet Protocol
+ipc	Inter Process Communication
+isp	Internet Service Provider
+isv	Independent Software Vendor
+jad	Joint Application Design
+jdbc	Java Database Connectivity
+jdk	Java Development Kit
+jms	Java Message Service
+jre	Java Runtime Environment
+json	JavaScript Object Notation
+jvm	Java Virtual Machine
+kiss	Keep It Simple Stupid
+kms	Key Management Service
+kpi	Key Performance Indicator
+lamp	Linux Apache MySQL PHP
+lan	Local Area Network
+lb	Load Balancer
+lcme	Linux Yaws CouchDB Erlang
+ldap	Lightweight Directory Access Protocol
+lifo	Last In First Out
+lms	Learning Management System
+lyme	Linux Yaws Mnesia Erlang
+man	Metropolitan Area Network
+mbaas	Mobile Backend As A Service
+mdm	Master Data Management
+mean	MongoDB Express.js AngularJS Nodejs
+mern	MongoDB Expressjs React Nodejs
+mevn	MongoDB Expressjs VueJS Nodejs
+mfa	Multi Factor Authentication
+mft	Managed File Transfer
+ml	Machine Learning
+mom	Message Oriented Middleware
+mq	Message Queue
+mtbf	Mean Time Before Failure
+mtta	Mean Time To Acknowledge
+mttf	Mean Time To Failure
+mva	Model View Adapter
+mvc	Model View Controller
+mvcc	Multi Version Concurrency Control
+mvco	Multi Version Commitment Ordering
+mvno	Mobile Virtual Network Operator
+mvp	Model View Presenter
+mvvm	Model View View Model
+mwn	Municipal Wireless Network
+naas	Network As A Service
+nack	Negative Acknowledgement
+nlp	Natural Language Processing
+ntfs	New Technology File System
+oauth	Open Authorization
+occ	Optimistic Concurrency Control
+oco	Optimistic Commitment Ordering
+odbc	Open Database Connectivity
+ods	Operational Data Store
+okr	Objectives Key Results
+olap	Online Analytical Processing
+olep	Online Event Processing
+oltp	Online Transaction Processing
+omt	Object Modeling Technique
+ooa	Object Oriented Analysis
+ood	Object Oriented Design
+oop	Object Oriented Programming
+ooui	Object Oriented User Interface
+openop	Open Unified Process
+orb	Object Request Broker
+orm	Object Relational Mapping
+osi	Open Systems Interconnection
+oss	Open Source Software
+otp	One Time Password
+p2p	Peer To Peer
+paas	Platform As A Service
+pac	Presentation Abstraction Control
+pan	Personal Area Network
+pbi	Product Backlog Item
+pcc	Pessimistic Concurrency Control
+pci	Payment Card Industry
+pin	Personal Identification Number
+pk	Primary Key
+pki	Public Key Infrastructure
+poc	Proof Of Concept
+pojo	Plain Old Java Object
+pola	Principle Of Least Astonishment
+pov	Proof Of Value
+protobuf	Protocol Buffers
+psp	Payment Service Provider
+qa	Quality Assurance
+qbr	Quarterly Business Review
+qc	Quality Control
+qps	Queries Per Second
+qtr	Quarterly Tech Review
+r&d	Research And Development
+ra	Registration Authority
+rad	Rapid Application Development
+raid	Redundant Array Of Inexpensive Disks
+ram	Random Access Memory
+ran	Religious Area Network
+rca	Root Cause Analysis
+rdbms	Relational Database Management System
+re	Release Engineering
+rep	Reuse Release Equivalence Principle
+rero	Release Early Release Often
+rest	Representational State Transfer
+rfc	Remote Function Call
+rfc	Request For Comments
+rom	Read Only Memory
+rpc	Remote Procedure Call
+rpo	Recovery Point Objective
+rps	Requests Per Second
+rsa	Rivest Shamir Adleman
+rt	Response Time
+rto	Recovery Time Objective
+rup	Rational Unified Process
+s2pl	Strict 2 Phase Locking
+saas	Software As A Service
+safe	Scaled Agile Framework
+san	Storage Area Network
+sap	Stable Abstractions Principle
+sba	Space Based Architecture
+sca	Service Component Architecture
+scm	Software Configuration Management
+scm	Supply Chain Management
+sco	Strict Commitment Ordering
+sdk	Software Development Kits
+sdlc	Systems Development Life Cycle
+sdn	Software Defined Networking
+sdp	Stable Dependencies Principle
+secaas	Security As A Service
+seo	Search Engine Optimization
+sftp	SSH File Transfer Protocol
+sla	Service Level Agreement
+sli	Service Level Indicator
+slo	Service Level Objective
+smart	Specific Measurable Achievable Relevant Time bound
+sms	Short Message Service
+smtp	Simple Mail Transfer Protocol
+sn	Shared Nothing
+soa	Service Oriented Architecture
+soap	Simple Object Access Protocol
+sop	Standard Operating Procedure
+spof	Single Point Of Failure
+sqa	Software Quality Assurance
+sql	Structured Query Language
+sre	Site Reliability Engineering
+srlc	Software Release Life Cycle
+ss2pl	Strong Strict 2 Phase Locking
+ssadm	Structured Systems Analysis Design Method
+ssd	Solid State Drive
+ssd	System Sequence Diagram
+ssh	Secure Shell
+ssl	Secure Sockets Layer
+sso	Single Sign On
+ssot	Single Source Of Truth
+sut	System Under Test
+svot	Single Version Of Truth
+tcc	Try Confirm Cancel
+tcp	Transmission Control Protocol
+tdd	Test Driven Development
+tds	Transaction Data Store
+tls	Transport Layer Security
+tms	Translation Management System
+tmtowtdi	Theres More Than One Way To Do It
+to	Timestamp Ordering
+totp	Time Based One Time Password
+tps	Transactions Per Second
+tsv	Tab Separated Values
+ttl	Time To Live
+ttp	Trusted Third Party
+tui	Tangible User Interface
+uap	Uniform Access Principle
+uat	User Acceptance Testing
+ucaas	Unified Communication As A Service
+ucd	User Centered Design
+uddi	Universal Description Discovery Integration
+udp	User Datagram Protocol
+ui	User Interface
+uml	Unified Modeling Language
+uri	Uniform Resource Identifier
+url	Uniform Resource Locator
+usd	Unified Software Development
+utc	Coordinated Universal Time
+uut	Unit Under Test
+ux	User Experience
+va	Validation Authority
+vdd	Value Driven Design
+vlan	Virtual LAN
+vpn	Virtual Private Network
+wan	Wide Area Network
+wban	Wireless BAN
+wlan	Wireless LAN
+ws	Web Service
+wsdl	Web Service Description Language
+xml	Extensible Markup Language
+xp	Extreme Programming
+yagni	You Arent Gonna Need It
+yaml	YAML Aint Markup Language
+ztn	Zero Trust Network

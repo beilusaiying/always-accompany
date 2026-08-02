@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DERIVED } from './resources2.mjs';
 
-const LEXBASE = 'D:\\shajiuguan\\p1shiyanshi\\09_P1自驱动_专项\\06_资源库_词库\\P1资源库';
+const LEXBASE = '<local-dev-path>';
 export const PATHS = {
   stopwordsCN: [
     `${LEXBASE}\\cn_stopwords\\cn_stopwords.txt`,

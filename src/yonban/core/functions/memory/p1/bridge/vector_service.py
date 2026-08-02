@@ -16,7 +16,7 @@ _wn_err = None
 DERIVED = os.environ.get("P1V2_DERIVED") or (
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "p1_res", "p1v2_derived")
     if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "p1_res", "p1v2_derived"))
-    else r"D:\shajiuguan\自驱动召回\resources_derived")
+    else r"<local-dev-path>")
 
 
 def _ensure_nb():

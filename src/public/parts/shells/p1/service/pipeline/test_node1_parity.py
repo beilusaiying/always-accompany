@@ -3,7 +3,7 @@
 #
 # 功能链：real_dialog_30cases.json 30 条输入 → tokenize_node1(input)（不带 context,
 #         JS 对照侧须同样直调 tokenizeNode1(input) 单参）→ 每条 words/权重/截断态
-#         → parity_node1_py.json 落 D:\shajiuguan\p1shiyanshi\py_parity\ 供主 AI 与 JS 双跑 diff
+#         → parity_node1_py.json 落 <local-dev-path> 供主 AI 与 JS 双跑 diff
 # why：设计 MD 保真规则 2——jieba(Python) 与 jieba-wasm 词典有差异, 用双跑对照容忍度报告
 #      定性（diff 逐条亲读）, 不为对齐 hack。
 # 运行：python test_node1_parity.py [cases_json] [out_json]
@@ -18,8 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from p1_node1_tokenize import jieba_available, tokenize_node1  # noqa: E402
 
-DEFAULT_CASES = Path(r"D:\shajiuguan\p1shiyanshi\eval_data\real_dialog_30cases.json")
-DEFAULT_OUT = Path(r"D:\shajiuguan\p1shiyanshi\py_parity\parity_node1_py.json")
+DEFAULT_CASES = Path(r"<local-dev-path>")
+DEFAULT_OUT = Path(r"<local-dev-path>parity_node1_py.json")
 
 
 def main() -> int:

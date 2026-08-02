@@ -31,7 +31,7 @@ if str(_SERVICE_DIR) not in sys.path:
 from p1_config import get_config  # noqa: E402  (service/p1_config.py, 主AI已落盘)
 
 # 旧运行位（历史兼容，同 p1_resdir.mjs CANDIDATES 第三候选）
-_LEGACY_RES_DIR = r"D:\shajiuguan\beilu-与你之诗\beilu的工作日志和项目日志\前端计划\P1资源库"
+_LEGACY_RES_DIR = r"<local-dev-path>"
 
 
 def get_memory_lib_dir() -> Path:

@@ -7,7 +7,7 @@
   4. run_pipeline(input, history, "code", user_ctx, {"recall": {"recallOnly": True, "dataRecall": True}})
      ——与 runner L110 完全同参；另跑一轮 nbRerank=True 以拉通 NB300 subset 复核链（runner 默认不开
      nbRerank，此轮单独标记 nb_rerank_pass，不与基线混淆）。
-  5. 结果落 D:\\shajiuguan\\p1shiyanshi\\py_parity\\parity_node0_py.json。
+  5. 结果落 <local-dev-path>
 只读红线：002 真实记忆（含 _global）只读——本脚本仅 open(...,"r")，零写入记忆目录。
 分身A 模块缺席时自动注入 tests/ 下 *_stub（sys.modules 顶名），_meta.stubbed 记录哪些层是 stub
 ——stub 态的 parity 数值只验证分身B 层自身可跑通+形状正确，JS↔Py 全量等价对照待 A 落盘后由主 AI 跑。
@@ -26,9 +26,9 @@ for p in (str(_PIPELINE_DIR), str(_PIPELINE_DIR.parent)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-CASES_FILE = Path(r"D:\shajiuguan\p1shiyanshi\eval_data\recall_causal_4mode_private"
+CASES_FILE = Path(r"<local-dev-path>"
                   r"\2026-07-29T13-47-46-988Z\private\ide\cases.private.json")
-OUT_DIR = Path(r"D:\shajiuguan\p1shiyanshi\py_parity")
+OUT_DIR = Path(r"<local-dev-path>")
 OUT_FILE = OUT_DIR / "parity_node0_py.json"
 CASE_LIMIT = 30
 MIN_INPUT_LEN = 5  # runner 同款

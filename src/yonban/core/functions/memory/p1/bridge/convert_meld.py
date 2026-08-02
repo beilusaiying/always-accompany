@@ -4,8 +4,8 @@ import sys, io, json
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-SRC = r"D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\meld_sch_concreteness\Concretenss Ratings of 9877 Two Character Chinese Words.xlsx"
-DST = r"D:\shajiuguan\自驱动召回\resources_derived\meld_sch_concreteness.tsv"
+SRC = r"<local-dev-path> Ratings of 9877 Two Character Chinese Words.xlsx"
+DST = r"<local-dev-path>"
 
 import openpyxl
 

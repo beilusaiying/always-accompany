@@ -4,8 +4,8 @@ import io, sys, csv, glob, os, re
 from collections import defaultdict
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-SRC_DIR = r"D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\EmoBank"
-OUT = r"D:\shajiuguan\自驱动召回\resources_derived\emobank_word_vad.tsv"
+SRC_DIR = r"<local-dev-path>"
+OUT = r"<local-dev-path>"
 
 cands = [f for f in glob.glob(os.path.join(SRC_DIR, "**", "*.csv"), recursive=True)
          if ".git" not in f]

@@ -5,8 +5,8 @@
 import io, sys, glob, os
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-BASE = r"D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库"
-OUT = r"D:\shajiuguan\自驱动召回\resources_derived"
+BASE = r"<local-dev-path>"
+OUT = r"<local-dev-path>"
 
 
 def emit(out, word, freq):

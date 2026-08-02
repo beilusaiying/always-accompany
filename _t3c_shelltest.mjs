@@ -1,0 +1,10 @@
+import emptyP from "./src/public/parts/serviceGenerators/AI/empty/main.mjs";
+import fallbackP from "./src/public/parts/serviceGenerators/AI/fallback/main.mjs";
+import { applyModelParams } from "./src/public/parts/serviceGenerators/AI/_shared/applyModelParams.mjs";
+import { makeAbortError } from "./src/public/parts/serviceGenerators/AI/_shared/abort.mjs";
+import { stripReasoningTags } from "./src/public/parts/serviceGenerators/AI/proxy/lib/messageTransform.mjs";
+console.log("empty shell -> default obj:", typeof emptyP === "object", "| GetSource fn:", typeof emptyP?.interfaces?.serviceGenerator?.GetSource);
+console.log("fallback shell -> GetConfigTemplate fn:", typeof fallbackP?.interfaces?.serviceGenerator?.GetConfigTemplate);
+console.log("applyModelParams named export:", typeof applyModelParams, "| makeAbortError:", typeof makeAbortError, "| stripReasoningTags(via shell):", typeof stripReasoningTags);
+const r = applyModelParams({ max_tokens: 1234 }, { shape: "anthropic", model: "claude-x" });
+console.log("applyModelParams via shell ->", JSON.stringify(r));

@@ -49,7 +49,7 @@ _UD_INFO = []
 _DERIVED = _os.environ.get("P1V2_DERIVED") or (
     _os.path.join(_os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived")
     if _os.path.exists(_os.path.join(_os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived"))
-    else r"D:\shajiuguan\自驱动召回\resources_derived")
+    else r"<local-dev-path>")
 for _name, _cond in (("userdict_main.txt", True), ("userdict_domain_full.txt", _os.environ.get("P1_USERDICT_FULL") == "on")):
     _f = _os.path.join(_DERIVED, _name)
     if _cond and _os.path.exists(_f):
@@ -63,7 +63,7 @@ FREQ = jieba.dt.FREQ  # jieba 词典,用于 OOV 判定
 _CND = {}
 _CND_PATH = _os.path.join(_os.path.dirname(__file__), '..', '..', 'p1_res', 'CoreNatureDictionary.txt')
 if not _os.path.exists(_CND_PATH):
-    _CND_PATH = r'D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库\CoreNatureDictionary.txt'
+    _CND_PATH = r'<local-dev-path>'
 if _os.path.exists(_CND_PATH):
     for _line in open(_CND_PATH, encoding='utf-8', errors='replace'):
         _parts = _line.strip().split('\t')

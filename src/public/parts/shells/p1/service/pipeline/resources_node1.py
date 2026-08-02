@@ -32,7 +32,7 @@ _THIS_DIR = Path(__file__).resolve().parent
 # ── MEMORY_DIR 解析（设计MD："路径基于可配置的 MEMORY_DIR，默认指向现 JS memory 目录"） ──
 # 候选序：env P1_PY_MEMORY_DIR > 仓库相对推导(pipeline/service/p1/shells/parts/public/src/<repo>)
 #         > 现 JS memory 目录绝对路径兜底（目录整体外迁时仍可跑）。
-_JS_MEMORY_ABS = Path(r"D:\shajiuguan\beilu-与你之诗\beilu-always-accompany\src\yonban\core\functions\memory")
+_JS_MEMORY_ABS = Path(r"<local-dev-path>")
 
 
 def _derive_repo_root() -> Optional[Path]:
@@ -62,7 +62,7 @@ _RES_CANDIDATES: list[Path] = [
     p for p in (
         Path(os.environ["P1_RESOURCE_DIR"]) if os.environ.get("P1_RESOURCE_DIR") else None,
         _RES_DEFAULT,
-        Path(r"D:\shajiuguan\beilu-与你之诗\beilu的工作日志和项目日志\前端计划\P1资源库"),  # 旧运行位（历史兼容）
+        Path(r"<local-dev-path>"),  # 旧运行位（历史兼容）
     ) if p is not None
 ]
 _res_dir: Optional[Path] = None

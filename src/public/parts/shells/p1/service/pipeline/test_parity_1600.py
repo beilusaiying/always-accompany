@@ -9,9 +9,9 @@
   - 汇总键与 JS runner stats.summary 逐键同名，便于直接对照
     eval_data\\full_recall_causal_4mode_result_2026-07-31.json / work_zh_work_recall_causal_result_2026-07-31.json。
 输出：
-  - D:\\shajiuguan\\p1shiyanshi\\py_parity\\full_1600_py_result.json     汇总（每 mode 完成即落盘 partial）
-  - D:\\shajiuguan\\p1shiyanshi\\py_parity\\full_1600_py_percase.json    逐 case 紧凑行（含 recordId/内容前缀，供 30 条深对照）
-  - D:\\shajiuguan\\p1shiyanshi\\py_parity\\parity_1600_compare.json     与 JS 基线逐指标对照表
+  - <local-dev-path>     汇总（每 mode 完成即落盘 partial）
+  - <local-dev-path>    逐 case 紧凑行（含 recordId/内容前缀，供 30 条深对照）
+  - <local-dev-path>     与 JS 基线逐指标对照表
 红线：002 记忆只读；每 mode 结束 clear_data_recall_cache()（纯测试进程内存卫生，索引按 mode 分键互不影响结果）。
 """
 from __future__ import annotations
@@ -29,12 +29,12 @@ for p in (str(_PIPELINE_DIR), str(_PIPELINE_DIR.parent)):
 from p1_pipeline_py import run_pipeline  # noqa: E402
 from p1_node0_data_recall import clear_data_recall_cache  # noqa: E402
 
-EVAL_ROOT = Path(r"D:\shajiuguan\p1shiyanshi\eval_data\recall_causal_4mode_private")
+EVAL_ROOT = Path(r"<local-dev-path>")
 TAG_A = "2026-07-29T13-47-46-988Z"
 TAG_B = "2026-07-30T18-05-31-600Z"  # work 中文库
-OUT_DIR = Path(r"D:\shajiuguan\p1shiyanshi\py_parity")
-JS_BASE_4MODE = Path(r"D:\shajiuguan\p1shiyanshi\eval_data\full_recall_causal_4mode_result_2026-07-31.json")
-JS_BASE_WORKZH = Path(r"D:\shajiuguan\p1shiyanshi\eval_data\work_zh_work_recall_causal_result_2026-07-31.json")
+OUT_DIR = Path(r"<local-dev-path>")
+JS_BASE_4MODE = Path(r"<local-dev-path>")
+JS_BASE_WORKZH = Path(r"<local-dev-path>")
 MIN_INPUT_LEN = 5
 
 # JS runner ALL_MODE_MAP 同序 chat→ide→work→airp

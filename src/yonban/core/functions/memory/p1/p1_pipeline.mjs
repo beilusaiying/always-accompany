@@ -5,7 +5,7 @@
 //   getPromptHandler 把 p1_act 包成 <p1_act> XML 注入 depthInjections
 //
 // 新管线: node0召回预处理→node1分词三层过滤→node2发散(可插拔机制汇池)→node3打分→node4混合排序
-// 设计: D:\shajiuguan\自驱动召回\P1_新管线设计_算法标注版.md
+// 设计: <local-dev-path>
 // 白盒原则(凛倾2026-08-01): 任意一条输入可打全链因果报告(opts.whitebox=true)
 
 import { runPipeline as corePipeline, renderFullWhitebox } from './pipeline.mjs';

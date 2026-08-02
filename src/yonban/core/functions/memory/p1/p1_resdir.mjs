@@ -20,7 +20,7 @@ const _DEFAULT = path.join(__dirname, "..", "p1_res");   // 随代码（与 NB30
 const CANDIDATES = [
   process.env.P1_RESOURCE_DIR,                            // 显式覆盖最高优先
   _DEFAULT,
-  String.raw`D:\shajiuguan\beilu-与你之诗\beilu的工作日志和项目日志\前端计划\P1资源库`, // 旧运行位（历史兼容）
+  String.raw`<local-dev-path>, // 旧运行位（历史兼容）
 ].filter(Boolean);
 
 let _resDir;

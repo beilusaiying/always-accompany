@@ -8,12 +8,12 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const LEXBASE = 'D:\\shajiuguan\\p1shiyanshi\\09_P1自驱动_专项\\06_资源库_词库\\P1资源库';
+const LEXBASE = '<local-dev-path>';
 // 派生词库收口: env P1V2_DERIVED > 插件资源位 p1_res\p1v2_derived > 旧生成位置(回退)
 const _dc = [
   process.env.P1V2_DERIVED,
   join(dirname(fileURLToPath(import.meta.url)), '..', 'p1_res', 'p1v2_derived'),
-  'D:\\shajiuguan\\自驱动召回\\resources_derived',
+  '<local-dev-path>',
 ].filter(Boolean);
 export const DERIVED = _dc.find(p => existsSync(p)) ?? _dc[_dc.length - 1];
 

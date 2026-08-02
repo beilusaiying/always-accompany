@@ -1,5 +1,5 @@
 # preprocess_resources.py — 重资源一次性预处理(原始压缩包 → 管线可直读的派生文件)
-# 产出统一落 D:\shajiuguan\自驱动召回\resources_derived\
+# 产出统一落 <local-dev-path>
 # 每份产出打印 [源文件/格式探测/行数],不静默猜格式(白盒原则)
 #
 # 产出清单:
@@ -18,8 +18,8 @@ from opencc import OpenCC
 _t2s = OpenCC("t2s")
 t2s = _t2s.convert
 
-BASE = r"D:\shajiuguan\p1shiyanshi\09_P1自驱动_专项\06_资源库_词库\P1资源库"
-OUT = r"D:\shajiuguan\自驱动召回\resources_derived"
+BASE = r"<local-dev-path>"
+OUT = r"<local-dev-path>"
 os.makedirs(OUT, exist_ok=True)
 
 

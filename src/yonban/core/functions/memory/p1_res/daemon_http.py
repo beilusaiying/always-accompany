@@ -8,7 +8,7 @@ import sys, io, json, os, traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 13160
-DERIVED = os.environ.get('P1V2_DERIVED', r'D:\shajiuguan\自驱动召回\resources_derived')
+DERIVED = os.environ.get('P1V2_DERIVED', r'<local-dev-path>')
 ONNX_DIR = os.path.join(DERIVED, 'hanlp_onnx')
 
 print(f'[daemon] Loading resources from {DERIVED}', flush=True)

@@ -1,21 +1,21 @@
 """test_parity_diff30.py — 逐 case 深对照（每 mode 前 30 条，JS↔Python recalledRecords 比对）。
 
 输入：
-  - D:\\shajiuguan\\p1shiyanshi\\py_parity\\full_1600_py_percase.json（Python 全量逐 case，取前 30）
-  - D:\\shajiuguan\\p1shiyanshi\\py_parity\\dump30_js.json（JS 侧同 30 条，test_parity_dump30_js.mjs 产出）
+  - <local-dev-path> 全量逐 case，取前 30）
+  - <local-dev-path> 侧同 30 条，test_parity_dump30_js.mjs 产出）
 比对维度（按 case id 对齐）：
   - recordId 集合：identical / overlap(交集数) / disjoint —— recordId=sha256(sourceRel\\0locator\\0contentHash)[:24]，
     条目切分+内容完全一致时两侧必同 id（与打分无关），是最强的"召回同一条记忆"判据。
   - content80 集合：recordId 不同但内容同 → id 构造差异（locator/display 归一化层）；内容也不同 → 真召回差异。
   - inputWords Jaccard / anchors(top5) 交集 —— 差异归因辅助（分词层 vs 检索层）。
-输出：D:\\shajiuguan\\p1shiyanshi\\py_parity\\parity_diff30.json（含逐差异 case 的两侧明细，供亲读定性）。
+输出：<local-dev-path> case 的两侧明细，供亲读定性）。
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-OUT_DIR = Path(r"D:\shajiuguan\p1shiyanshi\py_parity")
+OUT_DIR = Path(r"<local-dev-path>")
 PY_FILE = OUT_DIR / "full_1600_py_percase.json"
 JS_FILE = OUT_DIR / "dump30_js.json"
 OUT_FILE = OUT_DIR / "parity_diff30.json"

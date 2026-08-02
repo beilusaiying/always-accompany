@@ -804,8 +804,10 @@ export async function handleMessageDeleted(index, winId) {
   if (!_w.virtualList) return;
 
   const queue = _w.virtualList.getQueue();
+  const _ofs = _w.chatLogOffsetShift || 0; // virtualList 内部索引是局部的，需加 offset 才是绝对 chatLog 下标
   for (let i = 0; i < queue.length; i++) {
-    const logIndex = _w.virtualList.getChatLogIndexByQueueIndex(i);
+    const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(i);
+    const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
     if (logIndex === index) {
       const item = queue[i];
       if (item && _w.streamingMessages.has(item.id)) {
@@ -831,8 +833,10 @@ export function handleMessagesHidden(indices, hide, winId) {
   if (!_w.virtualList || !Array.isArray(indices) || indices.length === 0) return;
   const target = new Set(indices);
   const queue = _w.virtualList.getQueue();
+  const _ofs = _w.chatLogOffsetShift || 0; // virtualList 内部索引是局部的，需加 offset 才是绝对 chatLog 下标
   for (let i = 0; i < queue.length; i++) {
-    const logIndex = _w.virtualList.getChatLogIndexByQueueIndex(i);
+    const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(i);
+    const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
     if (!target.has(logIndex)) continue;
     const el = document.getElementById(queue[i].id);
     if (!el) continue;
@@ -851,8 +855,10 @@ export async function handleMessagesRangeDeleted(startIndex, count, winId) {
   if (!_w.virtualList || count <= 0) return;
 
   const queue = _w.virtualList.getQueue();
+  const _ofs = _w.chatLogOffsetShift || 0; // virtualList 内部索引是局部的，需加 offset 才是绝对 chatLog 下标
   for (let j = 0; j < queue.length; j++) {
-    const logIndex = _w.virtualList.getChatLogIndexByQueueIndex(j);
+    const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(j);
+    const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
     if (logIndex >= startIndex && logIndex < startIndex + count) {
       const item = queue[j];
       if (item && _w.streamingMessages.has(item.id)) {

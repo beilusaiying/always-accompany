@@ -1718,8 +1718,10 @@ export function setEndpoints(router) {
         await deleteMessage(chatid, parseInt(index, 10));
         res.status(200).json({ success: true });
       } catch (err) {
-        console.error("[chat/deleteMessage] Error:", err);
-        res.status(500).json({ error: err.message });
+        // "Invalid index" / "Chat not found" = 客户端参数错 → 400；其余 → 500
+        const _code = err.message === "Invalid index" || err.message === "Chat not found" ? 400 : 500;
+        if (_code >= 500) console.error("[chat/deleteMessage] Error:", err);
+        res.status(_code).json({ error: err.message });
       }
     },
   );

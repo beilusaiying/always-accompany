@@ -259,8 +259,12 @@ export function broadcastAllChatUi(event, username) {
   // #181: 传 username 时只推给该用户的 chatId（多用户隔离），不传则全推（Bot 全局事件等）
   const ownerScoped = typeof username === "string" && username.length > 0;
   const metas = ownerScoped && _getChatMetadatas ? (() => { try { return _getChatMetadatas(); } catch { return null; } })() : null;
-  // owner 已给却没有 owner→chat 索引时必须零发送；否则“用户级”会退化成全用户广播。
-  if (ownerScoped && !metas) return false;
+  // owner 已给却没有 owner→chat 索引时必须零发送；否则”用户级”会退化成全用户广播。
+  // 例外：启动阶段 _getChatMetadatas 尚未注入且无任何 WS 连接时，广播无接收者 = 等价成功（不报 E_OWNER）。
+  if (ownerScoped && !metas) {
+    if (chatUiSockets.size === 0) return true;
+    return false;
+  }
   for (const [cid, sockets] of chatUiSockets.entries()) {
     if (ownerScoped) {
       try { if (metas.get(cid)?.username !== username) continue; } catch { /* metadata miss → 跳过 */ }
@@ -380,7 +384,11 @@ export function broadcastCrossChatEvent(sourceChatId, event, usernameOverride = 
     console.warn("[broadcast] broadcastCrossChatEvent: owner 查询失败, 已拒绝广播:", _ownerErr?.message || _ownerErr);
     return false;
   }
-  if (!_metas || !_srcUsername) return false;
+  if (!_metas || !_srcUsername) {
+    // 启动阶段 _getChatMetadatas 尚未注入且无 WS 连接时，广播无接收者 = 等价成功。
+    if (chatUiSockets.size === 0) return true;
+    return false;
+  }
   if (sourceChatId) {
     try {
       const groupId = sourceChatId ? getGroupIdByChatId(_srcUsername, sourceChatId) : null;

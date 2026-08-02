@@ -318,8 +318,10 @@ export async function deleteMessage(chatid, index) {
   wbTrace(chatid, "chatOps", "deleteMessage:enter", { index });
   const chatMetadata = await loadChat(chatid);
   if (!chatMetadata) throw new Error("Chat not found");
-  if (index == null || index < 0 || !chatMetadata.chatLog[index]) return;
-  if (isDeleted(chatMetadata.chatLog[index])) return;
+  // 参数校验：非法值（null/NaN/负数）硬抛；越界或已删除则幂等返回——
+  // 回档物理截断后前端可能持有旧索引，越界不应报错（消息已不在）。
+  if (index == null || !Number.isFinite(index) || index < 0) throw new Error("Invalid index");
+  if (!chatMetadata.chatLog[index] || isDeleted(chatMetadata.chatLog[index])) return;
 
   const entry = chatMetadata.chatLog[index];
   if (entry) StreamManager.abortByMessageId(entry.id);

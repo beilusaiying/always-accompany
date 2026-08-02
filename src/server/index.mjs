@@ -51,7 +51,7 @@ const beilu_config = {
 			Jobs: !fs.existsSync(__dirname + '/.nojobs'),
 			Timers: !fs.existsSync(__dirname + '/.notimers'),
 			Idle: !fs.existsSync(__dirname + '/.noidle'),
-			AutoUpdate: false, // beilu: 自动更新永久禁用
+			AutoUpdate: !fs.existsSync(__dirname + '/.noupdate'),
 		}
 	}
 }

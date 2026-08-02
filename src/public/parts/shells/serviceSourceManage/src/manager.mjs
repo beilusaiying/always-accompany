@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import sanitize from 'npm:sanitize-filename'
 
-import { saveJsonFile } from '../../../../../scripts/json_loader.mjs'
+import { loadJsonFileIfExists, saveJsonFile } from '../../../../../scripts/json_loader.mjs'
 import { getUserDictionary } from '../../../../../yonban/core/functions/security/auth.mjs'
 import { isPartLoaded, loadPart, unloadPart } from '../../../../../server/parts_loader.mjs'
 import { loadData, saveData } from '../../../../../server/setting_loader.mjs'
@@ -190,11 +190,21 @@ export async function saveServiceSourceFile(username, fileName, data, serviceSou
 	// 确保文件结构存在（如果不存在则创建）
 	await createScaffold(baseDir, normalizedServicePath, fileName)
 
-	// 加载现有数据以进行合并
+	// [根修] 先写 config.json 再 loadPart——新建源时 config.json 尚不存在，生成的 main.mjs
+	// 模块级 loadJsonFileIfExists 会回退到 { generator: '', config: {} }，导致首次 Load
+	// 走 empty/proxy fallback 而不是用户真正选择的生成器。先把入参 data 合并写盘，确保
+	// 首次 import 就能读到正确的 generator，消除「先加载空壳再 reload」的窗口。
+	const configPath = getConfigPath(baseDir)
+	const existingOnDisk = loadJsonFileIfExists(configPath, buildDefaultConfig())
+	const preloadData = { ...existingOnDisk, ...data }
+	saveJsonFile(configPath, preloadData)
+
+	// 加载部件（此时 config.json 已有正确的 generator，首次 Load 即可成功）
 	const part = await loadPart(username, partpath)
 	const existingData = await part.interfaces.config.GetData()
 
-	// 准备要保存的数据，合并现有数据
+	// 准备要保存的数据，合并现有数据（module-level data 可能在 Load 中被 SetData 修改过，
+	// 以 GetData 返回的为准再合并一次，确保运行时对象与磁盘一致）
 	const dataToSave = { ...existingData, ...data }
 
 	// 通过part的SetData接口保存数据
@@ -232,8 +242,10 @@ export async function addServiceSourceFile(username, fileName, serviceSourcePath
 	// 创建文件结构
 	await createScaffold(baseDir, normalizedServicePath, fileName)
 
-	// 准备初始数据
+	// 准备初始数据——先写 config.json 再 loadPart（与 saveServiceSourceFile 同策略）
 	const initialData = buildDefaultConfig()
+	const configPath = getConfigPath(baseDir)
+	saveJsonFile(configPath, initialData)
 
 	// 通过part的SetData接口设置初始数据
 	const part = await loadPart(username, partpath)

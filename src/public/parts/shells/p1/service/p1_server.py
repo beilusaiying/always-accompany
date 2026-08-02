@@ -20,6 +20,7 @@ import argparse
 import json
 import re
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -155,7 +156,9 @@ def _pipeline():
 
 
 def _username(req: Request, body: dict) -> str:
-    return req.headers.get("x-p1-username") or str(body.get("username") or "")
+    raw = req.headers.get("x-p1-username") or ""
+    # main.mjs 用 encodeURIComponent 编码 username（非 ASCII 安全过 HTTP header），这里对称解码
+    return urllib.parse.unquote(raw) if raw else str(body.get("username") or "")
 
 
 @app.get("/health")

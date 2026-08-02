@@ -1,0 +1,5 @@
+﻿{
+  "_doc": "P1 服务配置。路径类键留空时自动使用 p1_config.py DEFAULTS（基于仓库根相对计算）。",
+  "port": 13150,
+  "enabled": true
+}

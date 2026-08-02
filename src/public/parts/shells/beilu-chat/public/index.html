@@ -162,6 +162,22 @@
                 <span>桌面系统通知</span>
                 <input type="checkbox" class="toggle toggle-xs toggle-warning" data-notify-pref="desktop" />
               </label>
+              <label class="flex items-center justify-between gap-2 text-xs px-1 py-0.5">
+                <span>同屏最多条数</span>
+                <input type="number" class="input input-xs w-20 text-center" min="1" max="20" step="1" data-notify-pref="maxVisible" />
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs px-1 py-0.5">
+                <span>弹窗停留秒（0=常驻）</span>
+                <input type="number" class="input input-xs w-20 text-center" min="0" max="600" step="1" data-notify-pref="popupDurationMs" data-unit-multiplier="1000" />
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs px-1 py-0.5">
+                <span>历史最多条数</span>
+                <input type="number" class="input input-xs w-20 text-center" min="1" max="500" step="1" data-notify-pref="historyMax" />
+              </label>
+              <label class="flex items-center justify-between gap-2 text-xs px-1 py-0.5">
+                <span>历史保留分钟</span>
+                <input type="number" class="input input-xs w-20 text-center" min="1" max="525600" step="1" data-notify-pref="historyMaxAgeMs" data-unit-multiplier="60000" />
+              </label>
             </div>
           </div>
         </div>
@@ -639,29 +655,21 @@
                     >
                       无
                     </option>
-                    <option
-                      value="merge"
-                      data-i18n="chat.beiluChat.modelParams.ppMerge"
-                    >
-                      合并相同角色连续发言
-                    </option>
-                    <option
-                      value="semi"
-                      data-i18n="chat.beiluChat.modelParams.ppSemi"
-                    >
-                      半严格（合并+system转user交替）
-                    </option>
-                    <option
-                      value="strict"
-                      data-i18n="chat.beiluChat.modelParams.ppStrict"
-                    >
-                      严格（合并+user在前+system仅一条）
-                    </option>
+                    <optgroup label="保留工具 (With Tools)">
+                    <option value="merge_tools" data-i18n="chat.beiluChat.modelParams.ppMergeTools">合并 (保留工具)</option>
+                    <option value="semi_tools" data-i18n="chat.beiluChat.modelParams.ppSemiTools">半严格 (保留工具)</option>
+                    <option value="strict_tools" data-i18n="chat.beiluChat.modelParams.ppStrictTools">严格 (保留工具)</option>
+                    </optgroup>
+                    <optgroup label="无工具 (No Tools)">
+                    <option value="merge" data-i18n="chat.beiluChat.modelParams.ppMerge">合并 (无工具)</option>
+                    <option value="semi" data-i18n="chat.beiluChat.modelParams.ppSemi">半严格 (无工具)</option>
+                    <option value="strict" data-i18n="chat.beiluChat.modelParams.ppStrict">严格 (无工具)</option>
+                    </optgroup>
                   </select>
                   <span
                     class="text-[9px] text-base-content/50 pl-1"
                     data-i18n="chat.beiluChat.modelParams.postProcessingHint"
-                    >部分API要求严格角色交替，按需选择</span
+                    >半严格/严格：历史中段 system→user，尾部保留；工具变体保留 tool 角色</span
                   >
                 </div>
                 <button
@@ -878,6 +886,8 @@
           <div id="chat-container" class="flex-1 flex flex-col overflow-hidden">
             <!-- F3 任务清单卡（聊天流顶部，§1.4 / G2）：AI 制定任务 + 打勾，按 chatId 隔离展示 -->
             <div id="task-card" class="hidden mx-[10px] mt-2 lg:mx-4 lg:mt-3"></div>
+            <!-- 分身进度卡（任务清单下方）：实时显示当前对话的分身执行状态 -->
+            <div id="clone-progress-card" class="hidden mx-[10px] mt-1 lg:mx-4 lg:mt-1.5"></div>
             <!-- 消息列表 -->
             <div
               class="chat-messages flex-grow overflow-y-auto flex flex-col px-[10px] py-2 lg:px-4 lg:py-3"
@@ -943,6 +953,9 @@
             <div class="chat-input-wrapper">
               <!-- 拖拽调高手柄（凛倾2026-07-09：对话框要像侧栏一样可拉伸；逻辑在 messageInput.mjs initInputResize） -->
               <div id="chat-input-resize-handle" class="chat-input-resize-handle" title="拖动调整输入框高度"></div>
+              <!-- 打字式联想栏（002 0731）：停顿防抖调 P1 召回，展示联想词 chip（点击插入）；默认隐藏，
+                   开关在 P1「运行/测试」面板（storage: beilu-typing-suggest-enabled，默认关）。逻辑 typingSuggest.mjs -->
+              <div id="typing-suggest-bar" class="typing-suggest-bar" style="display:none"></div>
               <!-- 上半: 输入框 -->
               <textarea
                 id="message-input"
@@ -1298,6 +1311,10 @@ Ctrl+Enter 发送"
                   </div>
 
                   <!-- 自动继续对话 -->
+                  <!-- 【红线·0731】#ide-auto-continue=持久配置 yonban_config.auto_continue.enabled 的 UI（系统配置域，唯一写者=用户）。
+                       与 AI 的 <stopContinue/>（任务域：只结束本轮任务）是两个开关，禁止任何运行态代码翻它的 checked——
+                       触点收口 idePanel.mjs 两处（init 后端回填/用户 change），历史劫持事故见 websocket.mjs stopContinue 分支注释 -->
+
                   <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
                     <p class="text-xs font-medium text-amber-700 mb-1">
                       <i data-ic="refresh"></i> 操作后自动继续
@@ -1427,6 +1444,130 @@ Ctrl+Enter 发送"
                     <button id="ide-limits-save" class="btn btn-xs btn-warning w-full mt-1">保存高级设置</button>
                   </div>
 
+                  <!-- 工具 Job 运行时：默认值与持久化均由后端 tool_runtime 单源提供；前端不预填 -->
+                  <fieldset id="ide-tool-runtime-settings" class="bg-base-300/50 rounded-lg p-2 space-y-1" disabled>
+                    <p class="text-xs font-medium text-amber-700 mb-1">
+                      <i data-ic="wrench"></i> 工具运行时
+                    </p>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">响应等待上限(ms)</span>
+                      <input type="number" id="ide-tool-response-timeout-ms" class="input input-xs w-24 text-xs text-center" min="1000" max="3600000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">传输宽限(ms)</span>
+                      <input type="number" id="ide-tool-transport-grace-ms" class="input input-xs w-24 text-xs text-center" min="0" max="300000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">迟到结果保留(ms)</span>
+                      <input type="number" id="ide-tool-late-retention-ms" class="input input-xs w-24 text-xs text-center" min="60000" max="86400000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">长任务判定(ms)</span>
+                      <input type="number" id="ide-tool-long-running-after-ms" class="input input-xs w-24 text-xs text-center" min="1000" max="3600000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">长任务通知</span>
+                      <input type="checkbox" id="ide-tool-notify-long-running" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">检测到命令静默时通知</span>
+                      <input type="checkbox" id="ide-tool-notify-stalled" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">完成通知</span>
+                      <input type="checkbox" id="ide-tool-notify-completed" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">失败通知</span>
+                      <input type="checkbox" id="ide-tool-notify-failed" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">迟到结果自动续轮</span>
+                      <input type="checkbox" id="ide-tool-auto-continue-late-results" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">迟到续轮延迟(ms)</span>
+                      <input type="number" id="ide-tool-late-continue-delay-ms" class="input input-xs w-24 text-xs text-center" min="0" max="30000" step="100" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">Job 历史上限</span>
+                      <input type="number" id="ide-tool-history-limit" class="input input-xs w-24 text-xs text-center" min="20" max="2000" step="10" />
+                    </label>
+                    <div class="border-t border-base-content/10 my-1"></div>
+                    <p class="text-[10px] font-medium text-base-content/70">命令静默检测</p>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">启用静默 watchdog</span>
+                      <input type="checkbox" id="ide-tool-command-watchdog-enabled" class="toggle toggle-xs toggle-warning" />
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-[10px] text-base-content/60">检测到静默后终止进程树</span>
+                      <input type="checkbox" id="ide-tool-command-watchdog-terminate" class="toggle toggle-xs toggle-error" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">连续静默阈值(ms)</span>
+                      <input type="number" id="ide-tool-command-watchdog-stall-ms" class="input input-xs w-24 text-xs text-center" min="5000" max="3600000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">采样间隔(ms)</span>
+                      <input type="number" id="ide-tool-command-watchdog-sample-ms" class="input input-xs w-24 text-xs text-center" min="1000" max="60000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">CPU 增量阈值(ms)</span>
+                      <input type="number" id="ide-tool-command-watchdog-cpu-delta-ms" class="input input-xs w-24 text-xs text-center" min="0" max="60000" step="1" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">RSS 增量阈值(bytes)</span>
+                      <input type="number" id="ide-tool-command-watchdog-rss-delta-bytes" class="input input-xs w-24 text-xs text-center" min="0" max="1073741824" step="65536" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">进度回报间隔(ms)</span>
+                      <input type="number" id="ide-tool-command-watchdog-progress-ms" class="input input-xs w-24 text-xs text-center" min="1000" max="300000" step="1000" />
+                    </label>
+                    <span class="block text-[9px] text-base-content/40">组合判据：输出、CPU 时间、RSS 与进程树连续无变化；GPU 暂不作为终止依据</span>
+                    <div class="border-t border-base-content/10 my-1"></div>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">读取默认行数</span>
+                      <input type="number" id="ide-tool-read-default-line-limit" class="input input-xs w-24 text-xs text-center" min="50" max="5000" step="50" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">读取最大行数</span>
+                      <input type="number" id="ide-tool-read-max-line-limit" class="input input-xs w-24 text-xs text-center" min="100" max="20000" step="100" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">读取输出字符上限</span>
+                      <input type="number" id="ide-tool-read-max-output-chars" class="input input-xs w-24 text-xs text-center" min="2000" max="500000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索默认分页数</span>
+                      <input type="number" id="ide-tool-search-default-page-size" class="input input-xs w-24 text-xs text-center" min="10" max="500" step="10" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索最大分页数</span>
+                      <input type="number" id="ide-tool-search-max-page-size" class="input input-xs w-24 text-xs text-center" min="10" max="2000" step="10" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索快照保留(ms)</span>
+                      <input type="number" id="ide-tool-search-snapshot-ttl-ms" class="input input-xs w-24 text-xs text-center" min="10000" max="3600000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索快照结果上限</span>
+                      <input type="number" id="ide-tool-search-max-snapshot-results" class="input input-xs w-24 text-xs text-center" min="100" max="20000" step="100" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索快照缓存条目</span>
+                      <input type="number" id="ide-tool-search-snapshot-cache-max-entries" class="input input-xs w-24 text-xs text-center" min="4" max="512" step="4" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索快照缓存结果总量</span>
+                      <input type="number" id="ide-tool-search-snapshot-cache-max-results" class="input input-xs w-24 text-xs text-center" min="100" max="500000" step="1000" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                      <span class="text-[10px] text-base-content/60">搜索执行超时(ms)</span>
+                      <input type="number" id="ide-tool-search-timeout-ms" class="input input-xs w-24 text-xs text-center" min="1000" max="120000" step="1000" />
+                    </label>
+                    <span id="ide-tool-runtime-status" class="block text-[9px] text-base-content/50">正在读取后端配置…</span>
+                  </fieldset>
+
                   <!-- 操作监控 -->
                   <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
                     <div class="flex items-center justify-between mb-1">
@@ -1442,6 +1583,10 @@ Ctrl+Enter 发送"
                       </button>
                     </div>
                     <span class="text-[9px] text-base-content/50">AI 自主执行的文件 / git / 命令操作结果在此显示</span>
+                    <div
+                      id="ide-tool-jobs"
+                      class="space-y-1 text-[10px]"
+                    ></div>
                     <div
                       id="ide-op-log"
                       class="max-h-48 overflow-y-auto space-y-0.5 text-[10px] font-mono"
@@ -1988,6 +2133,15 @@ Ctrl+Enter 发送"
                 <button class="ide-activity-btn" data-mem-panel="pseries" title="P系列引擎 (P1-P9)"><span class="ide-activity-icon"><i data-ic="settings"></i></span><span class="mem-nav-label">P系列引擎</span></button>
                 <button class="ide-activity-btn" data-mem-panel="diagretr" title="检索配置 + AI诊断"><span class="ide-activity-icon"><i data-ic="search"></i></span><span class="mem-nav-label">检索 / 诊断</span></button>
               </div>
+              <!-- P1 自驱动组（2026-07-31 002后期任务"画圈的地方增加前端3个"）：
+                   运行/测试=插件运行展示+参数微调+快速测试；词库管理=AT自更新+用户插拔；P9 维护=词库维护AI提示词数据件。
+                   复用 data-mem-panel 路由（JS initIdeActivityBar/_toggleMemMainArea 零改），loader 在 p1panel.mjs -->
+              <div class="mem-nav-group">
+                <div class="mem-nav-gh">P1 自驱动</div>
+                <button class="ide-activity-btn" data-mem-panel="p1run" title="P1 召回运行展示 + 参数微调 + 快速测试"><span class="ide-activity-icon"><i data-ic="zap"></i></span><span class="mem-nav-label">运行 / 测试</span></button>
+                <button class="ide-activity-btn" data-mem-panel="p1vocab" title="AT 自更新词库 + 用户插拔词库"><span class="ide-activity-icon"><i data-ic="book"></i></span><span class="mem-nav-label">词库管理</span></button>
+                <button class="ide-activity-btn" data-mem-panel="p1p9" title="P9 词库维护子模式：配置 + 提示词就地完整编辑"><span class="ide-activity-icon"><i data-ic="edit"></i></span><span class="mem-nav-label">P9 维护</span></button>
+              </div>
               <!-- 「资源」组已删（凛倾 0723）：说明书库迁 INJ 编辑面板「说明书库」子 tab（settings/skillLibrary.mjs），组内仅此一钮故整组删除 -->
               <div class="mt-auto pb-1 flex flex-col items-center gap-0.5">
                 <button
@@ -2265,6 +2419,9 @@ Ctrl+Enter 发送"
                 <div id="mem-tool-snapshot-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">快照管理加载中...</p></div>
                 <div id="mem-tool-retrieval-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">检索参数加载中...</p></div>
                 <div id="mem-tool-format-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">格式检查加载中...</p></div>
+                <div id="mem-tool-p1run-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">P1 运行/测试加载中...</p></div>
+                <div id="mem-tool-p1vocab-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">词库管理加载中...</p></div>
+                <div id="mem-tool-p1p9-view" class="mem-tool-view flex-1 overflow-auto hidden"><p class="p-4 text-sm opacity-50">P9 维护加载中...</p></div>
                 <!-- 合并 v4 #21：导入/导出（接进运维）— 复用底部既有导出/导入按钮 -->
                 <div id="mem-tool-io-view" class="mem-tool-view flex-1 overflow-auto hidden"><div class="p-4 text-sm space-y-3"><div class="font-bold"><i data-ic="refresh"></i> 导入 / 导出</div><p class="text-xs opacity-60 leading-relaxed">导出当前角色卡的记忆为 zip / 从 zip 导入（导入前自动逐文件 .import_bak 备份）。</p><div class="flex gap-2"><button id="mem-io-export" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white"><i data-ic="upload"></i> 导出记忆</button><button id="mem-io-import" class="btn btn-sm btn-outline border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white"><i data-ic="download"></i> 导入记忆</button></div></div></div>
               </div>
@@ -2789,6 +2946,27 @@ Ctrl+Enter 发送"
                     · 关闭后立即生效（无需重启）；若环境变量 <code>BEILU_CSP=off</code> 则强制关闭且此开关只读。
                   </p>
                 </div>
+                <div class="bg-base-300/50 rounded-lg p-2 space-y-2">
+                  <p class="text-xs font-medium text-amber-700">请求日志与重复聚合</p>
+                  <label class="grid grid-cols-[1fr_8rem] items-center gap-2 text-xs">
+                    <span>重复聚合窗口（毫秒，0=逐条输出）</span>
+                    <input id="ui-request-log-repeat-window" type="number" min="0" max="60000" step="100"
+                      class="input input-xs input-bordered w-full" />
+                  </label>
+                  <label class="flex items-center justify-between text-xs">
+                    <span>日志包含请求来源</span>
+                    <input id="ui-request-log-include-source" type="checkbox" class="toggle toggle-xs" />
+                  </label>
+                  <label class="block text-xs">
+                    <span>静默规则（每行一个正则；空白表示不静默任何路径）</span>
+                    <textarea id="ui-request-log-silent-patterns" rows="5"
+                      class="textarea textarea-xs textarea-bordered font-mono w-full mt-1"></textarea>
+                  </label>
+                  <div class="flex items-center justify-between gap-2">
+                    <span id="ui-request-log-status" class="text-[10px] text-base-content/50">从后端读取中…</span>
+                    <button id="ui-request-log-save" type="button" class="btn btn-xs btn-outline">保存并立即生效</button>
+                  </div>
+                </div>
                 <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
                   <div class="flex items-center justify-between mb-1">
                     <p class="text-xs font-medium text-amber-700"><i data-ic="clipboard"></i> 运行时日志</p>
@@ -3160,28 +3338,24 @@ Ctrl+Enter 发送"
                   </div>
                 </div>
 
-                <!-- [0723 凛倾「不要全部挤在一起,单独开窗口,复用ui,这样好统一」] 提示词注入/内容过滤/
-                     参数覆盖三域收进独立弹窗（原生 dialog+daisyUI modal，同 ext-new-key-dialog 范式）；
-                     面板只留统一入口行。块内控件 id 原样保留（dialog 内 getElementById 可达）=
-                     loadPlatformInjection/bindContentFilterControls/loadBotSubModePanel 绑定链零改动。 -->
-                <div class="bg-base-300/50 rounded-lg p-3 shrink-0">
+                <!-- Bot 设置按真实 owner 集中在本面板：角色卡/平台、用户级、平台对话线各自标清作用域。
+                     控件 id 与后端动作保持不变，只取消第二层 modal，避免配置上下文被窗口嵌套遮断。 -->
+                <div id="dc-bot-feature-settings" class="bg-base-300/50 rounded-lg p-3 shrink-0">
                   <div class="text-xs font-semibold opacity-60 mb-1.5">
                     <i data-ic="toolbox"></i> Bot 功能设置
                   </div>
-                  <!-- 4 项改 2×2（原 cols-3 三项一行）：四项挤一行在侧栏宽度下按钮文字会折行，
-                       操作界面三原则「不拥挤」优先于少占一行。 -->
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <button id="dc-open-inj-dialog" class="btn btn-xs btn-outline"><i data-ic="edit"></i> 提示词注入</button>
-                    <button id="dc-open-cf-dialog" class="btn btn-xs btn-outline"><i data-ic="shield"></i> 内容过滤</button>
-                    <button id="dc-open-bsm-dialog" class="btn btn-xs btn-outline"><i data-ic="tune"></i> 参数覆盖</button>
-                    <button id="dc-open-cmd-dialog" class="btn btn-xs btn-outline"><i data-ic="terminal"></i> 平台命令</button>
-                    <button id="dc-open-hist-dialog" class="btn btn-xs btn-outline"><i data-ic="history"></i> 对话记录</button>
+                  <div class="text-[10px] text-base-content/50 mb-2">
+                    设置都在当前 Bot 面板内完成；每一项标题会标明它真正影响的角色卡、用户或平台对话线。
                   </div>
-                </div>
+                  <div class="space-y-2">
 
-                <!-- 弹窗①提示词注入：INJ-3（10 平台共用）+ 平台专属注入 -->
-                <dialog id="dc-inj-dialog" class="modal">
-                  <div class="modal-box max-w-lg space-y-2">
+                <!-- 内嵌①提示词注入：INJ-3（10 平台共用）+ 当前绑定角色卡的平台专属注入 -->
+                <details id="dc-inj-section" class="rounded-lg border border-base-300 bg-base-200/40">
+                  <summary class="cursor-pointer px-2.5 py-2 text-xs font-semibold">
+                    <i data-ic="edit"></i> 提示词注入
+                    <span class="badge badge-xs badge-outline ml-1">当前绑定角色卡 / 平台</span>
+                  </summary>
+                  <div class="px-2.5 pb-2.5 space-y-2">
                 <!-- INJ-3 Bot 平台提示词快捷入口（autoMode="bot" 门控，10 平台共用一条，标题不跟随平台） -->
                 <div class="bg-base-300/50 rounded-lg p-3 shrink-0">
                   <div class="flex items-center justify-between">
@@ -3226,14 +3400,16 @@ Ctrl+Enter 发送"
                   ></textarea>
                   <button id="dc-platform-inj-save" class="btn btn-xs btn-outline w-full"><i data-ic="save"></i> 保存平台注入</button>
                 </div>
-                    <div class="modal-action mt-1"><form method="dialog"><button class="btn btn-sm btn-outline">关闭</button></form></div>
                   </div>
-                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-                </dialog>
+                </details>
 
-                <!-- 弹窗②内容过滤（安全） -->
-                <dialog id="dc-cf-dialog" class="modal">
-                  <div class="modal-box max-w-lg space-y-2">
+                <!-- 内嵌②内容过滤（用户级安全设置） -->
+                <details id="dc-cf-section" class="rounded-lg border border-base-300 bg-base-200/40">
+                  <summary class="cursor-pointer px-2.5 py-2 text-xs font-semibold">
+                    <i data-ic="shield"></i> 内容过滤
+                    <span class="badge badge-xs badge-outline ml-1">用户级 / 全平台</span>
+                  </summary>
+                  <div class="px-2.5 pb-2.5 space-y-2">
                 <!-- 内容过滤（0722 凛倾「bot这边也需要做一个窗口」）：与设置面板同一份用户级配置
                      （contentFilter.mjs 单 owner，localStorage 三键+后端 user.contentFilter），双向即时同步；
                      bot 生成侧消费=botContentShared.applyBotContentFilter（9 平台壳，「也过滤提示词」才生效） -->
@@ -3264,14 +3440,16 @@ Ctrl+Enter 发送"
                     </div>
                   </div>
                 </div>
-                    <div class="modal-action mt-1"><form method="dialog"><button class="btn btn-sm btn-outline">关闭</button></form></div>
                   </div>
-                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-                </dialog>
+                </details>
 
-                <!-- 弹窗③参数覆盖（Bot 子模式） -->
-                <dialog id="dc-bsm-dialog" class="modal">
-                  <div class="modal-box max-w-lg space-y-2">
+                <!-- 内嵌③参数覆盖（Bot 子模式） -->
+                <details id="dc-bsm-section" class="rounded-lg border border-base-300 bg-base-200/40">
+                  <summary class="cursor-pointer px-2.5 py-2 text-xs font-semibold">
+                    <i data-ic="tune"></i> 参数覆盖
+                    <span class="badge badge-xs badge-outline ml-1">当前平台对话线</span>
+                  </summary>
+                  <div class="px-2.5 pb-2.5 space-y-2">
                 <!-- Bot 参数覆盖（0723 凛倾「专门做bot的参数,类似子模式,每个外部bot一个,可增可减」）：
                      实体=既有 sub_modes 框架的 modeGroup:"bot" 条目（yonban_config 单源；saveSubModes/
                      deleteSubMode 通用 verb，可增可减）；线级激活=active_sub_modes_map[平台线chatid]
@@ -3340,50 +3518,48 @@ Ctrl+Enter 发送"
                     <button id="dc-bsm-save" class="btn btn-xs btn-outline w-full"><i data-ic="save"></i> 保存参数</button>
                   </div>
                 </div>
-                    <div class="modal-action mt-1"><form method="dialog"><button class="btn btn-sm btn-outline">关闭</button></form></div>
                   </div>
-                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-                </dialog>
+                </details>
 
-                <!-- 弹窗④平台命令：主用户在聊天平台里直接发的命令清单。
+                <!-- 内嵌④平台命令：主用户在聊天平台里直接发的命令清单。
                      内容【全部】由后端 BOT_COMMAND_REGISTRY 经 getcommandmeta 下发后 JS 渲染
                      （同 BOT_CONFIG_FIELD_META / injection_automode_meta 的「后端权威清单下发」范式）——
                      此处刻意不写任何命令名/用法字面量，加命令只改后端注册表，本界面自动跟随。
                      拉取失败=命令区显示降级提示（诚实降级，不伪造清单）。 -->
-                <dialog id="dc-cmd-dialog" class="modal">
-                  <div class="modal-box max-w-lg space-y-2">
-                    <div class="text-sm font-semibold">
-                      <i data-ic="terminal"></i> 平台命令
-                    </div>
+                <details id="dc-cmd-section" class="rounded-lg border border-base-300 bg-base-200/40">
+                  <summary class="cursor-pointer px-2.5 py-2 text-xs font-semibold">
+                    <i data-ic="terminal"></i> 平台命令
+                    <span class="badge badge-xs badge-outline ml-1">当前平台 / 主用户权限</span>
+                  </summary>
+                  <div class="px-2.5 pb-2.5 space-y-2">
                     <div class="text-[10px] text-base-content/50">
                       在聊天平台里直接发送即可（回执只发给你，不进 AI 上下文）
                     </div>
                     <div id="dc-cmd-list" class="space-y-2"></div>
-                    <div class="modal-action mt-1"><form method="dialog"><button class="btn btn-sm btn-outline">关闭</button></form></div>
                   </div>
-                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-                </dialog>
+                </details>
 
-                <!-- 弹窗⑤对话记录（只读）：补上凛倾 07-09「前端其他的屏蔽,只有在bot模式出现」的后半句——
+                <!-- 内嵌⑤对话记录（只读）：补上凛倾 07-09「前端其他的屏蔽,只有在bot模式出现」的后半句——
                      bot 线在 chat/airp/work 左栏被无条件滤除（conversationManager:464），此前**任何界面都看不到**，
-                     于是「对话文件=上下文载体」只剩上下文、没有"看得到"。本弹窗即 bot 模式下的那个出现位。
+                     于是「对话文件=上下文载体」只剩上下文、没有"看得到"。本区即 bot 模式下的那个出现位。
                      只读：不发消息、不改内容（发送面在平台侧，改内容走 web 主对话面）。
                      数据全部来自后端既有分页端点（getLogLengthVisible + getLog），前端零内容硬编码。 -->
-                <dialog id="dc-hist-dialog" class="modal">
-                  <div class="modal-box max-w-2xl space-y-2">
-                    <div class="text-sm font-semibold">
-                      <i data-ic="history"></i> 对话记录（只读）
-                    </div>
+                <details id="dc-hist-section" class="rounded-lg border border-base-300 bg-base-200/40">
+                  <summary class="cursor-pointer px-2.5 py-2 text-xs font-semibold">
+                    <i data-ic="history"></i> 对话记录（只读）
+                    <span class="badge badge-xs badge-outline ml-1">当前平台角色线</span>
+                  </summary>
+                  <div class="px-2.5 pb-2.5 space-y-2">
                     <div class="flex items-center gap-2">
                       <select id="dc-hist-line" class="select select-xs select-bordered flex-1"></select>
                       <button id="dc-hist-refresh" class="btn btn-xs btn-outline"><i data-ic="refresh"></i> 刷新</button>
                     </div>
                     <div id="dc-hist-meta" class="text-[10px] text-base-content/50"></div>
                     <div id="dc-hist-list" class="space-y-1.5 max-h-96 overflow-y-auto"></div>
-                    <div class="modal-action mt-1"><form method="dialog"><button class="btn btn-sm btn-outline">关闭</button></form></div>
                   </div>
-                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
-                </dialog>
+                </details>
+                  </div>
+                </div>
               </div>
 
               <!-- 空状态（无 Bot 时显示） -->
@@ -4328,48 +4504,7 @@ Ctrl+Enter 发送"
                 </div>
                 </div><!-- /FT-D3 隐藏段1 (名称+类型) -->
 
-                <!-- Extended Thinking（常驻可见，与预填充同铁律——不按渠道名猜门控） -->
-                <div
-                  id="claude-thinking-group"
-                  class="form-control"
-                >
-                  <label class="label py-0.5 cursor-pointer">
-                    <span class="label-text text-xs"><i data-ic="brain"></i> Extended Thinking</span>
-                    <input
-                      type="checkbox"
-                      id="param-claude-thinking"
-                      class="toggle toggle-xs toggle-warning"
-                    />
-                  </label>
-                  <div
-                    class="pl-1 space-y-1"
-                    id="claude-thinking-budget-row"
-                    style="display: none"
-                  >
-                    <label class="label py-0.5">
-                      <span class="label-text text-xs"
-                        >思考 Budget（tokens）</span
-                      >
-                      <span
-                        id="param-thinking-budget-value"
-                        class="label-text-alt font-mono text-xs"
-                        >8000</span
-                      >
-                    </label>
-                    <input
-                      type="range"
-                      id="param-thinking-budget"
-                      min="1024"
-                      max="32000"
-                      step="1024"
-                      value="8000"
-                      class="range range-xs range-warning"
-                    />
-                  </div>
-                  <span class="text-[9px] text-base-content/50 pl-1"
-                    >Claude 发送 thinking 参数（需反代支持）</span
-                  >
-                </div>
+                <!-- Extended Thinking 控件已删（2026-08-01 凛倾收口：思维链控制唯一入口=AI 源面板 per-源设置） -->
 
                 <div class="hidden" aria-hidden="true"><!-- FT-D3 隐藏段2 (URL+Key) -->
                 <div class="form-control">

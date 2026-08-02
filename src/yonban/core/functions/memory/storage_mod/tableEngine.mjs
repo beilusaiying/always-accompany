@@ -18,7 +18,7 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
-import { diag, getMemoryDir, loadJsonFile, saveJsonFile } from "./storage.mjs";
+import { diag, getMemoryDir, loadJsonFile, saveJsonFile, withFileLock } from "./storage.mjs"; // withFileLock: 0731 forever.json 命中刷新锁收口
 
 import { parseOperationArgs } from "../handler/replyParser.mjs";
 
@@ -442,7 +442,7 @@ export function readHotMemoryForInjection(username, charName, opts = {}) {
         // R5：接通悬空强化回路——被真注入(opts.recordHit)命中的条目刷新 last_triggered，让 Top-K
         //   recency 真实反映命中。节流：仅 last_triggered 距今 >1 天才刷(同日多次注入不重复写盘)；
         //   仅 recordHit 路径(主对话真注入 getPromptHandler)落盘，预览/P系列不传=不污染命中。
-        let _hitDirty = false;
+        const _hitKeys = new Set();
         for (const { entry } of topK) {
           const text =
             typeof entry === "string"
@@ -451,12 +451,27 @@ export function readHotMemoryForInjection(username, charName, opts = {}) {
           lines.push(`  - ${text}`);
           if (opts.recordHit && typeof entry === "object") {
             const _lt = entry.last_triggered ? new Date(entry.last_triggered).getTime() : 0;
-            if (now - _lt > 86400000) { entry.last_triggered = new Date(now).toISOString(); _hitDirty = true; }
+            if (now - _lt > 86400000) _hitKeys.add(entry.content || entry.event || "");
           }
         }
-        if (opts.recordHit && _hitDirty) {
-          try { saveJsonFile(foreverPath, data); }
-          catch (e) { wbD(null, "table", "tableEngine:forever_hit_save_fail", false, "forever.json 命中刷新写盘失败(last_triggered 未持久化)", { path: foreverPath, err: e.message }); diag.warn(`[tableEngine] forever 命中刷新写盘失败: ${e.message}`); }
+        // [0731 P0 锁收口·多窗口摸底乱点#1] 原直写 saveJsonFile(foreverPath, data) 是无锁 RMW
+        //   （读:424→改→写），同角色双窗并发生成命中同一条目时 lost-update。改为 withFileLock 串行化，
+        //   且锁内重读盘上最新版按命中键刷新——不用本函数开头的旧快照整份覆盖，并发的结构性修改不被冲掉。
+        //   本函数是同步注入路径 → 锁任务 fire-and-forget（刷新结果不影响本轮注入文本，失败 wbD 观测）。
+        if (opts.recordHit && _hitKeys.size > 0) {
+          withFileLock(foreverPath, async () => {
+            const fresh = loadJsonFile(foreverPath);
+            let _dirty = false;
+            for (const entry of fresh?.entries || []) {
+              if (typeof entry !== "object" || !_hitKeys.has(entry.content || entry.event || "")) continue;
+              const _lt = entry.last_triggered ? new Date(entry.last_triggered).getTime() : 0;
+              if (now - _lt > 86400000) { entry.last_triggered = new Date(now).toISOString(); _dirty = true; }
+            }
+            if (_dirty) saveJsonFile(foreverPath, fresh);
+          }).catch((e) => {
+            wbD(null, "table", "tableEngine:forever_hit_save_fail", false, "forever.json 命中刷新写盘失败(last_triggered 未持久化)", { path: foreverPath, err: e.message });
+            diag.warn(`[tableEngine] forever 命中刷新写盘失败: ${e.message}`);
+          });
         }
       }
     } catch (e) {

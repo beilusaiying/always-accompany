@@ -430,7 +430,11 @@ router.put("/chat/message/:chatId/:index", requireApiKeyScope("chat:send"), asyn
   if (content === undefined) return res.status(400).json({ error: "missing content" });
   const chatModule = await _getBeiluChat();
   if (!await _isChatOwner(chatModule, chatId, username)) return res.status(404).json({ error: "chat not found" });
-  await chatModule.editMessage(chatId, index, content);
+  // [2026-08-01 批⑦疑#1] editMessage 第三参被 messageBuilder 按对象消费（result.content）。
+  //   v1 API 层 content 可能是纯字符串——包装成 {content} 对象，对齐内部 endpoints.mjs:203
+  //   addUserReply 的 {content} 包装范式。
+  const _editPayload = typeof content === 'string' ? { content } : content;
+  await chatModule.editMessage(chatId, index, _editPayload);
   res.json({ success: true });
 }, "PUT /v1/chat/message/:chatId/:index"));
 

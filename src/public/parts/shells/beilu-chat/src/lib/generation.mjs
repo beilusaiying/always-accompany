@@ -3,10 +3,16 @@
  * 不管工具执行（那是 ideClient/ToolExecutor 的事）、不管消息 CRUD（那是 chatOps 的事）。
  *
  * 链路：endpoints POST /message → triggerCharReply → executeGeneration → GetReply(插件链) → finalizeEntry → 自动续轮决策
- * 影响：写 chatLog（经 chatOps.addChatLogEntry）/ 广播 stream_start·stream_update·message_replaced·token_usage·auto_continue_fuse /
+ * 影响：写 chatLog——主 AI 回复经 finalizeEntry/modifyTimeLine 直接操作 chatMetadata.chatLog + chatStorage.saveChat
+ *       （不经 chatOps）；system/loop 辅助条目（工具结果/续轮注入/orphan 提示/用户图）经 chatOps.addChatLogEntry /
+ *       广播 message_added·stream_start·stream_update·message_replaced·token_usage·auto_continue_fuse·
+ *       reply_truncated·timeline_info·group_worker_degraded /
  *       设 _autoContinueTimers 定时器 / 更新 generationStats / 触发 runCodeRoundTriggers
- * 相交：← endpoints.mjs·chatOps.mjs（调用方）  → requestBuilder.getChatRequest·broadcast.StreamManager·chatOps.addChatLogEntry·
- *         ideClient.consumePendingResults·messageBuilder.BuildChatLogEntryFromCharReply
+ * 相交：← endpoints.mjs（调用方，triggerCharReply/modifyTimeLine 入口）；chatStorage.mjs 反向动态 import
+ *         调用 forgetChatGenState（deleteChat/handleAfterUserDeleted 会话清理钩子，非请求路径调用方）
+ *       → chatStorage.loadChat/saveChat·requestBuilder.getChatRequest·broadcast.StreamManager·
+ *         chatOps.addChatLogEntry/addUserReply/deleteMessage/hideMessages/trimEntryFiles·
+ *         ideClient.consumePendingResults/enqueuePendingResult·messageBuilder.BuildChatLogEntryFromCharReply
  */
 
 import { getPartDetails } from "../../../../../../server/parts_loader.mjs";
@@ -112,10 +118,32 @@ export function hasAutoContinueTimer(chatid) {
  * @param {number} [delayMs=0] - 延迟毫秒（来源 getAutoContinueConfig(username).delay_ms）
  * @param {string} [source="round_end"] - 触发源标识（仅日志/诊断用）
  */
-export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "round_end") {
+export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "round_end", readyContext = null) {
   cancelAutoContinue(chatid);
   const timerId = setTimeout(() => {
+    if (_autoContinueTimers.get(chatid) !== timerId) return;
     _autoContinueTimers.delete(chatid);
+    if (readyContext) {
+      const _chatData = chatMetadatas.get(chatid);
+      const _meta = _chatData?.chatMetadata;
+      const _owner = typeof readyContext.username === "string" ? readyContext.username.trim() : "";
+      if (!_meta || !_owner || _chatData.username !== _owner || _meta.username !== _owner) {
+        wbDetect(chatid, "generation", "resultReady:suppressed", false,
+          "结果续轮 fire 时会话已删除/卸载或 owner 不匹配", { source, owner: _owner || null });
+        return;
+      }
+      if (readyContext.enabled === false || !getAutoContinueConfig(_owner).enabled) {
+        wbTrace(chatid, "generation", "resultReady:suppressed", { source, reason: "config_disabled_at_fire" });
+        return;
+      }
+      // delay 窗内若另一轮开始，不能直接 trigger 后被生成锁忽略；改入统一 pending-ready，
+      // 锁释放后只补一次，闭合 check→timer→fire 的竞态窗口。
+      if (_generatingChats.has(chatid)) {
+        _queuePendingResultReady({ ...readyContext, chatid, charname, source, delayMs: 0 });
+        wbTrace(chatid, "generation", "resultReady:queuedAtFire", { source });
+        return;
+      }
+    }
     triggerCharReply(chatid, charname).catch(e =>
       console.warn(`[chat] ★ 自动继续触发失败 (${source}):`, e.message)
     );
@@ -129,7 +157,7 @@ export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "ro
  * _genPromises/_generatingChats 由在飞 executeGeneration 的 finally 按 promise 身份自清，不在此动（避免干扰其身份判定）。
  *
  * 链路：chatStorage.deleteChat → 本函数
- * 影响：abortAll 在飞流 / clearTimeout 续轮定时器 / 清 _autoContinueCounters·_fuzzyFailCounters·_pendingUserInput
+ * 影响：abortAll 在飞流 / clearTimeout 续轮定时器 / 清计数、用户输入与异步结果排队态
  *
  * @param {string} chatid - 要清理的会话 ID
  */
@@ -143,7 +171,7 @@ export function forgetChatGenState(chatid) {
   resetAutoContinueCounter(chatid);  // _autoContinueCounters + _fuzzyFailCounters
   _pendingUserInput.delete(chatid);
   _loopStopSignals.delete(chatid);   // [0724 双停退出] 删会话清连续停止计数
-  _pendingAsyncWake.delete(chatid);  // [0726 分身异步] 删会话清排队中的分身完成补唤醒
+  _pendingResultReady.delete(chatid); // 删会话清排队中的异步结果补唤醒
 }
 
 // 注册停止回调——现仅 broadcast ws.on("close") 全断 5s 卸载路径调用：卸载后 chatMetadata 置 null，
@@ -161,6 +189,12 @@ setOnStopGeneration(cancelAutoContinue);
 //   动态 import → 默认路径不引入任何新静态依赖。任何异常都回退本地 GetReply（不阻断生成）。
 //   worker 内工具调用的 pendingResults 由 runner consumePendingResults(chatid) 回传主进程（L89-93），
 //   auto-continue 续轮注入对 grouped chat 已生效（v4 §3.3 跨界队列已实现）。
+// 【红线·0731 凛倾拍板】「操作后自动继续」（系统配置域）与 <stopContinue/>（AI 任务域）是两个东西，禁止合流：
+//   自动继续=AI 操作后自动续下一轮对话的用户配置，跨任务持久；stopContinue=AI 说"本轮任务做完了"，
+//   只结束当前任务轮。AI 停止符禁止写/翻此配置（后端禁写 yonban_config.auto_continue，前端禁碰
+//   #ide-auto-continue 开关 UI）——否则用户下一次派任务就没有自动继续了。此配置唯一写者=用户
+//   （idePanel change → setAutoContinueConfig）。违反此线的历史事故：websocket.mjs 曾把停止符翻
+//   开关 checked=false，经面板全量覆写把假值持久化=用户配置随机丢失（0731 根修已删）。
 // 「操作后自动继续」用户配置单源（yonban_config.auto_continue ← 面板"自动触发AI继续"开关+延迟(秒)）。
 // 半接线修复（2026-07-14）：该面板开关/延迟原只写 localStorage、全仓零业务消费者（前端触发方案
 // 后端化为本文件回合末续轮时未跟迁）——现收口为后端单源：回合末续轮（ideToolCall/file_op 两处）
@@ -196,28 +230,78 @@ export function getCloneAsyncConfig(username) {
   };
 }
 
-// [0726 分身异步·002] 异步分身完成 → 唤醒主 AI 的唯一入口（replyHandler 分身完成回调经跨 part 动态 import 调用）。
-//   三态：①本会话生成中 → 排队 _pendingAsyncWake，_releaseGenerationLock 补唤醒（防 triggerCharReply 非
-//   userInitiated 静默丢弃）②空闲且自动继续总开关开 → scheduleAutoContinue 收口（可取消/互斥/单 timer，
-//   唤醒轮的 triggerCharReply 前置落地段会把池中 _clone_results 注入 prompt）③总开关关 → 尊重用户配置不唤醒，
-//   结果留池等下一次生成回合。提醒文本不在此注入——聚合文本头部已带 injectTexts "clone.async_done_reminder"。
-export function notifyAsyncCloneDone(chatid, charname, username) {
-  if (!chatid) return;
-  if (_generatingChats.has(chatid)) {
-    _pendingAsyncWake.set(chatid, username);
-    console.log(`[chat] ★ 分身异步完成: chatid=${chatid} 正在生成中，排队待本轮结束补唤醒`);
+function _queuePendingResultReady(next) {
+  const prev = _pendingResultReady.get(next.chatid);
+  if (!prev) {
+    _pendingResultReady.set(next.chatid, { ...next });
     return;
+  }
+  _pendingResultReady.set(next.chatid, {
+    ...prev,
+    charname: prev.charname || next.charname,
+    delayMs: Math.min(Number(prev.delayMs) || 0, Number(next.delayMs) || 0),
+    source: prev.source === next.source ? prev.source : `${prev.source}+${next.source}`,
+    enabled: prev.enabled !== false && next.enabled !== false,
+  });
+}
+
+/**
+ * 异步结果准备完成后的唯一生成唤醒入口。
+ * 同步完成 chat/owner/config/timer/generating 的原子判定；timer fire 时再次验证，消除
+ * 「检查时空闲、fire 时正在生成」导致 triggerCharReply 被锁忽略的竞态。
+ */
+export function notifyResultReady({
+  chatid,
+  username,
+  charname,
+  source = "result_ready",
+  delayMs,
+  enabled = true,
+} = {}) {
+  const _owner = typeof username === "string" ? username.trim() : "";
+  const _chatData = chatid ? chatMetadatas.get(chatid) : null;
+  const _meta = _chatData?.chatMetadata;
+  if (!chatid || !_owner || !_meta || _chatData.username !== _owner || _meta.username !== _owner) {
+    wbDetect(chatid || null, "generation", "resultReady:suppressed", false,
+      "结果就绪缺少有效 chat/owner 或会话已删除/卸载", { source, owner: _owner || null });
+    return { accepted: false, reason: "chat_or_owner_invalid" };
+  }
+  if (enabled === false) {
+    wbTrace(chatid, "generation", "resultReady:suppressed", { source, reason: "source_disabled" });
+    return { accepted: true, scheduled: false, reason: "source_disabled" };
+  }
+  const _ac = getAutoContinueConfig(_owner);
+  const _delay = Number.isFinite(Number(delayMs))
+    ? Math.max(0, Math.min(30000, Number(delayMs)))
+    : _ac.delay_ms;
+  const _ctx = { chatid, username: _owner, charname, source, delayMs: _delay, enabled: true };
+  if (_generatingChats.has(chatid)) {
+    _queuePendingResultReady(_ctx);
+    wbTrace(chatid, "generation", "resultReady:queued", { source });
+    return { accepted: true, queued: true };
   }
   if (_autoContinueTimers.has(chatid)) {
-    console.log(`[chat] ★ 分身异步完成: chatid=${chatid} 已有续轮 timer 在途，结果由该轮前置落地接住，不双触发`);
-    return;
+    wbTrace(chatid, "generation", "resultReady:coalesced", { source, reason: "timer_exists" });
+    return { accepted: true, scheduled: false, reason: "timer_exists" };
   }
-  const _ac = getAutoContinueConfig(username);
   if (!_ac.enabled) {
-    console.log(`[chat] ★ 分身异步完成: 自动继续总开关关闭，结果已入池等待下次生成（chatid=${chatid}）`);
-    return;
+    wbTrace(chatid, "generation", "resultReady:suppressed", { source, reason: "config_disabled" });
+    return { accepted: true, scheduled: false, reason: "config_disabled" };
   }
-  scheduleAutoContinue(chatid, charname, getCloneAsyncConfig(username).wake_delay_ms, "clone_async_done");
+  scheduleAutoContinue(chatid, charname, _delay, source, _ctx);
+  wbTrace(chatid, "generation", "resultReady:scheduled", { source, delayMs: _delay });
+  return { accepted: true, scheduled: true };
+}
+
+// [0726 分身异步·002] 保留既有公开入口，内部统一委托来源无关的 notifyResultReady。
+export function notifyAsyncCloneDone(chatid, charname, username) {
+  return notifyResultReady({
+    chatid,
+    username,
+    charname,
+    source: "clone_async_done",
+    delayMs: getCloneAsyncConfig(username).wake_delay_ms,
+  });
 }
 
 // [0724 双停退出] per-chat 连续 stopContinue 计数：AI 在 loop 中每发一次 <stopContinue/> 计 1，
@@ -401,6 +485,11 @@ export async function executeGeneration(
       if (_freshMeta) chatMetadata = _freshMeta;
     } catch { /* loadChat 失败用既有引用（原行为），不阻断落盘 */ }
 
+    // [2026-08-01 空消息累计案·断链2] 错误条目持久标记：isError 只跳过"本次"saveChat（:530），
+    //   但条目留在内存 chatLog（前端收敛/自动继续决策需要），之后任何整份落盘
+    //   （addChatLogEntry/回档等的 saveChat）都会把它带上盘=契约破产（盘上 ⚠️ 生成失败消息实证）。
+    //   打标记 + chatStorage.saveChat 序列化单点剥除，恢复"错误条目不持久化"契约。
+    if (isError) finalEntry._transient_error = true;
     let idx = chatMetadata.chatLog.findIndex((e) => e.id === entryId);
     if (idx === -1) {
       chatMetadata.chatLog.push(finalEntry);
@@ -580,6 +669,9 @@ export async function executeGeneration(
     // API截断由反代抗截断机制处理（自动续传），beilu不干预
 
     // ★ stopContinue：即使有pendingResults也先注入再停止（不触发继续）
+    // 【红线】stopContinue 是任务域信号：本分支只允许结束"当前任务轮"（不安排续轮）+ 运行态计数
+    //   （_loopStopSignals/_autoContinueCounters，均为内存 Map，用户下一条消息/AI 下一轮干活即清），
+    //   禁止在此写任何持久配置（yonban_config.auto_continue/loop_enabled）——系统开关只归用户。
     const _hasPending = ideClient.countPendingResults(chatid) > 0;
     wbTrace(chatid, "generation", "autocontinue:decide", { hasToolCall: _hasToolCall, hasPending: _hasPending, isError: _isError, isEmpty: _isEmpty, isAborted: _isAborted });
     // [0724 双停退出] 本轮不带停止符=AI 还在干活 → 连续停止计数清零（连续性定义在此单点维护）
@@ -595,7 +687,8 @@ export async function executeGeneration(
         _sysEntry.content = _resultText;
         // ★ 容错：结构化操作类型标记，识别身份首选此字段（不依赖 content 字面串 [IDE工具执行结果]）
         if (!_sysEntry.extension) _sysEntry.extension = {};
-        _sysEntry.extension._opType = "ide_tool_result";
+        const _hasCloneResultSC = _pendingResults.some(r => r.tool === "_clone_results");
+        _sysEntry.extension._opType = _hasCloneResultSC ? "clone_result" : "ide_tool_result";
         _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
         _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _sysEntry.time_stamp = new Date();
@@ -687,7 +780,11 @@ export async function executeGeneration(
           : _resultText;
         // ★ 容错：结构化操作类型标记，识别身份首选此字段（不依赖 content 字面串 [IDE工具执行结果]）
         if (!_sysEntry.extension) _sysEntry.extension = {};
-        _sysEntry.extension._opType = "ide_tool_result";
+        // [0730] 分身结果独立 _opType：分身产出（_clone_results）与普通工具结果（read_file 等）
+        //   原同标 ide_tool_result → collectNoiseToHide 同池 keepLast=2 竞争 → 分身结果被几个
+        //   read_file 挤掉。独立标 clone_result 后 isIdeToolResultMsg 不匹配 → 不参与自动裁剪。
+        const _hasCloneResult = _pendingResults.some(r => r.tool === "_clone_results");
+        _sysEntry.extension._opType = _hasCloneResult ? "clone_result" : "ide_tool_result";
         _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
         _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _sysEntry.time_stamp = new Date();
@@ -831,6 +928,33 @@ export async function executeGeneration(
                 console.warn(`[chat] ⚠️ 回复非自然完成: finish_reason=${_fr}，内容可能被截断`);
                 try { broadcastChatEvent(chatid, { type: "reply_truncated", payload: { finish_reason: _fr, timestamp: new Date().toISOString() } }); } catch { /* 广播失败不影响主流程 */ }
               }
+              // [0730 框架修] _hasToolCall 安全网：content 含 ideToolCall 标签但所有结果池为空=
+              //   ReplyHandler section 7 被跳过或工具结果入队失败。不当"纯文本"停掉——
+              //   注入诊断错误让 AI 看到问题，续轮给 AI 自纠机会。
+              if (_hasToolCall) {
+                wbDetect(chatid, "generation", "autocontinue:toolCallOrphan", false,
+                  "content 含 ideToolCall 标签但所有结果池为空（工具调用被检测但未执行/结果丢失）",
+                  { contentLen: _content.length });
+                console.warn(`[chat] ⚠️ 工具调用孤儿：content 含 ideToolCall 但 pendingResults 全空`);
+                const _orphanEntry = new chatLogEntry_t();
+                _orphanEntry.role = "system";
+                _orphanEntry.name = "IDE工具结果";
+                _orphanEntry.content = "[IDE工具执行结果]\n\n⚠️ 你的工具调用标签被检测到，但工具未能执行（可能原因：ReplyHandler 处理异常、IDE 未连接、或结果入队失败）。请重试工具调用。\n\n[/IDE工具执行结果]";
+                if (!_orphanEntry.extension) _orphanEntry.extension = {};
+                _orphanEntry.extension._opType = "ide_tool_result";
+                _orphanEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
+                _orphanEntry.time_stamp = new Date();
+                _orphanEntry.is_generating = false;
+                await addChatLogEntry(chatid, _orphanEntry);
+                const _acCfgOrphan = getAutoContinueConfig(chatMetadata.username);
+                if (_acCfgOrphan.enabled) {
+                  const _count = (_autoContinueCounters.get(chatid) || 0) + 1;
+                  _autoContinueCounters.set(chatid, _count);
+                  scheduleAutoContinue(chatid, request.char_id, Math.max(_acCfgOrphan.delay_ms, 1000), "tool_orphan");
+                } else {
+                  _autoContinueCounters.delete(chatid);
+                }
+              } else {
               // Loop 自动继续：无工具结果时，若主开关+loop 均启用且有注入文本，排延迟注入续轮（单一实现见 scheduleLoopContinue）
               const _loopCfg = getAutoContinueConfig(chatMetadata.username);
               if (_loopActive(_loopCfg)) {
@@ -839,6 +963,7 @@ export async function executeGeneration(
                 _autoContinueCounters.delete(chatid);
                 wbTrace(chatid, "generation", "autocontinue:stop", { reason: "no_tool_results" });
                 console.log("[chat] ★ 自动继续: 停止 (纯文本，无工具结果)");
+              }
               }
             }
           }
@@ -870,7 +995,7 @@ export async function executeGeneration(
         await finalizeEntry(placeholderEntry, false);
       } catch (saveErr) {
         console.error("[chat] saveChat failed for aborted entry (kept in-memory only):", saveErr?.message || saveErr);
-        broadcastBotError({ platform: "beilu-chat", botname: request.char_id || "", phase: "runtime", error: saveErr });
+        broadcastBotError({ username: chatMetadata.username, platform: "beilu-chat", botname: request.char_id || "", phase: "runtime", error: saveErr });
       }
     } else {
       generationStats.error++;
@@ -881,7 +1006,7 @@ export async function executeGeneration(
       );
       // BR2：GetReply 错误经 broadcastBotError 广播到全 UI（botSidePanels 红点计数），
       // 对齐 10 个 bot 壳已有的错误外显链路。broadcastBotError 契约=永不抛（内部全容错），不再包裹。
-      broadcastBotError({ platform: "beilu-chat", botname: request.char_id || "", phase: "runtime", error: e });
+      broadcastBotError({ username: chatMetadata.username, platform: "beilu-chat", botname: request.char_id || "", phase: "runtime", error: e });
       stream.abort(e?.message || String(e));
       // [0716 网络波动容错·凛倾定案] 已流出的内容（含 thinking）必须保留——原实现 content=classifyApiError(e)
       //   整条覆盖，网络中流断线后 AI 已产出的 think/正文全被错误文案吃掉（凛倾实证）。对齐同函数
@@ -932,20 +1057,22 @@ const _genPromises = new Map();
  *  单次注入的语义是「跟这条消息一起送到」，排队只该推迟消息，不该丢它的附加物。
  *  多条中途输入合并而非覆盖：ids 取并集、文本去重后换行拼接——两次都是用户真说过的话。 */
 const _pendingUserInput = new Map();
-/** [0726 分身异步·002] 异步分身完成时若本会话正在生成 → 排队（chatid→username），本轮结束后补唤醒。
+/** 异步结果到达时若本会话正在生成 → 排队（chatid→route context），本轮结束后补唤醒。
  *  与 _pendingUserInput 平行：triggerCharReply 非 userInitiated 重复触发会被静默忽略（:869），
- *  没有这条排队通道时"生成中到达的分身完成"会丢唤醒、结果滞留池中等下一次任意生成。 */
-const _pendingAsyncWake = new Map();
+ *  没有这条排队通道时生成中到达的工具/分身结果会丢唤醒、结果滞留池中等下一次任意生成。 */
+const _pendingResultReady = new Map();
 
 function _releaseGenerationLock(chatid, charname, genPromise) {
   _generatingChats.delete(chatid);
   generationStats.activeCount--;
   if (_genPromises.get(chatid) === genPromise) _genPromises.delete(chatid);
+  let _userWakeScheduled = false;
   if (_pendingUserInput.has(chatid)) {
     // [0726] 排队时随身携带的单次注入随补发一起送出（原先补发不带 → 中途输入的注入蒸发）
     const _pending = _pendingUserInput.get(chatid) || {};
     _pendingUserInput.delete(chatid);
     if (!_autoContinueTimers.has(chatid)) {
+      _userWakeScheduled = true;
       setTimeout(() => {
         triggerCharReply(chatid, charname, {
           userInitiated: true,
@@ -955,12 +1082,16 @@ function _releaseGenerationLock(chatid, charname, genPromise) {
       }, 0);
     }
   }
-  // [0726 分身异步·002] 生成中到达的分身完成 → 本轮结束补唤醒。回合末分支③若已消费结果并排了
-  //   续轮 timer（_autoContinueTimers 有本 chatid），notifyAsyncCloneDone 内的互斥判断天然跳过，不双触发。
-  if (_pendingAsyncWake.has(chatid)) {
-    const _awUser = _pendingAsyncWake.get(chatid);
-    _pendingAsyncWake.delete(chatid);
-    notifyAsyncCloneDone(chatid, charname, _awUser);
+  // 生成中到达的异步结果 → 本轮结束补唤醒。若已有用户中途输入，下一用户轮会前置消费结果，
+  // 不再另排自动轮；否则重新进入统一入口，与回合末已排 timer 原子合并。
+  if (_pendingResultReady.has(chatid)) {
+    const _ready = _pendingResultReady.get(chatid);
+    _pendingResultReady.delete(chatid);
+    if (_userWakeScheduled) {
+      wbTrace(chatid, "generation", "resultReady:coalesced", { source: _ready.source, reason: "pending_user_input" });
+    } else {
+      notifyResultReady({ ..._ready, charname: _ready.charname || charname });
+    }
   }
 }
 
@@ -1130,7 +1261,7 @@ export async function triggerCharReply(chatid, charname, options = {}) {
           try {
             if (_r.chatid) ideClient.enqueuePendingResult(_r);
             else _r._deliveredTo?.delete?.(chatid);
-          } catch { /* 恢复失败仅日志 */ }
+          } catch (restoreErr) { console.warn(`[chat] IDE 结果池态恢复失败(${_r.chatid || "broadcast"}): ${restoreErr?.message}`); }
         }
         console.warn("[chat] IDE 结果前置落 log 失败（池态已恢复，回合末兜底）:", _idePreErr?.message);
       }

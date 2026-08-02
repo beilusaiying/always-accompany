@@ -1,0 +1,88 @@
+{
+  "_meta": {
+    "name": "P9词库维护",
+    "source": "builtin",
+    "description": "P9 词库维护聊天组子模式配套预设：提示词正文由用户填写"
+  },
+  "preset_json": {
+    "prompts": [
+      { "identifier": "main", "system_prompt": true, "enabled": true, "marker": false, "name": "P9-词库维护-主指令", "role": "system", "content": "", "injection_position": 0, "injection_depth": 4, "forbid_overrides": false, "injection_order": 100 },
+      { "identifier": "nsfw", "system_prompt": true, "enabled": true, "marker": false, "name": "NSFW Prompt", "role": "system", "content": "", "injection_position": 0, "injection_depth": 4, "forbid_overrides": false, "injection_order": 100 },
+      { "identifier": "jailbreak", "system_prompt": true, "enabled": true, "marker": false, "name": "Jailbreak", "role": "system", "content": "", "injection_position": 0, "injection_depth": 4, "forbid_overrides": false, "injection_order": 100 },
+      { "identifier": "personaDescription", "name": "Persona Description", "system_prompt": true, "marker": true },
+      { "identifier": "scenario", "name": "Scenario", "system_prompt": true, "marker": true },
+      { "identifier": "charDescription", "name": "Char Description", "system_prompt": true, "marker": true },
+      { "identifier": "charPersonality", "name": "Char Personality", "system_prompt": true, "marker": true },
+      { "identifier": "worldInfoBefore", "name": "World Info (before)", "system_prompt": true, "marker": true },
+      { "identifier": "worldInfoAfter", "name": "World Info (after)", "system_prompt": true, "marker": true },
+      { "identifier": "chatHistory", "name": "Chat History", "system_prompt": true, "marker": true },
+      { "identifier": "dialogueExamples", "name": "Chat Examples", "system_prompt": true, "marker": true }
+    ],
+    "prompt_order": [
+      { "character_id": 100000, "order": [
+        { "identifier": "main", "enabled": true },
+        { "identifier": "personaDescription", "enabled": true },
+        { "identifier": "worldInfoBefore", "enabled": true },
+        { "identifier": "charDescription", "enabled": true },
+        { "identifier": "charPersonality", "enabled": true },
+        { "identifier": "scenario", "enabled": true },
+        { "identifier": "nsfw", "enabled": true },
+        { "identifier": "worldInfoAfter", "enabled": true },
+        { "identifier": "dialogueExamples", "enabled": true },
+        { "identifier": "chatHistory", "enabled": true },
+        { "identifier": "jailbreak", "enabled": true }
+      ] },
+      { "character_id": 100001, "order": [
+        { "identifier": "main", "enabled": true },
+        { "identifier": "personaDescription", "enabled": true },
+        { "identifier": "worldInfoBefore", "enabled": true },
+        { "identifier": "charDescription", "enabled": true },
+        { "identifier": "charPersonality", "enabled": true },
+        { "identifier": "scenario", "enabled": true },
+        { "identifier": "nsfw", "enabled": true },
+        { "identifier": "worldInfoAfter", "enabled": true },
+        { "identifier": "dialogueExamples", "enabled": true },
+        { "identifier": "chatHistory", "enabled": true },
+        { "identifier": "jailbreak", "enabled": true }
+      ] }
+    ],
+    "temperature": 1,
+    "frequency_penalty": 0,
+    "presence_penalty": 0,
+    "top_p": 1,
+    "top_k": 0,
+    "top_a": 0,
+    "min_p": 0,
+    "repetition_penalty": 1,
+    "openai_max_context": 1000000,
+    "openai_max_tokens": 60000,
+    "stream_openai": true,
+    "seed": -1,
+    "max_context_unlocked": true
+  },
+  "model_params": {
+    "temperature": 1,
+    "frequency_penalty": 0,
+    "presence_penalty": 0,
+    "top_p": 1,
+    "top_k": 0,
+    "top_a": 0,
+    "min_p": 0,
+    "repetition_penalty": 1,
+    "max_context": 1000000,
+    "openai_max_context": 1000000,
+    "max_tokens": 60000,
+    "stream": true,
+    "seed": -1,
+    "n": 1,
+    "names_behavior": 0,
+    "wrap_in_quotes": false,
+    "max_context_unlocked": true,
+    "squash_system_messages": false,
+    "function_calling": false,
+    "show_thoughts": false,
+    "reasoning_effort": "auto",
+    "image_inlining": false
+  },
+  "macro_variables": {}
+}

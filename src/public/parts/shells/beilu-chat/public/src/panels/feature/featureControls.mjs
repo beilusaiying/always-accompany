@@ -205,7 +205,7 @@ const _PARAM_SCHEMA_DOM = [
   ["min_p", "param-min-p"],
   ["max_context", "param-max-context"],
   ["max_tokens", "param-max-tokens"],
-  ["thinking_budget", "param-thinking-budget"],
+  // thinking_budget 行已删（2026-08-01 收口：思维链控制唯一入口=AI 源面板 per-源设置）
   ["frequency_penalty", "param-frequency-penalty"], // T11-A：min/max/step 从 PARAM_SCHEMA 单源覆盖
   ["presence_penalty", "param-presence-penalty"],   // T11-A
 ];

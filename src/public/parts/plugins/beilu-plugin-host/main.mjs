@@ -281,6 +281,7 @@ export default {
      */
     chat: {
       GetPrompt: async () => {
+        // ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
         const injections = consumeAllPendingInjections();
         wbT(null, "pluginhost:call", "getprompt_consume", { injections: injections.length });
         if (injections.length === 0) {

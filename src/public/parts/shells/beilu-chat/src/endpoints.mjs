@@ -1,12 +1,13 @@
 /**
- * endpoints — beilu-chat 壳的全部 HTTP/WS 路由入口。4 条链路交叉（R1 生成 / R6 回档 / R9 Eye / R12 前端）。
+ * endpoints — beilu-chat 壳的全部 HTTP/WS 路由入口。3 条链路交叉（R1 生成 / R6 回档 / R12 前端）。
  * 不管 AI 生成逻辑（那是 generation.mjs 的事）、不管消息 CRUD 实现（那是 chatOps 的事）、
  * 不管存储路径解析（那是 chatStorage 的事）。本模块只做：HTTP 参数校验 → 委派业务函数 → 序列化响应。
+ * 【0802 校验】POST /api/eye/inject（Eye 截图注入，R9 链路）不在本文件——该路由实际注册在
+ *   server/web_server/endpoints.mjs，本文件全文 grep 零引用，原头注释误标为本文件链路，已删除该claim。
  *
  * 链路：前端 HTTP/WS → 本模块 → chatOps / chatStorage / generation（triggerCharReply）
- *       Eye Python/Electron → POST /api/eye/inject → injection_state（截图注入通道，R9 链路）
  * 影响：全局状态写（__beiluLastUserMessage/AutoSendCount）、磁盘文件操作（角色/人设 CRUD）
- * 相交：← 前端（browser + YonBan webview）/ Eye（Python + Electron）
+ * 相交：← 前端（browser + YonBan webview）
  *       → chat.mjs facade（re-export 的 chatOps/chatStorage/generation 函数）
  *       → parts_loader（loadPart/notifyPartInstall/parts_set）
  *       → ideClient（IDE 桥接 WS token / 手动工具调用）
@@ -21,6 +22,7 @@
  * │ ■ IDE 桥接                                                            │
  * │   GET  ide/wstoken              — 浏览器代读 IDE WS token              │
  * │   POST ide/connect              — 强制后端 ideClient 立即连接           │
+ * │   GET  ide/tool-list            — IDE 公开工具清单（单源 ideClient.availableTools）│
  * │   POST ide/manual-tool-call     — 人工面板工具调用（走后端统一执行闸）    │
  * │                                                                       │
  * │ ■ 多组并行管理（v4）                                                   │
@@ -33,6 +35,10 @@
  * │   GET    groups/engine          — 并行引擎开关状态                      │
  * │   POST   groups/engine          — 切换并行引擎开关                      │
  * │   POST   groups/:groupId/execute — 启动组内全部角色对话                  │
+ * │                                                                       │
+ * │ ■ 生成并发控制                                                         │
+ * │   GET    ai-concurrency         — 读 AI 并发上限（0=不限）              │
+ * │   POST   ai-concurrency         — 设 AI 并发上限（写 yonban_config.ai_max_concurrent）│
  * │                                                                       │
  * │ ■ 角色卡管理（从 beilu-home 迁入）                                      │
  * │   POST   create-char            — 创建空白角色卡                        │
@@ -50,6 +56,7 @@
  * │                                                                       │
  * │ ■ 对话生命周期                                                         │
  * │   POST   new                    — 新建空对话                            │
+ * │   POST   newbotchat             — bot 对话文件 ensure/新建（一平台一线，幂等）│
  * │   DELETE delete                 — 批量删除对话                          │
  * │   POST   :chatid/rename         — 对话改名（N39）                       │
  * │   POST   :chatid/mode           — 对话模式徽标（服务端持久，对齐N39）     │
@@ -58,6 +65,7 @@
  * │   POST   branch                 — 对话分叉                             │
  * │   GET    getchatlist            — 获取聊天列表                          │
  * │   POST   search                 — 全文搜索聊天内容                      │
+ * │   POST   switch-active          — 跨客户端同步当前活跃对话（YonBan切换通知本体跟随）│
  * │                                                                       │
  * │ ■ 对话消息操作（:chatid 经 router.param 归属校验）                       │
  * │   WS     /ws/.../ui/:chatid     — 聊天 UI WebSocket                    │
@@ -72,6 +80,7 @@
  * │   POST   :chatid/messages/hide  — 隐藏/取消隐藏消息范围                 │
  * │   PUT    :chatid/timeline       — 切换时间线（greeting swipe）           │
  * │   GET    :chatid/render/entries — D5 regex 激活修复：render 查询         │
+ * │   GET    :chatid/airp/view      — AIRP 渲染期视图（符号画/状态块，不进 chatLog）│
  * │                                                                       │
  * │ ■ 对话元数据查询                                                       │
  * │   GET    :chatid/chars          — 对话内角色列表                        │
@@ -110,6 +119,10 @@
  * │   GET    diag/logs              — 获取诊断日志                          │
  * │   POST   diag/clear-logs        — 清空诊断日志                          │
  * │                                                                       │
+ * │ ■ Browser 插件代理（浏览器自动化 CDP 连接管理）                          │
+ * │   GET    plugins/beilu-browser/status — 查询 CDP 连接状态               │
+ * │   POST   plugins/beilu-browser/launch — 启动带远程调试端口的 Chrome      │
+ * │                                                                       │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 import { Buffer } from "node:buffer";
@@ -127,7 +140,7 @@ import {
   requireOwner,
 } from "../../../../../yonban/core/functions/security/auth.mjs";
 import { diagControl } from "../../../../../server/diagLogger.mjs";
-import { loadPart, notifyPartInstall, parts_set, uninstallPartBase } from "../../../../../server/parts_loader.mjs";
+import { isPartLoaded, loadPart, notifyPartInstall, parts_set, uninstallPartBase } from "../../../../../server/parts_loader.mjs";
 import { loadData, saveData } from "../../../../../server/setting_loader.mjs";
 import { sendEventToUser } from "../../../../../server/web_server/event_dispatcher.mjs";
 import { confinePath, confineSegment } from "../../../../../yonban/core/functions/security/path_confine.mjs";
@@ -174,8 +187,9 @@ import { addfile, getfile } from "./files.mjs";
 // 防双实现路径漂移（前端代读端点与后端客户端读到不同 token/端口）。
 import { resolveIdeWsToken, ideClient } from "../../../../../yonban/core/transport/ideClient.mjs"; // T066：ideClient 迁 transport，改指 yonban 新位实现体
 // D-4 路B：手动工具调用经后端 ideClient（统一执行闸）+ 结果作 _hidden 的 IDE工具结果 条目接入对话。
-import { addChatLogEntry, ensureBotChat, getRecentUserReply } from "./lib/chatOps.mjs"; // getRecentUserReply=0719 幂等窗查询（POST message 重放判定）
+import { addChatLogEntry, ensureBotChat, ensureModeChatsForChar, getRecentUserReply } from "./lib/chatOps.mjs"; // getRecentUserReply=0719 幂等窗查询（POST message 重放判定）；ensureModeChatsForChar=0731 四窗口对话收口
 import { branchChat, loadChat, getChatMetadatas } from "./lib/chatStorage.mjs";
+import { broadcastUserActiveChat } from "./lib/broadcast.mjs";
 import { chatLogEntry_t } from "./lib/models.mjs";
 import { safeTrash, safeUnlink } from "../../../../../yonban/core/functions/rollback/safeDelete.mjs"; // T8·回切：改指 yonban 新位实现体
 import { isDeleted } from "../../../../../yonban/core/functions/hide/chatEntryUtils.mjs"; // T8·回切：改指 yonban 新位实现体
@@ -272,6 +286,26 @@ export function setEndpoints(router) {
     },
   );
 
+  // [0730] 对话切换广播：任何客户端（YonBan/外部面板）切换对话时调此端点，
+  // 后端广播 peer_active_chat → 本体前端跟随切换（websocket.mjs:1169 消费）。
+  // 解决 YonBan 切对话时本体不同步：YonBan 前端不经过 WS 重建，手动触发广播。
+  router.post(
+    "/api/parts/shells\\:chat/switch-active",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const chatid = req.body?.chatid;
+        if (!chatid) return res.status(400).json({ error: "缺少 chatid" });
+        broadcastUserActiveChat(chatid, "attach");
+        res.status(200).json({ ok: true, chatid });
+      } catch (err) {
+        console.error("[chat/switch-active] Error:", err.message);
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
   // 连接识别修复（2026-06-15）：前端 ideConnPanel 连上浏览器那条 WS 后调本端点，
   // 强制后端 ideClient（getPromptHandler 选 INJ 看的就是它）立即连一次，绕开指数退避窗口。
   // 根因：前端连接(浏览器↔YonBan) 与 后端连接(Deno↔YonBan) 解耦，前端"已连接"≠后端 isConnected。
@@ -326,8 +360,13 @@ export function setEndpoints(router) {
         }
         // SEC 破口1：chatid 来自 body，router.param 不触发 → inline 校验属主，防 A 借工具调用操作 B 的会话。
         if (!(await _assertChatOwner(req, res, chatid))) return;
+        const { username } = await getUserByReq(req);
         const traceId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const result = await ideClient.callTool(tool, params, undefined, traceId, { source: "frontend" });
+        const result = await ideClient.callTool(tool, params, undefined, traceId, {
+          source: "frontend",
+          chatid,
+          ownerUsername: username,
+        });
 
         const ok = !!result?.success;
         const body = ok
@@ -701,7 +740,11 @@ export function setEndpoints(router) {
         // 添加角色卡=建永久链路（凛倾0705拍板；单源 storage.addPermanentCharLink，与 addCharLink verb 同落盘）
         try { await addPermanentCharLink(username, charName); } catch (e) { console.warn("[beilu-chat] 建永久链路失败(非致命):", e.message); } // T4：now async，await 保留错误被此 try/catch 捕获
         try { sendEventToUser(username, "char-data-changed", { charName, created: true }); } catch (e) { console.warn("[同步广播] char-data-changed(created) 推送失败(不阻塞创建):", e?.message); }
-        res.status(201).json({ success: true, name: charName });
+        // [0731 四窗口对话收口] 四模式窗口各建一条专属对话+「在用」指针（单点=chatOps.ensureModeChatsForChar，
+        //   幂等）。放 notifyPartInstall 之后：addchar 内 loadPart 需要 parts 缓存已刷新。非致命：失败只少对话。
+        let modeChats = {};
+        try { modeChats = await ensureModeChatsForChar(username, charName); } catch (e) { console.warn("[beilu-chat] 建四窗口对话失败(非致命):", e.message); }
+        res.status(201).json({ success: true, name: charName, modeChats });
       } catch (error) {
         console.error("[beilu-chat] Error creating char:", error);
         res.status(500).json({ message: error.message });
@@ -767,7 +810,9 @@ export function setEndpoints(router) {
             chardata.extensions = {};
           }
           // 递归浅合并第一层 key（如 tavern_helper）
+          const _UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"])
           for (const [extKey, extVal] of Object.entries(updates.extensions)) {
+            if (_UNSAFE_KEYS.has(extKey)) continue
             if (
               extVal &&
               typeof extVal === "object" &&
@@ -863,6 +908,17 @@ export function setEndpoints(router) {
         console.log(
           `[beilu-chat] 角色卡已更新: "${charName}" (user: ${username})`,
         );
+        // [2026-08-01 改卡不重载修] 盘已更新，刷新已加载角色的模块级 chardata 内存态：
+        //   两种角色模板的 SetData({chardata}) 均支持就地刷新内存（SillyTavern :110-112 原有，
+        //   beilu-char-template 本次补齐）。未加载的角色（首次使用时从盘读，无陈旧态）跳过。
+        //   失败不阻断保存——模板可能无 SetData 或角色已卸载。
+        const _charPartpath = `chars/${charName}`;
+        if (changed && isPartLoaded(username, _charPartpath)) {
+          try {
+            const _charPart = await loadPart(username, _charPartpath);
+            await _charPart.interfaces?.config?.SetData?.({ chardata });
+          } catch (e) { console.warn(`[beilu-chat] 改卡后刷新内存态失败(盘已保存): ${e?.message}`); }
+        }
         // 跨客户端：通知该用户所有端，正在看此卡的角色信息面板/选卡器重载
         try { sendEventToUser(username, "char-data-changed", { charName }); } catch (e) { console.warn("[同步广播] char-data-changed 推送失败(不阻塞保存):", e?.message); }
         res.status(200).json({ success: true, name: charName, chardata });
@@ -2003,7 +2059,8 @@ export function setEndpoints(router) {
     async (req, res) => {
       try {
         const { username } = await getUserByReq(req);
-        res.status(200).json({ chatid: await newChat(username) });
+        const mode = req.body?.mode || null;
+        res.status(200).json({ chatid: await newChat(username, mode) });
       } catch (err) {
         console.error("[chat/new] Error:", err.message);
         res.status(500).json({ error: err.message });
@@ -2873,11 +2930,16 @@ export function setEndpoints(router) {
         );
         // 添加角色卡=建永久链路（凛倾0705拍板；导入用 finalName=重名加后缀后的最终落盘名）
         try { await addPermanentCharLink(username, finalName); } catch (e) { console.warn("[beilu-chat] 建永久链路失败(非致命):", e.message); } // T4：now async，await 保留错误被此 try/catch 捕获
+        // [0731 四窗口对话收口] 与 create-char 同点：四模式窗口各建专属对话（幂等补缺）。
+        //   原前端导入路径"已有对话就跳过建对话"短路是三窗共用一对话的根因，已随本收口镜像删除。
+        let modeChats = {};
+        try { modeChats = await ensureModeChatsForChar(username, finalName); } catch (e) { console.warn("[beilu-chat] 建四窗口对话失败(非致命):", e.message); }
         res.status(201).json({
           success: true,
           name: finalName,
           original_name: charName,
           chardata: data,
+          modeChats,
         });
       } catch (error) {
         console.error("[beilu-chat] Error importing char:", error);

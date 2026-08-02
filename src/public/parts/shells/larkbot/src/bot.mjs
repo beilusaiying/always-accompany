@@ -16,7 +16,7 @@ const _lc = createBotLifecycle("larkbot", {
 		const { createSimpleLarkInterface } = await import("./default_interface/main.mjs");
 		return createSimpleLarkInterface(char, username, charname);
 	},
-	connect: async (config, char, { botname }) => {
+	connect: async (config, char, { username, botname }) => {
 		diag.log(`startBot: 启动 bot="${config.char}", appId="${config.appId}"`);
 		const client = new lark.Client({
 			appId: config.appId,
@@ -40,7 +40,7 @@ const _lc = createBotLifecycle("larkbot", {
 		// BR2 runtime：lark WSClient 的 onError(SDK 文档支持)在重连耗尽/运行时连接错误时触发 → 外显红点(phase=runtime，补齐 M8 半修：原仅 start 阶段有 producer)
 		wsClient.start({
 			eventDispatcher,
-			onError: (error) => { try { broadcastBotError({ platform: "larkbot", botname, phase: "runtime", error }); } catch { /* 外显失败不阻断 bot 主流程 */ } },
+			onError: (error) => { try { broadcastBotError({ username, platform: "larkbot", botname, phase: "runtime", error }); } catch { /* 外显失败不阻断 bot 主流程 */ } },
 		});
 		return { client, wsClient };
 	},

@@ -17,6 +17,40 @@
   box-shadow: 0 2px 16px var(--beilu-amber-10);
 }
 
+/* 打字式联想栏（002 0731）：flex 列内自然占位（非 absolute overlay，不引入层级复杂度）。
+   chip=联想词可点击插入；.ts-mem=相关记忆只读提示行。主题色走 --beilu-* 变量明暗自适应。 */
+.typing-suggest-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--beilu-amber-15);
+  scrollbar-width: thin;
+}
+.typing-suggest-chip {
+  flex-shrink: 0;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--beilu-amber-15);
+  border-radius: 10px;
+  background: var(--beilu-bg-card);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.typing-suggest-chip:hover {
+  border-color: var(--beilu-amber-40);
+}
+.typing-suggest-mem {
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 10px;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 输入框拖拽调高手柄（凛倾2026-07-09：对话框像侧栏一样可拉伸；同 .panel-resize-handle 交互语义，方向改纵向） */
 .chat-input-resize-handle {
   height: 5px;

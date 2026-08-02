@@ -266,12 +266,15 @@ export function buildChatLogMessages(prompt_struct, ignoreFiles, attachmentHisto
 /**
  * 提示词后处理：对消息序列应用不同级别的角色规范化
  *
- * 3 种模式 + none（2026-07-08 凛倾定：「提示词后处理只有3个模式,合并,严格,半严格」，
- * 与预填充（claude_prefill_mode，尾部最后一条的独立机制）互不相干）：
+ * 3 种模式 + none（与预填充 claude_prefill_mode 互不相干）：
  *   none   — 不处理（default）
  *   merge  — 合并连续同角色
- *   semi   — 半严格：merge + 中段 system→user
- *   strict — 严格：semi + 首条 user 占位
+ *   semi   — 旧半严格兼容值；等同 merge，保留 system 权限
+ *   strict — 旧严格兼容值；等同 merge，保留 system 权限
+ *
+ * 权限契约（2026-07-29）：
+ *   PP 只能整理消息边界，不能把 system 降成 user。渠道确有结构差异时，由 provider adapter
+ *   映射成该协议的 systemInstruction / 顶层 system / developer 等等价高权限形状。
  * 存量兼容归一：旧 "claude"（预填充概念泄漏进 pp 的历史枚举，ST 分发表同义 merge）→ merge；
  * 旧 "single"（全并单条 user）→ strict。写入层（preset/main.mjs）同表迁移，此处消费端兜底。
  *
@@ -285,14 +288,32 @@ export function postProcessMessages(messages, type) {
   wbT(null, "ai:transform", "postProcess", { type: _type, raw: type, count: messages?.length || 0 });
   switch (_type) {
     case "merge":
+      return mergeConsecutiveRoles(_stripTools(messages, false));
+    case "merge_tools":
       return mergeConsecutiveRoles(messages);
     case "semi":
+      return semiStrictProcess(_stripTools(messages, false));
+    case "semi_tools":
       return semiStrictProcess(messages);
     case "strict":
+      return strictProcess(_stripTools(messages, false));
+    case "strict_tools":
       return strictProcess(messages);
     default:
       return messages;
   }
+}
+
+// tool 角色处理（SillyTavern 同源）：tools=false 时 tool→user + 删 tool_calls/tool_call_id
+function _stripTools(messages, keep) {
+  if (keep) return messages;
+  return messages.map((m) => {
+    const out = { ...m };
+    if (out.role === "tool") out.role = "user";
+    delete out.tool_calls;
+    delete out.tool_call_id;
+    return out;
+  });
 }
 
 /**
@@ -388,52 +409,37 @@ export function mergeConsecutiveRoles(messages) {
 }
 
 /**
- * 半严格模式：
- * 处理顺序：
- *   1. 先合并连续同角色消息
- *   2. 将 i>0 的 system 消息转为 user
- *   3. 再次合并（因为 system→user 后可能产生新的连续同角色）
- *
- * @param {Array<{role: string, content: string|object[]}>} messages
- * @returns {Array<{role: string, content: string|object[]}>}
+ * 半严格模式（SillyTavern semi 变体）：合并 + 历史对话中段的 system 改为 user。
+ * 尾部 system（最后一条 user/assistant 之后的）保持原样——那是当前轮活跃指令，需要 system 权限。
  */
 function semiStrictProcess(messages) {
-  // 步骤 1：先合并连续同角色
-  let merged = mergeConsecutiveRoles(messages);
-
-  // 步骤 2：i>0 的 system → user
-  for (let i = 1; i < merged.length; i++) {
-    if (merged[i].role === "system") {
-      merged[i] = { ...merged[i], role: "user" };
-    }
+  const merged = mergeConsecutiveRoles(messages);
+  let lastChatIdx = 0;
+  for (let i = merged.length - 1; i >= 0; i--) {
+    if (merged[i].role === "user" || merged[i].role === "assistant") { lastChatIdx = i; break; }
   }
-
-  // 步骤 3：再次合并（system→user 后可能产生连续 user）
+  for (let i = 1; i < lastChatIdx; i++) {
+    if (merged[i].role === "system") merged[i].role = "user";
+  }
   return mergeConsecutiveRoles(merged);
 }
 
 /**
- * 严格模式：
- * 合并连续同角色 + i>0 的 system 转 user + 最终再合并。
- * （占位符插入已删除——凛倾0712：代码禁产生进对话的文本；ST 的 STRICT 用
- * config 项 promptPlaceholder 补首 user，beilu 不代用户写消息，渠道若要求
- * 首条 user 由渠道报错=可见诊断面）
- *
- * @param {Array<{role: string, content: string|object[]}>} messages
- * @returns {Array<{role: string, content: string|object[]}>}
+ * 严格模式（SillyTavern strict 变体）：semi + 首条 system 后若无 user 则插占位消息。
+ * 尾部 system 同样保持原样。
  */
 function strictProcess(messages) {
-  // 步骤 1：先合并连续同角色
-  let merged = mergeConsecutiveRoles(messages);
-
-  // 步骤 2：i>0 的 system → user
-  for (let i = 1; i < merged.length; i++) {
-    if (merged[i].role === "system") {
-      merged[i] = { ...merged[i], role: "user" };
-    }
+  const merged = mergeConsecutiveRoles(messages);
+  let lastChatIdx = 0;
+  for (let i = merged.length - 1; i >= 0; i--) {
+    if (merged[i].role === "user" || merged[i].role === "assistant") { lastChatIdx = i; break; }
   }
-
-  // 步骤 3：最终合并（system→user 后可能产生连续同角色）
+  for (let i = 1; i < lastChatIdx; i++) {
+    if (merged[i].role === "system") merged[i].role = "user";
+  }
+  if (merged.length > 0 && merged[0].role === "system" && (merged.length === 1 || merged[1].role !== "user")) {
+    merged.splice(1, 0, { role: "user", content: "." });
+  }
   return mergeConsecutiveRoles(merged);
 }
 

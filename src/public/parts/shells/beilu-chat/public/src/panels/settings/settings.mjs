@@ -323,13 +323,30 @@ function _initSettingsModals() {
     window.addEventListener("beilu:notify-history-update", () => render());
     // 任务态变化（taskOverlay/websocket/审批 producer 派发）→ 刷新任务区与 badge（原小窗的驱动信号）
     window.addEventListener("beilu:smart-task-update", () => render());
-    // 通知偏好三开关（🔔 下拉底部，静态 DOM 绑一次；写入=crossModeNotification setNotifyPref 单源）
+    // 通知偏好与数值策略（🔔 下拉底部，静态 DOM 绑一次；写入=setNotifyPref 单源）
     (async () => {
       const { getNotifyPrefs, setNotifyPref } = await import("../../shared/widgets/crossModeNotification.mjs");
       const prefs = getNotifyPrefs();
-      document.querySelectorAll("#notify-center-prefs [data-notify-pref]").forEach((cb) => {
-        cb.checked = prefs[cb.dataset.notifyPref] !== false;
-        cb.addEventListener("change", () => setNotifyPref(cb.dataset.notifyPref, cb.checked));
+      document.querySelectorAll("#notify-center-prefs [data-notify-pref]").forEach((control) => {
+        const key = control.dataset.notifyPref;
+        const multiplier = Number(control.dataset.unitMultiplier || 1);
+        if (control.type === "checkbox") control.checked = prefs[key] !== false;
+        else control.value = String(Number(prefs[key]) / multiplier);
+        control.addEventListener("change", () => {
+          try {
+            const value = control.type === "checkbox"
+              ? control.checked
+              : Number(control.value) * multiplier;
+            setNotifyPref(key, value);
+            const current = getNotifyPrefs();
+            if (control.type !== "checkbox") control.value = String(Number(current[key]) / multiplier);
+          } catch (error) {
+            window._beiluToast?.(`通知设置无效: ${error?.message || error}`, "error");
+            const current = getNotifyPrefs();
+            if (control.type === "checkbox") control.checked = current[key] !== false;
+            else control.value = String(Number(current[key]) / multiplier);
+          }
+        });
       });
     })();
     window.addEventListener("beilu:notify-prefs-update", () => render());
@@ -632,6 +649,96 @@ function _initUiExtraSettings() {
         .then((d) => { cspEl.checked = (d && d.success) ? d.enabled !== false : !want; })
         .catch(() => { cspEl.checked = !want; })
         .finally(() => { cspEl.disabled = false; });
+    });
+  }
+
+  const requestLogWindowEl = document.getElementById("ui-request-log-repeat-window");
+  const requestLogSourceEl = document.getElementById("ui-request-log-include-source");
+  const requestLogPatternsEl = document.getElementById("ui-request-log-silent-patterns");
+  const requestLogSaveEl = document.getElementById("ui-request-log-save");
+  const requestLogStatusEl = document.getElementById("ui-request-log-status");
+  if (requestLogWindowEl && requestLogSourceEl && requestLogPatternsEl && requestLogSaveEl) {
+    const dirty = new Set();
+    const setRequestLogDisabled = (disabled) => {
+      requestLogWindowEl.disabled = disabled;
+      requestLogSourceEl.disabled = disabled;
+      requestLogPatternsEl.disabled = disabled;
+      requestLogSaveEl.disabled = disabled;
+    };
+    const setRequestLogStatus = (text, isError = false) => {
+      if (!requestLogStatusEl) return;
+      requestLogStatusEl.textContent = text;
+      requestLogStatusEl.classList.toggle("text-error", isError);
+      requestLogStatusEl.classList.toggle("text-base-content/50", !isError);
+    };
+    const applyRequestLogConfig = (data) => {
+      if (!Number.isFinite(Number(data.repeatWindowMs))) {
+        throw new Error("后端未返回有效的重复聚合窗口");
+      }
+      if (typeof data.includeSource !== "boolean") {
+        throw new Error("后端未返回有效的请求来源开关");
+      }
+      requestLogWindowEl.value = String(data.repeatWindowMs);
+      requestLogSourceEl.checked = data.includeSource;
+      requestLogPatternsEl.value = Array.isArray(data.silentPatterns)
+        ? data.silentPatterns.join("\n")
+        : "";
+    };
+    requestLogWindowEl.addEventListener("input", () => dirty.add("repeatWindowMs"));
+    requestLogSourceEl.addEventListener("change", () => dirty.add("includeSource"));
+    requestLogPatternsEl.addEventListener("input", () => dirty.add("silentPatterns"));
+    setRequestLogDisabled(true);
+    sendAction({ verb: "getRequestLogConfig", target: "server:diagnostics", source: "web" })
+      .then((data) => {
+        if (!data || data.success === false) throw new Error(data?.error || "读取请求日志设置失败");
+        applyRequestLogConfig(data);
+        dirty.clear();
+        setRequestLogDisabled(false);
+        setRequestLogStatus("配置来自后端");
+      })
+      .catch((error) => {
+        setRequestLogDisabled(true);
+        setRequestLogStatus(error?.message || String(error), true);
+      });
+    requestLogSaveEl.addEventListener("click", async () => {
+      if (dirty.size === 0) {
+        setRequestLogStatus("没有待保存的修改");
+        return;
+      }
+      const payload = {};
+      if (dirty.has("repeatWindowMs")) {
+        const value = Number(requestLogWindowEl.value);
+        if (!Number.isFinite(value) || value < 0 || value > 60000) {
+          setRequestLogStatus("聚合窗口必须是 0 到 60000 的数字", true);
+          return;
+        }
+        payload.repeatWindowMs = value;
+      }
+      if (dirty.has("includeSource")) payload.includeSource = requestLogSourceEl.checked;
+      if (dirty.has("silentPatterns")) {
+        payload.silentPatterns = requestLogPatternsEl.value
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+      }
+      setRequestLogDisabled(true);
+      setRequestLogStatus("正在保存…");
+      try {
+        const data = await sendAction({
+          verb: "setRequestLogConfig",
+          target: "server:diagnostics",
+          source: "web",
+          payload,
+        });
+        if (!data || data.success === false) throw new Error(data?.error || "保存请求日志设置失败");
+        applyRequestLogConfig(data);
+        dirty.clear();
+        setRequestLogStatus("已保存并立即生效");
+      } catch (error) {
+        setRequestLogStatus(error?.message || String(error), true);
+      } finally {
+        setRequestLogDisabled(false);
+      }
     });
   }
 

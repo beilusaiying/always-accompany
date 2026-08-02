@@ -462,6 +462,35 @@ export function parseMemoryNoteTags(content) {
 }
 
 // ============================================================
+// <vocab_edit> 解析器（P9 词库维护专用，2026-07-31 002拍板）
+// ============================================================
+
+/**
+ * 从 P9 AI 回复中提取 <vocab_edit>JSON</vocab_edit> 标签（纯解析层，无副作用）。
+ * 【why 返回原始片段】JSON.parse 失败必须能按 tag 逐条回喂 AI 重试，不能在解析层抛崩整轮——
+ *   解析留给 aiRunner 的 executeVocabEditOps 执行层。预览/落库两态用 JSON 内 confirm 字段区分。
+ * 兼容 AI 习惯性用 ``` 代码块包裹 JSON（照 parseTableEditTags 同款剥壳）。
+ * 关联链：aiRunner.runMemoryPresetAI 工具循环 → executeVocabEditOps → p1Bridge.saveUserVocabFile
+ *   → beilu-p1-selfdriven 插件 saveUserVocab（格式校验收口）→ vocab/*.json → p1_pool mode:user 消费。
+ * @param {string} content
+ * @returns {{ blocks: string[], cleanContent: string }} blocks=原始 JSON 文本数组
+ */
+export function parseVocabEditTags(content) {
+  if (!content) return { blocks: [], cleanContent: content };
+  const tagRegex = /<vocab_edit>([\s\S]*?)<\/vocab_edit>/gi;
+  const blocks = [];
+  let match;
+  while ((match = tagRegex.exec(content)) !== null) {
+    let raw = match[1].trim();
+    // 剥 ```json ... ``` 代码块壳
+    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    if (raw) blocks.push(raw);
+  }
+  const cleanContent = content.replace(/<vocab_edit>[\s\S]*?<\/vocab_edit>/gi, "").trim();
+  return { blocks, cleanContent };
+}
+
+// ============================================================
 // <presetSwitch> 解析器
 // ============================================================
 

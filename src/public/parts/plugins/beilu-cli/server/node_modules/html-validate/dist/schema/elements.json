@@ -1,0 +1,380 @@
+{
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$id": "https://html-validate.org/schemas/elements.json",
+
+  "type": "object",
+
+  "properties": {
+    "$schema": {
+      "type": "string"
+    }
+  },
+
+  "patternProperties": {
+    "^[^$].*$": {
+      "type": "object",
+      "properties": {
+        "inherit": {
+          "title": "Inherit from another element",
+          "description": "Most properties from the parent element will be copied onto this one",
+          "type": "string"
+        },
+
+        "embedded": {
+          "title": "Mark this element as belonging in the embedded content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "flow": {
+          "title": "Mark this element as belonging in the flow content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "heading": {
+          "title": "Mark this element as belonging in the heading content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "interactive": {
+          "title": "Mark this element as belonging in the interactive content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "metadata": {
+          "title": "Mark this element as belonging in the metadata content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "phrasing": {
+          "title": "Mark this element as belonging in the phrasing content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "sectioning": {
+          "title": "Mark this element as belonging in the sectioning content category",
+          "$ref": "#/definitions/contentCategory"
+        },
+
+        "deprecated": {
+          "title": "Mark element as deprecated",
+          "description": "Deprecated elements should not be used. If a message is provided it will be included in the error",
+          "anyOf": [
+            { "type": "boolean" },
+            { "type": "string" },
+            { "$ref": "#/definitions/deprecatedElement" }
+          ]
+        },
+
+        "foreign": {
+          "title": "Mark element as foreign",
+          "description": "Foreign elements are elements which have a start and end tag but is otherwize not parsed",
+          "type": "boolean"
+        },
+
+        "void": {
+          "title": "Mark element as void",
+          "description": "Void elements are elements which cannot have content and thus must not use an end tag",
+          "type": "boolean"
+        },
+
+        "transparent": {
+          "title": "Mark element as transparent",
+          "description": "Transparent elements follows the same content model as its parent, i.e. the content must be allowed in the parent.",
+          "anyOf": [{ "type": "boolean" }, { "type": "array", "items": { "type": "string" } }]
+        },
+
+        "implicitClosed": {
+          "title": "List of elements which implicitly closes this element",
+          "description": "Some elements are automatically closed when another start tag occurs",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+
+        "implicitRole": {
+          "title": "Implicit ARIA role for this element",
+          "description": "Some elements have implicit ARIA roles.",
+          "deprecated": true,
+          "function": true
+        },
+
+        "aria": {
+          "title": "WAI-ARIA properties for this element",
+          "$ref": "#/definitions/Aria"
+        },
+
+        "scriptSupporting": {
+          "title": "Mark element as script-supporting",
+          "description": "Script-supporting elements are elements which can be inserted where othersise not permitted to assist in templating",
+          "type": "boolean"
+        },
+
+        "focusable": {
+          "title": "Mark this element as focusable",
+          "description": "This element may contain an associated label element.",
+          "anyOf": [{ "type": "boolean" }, { "function": true }]
+        },
+
+        "form": {
+          "title": "Mark element as a submittable form element",
+          "type": "boolean"
+        },
+
+        "formAssociated": {
+          "title": "Mark element as a form-associated element",
+          "$ref": "#/definitions/FormAssociated"
+        },
+
+        "labelable": {
+          "title": "Mark this element as labelable",
+          "description": "This element may contain an associated label element.",
+          "anyOf": [{ "type": "boolean" }, { "function": true }]
+        },
+
+        "templateRoot": {
+          "title": "Mark element as an element ignoring DOM ancestry, i.e. <template>.",
+          "description": "The <template> element can contain any elements.",
+          "type": "boolean"
+        },
+
+        "deprecatedAttributes": {
+          "title": "List of deprecated attributes",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+
+        "requiredAttributes": {
+          "title": "List of required attributes",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+
+        "attributes": {
+          "title": "List of known attributes and allowed values",
+          "$ref": "#/definitions/PermittedAttribute"
+        },
+
+        "permittedContent": {
+          "title": "List of elements or categories allowed as content in this element",
+          "$ref": "#/definitions/Permitted"
+        },
+
+        "permittedDescendants": {
+          "title": "List of elements or categories allowed as descendants in this element",
+          "$ref": "#/definitions/Permitted"
+        },
+
+        "permittedOrder": {
+          "title": "Required order of child elements",
+          "$ref": "#/definitions/PermittedOrder"
+        },
+
+        "permittedParent": {
+          "title": "List of elements or categories allowed as parent to this element",
+          "$ref": "#/definitions/Permitted"
+        },
+
+        "requiredAncestors": {
+          "title": "List of required ancestor elements",
+          "$ref": "#/definitions/RequiredAncestors"
+        },
+
+        "requiredContent": {
+          "title": "List of required content elements",
+          "$ref": "#/definitions/RequiredContent"
+        },
+
+        "textContent": {
+          "title": "Allow, disallow or require textual content",
+          "description": "This property controls whenever an element allows, disallows or requires text. Text from any descendant counts, not only direct children",
+          "default": "default",
+          "type": "string",
+          "enum": ["none", "default", "required", "accessible"]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "definitions": {
+    "Aria": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "implicitRole": {
+          "title": "Implicit ARIA role for this element",
+          "description": "Some elements have implicit ARIA roles.",
+          "anyOf": [{ "type": "string" }, { "function": true }]
+        },
+        "naming": {
+          "title": "Prohibit or allow this element to be named by aria-label or aria-labelledby",
+          "anyOf": [{ "type": "string", "enum": ["prohibited", "allowed"] }, { "function": true }]
+        }
+      }
+    },
+
+    "contentCategory": {
+      "anyOf": [{ "type": "boolean" }, { "function": true }]
+    },
+
+    "deprecatedElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "title": "A short text message shown next to the regular error message."
+        },
+        "documentation": {
+          "type": "string",
+          "title": "An extended markdown formatted message shown with the contextual rule documentation."
+        },
+        "source": {
+          "type": "string",
+          "title": "Element source, e.g. what standard or library deprecated this element.",
+          "default": "html5"
+        }
+      }
+    },
+
+    "FormAssociated": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disablable": {
+          "type": "boolean",
+          "title": "Disablable elements can be disabled using the disabled attribute."
+        },
+        "listed": {
+          "type": "boolean",
+          "title": "Listed elements have a name attribute and is listed in the form and fieldset elements property."
+        }
+      }
+    },
+
+    "Permitted": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/definitions/PermittedGroup"
+                }
+              ]
+            }
+          },
+          {
+            "$ref": "#/definitions/PermittedGroup"
+          }
+        ]
+      }
+    },
+
+    "PermittedAttribute": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "allowed": {
+                  "function": true,
+                  "title": "Set to a function to evaluate if this attribute is allowed in this context"
+                },
+                "boolean": {
+                  "type": "boolean",
+                  "title": "Set to true if this is a boolean attribute"
+                },
+                "deprecated": {
+                  "title": "Set to true or string if this attribute is deprecated",
+                  "oneOf": [{ "type": "boolean" }, { "type": "string" }]
+                },
+                "list": {
+                  "type": "boolean",
+                  "title": "Set to true if this attribute is a list of space-separated tokens, each which must be valid by itself"
+                },
+                "enum": {
+                  "type": "array",
+                  "title": "Exhaustive list of values (string or regex) this attribute accepts",
+                  "uniqueItems": true,
+                  "items": {
+                    "anyOf": [{ "type": "string" }, { "regexp": true }]
+                  }
+                },
+                "omit": {
+                  "type": "boolean",
+                  "title": "Set to true if this attribute can optionally omit its value"
+                },
+                "required": {
+                  "title": "Set to true or a function to evaluate if this attribute is required",
+                  "oneOf": [{ "type": "boolean" }, { "function": true }]
+                }
+              }
+            },
+            {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+
+    "PermittedGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+
+    "PermittedOrder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "RequiredAncestors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+
+    "RequiredContent": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

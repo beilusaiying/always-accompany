@@ -12,7 +12,9 @@ import { getInjectText } from "../../injectTexts/main.mjs"; // 注入文本单�
  *   - [已删除] triggerP1Retrieval（曾：异步触发 P1 检索 fire-and-forget，结果落 _lastP1Results Map 供下轮注入）——
 *     凛倾 07-02 拍板"自驱动P1召回发散直接移除"后调用点已摘、07-03 授权删除，函数体已物理移除（死码，详见 :1461 附近注释）。
 *     P1 现由 getPromptHandler.mjs S13 直接同步 await runMemoryPresetAI() 触发，不再经本函数中转。
- *   - triggerP2Summary：异步触发 P2 总结（由 backgroundTasks 通过回调触发，避免循环依赖）。
+ *   - triggerP2Summary：异步触发 P2 总结。0802 凛倾指令"P2 是手动触发"后，backgroundTasks
+ *     的 onTriggerP2 自动回调调用点已注释（见 backgroundTasks.mjs autoCheckArchiveTriggers），
+ *     现唯一真实触发路径是 setDataActions.mjs case "triggerP2Summary"（手动按钮）直接调用本函数。
  *   - pushMemoryAIOutput / memoryAIOutputQueue：AI 输出队列，供前端 SSE/WS 轮询消费。
  *   - 插件全局状态变量：pluginEnabled / pendingChatSearchResults 等
  *     （单一权威，getPromptHandler/replyHandler 直接 import 使用，不重复定义）。
@@ -31,7 +33,8 @@ import { getInjectText } from "../../injectTexts/main.mjs"; // 注入文本单�
  *     1. getPromptHandler S13（P1）/ S18（P8）→ runMemoryPresetAI() 直接同步调用
 *        （triggerP1Retrieval 已删除，07-02/07-03 拍板，见 :1461 附近注释）
  *     2. replyHandler parallelDelegate / 分身标签 → runMemoryPresetAI()（委派/分身子任务）
- *     3. backgroundTasks onTriggerP2 回调 → triggerP2Summary()（每轮回复后异步）
+ *     3. setDataActions.mjs case "triggerP2Summary"（用户手动点按钮）→ triggerP2Summary()
+ *        （backgroundTasks onTriggerP2 自动回调此前走这条路，0802 起调用点已注释，不再触发）
  *   AI 输出通过两条路径回前端：
  *     - _lastP1Results Map / pendingChatSearchResults → 下轮 GetPrompt 注入 → 随 prompt 传给 AI → AI 回复给用户
  *     - memoryAIOutputQueue → 前端 SSE 轮询 /api/memory-ai-output → 实时显示 P1/P2 进度面板
@@ -39,7 +42,8 @@ import { getInjectText } from "../../injectTexts/main.mjs"; // 注入文本单�
  * 【关联链】
  *   ← getPromptHandler.mjs（runMemoryPresetAI — S13 P1 / S18 P8，均直接同步调用；triggerP1Retrieval 已删除见 :1461）
  *   ← replyHandler.mjs（runMemoryPresetAI 委派/分身 / pluginEnabled）
- *   ← backgroundTasks.mjs（onTriggerP2 回调 → triggerP2Summary）
+ *   ← setDataActions.mjs（case "triggerP2Summary" 手动按钮 → triggerP2Summary；backgroundTasks.mjs
+ *     的 onTriggerP2 回调形参仍在但 0802 起调用点已注释，不再是实际触发源）
  *   ← gameCompanion.mjs（runMemoryPresetAI 游戏陪伴 AI 分析）
  *   → storage.mjs（loadMemoryData / loadMemoryPresets / saveTablesData 等）
  *   → replyParser.mjs（parseTableEditTags / parseMemoryArchiveTags / parseSearchQueryTags 等）
@@ -61,7 +65,7 @@ import { getInjectText } from "../../injectTexts/main.mjs"; // 注入文本单�
  *
  * 【使用效果】
  *   P1 检索结果在当轮回复后异步完成，下轮对话时 AI 能看到最新检索结论；
- *   P2 总结在记忆归档触发后异步完成，热层记忆被精炼后注入下轮；
+ *   P2 总结现只能由用户手动点按钮触发（0802 起不再随归档自动异步跑），完成后热层记忆被精炼注入下轮；
  *   委派/分身在同轮内同步串行完成，结果通过 pendingResults 注入当轮 AI 继续上下文。
  *
  * 依赖：storage.mjs / replyParser.mjs / tableEngine.mjs / archiver.mjs / retrieval.mjs /
@@ -119,7 +123,11 @@ import {
   parseSearchQueryTags,
   parseSearchResultTags,
   parseTableEditTags,
+  parseVocabEditTags, // P9 词库维护 <vocab_edit>（2026-07-31 002拍板）
 } from "../handler/replyParser.mjs";
+// P9 词库维护执行层（0731 子模式化提升为单点收口，与 replyHandler 正常对话链共享；
+//   p1Bridge 读写在其内部，本文件不再直接触碰词库文件）
+import { executeVocabEditOps } from "../tools/vocabEditExec.mjs";
 
 // [0726「底部功能层.txt」第44行收口] 本文件是 P8 传导链，只搬运：结果→AI 可读文本的格式化、
 //   相关度打印、SEC-T8 不可信边界包裹三件事全在功能层 buildInjectableSearchText 单源（chat/分身链同调）。
@@ -642,18 +650,22 @@ export async function runMemoryPresetAI(
       const _mRoot = activeMode === "code" ? "code" : "work";
       const _coldSub = activeMode === "code" ? "projects" : "outputs";
 
-      // 热层
+      // 热层：递归读取日期目录，归档的 JSON/MD 都要进入 P1 可用数据清单。
       const _hotDir = path.join(_memDir, _mRoot, "active");
-      if (fs.existsSync(_hotDir)) {
-        for (const _f of fs
-          .readdirSync(_hotDir)
-          .filter((_x) => _x.endsWith(".md"))) {
-          const _sz = fs.statSync(path.join(_hotDir, _f)).size;
-          const _est = Math.round(_sz / 3);
-          _sources.push({ name: _f, layer: "hot", tokens: _est });
-          _totalEstTokens += _est;
+      const _walkHot = (dir, rel = "") => {
+        if (!fs.existsSync(dir)) return;
+        for (const _entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const _fp = path.join(dir, _entry.name);
+          const _rel = rel ? `${rel}/${_entry.name}` : _entry.name;
+          if (_entry.isDirectory()) _walkHot(_fp, _rel);
+          else if (_entry.name.endsWith(".md") || _entry.name.endsWith(".json")) {
+            const _est = Math.round(fs.statSync(_fp).size / 3);
+            _sources.push({ name: _rel, layer: "hot", tokens: _est });
+            _totalEstTokens += _est;
+          }
         }
-      }
+      };
+      _walkHot(_hotDir);
       // 温层 <mode>/archive/：表格行归档落点（20260726 从 hot/archive/tables/ 归位于此）
       //   + 旧经验表专线遗留的 *_archive.json 存量（该专线已删，只读不再生产）
       const _warmDir = path.join(_memDir, _mRoot, "archive");
@@ -968,6 +980,8 @@ export async function runMemoryPresetAI(
 
   // 3. 多轮搜索循环
   const allExecutedOps = [];
+  // ── P9 词库维护 <vocab_edit>（2026-07-31 002拍板；0731 子模式化后执行层提升为
+  //   tools/vocabEditExec.mjs 单点收口，与正常对话链 replyHandler 共享——本文件只消费不再自持实现） ──
   // [0728 top-k] 本 run 实际读到内容的记忆文件相对路径（readFile 成功/关键词/正则/向量命中）。
   //   随返回值带出，由 getPromptHandler 在 AI P1 真注入时交 recallStats.recordRecall 记召回频率
   //   （写点不在本函数：P2-P8/dryRun/无结果轮不该计数，注入与否只有调用方知道）。
@@ -1055,12 +1069,8 @@ export async function runMemoryPresetAI(
       // ★ 思考模式控制（分身/辅助AI关闭模型自带thinking）
       if (apiConfig.include_reasoning !== undefined)
         modelOverrides.include_reasoning = apiConfig.include_reasoning;
-      if (apiConfig.extended_thinking !== undefined)
-        modelOverrides.extended_thinking = apiConfig.extended_thinking;
-      // thinking 六口·口5（2026-07-25）：budget 补转发——原只转 extended_thinking=半接线，
-      //   开思考后 budget 恒兜 paramDefault(8000)，api_config 存的 budget 到不了请求
-      if (apiConfig.thinking_budget !== undefined)
-        modelOverrides.thinking_budget = apiConfig.thinking_budget;
+      // extended_thinking/thinking_budget 转发已删（2026-08-01 凛倾收口：思维链控制唯一入口=
+      //   AI 源面板 per-源 config，httpFetch 只读源 config，分身/委派不再逐调用覆盖）
     }
     const hasModelOverrides = Object.keys(modelOverrides).length > 0;
 
@@ -1223,6 +1233,22 @@ export async function runMemoryPresetAI(
       catch (e) { console.error("[beilu-memory] 保存 memoryNote 失败:", e.message); }
     }
 
+    // <vocab_edit>（P9 词库维护：预览→确认两态，防一次性静默大改）
+    const { blocks: vocabEditBlocks, cleanContent: afterVocabEdit } = parseVocabEditTags(processedContent);
+    processedContent = afterVocabEdit;
+    let vocabEditFeedback = "";
+    if (vocabEditBlocks.length > 0) {
+      const vocabResults = await executeVocabEditOps(vocabEditBlocks);
+      const writtenCount = vocabResults.filter((r) => r.status === "written").length;
+      allExecutedOps.push({ type: "vocabEdit", results: vocabResults, count: writtenCount, round });
+      vocabEditFeedback = `[词库改动结果]\n${vocabResults.map((r) => {
+        if (r.status === "preview") return `预览 ${r.file}: 新增${r.added} 删除${r.removed} 修改${r.modified}，理由：${r.reason}。确认无误请用完全相同的 file+content 重新发送 <vocab_edit> 并在 JSON 中加 "confirm": true 以落库；如需调整请修改后重新提交（不视为确认）。`;
+        if (r.status === "written") return `已写入 ${r.file}: 新增${r.added} 删除${r.removed} 修改${r.modified}（理由：${r.reason}）`;
+        if (r.status === "rejected_cap") return `拒绝 ${r.file}: ${r.reason}`;
+        return `失败 ${r.file || ""}: ${r.reason}`;
+      }).join("\n")}\n[/词库改动结果]`;
+    }
+
     // 提取 <thinking> / <think>
     let roundThinking = "";
     const thinkingMatch = replyContent.match(
@@ -1242,6 +1268,8 @@ export async function runMemoryPresetAI(
 
     const hasLocalSearch = searchOps.length > 0;
     const hasWebSearch = webSearchQueries.length > 0;
+    // vocab_edit 预览必须回喂让 AI 有机会确认——有 tag 就继续循环，与搜索同权
+    const hasVocabEdit = vocabEditBlocks.length > 0;
 
     roundDetails.push({
       round,
@@ -1259,8 +1287,8 @@ export async function runMemoryPresetAI(
       `[beilu-memory] 记忆AI(${preset.id}) 第${round}轮回复: ${replyContent.length}字符, 本地搜索: ${searchOps.length}个, 联网搜索: ${webSearchQueries.length}个${isNoSearch ? " (noSearch)" : ""}${filteredResults.length > 0 ? ` (精选结果: ${filteredResults.length}条)` : ""}`,
     );
 
-    // 既没有本地搜索也没有联网搜索 → 循环完成
-    if (!hasLocalSearch && !hasWebSearch) {
+    // 既没有本地搜索也没有联网搜索、也没有待回喂的词库改动 → 循环完成
+    if (!hasLocalSearch && !hasWebSearch && !hasVocabEdit) {
       finalReply = processedContent;
       finalThinking = roundThinking;
       // 如果有精选结果，将其保留在 reply 中
@@ -1340,6 +1368,7 @@ export async function runMemoryPresetAI(
     const feedbackParts = [];
     if (localSearchFeedback) feedbackParts.push(localSearchFeedback);
     if (webSearchFeedback) feedbackParts.push(webSearchFeedback);
+    if (vocabEditFeedback) feedbackParts.push(vocabEditFeedback);
 
     const feedbackContent = feedbackParts.join("\n\n");
 

@@ -237,51 +237,9 @@ const pluginExport = {
 			/**
 			 * GetPrompt: 注入系统上下文信息
 			 */
-			GetPrompt: async (arg) => {
-				const _cid = arg?.chatid || arg?.chat_name?.replace('common_chat_', '') || null
-				wbT(_cid, 'sysinfo:getprompt', 'enter', { enabled: pluginData.enabled })
-				if (!pluginData.enabled) return null
-
-				// 检查缓存
-				let sysInfo
-				const now = Date.now()
-				if (
-					pluginData.refreshInterval > 0 &&
-					pluginData._cachedInfo &&
-					(now - pluginData._cachedAt) < pluginData.refreshInterval * 1000
-				) {
-					sysInfo = pluginData._cachedInfo
-					wbT(_cid, 'sysinfo:getprompt/gather', 'cache_hit', { ageMs: now - pluginData._cachedAt })
-				} else {
-					wbT(_cid, 'sysinfo:getprompt/gather', 'collect_start', { refreshInterval: pluginData.refreshInterval })
-					sysInfo = collectSystemInfo()
-					pluginData._cachedInfo = sysInfo
-					pluginData._cachedAt = now
-					wbT(_cid, 'sysinfo:getprompt/gather', 'collect_done', { runtime: sysInfo?.runtime, hasOs: !!sysInfo?.os, fieldCount: sysInfo ? Object.keys(sysInfo).length : 0 })
-				}
-
-				wbD(_cid, 'sysinfo:getprompt/gather', 'sysinfo_present', !!sysInfo, '系统信息采集为空', { isNull: sysInfo == null })
-				if (pluginData.includeTime) wbD(_cid, 'sysinfo:getprompt/gather', 'time_field', !!(sysInfo && sysInfo.localTime), '时间字段缺失', { localTime: sysInfo?.localTime })
-				if (pluginData.includeOS) wbD(_cid, 'sysinfo:getprompt/gather', 'os_field', !!(sysInfo && sysInfo.os), 'OS字段缺失', { os: sysInfo?.os })
-
-				const text = formatSystemInfo(sysInfo, {
-					includeTime: pluginData.includeTime,
-					includeOS: pluginData.includeOS,
-					includeMemory: pluginData.includeMemory,
-					customFields: pluginData.customFields,
-				})
-
-				wbD(_cid, 'sysinfo:getprompt/inject', 'text_built', !!(text && text.length), '注入文本为空', { len: text ? text.length : 0, customFields: pluginData.customFields?.length || 0 })
-
-				// [0727 契约修] text 契约=数组[{content,important}]（decl/prompt_struct.ts，全部下游按数组 .sort 消费）。
-				//   原返回裸字符串——fake-send 的 change-prompt build_prompt 分支炸 "plugin.sort is not a function"
-				//   （0727 实证），且 beilu-airp 注释自认照抄本处=错误形状被复制。空文本给空数组不给空串元素。
-				return {
-					text: text ? [{ content: text, important: 0 }] : [],
-					role: 'system',
-					name: 'beilu-sysinfo',
-				}
-			},
+			// [0730 迁 INJ] 系统上下文注入已迁入 INJ-plugin-sysinfo 条目（默认关闭）。
+			// 原硬编码 GetPrompt 违反铁律「GetPrompt 禁止硬编码提示词文本」，且前端 INJ 面板不可见不可控。
+			GetPrompt: async () => null,
 		},
 	},
 }

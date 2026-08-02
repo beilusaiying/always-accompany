@@ -1,0 +1,158 @@
+{
+  "name": "yonban",
+  "displayName": "YonBan — beilu IDE Bridge",
+  "description": "将 beilu-always-accompany 后端与 VSCode/Cursor 连接，为 AI 提供 IDE 工具执行能力",
+  "version": "0.2.9",
+  "publisher": "linqing",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/beilusaiying/beilu-always-accompany"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yonban-sidebar",
+          "title": "YonBan",
+          "icon": "$(beaker)"
+        }
+      ]
+    },
+    "views": {
+      "yonban-sidebar": [
+        {
+          "type": "webview",
+          "id": "yonban.panel",
+          "name": "%view.sidebar.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "yonban.connect",
+        "title": "%command.connect.title%"
+      },
+      {
+        "command": "yonban.disconnect",
+        "title": "%command.disconnect.title%"
+      },
+      {
+        "command": "yonban.showPanel",
+        "title": "%command.showPanel.title%"
+      },
+      {
+        "command": "yonban.startWsServer",
+        "title": "%command.startWsServer.title%"
+      },
+      {
+        "command": "yonban.stopWsServer",
+        "title": "%command.stopWsServer.title%"
+      },
+      {
+        "command": "yonban.toggleSandboxMode",
+        "title": "%command.toggleSandboxMode.title%"
+      },
+      {
+        "command": "yonban.showConnectionInfo",
+        "title": "%command.showConnectionInfo.title%"
+      }
+    ],
+    "configuration": {
+      "title": "YonBan",
+      "properties": {
+        "yonban.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:1314",
+          "description": "%config.serverUrl.description%"
+        },
+        "yonban.hints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.hints.enabled.description%"
+        },
+        "yonban.hints.overrides": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "%config.hints.overrides.description%"
+        },
+        "yonban.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.autoConnect.description%"
+        },
+        "yonban.autoStartWs": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.autoStartWs.description%"
+        },
+        "yonban.wsPort": {
+          "type": "number",
+          "default": 8931,
+          "description": "%config.wsPort.description%"
+        },
+        "yonban.sandboxMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.sandboxMode.description%"
+        },
+        "yonban.sandboxServerUrl": {
+          "type": "string",
+          "default": "http://localhost:13140",
+          "description": "%config.sandboxServerUrl.description%"
+        },
+        "yonban.sandboxWsPort": {
+          "type": "number",
+          "default": 18931,
+          "description": "%config.sandboxWsPort.description%"
+        },
+        "yonban.maxFileReferences": {
+          "type": "number",
+          "default": 5,
+          "description": "%config.maxFileReferences.description%"
+        },
+        "yonban.autoRevealOnEdit": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.autoRevealOnEdit.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "vsce package",
+    "check-syntax": "node scripts/check-syntax.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "diff": "^8.0.4",
+    "dompurify": "^3.3.3",
+    "html-validate": "^10.9.0",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.0",
+    "marked": "^18.0.0",
+    "pdf-parse": "^1.1.1",
+    "word-extractor": "^1.0.4",
+    "ws": "^8.16.0",
+    "xlsx": "^0.18.5"
+  }
+}

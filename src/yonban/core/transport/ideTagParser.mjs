@@ -136,6 +136,42 @@ export function parseQuestionTags(content) {
   return { questions, cleanContent };
 }
 
+/** 外层失败时透出执行端的结构化事实；仅回放真实结果，不在此层添加操作指令。 */
+function _appendToolFailureReceipt(lines, outerResult) {
+  const resultData = outerResult?.result;
+  if (!resultData || typeof resultData !== "object" || Array.isArray(resultData)) return;
+
+  const detail = {};
+  for (const key of [
+    "errorCode",
+    "exitCode",
+    "timedOut",
+    "aborted",
+    "stalled",
+    "blocked",
+    "session",
+    "sessionKey",
+  ]) {
+    if (resultData[key] !== undefined) detail[key] = resultData[key];
+  }
+  for (const key of ["stall", "processTermination"]) {
+    if (resultData[key] && typeof resultData[key] === "object") detail[key] = resultData[key];
+  }
+  if (Object.keys(detail).length > 0) {
+    try {
+      const encoded = JSON.stringify(detail);
+      lines.push(`[tool_failure] ${encoded.length > 6000 ? `${encoded.slice(0, 6000)}…` : encoded}`);
+    } catch {
+      lines.push("[tool_failure] (结构化失败详情无法序列化)");
+    }
+  }
+
+  for (const [label, value] of [["stdout", resultData.stdout], ["stderr", resultData.stderr]]) {
+    if (typeof value !== "string" || !value) continue;
+    lines.push(`[${label}] ${value.length > 8000 ? `${value.slice(0, 8000)}…` : value}`);
+  }
+}
+
 /**
  * 格式化工具执行结果为注入文本
  *
@@ -166,6 +202,8 @@ export function formatToolResultsForInjection(results) {
       //   任一分身失败=全部产出被吞（07-14/07-24 多会话实锤），主 AI 白等一整批。
       if (typeof r.result?.result === "string" && r.result.result.trim()) {
         lines.push(r.result.result);
+      } else {
+        _appendToolFailureReceipt(lines, r.result);
       }
     } else if (r.result?.success) {
       const resultData = r.result.result;
@@ -188,6 +226,39 @@ export function formatToolResultsForInjection(results) {
         const _lnBefore = lines.length; // 0714：白名单零命中检测基线（见下方兜底）
         const _msg = resultData.message || resultData.path || "";
         if (_msg) lines.push(_msg);
+        // 读取/搜索来源与分页是真实工具回执数据，不是提示词指令。执行端负责产生，
+        // 本层只做无损透传，避免 source/nextOffset/searchId 被白名单格式化器吞掉。
+        if (resultData.source && typeof resultData.source === "object") {
+          lines.push(`[source] ${JSON.stringify(resultData.source)}`);
+        }
+        if (resultData.limitApplied && typeof resultData.limitApplied === "object") {
+          lines.push(`[read_limits] ${JSON.stringify(resultData.limitApplied)}`);
+        }
+        const _readPage = {};
+        if (resultData.nextOffset !== undefined) _readPage.nextOffset = resultData.nextOffset;
+        if (resultData.nextCharOffset !== undefined) _readPage.nextCharOffset = resultData.nextCharOffset;
+        if (resultData.truncatedReason !== undefined) _readPage.truncatedReason = resultData.truncatedReason;
+        if (Object.keys(_readPage).length > 0) {
+          lines.push(`[read_page] ${JSON.stringify(_readPage)}`);
+        }
+        const _searchSnapshot = {};
+        for (const _key of [
+          "searchId",
+          "queryKey",
+          "snapshotAt",
+          "complete",
+          "snapshotCount",
+          "pageCount",
+          "nextCursor",
+          "engine",
+          "fallbackReason",
+          "rangeLimitReason",
+        ]) {
+          if (resultData[_key] !== undefined) _searchSnapshot[_key] = resultData[_key];
+        }
+        if (Object.keys(_searchSnapshot).length > 0) {
+          lines.push(`[search_snapshot] ${JSON.stringify(_searchSnapshot)}`);
+        }
         // 写入类工具：展示验证状态
         if (resultData.verified === false) {
           lines.push("⚠️ 写入后验证失败，内容可能未正确写入");
@@ -220,22 +291,37 @@ export function formatToolResultsForInjection(results) {
         if (resultData.truncatedHint) lines.push(`ℹ️ ${resultData.truncatedHint}`);
         // ★ 结果提示（ToolExecutor._getResultHint 算出的 _hint）：此前从不透出，AI 看不到下一步指引，在此补上。
         if (resultData._hint) lines.push(`💡 ${resultData._hint}`);
-        // read_file：截断保护（防单个文件撑爆token）
+        // read_file：优先尊重执行端回传的本次用户配置；老执行端没有 limitApplied 时
+        // 保留旧 20000 字符防护，避免升级期间由单个遗留回包撑爆上下文。
         if (resultData.content !== undefined) {
-          const _maxChars = 20000;
-          if (resultData.content.length > _maxChars) {
-            lines.push(resultData.content.slice(0, _maxChars));
-            lines.push(`\n... [内容已截断: 原${resultData.content.length}字符, 显示前${_maxChars}字符。如需后续内容请用offset参数分页读取]`);
+          const _content = String(resultData.content);
+          const _reportedMax = Number(resultData.limitApplied?.maxOutputChars);
+          const _maxChars = Number.isFinite(_reportedMax) && _reportedMax > 0
+            ? Math.round(_reportedMax)
+            : 20000;
+          if (_content.length > _maxChars) {
+            lines.push(_content.slice(0, _maxChars));
+            lines.push(`[content_truncated] ${JSON.stringify({
+              originalChars: _content.length,
+              displayedChars: _maxChars,
+              reason: "injection_safety_limit",
+            })}`);
           } else {
-            lines.push(resultData.content);
+            lines.push(_content);
           }
         }
         // ★ search结果：紧凑格式（file:line content），不用JSON
         if (resultData.matches && Array.isArray(resultData.matches)) {
-          for (const _m of resultData.matches.slice(0, 30)) {
+          const _reportedPageCount = Number(resultData.pageCount);
+          const _displayCount = Number.isFinite(_reportedPageCount) && _reportedPageCount >= 0
+            ? Math.min(resultData.matches.length, Math.round(_reportedPageCount))
+            : Math.min(resultData.matches.length, 30);
+          for (const _m of resultData.matches.slice(0, _displayCount)) {
             lines.push(`  ${_m.file || ""}:${_m.line || ""} ${(_m.content || _m.text || "").substring(0, 120)}`);
           }
-          if (resultData.total > 30) lines.push(`  ... 共${resultData.total}条匹配`);
+          if (resultData.matches.length > _displayCount) {
+            lines.push(`[matches_not_displayed] ${resultData.matches.length - _displayCount}`);
+          }
         }
         // ★ list_files结果：紧凑一行一个
         if (resultData.files && Array.isArray(resultData.files)) {

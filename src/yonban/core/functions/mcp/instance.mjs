@@ -30,6 +30,7 @@ import { defineToolUseBlocks } from '../../../../public/parts/shells/beilu-chat/
 import { saveJsonFile } from '../../../../scripts/json_loader.mjs'
 import { loadPart } from '../../../../server/parts_loader.mjs'
 import { authenticate } from '../security/auth.mjs'
+import { reduceMcpRuntimeHealth, registerMcpRuntime } from './runtimeRegistry.mjs'
 
 /** @typedef {import('../../../../decl/pluginAPI.ts').pluginAPI_t} pluginAPI_t */
 
@@ -77,8 +78,110 @@ export function createMcpPart(pluginDir) {
 	let tools = null
 	let samplingAIsource = null
 	let username = null
+	let mcpConnected = false
 	/** 最近一次连接失败原因（GetData 暴露给面板做诊断；null=无错） */
 	let mcpError = null
+	let runtimeToolCount = 0
+	let clientGeneration = 0
+
+	const runtimeTransport = () => data?.config?.command
+		? 'stdio'
+		: data?.config?.url
+			? String(data.config.url).toLowerCase().startsWith('ws') ? 'websocket' : 'http'
+			: null
+	const runtimeBase = () => {
+		const configured = !!(data?.config?.command || data?.config?.url)
+		return {
+			key: `${username || ''}:${path.basename(pluginDir)}`,
+			username,
+			name: data?.name || path.basename(pluginDir),
+			transport: runtimeTransport(),
+			configured,
+			approved: configured && (!data?.config?.command || data?._mcpApproved === true),
+		}
+	}
+	/** @type {ReturnType<typeof registerMcpRuntime>|null} */
+	let runtimeRegistration = null
+	const ensureRuntimeRegistration = () => {
+		if (!runtimeRegistration)
+			runtimeRegistration = registerMcpRuntime({
+				username,
+				pluginIdentity: path.resolve(pluginDir),
+			}, {
+				...runtimeBase(),
+				connected: mcpConnected,
+				error: mcpError,
+				toolCount: runtimeToolCount,
+			})
+		return runtimeRegistration
+	}
+	const applyRuntimeEvent = (event) => {
+		const next = reduceMcpRuntimeHealth({
+			connected: mcpConnected,
+			error: mcpError,
+			toolCount: runtimeToolCount,
+		}, event)
+		mcpConnected = next.connected
+		mcpError = next.error
+		runtimeToolCount = next.toolCount
+		ensureRuntimeRegistration().update({ ...runtimeBase(), ...next })
+		return next
+	}
+	const isActiveGeneration = (generation) => generation === clientGeneration
+	const classifyRequestFailure = (error, client) => {
+		const code = error?.code ?? error?.cause?.code
+		if (code === -32000 || !client?.rawClient?.transport || /connection\s+closed|transport\s+closed|not\s+connected/i.test(String(error?.message || error)))
+			return 'transport'
+		if (code === -32001 || /timed?\s*out|超时/i.test(String(error?.message || error)))
+			return 'timeout'
+		return 'application'
+	}
+	const applyCatalog = (catalog, generation = clientGeneration) => {
+		if (!isActiveGeneration(generation)) return false
+		tools = Array.isArray(catalog) ? catalog : []
+		applyRuntimeEvent({ type: 'catalog_succeeded', toolCount: tools.length })
+		return true
+	}
+	const applyCatalogFailure = (error, generation = clientGeneration) => {
+		if (!isActiveGeneration(generation)) return false
+		tools = []
+		applyRuntimeEvent({ type: 'catalog_failed', error })
+		return true
+	}
+	const refreshToolCatalog = async (client = mcpClient, generation = clientGeneration) => {
+		if (!client) throw new Error('MCP client is not connected')
+		try {
+			const catalog = await client.listTools()
+			applyCatalog(catalog, generation)
+			return catalog
+		} catch (error) {
+			applyCatalogFailure(error, generation)
+			throw error
+		}
+	}
+	const executeHealthyRequest = async (client, operation, generation = clientGeneration) => {
+		try {
+			const result = await operation()
+			if (isActiveGeneration(generation)) applyRuntimeEvent({ type: 'request_succeeded' })
+			return result
+		} catch (error) {
+			if (isActiveGeneration(generation))
+				applyRuntimeEvent({
+					type: 'request_failed',
+					error,
+					failureKind: classifyRequestFailure(error, client),
+				})
+			throw error
+		}
+	}
+	const detachCurrentClient = async () => {
+		const client = mcpClient
+		clientGeneration += 1
+		mcpClient = null
+		try { await client?.stop() } catch {}
+		tools = []
+		applyRuntimeEvent({ type: 'reset' })
+	}
 
 	/**
 	 * Sampling 处理器
@@ -119,6 +222,7 @@ export function createMcpPart(pluginDir) {
 		if (data?.config?.command && data?._mcpApproved !== true) {
 			console.warn(`[SEC-MCP] 命令型 MCP server "${data?.name}" 未批准，跳过 spawn（command: ${data?.config?.command}）。owner 在安全中心批准(置 data._mcpApproved)后方可启动。`)
 			tools = []
+			applyRuntimeEvent({ type: 'reset' })
 			return
 		}
 
@@ -127,13 +231,29 @@ export function createMcpPart(pluginDir) {
 				samplingAIsource = await loadPart(username, 'serviceSources/AI/' + data.samplingAIsource)
 			} catch (e) { console.warn('[MCP] Sampling load failed:', e) }
 
-		mcpClient = await createMCPClient({
+		const generation = ++clientGeneration
+		const client = await createMCPClient({
 			...data.config,
+			sandbox: data.sandbox || null,
 			serverName: data.name, // T024：超时错误结构化需 server 名
 			roots: data.roots || [],
-			samplingHandler: samplingAIsource ? handleSampling : null
+			samplingHandler: samplingAIsource ? handleSampling : null,
+			toolsChangedHandler: (error, catalog) => {
+				if (error) applyCatalogFailure(error, generation)
+				else applyCatalog(catalog, generation)
+			},
+			lifecycleHandler: ({ error }) => {
+				if (!isActiveGeneration(generation)) return
+				tools = []
+				applyRuntimeEvent({ type: 'transport_failed', error })
+			},
 		})
-		tools = await mcpClient.listTools()
+		if (!isActiveGeneration(generation)) {
+			try { await client.stop() } catch {}
+			return
+		}
+		mcpClient = client
+		await refreshToolCatalog(client, generation)
 	}
 
 	/**
@@ -202,8 +322,13 @@ export function createMcpPart(pluginDir) {
 	 */
 	async function buildToolsData() {
 		if (!mcpClient) return ''
-		const [tl, pl, rl] = await Promise.all([
-			mcpClient.listTools().catch(() => []),
+		let tl
+		try {
+			tl = await refreshToolCatalog()
+		} catch (e) {
+			return ''
+		}
+		const [pl, rl] = await Promise.all([
 			mcpClient.listPrompts().catch(() => []),
 			mcpClient.listResources().catch(() => [])
 		])
@@ -262,13 +387,17 @@ export function createMcpPart(pluginDir) {
 		 * @returns {Promise<void>} Promise
 		 */
 		Load: async (stat) => {
+			runtimeRegistration?.remove()
+			runtimeRegistration = null
 			username = stat?.username
+			applyRuntimeEvent({ type: 'reset' })
 			// 断链批（20260704）：connect 失败不炸整个 part 装载——错误存 mcpError 由 GetData 带给面板显示
 			//   （错误是诊断面，不该变成路由消失）。
-			try { await initializeMCP(); mcpError = null }
+			try { await initializeMCP() }
 			catch (e) {
-				mcpError = e.message
-				console.warn(`[MCP] "${data?.name}" 连接失败（面板保持可用，可在面板重试）:`, e.message)
+				await detachCurrentClient()
+				applyCatalogFailure(e)
+				console.warn(`[MCP] "${data?.name}" 连接失败（面板保持可用，可在面板重试）:`, mcpError)
 			}
 			const router = stat?.router
 			if (router) {
@@ -288,7 +417,13 @@ export function createMcpPart(pluginDir) {
 		 * 卸载插件
 		 * @returns {Promise<void>} Promise
 		 */
-		Unload: async () => { await mcpClient?.stop(); mcpClient = null },
+		Unload: async () => {
+			try { await detachCurrentClient() }
+			finally {
+				runtimeRegistration?.remove()
+				runtimeRegistration = null
+			}
+		},
 		interfaces: {
 			config: {
 				/**
@@ -297,7 +432,7 @@ export function createMcpPart(pluginDir) {
 				 */
 				GetData: () => ({
 					...data,
-					_mcpConnected: !!mcpClient,
+					_mcpConnected: mcpConnected,
 					_mcpError: mcpError,
 					// 面板「提示词」页的占位/恢复默认用（缺省值单源在本文件，面板不复制一份）
 					_promptDefault: DEFAULT_PROMPT,
@@ -310,15 +445,17 @@ export function createMcpPart(pluginDir) {
 				SetData: async (newData) => {
 					if (newData._action === 'listTools') {
 						if (!mcpClient) return { _result: { success: false, error: 'MCP Server 未连接' } }
+						const client = mcpClient
+						const generation = clientGeneration
 						try {
-							const [tl, pl, rl] = await Promise.all([
-								mcpClient.listTools().catch(() => []),
-								mcpClient.listPrompts().catch(() => []),
-								mcpClient.listResources().catch(() => []),
+							const tl = await refreshToolCatalog(client, generation)
+							const [pl, rl] = await Promise.all([
+								client.listPrompts().catch(() => []),
+								client.listResources().catch(() => []),
 							])
 							return { _result: { success: true, tools: tl, prompts: pl, resources: rl } }
 						} catch (e) {
-							return { _result: { success: false, error: e.message } }
+							return { _result: { success: false, error: e?.message || String(e) } }
 						}
 					}
 					// [0727 凛倾「实际内容和提示词点击展开」] 面板「数据」页取实时清单、
@@ -333,11 +470,17 @@ export function createMcpPart(pluginDir) {
 					}
 					if (newData._action === 'testTool') {
 						if (!mcpClient) return { _result: { success: false, error: 'MCP Server 未连接' } }
+						const client = mcpClient
+						const generation = clientGeneration
 						try {
-							const result = await mcpClient.callTool(newData.toolName, newData.args || {})
+							const result = await executeHealthyRequest(
+								client,
+								() => client.callTool(newData.toolName, newData.args || {}),
+								generation,
+							)
 							return { _result: { success: true, result: fmtRes(result) } }
 						} catch (e) {
-							return { _result: { success: false, error: e.message } }
+							return { _result: { success: false, error: e?.message || String(e) } }
 						}
 					}
 					// [0727] 提示词单独存：整包覆盖写会把面板没带的字段抹掉（同下方 _mcpApproved 教训），
@@ -363,13 +506,13 @@ export function createMcpPart(pluginDir) {
 					data = (_cmdUnchanged && data?._mcpApproved === true) ? { ...cleanData, _mcpApproved: true } : cleanData
 					if (_keptPrompt !== undefined) data.promptText = _keptPrompt
 					saveJsonFile(dataPath, data)
-					await mcpClient?.stop()
-					mcpClient = null
+					await detachCurrentClient()
 					// 同 Load 解耦：配置已写盘=保存成功是事实；重连失败作诊断字段返回，不让 500 谎报失败。
-					try { await initializeMCP(); mcpError = null }
+					try { await initializeMCP() }
 					catch (e) {
-						mcpError = e.message
-						return { success: true, _mcpError: e.message }
+						await detachCurrentClient()
+						applyCatalogFailure(e)
+						return { success: true, _mcpError: mcpError }
 					}
 				}
 			},
@@ -378,6 +521,7 @@ export function createMcpPart(pluginDir) {
 				 * 获取 Prompt（注入 = 用户提示词 ⊕ 工具清单数据）
 				 * @param {object} args - 上下文参数
 				 * @returns {Promise<object>} Prompt 结构
+				 * ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText，操作说明走 INJ 条目。DEFAULT_PROMPT 是用户可覆盖的缺省值（面板可改写/清空），合规。
 				 */
 				GetPrompt: async (args) => ({
 					text: [{ content: await getDesc(args), important: 0 }],
@@ -406,7 +550,7 @@ export function createMcpPart(pluginDir) {
 							let _cid0 = null
 							const _cn0 = args?.chat_name || ''
 							if (_cn0.startsWith('common_chat_')) _cid0 = _cn0.slice('common_chat_'.length)
-							_ic.enqueuePendingResult({ chatid: _cid0, tool: 'mcp:parse', params: {}, timestamp: new Date().toISOString(), result: { success: false, error: _git('mcp.call_incomplete') } })
+							_ic.enqueuePendingResult({ chatid: _cid0, ownerUsername: username, tool: 'mcp:parse', params: {}, timestamp: new Date().toISOString(), result: { success: false, error: _git('mcp.call_incomplete') } })
 						} catch (_fbErr) { console.warn('[MCP] 半失败反馈入池失败:', _fbErr?.message) }
 						return false
 					}
@@ -429,15 +573,20 @@ export function createMcpPart(pluginDir) {
 						let _entry
 						try {
 							let result
-							if (call.type === 'tool') result = await mcpClient.callTool(call.name, call.args)
-							else if (call.type === 'prompt') result = await mcpClient.getPrompt(call.name, call.args)
-							else result = await mcpClient.readResource(call.uri)
+							const client = mcpClient
+							const generation = clientGeneration
+							if (call.type === 'tool')
+								result = await executeHealthyRequest(client, () => client.callTool(call.name, call.args), generation)
+							else if (call.type === 'prompt')
+								result = await executeHealthyRequest(client, () => client.getPrompt(call.name, call.args), generation)
+							else
+								result = await executeHealthyRequest(client, () => client.readResource(call.uri), generation)
 							_entry = { chatid: _chatid, tool: `mcp:${call.name || call.uri}`, params: call.args || {}, timestamp: new Date().toISOString(), result: { success: true, result: `${call.type} result for ${call.name || call.uri}:\n${fmtRes(result)}` } }
 						} catch (err) {
 							console.error('MCP call error:', err)
 							_entry = { chatid: _chatid, tool: `mcp:${call.name || call.uri}`, params: call.args || {}, timestamp: new Date().toISOString(), result: { success: false, error: `Error calling ${call.type} "${call.name || call.uri}": ${err.message}` } }
 						}
-						ideClient.enqueuePendingResult(_entry)
+						ideClient.enqueuePendingResult({ ..._entry, ownerUsername: username })
 					}
 
 					return false

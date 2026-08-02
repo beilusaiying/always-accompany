@@ -62,6 +62,7 @@ import { pluginEnabled } from "../ai/aiRunner.mjs";
 import { ideClient } from "../../../transport/ideClient.mjs";
 // inj 识别系统 2026-07-13：识别+裁决+值域单源（生成链 getPromptHandler 同模块）
 import { resolveInjectionContext, resolveEffectiveInjections, getInjectionAutoModeMeta } from "../storage_mod/injectionSystem.mjs";
+import { VOLATILE_PROMPT_MACROS } from "./volatileMacros.mjs"; // 0731：高动态宏清单下发（INJ 编辑器"上方条目含动态宏"警告的判据单源）
 import { _resolveChatOwner, _resolveRequestChar } from "./setDataActions.mjs"; // SEC 破口D owner 谓词 + 链1 chatid→char 归位（单一权威复用，不重复造）
 import { getDataSnapshot, initDataFiles } from "../data/dataSystem.mjs";
 // T072a（可操作处禁硬编码）：搜索引擎枚举唯一权威源（webSearch.mjs），
@@ -180,6 +181,10 @@ export async function handleGetData(args) {
     //   injection_effective   = 每条生效裁决（与生成链同一 resolveEffectiveInjections，
     //   前端直接渲染真值，替 panels.mjs computeEffective 镜像重算——镜像漏 bot 分支且缺 smart）
     injection_automode_meta: getInjectionAutoModeMeta(),
+    // 0731 缓存事故防复发：高动态宏清单（单源=volatileMacros.mjs）。前端 INJ 编辑器据此对
+    //   depth>=1 且启用的条目做"正文含每轮变宏"检测→弹窗警告+标行号（0729 {{tool_runtime_json}}
+    //   写进上方手册致缓存归零，人眼审不出，必须机制拦）。
+    volatile_macros: VOLATILE_PROMPT_MACROS,
     // loadMemoryPresets(storage.mjs:2785) 已把缺失键归一成 []，不复制上面 ||DEFAULT 的死枝形状
     // [0718 半接线修] chatId 补传：桥层 0709 起统一注入 chatid（sendAction.mjs:145），本处一直未消费——
     //   同响应内 activeMode 已走 per-窗口(_cid :119)而本判定走 char 级，窗口绑定模式（active_modes_map）
@@ -332,7 +337,14 @@ export async function handleGetData(args) {
       "approveAllIdeOps",
       "rejectAllIdeOps",
       "setIdeWriteApproval",
+      "getMcpConnectRequests",
+      "beginMcpConnectRequestImport",
+      "finishMcpConnectRequestImport",
+      "dismissMcpConnectRequest",
       "getPendingIdeResults",
+      "getToolRuntimeConfig",
+      "setToolRuntimeConfig",
+      "getSystemRuntimeSnapshot",
       "getIdeOperationHistory",
       "clearIdeOperationHistory",
       "getCheckpointList",

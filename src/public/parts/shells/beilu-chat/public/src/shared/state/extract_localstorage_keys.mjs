@@ -13,6 +13,7 @@
  *   A. localStorage.getItem/setItem/removeItem("字面")     —— 直接内联
  *   B. storage.get/set/remove("字面")                       —— 经 storage.mjs 封装的内联
  *   C. const/let/var VAR = "字面"，且 VAR 被 localStorage.xxx(VAR) 引用 —— 局部常量中转
+ *   D. const MAP = { field:"字面" }，且 MAP[field] 被 storage.xxx(MAP[field]) 引用 —— 键表中转
  *   （storage.get/set(KEYS.X) 这类已收口的消费不产生字面，其 key 由"现表并集"保留，不依赖扫描。）
  *
  * 排序规则：**保序**——现有 KEYS 行按原文件顺序原样保留（历史顺序含手工插入痕迹，非严格字母序，
@@ -30,6 +31,8 @@
  * 用法：
  *   node extract_localstorage_keys.mjs           # dry-run：打印扫描结果与对现表的 diff，不写文件
  *   node extract_localstorage_keys.mjs --write    # 生成并覆盖 storage-keys.mjs
+ *   node extract_localstorage_keys.mjs --write --only-prefix=beilu-notify-
+ *                                              # 仅追加指定前缀的新键，保留其余历史债与现表注释
  */
 
 import fs from "node:fs";
@@ -82,6 +85,24 @@ function extractKeysFromText(text) {
     );
     let ma;
     while ((ma = reAssign.exec(text))) found.add(ma[1]);
+  }
+
+  // D. 小型键表中转（如通知策略字段→localStorage key）。
+  const objectRefs = new Set();
+  const reObjectRef = /\bstorage\.(?:get|set|remove)\(\s*([A-Za-z_$][\w$]*)\s*\[/g;
+  while ((m = reObjectRef.exec(text))) objectRefs.add(m[1]);
+  for (const v of objectRefs) {
+    const esc = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const reObjectAssign = new RegExp(
+      "\\b(?:const|let|var)\\s+" + esc + "\\s*=\\s*\\{([\\s\\S]*?)\\}\\s*;",
+      "g",
+    );
+    let objectMatch;
+    while ((objectMatch = reObjectAssign.exec(text))) {
+      const reValue = /:\s*["']([^"']+)["']/g;
+      let valueMatch;
+      while ((valueMatch = reValue.exec(objectMatch[1]))) found.add(valueMatch[1]);
+    }
   }
 
   return found;
@@ -154,14 +175,32 @@ export const KEYS = Object.freeze({
   return header + body + "\n});\n";
 }
 
+/**
+ * 小范围迁移时只在现表结尾追加新项，保留现有注释、顺序与格式。
+ * 全量 canonical render 仍保留给显式的全域收口任务。
+ */
+function appendEntriesToCurrent(currentSource, entries) {
+  if (entries.length === 0) return currentSource;
+  const additions = entries
+    .map((entry) => `  ${entry.name}: ${JSON.stringify(entry.value)},`)
+    .join("\n");
+  if (!/\n\}\);\s*$/.test(currentSource)) {
+    throw new Error("storage-keys.mjs 结尾结构无法识别，拒绝写入");
+  }
+  return currentSource.replace(/\n\}\);\s*$/, `\n${additions}\n});\n`);
+}
+
 /** 主流程 */
 function main() {
   const write = process.argv.includes("--write");
+  const onlyPrefixArg = process.argv.find((arg) => arg.startsWith("--only-prefix="));
+  const onlyPrefix = onlyPrefixArg ? onlyPrefixArg.slice("--only-prefix=".length) : "";
   const scanned = scanKeys();
   const { entries, values } = parseCurrentTable();
 
   // 新键 = 扫到但现表没有的（保序：现表原序 + 新键按扫描顺序追加）
-  const newKeys = scanned.filter((k) => !values.has(k));
+  const allNewKeys = scanned.filter((k) => !values.has(k));
+  const newKeys = onlyPrefix ? allNewKeys.filter((k) => k.startsWith(onlyPrefix)) : allNewKeys;
   // 现表有但本次没扫到的（收口后消费方无字面，属正常；仅报告，不删）
   const scannedSet = new Set(scanned);
   const unscanned = entries.filter((e) => !scannedSet.has(e.value)).map((e) => e.value);
@@ -172,18 +211,21 @@ function main() {
 
   console.log(`[extract] 扫描根: ${SCAN_ROOT}`);
   console.log(`[extract] 扫到字面 key: ${scanned.length}  现表 key: ${values.size}`);
+  if (onlyPrefix) console.log(`[extract] 选择性追加前缀: "${onlyPrefix}"`);
   console.log(`[extract] 新增（扫到但不在现表，将追加）: ${newKeys.length}`);
   for (const k of newKeys) console.log(`  + ${keyToConstName(k)}: "${k}"`);
   console.log(`[extract] 现表中未被本次扫到的 key（收口后无字面，保留不删）: ${unscanned.length}`);
 
-  const out = renderFile(finalEntries);
+  const cur = fs.readFileSync(KEYS_FILE, "utf8");
+  const out = onlyPrefix
+    ? appendEntriesToCurrent(cur, finalEntries.slice(entries.length))
+    : renderFile(finalEntries);
 
   if (write) {
     fs.writeFileSync(KEYS_FILE, out, "utf8");
     console.log(`[extract] 已写入 ${KEYS_FILE}（共 ${finalEntries.length} 键）`);
   } else {
     // dry-run：与现表逐行对拍，输出 diff
-    const cur = fs.readFileSync(KEYS_FILE, "utf8");
     if (out === cur) {
       console.log("[extract] dry-run：产出与现表逐字节一致（幂等）。");
     } else {

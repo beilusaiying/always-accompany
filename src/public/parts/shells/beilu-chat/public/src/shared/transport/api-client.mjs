@@ -4,14 +4,16 @@
  *
  * 功能链：前端所有模块 → apiFetch(url, opts) → AbortController 超时守卫 → 浏览器 fetch → 后端 HTTP 路由
  *   → 响应解析（JSON/text/raw）→ 错误格式化（含 401 跳转）→ 返回数据给调用方。
- *   renameChat() 是对话改名的单一权威收口，三套对话管理 UI 共用，消除手抄逻辑。
+ *   renameChat() 现唯一直接调用方=conversationManager.mjs（commitChatRename 内）；workPanel/chatmgmt(airp)
+ *   两处原各自直调已删，改经 commitChatRename 间接复用，三套改名 UI 收口到同一条链而非各持一份。
  *
  * why：历史上前端有 277 处裸 fetch，全无超时控制，导致网络抖动时连接永挂、页面假死。
  *   401 处理也散落各处，行为不一致。本模块将所有 /api/* 请求收口为统一封装，
  *   让超时 abort、401 跳登录、错误格式化等横切逻辑只写一次、不可绕过（W72 #fetch / P2大重构 R1 step①）。
  *
  * 关联链：
- *   被 import → chat.mjs / endpoints.mjs / sharedState.mjs / diagLogger.mjs / index*.mjs 等全前端模块
+ *   被 import → chat-core/chat.mjs / transport/endpoints.mjs / state/diagLogger.mjs / index.mjs 等全前端模块（46 处，
+ *     覆盖 panels/* 全域；不含 shared/state/sharedState.mjs——它不直接发 HTTP，经其他模块间接受益）
  *   → 浏览器原生 fetch（本模块是 fetch 的唯一权威封装，traceFetch 除外——见 diagLogger.mjs）
  *   边界：chat 端点专用 wrapper 见 endpoints.mjs:callApi（带 currentChatId 前缀）；本模块面向通用 /api/* 路径。
  *
@@ -19,7 +21,8 @@
  *   - 改动超时值 DEFAULT_TIMEOUT_MS → 影响全前端所有 /api/* 请求的挂起时间
  *   - 改动 401 处理 → 影响所有未登录用户的跳转行为（页面强制导航）
  *   - 改动 JSON 序列化逻辑 → 影响全前端请求 body 格式
- *   - 改动 renameChat() → 影响 conversationManager / index-chatmgmt / workPanel 三处改名 UI
+ *   - 改动 renameChat() → 直接影响 conversationManager.commitChatRename，间接波及经它改名的
+ *     workPanel / panels/airp/chatmgmt 两处 UI（各自的直调已删，不再各持一份）
  *
  * 使用效果：
  *   - 用户操作触发 API 调用时：30 秒无响应自动中断并提示超时，不会永久加载转圈
@@ -142,13 +145,6 @@ export async function renameChat(chatid, name) {
 }
 
 /**
- * 对话模式徽标单一权威（对齐 renameChat/N39 范式）：POST /mode 持久化到服务端 chat_modes。
- * 【why】徽标原只写前端 localStorage convMeta.mode，换窗口/清缓存即丢；服务端权威后各窗口列表一致。
- * @param {string} chatid
- * @param {string} mode - "chat"|"smart"|"code"|"work"，空串=清除徽标
- * @returns {Promise<{ok:boolean, status:number, message?:string}>}
- */
-/**
  * 模式窗口在用指针单一权威（对齐 setChatMode 范式）：POST /using 持久化到服务端 mode_active_chats。
  * 【why】「XX窗口在用」原只有前端 localStorage 模式线指针——单浏览器视角，换窗口标签残缺。
  * R1 0713：不再报送 charName——服务端按对话 primaryCharName 权威定键。前端 charName 源
@@ -193,6 +189,13 @@ export async function setChatFlags(chatid, flags) {
 	}
 }
 
+/**
+ * 对话模式徽标单一权威（对齐 renameChat/N39 范式）：POST /mode 持久化到服务端 chat_modes。
+ * 【why】徽标原只写前端 localStorage convMeta.mode，换窗口/清缓存即丢；服务端权威后各窗口列表一致。
+ * @param {string} chatid
+ * @param {string} mode - "chat"|"smart"|"code"|"work"，空串=清除徽标
+ * @returns {Promise<{ok:boolean, status:number, message?:string}>}
+ */
 export async function setChatMode(chatid, mode) {
 	try {
 		const res = await apiFetch(

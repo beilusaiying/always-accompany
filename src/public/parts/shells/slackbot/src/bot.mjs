@@ -13,7 +13,7 @@ const _lc = createBotLifecycle("slackbot", {
 		const { createSimpleSlackInterface } = await import("./default_interface/main.mjs");
 		return createSimpleSlackInterface(char, username, charname);
 	},
-	connect: async (config, char, { botname }) => {
+	connect: async (config, char, { username, botname }) => {
 		const { App } = await import("npm:@slack/bolt@^4.6.0");
 		const app = new App({
 			token: config.token,
@@ -23,7 +23,7 @@ const _lc = createBotLifecycle("slackbot", {
 		// BR2: 运行时错误外显到前端 [O] 监控红点（phase=runtime），对齐 telegram bot.catch
 		app.error(async (error) => {
 			diag.error(`bot="${botname}" 运行时错误`, error);
-			broadcastBotError({ platform: "slackbot", botname, phase: "runtime", error });
+			broadcastBotError({ username, platform: "slackbot", botname, phase: "runtime", error });
 		});
 		await char.interfaces.slack.OnBotReady(app, config.config);
 		await app.start();

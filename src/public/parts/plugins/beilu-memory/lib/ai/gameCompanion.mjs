@@ -34,7 +34,7 @@
  *   读配置：eye_config.json（captureFrequency 截图频率）、game_companion_config.json（频率自适应参数/绑定）
  *
  * 【影响范围】
- *   - 内存：_sessions Map（按 username/charName 隔离，服务重启后清空需重新 start）
+ *   - 内存：_sessions Map（每个 username 一个后台 runtime；角色卡/对话在 session 内固定）
  *   - 承载对话文件：每轮写入用户侧消息(截图/触碰)+AI 回复（主链 ReplyHandler 落盘）
  *   - 不写记忆表格，不写 tables.json（陪伴消息不归档到记忆体系）
  *   - 定时器：每个 session 一个 setInterval（间隔=currentInterval，自适应频率变化时 clear 后按新频率重建）；
@@ -57,7 +57,7 @@ import {
   getGcCaptureRequestPath,
 } from "../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"; // T8·回切：壳已删改指 yonban 新位（删壳漏网:存活件对已删件的lib内互引盲区）
 
-/** 活跃的游戏陪伴会话 Map<"username/charName", session> */
+/** 活跃的游戏陪伴会话 Map<username, session>；同一用户只允许一个后台 runtime。 */
 const _sessions = new Map();
 
 /** 默认配置 */
@@ -76,7 +76,8 @@ const DEFAULT_CONFIG = {
  * @returns {{ success: boolean, sessionId?: string, error?: string }}
  */
 export function startGameCompanion(username, charName, options = {}) {
-  const key = `${username}/${charName}`;
+  const key = username;
+  const label = `${username}/${charName}`;
   if (_sessions.has(key)) {
     return { success: false, error: "游戏陪伴已在运行" };
   }
@@ -89,7 +90,7 @@ export function startGameCompanion(username, charName, options = {}) {
 
   // captureFrequency=0 → baseInterval=0 → 用户意图是禁用自动截图
   if (baseInterval === 0 && !(options.interval > 0)) {
-    console.log(`[gameCompanion] captureFrequency=0，自动截图已禁用，不启动: ${key}`);
+    console.log(`[gameCompanion] captureFrequency=0，自动截图已禁用，不启动: ${label}`);
     return { success: false, error: "自动截图已禁用 (captureFrequency=0)" };
   }
 
@@ -136,13 +137,13 @@ export function startGameCompanion(username, charName, options = {}) {
   session.timer = setInterval(() => {
     if (!session.paused) {
       _executeRound(session).catch((e) => {
-        console.error(`[gameCompanion] 执行轮次失败 (${key}):`, e.message);
+        console.error(`[gameCompanion] 执行轮次失败 (${label}):`, e.message);
       });
     }
   }, session.currentInterval);
 
   _sessions.set(key, session);
-  console.log(`[gameCompanion] 已启动: ${key}, 间隔=${Math.round(session.currentInterval / 1000)}秒`);
+  console.log(`[gameCompanion] 已启动: ${label}, 间隔=${Math.round(session.currentInterval / 1000)}秒`);
 
   return { success: true, sessionId: session.id };
 }
@@ -153,8 +154,8 @@ export function startGameCompanion(username, charName, options = {}) {
  * @param {string} charName
  * @returns {{ success: boolean }}
  */
-export function stopGameCompanion(username, charName) {
-  const key = `${username}/${charName}`;
+export function stopGameCompanion(username, _charName) {
+  const key = username;
   const session = _sessions.get(key);
   if (!session) {
     return { success: false, error: "没有运行中的游戏陪伴" };
@@ -162,7 +163,7 @@ export function stopGameCompanion(username, charName) {
 
   if (session.timer) clearInterval(session.timer);
   _sessions.delete(key);
-  console.log(`[gameCompanion] 已停止: ${key}, 共${session.roundCount}轮`);
+  console.log(`[gameCompanion] 已停止: ${session.username}/${session.charName}, 共${session.roundCount}轮`);
 
   return { success: true, rounds: session.roundCount };
 }
@@ -173,8 +174,8 @@ export function stopGameCompanion(username, charName) {
  * @param {string} charName
  * @returns {object}
  */
-export function getGameCompanionStatus(username, charName) {
-  const key = `${username}/${charName}`;
+export function getGameCompanionStatus(username, _charName) {
+  const key = username;
   const session = _sessions.get(key);
   if (!session) {
     return { running: false };
@@ -182,6 +183,7 @@ export function getGameCompanionStatus(username, charName) {
   return {
     running: true,
     sessionId: session.id,
+    charName: session.charName,
     chatid: session.chatid, // 承载对话:前端陪伴面板(companionChat.mjs)据此拉历史,producer↔consumer 全接线
     startedAt: session.startedAt,
     roundCount: session.roundCount,
@@ -200,8 +202,8 @@ export function getGameCompanionStatus(username, charName) {
  * @param {string} charName
  * @param {"reply"|"ignore"|"close"|"pause"} action
  */
-export function gameCompanionUserAction(username, charName, action) {
-  const key = `${username}/${charName}`;
+export function gameCompanionUserAction(username, _charName, action) {
+  const key = username;
   const session = _sessions.get(key);
   if (!session) return;
 
@@ -239,7 +241,7 @@ export function gameCompanionUserAction(username, charName, action) {
     session.timer = setInterval(() => {
       if (!session.paused) {
         _executeRound(session).catch((e) => {
-          console.error(`[gameCompanion] 执行轮次失败 (${key}):`, e.message);
+          console.error(`[gameCompanion] 执行轮次失败 (${session.username}/${session.charName}):`, e.message);
         });
       }
     }, session.currentInterval);
@@ -267,15 +269,15 @@ export function gameCompanionTouchMessage(username, text, extra = {}) {
   const t = typeof text === "string" ? text.trim() : "";
   const _exFiles = Array.isArray(extra.files) ? extra.files.filter(f => f && typeof f.dataBase64 === "string" && f.dataBase64) : [];
   if (!t && !_exFiles.length) return false;
-  for (const [key, session] of _sessions) {
-    if (key.startsWith(`${username}/`) && !session.paused) {
+  const session = _sessions.get(username);
+  if (session && !session.paused) {
       session.lastUserReply = Date.now(); // 触碰=用户主动交互,复位降频语义(同 reply)
       _executeRound(session, {
         touchText: t,
         touchFiles: _exFiles,
         singleInject: typeof extra.singleInject === "string" ? extra.singleInject.trim() : "",
       }).catch(async (e) => {
-        console.error(`[gameCompanion] 触碰消息轮失败 (${key}):`, e.message);
+        console.error(`[gameCompanion] 触碰消息轮失败 (${session.username}/${session.charName}):`, e.message);
         // 回执可见(2026-07-10 审计C修):reason 气泡只覆盖"陪伴未运行"前置检查,轮内失败(AI 出错等)
         // 此前只 console=用户以为发出去了。经既有 orb 槽→桌宠轮询→气泡,同显示链零新面。
         try {
@@ -284,7 +286,6 @@ export function gameCompanionTouchMessage(username, text, extra = {}) {
         } catch { /* 回执失败不再级联 */ }
       });
       return true;
-    }
   }
   return false;
 }

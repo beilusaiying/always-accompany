@@ -35,6 +35,7 @@ import {
 import { initPipelinePanel } from "../../panels/work/pipelinePanel.mjs";
 import { initTaskItemPanel, mountTaskItemPanel } from "../../panels/task/taskItemPanel.mjs";
 import { initTaskCard } from "../../panels/task/taskCard.mjs";
+import { initCloneProgressCard } from "../../panels/task/cloneProgressCard.mjs";
 import { initPermissionPanel } from "../../panels/feature/permissionPanel.mjs";
 import { getCharId, isValidChatId } from "../state/sharedState.mjs";
 
@@ -1027,6 +1028,7 @@ export function initLayout() {
 
   // F3 任务清单卡（聊天流顶部，AI 制定任务 + 打勾）
   initTaskCard();
+  initCloneProgressCard();
 
   // 初始化 IDE 控制面板（idePanel 子模块）
   // pipelinePanel=skill组启动器（角色位次显示已删）；FT1 的 taskItemPanel 挂载在 #ide-task-panel。

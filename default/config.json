@@ -1,5 +1,28 @@
 {
 	"port": 1314,
+	"request_log_repeat_window_ms": 5000,
+	"request_log_include_source": true,
+	"request_log_silent_patterns": [
+		"/api/eye/status",
+		"/api/parts/plugins:beilu-files/config/setdata",
+		"/api/user-plugins/status",
+		"/api/parts/plugins:beilu-memory/config/(getdata|setdata)",
+		"/api/parts/plugins:beilu-preset/config/(runtime-params|setdata|getdata)",
+		"/api/parts/shells:chat/[^/]+/fake-send",
+		"/api/getdetails/",
+		"/api/parts/shells:chat/[^/]+/log/",
+		"/api/parts/shells:chat/groups",
+		"/api/eye/getdata",
+		"/api/v1/monitor/plugins",
+		"/api/parts/shells:chat/getchatlist",
+		"^/(esm-cache)/",
+		"^/(public|pages|assets)/",
+		"\\.(mjs|js|css|html|woff2?|ttf|svg|png|jpg|ico)(\\?|$)",
+		"^/api/yonban/dispatch",
+		"/api/eye/pet-settings",
+		"/api/eye/orb-consume",
+		"/api/parts/shells:discordbot/getrunningbotlist"
+	],
 	"prelaunch": {
 		"heapSize": 0
 	},

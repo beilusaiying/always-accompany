@@ -1,0 +1,13 @@
+{
+  "source": {
+    "include": [ "lib" ],
+    "includePattern": ".+\\.js(doc|x)?$"
+  },
+  "opts": {
+    "destination": "./jsdoc/",
+    "recurse": true
+  },
+  "sourceType": "module",
+  "plugins": ["plugins/markdown"],
+  "verbose": true
+}

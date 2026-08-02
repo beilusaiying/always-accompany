@@ -1020,9 +1020,9 @@
         "postProcessing": "提示詞後處理",
         "ppNone": "無",
         "ppMerge": "合併相同角色連續發言",
-        "ppSemi": "半嚴格（合併+system轉user交替）",
-        "ppStrict": "嚴格（合併+user在前+system僅一條）",
-        "postProcessingHint": "部分API要求嚴格角色交替，按需選擇",
+        "ppSemi": "半嚴格（舊設定，等同合併，保留 system）",
+        "ppStrict": "嚴格（舊設定，等同合併，保留 system）",
+        "postProcessingHint": "後處理不會把 system 降成 user；渠道差異由供應商適配層處理",
         "save": "<i data-ic=\"save\"></i> 儲存參數"
       },
       "presetEntries": {

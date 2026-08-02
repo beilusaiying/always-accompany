@@ -1,0 +1,33 @@
+{
+	"_说明": "beilu-era English 语言差量层（叠加在默认模板上：文案替换为英文，terrain/placement 键为增补——中英键共存，AI 用任一语言词均命中）",
+
+	"terrain": {
+		"presets": {
+			"forest": { "chars": "♣♠T", "color": "#3f7a3f" },
+			"field": { "chars": "+", "color": "#7a8a3f" },
+			"water": { "chars": "∞~", "color": "#3f6a8a" }
+		}
+	},
+
+	"placement": {
+		"center": { "anchor": "center", "desc": "room centre" },
+		"door": { "anchor": "door", "desc": "inside the door" },
+		"corner": { "anchor": "topleft", "dx": 1, "dy": 1, "desc": "inner top-left corner" },
+		"north": { "anchor": "wall_n", "desc": "north wall midpoint" },
+		"south": { "anchor": "wall_s", "desc": "south wall midpoint" },
+		"east": { "anchor": "wall_e", "desc": "east wall midpoint" },
+		"west": { "anchor": "wall_w", "desc": "west wall midpoint" },
+		"near": { "anchor": "near", "desc": "adjacent to an entity (with near:id)" }
+	},
+
+	"compass": { "n": "N", "s": "S", "e": "E", "w": "W" },
+
+	"textLabels": {
+		"headerLine": "{name} (id:{id} rev{rev})",
+		"floorHeader": "── F{f} ──",
+		"truncatedLine": "Truncated rooms: ",
+		"stairsLine": "Stairs: ",
+		"entsLine": "Entities: ",
+		"compassLine": "Compass: {n} up · {s} down · {w} left · {e} right"
+	}
+}

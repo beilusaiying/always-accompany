@@ -170,7 +170,7 @@ async function GetSource(config) {
 						_wbChunks++
 						wbT(_wbChatid, 'ai:ollama', 'stream_chunk', { n: _wbChunks, len: chunk.message.content.length })
 						result.content += chunk.message.content
-						previewUpdater(result)
+						previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 					}
 				}
 				wbT(_wbChatid, 'ai:ollama', 'stream_end', { chunks: _wbChunks, totalLen: result.content.length })
@@ -187,7 +187,7 @@ async function GetSource(config) {
 				result.content = response.message.content
 				wbT(_wbChatid, 'ai:ollama', 'response_received', { totalLen: result.content?.length ?? 0 })
 				wbD(_wbChatid, 'ai:ollama', 'response_empty', !!result.content, '非流式返回空内容（本地 ollama 服务/模型异常）', { model: _cfg.model })
-				previewUpdater(result)
+				previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 			}
 
 			wbT(_wbChatid, 'ai:ollama', 'structcall_done', { len: result.content.length })

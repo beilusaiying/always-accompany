@@ -11,8 +11,12 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  *     #8 永久记忆溢出（≥200条）→ hot/forever.json 按日期分批
  *     #9 warm 旧日记录（≥30天）→ cold/（温→冷，每天最多1次）
  *     code/work 经验表过大（≥80行）→ code/archive/ 或 work/archive/
- *   日终归档（endDay）在用户点击"结束今天"时触发，执行 9 步完整收尾流程（含 P2 总结）。
- *   不直接 import aiRunner（防循环依赖），P2 总结通过 callbacks.onTriggerP2 回调解耦触发。
+ *   日终归档（endDay）在用户点击"结束今天"时触发，执行 9 步完整收尾流程——
+ *   日总结（Step1-2）由 endDay 自身的 JS 逻辑合并 #6+#4 生成，不调用任何 P 系列 AI；
+ *   endDay(username, charName) 签名本身不接收 callbacks 参数，函数体内也无 P2/P3 触发点
+ *   （0802 修正过时注释：此前误写"含 P2 总结"/"→ onTriggerP2"，P2 总结现仅由用户在
+ *   面板点按钮走 setDataActions "triggerP2Summary" → aiRunner.triggerP2Summary 手动触发，
+ *   与 endDay 完全独立；P3"每日总结AI"同理仅能手动运行，不被 endDay 调用）。
  *
  * 【why】
  *   记忆体系分三温层（hot 活跃 / warm 近期 / cold 归档）是为了控制 GetPrompt 注入 token 量——
@@ -26,14 +30,16 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  *     generation.mjs → replyHandler.handleReply() → autoCheckArchiveTriggers()（每轮末尾）
  *   手动触发（用户操作）：
  *     前端点击"结束今天" → SetData("endDay") → setDataActions → endDay()
- *     → 9步日终归档（含 onTriggerP2 → aiRunner.triggerP2Summary）
+ *     → 9步日终归档（纯 JS 生成日总结+归档，不含任何 P 系列 AI 调用）
  *   归档完成后前端无专用广播，但下轮 GetData 拉取时 tables 状态已更新（已归档行消失）。
  *
  * 【关联链】
  *   ← replyHandler.mjs（每轮末尾调 autoCheckArchiveTriggers）
  *   ← setDataActions.mjs（endDay 日终归档入口）
  *   → storage.mjs（loadMemoryData / saveTablesData / saveJsonFile / getMemoryDir / getTodayStr 等，唯一 lib 依赖）
- *   → callbacks.onTriggerP2（注册回调 → aiRunner.triggerP2Summary — 通过 main.mjs 注入，防循环依赖）
+ *   → callbacks.onTriggerP2（autoCheckArchiveTriggers 形参仍保留该回调位，但 0802 凛倾指令
+ *     "P2 是手动触发"后调用点已注释——回调对象仍由 replyHandler.mjs 构建传入，实际不再被调用；
+ *     P2 真实触发路径现只有 setDataActions.mjs case "triggerP2Summary" 手动按钮）
  *
  * 【影响范围】
  *   - 写 hot/remember_about_user/{date}.json（#7 按日期分组归档）
@@ -50,7 +56,8 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  * 【使用效果】
  *   hot 层记忆始终保持在合理规模（不超阈值），GetPrompt 注入 token 受控；
  *   历史记忆自动沉降到 warm/cold 层，按需由 P1 检索召回；
- *   日终归档后当天的对话/任务/关于用户记录完整保存，P2 总结生成当天摘要。
+ *   日终归档后当天的对话/任务/关于用户记录完整保存，当天摘要由 endDay Step1-2 自身 JS 逻辑
+ *   （合并 #6+#4）生成写入 warm/{y}/{m}/{d}_summary.json——不经过 P2/P3 AI，P2/P3 均只能手动运行。
  *
  * 触发阈值均从 _config.json 读取（可配），各函数内部有兜底默认值：
  *   #4 temp_memory_threshold=50 / #7 remember_archive_days=3 / #8 forever_max=200 /
@@ -536,7 +543,7 @@ function _appendTableArchiveFile(archiveFile, meta, oldRows) {
  *   ＋关键词检索原只扫 .json」＝归档即消失；正确修法是不建子目录 + 检索扩 .md（retrieval 已扩），
  *   而不是换个落点绕过。旧落点让凛倾设计的 code/archive/ 长期空置，且归档产物落进
  *   "会被检索注入"的 hot，与前端层语义（hot=活跃 / warm=近期 / cold=已归档，memoryBrowser.mjs:140-144）冲突。
- * 【现落点】code → code/archive/ ・ work → work/archive/ ・ chat → cold/tables/
+ * 【现落点】code → code/active/ ・ work → work/active/ ・ chat → hot/
  *   一律**直接放文件、不建子目录** → 温层枚举(isFile) 与 searchMemoryFiles(.json/.md) 均可达。
  * 【存量归位】把落错位置的 hot/archive/tables/<mode>/* 及更早的 <mode>/archive/tables/*、archive/tables/*
  *   一次性 rename 回本落点（幂等，每进程每 mode 判一次）；同名冲突插 _migrated<ts> 保后缀契约。
@@ -546,39 +553,82 @@ function _appendTableArchiveFile(archiveFile, meta, oldRows) {
  * @returns {{ absDir:string, relPrefix:string }} relPrefix 用于回传 file 相对路径（前端 list/get/restore 用）
  */
 const _archiveMigratedMemo = new Set();
-export function tableArchiveDir(memDir, mode) {
-  const _m = (mode === "code" || mode === "work") ? mode : "chat";
-  // 归档＝降温：code/work 落各自模式的 archive 层；chat 落三温层的 cold（前端标签「已归档」）
-  const relPrefix = _m === "chat" ? "cold/tables" : _m + "/archive";
-  const absDir = path.join(memDir, ...relPrefix.split("/"));
-  const _memoKey = memDir + "\u0001tables\u0001" + _m;
-  if (!_archiveMigratedMemo.has(_memoKey)) {
-    _archiveMigratedMemo.add(_memoKey);
-    // 旧落点按时间倒序归位：hot 四层嵌套（0716~0726 错落点）→ 更早的 <mode>/archive/tables/ 与 archive/tables/
-    const _legacyDirs = [
-      path.join(memDir, "hot", "archive", "tables", _m),
-      _m === "chat" ? path.join(memDir, "archive", "tables") : path.join(memDir, _m, "archive", "tables"),
-    ];
-    for (const _legacyDir of _legacyDirs) {
+
+function _tableArchiveSpec(mode) {
+  const _m = mode === "code" || mode === "work" ? mode : "chat";
+  const relRoot = _m === "chat" ? "hot" : `${_m}/active`;
+  return { mode: _m, relRoot, absRoot: (memDir) => path.join(memDir, ...relRoot.split("/")) };
+}
+
+function _archiveDateFromFile(filePath) {
+  const doc = loadJsonFileIfExists(filePath, null);
+  if (doc && /^\d{4}-\d{2}-\d{2}$/.test(String(doc.date || ""))) return doc.date;
+  const match = path.basename(filePath).match(/(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : getTodayStr();
+}
+
+function _walkTableArchiveFiles(dir, out = []) {
+  if (!fs.existsSync(dir)) return out;
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) _walkTableArchiveFiles(full, out);
+    else if (entry.isFile() && entry.name.endsWith("_archive.json")) out.push(full);
+  }
+  return out;
+}
+
+function _migrateTableArchives(memDir, mode, absRoot) {
+  const spec = _tableArchiveSpec(mode);
+  const memoKey = `${memDir}\u0001tables\u0001${spec.mode}`;
+  if (_archiveMigratedMemo.has(memoKey)) return;
+  const legacyRoots = spec.mode === "chat"
+    ? [path.join(memDir, "cold", "tables"), path.join(memDir, "hot", "archive", "tables", "chat"), path.join(memDir, "archive", "tables")]
+    : [path.join(memDir, spec.mode, "archive"), path.join(memDir, "hot", "archive", "tables", spec.mode), path.join(memDir, spec.mode, "archive", "tables")];
+  let moved = 0;
+  let failed = 0;
+  for (const legacyRoot of legacyRoots) {
+    if (path.resolve(legacyRoot) === path.resolve(absRoot)) continue;
+    for (const source of _walkTableArchiveFiles(legacyRoot)) {
       try {
-        if (!fs.existsSync(_legacyDir) || path.resolve(_legacyDir) === path.resolve(absDir)) continue;
-        const _files = fs.readdirSync(_legacyDir).filter((f) => f.endsWith("_archive.json") || f.endsWith("_archive.md"));
-        if (_files.length > 0) {
-          fs.mkdirSync(absDir, { recursive: true });
-          for (const _f of _files) {
-            let _dst = path.join(absDir, _f);
-            if (fs.existsSync(_dst)) _dst = path.join(absDir, _f.replace(/_archive\.(json|md)$/, "_migrated" + Date.now() + "_archive.$1"));
-            fs.renameSync(path.join(_legacyDir, _f), _dst);
-          }
-          console.log("[beilu-memory] 归档归位: " + _legacyDir + " → " + absDir + " (" + _files.length + " 件)");
-        }
-        if (fs.readdirSync(_legacyDir).length === 0) fs.rmdirSync(_legacyDir);
+        const date = _archiveDateFromFile(source);
+        const targetDir = path.join(absRoot, date);
+        fs.mkdirSync(targetDir, { recursive: true });
+        let target = path.join(targetDir, path.basename(source));
+        if (fs.existsSync(target)) target = path.join(targetDir, path.basename(source).replace(/_archive\.json$/, `_migrated${Date.now()}_archive.json`));
+        fs.renameSync(source, target);
+        moved++;
       } catch (e) {
-        wbD(null, "backgroundTasks", "tableArchiveDir:migrate_fail", false, "归档归位失败(旧位文件保留原地，本轮 list 看不到未迁存量)", { legacyDir: _legacyDir, absDir, err: e.message });
+        failed++;
+        wbD(null, "backgroundTasks", "tableArchiveDir:migrate_fail", false, "表格归档存量迁移失败（源文件保留）", { source, absRoot, err: e.message });
       }
     }
   }
-  return { absDir, relPrefix };
+  if (failed === 0) _archiveMigratedMemo.add(memoKey);
+  if (moved > 0) console.log(`[beilu-memory] 表格归档存量迁移: ${spec.mode} → ${spec.relRoot}/<date> (${moved} 件${failed > 0 ? `，${failed} 件失败将重试` : ""})`);
+}
+
+export function tableArchiveRoot(memDir, mode) {
+  const spec = _tableArchiveSpec(mode);
+  const absRoot = spec.absRoot(memDir);
+  _migrateTableArchives(memDir, spec.mode, absRoot);
+  return { absRoot, relRoot: spec.relRoot, mode: spec.mode };
+}
+
+export function tableArchiveDir(memDir, mode, date = getTodayStr()) {
+  const { absRoot, relRoot, mode: normalizedMode } = tableArchiveRoot(memDir, mode);
+  const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(String(date)) ? String(date) : getTodayStr();
+  return { absDir: path.join(absRoot, safeDate), relPrefix: `${relRoot}/${safeDate}`, mode: normalizedMode };
+}
+
+export function listTableArchiveFiles(memDir, mode) {
+  const { absRoot } = tableArchiveRoot(memDir, mode);
+  return _walkTableArchiveFiles(absRoot).map((absPath) => ({
+    absPath,
+    file: path.relative(memDir, absPath).replace(/\\/g, "/"),
+    doc: loadJsonFileIfExists(absPath, null),
+  }));
 }
 
 /**
@@ -633,7 +683,7 @@ export function mdArchiveDir(memDir, mode, ym) {
 export const TABLE_ARCHIVE_DEFAULTS = {
   enabled: false, // 「chat 现状无表格归档默认关」决议（setDataActions _ARCHIVE_SPEC 注释）
   max_rows: 80,
-  keep_recent: 20,
+  keep_recent: 0, // 0=无额外保护区，归档到 max_rows 为止（等效 keep_recent=max_rows）；>0=显式保护最近 N 行
   archive_batch: 0,
   // min_archive_rows（20260726 加）：单次归档不足此行数则整轮跳过，攒够再一次性搬。
   //   【为什么必须有】选行量 = 行数 - keep_recent。当用户把 max_rows 配得接近或等于 keep_recent
@@ -709,8 +759,11 @@ export async function archiveTableRowsGeneric(username, charName, mode, tableId,
     _keepMask = _tbl.rows.map((_r, i) => !_idxSet.has(i));
   } else {
     // 行数上限策略：缺省全走 TABLE_ARCHIVE_DEFAULTS 单源（原 80/20 硬数字收口，决议1 数值不变）
-    const _keepRecent = Number.isFinite(opts.keepRecent) ? Math.max(0, opts.keepRecent) : TABLE_ARCHIVE_DEFAULTS.keep_recent;
     const _maxRows = Number.isFinite(opts.maxRows) ? Math.max(1, opts.maxRows) : TABLE_ARCHIVE_DEFAULTS.max_rows;
+    // keep_recent 语义：0（默认）=无额外保护区，归档到 max_rows 行为止；>0=显式保护最近 N 行。
+    // 上限 clamp：keep_recent 不超过 max_rows，防止 keep_recent > max_rows 时 _cut 为负永不归档。
+    const _keepRecentRaw = Number.isFinite(opts.keepRecent) ? Math.max(0, opts.keepRecent) : TABLE_ARCHIVE_DEFAULTS.keep_recent;
+    const _keepRecent = _keepRecentRaw > 0 ? Math.min(_keepRecentRaw, _maxRows) : _maxRows;
     if (_tbl.rows.length <= _maxRows) {
       return { archived: 0, file: "", remaining: _tbl.rows.length }; // 未超限，no-op
     }
@@ -721,11 +774,11 @@ export async function archiveTableRowsGeneric(username, charName, mode, tableId,
     if (_batch > 0) _cut = Math.min(_cut, _batch);
     if (_cut <= 0) return { archived: 0, file: "", remaining: _tbl.rows.length };
     // 单次归档行数下限（20260726 防碎片化）：不足则整轮跳过，攒够再一次性搬。
-    //   病：keep_recent ≥ max_rows 时滞后区归零（用户配 max_rows=20 + keep_recent 默认 20 实测），
-    //   变成「每超一行归档一行」，且默认文件名含 {time}/{count} → 每行一个碎片档。
-    //   手动归档（用户显式点「立即归档」）不受此限——用户主动要求就照做，不替他判断值不值得。
+    //   keep_recent ≥ max_rows 时滞后区天然小（每轮只超出 1-2 行），此时 min 检查会永久阻塞归档，
+    //   故仅在 keep_recent < max_rows（滞后区可自然增长）时启用 min 门槛。
+    //   手动归档不受此限——用户主动要求就照做。
     const _minRows = Number.isFinite(opts.minArchiveRows) ? Math.max(0, opts.minArchiveRows) : TABLE_ARCHIVE_DEFAULTS.min_archive_rows;
-    if (!opts.manual && _minRows > 0 && _cut < _minRows) {
+    if (!opts.manual && _minRows > 0 && _cut < _minRows && _keepRecent < _maxRows) {
       return { archived: 0, file: "", remaining: _tbl.rows.length, skipped: `不足单次归档下限 ${_minRows} 行（当前可归档 ${_cut} 行），攒够再搬` };
     }
     _oldRows = _tbl.rows.slice(0, _cut);
@@ -1145,7 +1198,8 @@ export function archiveWarmToCold(username, charName) {
  * 链路：replyHandler(:3374) 每轮回复后 → autoCheckArchiveTriggers → 各 archive* 函数
  * 影响：按条件触发 archiveTempMemory / archiveRememberAboutUser / archiveForeverEntries /
  *        maintainTimeSpaceTable / archiveTableRowsGeneric / archiveWarmToCold / normalizeForeverEntries
- *        通过 callbacks.onTriggerP2 异步触发 P2 总结 AI（不直接 import aiRunner，防循环依赖）
+ *        callbacks.onTriggerP2 / onTriggerP2Code 形参仍保留，但 0802 凛倾指令"P2 是手动触发"后
+ *        函数体内两处调用点均已注释（见下方 chat #4 分支、code/work 分支），本轮不再异步触发 P2 AI
  * 约束：per-chatId 模式解析——多窗口下 active_mode 恒停 "chat"，必须按 active_modes_map[chatId] 解析，
  *        否则 code/work 窗口永远走 chat 分支（旧 vapor 病根）
  *
@@ -1198,11 +1252,8 @@ export async function autoCheckArchiveTriggers(username, charName, callbacks, op
             }
           }
         }
-        if (_archivedAny && _aCfg.auto_summary && callbacks?.onTriggerP2Code) {
-          callbacks
-            .onTriggerP2Code(username, charName, _archChatId)
-            .catch((e) => console.error("[beilu-memory] P2-code 自动总结失败:", e.message));
-        }
+        // P2-code 自动触发已关闭（0802 凛倾指令：P2 是手动触发）
+        // 原：if (_archivedAny && _aCfg.auto_summary && callbacks?.onTriggerP2Code) { callbacks.onTriggerP2Code(...) }
       }
     } catch (e) {
       wbD(opts?.chatId ?? null, "backgroundTasks", "autoCheckArchiveTriggers:codeWorkTableArchive", false, e.message, { mode: _archMode });
@@ -1230,14 +1281,8 @@ export async function autoCheckArchiveTriggers(username, charName, callbacks, op
       wbD(_archChatId ?? null, "backgroundTasks", "autoCheckArchiveTriggers:archiveTempMemory", false, e.message, {});
       console.warn(`[beilu-memory] #4 临时记忆归档失败: ${e.message}`);
     }
-    // 异步触发 P2 总结AI（通过回调，避免直接依赖 aiRunner）
-    if (callbacks?.onTriggerP2) {
-      callbacks
-        .onTriggerP2(username, charName, _archChatId)
-        .catch((e) =>
-          console.error("[beilu-memory] P2 自动触发失败:", e.message),
-        );
-    }
+    // P2 自动触发已关闭（0802 凛倾指令：P2 是手动触发，整理归档内容+命名+格式化）
+    // 原：callbacks.onTriggerP2(username, charName, _archChatId)
   }
 
   // 检查 #7 是否有超过3天的条目

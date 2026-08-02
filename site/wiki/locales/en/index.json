@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "title": "always-accompany User Manual",
+  "languages": [
+    { "id": "zh-CN", "name": "简体中文" },
+    { "id": "zh-TW", "name": "繁體中文" },
+    { "id": "ja", "name": "日本語" },
+    { "id": "en", "name": "English" }
+  ],
+  "tree": [
+    {
+      "title": "Quick Start",
+      "icon": "rocket",
+      "children": [
+        { "title": "Quick Start", "file": "getting-started/overview.md", "audience": ["beginner", "user", "developer"] },
+        { "title": "Configure AI Service Sources", "file": "getting-started/install.md", "audience": ["beginner", "user"] },
+        { "title": "Presets & Parameters", "file": "getting-started/first-chat.md", "audience": ["beginner", "user"] },
+        { "title": "UI Layout", "file": "getting-started/ui-guide.md", "audience": ["beginner", "user"] }
+      ]
+    },
+    {
+      "title": "Mode System",
+      "icon": "layers",
+      "children": [
+        { "title": "Mode Overview", "file": "modes/overview.md", "audience": ["user", "developer"] },
+        { "title": "Chat Mode", "file": "modes/chat.md", "audience": ["beginner", "user"] },
+        { "title": "Code Mode (Code/IDE)", "file": "modes/ide.md", "audience": ["user", "developer"] },
+        { "title": "Work Mode", "file": "modes/work.md", "audience": ["user", "developer"] },
+        { "title": "Bot Mode", "file": "modes/bot.md", "audience": ["user", "developer"] },
+        { "title": "Game Companion Mode", "file": "modes/game.md", "audience": ["user"] },
+        { "title": "Sub-Modes & Switching", "file": "modes/submodes.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "Macro System",
+      "icon": "code",
+      "children": [
+        { "title": "What Are Macros", "file": "macros/overview.md", "audience": ["beginner", "user"] },
+        { "title": "Basic Macros", "file": "macros/basic.md", "audience": ["beginner", "user"] },
+        { "title": "Advanced Macros", "file": "macros/advanced.md", "audience": ["user", "developer"] },
+        { "title": "Variable Macros", "file": "macros/variables.md", "audience": ["user", "developer"] },
+        { "title": "Memory System Macros", "file": "macros/memory.md", "audience": ["user", "developer"] },
+        { "title": "IDE/Code Macros", "file": "macros/ide.md", "audience": ["developer"] },
+        { "title": "env Custom Variable Macros", "file": "macros/env.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "Memory System",
+      "icon": "brain",
+      "children": [
+        { "title": "Memory System Overview", "file": "memory/overview.md", "audience": ["beginner", "user"] },
+        { "title": "Memory Tables (#0-#9)", "file": "memory/tables.md", "audience": ["user", "developer"] },
+        { "title": "Hot-Layer Memory", "file": "memory/hot-layer.md", "audience": ["user", "developer"] },
+        { "title": "Memory AI Presets (P1-P8)", "file": "memory/presets.md", "audience": ["developer"] },
+        { "title": "Context Compression", "file": "memory/compression.md", "audience": ["user", "developer"] },
+        { "title": "Memory Archival & Retrieval", "file": "memory/archival.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "World Book",
+      "icon": "book",
+      "children": [
+        { "title": "World Book Overview", "file": "memory/worldbook-overview.md", "audience": ["beginner", "user"] },
+        { "title": "Entries & Trigger Mechanisms", "file": "memory/worldbook-entries.md", "audience": ["user", "developer"] },
+        { "title": "Regex & Rendered Entries", "file": "memory/worldbook-regex.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "Injection System (INJ)",
+      "icon": "inject",
+      "children": [
+        { "title": "Injection System Overview", "file": "memory/inj-overview.md", "audience": ["user", "developer"] },
+        { "title": "INJ Rule Configuration", "file": "memory/inj-rules.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "Preset Engine",
+      "icon": "settings",
+      "children": [
+        { "title": "Preset System Overview", "file": "presets/overview.md", "audience": ["beginner", "user"] },
+        { "title": "Preset Categories & Selection", "file": "presets/categories.md", "audience": ["user"] },
+        { "title": "Preset Entry Structure", "file": "presets/structure.md", "audience": ["developer"] },
+        { "title": "Commander Mode", "file": "presets/commander.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "AI Service Configuration",
+      "icon": "zap",
+      "children": [
+        { "title": "Service Source Overview", "file": "ai-service/overview.md", "audience": ["beginner", "user"] },
+        { "title": "Supported AI Providers", "file": "ai-service/providers.md", "audience": ["user"] },
+        { "title": "API Configuration Details", "file": "ai-service/api-config.md", "audience": ["user", "developer"] },
+        { "title": "Model Parameters", "file": "ai-service/model-params.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "Prompt Techniques",
+      "icon": "lightbulb",
+      "children": [
+        { "title": "Understanding LLMs", "file": "prompt-techniques/llm-basics.md", "audience": ["beginner", "user"] },
+        { "title": "Getting Started with Prompts", "file": "prompt-techniques/prompt-basics.md", "audience": ["beginner", "user"] },
+        { "title": "Hands-On Prompting with always-accompany", "file": "prompt-techniques/practice.md", "audience": ["user", "developer"] },
+        { "title": "Advanced & Professional Tips", "file": "prompt-techniques/advanced.md", "audience": ["user", "developer"] },
+        { "title": "Prompt Theory Basics", "file": "prompt-techniques/theory.md", "audience": ["beginner", "user"] },
+        { "title": "Identity & Persona Design", "file": "prompt-techniques/identity.md", "audience": ["user"] },
+        { "title": "Guide, Don't Ban", "file": "prompt-techniques/guide-not-ban.md", "audience": ["user"] },
+        { "title": "Chain-of-Thought (CoT)", "file": "prompt-techniques/cot.md", "audience": ["user", "developer"] },
+        { "title": "Refine & Iterate", "file": "prompt-techniques/refine.md", "audience": ["user"] },
+        { "title": "Small Words, Big Impact", "file": "prompt-techniques/small-words.md", "audience": ["user", "developer"] },
+        { "title": "Formatting & Symbols", "file": "prompt-techniques/formatting.md", "audience": ["user"] },
+        { "title": "Few-Shot Prompting", "file": "prompt-techniques/few-shot.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "Plugin System",
+      "icon": "plug",
+      "children": [
+        { "title": "Plugin Overview", "file": "plugins/overview.md", "audience": ["user", "developer"] },
+        { "title": "File Operations (beilu-files)", "file": "plugins/files.md", "audience": ["user", "developer"] },
+        { "title": "Screen Awareness (beilu-eye)", "file": "plugins/eye.md", "audience": ["user"] },
+        { "title": "Web Search (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
+        { "title": "Regex Enhancement (beilu-regex)", "file": "plugins/regex.md", "audience": ["developer"] },
+        { "title": "Variable System (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
+        { "title": "Script Engine", "file": "plugins/scripts.md", "audience": ["developer"] },
+        { "title": "Browser Automation (beilu-browser)", "file": "plugins/browser.md", "audience": ["user", "developer"] },
+        { "title": "Platform Reach (beilu-reach)", "file": "plugins/reach.md", "audience": ["user", "developer"] }
+      ]
+    },
+    {
+      "title": "YonBan (IDE Extension)",
+      "icon": "wrench",
+      "children": [
+        { "title": "YonBan Overview", "file": "yonban/overview.md", "audience": ["user", "developer"] },
+        { "title": "Tool List", "file": "yonban/tools.md", "audience": ["user", "developer"] },
+        { "title": "Approval & Permissions", "file": "yonban/approval.md", "audience": ["user", "developer"] },
+        { "title": "Execution Pipeline", "file": "yonban/architecture.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "Security Settings",
+      "icon": "shield",
+      "children": [
+        { "title": "Security Center", "file": "security/overview.md", "audience": ["user", "developer"] },
+        { "title": "Permissions & Authentication", "file": "security/auth.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "Developer Guide",
+      "icon": "wrench",
+      "children": [
+        { "title": "System Architecture", "file": "developer/architecture.md", "audience": ["developer"] },
+        { "title": "Message Pipeline", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "Plugin Development", "file": "developer/plugin-dev.md", "audience": ["developer"] },
+        { "title": "API Endpoint Reference", "file": "developer/api-reference.md", "audience": ["developer"] }
+      ]
+    },
+    {
+      "title": "P1 Self-Driven Divergence & Recall",
+      "icon": "brain",
+      "children": [
+        { "title": "Preface: Summary & Table of Contents", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "Chapter 1: Design Philosophy & Concepts", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
+        { "title": "Chapter 2: Architecture & Processing Flow", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
+        { "title": "Chapter 3: Algorithm Design & Formal Description", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },
+        { "title": "Chapter 4: Memory System", "file": "p1-recall/ch4-memory.md", "audience": ["user", "developer"] },
+        { "title": "Chapter 5: System Evolution & Experimental Evaluation", "file": "p1-recall/ch5-evolution.md", "audience": ["developer"] },
+        { "title": "Chapter 6: Resources & Appendices", "file": "p1-recall/ch6-resources.md", "audience": ["developer"] }
+      ]
+    }
+  ]
+}

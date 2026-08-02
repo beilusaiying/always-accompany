@@ -1026,9 +1026,9 @@
         "postProcessing": "Prompt Post-processing",
         "ppNone": "None",
         "ppMerge": "Merge consecutive same-role messages",
-        "ppSemi": "Semi-strict (merge + system→user alternation)",
-        "ppStrict": "Strict (merge + user first + single system)",
-        "postProcessingHint": "Some APIs require strict role alternation, choose as needed",
+        "ppSemi": "Legacy semi (same as merge; preserves system)",
+        "ppStrict": "Legacy strict (same as merge; preserves system)",
+        "postProcessingHint": "Post-processing never demotes system to user; provider differences are handled by adapters",
         "save": "<i data-ic=\"save\"></i> Save Parameters"
       },
       "presetEntries": {

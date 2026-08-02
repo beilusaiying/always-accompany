@@ -1251,7 +1251,8 @@ export async function getAllCachedPartDetails(username, partpath) {
 events.on('AfterUserDeleted', async ({ username }) => {
 	if (parts_set[username]) {
 		for (const partpath of Object.keys(parts_set[username])) {
-			try { await unloadPart(username, partpath) } catch {}
+			// [2026-08-01 批⑤危险#1] 同构 BeforeUserRenamed:1271 修——吞错=旧实例残留+旧目录重建
+			try { await unloadPart(username, partpath) } catch (e) { wbDetect(null, "parts", "AfterUserDeleted:unload_failed", false, "用户删除后卸载 part 失败(旧实例可能残留)", { username, partpath, err: e?.message || String(e) }) }
 		}
 	}
 	delete parts_set[username]

@@ -239,26 +239,56 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
    beilu Chat 基础样式 (从 chat shell 复制)
    ============================================================ */
 
-/* 聊天消息样式 — 竖排布局（头像+名字在上方，内容在下方） */
+/* 聊天消息列表以单一 gap 控制间隔，避免模板 margin + 导航高度叠加成大片空白。 */
+.chat-messages {
+  gap: 8px;
+}
+
+/* 所有消息根节点共享定位；左右列只施加到标准消息骨架，避免内嵌状态卡和错误占位误入头像列。 */
 .chat-message {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
   transition: transform 0.3s ease;
+}
+
+/* 聊天消息样式 — 对齐 SillyTavern：头像左列，名字与正文右列。 */
+.chat-message.chat-message-layout {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
 }
 
 .chat-message:hover {
   transform: translateX(3px);
 }
 
-/* 消息头部：头像 + 名字 + 时间 一行 */
+/* grid 兜底：hidden bar / 工具卡 / 任务卡 / 搜索卡等直接子元素必须横跨全宽，
+   否则被 50px avatar 列挤成竖排文字。avatar 和 message-main 按 grid-template-columns 走。 */
+.chat-message-layout > :not(.message-avatar):not(.message-main) {
+  grid-column: 1 / -1;
+}
+
+/* 右列承载头部、思维链、气泡；min-width:0 防止富前端内容撑破聊天列。 */
+.message-main {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+/* 消息头部：名字 + 时间 一行 */
 .message-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0 0.25rem;
+  min-width: 0;
+  padding: 0 0.25rem 0 0;
   margin-bottom: 0.25rem;
 }
 
-/* 头像（P0-C4: 50px + 描边 + 阴影 + hover 放大） */
+/* 头像（左列固定 50px；点击打开大图预览） */
 .message-avatar {
   width: 50px;
   height: 50px;
@@ -271,6 +301,15 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
     box-shadow 0.15s ease;
 }
 
+.chat-message-layout > .message-avatar {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  appearance: none;
+  cursor: zoom-in;
+  background: transparent;
+}
+
 .message-avatar:hover {
   transform: scale(1.08);
   box-shadow: 0 2px 8px var(--beilu-shadow-30);
@@ -280,16 +319,89 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   border-radius: 50%;
 }
 
+.chat-message-layout > .message-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-message-layout > .message-avatar:focus-visible {
+  outline: 2px solid var(--beilu-amber);
+  outline-offset: 2px;
+}
+
+/* 头像大图是非阻塞浮窗：可拖动、可关闭，不遮断聊天。 */
+.message-avatar-preview {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-float);
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(82vh, 720px);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 22%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--color-base-100) 94%, transparent);
+  box-shadow: 0 16px 48px var(--beilu-shadow-50);
+  backdrop-filter: blur(12px);
+}
+
+.message-avatar-preview__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 8px 6px 12px;
+  cursor: move;
+  user-select: none;
+  border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 12%, transparent);
+}
+
+.message-avatar-preview__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.message-avatar-preview__close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-base-content);
+  background: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  cursor: pointer;
+}
+
+.message-avatar-preview__image {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  max-height: calc(min(82vh, 720px) - 36px);
+  object-fit: contain;
+  background: color-mix(in oklch, var(--color-base-300) 35%, transparent);
+}
+
 /* 时间戳 */
 .message-timestamp {
   margin-left: auto;
 }
 
-/* 消息气泡 — 左缩进对齐头像（P0-C4: 50px+gap配合），铺满宽度 */
+/* 消息气泡占满右列；头像缩进由 grid 负责，不再由 margin 模拟。 */
 .chat-message .chat-bubble {
-  margin-left: 3.5rem;
+  position: relative;
+  box-sizing: border-box;
+  margin-left: 0;
   max-inline-size: 100%;
-  width: auto;
+  width: 100%;
 }
 
 /* T028c 气泡分色接链（方案C：底色贴背景 + 左侧 3px 色条分色）
@@ -329,22 +441,27 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   margin-bottom: 0.4em;
 }
 
-/* 时间线切换导航栏（消息下方居中） */
+/* 时间线切换导航栏：覆盖在气泡两侧，不进入文档流，不制造底部空白。 */
 .chat-message .swipe-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 6px;
+  position: absolute;
+  inset: 0;
+  display: block;
+  margin: 0;
   opacity: 0;
+  pointer-events: none;
+  z-index: 9;
   transition: opacity 0.2s ease;
 }
 
-.chat-message:hover .swipe-nav {
+.chat-message:hover .swipe-nav,
+.chat-message .swipe-nav:focus-within {
   opacity: 1;
 }
 
 .chat-message .swipe-nav .arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
@@ -359,7 +476,18 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   user-select: none;
   text-shadow: 0 1px 2px var(--beilu-shadow-30);
   line-height: 1;
+  padding: 0;
+  border: 0;
+  pointer-events: auto;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.chat-message .swipe-nav .arrow.left {
+  left: 8px;
+}
+
+.chat-message .swipe-nav .arrow.right {
+  right: 8px;
 }
 
 .chat-message .swipe-nav .arrow:hover {
@@ -369,6 +497,9 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
 
 /* Swipe 计数器 */
 .chat-message .swipe-nav .swipe-counter {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
   font-size: 0.75rem;
   color: oklch(var(--bc) / 0.5);
   background-color: var(--beilu-shadow-40);
@@ -376,10 +507,35 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   border-radius: 10px;
   user-select: none;
   font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .chat-message:hover .swipe-nav .swipe-counter {
   color: var(--beilu-amber);
+}
+
+@media (hover: none) {
+  .chat-message .swipe-nav {
+    opacity: 0.78;
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-message.chat-message-layout {
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: 8px;
+  }
+
+  .chat-message-layout > .message-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .message-avatar-preview {
+    right: 8px;
+    bottom: 8px;
+    width: calc(100vw - 16px);
+  }
 }
 
 /* 消息按钮组（P0-P3a: 基础透明度0.3，hover时1） */

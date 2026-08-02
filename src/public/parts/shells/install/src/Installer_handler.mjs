@@ -29,6 +29,10 @@ export async function importPart(username, data) {
 	for (const importHandler of ImportHandlers) try {
 		const handler = await loadPart(username, 'ImportHandlers/' + importHandler)
 		const installedParts = await handler.interfaces.import.ImportAsData(username, data)
+		if (!Array.isArray(installedParts) || installedParts.length === 0) {
+			errors.push({ handler: importHandler, error: 'handler returned no installed parts' })
+			continue
+		}
 		for (const partpath of installedParts)
 			if (partpath) {
 				notifyPartInstall(username, partpath)
@@ -41,9 +45,8 @@ export async function importPart(username, data) {
 		console.log(`handler ${importHandler} failed:`, err)
 	}
 
-	// 如果所有导入处理器都失败，抛出包含所有错误的异常
-	if (errors.length)
-		throw skip_report(Object.assign(new Error('All handlers failed'), { errors }))
+	// 空数组表示“该处理器未接收此输入”；没有产出时不能返回成功。
+	throw skip_report(Object.assign(new Error('All handlers failed'), { errors }))
 }
 
 /**
@@ -59,10 +62,13 @@ export async function importPartByText(username, text) {
 	for (const importHandler of ImportHandlers) try {
 		const handler = await loadPart(username, 'ImportHandlers/' + importHandler)
 		const installedParts = await handler.interfaces.import.ImportByText(username, text)
-		if (installedParts && installedParts.length)
-			for (const partpath of installedParts)
-				if (partpath)
-					notifyPartInstall(username, partpath)
+		if (!Array.isArray(installedParts) || installedParts.length === 0) {
+			errors.push({ handler: importHandler, error: 'handler returned no installed parts' })
+			continue
+		}
+		for (const partpath of installedParts)
+			if (partpath)
+				notifyPartInstall(username, partpath)
 
 		return installedParts
 	} catch (err) {
@@ -70,7 +76,7 @@ export async function importPartByText(username, text) {
 		console.log(`handler ${importHandler} failed:`, err)
 	}
 
-	if (errors.length) throw skip_report(Object.assign(new Error('All handlers failed'), { errors }))
+	throw skip_report(Object.assign(new Error('All handlers failed'), { errors }))
 }
 
 function _autoAssignAIsource(username, partpath) {

@@ -682,19 +682,20 @@ export async function openLinePicker() {
   // 【原错误模型】把"一条线必须绑一个实例"当成两套共同规则 → 单个 CLI 被当成"只能有一个窗口"，
   //   本体拉第二条线时检测不到第二个实例 = 凛倾原话「本体一建立新的多窗口就被检测到没有其他的
   //   正在运行的，只有本体的 cli」——本体的多线被套进 YonBan 的"多实例"口径里 = 嵌套。
-  // 【判据】列表里有 YonBan → 按窗口选；只有 CLI → 唯一执行端，N 条线共用，不让用户选也不拦。
+  // 【判据】纯 YonBan → 按窗口选；纯 CLI → 唯一执行端，N 条线共用，不让用户选也不拦；
+  //   hybrid/backend → 在线 CLI 与所有在线 YonBan 都是可选路由目标，由用户显式绑定。
   // 分类由后端分类器下发（getIdeInstances → ideMode/windowDimension，resolveIdeMode 单点），
   //   前端**不再自己判 kind**：谁是当前系统、窗口是什么维度，只有一个地方说了算。
-  let ideMode = "none";        // "yonban" | "cli" | "none"
-  let windowDimension = null;  // "instance"(一窗口一实例) | "line"(一进程多线)
-  let ideInstances = [];       // YonBan 窗口列表（windowDimension==="instance" 时才需要用户选）
+  let ideMode = "none";        // "yonban" | "cli" | "hybrid" | "none"
+  let windowDimension = null;  // "instance"(一窗口一实例) | "line"(一进程多线) | "backend"(按执行后端选择)
+  let ideInstances = [];       // 需要用户选择的在线执行端（纯 YonBan 或 hybrid）
   let cliInstance = null;      // CLI 执行端（windowDimension==="line"，唯一，不需要选）
   try {
     const ir = await sendAction({ verb: "getIdeInstances", target: "plugins:beilu-memory", source: "web" });
     const list = (Array.isArray(ir?.instances) ? ir.instances : []).filter((i) => i && i.connected);
     ideMode = ir?.ideMode || "none";
     windowDimension = ir?.windowDimension || null;
-    if (windowDimension === "instance") ideInstances = list;
+    if (windowDimension === "instance" || windowDimension === "backend") ideInstances = list;
     else if (windowDimension === "line") cliInstance = list.find((i) => i.primary) || list[0] || null;
   } catch (e) {
     console.warn("[lineManager] getIdeInstances 失败:", e?.message);
@@ -730,7 +731,7 @@ export async function openLinePicker() {
     `<div data-role="lines"></div>` +
     `<div class="text-sm mb-1" style="opacity:0.8;">角色卡</div>` +
     `<select class="select select-sm w-full mb-2" data-role="char"></select>` +
-    `<div class="text-sm mb-1" style="opacity:0.8;">绑定 VSCode 窗口</div>` +
+    `<div class="text-sm mb-1" style="opacity:0.8;">绑定工具执行端</div>` +
     `<select class="select select-sm w-full mb-2" data-role="ide"></select>` +
     `<div class="text-sm mb-1" style="opacity:0.8;">对话文件</div>` +
     `<div data-role="chats" style="max-height:40vh;overflow-y:auto;border:1px solid rgba(128,128,128,0.25);border-radius:8px;"></div>` +
@@ -754,14 +755,15 @@ export async function openLinePicker() {
     charSel.appendChild(o);
   }
 
-  // 执行端选择：按两套系统的多开维度分类呈现（见上方 ══ 注释）。
+  // 执行端选择：按后端下发的多开维度分类呈现（见上方 ══ 注释）。
   //   ① 有 YonBan 窗口 → 逐窗口列出（值=实例编号=窗口权威身份，端口存 dataset 供绑定）；
   //   ② 只有 CLI → 唯一执行端、N 条线共用：不给选项让用户挑，只如实显示"共用同一个 CLI"，
   //      并照常把这条线绑到它（绑定=路由归属，多条 chatid 指同一 port 完全合法，
   //      线之间的隔离由 chatid 会话键在 CLI 侧完成，不靠多进程）；
-  //   ③ 两者都没有 → 如实说明，不静默开一条没有执行端的瘸线。
+  //   ③ hybrid/backend → 列出全部在线 CLI + YonBan，让用户逐线选择绑定；
+  //   ④ 两者都没有 → 如实说明，不静默开一条没有执行端的瘸线。
   const _cliOnly = windowDimension === "line" && !!cliInstance;
-  if (windowDimension === "instance" && ideInstances.length) {
+  if ((windowDimension === "instance" || windowDimension === "backend") && ideInstances.length) {
     for (const inst of ideInstances) {
       const o = document.createElement("option");
       o.value = inst.instanceId || String(inst.port);
@@ -1004,7 +1006,7 @@ async function _reconcileLinesWithPool() {
     const inst = instances.find((i) => i && i.port === b.port);
     if (inst && inst.connected) continue; // 执行端活着
     // 维度判定：实例在池用 kind；不在池用绑定表实例编号前缀（cli_/yb_，两侧生成器的既有约定：
-    //   代码cli/server.mjs resolveCliInstanceId / YonBan IdeWsServer yb_<workspaceKey>_<proc>）
+    //   plugins/beilu-cli/server/server.mjs resolveCliInstanceId / YonBan IdeWsServer yb_<workspaceKey>_<proc>）
     const kind = inst?.kind
       || (typeof b.instanceId === "string" ? (b.instanceId.startsWith("cli") ? "cli" : b.instanceId.startsWith("yb") ? "yonban" : null) : null);
     if (kind !== "yonban") continue;
@@ -1203,7 +1205,7 @@ export function initLineManager(activityBar) {
   //   传输层只播报事实（websocket 只桥接事件，不替谁决定关不关）。
   window.addEventListener("beilu:ide-mode-changed", (e) => {
     const d = e?.detail || {};
-    if (d.to !== "yonban" || d.from === "yonban") { _refreshBindHint(btn); return; }
+    if (d.from !== "cli" || d.to !== "yonban") { _refreshBindHint(btn); return; }
     const _cur = (() => { try { return window._beiluGetChatId?.() || ""; } catch { return ""; } })();
     const _extra = [..._lines.keys()].filter((cid) => cid !== _cur);
     if (!_extra.length) { _refreshBindHint(btn); return; }

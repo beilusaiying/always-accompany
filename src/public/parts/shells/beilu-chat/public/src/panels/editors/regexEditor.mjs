@@ -564,6 +564,44 @@ function renderRuleList(filter = '') {
 		const enabled = allRules.filter(r => !r.disabled).length
 		statsEl.textContent = `共 ${allRules.length} 条规则 · ${enabled} 启用`
 	}
+
+	// [2026-08-01 W3 接线] 拖拽排序——drag-handle(:292) 已有 UI 把手，此前无处理器=骗人 UI。
+	//   原生 HTML5 drag-drop，按 allRules 整体 id 顺序重排 → 后端 reorder action(main.mjs:920)。
+	//   同 scope 内排序（拖到异 scope 条目上方也只是整体位置移动，不改 scope 归属）。
+	{
+		let _dragId = null
+		const _cleanup = enableDragAutoScroll(listEl) // 拖拽中边缘自动滚动
+		listEl.querySelectorAll('.regex-rule-item').forEach(item => {
+			const handle = item.querySelector('.drag-handle')
+			if (!handle) return
+			handle.addEventListener('mousedown', () => { item.draggable = true })
+			item.addEventListener('dragend', () => { item.draggable = false })
+			item.addEventListener('dragstart', (e) => {
+				_dragId = item.dataset.ruleId
+				e.dataTransfer.effectAllowed = 'move'
+				item.style.opacity = '0.4'
+			})
+			item.addEventListener('dragover', (e) => {
+				e.preventDefault()
+				e.dataTransfer.dropEffect = 'move'
+			})
+			item.addEventListener('drop', async (e) => {
+				e.preventDefault()
+				const targetId = item.dataset.ruleId
+				if (!_dragId || _dragId === targetId) return
+				const fromIdx = allRules.findIndex(r => r.id === _dragId)
+				const toIdx = allRules.findIndex(r => r.id === targetId)
+				if (fromIdx === -1 || toIdx === -1) return
+				const [moved] = allRules.splice(fromIdx, 1)
+				allRules.splice(toIdx, 0, moved)
+				try {
+					await setRegexData({ _action: 'reorder', order: allRules.map(r => r.id) })
+				} catch (err) { _reportError('拖拽排序保存失败', err) }
+				renderRuleList(container?.querySelector('#regex-search')?.value || '')
+			})
+		})
+		listEl.addEventListener('dragover', (e) => e.preventDefault()) // 容器级允许 drop
+	}
 }
 
 // ============================================================

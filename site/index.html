@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>always-accompany 使用手册</title>
+<meta name="description" content="beilu (always-accompany) 使用手册 — 模式系统、记忆体系、宏、预设引擎、插件开发等完整文档。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<style>
+/* ============================================================
+   CSS Variables — Light default, dark toggle
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --c-bg: #ffffff;
+  --c-bg-soft: #f6f6f9;
+  --c-bg-mute: #ededf0;
+  --c-bg-sidebar: #f9f9fb;
+  --c-text: #2c2c3a;
+  --c-text-2: #5a5a72;
+  --c-text-3: #8e8ea0;
+  --c-border: rgba(0,0,0,0.08);
+  --c-border-heavy: rgba(0,0,0,0.15);
+  --c-hover: rgba(0,0,0,0.04);
+  --c-code-bg: #f3f3f6;
+  --c-shadow: rgba(0,0,0,0.06);
+
+  --beilu-amber: #d4a017;
+  --beilu-amber-fg: #9a7209;
+  --beilu-amber-text: #1a1207;
+  --beilu-amber-rgb: 212, 160, 23;
+  --beilu-amber-5: rgba(var(--beilu-amber-rgb), 0.05);
+  --beilu-amber-6: rgba(var(--beilu-amber-rgb), 0.06);
+  --beilu-amber-8: rgba(var(--beilu-amber-rgb), 0.08);
+  --beilu-amber-10: rgba(var(--beilu-amber-rgb), 0.10);
+
+  --c-green: #16a34a;
+  --c-blue: #2563eb;
+  --c-red: #dc2626;
+  --c-purple: #7c3aed;
+  --c-yellow: #ca8a04;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --c-bg: #1a1a2e;
+  --c-bg-soft: #1e1e32;
+  --c-bg-mute: #262640;
+  --c-bg-sidebar: #16162a;
+  --c-text: #dcdce4;
+  --c-text-2: #a0a0b8;
+  --c-text-3: #6a6a82;
+  --c-border: rgba(255,255,255,0.08);
+  --c-border-heavy: rgba(255,255,255,0.15);
+  --c-hover: rgba(255,255,255,0.05);
+  --c-code-bg: rgba(255,255,255,0.06);
+  --c-shadow: rgba(0,0,0,0.3);
+
+  --beilu-amber-fg: #e0b030;
+  --beilu-amber-text: #1a1207;
+
+  --c-green: #4ade80;
+  --c-blue: #60a5fa;
+  --c-red: #f87171;
+  --c-purple: #a78bfa;
+  --c-yellow: #facc15;
+}
+
+/* ============================================================
+   Reset & Base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; scroll-behavior: smooth; }
+body {
+  height: 100%;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-border-heavy); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-text-3); }
+
+/* ============================================================
+   Shell: header + layout
+   ============================================================ */
+.shell { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---- Header ---- */
+.header {
+  height: 56px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px;
+  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border);
+  position: sticky; top: 0; z-index: 50;
+}
+.header-brand {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; font-size: 15px; cursor: pointer;
+  color: var(--c-text);
+  transition: color 0.15s;
+}
+.header-brand:hover { color: var(--beilu-amber); }
+.header-brand-icon { font-size: 20px; }
+.header-brand-tag {
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px;
+  background: var(--beilu-amber-10);
+  color: var(--beilu-amber-fg);
+  letter-spacing: 0.02em;
+}
+.header-spacer { flex: 1; }
+.header-btn {
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: transparent; color: var(--c-text-2);
+  font-size: 18px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.header-btn:hover { background: var(--c-hover); color: var(--c-text); border-color: var(--c-border-heavy); }
+.header-link {
+  font-size: 13px; color: var(--c-text-2); padding: 6px 10px;
+  border-radius: 6px; transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.header-link:hover { background: var(--c-hover); color: var(--c-text); }
+.header-link svg { width: 18px; height: 18px; fill: currentColor; }
+.mobile-menu-btn {
+  display: none; width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid var(--c-border); background: transparent;
+  color: var(--c-text-2); font-size: 18px; cursor: pointer;
+  align-items: center; justify-content: center;
+}
+
+/* ---- Main Layout ---- */
+.main { display: flex; flex: 1; min-height: 0; }
+
+/* ---- Sidebar ---- */
+.sidebar {
+  width: 280px; flex-shrink: 0;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg-sidebar);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-toolbar {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.search-input {
+  width: 100%; padding: 8px 12px;
+  font-size: 13px; border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  transition: border-color 0.15s;
+}
+.search-input:focus { outline: none; border-color: var(--beilu-amber); }
+.search-input::placeholder { color: var(--c-text-3); }
+.aud-tabs { display: flex; gap: 4px; }
+.aud-btn {
+  flex: 1; padding: 5px 6px;
+  font-size: 11px; font-weight: 500;
+  border: 1px solid var(--c-border);
+  border-radius: 6px; background: transparent;
+  color: var(--c-text-3); cursor: pointer;
+  transition: all 0.15s;
+}
+.aud-btn:hover { background: var(--c-hover); color: var(--c-text-2); }
+.aud-active {
+  background: var(--beilu-amber) !important;
+  color: var(--beilu-amber-text) !important;
+  border-color: var(--beilu-amber) !important;
+  font-weight: 600;
+}
+.sidebar-nav {
+  flex: 1; overflow-y: auto; padding: 8px 0;
+}
+
+/* ---- Sidebar Tree ---- */
+.nav-group { margin: 0; }
+.nav-group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; font-size: 13px; font-weight: 600;
+  color: var(--c-text-2); cursor: pointer;
+  user-select: none; transition: color 0.1s;
+}
+.nav-group-header:hover { color: var(--c-text); }
+.nav-chevron {
+  font-size: 9px; color: var(--c-text-3);
+  transition: transform 0.15s;
+}
+.nav-group-icon { font-size: 14px; }
+.nav-group.open > .nav-group-header .nav-chevron { transform: rotate(90deg); }
+.nav-group-list { display: none; padding: 0 0 4px; }
+.nav-group.open > .nav-group-list { display: block; }
+.nav-item {
+  display: block; padding: 5px 16px 5px 40px;
+  font-size: 13px; color: var(--c-text-3);
+  cursor: pointer; border-radius: 0;
+  transition: all 0.1s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+  margin: 0;
+}
+.nav-item:hover { color: var(--c-text); background: var(--c-hover); }
+.nav-item-active {
+  color: var(--beilu-amber-fg) !important;
+  background: var(--beilu-amber-8) !important;
+  border-left-color: var(--beilu-amber) !important;
+  font-weight: 500;
+}
+
+/* ---- Content Area ---- */
+.content-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.breadcrumb {
+  padding: 8px 32px; font-size: 12px; color: var(--c-text-3);
+  border-bottom: 1px solid var(--c-border);
+  display: flex; align-items: center; gap: 6px;
+  min-height: 36px; flex-shrink: 0;
+}
+.bc-home { cursor: pointer; transition: color 0.1s; }
+.bc-home:hover { color: var(--c-text); }
+.bc-sep { opacity: 0.4; font-size: 10px; }
+.bc-chapter { color: var(--c-text-3); }
+.bc-page { color: var(--beilu-amber-fg); font-weight: 500; }
+.content-area {
+  flex: 1; overflow-y: auto; padding: 32px;
+}
+
+/* ---- Homepage ---- */
+.hero {
+  max-width: 720px; margin: 0 auto; padding: 48px 0 40px;
+  text-align: center;
+}
+.hero-icon { font-size: 48px; margin-bottom: 16px; }
+.hero-title {
+  font-size: 28px; font-weight: 800; letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.hero-title em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--beilu-amber), #e8c547);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-desc {
+  font-size: 15px; color: var(--c-text-2);
+  max-width: 480px; margin: 0 auto 32px; line-height: 1.6;
+}
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px; max-width: 720px; margin: 0 auto;
+}
+.home-card {
+  border: 1px solid var(--c-border); border-radius: 10px;
+  padding: 20px 16px; text-align: center; cursor: pointer;
+  background: var(--c-bg-soft);
+  transition: all 0.2s ease;
+}
+.home-card:hover {
+  border-color: var(--beilu-amber);
+  background: var(--beilu-amber-5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--c-shadow);
+}
+.home-card-icon { font-size: 32px; margin-bottom: 10px; }
+.home-card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.home-card-count { font-size: 11px; color: var(--c-text-3); }
+
+/* ============================================================
+   Article Typography
+   ============================================================ */
+.article {
+  max-width: 780px; font-size: 15px; line-height: 1.8;
+  color: var(--c-text);
+}
+.article h1 {
+  font-size: 24px; font-weight: 800; margin: 0 0 20px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--c-border);
+  letter-spacing: -0.01em;
+}
+.article h2 {
+  font-size: 18px; font-weight: 700; margin: 32px 0 14px;
+  color: var(--beilu-amber-fg);
+}
+.article h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; }
+.article h4 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; }
+.article p { margin: 10px 0; }
+.article ul, .article ol { margin: 10px 0; padding-left: 24px; }
+.article li { margin: 5px 0; }
+.article li > ul, .article li > ol { margin: 4px 0; }
+.article img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+.article code {
+  background: var(--c-code-bg); padding: 2px 6px;
+  border-radius: 4px; font-size: 13px;
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+.article pre {
+  background: var(--c-code-bg); padding: 16px;
+  border-radius: 8px; overflow-x: auto; margin: 14px 0;
+  border: 1px solid var(--c-border);
+}
+.article pre code { background: none; padding: 0; font-size: 13px; }
+.article table {
+  width: 100%; border-collapse: collapse; margin: 14px 0;
+  font-size: 13px; display: block; overflow-x: auto;
+}
+.article th {
+  background: var(--c-bg-soft); padding: 8px 12px;
+  text-align: left; font-weight: 600;
+  border-bottom: 2px solid var(--c-border-heavy);
+}
+.article td { padding: 7px 12px; border-bottom: 1px solid var(--c-border); }
+.article tr:hover td { background: var(--c-hover); }
+.article blockquote {
+  border-left: 3px solid var(--beilu-amber);
+  padding: 10px 18px; margin: 14px 0;
+  background: var(--beilu-amber-5);
+  border-radius: 0 6px 6px 0;
+  color: var(--c-text-2);
+}
+.article hr { border: none; border-top: 1px solid var(--c-border); margin: 24px 0; }
+.article a { color: var(--beilu-amber-fg); transition: opacity 0.1s; }
+.article a:hover { opacity: 0.8; }
+.article a.wiki-nav-link {
+  color: var(--beilu-amber-fg); border-bottom: 1px dashed var(--beilu-amber);
+  padding: 0 1px; cursor: pointer;
+}
+.article a.wiki-nav-link:hover { background: var(--beilu-amber-8); border-bottom-style: solid; }
+.article .wiki-disabled-link {
+  color: var(--c-text-3); border-bottom: 1px dotted var(--c-border-heavy);
+  cursor: help;
+}
+.article strong { font-weight: 600; }
+
+/* ---- Callouts ---- */
+.article .callout-tip, .article .callout-warning, .article .callout-info, .article .callout-danger {
+  padding: 12px 16px; border-radius: 8px; margin: 14px 0;
+  font-size: 13px; border-left: 3px solid;
+}
+.article .callout-tip { background: rgba(22,163,74,0.06); border-color: var(--c-green); }
+.article .callout-warning { background: rgba(202,138,4,0.06); border-color: var(--c-yellow); }
+.article .callout-info { background: rgba(37,99,235,0.06); border-color: var(--c-blue); }
+.article .callout-danger { background: rgba(220,38,38,0.06); border-color: var(--c-red); }
+.article .callout-title { font-weight: 600; margin-bottom: 4px; }
+.article .callout-tip .callout-title { color: var(--c-green); }
+.article .callout-warning .callout-title { color: var(--c-yellow); }
+.article .callout-info .callout-title { color: var(--c-blue); }
+.article .callout-danger .callout-title { color: var(--c-red); }
+
+/* ---- Wiki Diagram Components ---- */
+.wiki-flow { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 16px 0; }
+.wiki-flow-h { display: flex; align-items: center; gap: 0; margin: 16px 0; flex-wrap: wrap; justify-content: center; }
+.wiki-box {
+  padding: 10px 18px; border-radius: 8px; font-size: 13px; text-align: center;
+  border: 1px solid var(--c-border-heavy); background: var(--c-bg-soft);
+  min-width: 120px; position: relative;
+}
+.wiki-box b { display: block; font-size: 12px; margin-bottom: 2px; }
+.wiki-box small { display: block; font-size: 11px; color: var(--c-text-3); }
+.wiki-box-amber { border-color: var(--beilu-amber); background: var(--beilu-amber-6); }
+.wiki-box-amber b { color: var(--beilu-amber-fg); }
+.wiki-box-blue { border-color: var(--c-blue); background: rgba(37,99,235,0.06); }
+.wiki-box-blue b { color: var(--c-blue); }
+.wiki-box-green { border-color: var(--c-green); background: rgba(22,163,74,0.06); }
+.wiki-box-green b { color: var(--c-green); }
+.wiki-box-red { border-color: var(--c-red); background: rgba(220,38,38,0.06); }
+.wiki-box-red b { color: var(--c-red); }
+.wiki-box-purple { border-color: var(--c-purple); background: rgba(124,58,237,0.06); }
+.wiki-box-purple b { color: var(--c-purple); }
+.wiki-box-wide { min-width: 200px; }
+.wiki-box-full { width: 100%; max-width: 520px; }
+.wiki-arrow { font-size: 16px; color: var(--c-text-3); line-height: 1; padding: 2px 0; }
+.wiki-arrow-h { font-size: 14px; color: var(--c-text-3); padding: 0 6px; }
+.wiki-label { font-size: 11px; color: var(--c-text-3); padding: 2px 8px; font-style: italic; }
+.wiki-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; justify-content: center; }
+.wiki-col { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.wiki-group {
+  border: 1px dashed var(--c-border-heavy); border-radius: 10px; padding: 14px;
+  margin: 8px 0; background: var(--c-bg-soft);
+}
+.wiki-group-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--c-text-2); text-align: center; }
+.wiki-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 500;
+  background: var(--beilu-amber-10); color: var(--beilu-amber-fg); margin: 1px 2px;
+}
+.wiki-badge-blue { background: rgba(37,99,235,0.1); color: var(--c-blue); }
+.wiki-badge-green { background: rgba(22,163,74,0.1); color: var(--c-green); }
+.wiki-badge-red { background: rgba(220,38,38,0.1); color: var(--c-red); }
+.wiki-grid { display: grid; gap: 10px; margin: 14px 0; }
+.wiki-grid-2 { grid-template-columns: 1fr 1fr; }
+.wiki-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.wiki-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.wiki-card {
+  border: 1px solid var(--c-border); border-radius: 8px; padding: 12px;
+  background: var(--c-bg-soft);
+}
+.wiki-card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.wiki-card-desc { font-size: 12px; color: var(--c-text-2); }
+.wiki-layers { display: flex; flex-direction: column; gap: 0; margin: 14px 0; }
+.wiki-layer {
+  padding: 12px 18px; border: 1px solid var(--c-border); font-size: 13px;
+  display: flex; align-items: center; gap: 14px;
+}
+.wiki-layer:first-child { border-radius: 10px 10px 0 0; }
+.wiki-layer:last-child { border-radius: 0 0 10px 10px; }
+.wiki-layer + .wiki-layer { border-top: none; }
+.wiki-layer-label { font-weight: 600; min-width: 60px; }
+.wiki-layer-amber { background: var(--beilu-amber-5); border-color: var(--beilu-amber); }
+.wiki-layer-amber .wiki-layer-label { color: var(--beilu-amber-fg); }
+.wiki-layer-blue { background: rgba(37,99,235,0.04); border-color: rgba(37,99,235,0.25); }
+.wiki-layer-blue .wiki-layer-label { color: var(--c-blue); }
+.wiki-layer-green { background: rgba(22,163,74,0.04); border-color: rgba(22,163,74,0.25); }
+.wiki-layer-green .wiki-layer-label { color: var(--c-green); }
+.wiki-layer-purple { background: rgba(124,58,237,0.04); border-color: rgba(124,58,237,0.25); }
+.wiki-layer-purple .wiki-layer-label { color: var(--c-purple); }
+
+/* ============================================================
+   Content Layout: article + right TOC
+   ============================================================ */
+.content-layout { display: flex; align-items: flex-start; gap: 0; }
+.content-main { flex: 1; min-width: 0; }
+
+/* ---- Right-side TOC (page outline) ---- */
+.toc {
+  width: 200px; flex-shrink: 0;
+  position: sticky; top: 0;
+  padding: 24px 0 24px 20px;
+  max-height: calc(100vh - 56px - 36px);
+  overflow-y: auto;
+  display: none;
+  border-left: 1px solid var(--c-border);
+}
+.toc.visible { display: block; }
+.toc-title {
+  font-size: 11px; font-weight: 700; color: var(--c-text-3);
+  margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.toc-link {
+  display: block; font-size: 12px; color: var(--c-text-3);
+  padding: 3px 0 3px 10px; cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all 0.1s; line-height: 1.4;
+}
+.toc-link:hover { color: var(--c-text); }
+.toc-link.depth-3 { padding-left: 22px; font-size: 11px; }
+.toc-link.toc-active { color: var(--beilu-amber-fg); border-left-color: var(--beilu-amber); }
+
+/* ---- Prev/Next pagination ---- */
+.page-nav {
+  display: flex; gap: 12px; margin-top: 48px; padding-top: 24px;
+  border-top: 1px solid var(--c-border);
+}
+.page-nav-link {
+  flex: 1; display: flex; flex-direction: column; gap: 4px;
+  padding: 14px 18px; border-radius: 10px;
+  border: 1px solid var(--c-border); background: var(--c-bg-soft);
+  cursor: pointer; transition: all 0.2s;
+}
+.page-nav-link:hover { border-color: var(--beilu-amber); background: var(--beilu-amber-5); }
+.page-nav-link.next { align-items: flex-end; text-align: right; }
+.page-nav-label { font-size: 11px; color: var(--c-text-3); font-weight: 500; }
+.page-nav-title { font-size: 14px; font-weight: 600; color: var(--beilu-amber-fg); }
+.page-nav-placeholder { flex: 1; }
+
+/* ---- Footer ---- */
+.site-footer {
+  padding: 24px 0; margin-top: 48px;
+  border-top: 1px solid var(--c-border);
+  font-size: 12px; color: var(--c-text-3);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.site-footer a { color: var(--beilu-amber-fg); }
+.site-footer a:hover { opacity: 0.8; }
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+.sidebar-backdrop { display: none; }
+@media (max-width: 1100px) {
+  .toc { display: none !important; }
+}
+@media (max-width: 768px) {
+  .mobile-menu-btn { display: inline-flex; }
+  .header-link span { display: none; }
+  .sidebar {
+    position: fixed; top: 56px; left: 0; bottom: 0; z-index: 40;
+    width: 85vw; max-width: 320px;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
+  body.sidebar-open .sidebar { transform: translateX(0); box-shadow: 6px 0 32px var(--c-shadow); }
+  .sidebar-backdrop {
+    display: block; position: fixed; inset: 56px 0 0 0; z-index: 35;
+    background: rgba(0,0,0,0); pointer-events: none;
+    transition: background 0.25s ease;
+  }
+  body.sidebar-open .sidebar-backdrop { background: rgba(0,0,0,0.4); pointer-events: auto; }
+  .content-area { padding: 20px 16px; }
+  .breadcrumb { padding: 8px 16px; }
+  .hero { padding: 32px 0 24px; }
+  .hero-title { font-size: 22px; }
+  .hero-desc { font-size: 14px; }
+  .home-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .wiki-grid-3, .wiki-grid-4 { grid-template-columns: 1fr 1fr; }
+  .page-nav { flex-direction: column; }
+  .page-nav-link.next { align-items: flex-start; text-align: left; }
+  .site-footer { flex-direction: column; gap: 6px; text-align: center; }
+}
+@media (max-width: 480px) {
+  .home-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .home-card { padding: 14px 10px; }
+  .wiki-grid-2, .wiki-grid-3, .wiki-grid-4 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Header -->
+  <header class="header">
+    <button class="mobile-menu-btn" id="mobile-toggle" aria-label="Menu">&#9776;</button>
+    <div class="header-brand" id="home-link">
+      <span class="header-brand-icon">📖</span>
+      <span id="brand-text">always-accompany</span>
+      <span class="header-brand-tag">Docs</span>
+    </div>
+    <div class="header-spacer"></div>
+    <a class="header-link" href="https://github.com/beilusaiying/always-accompany" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <select id="wiki-lang" class="search-input" style="width:auto;padding:6px 8px;font-size:12px;border-radius:6px;" aria-label="Language"></select>
+    <button class="header-btn" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">&#9789;</button>
+  </header>
+
+  <!-- Main -->
+  <div class="main">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-toolbar">
+        <input type="text" class="search-input" id="wiki-search" placeholder="搜索文档...">
+        <div class="aud-tabs">
+          <button class="aud-btn aud-active" data-aud="user">使用者</button>
+          <button class="aud-btn" data-aud="developer">开发者</button>
+          <button class="aud-btn" data-aud="p1">P1专项</button>
+        </div>
+      </div>
+      <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <div class="content-wrap">
+      <div class="breadcrumb" id="breadcrumb"></div>
+      <div class="content-area" id="content-area">
+        <div class="content-layout">
+          <div id="content-main" class="content-main">
+            <div style="text-align:center;padding:60px 0;color:var(--c-text-3);">加载中...</div>
+          </div>
+          <aside class="toc" id="toc"></aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const WIKI_BASE = "./wiki/";
+  const LANG_KEY = "beiluLang";
+  const THEME_KEY = "beiluWikiTheme";
+  const ICONS = {
+    rocket: "\u{1F680}", layers: "\u{1F4D1}", code: "⚙", brain: "\u{1F9E0}", book: "\u{1F4D6}",
+    inject: "\u{1F489}", settings: "\u{1F39B}", zap: "⚡", lightbulb: "\u{1F4A1}",
+    plug: "\u{1F50C}", shield: "\u{1F6E1}", wrench: "\u{1F527}"
+  };
+
+  let _lang = "zh-CN", _rootIndex = null, _index = null, _indexLang = null;
+  let _currentFile = null, _audienceFilter = "user", _suppressHash = false;
+
+  const $ = s => document.getElementById(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  /* ---- Theme ---- */
+  function applyTheme(t) {
+    const dark = t === "dark";
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "");
+    $("theme-toggle").innerHTML = dark ? "&#9728;" : "&#9789;";
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  }
+
+  /* ---- marked.js CDN ---- */
+  function loadScript(src) {
+    return new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = ok; s.onerror = () => no(new Error(src));
+      document.head.appendChild(s);
+    });
+  }
+  async function ensureMarked() {
+    if (window.marked) return;
+    try { await loadScript("https://testingcf.jsdelivr.net/npm/marked/marked.min.js"); }
+    catch { await loadScript("https://cdn.jsdelivr.net/npm/marked/marked.min.js"); }
+    if (!window.marked) throw new Error("marked.js CDN failed");
+  }
+
+  /* ---- Index ---- */
+  async function fetchRootIndex() {
+    if (_rootIndex) return _rootIndex;
+    const r = await fetch(WIKI_BASE + "index.json");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return _rootIndex = await r.json();
+  }
+  async function fetchIndex() {
+    if (_index && _indexLang === _lang) return _index;
+    _index = await fetchRootIndex();
+    if (_lang !== "zh-CN") try {
+      const r = await fetch(WIKI_BASE + "locales/" + _lang + "/index.json");
+      if (r.ok) _index = await r.json();
+    } catch {}
+    _indexLang = _lang;
+    return _index;
+  }
+
+  /* ---- Hash routing ---- */
+  function parseHash() {
+    const raw = decodeURIComponent(location.hash.replace(/^#/, ""));
+    if (!raw) return { lang: null, file: null };
+    const i = raw.indexOf("/");
+    return i === -1 ? { lang: raw, file: null } : { lang: raw.slice(0, i), file: raw.slice(i + 1) };
+  }
+  function setHash(file) {
+    const h = "#" + _lang + (file ? "/" + file : "");
+    if (location.hash !== h) { _suppressHash = true; location.hash = h; }
+  }
+  window.addEventListener("hashchange", () => {
+    if (_suppressHash) { _suppressHash = false; return; }
+    onHashRoute();
+  });
+  async function onHashRoute() {
+    const { lang, file } = parseHash();
+    const known = (_rootIndex?.languages || []).map(l => l.id);
+    if (lang && known.includes(lang) && lang !== _lang) {
+      _lang = lang; localStorage.setItem(LANG_KEY, _lang); syncLangSelect();
+      const idx = await fetchIndex(); renderSidebar(idx.tree);
+    }
+    if (file) await loadPage(file, true, false);
+    else { _currentFile = null; showHome(); }
+  }
+
+  /* ---- Link processing ---- */
+  function processLinks(root) {
+    root.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href");
+      if (!href) return;
+      if (href.startsWith("beilu:")) {
+        const span = document.createElement("span");
+        span.className = "wiki-disabled-link";
+        span.title = "此功能需在应用内使用";
+        span.textContent = a.textContent;
+        a.replaceWith(span);
+        return;
+      }
+      if (href.endsWith(".md") || /\.md[#?]/.test(href)) {
+        a.classList.add("wiki-nav-link");
+        a.addEventListener("click", e => {
+          e.preventDefault();
+          const resolved = _currentFile ? new URL(href, "http://x/" + _currentFile).pathname.slice(1) : href;
+          loadPage(resolved);
+        });
+        return;
+      }
+      if (/^https?:\/\//.test(href)) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
+    });
+  }
+
+  function matchAud(a) {
+    if (_audienceFilter === "p1") return true;
+    if (!a || a.length === 0) return true;
+    if (_audienceFilter === "user") return a.includes("user") || a.includes("beginner");
+    return a.includes(_audienceFilter);
+  }
+  function matchChapter(ch) {
+    if (_audienceFilter === "p1") {
+      return (ch.children || []).some(c => c.file && c.file.startsWith("p1-recall/"));
+    }
+    return true;
+  }
+
+  /* ---- Flat page list for pagination ---- */
+  function getPageList() {
+    if (!_index) return [];
+    const pages = [];
+    for (const ch of _index.tree) {
+      if (!matchChapter(ch)) continue;
+      for (const c of (ch.children || [])) {
+        if (matchAud(c.audience)) pages.push({ file: c.file, title: c.title, chapter: ch.title });
+      }
+    }
+    return pages;
+  }
+
+  /* ---- Right-side TOC ---- */
+  function buildTOC(contentMain) {
+    const toc = $("toc");
+    if (!toc) return;
+    const headings = contentMain.querySelectorAll("h2, h3");
+    if (headings.length < 2) { toc.classList.remove("visible"); return; }
+    let html = '<div class="toc-title">ON THIS PAGE</div>';
+    headings.forEach((h, i) => {
+      const id = "heading-" + i;
+      h.id = id;
+      const depth = h.tagName === "H3" ? " depth-3" : "";
+      html += '<a class="toc-link' + depth + '" data-id="' + id + '">' + esc(h.textContent) + '</a>';
+    });
+    toc.innerHTML = html;
+    toc.classList.add("visible");
+    toc.querySelectorAll(".toc-link").forEach(a => {
+      a.addEventListener("click", () => {
+        const el = document.getElementById(a.dataset.id);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    setupScrollSpy(headings);
+  }
+
+  function setupScrollSpy(headings) {
+    const area = $("content-area");
+    if (!area) return;
+    let ticking = false;
+    area.addEventListener("scroll", () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        let activeId = "";
+        for (const h of headings) {
+          if (h.getBoundingClientRect().top <= 80) activeId = h.id;
+        }
+        document.querySelectorAll(".toc-link").forEach(a => {
+          a.classList.toggle("toc-active", a.dataset.id === activeId);
+        });
+      });
+    });
+  }
+
+  /* ---- Prev/Next pagination ---- */
+  function renderPagination(file) {
+    const pages = getPageList();
+    const idx = pages.findIndex(p => p.file === file);
+    if (idx === -1) return "";
+    const prev = idx > 0 ? pages[idx - 1] : null;
+    const next = idx < pages.length - 1 ? pages[idx + 1] : null;
+    if (!prev && !next) return "";
+    let html = '<div class="page-nav">';
+    if (prev) {
+      html += '<div class="page-nav-link prev" data-file="' + esc(prev.file) + '">'
+        + '<span class="page-nav-label">← 上一篇</span>'
+        + '<span class="page-nav-title">' + esc(prev.title) + '</span></div>';
+    } else {
+      html += '<div class="page-nav-placeholder"></div>';
+    }
+    if (next) {
+      html += '<div class="page-nav-link next" data-file="' + esc(next.file) + '">'
+        + '<span class="page-nav-label">下一篇 →</span>'
+        + '<span class="page-nav-title">' + esc(next.title) + '</span></div>';
+    } else {
+      html += '<div class="page-nav-placeholder"></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderFooter() {
+    return '<footer class="site-footer">'
+      + '<span>Released under MIT License</span>'
+      + '<span><a href="https://github.com/beilusaiying/always-accompany" target="_blank" rel="noopener">GitHub</a></span>'
+      + '</footer>';
+  }
+
+  /* ---- Breadcrumb ---- */
+  function updateBreadcrumb(file) {
+    const bc = $("breadcrumb");
+    if (!bc || !_index) return;
+    if (!file) { bc.innerHTML = ""; return; }
+    let ch = "", pg = "";
+    for (const c of _index.tree) {
+      const f = (c.children || []).find(x => x.file === file);
+      if (f) { ch = c.title; pg = f.title; break; }
+    }
+    bc.innerHTML = '<span class="bc-home" title="首页">\u{1F3E0}</span>'
+      + '<span class="bc-sep">/</span><span class="bc-chapter">' + esc(ch) + '</span>'
+      + '<span class="bc-sep">/</span><span class="bc-page">' + esc(pg) + '</span>';
+    bc.querySelector(".bc-home")?.addEventListener("click", () => { _currentFile = null; setHash(null); showHome(); });
+  }
+
+  /* ---- Homepage ---- */
+  function showHome() {
+    const main = $("content-main");
+    if (!main || !_index) return;
+    const toc = $("toc");
+    if (toc) toc.classList.remove("visible");
+    const cards = _index.tree.filter(ch => matchChapter(ch)).map(ch => {
+      const icon = ICONS[ch.icon] || "\u{1F4C4}";
+      const vis = (ch.children || []).filter(c => matchAud(c.audience));
+      if (!vis.length) return "";
+      return '<div class="home-card" data-file="' + esc(vis[0].file || "") + '">'
+        + '<div class="home-card-icon">' + icon + '</div>'
+        + '<div class="home-card-title">' + esc(ch.title) + '</div>'
+        + '<div class="home-card-count">' + vis.length + ' 篇</div></div>';
+    }).join("");
+    main.innerHTML = '<div class="hero">'
+      + '<div class="hero-icon">\u{1F4D6}</div>'
+      + '<h1 class="hero-title"><em>' + esc(_index.title || "always-accompany") + '</em></h1>'
+      + '<p class="hero-desc">完整的使用指南与开发文档。从快速开始到深度定制，帮助你充分发挥 beilu 的能力。</p>'
+      + '<div class="home-grid">' + cards + '</div></div>'
+      + renderFooter();
+    main.querySelectorAll(".home-card").forEach(c => {
+      c.addEventListener("click", () => { if (c.dataset.file) loadPage(c.dataset.file); });
+    });
+    updateBreadcrumb(null);
+    document.querySelectorAll(".nav-item").forEach(e => e.classList.remove("nav-item-active"));
+    $("content-area").scrollTop = 0;
+  }
+
+  /* ---- Load page ---- */
+  async function loadPage(file, force, pushHash) {
+    if (pushHash === undefined) pushHash = true;
+    if (!force && _currentFile === file) return;
+    _currentFile = file;
+    if (pushHash) setHash(file);
+    const main = $("content-main");
+    if (!main) return;
+    main.innerHTML = '<p style="color:var(--c-text-3);padding:20px;">加载中...</p>';
+    const toc = $("toc");
+    if (toc) toc.classList.remove("visible");
+    try {
+      let r = null;
+      if (_lang !== "zh-CN") try { r = await fetch(WIKI_BASE + "locales/" + _lang + "/" + file); } catch {}
+      if (!r?.ok) r = await fetch(WIKI_BASE + file);
+      if (!r.ok) { main.innerHTML = '<p style="color:var(--c-red);">页面不存在: ' + esc(file) + '</p>'; return; }
+      const md = await r.text();
+      let articleHtml;
+      if (!window.marked) {
+        articleHtml = '<article class="article"><pre>' + esc(md) + '</pre></article>';
+      } else {
+        articleHtml = '<article class="article">' + window.marked.parse(md) + '</article>';
+      }
+      main.innerHTML = articleHtml + renderPagination(file) + renderFooter();
+      if (window.marked) processLinks(main);
+      buildTOC(main);
+      main.querySelectorAll(".page-nav-link").forEach(link => {
+        link.addEventListener("click", () => { if (link.dataset.file) loadPage(link.dataset.file); });
+      });
+      $("content-area").scrollTop = 0;
+    } catch (e) {
+      main.innerHTML = '<p style="color:var(--c-red);">加载失败: ' + esc(e.message) + '</p>';
+    }
+    updateBreadcrumb(file);
+    document.querySelectorAll(".nav-item").forEach(e => e.classList.toggle("nav-item-active", e.dataset.file === file));
+    const active = document.querySelector(".nav-item-active");
+    if (active) {
+      const g = active.closest(".nav-group");
+      if (g && !g.classList.contains("open")) g.classList.add("open");
+    }
+    closeSidebar();
+  }
+
+  /* ---- Sidebar ---- */
+  function renderSidebar(tree) {
+    const nav = $("sidebar-nav");
+    if (!nav) return;
+    nav.innerHTML = "";
+    for (const ch of tree) {
+      if (!matchChapter(ch)) continue;
+      const vis = (ch.children || []).filter(c => matchAud(c.audience));
+      if (!vis.length) continue;
+      const g = document.createElement("div");
+      g.className = "nav-group";
+      const icon = ICONS[ch.icon] || "";
+      const hdr = document.createElement("div");
+      hdr.className = "nav-group-header";
+      hdr.innerHTML = '<span class="nav-chevron">▶</span><span class="nav-group-icon">' + icon + '</span><span>' + esc(ch.title) + '</span>';
+      hdr.addEventListener("click", () => g.classList.toggle("open"));
+      g.appendChild(hdr);
+      const list = document.createElement("div");
+      list.className = "nav-group-list";
+      for (const item of vis) {
+        const el = document.createElement("div");
+        el.className = "nav-item";
+        el.textContent = item.title;
+        el.dataset.file = item.file;
+        el.addEventListener("click", () => loadPage(item.file));
+        list.appendChild(el);
+      }
+      g.appendChild(list);
+      nav.appendChild(g);
+    }
+  }
+  function filterSidebar(q) {
+    q = q.trim().toLowerCase();
+    document.querySelectorAll(".nav-group").forEach(g => {
+      let any = false;
+      g.querySelectorAll(".nav-item").forEach(i => {
+        const ok = !q || i.textContent.toLowerCase().includes(q);
+        i.style.display = ok ? "" : "none";
+        if (ok) any = true;
+      });
+      g.style.display = any ? "" : "none";
+      if (q && any) g.classList.add("open");
+    });
+  }
+
+  /* ---- Lang selector ---- */
+  function syncLangSelect() {
+    const sel = $("wiki-lang");
+    if (sel && [...sel.options].some(o => o.value === _lang)) sel.value = _lang;
+  }
+  function initLangSelect() {
+    const sel = $("wiki-lang");
+    if (!sel) return;
+    const langs = _rootIndex?.languages || [];
+    if (langs.length < 2) { sel.style.display = "none"; return; }
+    if (!langs.some(l => l.id === _lang)) _lang = "zh-CN";
+    sel.innerHTML = langs.map(l => '<option value="' + l.id + '"' + (l.id === _lang ? " selected" : "") + '>' + esc(l.name) + '</option>').join("");
+    sel.addEventListener("change", async () => {
+      _lang = sel.value; localStorage.setItem(LANG_KEY, _lang);
+      const idx = await fetchIndex();
+      $("brand-text").textContent = idx.title || "always-accompany";
+      renderSidebar(idx.tree);
+      if (_currentFile) { setHash(_currentFile); loadPage(_currentFile, true, false); }
+      else { setHash(null); showHome(); }
+    });
+  }
+
+  /* ---- Mobile sidebar ---- */
+  function closeSidebar() { document.body.classList.remove("sidebar-open"); }
+
+  /* ---- Bind UI ---- */
+  function bind() {
+    document.querySelectorAll(".aud-btn").forEach(b => {
+      b.addEventListener("click", () => {
+        _audienceFilter = b.dataset.aud;
+        document.querySelectorAll(".aud-btn").forEach(x => x.classList.toggle("aud-active", x === b));
+        if (_index) renderSidebar(_index.tree);
+        _currentFile = null; setHash(null); showHome();
+      });
+    });
+    $("wiki-search").addEventListener("input", e => filterSidebar(e.target.value));
+    $("home-link").addEventListener("click", () => { _currentFile = null; setHash(null); showHome(); });
+    $("mobile-toggle").addEventListener("click", () => document.body.classList.toggle("sidebar-open"));
+    $("sidebar-backdrop").addEventListener("click", closeSidebar);
+    $("theme-toggle").addEventListener("click", () => {
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      applyTheme(dark ? "light" : "dark");
+    });
+  }
+
+  /* ---- Init ---- */
+  async function init() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "dark") applyTheme("dark");
+    const h = parseHash();
+    _lang = h.lang || localStorage.getItem(LANG_KEY) || "zh-CN";
+    bind();
+    try { await ensureMarked(); } catch {}
+    try { await fetchRootIndex(); } catch (e) {
+      $("sidebar-nav").innerHTML = '<p style="padding:16px;color:var(--c-red);font-size:13px;">目录加载失败</p>';
+      $("content-area").innerHTML = '<p style="color:var(--c-red);">无法加载 wiki，请确认 ./wiki/ 目录已部署。</p>';
+      return;
+    }
+    initLangSelect();
+    const idx = await fetchIndex();
+    $("brand-text").textContent = idx.title || "always-accompany";
+    renderSidebar(idx.tree);
+    if (h.file) await loadPage(h.file, true, false);
+    else showHome();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

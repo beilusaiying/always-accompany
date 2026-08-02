@@ -9,8 +9,10 @@
  * 影响：写 JSON 文件到 chars/{charName}/chats/{chatid}.json（新路径）或 shells/chat/chats/（旧路径兼容）
  *       写 chat_summaries_cache（shellData）、chat_names（shellData）
  *       sendEventToUser 跨客户端推 chat-list-changed（通道B: /ws/notify → onServerEvent）
- *       deleteChat 时清理 7 个子系统的 per-chatid 状态（fileEditRegistry/ideClient/beilu-files/
- *       _saveLocks/broadcast/generation/groupWorkerManager），防单调泄漏
+ *       deleteChat 时清理 per-chatid 残留状态：7 个子系统（fileEditRegistry/ideClient/beilu-files/
+ *       _saveLocks/broadcast/generation/groupWorkerManager）+ 角色卡级 active_modes_map/_work_config +
+ *       preset/submode 映射 + 5 个 shellData 存储（chat_names/chat_modes/chat_flags/
+ *       mode_active_chats/bot_chat_bindings），防单调泄漏
  *
  * 相交：← chatOps（saveChat 调用方）/ endpoints（CRUD 调用方）
  *       → json_loader（loadJsonFile/saveJsonFile）/ setting_loader（shellData）
@@ -365,15 +367,30 @@ export async function saveChat(chatid) {
     const _chatPath = chatDir + "/" + chatid + ".json";
     const _wbSave = wbSpan(chatid, "chatStorage", "saveChat:write", { chatLogLen: chatMetadata.chatLog?.length || 0 });
     const _chatDataForSave = await chatMetadata.toData();
+    // [2026-08-01 空消息累计案·断链2] "错误条目不持久化"契约的序列化单点兜底：
+    //   generation.mjs finalizeEntry(isError) 打 _transient_error 标记的条目留在内存，
+    //   任何落盘路径（本函数是唯一序列化点）一律剥除——旧实现只在 finalizeEntry 本次跳过
+    //   saveChat，下一次任意写盘就把错误消息整份带上盘（自驱动2 案 idx2/idx4 实证）。
+    if (Array.isArray(_chatDataForSave.chatLog)) _chatDataForSave.chatLog = _chatDataForSave.chatLog.filter(e => !e?._transient_error);
+    if (Array.isArray(_chatDataForSave.timeLines)) _chatDataForSave.timeLines = _chatDataForSave.timeLines.filter(e => !e?._transient_error);
     if (fs.existsSync(_chatPath) && freshData._integrity) {
       try {
         const _diskRaw = JSON.parse(fs.readFileSync(_chatPath, "utf8"));
         if (_diskRaw._integrity && _diskRaw._integrity !== freshData._integrity) {
           console.warn(`[chat] integrity 冲突: chatid=${chatid}, 内存=${freshData._integrity}, 磁盘=${_diskRaw._integrity}（外部改动，仍保存）`);
           const _conflictPath = _chatPath + ".conflict_" + Date.now();
-          try { fs.copyFileSync(_chatPath, _conflictPath); } catch {}
+          // [2026-08-01 批⑤危险#2] 冲突备份失败不再静默吞——旧 catch{} 空体=备份失败后照常覆盖
+          //   → 外部改动的聊天记录永久丢失且无备份无痕迹。现：失败留痕（wbDetect + warn 带路径）；
+          //   仍继续覆盖（当前架构下不覆盖=本次生成结果丢失，两害相权取可诊断的那个）。
+          try { fs.copyFileSync(_chatPath, _conflictPath); } catch (cpErr) {
+            wbDetect(chatid, "chatStorage", "saveChat:conflict_backup_failed", false, `冲突备份失败(外部改动可能丢失): ${cpErr?.message}`, { conflictPath: _conflictPath });
+            console.warn(`[chat] ⚠️ integrity 冲突备份失败: ${_conflictPath} — ${cpErr?.message}（仍将覆盖，外部改动可能丢失）`);
+          }
         }
-      } catch { /* 读盘校验失败不阻断保存 */ }
+      } catch (intErr) {
+      // 读盘校验失败不阻断保存，但留痕（原空 catch 零痕迹）
+      console.warn(`[chat] integrity 校验读盘失败(沿用内存版覆盖): ${intErr?.message}`);
+    }
     }
     const _newIntegrity = crypto.randomUUID();
     _chatDataForSave._integrity = _newIntegrity;
@@ -719,14 +736,18 @@ export async function getChatList(username) {
 // ============================================================
 
 /**
- * 删除聊天：磁盘文件 + 内存索引 + 7 个子系统的 per-chatid 状态清理。
+ * 删除聊天：磁盘文件 + 内存索引 + per-chatid 残留状态清理（7 个子系统 + 角色卡级映射 + 5 个 shellData 存储）。
  *
  * 链路：endpoints DELETE /delete → 本函数
  * 影响：safeUnlink 磁盘文件 → chatMetadatas.delete → 清理 7 个子系统 per-chatid 态：
  *   ① fileEditRegistry（编辑者注册表）② ideClient（编译熔断会话态）
  *   ③ beilu-files（activeModes/pendingOpResults/fileModeSessions）④ _saveLocks（写锁）
  *   ⑤ broadcast typingStatus ⑥ generation 续轮/计数/排队态 ⑦ groupWorkerManager（worker isolate）
- *   → summaries cache 清理 → chat_names 同步清理 → sendEventToUser 跨客户端通知
+ *   → 角色卡级 active_modes_map[chatid] + _work_config per-chat 键（跨所有角色卡目录遍历清理）
+ *   → preset active_preset_map + yonban_config active_sub_modes_map 映射清理
+ *   → summaries cache 清理 → _DEL_CLEAN_STORES 数据驱动清理 5 个 shellData 存储
+ *     （chat_names/chat_modes/chat_flags 按键删，mode_active_chats/bot_chat_bindings 按值反查删）
+ *   → sendEventToUser 跨客户端通知
  *
  * @param {string[]} chatids
  * @param {string} username
@@ -1067,10 +1088,14 @@ export function findEmptyChatid() {
   }
 }
 
-export async function newChat(username) {
+export async function newChat(username, mode) {
   const chatid = findEmptyChatid();
   await newMetadata(chatid, username);
-  await saveChat(chatid); // 保存到磁盘，确保出现在聊天列表中
+  await saveChat(chatid);
+  // [0730] YonBan 等非本体前端创建对话时可指定模式，后端自动 setChatMode（原只有前端 classifyNewChat 写标签=非本体入口恒缺标签）。
+  if (mode && _VALID_CHAT_MODES.has(mode)) {
+    await setChatMode(chatid, username, mode);
+  }
   return chatid;
 }
 

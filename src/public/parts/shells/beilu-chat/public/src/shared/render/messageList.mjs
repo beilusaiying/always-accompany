@@ -3,12 +3,16 @@
  *
  * 链路：virtualQueue.renderItem() → renderMessage() → DOM 元素
  *       websocket.mjs message_replaced → virtualQueue.replaceItem → renderMessage()
- * 影响：写 DOM（innerHTML 注入 .message-content）、挂 touch 监听器（swipe）、发 apiFetch（删除/编辑/隐藏/回档）
+ * 影响：写 DOM（innerHTML 注入 .message-content）、挂 touch 监听器（swipe）、发出向请求——
+ *       删除/编辑/切时间线经 endpoints.mjs（deleteMessage/deleteMessagesRange/editMessage/
+ *       modifyTimeLine），隐藏/取消隐藏/回档/render-entries 经 sendAction（不直接调 apiFetch）
  * 相交：← virtualQueue.mjs（renderItem 回调）  ← websocket.mjs（message_replaced 触发 replaceItem）
  *       → displayRegex.mjs（applyDisplayRules / applyBuiltinProcessors / detectContentType）
  *       → iframeRenderer.mjs（renderAsIframe: full-html/mixed 分支）
  *       → StreamRenderer.mjs（流式期间由 virtualQueue 管理，本模块不直接调用）
- *       → endpoints.mjs（deleteMessage / editMessage / modifyTimeLine）
+ *       → endpoints.mjs（deleteMessage / deleteMessagesRange / editMessage / modifyTimeLine）
+ *       → sendAction.mjs（hideMessages / getRenderEntries / getRollbackPreview / 回档 / branch，
+ *         target 覆盖 shells:chat 与 plugins:beilu-memory）
  *
  * 渲染管线（renderMessage 内部）：
  *   消息对象 → resolveMessageSource（取最完整字段源）→ 思维链剥离 → StatusPlaceHolder 提取
@@ -712,7 +716,7 @@ async function generateFullHtmlForMessage(message, cache) {
     ".beilu-hidden-msg{opacity:.5;filter:grayscale(.55);position:relative;}" +
     '.beilu-hidden-msg::after{content:"已隐藏·不发送AI";position:absolute;top:4px;right:8px;font-size:9px;color:#999;background:rgba(128,128,128,.16);padding:1px 6px;border-radius:7px;pointer-events:none;z-index:2;}' +
     // T3 折叠条：被隐藏消息默认折叠为一行灰条（「已隐藏：N 字 · 原因」+ 展开/取消隐藏），展开时灰条插在正文上方。
-    ".beilu-hidden-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:#888;background:rgba(128,128,128,.10);border:1px dashed rgba(128,128,128,.35);border-radius:8px;padding:4px 10px;margin:2px 0;cursor:default;}" +
+    ".beilu-hidden-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:#888;background:rgba(128,128,128,.10);border:1px dashed rgba(128,128,128,.35);border-radius:8px;padding:4px 10px;margin:2px 0;cursor:default;grid-column:1/-1;}" +
     ".beilu-hidden-bar .bhb-icon{opacity:.7;}" +
     ".beilu-hidden-bar .bhb-meta{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
     ".beilu-hidden-bar button{font-size:10px;color:#888;background:rgba(128,128,128,.16);border:none;border-radius:6px;padding:1px 8px;cursor:pointer;line-height:1.6;}" +
@@ -1877,8 +1881,12 @@ export async function renderMessage(message, renderContext) {
         const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
         if (chatLogIndex === -1) return;
 
-        const chatLogLength = await getChatLogLength();
-        const afterCount = chatLogLength - chatLogIndex - 1;
+        // [2026-08-01 空消息累计案·断链3] 计数口径改"用户可见"：渲染队列已按 _deleted/隐藏过滤，
+        //   旧实现拿裸 chatLog.length 算（含软删尸体）——每回一次档尸体+N，弹窗"将删除之后的 N 条"
+        //   越回越大且与所见完全不符（自驱动2"11 条"案）。后端回档语义不变（仍按 chatLogIndex 截断，
+        //   顺带清掉不可见尸体，无害）。
+        const _queue = getQueue() || [];
+        const afterCount = Math.max(0, _queue.length - queueIndex - 1);
         if (afterCount <= 0) {
           showToast("info", "这已经是最新的消息，无需回档");
           return;
@@ -2053,7 +2061,9 @@ export async function renderMessage(message, renderContext) {
       container.className = "segment-iframe-container";
       const wrapper = document.createElement("div");
       wrapper.id = `${message.id}-iframe-${Math.random().toString(36).slice(2, 8)}`;
-      wrapper.className = "chat-message"; // renderAsIframe 需要 .message-content 子元素
+      // 这里只是 iframe host，不是消息根节点。若复用 .chat-message，
+      // 外层“头像 + 正文”grid 会让富前端卡片误入 50px 头像列。
+      wrapper.className = "segment-iframe-host";
       const contentDiv = document.createElement("div");
       contentDiv.className = "message-content";
       contentDiv.innerHTML =
@@ -2354,7 +2364,8 @@ async function _renderStatusPlaceholderSeparately(
       const mvuVars = getMvuVariablesForRendering(message);
       const rawMessageText = message.content_for_show || message.content || "";
       const wrapper = document.createElement("div");
-      wrapper.className = "chat-message mvu-status-wrapper";
+      // 状态栏是当前消息右列中的子卡片，不能再次套消息根布局。
+      wrapper.className = "mvu-status-wrapper";
       const contentDiv = document.createElement("div");
       contentDiv.className = "message-content";
       wrapper.appendChild(contentDiv);
@@ -2392,10 +2403,13 @@ async function _renderStatusPlaceholderSeparately(
  * @param {HTMLElement} el - 消息 DOM 元素
  */
 function _addAvatarFallback(el) {
-  const imgs = el.querySelectorAll(
-    'img[src*="/parts/"], img[src*="image.png"], img[src*="avatar.png"]',
-  );
-  for (const img of imgs) {
+  // 只绑定标准消息根的直属头像；记忆列表和角色卡正文也可能复用
+  // .message-avatar 类，不能让它们被误认为聊天头像。
+  const avatars = el.querySelectorAll(":scope > .message-avatar");
+  for (const avatar of avatars) {
+    const img = avatar.querySelector("img");
+    if (!img) continue;
+
     if (img.dataset.fallbackBound) continue;
     img.dataset.fallbackBound = "1";
     img.addEventListener("error", () => {
@@ -2403,19 +2417,143 @@ function _addAvatarFallback(el) {
         img.src = DEFAULT_AVATAR;
       }
     });
+
+    const needsKeyboardPolyfill = avatar.tagName !== "BUTTON";
+    if (needsKeyboardPolyfill) {
+      avatar.setAttribute("role", "button");
+      if (!avatar.hasAttribute("tabindex")) avatar.tabIndex = 0;
+    }
+    if (!avatar.getAttribute("aria-label")) {
+      avatar.setAttribute("aria-label", `放大 ${img.alt || "消息"} 的头像`);
+    }
+    if (!avatar.getAttribute("title")) {
+      avatar.title = `点击放大 ${img.alt || "消息"} 的头像`;
+    }
+
+    const openPreview = () => _showAvatarFloatingPreview(img);
+    avatar.addEventListener("click", openPreview);
+    if (needsKeyboardPolyfill) {
+      avatar.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openPreview();
+      });
+    }
   }
 }
 
 // ============================================================
-// C2-chat: 头像悬浮放大预览（右下角、可拖动、×关闭）
+// C2-chat: 头像悬浮放大预览（非阻塞、可拖动、×/Esc 关闭）
 // ============================================================
 
 /** 悬浮预览 DOM 元素（全局单例，点击不同头像时替换图片） */
 let _avatarPreviewEl = null;
 
 /**
- * 关闭头像悬浮预览
- * 注意：配套的 _showAvatarFloatingPreview（在 _addAvatarFallback 点击处调用）当前未在本文件定义
+ * 打开头像悬浮预览。同一头像再次点击会关闭；切换头像时替换单例。
+ * @param {HTMLImageElement} sourceImage
+ */
+function _showAvatarFloatingPreview(sourceImage) {
+  const src = sourceImage?.currentSrc || sourceImage?.src || "";
+  if (!src) return;
+
+  if (_avatarPreviewEl?.dataset.avatarSrc === src) {
+    _closeAvatarPreview();
+    return;
+  }
+  _closeAvatarPreview();
+
+  const preview = document.createElement("section");
+  preview.className = "message-avatar-preview";
+  preview.dataset.avatarSrc = src;
+  preview.setAttribute("role", "dialog");
+  preview.setAttribute("aria-label", `${sourceImage.alt || "消息"} 的头像预览`);
+
+  const bar = document.createElement("div");
+  bar.className = "message-avatar-preview__bar";
+
+  const title = document.createElement("span");
+  title.className = "message-avatar-preview__title";
+  title.textContent = sourceImage.alt || "头像预览";
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "message-avatar-preview__close";
+  closeButton.textContent = "×";
+  closeButton.title = "关闭头像预览";
+  closeButton.setAttribute("aria-label", "关闭头像预览");
+  closeButton.addEventListener("click", _closeAvatarPreview);
+
+  const image = document.createElement("img");
+  image.className = "message-avatar-preview__image";
+  image.src = src;
+  image.alt = sourceImage.alt || "头像预览";
+  image.draggable = false;
+
+  bar.append(title, closeButton);
+  preview.append(bar, image);
+  document.body.appendChild(preview);
+  _avatarPreviewEl = preview;
+
+  let dragging = false;
+  let startPointerX = 0;
+  let startPointerY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+
+  const stopDragging = () => {
+    dragging = false;
+    bar.classList.remove("dragging");
+  };
+  const onPointerMove = (event) => {
+    if (!dragging) return;
+    const maxLeft = Math.max(0, window.innerWidth - preview.offsetWidth);
+    const maxTop = Math.max(0, window.innerHeight - preview.offsetHeight);
+    const nextLeft = Math.min(
+      maxLeft,
+      Math.max(0, startLeft + event.clientX - startPointerX),
+    );
+    const nextTop = Math.min(
+      maxTop,
+      Math.max(0, startTop + event.clientY - startPointerY),
+    );
+    preview.style.left = `${nextLeft}px`;
+    preview.style.top = `${nextTop}px`;
+    preview.style.right = "auto";
+    preview.style.bottom = "auto";
+  };
+  const onPointerUp = () => stopDragging();
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") _closeAvatarPreview();
+  };
+
+  bar.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button")) return;
+    const rect = preview.getBoundingClientRect();
+    dragging = true;
+    startPointerX = event.clientX;
+    startPointerY = event.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+    bar.classList.add("dragging");
+    event.preventDefault();
+  });
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
+  window.addEventListener("keydown", onKeyDown);
+
+  preview._cleanupDrag = () => {
+    stopDragging();
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    window.removeEventListener("keydown", onKeyDown);
+  };
+}
+
+/**
+ * 关闭头像悬浮预览并清理全局拖动/键盘监听。
  */
 function _closeAvatarPreview() {
   if (_avatarPreviewEl) {
@@ -2463,6 +2601,7 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
     editRenderedMessage,
   );
   messageElement.innerHTML = editViewHtml;
+  _addAvatarFallback(messageElement);
 
   // 获取编辑视图元素
   const fileEditInput = messageElement.querySelector(

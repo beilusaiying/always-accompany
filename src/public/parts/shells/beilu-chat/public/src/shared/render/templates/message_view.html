@@ -1,43 +1,46 @@
-<div class="chat-message mb-3 group" id="${id}" data-template-type="message">
-	<!-- 消息头部：头像 + 名字 + 楼层号 + 时间 -->
-	<div class="message-header flex items-center gap-2 px-1 mb-1">
-		<div class="message-avatar rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30 border border-amber-700/40">
-			<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
-				onerror="this.style.display='none';this.parentElement.querySelector('.avatar-fallback')||this.parentElement.insertAdjacentHTML('beforeend','<div class=avatar-fallback style=width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--beilu-amber,#fbbf24);font-size:12px;font-weight:bold>?</div>')" />
+<div class="chat-message chat-message-layout group" id="${id}" data-template-type="message">
+	<!-- 酒馆式消息骨架：头像固定左列，名字/正文共用右列 -->
+	<button type="button" class="message-avatar rounded-full overflow-hidden flex-shrink-0 bg-amber-900/30 border border-amber-700/40"
+		title="点击放大 ${name} 的头像" aria-label="放大 ${name} 的头像">
+		<img src="${avatar}" alt="${name}" class="w-full h-full object-cover"
+			onerror="this.style.display='none';this.parentElement.querySelector('.avatar-fallback')||this.parentElement.insertAdjacentHTML('beforeend','<div class=avatar-fallback style=width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--beilu-amber,#fbbf24);font-size:12px;font-weight:bold>?</div>')" />
+	</button>
+	<div class="message-main">
+		<!-- 消息头部：名字 + 楼层号 + 时间 -->
+		<div class="message-header flex items-center gap-2 px-1 mb-1">
+			<span class="char-name text-sm font-bold text-primary">${name}</span>
+			<span class="message-floor text-xs opacity-50 font-mono">${floor}</span>
+			<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
 		</div>
-		<span class="char-name text-sm font-bold text-primary">${name}</span>
-		<span class="message-floor text-xs opacity-50 font-mono">${floor}</span>
-		<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
-	</div>
-	<!-- 思维链（独立于消息气泡，默认隐藏） -->
-	<div class="thinking-toggle hidden" data-thinking-for="${id}">
-		<button class="thinking-toggle-btn">
-			<span class="thinking-toggle-icon">▶</span>
-			<span class="thinking-toggle-label"><i data-ic="thought"></i> 思考了一会</span><span class="thinking-toggle-badge"><i data-ic="lock"></i> 仅你可见 · AI 看不到</span>
-		</button>
-		<div class="thinking-toggle-content hidden"></div>
-	</div>
-	<!-- 消息体 -->
-	<div class="chat-bubble relative p-[15px] ml-10 rounded-lg ${contentHasMedia ? 'w-full' : ''}">
-		<div class="button-group">
-			<div class="normal-buttons join" style="display: flex;">
-				<button class="edit-button btn btn-xs btn-primary join-item" data-i18n="chat.messageView.buttons.edit">
-					<img src="/parts/shells:beilu-chat/icons/line-md__edit.svg" data-i18n="chat.messageView.buttons.editIcon" />
-				</button>
-				<button class="btn btn-xs btn-ghost join-item" popovertarget="popover-${id}" style="anchor-name:--anchor-${id}" data-i18n="chat.messageView.buttons.more">
-					<img src="/parts/shells:beilu-chat/icons/line-md__list-3.svg" data-i18n="chat.messageView.buttons.moreIcon" />
-				</button>
-			</div>
-			<div class="shift-buttons join" style="display: none;">
-				<button class="download-html-button-direct btn btn-xs btn-success join-item" data-i18n="chat.messageView.buttons.downloadHtml">
-					<img src="/parts/shells:beilu-chat/icons/line-md__download.svg" data-i18n="chat.messageView.buttons.downloadHtmlIcon" />
-				</button>
-				<button class="delete-button btn btn-xs btn-error join-item" data-i18n="chat.messageView.buttons.delete">
-					<img src="/parts/shells:beilu-chat/icons/line-md__remove.svg" data-i18n="chat.messageView.buttons.deleteIcon" />
-				</button>
-			</div>
+		<!-- 思维链（独立于消息气泡，默认隐藏） -->
+		<div class="thinking-toggle hidden" data-thinking-for="${id}">
+			<button class="thinking-toggle-btn">
+				<span class="thinking-toggle-icon">▶</span>
+				<span class="thinking-toggle-label"><i data-ic="thought"></i> 思考了一会</span><span class="thinking-toggle-badge"><i data-ic="lock"></i> 仅你可见 · AI 看不到</span>
+			</button>
+			<div class="thinking-toggle-content hidden"></div>
 		</div>
-		<ul class="dropdown dropdown-end menu w-52 rounded-box bg-base-100 shadow-sm" popover id="popover-${id}" style="position-anchor:--anchor-${id}">
+		<!-- 消息体 -->
+		<div class="chat-bubble relative p-[15px] rounded-lg ${contentHasMedia ? 'w-full' : ''}">
+			<div class="button-group">
+				<div class="normal-buttons join" style="display: flex;">
+					<button class="edit-button btn btn-xs btn-primary join-item" data-i18n="chat.messageView.buttons.edit">
+						<img src="/parts/shells:beilu-chat/icons/line-md__edit.svg" data-i18n="chat.messageView.buttons.editIcon" />
+					</button>
+					<button class="btn btn-xs btn-ghost join-item" popovertarget="popover-${id}" style="anchor-name:--anchor-${id}" data-i18n="chat.messageView.buttons.more">
+						<img src="/parts/shells:beilu-chat/icons/line-md__list-3.svg" data-i18n="chat.messageView.buttons.moreIcon" />
+					</button>
+				</div>
+				<div class="shift-buttons join" style="display: none;">
+					<button class="download-html-button-direct btn btn-xs btn-success join-item" data-i18n="chat.messageView.buttons.downloadHtml">
+						<img src="/parts/shells:beilu-chat/icons/line-md__download.svg" data-i18n="chat.messageView.buttons.downloadHtmlIcon" />
+					</button>
+					<button class="delete-button btn btn-xs btn-error join-item" data-i18n="chat.messageView.buttons.delete">
+						<img src="/parts/shells:beilu-chat/icons/line-md__remove.svg" data-i18n="chat.messageView.buttons.deleteIcon" />
+					</button>
+				</div>
+			</div>
+			<ul class="dropdown dropdown-end menu w-52 rounded-box bg-base-100 shadow-sm" popover id="popover-${id}" style="position-anchor:--anchor-${id}">
 			<li>
 				<button type="button" class="toggle-hide-button">
 					<img src="/parts/shells:beilu-chat/icons/mdi__eye-outline.svg" class="w-4 h-4" />
@@ -100,9 +103,10 @@
 					</ul>
 				</details>
 			</li>
-		</ul>
-		<div class="message-content markdown-body">
+			</ul>
+			<div class="message-content markdown-body">
+			</div>
+			<div class="attachments"></div>
 		</div>
-		<div class="attachments"></div>
 	</div>
 </div>

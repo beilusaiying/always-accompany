@@ -1,0 +1,85 @@
+{
+	"_说明": "beilu-era 出厂内容模板（数据文件非代码——字符/颜色/文案/参照词/房型全在此，用户建 data/era_config.json 即覆盖任意键；AI 亦可在 era-map 拓扑里 inline 覆盖 palette/terrain/字符）",
+
+	"roomSizes": { "s": [6, 4], "m": [8, 5], "l": [12, 6] },
+
+	"palette": {
+		"雨夜": "#0f1419",
+		"霓虹红": "#ff0033",
+		"霓虹蓝": "#00e5ff",
+		"霓虹紫": "#b026ff",
+		"暖黄": "#ffcc66",
+		"冷青": "#66ffe0",
+		"血月": "#8b0000",
+		"晨雾": "#c8d6e5",
+		"暗夜": "#1a1a2e",
+		"cyan": "#00ffff",
+		"magenta": "#ff00ff",
+		"amber": "#ffbf00"
+	},
+
+	"symbols": { "entity": "@", "corridor": "·", "door": "+", "stairs": "≡", "overlayDefault": "×" },
+
+	"charset": {
+		"wallH": "═", "wallV": "║",
+		"cornerTL": "╔", "cornerTR": "╗", "cornerBL": "╚", "cornerBR": "╝",
+		"floor": " ", "fill": "░",
+		"corridor": "·", "road": "▫", "door": "+", "stairs": "≡"
+	},
+
+	"placement": {
+		"center": { "anchor": "center", "desc": "房间中心" },
+		"door": { "anchor": "door", "desc": "门内侧" },
+		"corner": { "anchor": "topleft", "dx": 1, "dy": 1, "desc": "房内左上角" },
+		"north": { "anchor": "wall_n", "desc": "北墙内侧中点" },
+		"south": { "anchor": "wall_s", "desc": "南墙内侧中点" },
+		"east": { "anchor": "wall_e", "desc": "东墙内侧中点" },
+		"west": { "anchor": "wall_w", "desc": "西墙内侧中点" },
+		"near": { "anchor": "near", "desc": "紧邻某实体（配 near:实体id）" }
+	},
+
+	"terrain": {
+		"road": { "color": "#3a3f47" },
+		"ground": { "chars": "▪", "color": "#23262c", "fill": "around", "radius": 3, "density": 0.9 },
+		"presets": {
+			"森林": { "chars": "森林木", "color": "#3f7a3f", "density": 0.45 },
+			"田": { "chars": "+", "color": "#7a8a3f", "density": 0.7 },
+			"水": { "chars": "∞~", "color": "#3f6a8a", "density": 0.5 }
+		}
+	},
+
+	"compass": { "n": "北", "s": "南", "e": "东", "w": "西" },
+
+	"ui": {
+		"barChar": "▇",
+		"barEmptyChar": " ",
+		"barWidth": 20,
+		"barFormat": "{label}{bar}( {val}/ {max})",
+		"menuItemFormat": "[{num}] - {label}",
+		"menuCols": 3,
+		"menuColWidth": 24,
+		"panelHeader": "▼[-][{title}]────────",
+		"kvFormat": "{k}:{v}",
+		"kvSep": "  ",
+		"hrChar": "═"
+	},
+
+	"textLabels": {
+		"headerLine": "{name} (id:{id} rev{rev})",
+		"floorHeader": "── F{f} ──",
+		"truncatedLine": "名称截断房间: ",
+		"stairsLine": "楼梯: ",
+		"entsLine": "实体: ",
+		"compassLine": "方位: 上{n} 下{s} 左{w} 右{e}"
+	},
+
+	"prompt": {
+		"wrapOpen": "<era_map_state>",
+		"header": "地图:{name}(id:{id}) rev{rev} 网格{w}x{h} 楼层{floors}",
+		"roomLine": "{id}@({cx},{cy},f{floor}) 邻:{adj}",
+		"entityLine": "{id}在{room}({x},{y},f{floor})",
+		"overlayLine": "覆盖({x},{y},f{floor}):{sym}",
+		"wrapClose": "</era_map_state>",
+		"empty": ""
+	}
+}

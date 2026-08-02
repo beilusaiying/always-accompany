@@ -27,6 +27,7 @@ import { margeStructPromptChatLog } from '../../../../../public/parts/shells/bei
 import { applyModelParams } from '../_shared/applyModelParams.mjs'
 import { makeAbortError } from '../_shared/abort.mjs'
 import { buildMessagesFromPromptStruct } from '../_shared/buildMessages.mjs'
+import { buildGeminiModelParams, convertOpenAIToGeminiMessages } from './messageAdapter.mjs'
 import { detectImageMime, pickLastUserImages, resolveFileBuffer } from '../../image/imageInjection.mjs'
 import { clearXmlFormat } from '../proxy/lib/messageTransform.mjs'
 
@@ -191,6 +192,10 @@ function estimateTextTokens(contents) {
 	return Math.ceil(totalChars / 4)
 }
 
+function estimatePlainTextTokens(text) {
+	return Math.ceil(String(text || '').length / 4)
+}
+
 /**
  * 使用二分搜索找到在 token 限制内可以保留的最大历史记录数量
  * @param {import('npm:@google/genai').GoogleGenAI} ai - GenAI 实例
@@ -201,7 +206,7 @@ function estimateTextTokens(contents) {
  * @param {Array<object>} suffixMessages - 必须保留在历史记录之后的消息 (例如 a pause prompt)
  * @returns {Promise<Array<object>>} - 截断后的聊天历史记录
  */
-async function findOptimalHistorySlice(ai, model, limit, history, prefixMessages = [], suffixMessages = []) {
+async function findOptimalHistorySlice(ai, model, limit, history, prefixMessages = [], suffixMessages = [], systemInstruction = '') {
 	/**
 	 * 计算令牌数
 	 * @param {Array<object>} contents - 要计算令牌的内容。
@@ -209,7 +214,11 @@ async function findOptimalHistorySlice(ai, model, limit, history, prefixMessages
 	 */
 	const getTokens = async contents => {
 		try {
-			const res = await ai.models.countTokens({ model, contents })
+			const res = await ai.models.countTokens({
+				model,
+				contents,
+				...(systemInstruction ? { config: { systemInstruction } } : {}),
+			})
 			return res.totalTokens
 		}
 		catch (e) {
@@ -471,25 +480,14 @@ async function GetSource(config) {
 				const commanderMode = !useXmlFormat
 				wbT(_wbChatid, 'ai:gemini', 'commander_detect', { commanderMode, msgCount: oaiMessages.length })
 
-				// ── OpenAI → Gemini 格式转换 ──
-				// role: user→user, system→user(加system:前缀), assistant→model
-				// content: string→parts[{text}], array→parts[text+image]
-				const geminiMessages = oaiMessages.map(msg => {
-					const role = msg.role === 'assistant' ? 'model' : 'user'
-					if (typeof msg.content === 'string') {
-						const text = msg.role === 'system' ? `system:\n${msg.content}` : msg.content
-						return { role, parts: [{ text }] }
-					}
-					if (Array.isArray(msg.content)) {
-						const parts = msg.content.map(part => {
-							if (part.type === 'text') return { text: part.text }
-							// image_url 不应出现（ignoreFiles=true），兜底转为文本
-							if (part.type === 'image_url') return { text: _fnText(config, 'image_skipped') }
-							return { text: '' }
-						}).filter(p => p.text)
-						return { role, parts: parts.length ? parts : [{ text: '' }] }
-					}
-					return { role, parts: [{ text: '' }] }
+				// ── OpenAI → Gemini 原生格式转换 ──
+				// contents 只放 user/model；所有 system 保持应用指令权限，进入 config.systemInstruction。
+				// 旧实现把 system 改成 "system:\n..." user 文本，是角色降权根因。
+				const {
+					contents: geminiMessages,
+					systemInstruction,
+				} = convertOpenAIToGeminiMessages(oaiMessages, {
+					imageSkippedText: _fnText(config, 'image_skipped'),
 				})
 
 				// ── Gemini 文件处理（发送端特有逻辑，保留） ──
@@ -705,6 +703,10 @@ async function GetSource(config) {
 				// ── Gemini 特有：角色扮演引导序列（fallback 模式） ──
 				// 引导文本读取：用户配置逐键覆盖（config.roleplay_prompts），空/缺省回退单源默认
 				const _rpT = (k) => config.roleplay_prompts?.[k] || DEFAULT_ROLEPLAY_PROMPTS[k]
+				const effectiveSystemInstruction =
+					!commanderMode && systemInstruction
+						? _rpT('recap_prefix') + systemInstruction
+						: systemInstruction
 				const baseMessages = []
 				if (!config.disable_default_prompt && !commanderMode) {
 					baseMessages.push(
@@ -721,7 +723,7 @@ async function GetSource(config) {
 				if (commanderMode) {
 					// commander 模式：buildMessages 已排好消息序（prefix+chat+suffix），
 					// geminiMessages 直接用于 token 截断。
-					const overheadTextTokens = 0 // commander 无额外角色扮演消息
+					const overheadTextTokens = estimatePlainTextTokens(effectiveSystemInstruction)
 					const historyTextTokens = estimateTextTokens(geminiMessages)
 					const totalEstimatedTokens = overheadTextTokens + historyTextTokens + totalFileTokens
 					wbT(_wbChatid, 'ai:gemini', 'token_estimate', { mode: 'commander', historyTextTokens, totalFileTokens, totalEstimatedTokens, tokenLimit, fastPath: totalEstimatedTokens < tokenLimit * 0.9 })
@@ -739,10 +741,14 @@ async function GetSource(config) {
 							currentEstimatedTokens -= estimateTextTokens([removedMessage])
 						}
 
-						const { totalTokens } = await ai.models.countTokens({ model: config.model, contents: historyForProcessing })
+						const { totalTokens } = await ai.models.countTokens({
+							model: config.model,
+							contents: historyForProcessing,
+							...(effectiveSystemInstruction ? { config: { systemInstruction: effectiveSystemInstruction } } : {}),
+						})
 
 						if (totalTokens > tokenLimit) {
-							const truncatedHistory = await findOptimalHistorySlice(ai, config.model, tokenLimit, historyForProcessing, [], [])
+							const truncatedHistory = await findOptimalHistorySlice(ai, config.model, tokenLimit, historyForProcessing, [], [], effectiveSystemInstruction)
 							wbD(_wbChatid, 'ai:gemini', 'token_truncate', false, '司令员模式历史被截断', { mode: 'commander', origHistory: _preTruncateOrigLen, afterPreTruncate: historyForProcessing.length, kept: truncatedHistory.length, totalTokens, tokenLimit })
 							finalMessages = truncatedHistory
 						} else {
@@ -751,19 +757,9 @@ async function GetSource(config) {
 						}
 					}
 				} else {
-					// fallback 模式：geminiMessages 是 chatHistory 部分，需添加角色扮演引导序列。
-					// buildMessages 已处理 system_prompt 插入（作为 system role 消息，已转为 user role 带 system: 前缀）。
-					// 另需添加 Gemini 特有的 recap_prefix 包装 + pauseDeclare 引导序列。
-					// ★ system_prompt 的 recap_prefix 包装：找到 system 消息并添加前缀
-					for (const gMsg of geminiMessages) {
-						const _t = gMsg.parts?.[0]?.text || ''
-						if (_t.startsWith('system:\n') && !_t.includes('<message "')) {
-							// 这是 buildMessages 插入的 system_prompt（已被转为 system:\n 前缀），
-							// 替换前缀为 Gemini 特有的 recap_prefix
-							gMsg.parts[0].text = _rpT('recap_prefix') + _t.slice('system:\n'.length)
-							break
-						}
-					}
+					// fallback 模式：geminiMessages 仅含 user/model 聊天内容；buildMessages 产生的
+					// system_prompt 已进入 systemInstruction，不再用 recap_prefix 伪装成 user。
+					// 另加 Gemini 特有的角色扮演引导与 pauseDeclare 序列。
 
 					const pauseDeclareMessages = []
 					if (!config.disable_default_prompt) {
@@ -783,9 +779,11 @@ async function GetSource(config) {
 
 					const prefixMessages = [...baseMessages]
 					const suffixMessages = [...pauseDeclareMessages]
-					const chatHistory_gemini = geminiMessages // 已含 system_prompt（转 recap_prefix）
+					const chatHistory_gemini = geminiMessages
 
-					const overheadTextTokens = estimateTextTokens([...prefixMessages, ...suffixMessages])
+					const overheadTextTokens =
+						estimateTextTokens([...prefixMessages, ...suffixMessages]) +
+						estimatePlainTextTokens(effectiveSystemInstruction)
 					const historyTextTokens = estimateTextTokens(chatHistory_gemini)
 					const totalEstimatedTokens = overheadTextTokens + historyTextTokens + totalFileTokens
 					wbT(_wbChatid, 'ai:gemini', 'token_estimate', { mode: 'fallback', overheadTextTokens, historyTextTokens, totalFileTokens, totalEstimatedTokens, tokenLimit, fastPath: totalEstimatedTokens < tokenLimit * 0.9 })
@@ -804,10 +802,14 @@ async function GetSource(config) {
 						}
 
 						const fullContents = [...prefixMessages, ...historyForProcessing, ...suffixMessages]
-						const { totalTokens } = await ai.models.countTokens({ model: config.model, contents: fullContents })
+						const { totalTokens } = await ai.models.countTokens({
+							model: config.model,
+							contents: fullContents,
+							...(effectiveSystemInstruction ? { config: { systemInstruction: effectiveSystemInstruction } } : {}),
+						})
 
 						if (totalTokens > tokenLimit) {
-							const truncatedHistory = await findOptimalHistorySlice(ai, config.model, tokenLimit, historyForProcessing, prefixMessages, suffixMessages)
+							const truncatedHistory = await findOptimalHistorySlice(ai, config.model, tokenLimit, historyForProcessing, prefixMessages, suffixMessages, effectiveSystemInstruction)
 							wbD(_wbChatid, 'ai:gemini', 'token_truncate', false, 'fallback 模式历史被截断', { mode: 'fallback', origHistory: _preTruncateOrigLen, afterPreTruncate: historyForProcessing.length, kept: truncatedHistory.length, totalTokens, tokenLimit })
 							finalMessages = [...prefixMessages, ...truncatedHistory, ...suffixMessages]
 						} else {
@@ -823,7 +825,7 @@ async function GetSource(config) {
 
 				const { args: _gemApplied, model: _gemModel } = applyModelParams(presetModelParams, { shape: 'gemini', model: callConfig.model })
 
-				model_params = {
+				model_params = buildGeminiModelParams({
 					model: _gemModel || callConfig.model,
 					contents: finalMessages,
 					config: {
@@ -832,7 +834,8 @@ async function GetSource(config) {
 						...config.model_arguments,
 						..._gemApplied,
 					},
-				}
+					systemInstruction: effectiveSystemInstruction,
+				})
 
 				let thoughtSignature = undefined
 				/** 清理 AI 响应的 XML 格式（收口到 messageTransform.clearXmlFormat）+ declare 标签。 */
@@ -875,7 +878,7 @@ async function GetSource(config) {
 						} catch (error) {
 							console.error('Error processing inline image data:', error)
 						}
-						previewUpdater(result)
+						previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 					}
 				}
 

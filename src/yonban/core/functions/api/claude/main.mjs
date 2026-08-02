@@ -152,7 +152,7 @@ async function GetSource(config, { SaveConfig }) { // 接收 SaveConfig
 			wbT(_wbChatid, 'ai:claude', 'StructCall:call:before', { model: _clFinalModel, msgCount: messages.length })
 			result.content = await claudeAPI.callClaudeAPI(messages, _clFinalModel)
 			wbD(_wbChatid, 'ai:claude', 'StructCall:call:after', !!result.content, 'callClaudeAPI返回空内容', { len: result.content?.length ?? 0 })
-			previewUpdater(result)
+			previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 
 			return Object.assign(base_result, clearFormat(result))
 		},

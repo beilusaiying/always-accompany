@@ -114,12 +114,7 @@ async function GetSource(config, { SaveConfig }) {
         // ★ 思考模式控制
         if (modelOverrides.include_reasoning !== undefined)
           callConfig.model_arguments.include_reasoning = modelOverrides.include_reasoning;
-        // extended_thinking：aiRunner 一直在发但此处曾丢弃=断链补齐（httpFetch 从 model_arguments 提取）
-        if (modelOverrides.extended_thinking !== undefined)
-          callConfig.model_arguments.extended_thinking = modelOverrides.extended_thinking;
-        // thinking 六口·口5（2026-07-25）：budget 同通路补齐（原缺此口=aiRunner 转发也到不了 httpFetch）
-        if (modelOverrides.thinking_budget !== undefined)
-          callConfig.model_arguments.thinking_budget = modelOverrides.thinking_budget;
+        // extended_thinking/thinking_budget 转发已删（2026-08-01 收口：思维链唯一入口=源 config，httpFetch 直读）
       }
 
       {

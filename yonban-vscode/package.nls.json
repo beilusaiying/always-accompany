@@ -1,0 +1,21 @@
+{
+  "command.connect.title": "YonBan: Connect Backend",
+  "command.disconnect.title": "YonBan: Disconnect",
+  "command.showPanel.title": "YonBan: Open Panel",
+  "command.startWsServer.title": "YonBan: Start IDE Bridge Service",
+  "command.stopWsServer.title": "YonBan: Stop IDE Bridge Service",
+  "command.toggleSandboxMode.title": "YonBan: Toggle Sandbox Mode",
+  "command.showConnectionInfo.title": "YonBan: Show Current Connection Info",
+  "view.sidebar.name": "YonBan Control Panel",
+  "config.serverUrl.description": "beilu-always-accompany backend URL (default aligns with src/constants.ts DEFAULT_SERVER_URL; change port in both places)",
+  "config.hints.enabled.description": "Master switch for diagnostic hints (_hint) attached to tool results for AI. When off, no hint text is appended",
+  "config.hints.overrides.description": "Override hint text by key (see src/services/hintTexts.ts HINT_TEXTS for key list; keep placeholders like {n}/{error})",
+  "config.autoConnect.description": "Automatically connect to backend on startup",
+  "config.autoStartWs.description": "Automatically start IDE Bridge WebSocket server on startup",
+  "config.wsPort.description": "IDE Bridge WebSocket server port (frontend ideConnPanel connects to this port; default aligns with src/constants.ts DEFAULT_WS_PORT)",
+  "config.sandboxMode.description": "Sandbox mode: connect to sandbox instance (13140) instead of production instance (1314), for testing new features",
+  "config.sandboxServerUrl.description": "beilu backend URL in sandbox mode (default aligns with src/constants.ts DEFAULT_SANDBOX_SERVER_URL)",
+  "config.sandboxWsPort.description": "IDE Bridge WS port in sandbox mode (default aligns with src/constants.ts DEFAULT_SANDBOX_WS_PORT)",
+  "config.maxFileReferences.description": "Max number of @file references per message (excess truncated; 0 or negative = unlimited)",
+  "config.autoRevealOnEdit.description": "Automatically open editor and jump to highlighted modified line after AI edits a file (EditorReveal has always read this key, previously undeclared in settings panel)"
+}

@@ -72,12 +72,12 @@ const _lc = createBotLifecycle("discordbot", {
     const { createSimpleDiscordInterface } = await import("./default_interface/main.mjs");
     return createSimpleDiscordInterface(char, username, charname);
   },
-  connect: async (config, char, { botname }) => {
+  connect: async (config, char, { username, botname }) => {
     const client = await startBot(config, char);
     // BR2: 运行时错误外显到前端 [O] 监控红点（phase=runtime），对齐 telegram bot.catch
     client.on(Events.Error, (err) => {
       diag.error(`bot="${botname}" 运行时错误`, err);
-      broadcastBotError({ platform: "discordbot", botname, phase: "runtime", error: err });
+      broadcastBotError({ username, platform: "discordbot", botname, phase: "runtime", error: err });
     });
     return client;
   },

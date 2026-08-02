@@ -247,15 +247,19 @@ const WS_CLOSE_GRACE_MS = 5000; // WS 断开后给浏览器刷新重连的宽限
 
 export function broadcastAllChatUi(event, username) {
   if (isWorkerIsolate) {
-    if (!publishFromWorker("broadcast", null, { fn: "allChatUi", args: [event, username] }))
+    const published = publishFromWorker("broadcast", null, { fn: "allChatUi", args: [event, username] });
+    if (!published)
       console.warn("[broadcast] worker 桥无在飞 emitter，allChatUi 事件丢弃:", event?.type);
-    return;
+    return published;
   }
   const payload = JSON.stringify(event);
   // #181: 传 username 时只推给该用户的 chatId（多用户隔离），不传则全推（Bot 全局事件等）
-  const metas = username && _getChatMetadatas ? (() => { try { return _getChatMetadatas(); } catch { return null; } })() : null;
+  const ownerScoped = typeof username === "string" && username.length > 0;
+  const metas = ownerScoped && _getChatMetadatas ? (() => { try { return _getChatMetadatas(); } catch { return null; } })() : null;
+  // owner 已给却没有 owner→chat 索引时必须零发送；否则“用户级”会退化成全用户广播。
+  if (ownerScoped && !metas) return false;
   for (const [cid, sockets] of chatUiSockets.entries()) {
-    if (metas) {
+    if (ownerScoped) {
       try { if (metas.get(cid)?.username !== username) continue; } catch { /* metadata miss → 跳过 */ }
     }
     for (const ws of sockets) {
@@ -264,6 +268,7 @@ export function broadcastAllChatUi(event, username) {
       try { ws.send(payload); } catch { /* 静默 */ }
     }
   }
+  return true;
 }
 
 /**
@@ -342,14 +347,17 @@ export function broadcastChatEvent(chatid, event) {
  * 约束：源 chatId 已通过 broadcastChatEvent 通知过，此处跳过源以避免重复；
  *       #181 多用户隔离 — 无组时退回同用户广播（不跨用户）
  *
- * @param {string} sourceChatId - 事件源会话 ID（会被跳过不重复推送）
+ * @param {string|null} sourceChatId - 事件源会话 ID（会被跳过不重复推送）
  * @param {{type?: string, payload?: object}} event - 要广播的事件（缺 type 时默认 cross_mode_task_update）
+ * @param {string|null} usernameOverride - source 为空时由认证调用方显式提供的用户 owner
+ * @returns {boolean} 是否已解析出安全的用户范围并接受广播
  */
-export function broadcastCrossChatEvent(sourceChatId, event) {
+export function broadcastCrossChatEvent(sourceChatId, event, usernameOverride = null) {
   if (isWorkerIsolate) {
-    if (!publishFromWorker("broadcast", sourceChatId, { fn: "crossChatEvent", args: [sourceChatId, event] }))
+    const published = publishFromWorker("broadcast", sourceChatId, { fn: "crossChatEvent", args: [sourceChatId, event, usernameOverride] });
+    if (!published)
       console.warn("[broadcast] worker 桥无在飞 emitter，crossChatEvent 丢弃:", event?.type);
-    return;
+    return published;
   }
   const payload = JSON.stringify({
     ...event,
@@ -357,32 +365,41 @@ export function broadcastCrossChatEvent(sourceChatId, event) {
     sourceChatId,
   });
 
-  // 解析源 chat 的组 scope + username：拿到组则只投同组，否则退回同用户全广播（#181: 多用户隔离）
+  // 解析源 chat 的组 scope + username：拿到组则只投同组，否则退回同用户全广播（#181: 多用户隔离）。
+  // source 为空时只接受认证调用方传入的 usernameOverride；两者都没有时 fail-closed。
   let allowed = null;
   let _srcUsername = null;
   let _metas = null;
   try {
     _metas = _getChatMetadatas?.();
-    _srcUsername = _metas?.get(sourceChatId)?.username;
-    if (_srcUsername) {
-      const groupId = getGroupIdByChatId(_srcUsername, sourceChatId);
+    _srcUsername = (sourceChatId ? _metas?.get(sourceChatId)?.username : null) || usernameOverride;
+  } catch (_ownerErr) {
+    console.warn("[broadcast] broadcastCrossChatEvent: owner 查询失败, 已拒绝广播:", _ownerErr?.message || _ownerErr);
+    return false;
+  }
+  if (!_metas || !_srcUsername) return false;
+  if (sourceChatId) {
+    try {
+      const groupId = sourceChatId ? getGroupIdByChatId(_srcUsername, sourceChatId) : null;
       if (groupId) allowed = new Set(getGroupChatIds(_srcUsername, groupId));
+    } catch (_groupErr) {
+      // 组索引不可用时仍可依靠已解析的 username 安全退回同用户广播，不跨 owner。
+      console.warn("[broadcast] broadcastCrossChatEvent: 组隔离查询失败, 退回同用户广播:", _groupErr?.message || _groupErr);
     }
-  } catch (_groupErr) { console.warn("[broadcast] broadcastCrossChatEvent: 组隔离查询失败, 退回同用户广播:", _groupErr?.message || _groupErr); }
+  }
 
   for (const [cid, sockets] of chatUiSockets.entries()) {
     if (cid === sourceChatId) continue; // 源 chatId 已经通过 broadcastChatEvent 通知过
     if (allowed && !allowed.has(cid)) continue; // 组隔离：非同组 chatid 跳过
-    // #181: 无组时退回同用户广播（不跨用户），metadata miss 则保守跳过
-    if (!allowed && _srcUsername && _metas) {
-      try { if (_metas.get(cid)?.username !== _srcUsername) continue; } catch { continue; }
-    }
+    // 无论是否有组都再校验用户 owner；metadata miss 保守跳过。
+    try { if (_metas.get(cid)?.username !== _srcUsername) continue; } catch { continue; }
     for (const ws of sockets) {
       if (ws.readyState !== ws.OPEN) continue;
       if (ws.bufferedAmount > WS_BACKPRESSURE_LIMIT) continue;
       try { ws.send(payload); } catch { /* 静默 */ }
     }
   }
+  return true;
 }
 
 /**
@@ -564,7 +581,7 @@ if (!isWorkerIsolate) {
     const a = Array.isArray(p?.args) ? p.args : [];
     if (p?.fn === "chatEvent") broadcastChatEvent(a[0], a[1]);
     else if (p?.fn === "allChatUi") broadcastAllChatUi(a[0], a[1]);
-    else if (p?.fn === "crossChatEvent") broadcastCrossChatEvent(a[0], a[1]);
+    else if (p?.fn === "crossChatEvent") broadcastCrossChatEvent(a[0], a[1], a[2]);
     else if (p?.fn === "userActiveChat") broadcastUserActiveChat(a[0], a[1]);
   });
 }

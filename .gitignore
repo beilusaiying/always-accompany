@@ -29,6 +29,11 @@
 # beilu 运行时目录（含 _ws_token 连接凭证与操作日志，禁入库）
 **/.beilu/
 
+# P1 资源大文件（>100MB，仓库里放 zip 压缩包，启动时自动解压）
+src/yonban/core/functions/memory/p1_res/p1v2_derived/nb_vec_int8.npy
+src/yonban/core/functions/memory/p1_res/p1v2_derived/userdict_domain_full.txt
+src/yonban/core/functions/memory/p1_res/p1v2_derived/conceptnet_en.json
+
 # 插件运行时数据（不应被git覆盖）
 src/public/parts/plugins/beilu-regex/config_data.json
 src/public/parts/plugins/beilu-worldbook/config_data.json

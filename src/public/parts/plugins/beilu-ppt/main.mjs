@@ -1028,6 +1028,7 @@ const pluginExport = {
 			 * 未配置 pipelineDir = 休眠（不注入不产宏，功能对 AI 不可见）。
 			 */
 			GetPrompt: (arg) => {
+				// ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
 				// [0717 宏残留修] 门控只关"注入文本", 宏恒定义——预设 main 尾挂 {{ppt_usage}}
 				// (preset 装配断链修), 非 work/code 模式若宏未定义会字面残留"{{ppt_usage}}"进上下文
 				if (!ENABLED_MODES.has(resolveMode(arg)) || !settings.pipelineDir) {
@@ -1058,6 +1059,7 @@ const pluginExport = {
 			ReplyHandler: async (reply, args) => {
 				if (!reply?.content || !reply.content.includes("<ppt_op")) return false;
 				if (!ENABLED_MODES.has(resolveMode(args))) return false;
+				const _ownerUsername = args?.username || "";
 
 				// chatid 解析上移：门 3 半失败反馈分支也需要（见下）
 				let _chatid = null;
@@ -1076,7 +1078,7 @@ const pluginExport = {
 					// [0717 吞噬事故配套] 只在"像指令的尝试"（带属性的 <ppt_op ...=）时反馈；
 					//   正文散文提及裸 `<ppt_op>` 字样（parsePptOps 已按提及跳过）不触发，防误纠错进上下文。
 					if (!/<ppt_op\b[^>]*\w+\s*=/i.test(reply.content)) return false;
-					ideClient.enqueuePendingResult({ chatid: _chatid, tool: "ppt_op", params: { action: "parse" }, timestamp: new Date().toISOString(), result: { success: false, error: getInjectText("ppt.op_incomplete") } });
+					ideClient.enqueuePendingResult({ chatid: _chatid, ownerUsername: _ownerUsername, tool: "ppt_op", params: { action: "parse" }, timestamp: new Date().toISOString(), result: { success: false, error: getInjectText("ppt.op_incomplete") } });
 					return false;
 				}
 
@@ -1089,7 +1091,7 @@ const pluginExport = {
 					const _ranN = countPptOpsSinceUser(args?.chat_log);
 					reply.extension ??= {};
 					reply.extension._stopContinue = true;
-					ideClient.enqueuePendingResult({ chatid: _chatid, tool: "ppt_op", params: { action: ops[0].action, name: ops[0].name || "" }, timestamp: new Date().toISOString(), result: { success: false, error: fillInjectText("ppt.op_budget_paused", { n: _ranN }) } });
+					ideClient.enqueuePendingResult({ chatid: _chatid, ownerUsername: _ownerUsername, tool: "ppt_op", params: { action: ops[0].action, name: ops[0].name || "" }, timestamp: new Date().toISOString(), result: { success: false, error: fillInjectText("ppt.op_budget_paused", { n: _ranN }) } });
 					diag.log(`防循环预算触发: ${_ranN}/${_budget} 连续无用户输入, 本轮 ${ops.length} 条 op 未执行`);
 					return false;
 				}
@@ -1108,7 +1110,7 @@ const pluginExport = {
 					// [0718 防循环②] 重复 op 拒绝：与上一条成功执行的 op 完全相同（确定性执行类）
 					//   =同产物重跑, 拒绝并回操作错误信号；AI 改动内容后重发即放行。
 					if (DUP_GUARD_ACTIONS.has(op.action) && op.body && _chatid && _lastOpSig.get(_chatid) === _opSig(op)) {
-						ideClient.enqueuePendingResult({ chatid: _chatid, tool: "ppt_op", params: { action: op.action, name: op.name || "" }, timestamp: new Date().toISOString(), result: { success: false, error: getInjectText("ppt.op_duplicate") } });
+						ideClient.enqueuePendingResult({ chatid: _chatid, ownerUsername: _ownerUsername, tool: "ppt_op", params: { action: op.action, name: op.name || "" }, timestamp: new Date().toISOString(), result: { success: false, error: getInjectText("ppt.op_duplicate") } });
 						diag.log(`重复 op 拒绝: ${op.action}/${op.name}`);
 						continue;
 					}
@@ -1143,7 +1145,7 @@ const pluginExport = {
 						diag.warn("ppt_op 执行失败:", err && err.message);
 						_entry = { chatid: _chatid, tool: "ppt_op", params: { action: op.action, name: op.name || "" }, timestamp: new Date().toISOString(), result: { success: false, error: `[PPT 生成失败] ${err.message}` } };
 					}
-					ideClient.enqueuePendingResult(_entry);
+					ideClient.enqueuePendingResult({ ..._entry, ownerUsername: _ownerUsername });
 				}
 
 				return false;

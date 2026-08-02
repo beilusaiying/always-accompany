@@ -186,7 +186,7 @@ async function init() {
 
   // Live2D 桌宠渲染核心（挂 companion tab 的 #live2d-host 桌宠预览位，订阅 WS 表情/消息事件；库未加载或模型缺失时静默退化）
   try {
-    initLive2dRenderer();
+    await initLive2dRenderer();
   } catch (e) {
     console.warn("[live2d]", e);
   }

@@ -225,6 +225,19 @@ function _lazyLoadMemTool(tool, target) {
   else if (tool === "retrieval") _loadMemToolRetrieval(target);
   else if (tool === "format") _loadMemToolFormat(target);
   else if (tool === "pseries") _loadMemToolPseries(target); // T006: vocab 分支已删（空实现占位，词库面板已移除）
+  // P1 自驱动 3 面板（2026-07-31；p1p9=P9 词库维护就地完整编辑区——子模式配置+绑定预设提示词，
+  //   0731 002"仿照code的子模式做前端,完整的编辑前端"，替换原提示块/跳转文案）
+  else if (tool === "p1run" || tool === "p1vocab" || tool === "p1p9") {
+    import("./p1panel.mjs").then((m) => {
+      if (tool === "p1run") m.loadP1RunPanel(target);
+      else if (tool === "p1vocab") m.loadP1VocabPanel(target);
+      else m.loadP1P9Panel(target);
+    }).catch((e) => {
+      console.error("[memtool] p1panel 加载失败:", e);
+      window._reportError?.(`[memtool] p1panel 加载失败: ${e?.message || e}`);
+      target.innerHTML = `<p class="p-4 text-sm text-error">P1 面板加载失败: ${e?.message || e}</p>`;
+    });
+  }
   // skills 分支已删（凛倾 0723「记忆那边直接删除」）：说明书库整块迁 panels/settings/skillLibrary.mjs，
   // 唯一入口=INJ 编辑面板「说明书库」子 tab；记忆 activity 按钮/容器同批删（index.html）。
 }

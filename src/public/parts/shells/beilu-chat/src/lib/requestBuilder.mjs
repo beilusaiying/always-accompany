@@ -206,11 +206,15 @@ export async function getChatRequest(chatid, charname, options = {}) {
         _activationDeps = {
           resolveGenerationMode: _stor.resolveGenerationMode ?? null,
           buildPresetContext: _preset.buildPresetContext ?? null,
+          ensureWindowModePresetBindings: _preset.ensureWindowModePresetBindings ?? null,
         };
       } catch { _activationDeps = null; }
     }
     if (_activationDeps?.resolveGenerationMode) {
       const _actMode = _activationDeps.resolveGenerationMode(result, username, result.char_id || "_global", chatid);
+      if (_activationDeps.ensureWindowModePresetBindings && chatid) {
+        await _activationDeps.ensureWindowModePresetBindings(username, chatid);
+      }
       const _actPreset = _activationDeps.buildPresetContext
         ? (_activationDeps.buildPresetContext(username, chatid, _actMode)?.presetName || null)
         : null;

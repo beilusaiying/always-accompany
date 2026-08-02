@@ -131,6 +131,7 @@ import {
   resolveWorkflowSlot,
   getCodeConfigPath,
   modeFeaturesReady, // 0716 审查风险3：switchMode 声明表未就绪时跳过 scheduler 启停
+  modeFeature, // 0731 T2：getModeFeatureOverrides 下发声明默认值（单源，前端零硬编码）
   isPathSafe, // 0716 路径前缀边界修复：收口内联 resolve().startsWith 到权威守卫
 } from "../storage_mod/storage.mjs";
 
@@ -169,7 +170,8 @@ import {
   endDay,
   mdArchiveDir,
   TABLE_ARCHIVE_DEFAULTS,
-  tableArchiveDir,
+  tableArchiveRoot,
+  listTableArchiveFiles,
 } from "../tools/backgroundTasks.mjs";
 
 import { countTokensSync } from "../nlp/tokenizer.mjs";
@@ -199,6 +201,18 @@ import {
 } from "../ai/aiRunner.mjs";
 
 import { ideClient, isIdeToolResultMsg, isIdeToolCallMsg, deriveApprovalSkipRule, buildPermissionTemplateRules, collectNoiseToHide, CLONE_TAG_RE, PERMISSION_WRITE_TOOLS, FILE_EDIT_TOOLS, WRITE_TOOLS_ALL, DELETE_CMD_FIRST_WORDS, isSensitiveEnvBasename } from "../../../transport/ideClient.mjs";
+import {
+  normalizeToolRuntimeConfig,
+  normalizeToolRuntimeConfigForRecovery,
+  readToolRuntimeConfig,
+  readToolRuntimeConfigState,
+} from "../../../transport/toolRuntime.mjs";
+import { getMcpRuntimeSnapshot } from "../../mcp/runtimeRegistry.mjs";
+import {
+  listMcpConnectRequests,
+  normalizeMcpConnectConfig,
+  transitionMcpConnectRequest,
+} from "../../mcp/connectRequestStore.mjs";
 import { loadPart } from "../../../../../server/parts_loader.mjs"; // 根病4/cleanIdeResults: 跨插件直调替代 HTTP(端口+认证双断)
 
 import {
@@ -280,16 +294,20 @@ function _buildTemplateRulesById(templateId, level) {
  * 反馈」的病根。延迟仍尊重配置（delay_ms）。
  */
 async function _broadcastToolResultsReady(_ideClient, chatId, username = "") {
-  if (_ideClient.pendingResults.length === 0) return;
+  const _pendingResults = _ideClient.getPendingResults({
+    ownerUsername: username,
+    chatid: chatId || undefined,
+  });
+  if (_pendingResults.length === 0) return;
   // [0716 T3对接首批] 原动态 import broadcast.mjs 散拼样板改经 bus:broadcast 出口（exits.mjs 薄包装，
   //   行为等价：dispatch 内部 fail 不抛，ok:false 时 warn=原 catch+warn 同语义）。续轮段（下方
   //   triggerCharReply）非广播域，保持原样。
   if (chatId) {
     const _r = await dispatch({
       target: "bus:broadcast", verb: "emit", source: "yonban",
-      payload: { chatid: chatId, event: { type: "tool_results_ready", payload: { count: _ideClient.pendingResults.length, source: "approval", readOnly: false } } },
+      payload: { chatid: chatId, event: { type: "tool_results_ready", payload: { count: _pendingResults.length, source: "approval", readOnly: false } } },
     });
-    if (_r?.ok) console.log(`[beilu-memory] 审批完成，广播 tool_results_ready (${_ideClient.pendingResults.length}条结果)`);
+    if (_r?.ok) console.log(`[beilu-memory] 审批完成，广播 tool_results_ready (${_pendingResults.length}条结果)`);
     else console.warn("[beilu-memory] 广播 tool_results_ready 失败:", _r?.error?.msg);
   }
   await _triggerContinueAfterUserAction(chatId, username);
@@ -385,6 +403,31 @@ async function _broadcastInjPromptsChanged(username) {
 }
 
 /**
+ * mcpConnect 请求文件变化后只广播轻量刷新信号。
+ * 配置仍由面板通过当前 chatId 重拉，不在 WS 携带，也不在此触发导入/挂载/批准/连接。
+ */
+async function _broadcastMcpConnectRequestsChanged(username, request) {
+  if (!request?.requestId) return;
+  const _r = await dispatch({
+    target: "bus:broadcast",
+    verb: "emitAll",
+    source: "yonban",
+    payload: {
+      username: username !== "_default" ? username : undefined,
+      event: {
+        type: "mcp_connect_requests_changed",
+        payload: {
+          requestId: request.requestId,
+          chatId: request.chatId,
+          status: request.status,
+        },
+      },
+    },
+  });
+  if (!_r?.ok) console.warn("[beilu-memory] 广播 mcp_connect_requests_changed 失败:", _r?.error?.msg);
+}
+
+/**
  * T052：data 系统写成功后广播 data_system_updated，跨窗口回显同步（补半链的 producer 侧）。
  *
  * 半链根因：data 系统写 handler（addRouteNote/ackDataWarning）只有
@@ -401,16 +444,17 @@ async function _broadcastInjPromptsChanged(username) {
  * per-char 跨对话跨窗口共享，非 per-chatid，故用跨窗口引擎而非本窗口 broadcastChatEvent。
  * 事件形状与前端 handleBroadcastEvent 解包对齐（T023 形状病教训：{type,payload:{charId,scope,kind}} 扁平，
  * 前端读 event.payload.charId / .scope，不嵌套 params）。
- * @param {string|null} chatId  源会话 chatid（作 sourceChatId 被跳过；null 时跨窗口引擎仍按 username 全投）
+ * @param {string|null} chatId  源会话 chatid（作 sourceChatId 被跳过；null 时按显式 username 投递）
+ * @param {string} username     已认证用户 owner；chatId 为空时是 fail-closed 隔离所必需
  * @param {string} charName     数据归属角色卡（= args.char_id；前端 getCurrentCharId() 同值，键对齐）
  * @param {"char"} scope        数据维度（route/warnings=char）
  * @param {string} kind         具体写类型（route/warning）——仅供前端 trace/调试，不参与过滤
  */
-async function _broadcastDataSystemUpdate(chatId, charName, scope, kind) {
-  // [0716 T3对接首批] 改经 bus:broadcast.emitCross 出口（exits.mjs 薄包装；chatid 允许 null=按 username 全投）。
+async function _broadcastDataSystemUpdate(chatId, username, charName, scope, kind) {
+  // [0716 T3对接首批] 改经 bus:broadcast.emitCross 出口；chatid 允许 null，但必须携带认证 username。
   const _r = await dispatch({
     target: "bus:broadcast", verb: "emitCross", source: "yonban",
-    payload: { chatid: chatId, event: { type: "data_system_updated", payload: { charId: charName, scope, kind } } },
+    payload: { chatid: chatId, username, event: { type: "data_system_updated", payload: { charId: charName, scope, kind } } },
   });
   if (!_r?.ok) console.warn("[beilu-memory] 广播 data_system_updated 失败:", _r?.error?.msg);
 }
@@ -538,6 +582,37 @@ function _c2CopyDomain(domain, sourceMemDir, targetMemDir) {
 // P系列提示词组整组写入的统一归一+守卫（replacePresetPrompts 与 importMemoryPreset 共用，
 // 禁再各写一份=散写）：字段归一 → deletable:false 原条目漏删插回 → 内置条目内容/身份标志锁
 // （content/builtin/deletable 保原值，role/enabled/name/顺序放行，凛倾0711）
+// ── 子模式「成员即有预设」不变式（0731 002"没有新建预设"根修：原逻辑困在 getSubModes 初始化/迁移
+//   分支，schema 达标纯读与 saveSubModes 新增条目永远不建预设）。幂等：presetExists 命中跳过。
+//   消费方：getSubModes（初始化/迁移后）+ saveSubModes（写入后同步补建）。──
+function _ensureSubModePresetsFor(smUser, subModes) {
+  let _created = 0;
+  for (const sm of subModes) {
+    if (sm.presetName && !presetExists(smUser, sm.presetName)) {
+      const defaultOrder = [{ identifier: "main", enabled: true }, { identifier: "personaDescription", enabled: true }, { identifier: "worldInfoBefore", enabled: true }, { identifier: "charDescription", enabled: true }, { identifier: "charPersonality", enabled: true }, { identifier: "scenario", enabled: true }, { identifier: "nsfw", enabled: true }, { identifier: "worldInfoAfter", enabled: true }, { identifier: "dialogueExamples", enabled: true }, { identifier: "chatHistory", enabled: true }, { identifier: "jailbreak", enabled: true }];
+      const presetJson = {
+        prompts: [
+          { name: "Main Prompt", system_prompt: true, role: "system", content: DEFAULT_SYSTEM_TEXTS.submode_main_prompt.replaceAll("{label}", sm.label).replaceAll("{desc}", sm.desc || ""), identifier: "main", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
+          { name: "NSFW Prompt", system_prompt: true, role: "system", content: "", identifier: "nsfw", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
+          { name: "Jailbreak", system_prompt: true, role: "system", content: "", identifier: "jailbreak", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
+          { identifier: "personaDescription", name: "Persona Description", system_prompt: true, marker: true },
+          { identifier: "scenario", name: "Scenario", system_prompt: true, marker: true },
+          { identifier: "charDescription", name: "Char Description", system_prompt: true, marker: true },
+          { identifier: "charPersonality", name: "Char Personality", system_prompt: true, marker: true },
+          { identifier: "worldInfoBefore", name: "World Info (before)", system_prompt: true, marker: true },
+          { identifier: "worldInfoAfter", name: "World Info (after)", system_prompt: true, marker: true },
+          { identifier: "chatHistory", name: "Chat History", system_prompt: true, marker: true },
+          { identifier: "dialogueExamples", name: "Chat Examples", system_prompt: true, marker: true },
+        ],
+        prompt_order: [{ character_id: 100000, order: defaultOrder.map((o) => ({ ...o })) }, { character_id: 100001, order: defaultOrder.map((o) => ({ ...o })) }],
+      };
+      createBeiluPreset(smUser, sm.presetName, presetJson, `[${sm.label}] ${sm.desc}`);
+      _created++;
+    }
+  }
+  return _created;
+}
+
 function sanitizePromptSet(orig, incoming, presetId, setKey) {
   const _orig = Array.isArray(orig) ? orig : [];
   const _new = incoming.map((p, i) => ({
@@ -738,10 +813,10 @@ function _resolveTableMode(data, username, charName, chatId) {
   return (_m === "code" || _m === "work") ? _m : "chat";
 }
 
-// D-1 游戏陪伴：解析有效角色(角色卡),带存在性校验 + 优雅 fallback。
-//   集中一处的原因：start/stop/status/action 四个 op 必须拿到【一致】的 effChar——
-//   _sessions 键 = `username/charName`(gameCompanion.mjs:44)，start 用 A 起、stop 却用 B 找就停不掉。
-//   bindChar 指向被删角色卡 → 回退当前 charName。
+// D-1 游戏陪伴：启动时解析有效角色(角色卡)，带存在性校验 + 明示 fallback。
+//   解析结果只用于创建 session；运行后 gameCompanion 以 username 寻址唯一 runtime，
+//   session.charName/chatid 固定，不随前端当前角色或后续 bindChar 改动漂移。
+//   bindChar 指向被删角色卡 → 启动时回退当前 charName。
 function _resolveCompanionChar(username, charName, cfg, warnings = []) {
   let effChar = charName;
   if (cfg && cfg.bindChar) {
@@ -760,8 +835,8 @@ function _resolveCompanionChar(username, charName, cfg, warnings = []) {
 //   路由=两级:bindChat(用户显式锁定,校验存在) > companion 专门对话(ensureBotChat 幂等指针,
 //   bot 符号命名被普通列表屏蔽,新对话默认 chat 模式=AIRP 形态)。
 //   防呆:bindChat 指向 code/work 对话也拒绝(凛倾:"只可以使用airp或者专门的"),落专门对话并 warning。
-//   仅 start 调用(session.chatid 定于启动);stop/status/action 只需 effChar 走 _resolveCompanionChar,
-//   避免状态轮询路径产生"顺手建对话"副作用。
+//   仅 start 调用(session.charName/chatid 定于启动)；stop/status/action 按 username 命中正在运行的实例，
+//   避免状态轮询重新解释当前角色/绑定，更不会产生"顺手建对话"副作用。
 async function _resolveCompanionTarget(username, charName, cfg) {
   const warnings = [];
   const effChar = _resolveCompanionChar(username, charName, cfg, warnings);
@@ -814,7 +889,10 @@ export async function handleSetData(data, args) {
   //   无 args.username 的调用(part 加载恢复 parts_loader:670 / 插件间内部调用)不受影响。
   if (args?.username) data.username = args.username;
 
-  const _chatid = data.chatid || data.chatId || null;
+  // 桥接调用把认证会话写在 args.chatid（HTTP/WS dispatch 同契约），旧 REST 调用
+  // 仍可能把 chatid 放在 data。两条入口必须在这里统一归一；否则 ideToolCall 会
+  // 以无会话 Job 执行，owner 广播被拒，运行快照也无法按当前聊天读到该 Job。
+  const _chatid = data.chatid || data.chatId || args?.chatid || null;
   const _isReadOnly = typeof data._action === "string" && (data._action.startsWith("get") || data._action.startsWith("list"));
   if (!_isReadOnly) {
     wbT(_chatid, "setDataActions", "handleSetData:enter", { _action: data._action, username: data.username, charName: data.charName });
@@ -1210,6 +1288,31 @@ export async function handleSetData(data, args) {
     //   「切换=改绑」总则。落 _memory_presets.json 顶层 active_preset_id（与 presets[] 同文件同 save 链），
     //   getData 下发 active_memory_preset_id 供三处前端（memoryPresetChat/memtool/home memoryPreset tab）
     //   恢复选中。运行仍按前端显式传的 presetId（本位只管"选中态持久+跨面板互通"，不改运行取值链）。
+    // P 系列新建能力（2026-07-31 002拍板"从子模式拉个线"）：此前所有 P 系列写 verb 均以"预设已存在"
+    //   为前提、全仓无 create 入口（系统级空白非枚举拦截）。本 verb 对齐子模式 saveSubModes 的"数据即成员"
+    //   语义：新增能力零改既有 verb（importMemoryPreset "只覆盖不新增"不变式保留）。
+    //   首个消费方：P9 词库维护 AI（p1panel.mjs P9 面板"创建 P9 预设"，prompts seed 自 P9 提示词数据件）。
+    //   前端 P 系列面板动态渲染 presets 数组（memtool.mjs:825-842）→ 新预设创建即显示，可编辑可运行。
+    case "createMemoryPreset": {
+      const _cpId = String(data.presetId || "").trim();
+      if (!_cpId) return { success: false, error: "presetId 不能为空" };
+      if (presetsData.presets.some((p) => p.id === _cpId)) {
+        return { success: false, error: `预设已存在 (presetId=${_cpId})，如需改内容用 updateMemoryPreset/replacePresetPrompts` };
+      }
+      const _cpPrompts = Array.isArray(data.prompts) ? data.prompts : [];
+      const _cpPreset = {
+        id: _cpId,
+        name: String(data.name || _cpId),
+        description: String(data.description || ""),
+        enabled: data.enabled !== false,
+        ...(data.api_config && typeof data.api_config === "object" ? { api_config: structuredClone(data.api_config) } : {}),
+        prompts: sanitizePromptSet([], _cpPrompts, _cpId, "prompts"),
+      };
+      presetsData.presets.push(_cpPreset);
+      saveMemoryPresets(username, charName, presetsData);
+      return { success: true, presetId: _cpId, promptCount: _cpPreset.prompts.length };
+    }
+
     case "setActiveMemoryPreset": {
       const _amId = data.presetId || "";
       if (_amId && !presetsData.presets.some((p) => p.id === _amId)) {
@@ -1580,9 +1683,9 @@ export async function handleSetData(data, args) {
     }
 
     // ============================================================
-    // 表格归档系统（25批21）· 6 verb。设计：设计_表格归档系统_20260703.md §三。
-    //   归档目录：全模式统一热层 hot/archive/tables/<mode>/（凛倾 2026-07-16「归档只可以变成文件储存在热层」，
-    //   路径单源 tableArchiveDir，旧散点存量首次访问自动归位）。
+    // 表格归档系统（25批21）· 6 verb。数据归档按模式落在当前工作层的日期目录：
+    //   chat=hot/<YYYY-MM-DD>/，code=code/active/<YYYY-MM-DD>/，work=work/active/<YYYY-MM-DD>/。
+    //   路径单源 tableArchiveRoot/tableArchiveDir，旧 archive 存量首次访问自动归位。
     //   mode 解析走 _resolveTableMode 收口（显式三值原样用；空=per-chatId active_mode 同源，20260712 改，
     //   原「空→chat 硬默认」与读端 getData 回退语义分叉=跨桶归档病根）。
     // ============================================================
@@ -1590,14 +1693,13 @@ export async function handleSetData(data, args) {
     // per-table 归档配置读取：{ [tableId]: {enabled, max_rows, keep_recent} }
     case "getTableArchiveConfig": {
       const _tMode = _resolveTableMode(data, username, charName, chatId);
-      // defaults/storage/format 随配置一并回传：前端 placeholder、储存位置、文件格式展示全取自这里，
-      //   禁前端硬编码（凛倾「所有可操作处禁硬编码」）。storage 相对路径=tableArchiveDir 单源（热层收口）。
-      const { relPrefix: _relPrefix } = tableArchiveDir(getMemoryDir(username, charName), _tMode);
+      // defaults/storage/format 随配置一并回传：前端 placeholder、储存位置、文件格式展示全取自这里。
+      const { relRoot: _relRoot } = tableArchiveRoot(getMemoryDir(username, charName), _tMode);
       return {
         success: true, mode: _tMode,
         config: _readTableArchiveConfig(getMemoryDir(username, charName), _tMode),
         defaults: { ...TABLE_ARCHIVE_DEFAULTS },
-        storage: _relPrefix,
+        storage: `${_relRoot}/{date}`,
         format: "json", // 归档文件固定纯 JSON（{date,mode,table,tableId,columns,count,entries}，同日合并+指纹去重）；restore/list 依赖此格式
       };
     }
@@ -1638,20 +1740,17 @@ export async function handleSetData(data, args) {
       } catch (e) { return { success: false, error: `归档失败: ${e.message}` }; }
     }
 
-    // 列出归档文件：扫 <archiveDir>/*.json，返回 [{file, date, tableId, table, count}]
+    // 列出归档文件：递归扫 <mode active root>/<date>/*.json，返回 [{file, date, tableId, table, count}]
     case "listTableArchives": {
       const _tMode = _resolveTableMode(data, username, charName, chatId);
       try {
         const _memDir = getMemoryDir(username, charName);
-        const { absDir: _absDir, relPrefix: _relPrefix } = tableArchiveDir(_memDir, _tMode);
-        if (!fs.existsSync(_absDir)) return { success: true, mode: _tMode, archives: [] };
         const _out = [];
-        for (const _fn of fs.readdirSync(_absDir)) {
-          if (!_fn.endsWith("_archive.json")) continue;
-          const _doc = loadJsonFileIfExists(path.join(_absDir, _fn), null);
+        for (const _item of listTableArchiveFiles(_memDir, _tMode)) {
+          const _doc = _item.doc;
           if (!_doc) continue;
           if (data.tableId !== undefined && data.tableId !== null && Number(_doc.tableId) !== Number(data.tableId)) continue;
-          _out.push({ file: `${_relPrefix}/${_fn}`, date: _doc.date || "", tableId: _doc.tableId, table: _doc.table || "", count: _doc.count || (_doc.entries?.length || 0) });
+          _out.push({ file: _item.file, date: _doc.date || "", tableId: _doc.tableId, table: _doc.table || "", count: _doc.count || (_doc.entries?.length || 0) });
         }
         _out.sort((a, b) => String(b.date).localeCompare(String(a.date)));
         return { success: true, mode: _tMode, archives: _out };
@@ -1766,6 +1865,10 @@ export async function handleSetData(data, args) {
             saveJsonFile(_full, _doc);
           } else {
             fs.unlinkSync(_full);
+            try {
+              const _parent = path.dirname(_full);
+              if (/^\d{4}-\d{2}-\d{2}$/.test(path.basename(_parent)) && fs.readdirSync(_parent).length === 0) fs.rmdirSync(_parent);
+            } catch (_rmdirErr) { diag.warn(`restoreTableArchiveRows 清理空日期目录失败: ${_rmdirErr.message}`); }
           }
         } catch (_ue) { diag.warn(`restoreTableArchiveRows 消账失败(数据已恢复,档残留可能被重复恢复): ${_ue.message}`); }
         return { success: true, mode: _tMode, tableId: data.tableId, restored: _newRows.length, rev: _tbl.rev };
@@ -2239,7 +2342,7 @@ export async function handleSetData(data, args) {
               max_tokens: _tcClone.maxTokens || 60000,
               prompt_post_processing: _tcClone.promptPostProcessing || "strict",
               include_reasoning: false,
-              extended_thinking: false,
+              // extended_thinking 已删（2026-08-01 收口：思维链跟随所用 AI 源的 per-源设置）
             },
           }, memData, charName, username, "", { maxRounds: 1, aiPriority: "low" }); // [0727 并发闸] 测试分身=后台级
 
@@ -3639,37 +3742,10 @@ export async function handleSetData(data, args) {
     case "getSubModes": {
       const smUser = data.username || args?.username || "_default";
       // T4 收口：getSubModes 的「初始化默认 + W64 迁移」整段 read-modify-write 走 updateYonbanConfig
-      //   串行锁（原顶层 load + 两处 saveJsonFile 无锁，与 saveSubModes/setActiveSubMode 等并发时互覆字段）。
-      //   建预设（createBeiluPreset 写 preset 文件，非 yonban_config）提到锁外统一执行一次——原本初始化/迁移
-      //   两块建预设逻辑逐字相同，合并为对最终 sub_modes 建缺失预设（幂等：presetExists 命中跳过），行为等价。
-      // 建缺失预设 helper（合并原初始化 :3520 与迁移 :3626 两处相同逻辑；只补 presetName 有值且文件不存在的）。
-      const _ensureSubModePresets = (subModes) => {
-        let _created = 0;
-        for (const sm of subModes) {
-          if (sm.presetName && !presetExists(smUser, sm.presetName)) {
-            const defaultOrder = [{ identifier: "main", enabled: true }, { identifier: "personaDescription", enabled: true }, { identifier: "worldInfoBefore", enabled: true }, { identifier: "charDescription", enabled: true }, { identifier: "charPersonality", enabled: true }, { identifier: "scenario", enabled: true }, { identifier: "nsfw", enabled: true }, { identifier: "worldInfoAfter", enabled: true }, { identifier: "dialogueExamples", enabled: true }, { identifier: "chatHistory", enabled: true }, { identifier: "jailbreak", enabled: true }];
-            const presetJson = {
-              prompts: [
-                { name: "Main Prompt", system_prompt: true, role: "system", content: DEFAULT_SYSTEM_TEXTS.submode_main_prompt.replaceAll("{label}", sm.label).replaceAll("{desc}", sm.desc || ""), identifier: "main", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-                { name: "NSFW Prompt", system_prompt: true, role: "system", content: "", identifier: "nsfw", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-                { name: "Jailbreak", system_prompt: true, role: "system", content: "", identifier: "jailbreak", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-                { identifier: "personaDescription", name: "Persona Description", system_prompt: true, marker: true },
-                { identifier: "scenario", name: "Scenario", system_prompt: true, marker: true },
-                { identifier: "charDescription", name: "Char Description", system_prompt: true, marker: true },
-                { identifier: "charPersonality", name: "Char Personality", system_prompt: true, marker: true },
-                { identifier: "worldInfoBefore", name: "World Info (before)", system_prompt: true, marker: true },
-                { identifier: "worldInfoAfter", name: "World Info (after)", system_prompt: true, marker: true },
-                { identifier: "chatHistory", name: "Chat History", system_prompt: true, marker: true },
-                { identifier: "dialogueExamples", name: "Chat Examples", system_prompt: true, marker: true },
-              ],
-              prompt_order: [{ character_id: 100000, order: defaultOrder.map((o) => ({ ...o })) }, { character_id: 100001, order: defaultOrder.map((o) => ({ ...o })) }],
-            };
-            createBeiluPreset(smUser, sm.presetName, presetJson, `[${sm.label}] ${sm.desc}`);
-            _created++;
-          }
-        }
-        return _created;
-      };
+      //   串行锁。建预设 helper 已提升为模块级 _ensureSubModePresetsFor（0731 002"没有新建预设"根修：
+      //   原定义困在本 case 且只在初始化/迁移分支被调 → schema 达标的纯读路径与 saveSubModes 新增条目
+      //   永远不建预设=「成员即有预设」不变式只在首次初始化成立一次。现 saveSubModes 写入后同步补建）。
+      const _ensureSubModePresets = (subModes) => _ensureSubModePresetsFor(smUser, subModes);
       // [0720 框架归位·数据版本门] 盘上 sub_modes_schema 达标=纯读返回(写不变式由 saveSubModes
       //   的 D4 写路径归一维持,读盘每次拿各写口最新值);低版本/空配置才进下方一次性迁移写路径。
       let _gsmConfig = loadJsonFileIfExists(getYonbanConfigPath(smUser), { sub_modes: [], active_sub_mode: "前置任务专家" });
@@ -3855,6 +3931,7 @@ export async function handleSetData(data, args) {
         }
         return smConfig;
       }, { sub_modes: [], active_sub_mode: "前置任务专家" });
+      _ensureSubModePresetsFor(smUser, smConfig.sub_modes || []); // 写入即建缺失预设（原只在 getSubModes 初始化建=新增条目永远没预设）
       // _subModesChanged：上层（memory/main.mjs SetData 路由）据此广播 subModesConfigChanged，
       //   通知本体/YonBan 各客户端重拉（修"配置变更零推送"同步断链）。同 _subModeSwitch 信号范式。
       return { success: true, sub_modes: smConfig.sub_modes, _subModesChanged: true };
@@ -4120,6 +4197,46 @@ export async function handleSetData(data, args) {
       const _tcPath = getYonbanConfigPath(_tcUser);
       const _tcCfg = loadJsonFileIfExists(_tcPath, {});
       return { success: true, tableCleanFrequency: _tcCfg.tableCleanFrequency || 0 };
+    }
+
+    // P1 per-mode 开关用户覆盖层（2026-07-31 002 T2）：modes/*.json 是随代码模板禁直写，
+    //   features.p1.config 的用户覆盖落 yonban_config.mode_feature_overrides（抄 saveTableCleanConfig
+    //   形状：updateYonbanConfig 串行锁写 / loadJsonFileIfExists 读）。只存用户显式改过的键，
+    //   无字段=沿用 modes json 声明值。消费点=getPromptHandler _p1Feat 合并（唯一消费点，
+    //   不碰 modeFeature/_modeFeaturesById 通用机制）。lib 白名单只放行 "p1"（范围锁，防成任意 features 后门）。
+    case "saveModeFeatureOverride": {
+      const _mfUser = data.username || args?.username || "_default";
+      const _mfMode = data.mode;
+      if (!isValidModeId(_mfMode)) return { success: false, error: `非法模式值: ${_mfMode}` };
+      if (data.lib !== "p1") return { success: false, error: "本写口仅支持 lib=p1" };
+      await updateYonbanConfig(_mfUser, (cfg) => {
+        cfg.mode_feature_overrides ??= {};
+        cfg.mode_feature_overrides[_mfMode] ??= {};
+        cfg.mode_feature_overrides[_mfMode].p1 = {
+          ...(cfg.mode_feature_overrides[_mfMode].p1 || {}),
+          ...(data.selfDriven !== undefined ? { selfDriven: !!data.selfDriven } : {}),
+          ...(data.aiP1 !== undefined ? { aiP1: !!data.aiP1 } : {}),
+        };
+        return cfg;
+      }, {});
+      return { success: true, mode: _mfMode };
+    }
+
+    case "getModeFeatureOverrides": {
+      const _mfUser = data.username || args?.username || "_default";
+      const _mfCfg = loadJsonFileIfExists(getYonbanConfigPath(_mfUser), {});
+      const _mfOv = _mfCfg.mode_feature_overrides || {};
+      // effective = modes json 声明值 ⊕ 用户覆盖（单源下发，前端纯渲染零硬编码默认值）
+      const _mfEffective = {};
+      for (const _m of ["chat", "code", "work"]) {
+        const _decl = modeFeature(_m, "p1");
+        _mfEffective[_m] = {
+          selfDriven: _decl.config?.selfDriven === true,
+          aiP1: _decl.config?.aiP1 !== false,
+          ...(_mfOv[_m]?.p1 || {}),
+        };
+      }
+      return { success: true, mode_feature_overrides: _mfOv, effective: _mfEffective };
     }
 
     // === Skill组(流程组)执行引擎 ===
@@ -5207,30 +5324,180 @@ export async function handleSetData(data, args) {
       } catch (e) { return { success: false, error: e.message }; }
     }
 
+    // === mcpConnect 人工审查队列 ===
+    case "getMcpConnectRequests": {
+      const _requestChatId = data.chatId || data.chatid || args?.chatid || "";
+      if (!_requestChatId) return { success: false, error: "缺少 chatId，不能读取 MCP 请求" };
+      return {
+        success: true,
+        chatId: _requestChatId,
+        requests: listMcpConnectRequests(username, { chatId: _requestChatId }),
+      };
+    }
+
+    case "beginMcpConnectRequestImport": {
+      const _requestChatId = data.chatId || data.chatid || args?.chatid || "";
+      if (!_requestChatId) return { success: false, error: "缺少 chatId，不能开始导入 MCP 请求" };
+      let _editedMcpConfig;
+      try {
+        const _editedText = typeof data.importText === "string" ? data.importText.trim() : "";
+        if (!_editedText) throw new Error("缺少用户审查后的 MCP 配置");
+        _editedMcpConfig = JSON.parse(_editedText);
+      } catch (e) {
+        return { success: false, errorCode: "invalid_mcp_config", error: `MCP 配置 JSON 无效: ${e.message}` };
+      }
+      const _editedValidation = normalizeMcpConnectConfig(_editedMcpConfig);
+      if (_editedValidation.validationError) {
+        return {
+          success: false,
+          errorCode: "invalid_mcp_config",
+          error: _editedValidation.validationError,
+        };
+      }
+      const _result = await transitionMcpConnectRequest({
+        username,
+        requestId: data.requestId,
+        chatId: _requestChatId,
+        nextStatus: "importing",
+      });
+      if (_result.success && !_result.unchanged) {
+        await _broadcastMcpConnectRequestsChanged(username, _result.request);
+      }
+      return _result;
+    }
+
+    case "finishMcpConnectRequestImport": {
+      const _requestChatId = data.chatId || data.chatid || args?.chatid || "";
+      if (!_requestChatId) return { success: false, error: "缺少 chatId，不能更新 MCP 导入结果" };
+      if (typeof data.importSucceeded !== "boolean") {
+        return { success: false, error: "缺少 importSucceeded 导入结果" };
+      }
+      const _reportedParts = Array.isArray(data.importedParts)
+        ? data.importedParts.map(String)
+        : [];
+      const _validMcpParts = _reportedParts.length > 0 &&
+        _reportedParts.every((part) => /^plugins\/mcp_[^/\\]+$/.test(part));
+      const _importSucceeded = data.importSucceeded && _validMcpParts;
+      const _importError = data.importSucceeded && !_validMcpParts
+        ? "导入响应未包含有效 MCP 插件"
+        : data.importError;
+      const _result = await transitionMcpConnectRequest({
+        username,
+        requestId: data.requestId,
+        chatId: _requestChatId,
+        nextStatus: _importSucceeded ? "imported" : "import_failed",
+        importError: _importError,
+        importedParts: _reportedParts,
+      });
+      if (_result.success && !_result.unchanged) {
+        await _broadcastMcpConnectRequestsChanged(username, _result.request);
+      }
+      return _result;
+    }
+
+    case "dismissMcpConnectRequest": {
+      const _requestChatId = data.chatId || data.chatid || args?.chatid || "";
+      if (!_requestChatId) return { success: false, error: "缺少 chatId，不能忽略 MCP 请求" };
+      const _result = await transitionMcpConnectRequest({
+        username,
+        requestId: data.requestId,
+        chatId: _requestChatId,
+        nextStatus: "dismissed",
+      });
+      if (_result.success && !_result.unchanged) {
+        await _broadcastMcpConnectRequestsChanged(username, _result.request);
+      }
+      return _result;
+    }
+
     // === IDE 工具结果（自动继续轮询用） ===
     case "getPendingIdeResults": {
+      const _pendingChatid = data.chatid || data.chatId || args?.chatid || null;
+      const _pendingResults = ideClient.getPendingResults({
+        ownerUsername: username,
+        chatid: _pendingChatid || undefined,
+      });
       return {
-        hasPending: ideClient.pendingResults.length > 0,
-        count: ideClient.pendingResults.length,
-        ideConnected: ideClient.isConnected,
+        hasPending: _pendingResults.length > 0,
+        count: _pendingResults.length,
+        ideConnected: ideClient.isConnectedFor(_pendingChatid),
+      };
+    }
+
+    case "getToolRuntimeConfig": {
+      const _runtimeState = readToolRuntimeConfigState(username);
+      return {
+        ..._runtimeState.config,
+        _source: _runtimeState.source,
+        _persisted: _runtimeState.persisted,
+        _error: _runtimeState.error,
+      };
+    }
+
+    case "setToolRuntimeConfig": {
+      const _runtimePatch = data.patch && typeof data.patch === "object" && !Array.isArray(data.patch)
+        ? data.patch
+        : null;
+      const _savedRuntime = await updateYonbanConfig(username, (cfg) => {
+        const _currentRuntime = Object.hasOwn(cfg, "tool_runtime")
+          ? normalizeToolRuntimeConfigForRecovery(cfg.tool_runtime)
+          : normalizeToolRuntimeConfig();
+        const _rawRuntime = _runtimePatch
+          ? { ..._currentRuntime, ..._runtimePatch }
+          : (data.tool_runtime && typeof data.tool_runtime === "object" && !Array.isArray(data.tool_runtime)
+              ? data.tool_runtime
+              : data);
+        const _normalizedRuntime = normalizeToolRuntimeConfig(_rawRuntime);
+        cfg.tool_runtime = _normalizedRuntime;
+        return _normalizedRuntime;
+      }, {}, { strictRead: true });
+      return {
+        ..._savedRuntime,
+        _source: "persisted",
+        _persisted: true,
+        _error: null,
+      };
+    }
+
+    case "getSystemRuntimeSnapshot": {
+      const _runtimeChatid = data.chatid || data.chatId || args?.chatid || null;
+      return {
+        tool: ideClient.getRuntimeSnapshot(_runtimeChatid, username),
+        mcp: getMcpRuntimeSnapshot(username),
       };
     }
 
     // === IDE 操作历史（操作监控面板用） ===
     case "getIdeOperationHistory": {
-      const history = ideClient._operationHistory || [];
+      const _historyChatid = data.chatid || data.chatId || args?.chatid || null;
+      const _runtimeConfig = readToolRuntimeConfig(username);
+      const history = ideClient.getOperationHistory({
+        ownerUsername: username,
+        chatid: _historyChatid || undefined,
+        limit: _runtimeConfig.history_limit,
+      });
       const total = history.length;
       const success = history.filter(h => h.success).length;
       const failed = total - success;
       return {
-        history: history.slice(-50),
+        history,
+        jobs: ideClient.getToolJobs({
+          ownerUsername: username,
+          chatid: _historyChatid || undefined,
+          limit: _runtimeConfig.history_limit,
+        }),
         stats: { total, success, failed },
       };
     }
 
     case "clearIdeOperationHistory": {
-      if (ideClient._operationHistory) ideClient._operationHistory.length = 0;
-      return { success: true };
+      const _clearChatid = data.chatid || data.chatId || args?.chatid || null;
+      const clearedHistory = ideClient.clearOperationHistory({
+        ownerUsername: username,
+        chatid: _clearChatid || undefined,
+      });
+      ideClient.clearTerminalToolJobs(_clearChatid, username);
+      return { success: true, clearedHistory };
     }
 
     // === checkpoint 管理面板（前端 idePanel 调，经 YonBan _checkpoint_* 工具）===
@@ -5318,9 +5585,8 @@ export async function handleSetData(data, args) {
     }
 
     // === 游戏陪伴 (W15+W18 Q2) ===
-    // D-1 绑定：有效角色 = game_companion_config.bindChar(用户绑定的角色卡)否则当前 charName。
-    //   ⚠ start/stop/status/action 必须用【同一】有效角色——_sessions 键是 `username/charName`(gameCompanion.mjs:44)，
-    //   start 用 bindChar 起、stop 却用当前 charName 找，键对不上就停不掉/查不到。默认 bindChar=null → 等于原行为。
+    // D-1 绑定：启动角色 = game_companion_config.bindChar（有效时），否则当前 charName。
+    // runtime 按 username 唯一寻址；stop/status/action 不再重算角色，切卡或改绑定也能命中已启动 session。
     case "startGameCompanion": {
       const { startGameCompanion } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
       const _gcCfg = loadJsonFileIfExists(getGameCompanionConfigPath(username)) || {};
@@ -5336,24 +5602,20 @@ export async function handleSetData(data, args) {
 
     case "stopGameCompanion": {
       const { stopGameCompanion } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
-      const _gcCfg = loadJsonFileIfExists(getGameCompanionConfigPath(username)) || {};
-      return stopGameCompanion(username, _resolveCompanionChar(username, charName, _gcCfg));
+      return stopGameCompanion(username);
     }
 
     case "getGameCompanionStatus": {
       const { getGameCompanionStatus } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
-      const _gcCfg = loadJsonFileIfExists(getGameCompanionConfigPath(username)) || {};
-      return getGameCompanionStatus(username, _resolveCompanionChar(username, charName, _gcCfg));
+      return getGameCompanionStatus(username);
     }
 
     case "gameCompanionAction": {
       const { gameCompanionUserAction } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
-      const _gcCfg = loadJsonFileIfExists(getGameCompanionConfigPath(username)) || {};
-      const _gcChar = _resolveCompanionChar(username, charName, _gcCfg);
       // data.action: "reply" | "ignore" | "close" | "pause"
-      gameCompanionUserAction(username, _gcChar, data.action || "ignore");
+      gameCompanionUserAction(username, null, data.action || "ignore");
       const { getGameCompanionStatus: getStatus } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
-      return getStatus(username, _gcChar);
+      return getStatus(username);
     }
 
     // 对话台输入(凛倾 2026-07-12"需要有对话台"):web session 侧把用户文本发进陪伴轮。
@@ -5530,7 +5792,7 @@ export async function handleSetData(data, args) {
       diag.log("[dataCRUD]", `addRouteNote user=${username} char=${charName} task=${_rnTask} seq=${_rnRec?.seq ?? "-"}`);
       // T052：route 批注是 per-char（appendRouteAmendment 传 charName）→ scope="char"，前端按 charId 过滤只刷同卡窗口。
       // _rnRec 存在=真追加了记录（真变化）才广播。
-      if (_rnRec) _broadcastDataSystemUpdate(chatId, charName, "char", "route");
+      if (_rnRec) _broadcastDataSystemUpdate(chatId, username, charName, "char", "route");
       return { success: true, event: _rnRec };
     }
 
@@ -5550,7 +5812,7 @@ export async function handleSetData(data, args) {
       diag.log("[dataCRUD]", `ackDataWarning user=${username} char=${charName} task=${_awTask} position=${_awPos} ok=${_awOk}`);
       // T052：消警是 per-char（ackWarning 传 charName）→ scope="char"。仅 _awOk=true（真消到警告=真变化）才广播，
       // 未匹配到警告时不广播（防无意义风暴）。
-      if (_awOk) _broadcastDataSystemUpdate(chatId, charName, "char", "warning");
+      if (_awOk) _broadcastDataSystemUpdate(chatId, username, charName, "char", "warning");
       return { success: _awOk, acked: _awOk, ...(_awOk ? {} : { error: "未找到匹配的未消警警告" }) };
     }
 
@@ -5696,7 +5958,7 @@ export async function handleSetData(data, args) {
               max_tokens: 4000,
               prompt_post_processing: "strict",
               include_reasoning: false,
-              extended_thinking: false,
+              // extended_thinking 已删（2026-08-01 收口：思维链跟随所用 AI 源的 per-源设置）
             },
           },
           memData,

@@ -1,0 +1,21 @@
+{
+  "command.connect.title": "YonBan: 连接后端",
+  "command.disconnect.title": "YonBan: 断开连接",
+  "command.showPanel.title": "YonBan: 打开面板",
+  "command.startWsServer.title": "YonBan: 启动 IDE 桥接服务",
+  "command.stopWsServer.title": "YonBan: 停止 IDE 桥接服务",
+  "command.toggleSandboxMode.title": "YonBan: 切换沙箱模式",
+  "command.showConnectionInfo.title": "YonBan: 显示当前连接信息",
+  "view.sidebar.name": "YonBan 控制面板",
+  "config.serverUrl.description": "beilu-always-accompany 后端地址（default 与 src/constants.ts DEFAULT_SERVER_URL 对齐，改端口两处同改）",
+  "config.hints.enabled.description": "工具结果附带给 AI 的诊断提示（_hint）总开关。关闭后不附加任何提示文本",
+  "config.hints.overrides.description": "按键覆盖提示文本（键表见 src/services/hintTexts.ts HINT_TEXTS；占位符 {n}/{error} 等请保留）",
+  "config.autoConnect.description": "启动时自动连接后端",
+  "config.autoStartWs.description": "启动时自动开启 IDE 桥接 WebSocket 服务器",
+  "config.wsPort.description": "IDE 桥接 WebSocket 服务器端口（前端 ideConnPanel 连接此端口；default 与 src/constants.ts DEFAULT_WS_PORT 对齐）",
+  "config.sandboxMode.description": "沙箱模式：连接沙箱实例(13140)而非生产实例(1314)，用于测试新功能",
+  "config.sandboxServerUrl.description": "沙箱模式时的beilu后端地址（default 与 src/constants.ts DEFAULT_SANDBOX_SERVER_URL 对齐）",
+  "config.sandboxWsPort.description": "沙箱模式时的IDE桥接WS端口（default 与 src/constants.ts DEFAULT_SANDBOX_WS_PORT 对齐）",
+  "config.maxFileReferences.description": "单条消息 @文件引用的最大条数（超出截断；0 或负数=不限制）",
+  "config.autoRevealOnEdit.description": "AI 改完文件后自动打开编辑器并跳转高亮修改行（EditorReveal 一直读取此键，此前未在设置面板声明）"
+}

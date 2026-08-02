@@ -268,32 +268,74 @@ setTimeout(_installOneShotInjectionCleanup, 0);
 // 全局：父页面 resize 监听（只注册一次）
 // ============================================================
 let resizeListenerRegistered = false;
+let chatViewportResizeObserver = null;
+let observedChatViewport = null;
+let viewportBroadcastTimer = null;
+
+/**
+ * 富前端角色卡的 100vh 应等于真实消息视口，而不是整个浏览器窗口。
+ * 优先读 #chat-messages；DOM 尚未就绪时才回退 window.innerHeight。
+ */
+function getChatViewportHeight() {
+  const chatMessages = document.getElementById("chat-messages");
+  const measured = chatMessages?.clientHeight || 0;
+  if (measured > 0) return Math.round(measured);
+  return Math.max(0, Math.round(window.innerHeight || 0));
+}
+
+function broadcastIframeViewport() {
+  const height = getChatViewportHeight();
+  document.querySelectorAll(".beilu-beauty-iframe").forEach((iframe) => {
+    try {
+      iframe.contentWindow?.postMessage(
+        { type: "beilu-update-viewport", height },
+        "*",
+      );
+      iframe.contentWindow?.postMessage({ type: "beilu-remeasure" }, "*");
+    } catch (e) {
+      /* ignore */
+    }
+  });
+}
+
+function scheduleIframeViewportBroadcast() {
+  if (viewportBroadcastTimer) clearTimeout(viewportBroadcastTimer);
+  viewportBroadcastTimer = setTimeout(() => {
+    viewportBroadcastTimer = null;
+    broadcastIframeViewport();
+  }, 150);
+}
+
+/**
+ * 多窗口会切换持有标准 #chat-messages ID 的元素；每次渲染 iframe 时重新核对
+ * observer 目标，保证输入区、侧栏和聊天宽度变化始终触发当前窗口重测。
+ */
+function bindChatViewportResizeObserver() {
+  if (typeof ResizeObserver === "undefined") return;
+  const chatMessages = document.getElementById("chat-messages");
+  if (observedChatViewport === chatMessages) return;
+
+  if (!chatViewportResizeObserver) {
+    chatViewportResizeObserver = new ResizeObserver(
+      scheduleIframeViewportBroadcast,
+    );
+  } else {
+    chatViewportResizeObserver.disconnect();
+  }
+  observedChatViewport = chatMessages || null;
+  if (observedChatViewport) {
+    chatViewportResizeObserver.observe(observedChatViewport);
+  }
+}
 
 function ensureParentResizeListener() {
+  bindChatViewportResizeObserver();
   if (resizeListenerRegistered) return;
   resizeListenerRegistered = true;
 
-  // W72远期-resize防抖：原每个 resize 事件即向所有 iframe postMessage(viewport+remeasure)，窗口拖拽时
-  //   风暴式重排。150ms 防抖合并，拖拽停后只测一次（iframe 内部 requestMeasure 已 RAF 节流，本处治父页风暴）。
-  let _resizeDebounceT = null;
-  window.addEventListener("resize", () => {
-    if (_resizeDebounceT) clearTimeout(_resizeDebounceT);
-    _resizeDebounceT = setTimeout(() => {
-      _resizeDebounceT = null;
-      // 通知所有 iframe 更新视口高度变量 + 重新测量高度
-      document.querySelectorAll(".beilu-beauty-iframe").forEach((iframe) => {
-        try {
-          iframe.contentWindow?.postMessage(
-            { type: "beilu-update-viewport", height: window.innerHeight },
-            "*",
-          );
-          iframe.contentWindow?.postMessage({ type: "beilu-remeasure" }, "*");
-        } catch (e) {
-          /* ignore */
-        }
-      });
-    }, 150);
-  });
+  // 窗口变化、输入区拉高、侧栏/聊天宽度变化都可能改变角色卡宿主视口；
+  // 统一 150ms 防抖后广播真实聊天高度并请求重测。
+  window.addEventListener("resize", scheduleIframeViewportBroadcast);
 
   // ★ 监听来自 iframe 的音频控制消息
   window.addEventListener("message", (e) => {
@@ -343,7 +385,7 @@ function observeIframeVisibility(iframe) {
         if (entry.isIntersecting) {
           try {
             iframe.contentWindow?.postMessage(
-              { type: "beilu-update-viewport", height: window.innerHeight },
+              { type: "beilu-update-viewport", height: getChatViewportHeight() },
               "*",
             );
             iframe.contentWindow?.postMessage({ type: "beilu-remeasure" }, "*");
@@ -637,18 +679,14 @@ function createBridgeScript(messageId, rawContentBase64 = "", initialVh = 0, swi
 	// 2. 视口高度变量（修复 vh 在 iframe 中的问题）
 	// ============================================================
 	function updateViewportHeight(fallbackHeight) {
+		var resolved = Number(fallbackHeight) || 0;
 		try {
-			var vh = window.parent.innerHeight;
-			if (vh > 0) {
-				document.documentElement.style.setProperty('--beilu-viewport-height', vh + 'px');
-				return;
-			}
+			var chatViewport = window.parent.document && window.parent.document.getElementById('chat-messages');
+			var chatHeight = chatViewport ? chatViewport.clientHeight : 0;
+			if (chatHeight > 0) resolved = chatHeight;
 		} catch(e) {}
-		if (fallbackHeight > 0) {
-			document.documentElement.style.setProperty('--beilu-viewport-height', fallbackHeight + 'px');
-		} else if (__initialVh > 0) {
-			document.documentElement.style.setProperty('--beilu-viewport-height', __initialVh + 'px');
-		}
+		if (!(resolved > 0) && __initialVh > 0) resolved = __initialVh;
+		if (resolved > 0) document.documentElement.style.setProperty('--beilu-viewport-height', resolved + 'px');
 	}
 	updateViewportHeight();
 
@@ -699,6 +737,17 @@ function createBridgeScript(messageId, rawContentBase64 = "", initialVh = 0, swi
 			var body = document.body;
 			var html = document.documentElement;
 			if (!body || !html) return;
+			// 冷打开时虚拟列表可能已经按 iframe 的占位高度完成了初始定位。
+			// 只有该消息所属窗口原本贴近底部，才在 iframe 变高后恢复这个窗口的底部；
+			// 用户主动上翻时不抢滚动位置。closest 从 iframe 所在消息 DOM 找到正确窗口，
+			// 不使用全局 getElementById，避免多窗口隐藏容器串线。
+			var parentViewport = null;
+			var keepViewportBottom = false;
+			try {
+				parentViewport = frameElement && frameElement.closest ? frameElement.closest('.chat-messages') : null;
+				keepViewportBottom = !!parentViewport &&
+					(parentViewport.scrollHeight - parentViewport.scrollTop - parentViewport.clientHeight <= 32);
+			} catch(e) {}
 
 			var h = Math.max(body.scrollHeight, body.offsetHeight, html.scrollHeight);
 			if (!Number.isFinite(h) || h <= 0) return;
@@ -718,6 +767,13 @@ function createBridgeScript(messageId, rawContentBase64 = "", initialVh = 0, swi
 						id: '${messageId}',
 						height: h
 					}, '*');
+				}
+				if (keepViewportBottom && parentViewport) {
+					requestAnimationFrame(function() {
+						try {
+							if (parentViewport.isConnected) parentViewport.scrollTop = parentViewport.scrollHeight;
+						} catch(e) {}
+					});
 				}
 			}
 		} catch(e) {}
@@ -1082,7 +1138,7 @@ export async function renderAsIframe(
   // [0727 A11] 真实 swipe 数量/索引带进 iframe（时间线单源=virtualQueue，window 桥防模块环）：
   //   setTimeLineAbsolute 本就是会话级切换，与该桥的会话级语义一致
   const _tl = (() => { try { return window._beiluTimeLineInfo?.() || null; } catch { return null; } })();
-  const bridgeScript = createBridgeScript(messageId, "", window.innerHeight, _tl?.timeLinesCount || 1, _tl?.timeLineIndex || 0);
+  const bridgeScript = createBridgeScript(messageId, "", getChatViewportHeight(), _tl?.timeLinesCount || 1, _tl?.timeLineIndex || 0);
   if (modifiedHtml.includes("</body>")) {
     modifiedHtml = modifiedHtml.replace("</body>", bridgeScript + "</body>");
   } else if (modifiedHtml.includes("</html>")) {
@@ -1098,7 +1154,7 @@ export async function renderAsIframe(
   iframe.srcdoc = modifiedHtml;
 
   // 初始高度（后续由桥接脚本 frameElement.style.height 覆盖）
-  iframe.style.height = "600px";
+  iframe.style.height = "100px";
 
   contentEl.appendChild(iframe);
 

@@ -63,8 +63,12 @@
       "**/pipeline/out/",
       "**/pipeline/works/",
       "backup-sync.sh",
+      "output/",
+      "tools/",
       "docs/",
       "specs/",
+      "src/public/parts/shells/p1/",
+      "src/public/parts/plugins/beilu-p1-selfdriven/",
       "desktop-eye/user-models/",
       "test_preset_writelock.mjs",
       "_shot2.mjs",
@@ -75,7 +79,11 @@
       "beilu_项目总结.md"
     ],
     "_beiluWhy": "**/.beilu/ 是 beilu 运行时目录，含 _ws_token 连接凭证与 _ide_operation_log.jsonl 操作日志——任何发布物与仓库都不该带（0727 在 ai玩耍空间/.beilu 实见）。同步已加进 .gitignore。",
-    "_note": "exe 包是例外：app/always-accompany 内需要 node_modules 与 .deno_dir 才能离线运行，由 build-release.mjs 的 --profile=exe 单独放行（见该脚本 EXE_ALLOW）。"
+    "_note": "exe 包是例外：app/always-accompany 内需要 node_modules 与 .deno_dir 才能离线运行，由 build-release.mjs 的 --profile=exe 单独放行（见该脚本 EXE_ALLOW）。",
+    "keep": [
+      "src/public/parts/plugins/beilu-cli/server/node_modules/"
+    ],
+    "_keepWhy": "CLI server 运行依赖 65 个 npm 包（ws/jszip/xlsx/mammoth/pdf-parse 等），**/node_modules/ 排除规则会把它一起干掉 → CLI 启动 import 失败=直接死亡（0802 同步发现，疑似历史 P0 同款根因）。此目录约 8MB，非根级 node_modules。"
   },
 
   "scanRules": {

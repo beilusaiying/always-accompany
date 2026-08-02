@@ -1556,16 +1556,18 @@ async function openArchiveDialog() {
       const _v = (x) => (x != null ? escapeHtml(x) : "");
       return `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="#${t.id} ${escapeHtml(t.name || "未命名")}（当前 ${t.rows?.length ?? 0} 行）">#${t.id} ${escapeHtml(t.name || "未命名")}</span>` +
         `<input type="checkbox" class="dtarc-en" data-tid="${t.id}" ${e.enabled === true ? "checked" : ""} style="accent-color:var(--beilu-amber);cursor:pointer;justify-self:center;">` +
-        `<input type="number" class="dtarc-max" data-tid="${t.id}" min="1" step="1" value="${_v(e.max_rows)}" placeholder="${_phMax}" style="${_inpStyle}">` +
-        `<input type="number" class="dtarc-batch" data-tid="${t.id}" min="0" step="1" value="${_v(e.archive_batch)}" placeholder="${_phBatch}" style="${_inpStyle}">` +
-        `<input type="number" class="dtarc-keep" data-tid="${t.id}" min="0" step="1" value="${_v(e.keep_recent)}" placeholder="${_phKeep}" style="${_inpStyle}">` +
-        `<input type="number" class="dtarc-minrows" data-tid="${t.id}" min="0" step="1" value="${_v(e.min_archive_rows)}" placeholder="${_phMinRows}" style="${_inpStyle}">` +
+        `<input type="number" class="dtarc-max" data-tid="${t.id}" min="1" step="1" value="${_v(e.max_rows)}" placeholder="${_phMax}" title="行数超过此值才触发归档（主控参数，必填）" style="${_inpStyle}">` +
+        `<input type="number" class="dtarc-batch" data-tid="${t.id}" min="0" step="1" value="${_v(e.archive_batch)}" placeholder="${_phBatch}" title="每次触发最多迁移多少行；0或留空=不限，一次全搬" style="${_inpStyle}">` +
+        `<input type="number" class="dtarc-keep" data-tid="${t.id}" min="0" step="1" value="${_v(e.keep_recent)}" placeholder="${_phKeep}" title="0或留空=归档到上限行数为止（推荐）；填>0=额外保护最近N行不被归档" style="${_inpStyle}">` +
+        `<input type="number" class="dtarc-minrows" data-tid="${t.id}" min="0" step="1" value="${_v(e.min_archive_rows)}" placeholder="${_phMinRows}" title="可归档行数不足此值时跳过本轮，攒够再搬（防碎片）；0=不限；手动归档不受此限" style="${_inpStyle}">` +
         `<input type="text" class="dtarc-fname" data-tid="${t.id}" value="${_v(e.file_name_template)}" placeholder="${escapeHtml(_phFname)}" style="${_inpStyle}">` +
         `<span style="white-space:nowrap;display:inline-flex;gap:0.25rem;">` +
         `<button class="btn btn-xs dtarc-save" data-tid="${t.id}" title="保存该表归档设置">保存</button>` +
         `<button class="btn btn-xs dtarc-now" data-tid="${t.id}" title="立即按该表上限归档超出的旧行（存入热层归档文件）"><i data-ic="package"></i></button>` +
         `</span>`;
     }).join("");
+    // 初始加载后检测已有配置冲突
+    for (const t of tables) _checkArchiveConflict(t.id);
   } catch (e) {
     _rowsEl.innerHTML = `<div style="grid-column:1/-1;color:rgba(239,68,68,0.8);">读取配置失败: ${escapeHtml(e.message)}</div>`;
   }
@@ -1575,6 +1577,25 @@ async function openArchiveDialog() {
     const q = (cls) => _rowsEl.querySelector(`.${cls}[data-tid="${tid}"]`);
     return { en: q("dtarc-en"), max: q("dtarc-max"), batch: q("dtarc-batch"), keep: q("dtarc-keep"), minrows: q("dtarc-minrows"), fname: q("dtarc-fname") };
   }
+
+  // 冲突检测：keep_recent > 0 且 >= max_rows 时后端会 clamp，前端即时标红+tooltip 提示
+  function _checkArchiveConflict(tid) {
+    const f = _rowFields(Number(tid));
+    if (!f.max || !f.keep) return;
+    const _maxV = f.max.value !== "" ? Number(f.max.value) : null;
+    const _keepV = f.keep.value !== "" ? Number(f.keep.value) : null;
+    // keep_recent=0 或留空=默认行为（归档到 max_rows 为止），不是冲突；>0 且 >= max_rows 才冲突
+    const _conflict = _maxV != null && _keepV != null && _keepV > 0 && _keepV >= _maxV;
+    const _warnStyle = _conflict ? "1px solid rgba(239,68,68,0.7)" : "";
+    const _warnTip = _conflict ? `⚠ 保留最近(${_keepV}) ≥ 超出行数(${_maxV})，归档时保留数会被自动限制为 ${_maxV} 行` : "";
+    f.keep.style.border = _warnStyle;
+    f.keep.title = _warnTip || "0 或留空=归档到上限为止；>0=保护最近 N 行不被归档";
+    if (_conflict) f.max.style.border = _warnStyle; else f.max.style.border = "";
+  }
+  _rowsEl.addEventListener("input", (ev) => {
+    const _el = ev.target;
+    if (_el.classList.contains("dtarc-max") || _el.classList.contains("dtarc-keep")) _checkArchiveConflict(_el.dataset.tid);
+  });
 
   // 事件委托（行由 innerHTML 整体渲染，委托绑一次避免重复绑定泄漏）
   _rowsEl.addEventListener("click", async (ev) => {

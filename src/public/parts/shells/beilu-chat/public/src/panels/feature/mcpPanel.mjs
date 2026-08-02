@@ -98,6 +98,12 @@ export async function initMcpPanel(containerId, opts = {}) {
       ${_showTitle ? "<h3>MCP Servers</h3>" : "<span></span>"}
       <button class="mcp-refresh-btn" title="刷新列表"><i data-ic="refresh"></i></button>
     </div>
+    <div class="mcp-connect-request-section" style="margin-bottom:10px;">
+      <div style="font-size:0.78rem;font-weight:600;margin-bottom:5px;">AI 提出的接入请求</div>
+      <div id="${containerId}-request-list">
+        <div class="mcp-loading">加载中...</div>
+      </div>
+    </div>
     <div class="mcp-server-list" id="${containerId}-list">
       <div class="mcp-loading">加载中...</div>
     </div>
@@ -141,7 +147,7 @@ export async function initMcpPanel(containerId, opts = {}) {
     .querySelector(".mcp-refresh-btn")
     ?.addEventListener("click", () => {
       _pluginDetailsCache.clear();
-      loadMcpServers(containerId);
+      _refreshMcpPanel(containerId);
     });
 
   // 绑定添加按钮
@@ -149,13 +155,14 @@ export async function initMcpPanel(containerId, opts = {}) {
     .querySelector(".mcp-add-btn")
     ?.addEventListener("click", () => showAddServerDialog(containerId));
 
+  _mcpContainers.add(containerId);
+
   // 初次加载
-  await loadMcpServers(containerId);
+  await _refreshMcpPanel(containerId);
 
   // Drift 修复：MCP 列表依赖当前 chatId（hash），但此前只在 init/手动刷新/增删后加载。
   // 切会话(hashchange)时列表残留旧 chat 的 MCP；或 init 时尚无 chat → 永久停在"请先打开聊天"。
   // 监听 hashchange，chatId 真变化才重载（防抖守卫避免重复拉取）。
-  _mcpContainers.add(containerId);
   if (!_mcpHashListenerBound) {
     _mcpHashListenerBound = true;
     _mcpLastChatId = getCurrentChatId();
@@ -166,7 +173,18 @@ export async function initMcpPanel(containerId, opts = {}) {
       _pluginDetailsCache.clear();
       // 多实例（ide/work 各一容器）：重载所有仍在 DOM 中的已注册容器
       for (const cid of _mcpContainers) {
-        if (document.getElementById(cid)) loadMcpServers(cid);
+        if (document.getElementById(cid)) _refreshMcpPanel(cid);
+      }
+    });
+  }
+  if (!_mcpRequestListenerBound) {
+    _mcpRequestListenerBound = true;
+    window.addEventListener("beilu:mcp-connect-requests-changed", (event) => {
+      const changedChatId = event?.detail?.chatId || "";
+      const activeChatId = getCurrentChatId() || "";
+      if (changedChatId && changedChatId !== activeChatId) return;
+      for (const cid of _mcpContainers) {
+        if (document.getElementById(cid)) loadMcpConnectRequests(cid);
       }
     });
   }
@@ -177,8 +195,16 @@ export async function initMcpPanel(containerId, opts = {}) {
 
 /** hashchange 监听只绑定一次（initMcpPanel 可能被重复调用）；容器集支撑 ide/work 多实例 */
 let _mcpHashListenerBound = false;
+let _mcpRequestListenerBound = false;
 let _mcpLastChatId = null;
 const _mcpContainers = new Set();
+
+async function _refreshMcpPanel(containerId) {
+  await Promise.all([
+    loadMcpConnectRequests(containerId),
+    loadMcpServers(containerId),
+  ]);
+}
 
 /**
  * 获取当前聊天 ID（从多个来源尝试）
@@ -196,6 +222,188 @@ function getCurrentChatId() {
     if (ep?.dataset.currentChatid) return ep.dataset.currentChatid;
   } catch (_) { /* ignore */ }
   return null;
+}
+
+const _requestLoadGen = new Map();
+
+function _requestStatusLabel(status) {
+  return {
+    pending: "待审查",
+    importing: "导入处理中",
+    imported: "已导入",
+    import_failed: "导入失败",
+    dismissed: "已忽略",
+  }[status] || String(status || "未知");
+}
+
+function _requestPrefillText(request) {
+  if (request?.normalizedConfig) return JSON.stringify(request.normalizedConfig, null, 2);
+  if (typeof request?.requestText === "string") return request.requestText;
+  return JSON.stringify(request?.requestConfig ?? null, null, 2);
+}
+
+function _requestServerSummary(request) {
+  const servers = request?.normalizedConfig?.mcpServers;
+  if (servers && typeof servers === "object" && !Array.isArray(servers)) {
+    const names = Object.keys(servers);
+    if (names.length) return names.join("、");
+  }
+  return "未识别配置";
+}
+
+function _requestRuntimeHtml(request, runtimes, runtimeError) {
+  if (request?.status !== "imported") return "";
+  const names = Object.keys(request?.normalizedConfig?.mcpServers || {});
+  if (runtimeError) {
+    return `<div class="mcp-error" style="font-size:0.68rem;margin-top:5px;">运行态读取失败: ${escapeHtml(runtimeError)}</div>`;
+  }
+  return names.map((name) => {
+    const runtime = runtimes.find((entry) =>
+      entry?.name === name || String(entry?.key || "").endsWith(`:${name}`));
+    let label = "已导入，尚无运行实例";
+    if (runtime?.connected) label = `已连接 · ${runtime.toolCount || 0} 个工具`;
+    else if (runtime?.error) label = `连接异常 · ${runtime.error}`;
+    else if (runtime?.configured && runtime?.approved === false) label = "已配置，等待用户批准";
+    else if (runtime?.configured && runtime?.approved) label = "已批准，尚未连接";
+    else if (runtime) label = "运行实例尚未完成配置";
+    return `
+      <div class="mcp-hint" style="display:flex;align-items:center;gap:5px;font-size:0.68rem;margin-top:4px;">
+        <span class="mcp-status-dot ${runtime?.connected ? "connected" : "pending"}"></span>
+        <span>${escapeHtml(name)}：${escapeHtml(label)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadMcpConnectRequests(containerId) {
+  const listEl = document.getElementById(`${containerId}-request-list`);
+  if (!listEl) return;
+  const chatId = getCurrentChatId();
+  const generation = (_requestLoadGen.get(containerId) || 0) + 1;
+  _requestLoadGen.set(containerId, generation);
+
+  if (!chatId) {
+    listEl.innerHTML = '<div class="mcp-empty"><p class="mcp-hint">打开聊天后可查看该聊天的 AI 接入请求</p></div>';
+    return;
+  }
+  listEl.innerHTML = '<div class="mcp-loading">加载中...</div>';
+  try {
+    const result = await sendAction({
+      verb: "getMcpConnectRequests",
+      target: "plugins:beilu-memory",
+      source: "web",
+      scope: { chatId },
+      payload: { chatId },
+    });
+    if (getCurrentChatId() !== chatId) {
+      if (_requestLoadGen.get(containerId) !== generation) return;
+      return void loadMcpConnectRequests(containerId);
+    }
+    if (_requestLoadGen.get(containerId) !== generation) return;
+    if (!result?.success) throw new Error(result?.error || "读取请求失败");
+    const requests = Array.isArray(result.requests) ? result.requests : [];
+    let runtimes = [];
+    let runtimeError = "";
+    try {
+      const runtimeResult = await sendAction({
+        verb: "getSystemRuntimeSnapshot",
+        target: "plugins:beilu-memory",
+        source: "web",
+        scope: { chatId },
+        payload: { chatId },
+      });
+      if (runtimeResult?.success === false) {
+        throw new Error(runtimeResult.error || "MCP 运行态读取失败");
+      }
+      if (!Array.isArray(runtimeResult?.mcp)) {
+        throw new Error("后端未返回 MCP 运行态列表");
+      }
+      runtimes = Array.isArray(runtimeResult?.mcp) ? runtimeResult.mcp : [];
+    } catch (error) {
+      runtimeError = String(error?.message || error || "未知错误");
+    }
+    if (getCurrentChatId() !== chatId || _requestLoadGen.get(containerId) !== generation) return;
+    if (requests.length === 0) {
+      listEl.innerHTML = '<div class="mcp-empty"><p class="mcp-hint">当前聊天没有 AI 提出的 MCP 接入请求</p></div>';
+      return;
+    }
+
+    listEl.innerHTML = requests.map((request) => {
+      const canReview = request.status === "pending" || request.status === "import_failed";
+      const canDismiss = canReview;
+      const errorText = request.importError || request.validationError || "";
+      const requestedAt = request.requestedAt
+        ? new Date(request.requestedAt).toLocaleString()
+        : "";
+      return `
+        <div class="mcp-server-card" data-mcp-request="${escapeAttr(request.requestId)}"
+          style="padding:8px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="mcp-status-dot pending"></span>
+            <strong style="font-size:0.78rem;flex:1;">${escapeHtml(_requestServerSummary(request))}</strong>
+            <span class="mcp-tag">${escapeHtml(_requestStatusLabel(request.status))}</span>
+          </div>
+          <div class="mcp-hint" style="font-size:0.68rem;margin-top:4px;">
+            ${escapeHtml(requestedAt)} · ${escapeHtml(request.source || "ai:mcpConnect")}
+          </div>
+          ${_requestRuntimeHtml(request, runtimes, runtimeError)}
+          ${errorText ? `<div class="mcp-error" style="margin-top:5px;">${escapeHtml(errorText)}</div>` : ""}
+          <details style="margin-top:5px;">
+            <summary style="cursor:pointer;font-size:0.7rem;">查看原请求</summary>
+            <pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:0.68rem;margin:4px 0 0;">${escapeHtml(request.requestText || JSON.stringify(request.requestConfig ?? null, null, 2))}</pre>
+          </details>
+          <div class="mcp-request-action-error mcp-error hidden" style="margin-top:5px;"></div>
+          <div style="display:flex;gap:6px;margin-top:7px;">
+            ${canReview ? `<button class="mcp-btn mcp-btn-confirm" data-request-review="${escapeAttr(request.requestId)}">审查并导入</button>` : ""}
+            ${canDismiss ? `<button class="mcp-btn mcp-btn-remove" data-request-dismiss="${escapeAttr(request.requestId)}">忽略请求</button>` : ""}
+            ${request.status === "importing" ? '<button class="mcp-btn" disabled>导入处理中</button>' : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const byId = new Map(requests.map((request) => [request.requestId, request]));
+    listEl.querySelectorAll("[data-request-review]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const request = byId.get(button.dataset.requestReview);
+        if (!request || request.chatId !== getCurrentChatId()) return;
+        showAddServerDialog(containerId, {
+          request,
+          chatId: request.chatId,
+          prefillText: _requestPrefillText(request),
+        });
+      });
+    });
+    listEl.querySelectorAll("[data-request-dismiss]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const request = byId.get(button.dataset.requestDismiss);
+        if (!request || request.chatId !== getCurrentChatId()) return;
+        const card = button.closest("[data-mcp-request]");
+        const errorEl = card?.querySelector(".mcp-request-action-error");
+        button.disabled = true;
+        try {
+          const result = await sendAction({
+            verb: "dismissMcpConnectRequest",
+            target: "plugins:beilu-memory",
+            source: "web",
+            scope: { chatId: request.chatId },
+            payload: { requestId: request.requestId, chatId: request.chatId },
+          });
+          if (!result?.success) throw new Error(result?.error || "忽略请求失败");
+          await loadMcpConnectRequests(containerId);
+        } catch (error) {
+          if (errorEl) {
+            errorEl.textContent = error.message;
+            errorEl.classList.remove("hidden");
+          }
+          button.disabled = false;
+        }
+      });
+    });
+  } catch (error) {
+    if (_requestLoadGen.get(containerId) !== generation) return;
+    listEl.innerHTML = `<div class="mcp-error">接入请求加载失败: ${escapeHtml(error.message)}</div>`;
+  }
 }
 
 /**
@@ -722,10 +930,18 @@ async function _setMcpApproval(pluginName, approved, containerId) {
 /**
  * 显示添加 MCP Server 对话框
  * @param {string} containerId - 面板容器 ID
+ * @param {{request?:object,chatId?:string,prefillText?:string}} options - AI 请求审查时的原记录与预填内容
  */
-function showAddServerDialog(containerId) {
+function showAddServerDialog(containerId, options = {}) {
   // 移除已有对话框
   document.getElementById("mcp-add-dialog")?.remove();
+
+  const request = options.request || null;
+  const dialogChatId = options.chatId || getCurrentChatId();
+  const prefillText = typeof options.prefillText === "string" ? options.prefillText : "";
+  let dialogBusy = false;
+  let requestImportStarted = false;
+  let importCompleted = false;
 
   const dialog = document.createElement("div");
   dialog.id = "mcp-add-dialog";
@@ -733,11 +949,15 @@ function showAddServerDialog(containerId) {
   dialog.innerHTML = `
     <div class="mcp-dialog">
       <div class="mcp-dialog-header">
-        <h4>添加 MCP Server</h4>
+        <h4>${request ? "审查 AI 提出的 MCP 接入请求" : "添加 MCP Server"}</h4>
         <button class="mcp-dialog-close" title="关闭">✕</button>
       </div>
       <div class="mcp-dialog-body">
-        <p class="mcp-dialog-hint">粘贴 MCP 配置 JSON（标准 mcpServers 格式）：</p>
+        <p class="mcp-dialog-hint">${request
+          ? "以下内容仅作预填。请审查并可直接编辑；只有你点击“导入”后才会进入现有导入流程。"
+          : "粘贴 MCP 配置 JSON（标准 mcpServers 格式）："
+        }</p>
+        ${request?.validationError ? `<div class="mcp-error" style="margin-bottom:6px;">${escapeHtml(request.validationError)}</div>` : ""}
         <textarea class="mcp-dialog-textarea" placeholder='{
   "mcpServers": {
     "server-name": {
@@ -745,7 +965,7 @@ function showAddServerDialog(containerId) {
       "args": ["-y", "@some/mcp-server"]
     }
   }
-}'></textarea>
+}'>${escapeHtml(prefillText)}</textarea>
         <div class="mcp-dialog-error hidden" id="mcp-add-error"></div>
       </div>
       <div class="mcp-dialog-footer">
@@ -758,12 +978,33 @@ function showAddServerDialog(containerId) {
   document.body.appendChild(dialog);
 
   // 关闭
-  const close = () => dialog.remove();
+  const close = () => {
+    if (!dialogBusy) dialog.remove();
+  };
   dialog.querySelector(".mcp-dialog-close")?.addEventListener("click", close);
   dialog.querySelector(".mcp-btn-cancel")?.addEventListener("click", close);
   dialog.addEventListener("click", (e) => {
     if (e.target === dialog) close();
   });
+
+  const finishRequestImport = async (importSucceeded, importError, importedParts) => {
+    if (!request || !requestImportStarted) return;
+    const statusResult = await sendAction({
+      verb: "finishMcpConnectRequestImport",
+      target: "plugins:beilu-memory",
+      source: "web",
+      scope: { chatId: request.chatId },
+      payload: {
+        requestId: request.requestId,
+        chatId: request.chatId,
+        importSucceeded,
+        importError,
+        importedParts,
+      },
+    });
+    if (!statusResult?.success) throw new Error(statusResult?.error || "请求状态写回失败");
+    requestImportStarted = false;
+  };
 
   // 导入
   dialog
@@ -778,10 +1019,18 @@ function showAddServerDialog(containerId) {
         return;
       }
 
+      let parsedConfig;
       try {
-        JSON.parse(text); // 验证 JSON 格式
+        parsedConfig = JSON.parse(text); // 验证 JSON 格式
       } catch (e) {
         showDialogError(errorEl, `JSON 格式错误: ${e.message}`);
+        return;
+      }
+      const mcpServers = parsedConfig && typeof parsedConfig === "object" && !Array.isArray(parsedConfig)
+        ? parsedConfig.mcpServers
+        : null;
+      if (!mcpServers || typeof mcpServers !== "object" || Array.isArray(mcpServers) || Object.keys(mcpServers).length === 0) {
+        showDialogError(errorEl, "请输入至少包含一个 server 的标准 mcpServers 配置");
         return;
       }
 
@@ -789,23 +1038,54 @@ function showAddServerDialog(containerId) {
         const confirmBtn = dialog.querySelector(".mcp-btn-confirm");
         confirmBtn.textContent = "导入中...";
         confirmBtn.disabled = true;
+        dialogBusy = true;
+
+        if (request) {
+          if (!dialogChatId || request.chatId !== dialogChatId || getCurrentChatId() !== dialogChatId) {
+            throw new Error("当前聊天已变化，请回到该请求所属聊天后重新审查");
+          }
+          const beginResult = await sendAction({
+            verb: "beginMcpConnectRequestImport",
+            target: "plugins:beilu-memory",
+            source: "web",
+            scope: { chatId: request.chatId },
+            payload: {
+              requestId: request.requestId,
+              chatId: request.chatId,
+              importText: text,
+            },
+          });
+          if (!beginResult?.success) {
+            throw new Error(beginResult?.error || "请求已由其他窗口处理");
+          }
+          requestImportStarted = true;
+        }
 
         // 真路由：install shell 的文本导入（importPartByText 自动遍历 ImportHandlers，含 MCP）。
         // 原 /api/import 是幻影路由（后端无注册）→ 点导入必 404。
         // T6b：走 shells:install#importText（HTTP !ok → 门面抛错走 catch）
         const result = await sendAction({ verb: "importText", target: "shells:install", source: "web", payload: { text } });
+        const importedMcpParts = Array.isArray(result?.parts)
+          ? result.parts.filter((part) => /^plugins\/mcp_[^/\\]+$/.test(String(part)))
+          : [];
+        if (
+          importedMcpParts.length === 0 ||
+          importedMcpParts.length !== result.parts.length
+        ) {
+          throw new Error("导入响应未包含有效 MCP 插件");
+        }
         console.log("[mcpPanel] MCP 导入成功:", result);
 
         // 注意：不在此处 close()，待挂载到聊天确认后再关（失败需保留对话框显示错误）
 
-        // 如果导入成功，尝试将新插件添加到当前聊天
+        // 如果导入成功，尝试将新插件添加到打开对话框时确定的聊天。
         // Drift 修复：原代码挂载 POST 不查 res.ok，HTTP 4xx/5xx 仍 resolve →
         // 无脑 console.log "已添加" + 关闭对话框 = 假成功（插件实际没挂上，列表也不会出现它）。
         // 改为收集挂载失败项，有失败则不关对话框、提示用户。
-        const chatId = getCurrentChatId();
+        const chatId = dialogChatId;
         const mountFailures = [];
-        if (chatId && Array.isArray(result.parts)) {
-          for (const partPath of result.parts) {
+        if (chatId) {
+          for (const partPath of importedMcpParts) {
             const pluginName = partPath.replace(/^plugins\//, "");
             try {
               // T6b：走 shells:chat#mountPlugin（HTTP !ok → 门面抛错走 catch；原分支 HTTP N 错误信息统一为 e.message）
@@ -825,19 +1105,25 @@ function showAddServerDialog(containerId) {
 
         // 挂载有失败：保留对话框 + 显式报错（不假成功），仍刷新列表反映已成功项
         if (mountFailures.length > 0) {
+          const mountError = `导入成功但挂载到聊天失败: ${mountFailures.join("，")}`;
+          await finishRequestImport(false, mountError, importedMcpParts);
           showDialogError(
             errorEl,
-            `导入成功但挂载到聊天失败: ${mountFailures.join("，")}`,
+            mountError,
           );
           if (confirmBtn) {
             confirmBtn.textContent = "导入";
             confirmBtn.disabled = false;
           }
+          dialogBusy = false;
           _pluginDetailsCache.clear();
-          await loadMcpServers(containerId);
+          await _refreshMcpPanel(containerId);
           return;
         }
 
+        await finishRequestImport(true, null, importedMcpParts);
+        importCompleted = true;
+        dialogBusy = false;
         close();
 
         // SEC-T3: 命令型 MCP 导入后立即弹出批准确认，让 import → consent → approve 一气呵成。
@@ -868,14 +1154,28 @@ function showAddServerDialog(containerId) {
 
         // 刷新列表
         _pluginDetailsCache.clear();
-        await loadMcpServers(containerId);
+        await _refreshMcpPanel(containerId);
       } catch (err) {
-        showDialogError(errorEl, `导入失败: ${err.message}`);
+        if (importCompleted) {
+          console.warn("[mcpPanel] MCP 已导入，但后续界面刷新失败:", err.message);
+          return;
+        }
+        let visibleError = err.message;
+        if (requestImportStarted) {
+          try {
+            await finishRequestImport(false, visibleError, []);
+          } catch (statusError) {
+            visibleError += `；请求状态写回失败: ${statusError.message}`;
+          }
+        }
+        dialogBusy = false;
+        showDialogError(errorEl, `导入失败: ${visibleError}`);
         const confirmBtn = dialog.querySelector(".mcp-btn-confirm");
         if (confirmBtn) {
           confirmBtn.textContent = "导入";
           confirmBtn.disabled = false;
         }
+        await loadMcpConnectRequests(containerId);
       }
     });
 }

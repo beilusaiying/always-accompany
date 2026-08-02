@@ -1032,6 +1032,9 @@ export async function changeUserPassword(username, currentPassword, newPassword,
 	const isValidPassword = await verifyUserActionPassword(user, currentPassword)
 	if (!isValidPassword) return { success: false, message: 'Invalid current password' }
 
+	if (!newPassword || newPassword.length < 4)
+		return { success: false, message: 'Password too short (min 4 characters)' }
+
 	user.auth.password = await hashPassword(newPassword)
 	user.auth.passwordless = false // 设了真密码即非无密码账户，否则 login 仍凭 passwordless 跳过校验使新密码失效
 
@@ -1161,6 +1164,9 @@ export async function resetPasswordBySecurityQuestions(username, answers, newPas
 	const verify = await verifySecurityAnswers(username, answers)
 	if (!verify.success) return verify
 
+	if (!newPassword || newPassword.length < 4)
+		return { success: false, message: 'Password too short (min 4 characters)' }
+
 	const user = getUserByUsername(username)
 	user.auth.password = await hashPassword(newPassword)
 	user.auth.passwordless = false
@@ -1191,6 +1197,9 @@ export async function ownerResetUserPassword(ownerUsername, targetUsername, newP
 		return { success: false, message: 'Only owner can reset other users\' passwords.' }
 	const target = getUserByUsername(targetUsername)
 	if (!target?.auth) return { success: false, message: 'Target user not found.' }
+
+	if (!newPassword || newPassword.length < 4)
+		return { success: false, message: 'Password too short (min 4 characters)' }
 
 	target.auth.password = await hashPassword(newPassword)
 	target.auth.passwordless = false
@@ -1423,6 +1432,12 @@ export async function renameUser(currentUsername, newUsername, password, options
 		return { success: false, message: 'New username contains illegal characters' }
 	if (newUsername.length > 64)
 		return { success: false, message: 'New username too long (max 64)' }
+	// [2026-08-01] 同 register 保留名卫兵——改名目标同需拦截
+	{
+		const _RESERVED = new Set(["_default", "undefined", "null", "__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty"])
+		if (_RESERVED.has(newUsername) || newUsername.startsWith("_"))
+			return { success: false, message: 'New username is reserved' }
+	}
 
 	if (getUserByUsername(newUsername))
 		return { success: false, message: 'New username already exists.' }
@@ -1668,7 +1683,15 @@ export async function register(username, password) {
 		return { status: 400, success: false, message: 'Username contains illegal characters' }
 	if (username.length > 64)
 		return { status: 400, success: false, message: 'Username too long (max 64)' }
+	// [2026-08-01 凛倾「如果用户把用户名设置成 undefined 会怎么样」] JS 关键字/内部保留名拦截：
+	//   _default = 匿名回退桶（串台）；__proto__/constructor/prototype = 原型污染向量
+	//   （config.data.users[username] 属性注入）；undefined/null = truthy 字符串混淆 JS 语义
+	const _RESERVED = new Set(["_default", "undefined", "null", "__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty"])
+	if (_RESERVED.has(username) || username.startsWith("_"))
+		return { status: 400, success: false, message: 'Username is reserved' }
 	if (getUserByUsername(username)?.auth) return { status: 409, success: false, message: 'Username already exists' }
+	if (password && password.length < 4)
+		return { status: 400, success: false, message: 'Password too short (min 4 characters)' }
 	const _isFirstUser = Object.keys(config.data.users || {}).length === 0
 	const newUser = await createUser(username, password || '')
 	// SEC-R1：首个注册用户落定为实例 owner（运营者），持久化；之后注册不授予 owner。

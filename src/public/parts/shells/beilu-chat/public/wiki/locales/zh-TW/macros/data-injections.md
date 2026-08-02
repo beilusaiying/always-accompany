@@ -26,7 +26,8 @@
 
 | 條目 id | 內容 | 資料巨集 | 觸發條件 |
 |---------|------|---------|---------|
-| `INJ-p1-act-data` | P1 自驅動方向詞 | `{{p1_act}}` | P1 管線有產出 |
+| `INJ-p1-act-data` | P1 自驅動召回記憶資料 | `{{p1_act}}` | P1 管線有召回結果 |
+| `INJ-p1-recall-usage` | P1 召回記憶用法說明 | _(靜態文字)_ | 與 INJ-p1-act-data 聯動 |
 | `INJ-p1-retrieval-data` | 記憶 AI 檢索結果 | `{{p1_retrieval}}` `{{p1_retrieval_ts}}` | P1 檢索有結果 |
 | `INJ-p8-web-search-data` | 聯網搜尋結果 | `{{p8_results}}` | P8 搜尋有結果 |
 | `INJ-chat-search-data` | 上輪聊天 AI 搜尋結果 | `{{chat_search_results}}` `{{chat_search_ts}}` | 有待注入搜尋結果 |

@@ -63,7 +63,7 @@ export function resolveInjectionContext({ arg, username, charName, chatId } = {}
     //   使 ideConnected 恒真，INJ-2 永被 -code 变体覆盖。互斥规则本体不动（凛倾 0713「inj2 的
     //   互斥不要改」），只细化输入信号：CLI 连接/未连 → INJ-2（含全量 CLI 指令段）；
     //   YonBan 连接 + code 模式 → INJ-2-code。backendKind 权威=hello appName（ideClient）。
-    ideConnected: !!ideClient.isConnected && ideClient.backendKind !== "cli",
+    ideConnected: ideClient.isConnectedFor(chatId ?? null) && ideClient.backendKindFor(chatId ?? null) === "yonban",
     platform: arg?.extension?.platform,
     // ★ 单次注入·条目引用（0726 注入坞，凛倾「点击注入」）：本轮临时启用的 INJ 条目 id 集合。
     //   链路 前端注入坞点⚡ → POST /message.single_inject_ids → triggerCharReply(onceInjectIds)

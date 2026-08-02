@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$id": "https://html-validate.org/schemas/config.json",
+
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+
+    "root": {
+      "type": "boolean",
+      "title": "Mark as root configuration",
+      "description": "If this is set to true no further configurations will be searched.",
+      "default": false
+    },
+
+    "extends": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Configurations to extend",
+      "description": "Array of shareable or builtin configurations to extend."
+    },
+
+    "elements": {
+      "type": "array",
+      "items": {
+        "anyOf": [{ "type": "string" }, { "type": "object" }]
+      },
+      "title": "Element metadata to load",
+      "description": "Array of modules, plugins or files to load element metadata from. Use <rootDir> to refer to the folder with the package.json file.",
+      "examples": [
+        ["html-validate:recommended", "plugin:recommended", "module", "./local-file.json"]
+      ]
+    },
+
+    "plugins": {
+      "type": "array",
+      "items": {
+        "anyOf": [{ "type": "string" }, { "type": "object" }]
+      },
+      "title": "Plugins to load",
+      "description": "Array of plugins load. Use <rootDir> to refer to the folder with the package.json file.",
+      "examples": [["my-plugin", "./local-plugin"]]
+    },
+
+    "transform": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [{ "type": "string" }, { "function": true }]
+      },
+      "title": "File transformations to use.",
+      "description": "Object where key is regular expression to match filename and value is name of transformer or a function.",
+      "examples": [
+        {
+          "^.*\\.foo$": "my-transformer",
+          "^.*\\.bar$": "my-plugin",
+          "^.*\\.baz$": "my-plugin:named"
+        }
+      ]
+    },
+
+    "rules": {
+      "type": "object",
+      "patternProperties": {
+        ".*": {
+          "anyOf": [
+            { "enum": [0, 1, 2, "off", "warn", "error"] },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": [{ "enum": [0, 1, 2, "off", "warn", "error"] }]
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": [{ "enum": [0, 1, 2, "off", "warn", "error"] }, {}]
+            }
+          ]
+        }
+      },
+      "title": "Rule configuration.",
+      "description": "Enable/disable rules, set severity. Some rules have additional configuration like style or patterns to use.",
+      "examples": [
+        {
+          "foo": "error",
+          "bar": "off",
+          "baz": ["error", { "style": "camelcase" }]
+        }
+      ]
+    }
+  }
+}

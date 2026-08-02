@@ -761,3 +761,95 @@ Taken together, the following fact-level conclusions can be drawn. First, no ite
 This chapter formally described the algorithm design of the self-driven divergence and recall system. The core can be summarized across three levels. At the mechanism level, the system is externally attached to the large language model via a "contraction–divergence–contraction" three-phase structure; through two rounds of heterogeneous divergence, six-axis plane parallelism, spatial additive voting, and many-to-one aggregation, isolated associative points are converted into direction words available for the main model. At the scoring level, the BLQ framework uses weighted CombSUM additive scoring to counter multiplicative chain single-dimension negation, supplemented by lateral inhibition, MMR quota, soft floor, and redline hard removal, forming a complete and white-box-readable candidate quality device; the information word fine-ranking engine is currently in component status, while the direction word lightweight fine-ranking is live active. At the principle level, the full pipeline adheres to the 0-token white-box stance, not calling any large language model for a single divergence step.
 
 From the related work comparison perspective, the individual algorithmic components used by the system are mostly mature technologies; the system's originality claims fall at the three levels of assembly, transfer, and design argument. Item-by-item verification did not reveal any collision in the sense of "mechanism highly similar and before the design period"; only several high-similarity items require further manual review. Failed proposals disproved during evolution -- represented by the thirteen-factor product, axis average, and multiplicative unified formula -- collectively support the current design orientation of "additive is superior to multiplicative, soft isolation is superior to hard zeroing," forming the negative evidence foundation of this system's algorithm design.
+
+---
+
+## 3.8 Production Implementation Overview (2026-08-02)
+
+This section describes the live algorithm implementation for end users.
+
+### What We Use
+
+| Resource | Purpose | Data |
+|----------|---------|------|
+| **SWOW-ZH/EN** | Free association network: input word → human first-reaction associations | ZH 83K pairs / EN 12K pairs |
+| **ConceptNet** | Knowledge graph: 14 relation types (cause/use/property/part-of...) | ZH 22MB / EN 128MB |
+| **HIT-IR Cilin** | Chinese synonym thesaurus: semantic expansion by category | Extended edition |
+| **NumberBatch 300** | Word vectors: 824K words, int8 quantized | 236MB (mmap, not fully loaded) |
+| **WordNet** | English word sense network: path similarity cross-validation | NLTK built-in |
+| **BCC Frequency** | Dialog + general corpus word frequency: filters ultra-high-frequency function words | 6.6MB |
+| **ONNX ELECTRA** | POS tagging: CTB9 tagset, auto GPU/CPU | 47MB model |
+| **Gigatoken** | LLM tokenizer (Qwen3-8B): phrase-level matching as second perspective | Rust native |
+
+### What Is the BLQ Algorithm
+
+BLQ (Bilu Quality) is the candidate quality scoring framework. It doesn't choose directions — it eliminates noise and quantifies each candidate word's quality score.
+
+<details>
+<summary><b>BLQ Formula (click to expand)</b></summary>
+
+Core formula:
+
+```
+F(w) = Vote(w)^α × IB(w) × LogicScore(w) × NoveltyBonus(w)
+```
+
+Four factors multiplied — each evaluates candidate quality from a different angle:
+
+| Factor | Meaning | Formula |
+|--------|---------|---------|
+| **Vote^α** | How many independent divergence mechanisms found this word (resonance) | `max(1, resonance)^1.2` |
+| **IB** | Information Bottleneck: inverted-U curve of vector distance (too close = synonym redundancy, too far = irrelevant noise) | `d / (1 + α·d²)` |
+| **LogicScore** | Logic score: max of deductive/inductive/abductive/contrastive dimensions derived from ConceptNet relations | `max{deductive, inductive, abductive, contrastive}` |
+| **NoveltyBonus** | Freshness: words used more often score lower (prevents the same batch from dominating) | `1 / √(usage_count + 1)` |
+
+Redline parameter: `α = 1.2` (Vote exponent) — changing to 1.0 causes regression (A01 evidence), forbidden to modify.
+
+Goldilocks four-segment (NB300 cosine distance segmented weights):
+
+```
+cos < 0.15  → drop (too far = irrelevant)
+cos < 0.25  → ×0.7 (distant)
+0.25 ≤ cos ≤ 0.70 → ×1.0 (sweet spot)
+0.70 < cos ≤ 0.80 → ×0.8 (close)
+cos > 0.80  → ×0.5 (too close = synonym redundancy)
+```
+
+</details>
+
+### Three-Layer Filtering
+
+User input passes through three gates, each eliminating a batch of noise:
+
+```
+① Tokenization Filter (node1)
+   Input text → jieba+HanLP tokenize → stopwords/BCC high-freq/concreteness/POS 4-layer filter
+   Kept: nouns, OOV proper nouns, English NOUN/PROPN
+   Dropped: function words, ultra-high-frequency verbs, low-concreteness abstract words
+
+② Divergence + Second-pass Filter (node2)
+   Kept words → SWOW+ConceptNet+Cilin 3-mechanism parallel diverge → pool
+   Second-pass: verbs/function words/BCC ultra-high-freq in divergence output re-filtered
+   Output: candidate pool (sorted by resonance, ≥2 mechanisms hit = high confidence)
+
+③ Triple Review (node3)
+   Pool → BLQ pre-filter (Vote×Logic×Novelty, no vector service needed)
+       → surviving words sent to NB300 cosine verification (Goldilocks segments)
+       → WordNet dual verification (English words: both NB+WN must pass threshold)
+       → BLQ final filter (full four-factor score below threshold → drop)
+   Output: quality-certified candidate words
+```
+
+### How Ranking Works
+
+Candidates surviving all three filters are matched against each memory record:
+
+```
+④ Hybrid Ranking (node4)
+   BM25 term frequency matching (classic IR algorithm)
+   + Association word hit bonus (divergence output word appears in memory = bonus)
+   + Phrase consecutive match bonus (LLM token granularity, ≥3 consecutive tokens = phrase match)
+   + Layer weight (hot/warm/cold memory layers with different weights)
+   + Recency decay (recent memories rank higher, formula: 0.995^hours_since_now)
+   = Final score → sort by score → take top-K records → inject into AI context
+```

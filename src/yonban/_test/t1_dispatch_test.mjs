@@ -2,8 +2,8 @@
  * t1_dispatch_test.mjs — T1 dispatch 通路真单测（Deno 直跑，打印实际输出内容）
  *
  * 跑法：deno run --allow-all src/yonban/_test/t1_dispatch_test.mjs
- * 覆盖：E_NODE / macro 影子节点真输出 / image 影子节点真输出 / store:persist 真落盘读回 /
- *       handler 抛错→E_INVOKE / subprocess 档 E_TRANSPORT_TODO / lookupByTag。
+ * 覆盖：dispatcher 单独导入即自举内建出口 / E_NODE / macro 影子节点真输出 / image 影子节点真输出 /
+ *       store:persist 真落盘读回 / handler 抛错→E_INVOKE / subprocess 档 E_TRANSPORT_TODO / lookupByTag。
  * 不覆盖（有意）：bus:broadcast/feed/activate 的 handler 执行——它们懒加载 beilu-chat/beilu-memory
  * 模块链，脱离 app bootstrap 不可 import（受控验证边界，见记忆"后端 live 链路卡 init 全量 bootstrap"）；
  * 其注册存在性 + 包装正确性由代码审 + 后续沙盒拉线批验证。
@@ -13,7 +13,6 @@ import os from "node:os";
 import path from "node:path";
 import { dispatch } from "../core/dispatch/dispatcher.mjs";
 import { lookupByTag, register, registry } from "../core/dispatch/registry.mjs";
-import "../core/dispatch/exits.mjs";
 import "../core/functions/macro/index.mjs";
 import "../core/functions/image/index.mjs";
 
@@ -86,12 +85,12 @@ console.log("  targets:", [...registry.keys()].join(", "));
 	check("tag 反查", hit.length === 1 && hit[0] === "test:tagged" && miss.length === 0, { hit, miss });
 }
 
-// 8. 出口节点注册存在性（不执行 handler）
+// 8. 出口节点注册存在性（没有显式 import exits；由 dispatcher 自举）
 {
 	const want = ["bus:broadcast", "bus:feed", "bus:activate", "store:persist"];
 	const got = want.filter((t) => registry.has(t));
 	console.log("\n[8] 出口节点注册:", got.join(", "));
-	check("4 出口节点在表", got.length === 4, got);
+	check("dispatcher 自举 4 个出口节点", got.length === 4, got);
 }
 
 console.log(`\n== 结果: ${pass} PASS / ${failCount} FAIL ==`);

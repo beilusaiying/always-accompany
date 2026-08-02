@@ -923,6 +923,26 @@ async function _loadInjPanel() {
   let metaModes = [], metaAliases = [], metaSpecial = ["always", "all", "manual", "file"];
   let filterMode = "__all";
   let effectiveById = {};
+  // [0731 缓存事故防复发] 高动态宏清单（后端单源=volatileMacros.mjs，经 getData volatile_macros 下发，
+  //   前端禁止镜像硬编码）。0729 {{tool_runtime_json}} 被写进 depth>=1（历史上方）手册条目正文：
+  //   宏每轮展开出不同值（工具 job 总账 115k 字符/轮）坐在缓存前缀区 → Anthropic 累积前缀哈希从宏处
+  //   失配 → 全部历史缓存连坐 → 命中≈0（凛倾 50 条消息全程 0 缓存）。1.6 万字正文里一个宏人眼看不见，
+  //   必须机制检测：弹窗警告 + 列表徽标 + 详情页标行号。
+  let volatileMacros = [];
+  let _volWarnSig = ""; // 弹窗节流：同一批违规只弹一次，恢复正常后归零
+  // 违规判据：启用 && depth>=1（上方）&& 正文含清单宏。返回 [{macro, line}]（行号=标出宏位置）。
+  const _volHits = (e) => {
+    const hits = [];
+    if (e?.enabled === false || (Number(e?.depth) || 0) < 1) return hits;
+    const c = String(e?.content || "");
+    for (const m of volatileMacros) {
+      const needle = `{{${m}}}`;
+      for (let i = c.indexOf(needle); i >= 0; i = c.indexOf(needle, i + 1)) {
+        hits.push({ macro: m, line: c.slice(0, i).split("\n").length });
+      }
+    }
+    return hits;
+  };
   const REASON_NOTE = {
     scope_mismatch: "当前模式不匹配",
     platform_mismatch: "平台不匹配",
@@ -946,6 +966,7 @@ async function _loadInjPanel() {
     if (Array.isArray(d.injection_automode_meta?.modes)) metaModes = d.injection_automode_meta.modes;
     if (Array.isArray(d.injection_automode_meta?.aliases)) metaAliases = d.injection_automode_meta.aliases;
     if (Array.isArray(d.injection_automode_meta?.special) && d.injection_automode_meta.special.length) metaSpecial = d.injection_automode_meta.special;
+    volatileMacros = Array.isArray(d.volatile_macros) ? d.volatile_macros : []; // [0731] 判据随每次 load 刷新（后端单源）
     effectiveById = {};
     for (const g of (Array.isArray(d.injection_effective) ? d.injection_effective : [])) {
       effectiveById[g.id] = { on: g.on, note: g.reason ? (REASON_NOTE[g.reason] || g.reason) : "" };
@@ -992,6 +1013,7 @@ async function _loadInjPanel() {
           <input id="inj-d-platform" class="input input-xs input-bordered flex-1" value="${_escHtml(e.platform || '')}" placeholder="空=不限定；填平台名(discord/telegram…)仅该平台会话注入" /></div>
         <div><label class="opacity-60">内容</label>
           ${e.dataDriven ? '<div class="text-[9px] text-warning/80 my-0.5">⚠ 数据模板条目：内容里的 {{数据宏}} 由系统运行时填充。文本随便改，但删掉宏占位=对应数据不再注入（「恢复默认」可找回出厂模板）</div>' : ''}
+          ${(() => { const _h = _volHits(e); return _h.length ? `<div class="text-[10px] text-error my-0.5">🚨 本条目在「上方（聊天记录之前）」且正文含每轮变化的动态宏：${_h.map((h) => `<code>{{${_escHtml(h.macro)}}}</code> @ 行 ${h.line}`).join('、')} —— 展开值每轮不同，提示词缓存从宏处起整体失效。请把宏移到「下方」数据条目（如 INJ-1-write-code-data）。</div>` : ''; })()}
           <div class="relative expandable-container">
             <textarea id="inj-d-content" class="textarea textarea-bordered w-full text-xs font-mono" style="min-height:360px;" data-expandable data-expand-title="注入提示词内容">${_escHtml(e.content || '')}</textarea>
             <button class="expand-btn" title="放大编辑">⛶</button>
@@ -1091,6 +1113,7 @@ async function _loadInjPanel() {
         <input type="checkbox" class="checkbox checkbox-xs checkbox-success inj-row-toggle" ${e.enabled !== false ? 'checked' : ''} title="即时启用/禁用（立即保存）" />
         <span class="badge badge-xs badge-ghost">${String(e.role || 'system')[0].toUpperCase()}</span>
         ${e.dataDriven ? '<span class="badge badge-xs badge-info badge-outline" title="数据模板条目：{{数据宏}}由系统运行时填充">数据</span>' : ''}
+        ${_volHits(e).length ? '<span class="badge badge-xs badge-error" title="上方条目正文含每轮变化的动态宏——打掉提示词缓存！点开详情看位置">⚠动态宏</span>' : ''}
         <span class="flex-1 truncate font-mono cursor-pointer inj-row-label" title="${_escHtml(name)}">${_escHtml(idStr)}</span>
         <span class="badge badge-xs badge-ghost opacity-60" title="注入模式(autoMode): ${_escHtml(e.autoMode || 'always')}">${_escHtml(_modeLabel(e.autoMode || 'always'))}</span>
         ${badge}`;
@@ -1115,6 +1138,29 @@ async function _loadInjPanel() {
       : backendKind === 'cli' ? '后端: <b class="text-success">CLI 已连接</b>（INJ-2 域）'
       : '后端: <b class="text-success">YonBan 已连接</b>（INJ-2-code 域）';
     if (statsEl) statsEl.innerHTML = `共 ${entries.length} | 启用 ${enabledN} ｜ ${_bkLabel} ｜ 模式: <b>${_escHtml(activeMode)}</b>`;
+
+    // [0731 缓存事故防复发] 上方条目×动态宏 违规横幅 + 弹窗（判据 _volHits，单源见其注释）。
+    //   横幅常驻到违规清除为止；弹窗按违规签名节流（同一批只弹一次，防每次刷新轰炸）。
+    const warnEl = container.querySelector('#inj-vol-warn');
+    if (warnEl) {
+      const _viol = entries.map((e) => ({ e, hits: _volHits(e) })).filter((v) => v.hits.length);
+      if (_viol.length) {
+        warnEl.innerHTML = `
+          <div class="rounded border border-error/60 bg-error/10 p-2 text-[10px] leading-relaxed">
+            <div class="font-bold text-error">🚨 ${_viol.length} 条「上方（聊天记录之前）」条目正文含每轮变化的动态宏 —— 提示词缓存从宏处起整体失效！</div>
+            ${_viol.map((v) => `<div class="mt-0.5"><code class="cursor-pointer underline inj-vol-jump" data-inj="${_escHtml(v.e.id)}">${_escHtml(v.e.id)}</code>：${v.hits.map((h) => `<code>{{${_escHtml(h.macro)}}}</code> @ 行 ${h.line}`).join('、')}</div>`).join('')}
+            <div class="mt-0.5 opacity-70">修法：把这些宏移到 depth=0「下方」数据条目（如 INJ-1-write-code-data）。上方只放固定内容（{{user}}/{{mcp_runtime_json}} 等不常变的可留）。</div>
+          </div>`;
+        warnEl.querySelectorAll('.inj-vol-jump').forEach((el) => el.addEventListener('click', () => {
+          selectedId = el.dataset.inj; renderList(); renderDetail(entries.find((x) => x.id === el.dataset.inj));
+        }));
+        const sig = _viol.map((v) => v.e.id + ':' + v.hits.map((h) => h.macro + '@' + h.line).join(',')).join('|');
+        if (sig !== _volWarnSig) {
+          _volWarnSig = sig;
+          showToast("error", `⚠ ${_viol.length} 条「历史上方」INJ 含每轮变化的动态宏（${_viol.map((v) => v.e.id).join('、')}），整条提示词缓存被打掉——详见 INJ 面板红色警告`);
+        }
+      } else { warnEl.innerHTML = ''; _volWarnSig = ''; }
+    }
   };
 
   try {
@@ -1128,6 +1174,7 @@ async function _loadInjPanel() {
         <div class="text-[11px] opacity-50"><i data-ic="syringe"></i> 注入提示词（INJ）— 每轮按「注入模式」自动注入对话；全局共享(_global)，各模式/系统都在用。</div>
         <div id="inj-main" class="space-y-2">
         <div id="inj-stats" class="text-[10px] opacity-40"></div>
+        <div id="inj-vol-warn"></div>
         <div id="inj-modes" class="flex flex-wrap gap-1"></div>
         <input id="inj-search" class="input input-xs input-bordered w-full" placeholder="搜索 INJ..." />
         <div class="flex gap-2" style="min-height:60vh;">
@@ -1507,13 +1554,41 @@ async function _loadWorldbookInline() {
     listEl.innerHTML = filtered.map((e, i) => {
       const isActive = selectedEntry === i;
       const modeIcon = e.activationMode === "constant" ? '<i data-ic="pin"></i>' : e.activationMode === "dynamic" ? '<i data-ic="chart"></i>' : '<i data-ic="key"></i>';
-      return `<div class="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer mb-0.5 ${isActive ? 'font-bold' : 'hover:bg-base-200'} ${e.disable ? 'opacity-30' : ''}" style="${isActive ? 'background:var(--beilu-amber-15)' : ''}" data-wb-idx="${i}">
+      // [2026-08-01 W5] 条目项加 drag-handle 拖拽排序把手
+      return `<div class="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer mb-0.5 ${isActive ? 'font-bold' : 'hover:bg-base-200'} ${e.disable ? 'opacity-30' : ''}" style="${isActive ? 'background:var(--beilu-amber-15)' : ''}" data-wb-idx="${i}" data-wb-uid="${e.uid??i}">
+        <span class="wb-drag-handle cursor-grab text-base-content/40 hover:text-base-content/60" title="拖拽排序">≡</span>
         <span>${modeIcon}</span><span class="truncate flex-1">${_escHtml(e.comment || `条目${i}`)}</span>
       </div>`;
     }).join("");
     listEl.querySelectorAll("[data-wb-idx]").forEach(el => {
-      el.addEventListener("click", () => { selectedEntry = parseInt(el.dataset.wbIdx); renderDetail(); renderEntryList(container.querySelector("#wb-search")?.value); });
+      el.addEventListener("click", (e) => { if (e.target.classList.contains("wb-drag-handle")) return; selectedEntry = parseInt(el.dataset.wbIdx); renderDetail(); renderEntryList(container.querySelector("#wb-search")?.value); });
     });
+    // [2026-08-01 W5 接线] 拖拽排序——后端 reorder_entries(main.mjs:1272) 已齐，前端此前无处理器。
+    {
+      let _dragUid = null;
+      listEl.querySelectorAll("[data-wb-idx]").forEach(item => {
+        const handle = item.querySelector(".wb-drag-handle");
+        if (!handle) return;
+        handle.addEventListener("mousedown", () => { item.draggable = true; });
+        item.addEventListener("dragend", () => { item.draggable = false; });
+        item.addEventListener("dragstart", (e) => { _dragUid = item.dataset.wbUid; e.dataTransfer.effectAllowed = "move"; item.style.opacity = "0.4"; });
+        item.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+        item.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          item.style.opacity = "";
+          const targetUid = item.dataset.wbUid;
+          if (!_dragUid || _dragUid === targetUid) return;
+          const fromIdx = entries.findIndex(en => String(en.uid ?? entries.indexOf(en)) === _dragUid);
+          const toIdx = entries.findIndex(en => String(en.uid ?? entries.indexOf(en)) === targetUid);
+          if (fromIdx === -1 || toIdx === -1) return;
+          const [moved] = entries.splice(fromIdx, 1);
+          entries.splice(toIdx, 0, moved);
+          try { await _setData("reorder_entries", { order: entries.map(en => en.uid) }); } catch (err) { console.error("[worldbook] 拖拽排序失败:", err); }
+          renderEntryList(container.querySelector("#wb-search")?.value);
+        });
+      });
+      listEl.addEventListener("dragover", (e) => e.preventDefault());
+    }
   }
 
   function renderDetail() {
@@ -1587,6 +1662,52 @@ async function _loadWorldbookInline() {
             <textarea class="textarea textarea-bordered w-full text-xs font-mono" id="wb-e-content" rows="8" data-expandable data-expand-title="世界书条目内容">${_escHtml(e.content||"")}</textarea>
             <button class="expand-btn" data-expand-target="wb-e-content" title="放大编辑">⛶</button>
           </div></label>
+        <details class="collapse collapse-arrow bg-base-200/40 rounded-lg">
+          <summary class="collapse-title text-xs font-medium min-h-0 py-1.5 px-3">高级设置（ST 兼容）</summary>
+          <div class="collapse-content px-3 pb-3 pt-1 space-y-2">
+            <div class="grid grid-cols-3 gap-2">
+              <label class="form-control"><span class="text-[10px] opacity-40">选择逻辑</span>
+                <select class="select select-xs select-bordered" id="wb-e-selectiveLogic">
+                  <option value="0" ${(e.selectiveLogic??0)===0?'selected':''}>AND 全部匹配</option>
+                  <option value="1" ${e.selectiveLogic===1?'selected':''}>OR 任一匹配</option>
+                  <option value="2" ${e.selectiveLogic===2?'selected':''}>NOT 排除匹配</option>
+                </select></label>
+              <label class="form-control"><span class="text-[10px] opacity-40">触发概率 %</span>
+                <input type="number" class="input input-xs input-bordered" id="wb-e-probability" value="${e.probability??100}" min="0" max="100" /></label>
+              <label class="form-control justify-end"><span class="text-[10px] opacity-40">启用概率</span>
+                <input type="checkbox" class="toggle toggle-xs toggle-info" id="wb-e-useProbability" ${e.useProbability!==false?'checked':''} /></label>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="form-control"><span class="text-[10px] opacity-40">粘滞轮数</span>
+                <input type="number" class="input input-xs input-bordered" id="wb-e-sticky" value="${e.sticky??0}" min="0" /></label>
+              <label class="form-control"><span class="text-[10px] opacity-40">冷却轮数</span>
+                <input type="number" class="input input-xs input-bordered" id="wb-e-cooldown" value="${e.cooldown??0}" min="0" /></label>
+              <label class="form-control"><span class="text-[10px] opacity-40">延迟轮数</span>
+                <input type="number" class="input input-xs input-bordered" id="wb-e-delay" value="${e.delay??0}" min="0" /></label>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="form-control"><span class="text-[10px] opacity-40">扫描深度</span>
+                <input type="number" class="input input-xs input-bordered" id="wb-e-scanDepth" value="${e.scanDepth??''}" min="0" placeholder="默认" /></label>
+              <label class="form-control"><span class="text-[10px] opacity-40">大小写敏感</span>
+                <select class="select select-xs select-bordered" id="wb-e-caseSensitive">
+                  <option value="" ${e.caseSensitive==null?'selected':''}>默认</option>
+                  <option value="true" ${e.caseSensitive===true?'selected':''}>是</option>
+                  <option value="false" ${e.caseSensitive===false?'selected':''}>否</option>
+                </select></label>
+              <label class="form-control"><span class="text-[10px] opacity-40">全词匹配</span>
+                <select class="select select-xs select-bordered" id="wb-e-matchWholeWords">
+                  <option value="" ${e.matchWholeWords==null?'selected':''}>默认</option>
+                  <option value="true" ${e.matchWholeWords===true?'selected':''}>是</option>
+                  <option value="false" ${e.matchWholeWords===false?'selected':''}>否</option>
+                </select></label>
+            </div>
+            <div class="flex flex-wrap gap-x-4 gap-y-1">
+              <label class="flex items-center gap-1"><input type="checkbox" class="checkbox checkbox-xs" id="wb-e-excludeRecursion" ${e.excludeRecursion?'checked':''} /><span class="text-[10px] opacity-40">排除递归</span></label>
+              <label class="flex items-center gap-1"><input type="checkbox" class="checkbox checkbox-xs" id="wb-e-preventRecursion" ${e.preventRecursion?'checked':''} /><span class="text-[10px] opacity-40">阻止递归</span></label>
+              <label class="flex items-center gap-1"><input type="checkbox" class="checkbox checkbox-xs" id="wb-e-delayUntilRecursion" ${e.delayUntilRecursion?'checked':''} /><span class="text-[10px] opacity-40">延迟到递归</span></label>
+            </div>
+          </div>
+        </details>
         <div class="flex gap-2">
           <button class="btn btn-xs flex-1" id="wb-e-save" style="background:var(--beilu-amber);color:#000"><i data-ic="save"></i> 保存</button>
           <button class="btn btn-xs btn-error btn-outline" id="wb-e-delete"><i data-ic="trash"></i> 删除</button>
@@ -1631,7 +1752,24 @@ async function _loadWorldbookInline() {
           useRegex: !!detail.querySelector("#wb-e-useregex")?.checked,
           role: roleVal === "" ? null : parseInt(roleVal),
           content: detail.querySelector("#wb-e-content")?.value || "",
+          // ST 高级字段（12 个，折叠区采集）
+          selectiveLogic: parseInt(detail.querySelector("#wb-e-selectiveLogic")?.value) || 0,
+          probability: (() => { const v = parseInt(detail.querySelector("#wb-e-probability")?.value); return Number.isFinite(v) ? v : 100; })(),
+          useProbability: !!detail.querySelector("#wb-e-useProbability")?.checked,
+          sticky: parseInt(detail.querySelector("#wb-e-sticky")?.value) || 0,
+          cooldown: parseInt(detail.querySelector("#wb-e-cooldown")?.value) || 0,
+          delay: parseInt(detail.querySelector("#wb-e-delay")?.value) || 0,
+          excludeRecursion: !!detail.querySelector("#wb-e-excludeRecursion")?.checked,
+          preventRecursion: !!detail.querySelector("#wb-e-preventRecursion")?.checked,
+          delayUntilRecursion: !!detail.querySelector("#wb-e-delayUntilRecursion")?.checked,
         };
+        // ST 高级字段：nullable 类型单独处理（空=null 透传后端默认）
+        const _scanVal = detail.querySelector("#wb-e-scanDepth")?.value;
+        props.scanDepth = _scanVal === "" || _scanVal == null ? null : parseInt(_scanVal);
+        const _csVal = detail.querySelector("#wb-e-caseSensitive")?.value;
+        props.caseSensitive = _csVal === "" ? null : _csVal === "true";
+        const _mwVal = detail.querySelector("#wb-e-matchWholeWords")?.value;
+        props.matchWholeWords = _mwVal === "" ? null : _mwVal === "true";
         // T6-C10: 删编造副本 100（后端 createBlankEntry/convertSTEntry/GetData 恒有 order）。
         // 排序权重解析失败时不提交，update_entry 走 Object.assign 保留原 order，不写假默认/NaN。
         const _orderVal = parseInt(detail.querySelector("#wb-e-order")?.value, 10);

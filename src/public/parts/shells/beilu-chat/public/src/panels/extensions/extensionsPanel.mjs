@@ -29,9 +29,10 @@ const PLUGINS = [
   { id: "ppt", label: "PPT 生成", icon: "presentation",
     desc: "AI 多步组装 PPT · 渲染/转换/校准管线",
     render: _makeBackendSchemaPanel({ title: "PPT 生成", desc: "AI 通过 <ppt_op> 标签多步组装 PPT · 管线渲染/可编辑 pptx 转换", base: "/api/parts/plugins:beilu-ppt" }) },
-  { id: "mvu", label: "变量系统", icon: "variable",
-    desc: "MVU 变量累积与注入 · SillyTavern 兼容",
-    render: _makeBackendSchemaPanel({ title: "变量系统 (MVU)", desc: "对话变量累积与注入 · SillyTavern MVU 兼容", base: "/api/parts/plugins:beilu-mvu" }) },
+  // 【红线·0731 凛倾拍板"mvu重复+多处散写,直接把额外插件那边删除"】MVU/EJS 是酒馆角色卡适配件，
+  //   开关唯一控制面=AIRP「脚本插件管理」（stCompat/pluginManager.mjs，同步后端 config 单源）。
+  //   本平台禁止再列 beilu-mvu/beilu-ejs 条目——双面板同写一份后端 config = 散写，用户在一处关
+  //   另一处看还开着（0731 事故）。
 ];
 
 // ============================================================

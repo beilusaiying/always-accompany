@@ -1,23 +1,29 @@
 /**
- * [sendAction.mjs] — 前端唯一出向出口·门面壳（T6·6a，2026-07-02；四分区 shared/transport/ 首文件）
+ * [sendAction.mjs] — 前端统一出向出口（T6·6a 起步 2026-07-02，现已过 6b 全量收口）。
+ *   不管 WS 回向/事件分发（那是 websocket.mjs 的事）、不管超时/401（那是 api-client.mjs 的事）。
  *
- * 功能链（目标态，对齐 06-03 凛倾原话「统一封装 sendAction(type,payload) 绑定所有按钮」）：
- *   用户点/开/切 → panels 面板构造 message{verb,target,source:'web',payload,scope:{chatId}}
- *   → sendAction(message) 单一出口 → 查路由映射转 HTTP（物理档前端不感知）
- *   → 失败统一弹报错（含 target+verb 可即时定位，不再静默失败——「确保任何链路断裂都能即时感知」）
- *   → 后端 dispatch → 节点 → WS 回向照旧（websocket.mjs 55 事件已统一，不动）→ 渲染。
+ * 【0802 校验·状态更新】头注释原描述"6a 门面壳阶段·零消费方零流量"已腐烂——实测现状：
+ *   82 个前端文件调用 sendAction()，本文件内建约 140 条 registerAction/registerBridgeAction
+ *   路由注册（覆盖 shells:chat / plugins:全部 / server:全部），是事实上的全出向单一收口；
+ *   路由登记方式与原设想也有出入：并非"各库文件 import 本壳后各自 registerAction"，
+ *   而是集中写死在本文件内（registerAction 本身仍从未被外部文件调用过）。
  *
- * why（6a 门面壳阶段）：
- *   44+ 散 URL 一次性重写=中枢大改（裁决16：渐进）。本壳先就位：内部按注册映射转发旧 URL，
- *   零流量（无面板 import 本文件前不影响任何现状）；6b 逐库收口时面板改调本壳+registerAction
- *   注册该库路由，每库一小批 ui-shot 对照。回退=面板改回直连，本壳无状态可留。
+ * 功能链：用户点/开/切 → panels 面板构造 message{verb,target,source:'web',payload,scope:{chatId}}
+ *   → sendAction(message) 单一出口 → scope.chatId 单点盖章（_beiluCurWinChatId 优先/hash 兜底）
+ *   → 请求去重（inflight 共享 + 2s TTL 缓存，键=buildUrl+body）→ 查路由映射（精确 target#verb
+ *   优先，miss 回退通配 target#*）→ WS dispatch 优先（桥路由，走 websocket.mjs dispatchViaWs）
+ *   失败/不适用则 HTTP 兜底（apiFetch）→ 失败统一弹报错（含 target+verb 定位，notify 分级
+ *   toast/report）→ 后端 dispatch → 节点 → WS 回向照旧（websocket.mjs 事件，不动）→ 渲染。
+ *
+ * 两类路由：直连 REST（buildUrl 指向各库 /api/parts/... 端点）/ 桥路由（registerBridgeAction，
+ *   统一转 POST /api/yonban/dispatch，回包 {ok,data,error} 由 unwrap 还原成旧 REST 裸数据形状）。
  *
  * 关联链：
  *   → shared/transport/api-client.mjs apiFetch（超时+401 统一层，本壳不重复实现）
- *   → config/paths.mjs partUrl/shellUrl 构造器（T2 已就位）
- *   ← （6b 起）featureControls 首个收口，后逐库
+ *   → shared/transport/websocket.mjs dispatchViaWs（动态 import，防循环依赖）
+ *   ← 82 处前端调用方（panels/* 全域 + shared/chat-core·render·widgets 等）
  *
- * 影响范围：当前零消费方零流量；6b 后=全部出向调用点。
+ * 影响范围：本文件是全出向调用点的单一收口；改动 _routes 匹配/去重/WS-HTTP 切换逻辑影响全站请求。
  */
 import { apiFetch } from "./api-client.mjs";
 
@@ -54,7 +60,7 @@ async function _getWsDispatch() {
  * 注册一个出向路由（6b 各库收口时调用；同 key 覆盖）。
  * @param {string} target - 如 "plugins:beilu-memory"
  * @param {string} verb - 如 "switchMode"
- * @param {{method?:string, buildUrl:(m:object)=>string, buildBody?:(m:object)=>any}} route
+ * @param {{method?:string, buildUrl:(m:object)=>string, buildBody?:(m:object)=>any, buildHeaders?:(m:object)=>object}} route
  */
 export function registerAction(target, verb, route) {
 	_routes.set(`${target}#${verb}`, route);
@@ -135,6 +141,7 @@ async function _sendActionInner(message, verb, target, route) {
 			method: route.method ?? "POST",
 			body: route.buildBody ? route.buildBody(message) : message.payload,
 		};
+		if (route.buildHeaders) _opts.headers = route.buildHeaders(message);
 		if (route.timeout != null) _opts.timeout = route.timeout;
 		const res = await apiFetch(route.buildUrl(message), _opts);
 		return route.unwrap ? route.unwrap(res) : res;
@@ -166,15 +173,30 @@ _registerPluginSetdata("beilu-reach");
 // beilu-cli：CLI 工具后端插件（无头 YonBan 宿主）。写路走通配（verb=start/stop/restart/setConfig
 //   → SetData switch）；读路精确注册 getData（GET getdata，回 {status,config} 聚合快照——
 //   前端 CLI 设置区单次拉全，值单源在后端，ideConnPanel 零硬编码）。
-_registerPluginSetdata("beilu-cli");
+_registerPluginSetdata("beilu-cli")
+// P1 自驱动召回（2026-07-31 改造：Deno 插件 → 独立 Python 服务，002 拍板"单独/可插拔/可独立运行"）：
+//   target 名保持 plugins:beilu-p1-selfdriven（前端三面板/typingSuggest 零改动），路由单点重定向到
+//   shells/p1 薄壳 → Python 服务（verb 名=服务路由名一一对应：updateConfig/runP1/getStats/unloadCaches/
+//   listVocabs/atSearch/atBrowse/getUserVocab/saveUserVocab/toggleUserVocab/deleteUserVocab/
+//   getP9Prompts/saveP9Prompts/resetP9Prompts）。旧插件通配注册已停用（服务不在→薄壳 503 明确报错）。
+registerAction("plugins:beilu-p1-selfdriven", "*", {
+	method: "POST",
+	buildUrl: (m) => `/api/parts/shells:p1/service/${m.verb}`,
+	buildBody: (m) => ({ ...(m.payload ?? {}) }),
+});
+registerAction("plugins:beilu-p1-selfdriven", "getData", {
+	method: "GET",
+	buildUrl: () => "/api/parts/shells:p1/getdata",
+	buildBody: () => undefined,
+});
 registerAction("plugins:beilu-cli", "getData", {
 	method: "GET",
 	buildUrl: () => "/api/parts/plugins:beilu-cli/config/getdata",
 	buildBody: () => undefined,
 });
 // P1-2（一致性审计②）：beilu-mvu config 读/写收口（原 pluginManager.mjs apiFetch 直连、门面零覆盖）。
-//   精确注册而非 _action 通配：mvu 后端 SetData(req.body) 直收 {enabled} 落盘（prompt/mvu/main.mjs:560），
-//   套 _action 模板会把 _action 字段一并落盘成配置污染。URL 用字面量 ':'（Express 注册的 '\\:' 只是转义）。
+//   精确注册而非 _action 通配：mvu 后端 SetData(req.body) 直收 {enabled}（prompt/mvu/main.mjs setdata 路由），
+//   套 _action 模板会把 _action 字段一并写成配置污染。URL 用字面量 ':'（Express 注册的 '\\:' 只是转义）。
 registerAction("plugins:beilu-mvu", "getConfig", {
 	method: "GET",
 	buildUrl: () => "/api/parts/plugins:beilu-mvu/config/getdata",
@@ -183,6 +205,19 @@ registerAction("plugins:beilu-mvu", "getConfig", {
 registerAction("plugins:beilu-mvu", "setConfig", {
 	method: "POST",
 	buildUrl: () => "/api/parts/plugins:beilu-mvu/config/setdata",
+	buildBody: (m) => (m.payload ?? {}),
+});
+// [0731 EJS 门控断链根修] beilu-ejs config 读/写（同 mvu 精确注册形状；后端路由=sandbox/main.mjs Load）。
+//   此前门面零注册 + pluginManager 的 beilu-ejs 条目无 backendApiBase → 前端开关只写 localStorage、
+//   后端 pluginEnabled 永远默认 true =「我 ejs 都关闭了哪来的 ejs」事故（0731 凛倾）。
+registerAction("plugins:beilu-ejs", "getConfig", {
+	method: "GET",
+	buildUrl: () => "/api/parts/plugins:beilu-ejs/config/getdata",
+	buildBody: () => undefined,
+});
+registerAction("plugins:beilu-ejs", "setConfig", {
+	method: "POST",
+	buildUrl: () => "/api/parts/plugins:beilu-ejs/config/setdata",
 	buildBody: (m) => (m.payload ?? {}),
 });
 
@@ -396,6 +431,10 @@ registerAction("plugins:beilu-sysinfo", "updateSysinfoConfig", {
 //   切模式分母漂移根因。不带时后端行为同旧（零回归）。
 registerBridgeAction("plugins:beilu-preset", "getRuntimeParams", "functions:prompt", (m) => ({ chatid: m?.payload?.chatid ?? (window._beiluGetChatId?.() || undefined), charName: m?.payload?.charName ?? (window._beiluGetCharId?.() || undefined) }), "getRuntimeParams");
 registerBridgeAction("plugins:beilu-preset", "setRuntimeParams", "functions:prompt", (m) => (m.payload ?? {}), "setRuntimeParams");
+
+// [2026-08-01 W6] toggle 手动控制面：前端读/写桥（prompt/index.mjs toggleGetData/toggleSetData verb）
+registerBridgeAction("plugins:beilu-toggle", "getData", "functions:prompt", () => ({}), "toggleGetData");
+registerBridgeAction("plugins:beilu-toggle", "setData", "functions:prompt", (m) => ({ data: m.payload ?? {} }), "toggleSetData");
 
 // hide 思维链配置写路（24批1，07-03）：原写路只经 memory#updateConfig（读 hide/写 memory 门面分裂="只有airp能改"根因）——
 //   补 functions:hide#setReasoningTags 直达桥（纯桥新增无旧 REST；返回 {success,config}；写后端会同步清 hide TTL 缓存+memoryCache）。
@@ -1065,6 +1104,7 @@ registerAction("server:ping", "get", {
 	method: "GET",
 	buildUrl: () => "/api/ping",
 	buildBody: () => undefined,
+	buildHeaders: () => ({ "X-Beilu-Request-Source": "chat-settings-ping" }),
 });
 
 // ---- server:apikey（settings 外部应用 API Key 管理）----
@@ -1117,6 +1157,16 @@ registerAction("server:security", "getCsp", {
 registerAction("server:security", "setCsp", {
 	method: "POST",
 	buildUrl: () => "/api/security/csp",
+	buildBody: (m) => m.payload ?? {},
+});
+registerAction("server:diagnostics", "getRequestLogConfig", {
+	method: "GET",
+	buildUrl: () => "/api/diagnostics/request-log",
+	buildBody: () => undefined,
+});
+registerAction("server:diagnostics", "setRequestLogConfig", {
+	method: "POST",
+	buildUrl: () => "/api/diagnostics/request-log",
 	buildBody: (m) => m.payload ?? {},
 });
 

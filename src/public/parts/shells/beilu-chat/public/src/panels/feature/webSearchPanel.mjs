@@ -328,6 +328,9 @@ async function _save() {
     if (_fr) webConfig.maxResults = Number(_fr);
     const _ft = $("ws-fetch-timeout")?.value?.trim();
     if (_ft) webConfig.fetchTimeout = Number(_ft);
+    // [2026-08-01 批② browsersPath 口径分裂修] 前端同步写 beilu-web 的 _browsersPath——
+    //   原来 browsers_path 只写进 beilu-memory per-char 配置，beilu-web crawlProbe 读自己的空键=断链。
+    webConfig.browsersPath = webSearch.browsers_path || "";
 
     await Promise.all([
       sendAction({ verb: "updateConfig", target: "plugins:beilu-memory", source: "web", payload: { charName: charId, web_search: webSearch } }),

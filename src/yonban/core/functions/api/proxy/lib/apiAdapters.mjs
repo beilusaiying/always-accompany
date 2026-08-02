@@ -3,13 +3,13 @@ import { wbT, wbD } from "../../../../../../server/wbStub.mjs";
  * proxy/lib/apiAdapters.mjs
  * API 专用消息适配器
  *
- * 在通用后处理(merge/semi/strict)之后、发送之前执行。
+ * 在通用消息组装之后、发送之前执行。
  * 针对不同 API 的消息格式要求做最终适配，保护提示词效力。
  *
  * 分流设计：
  *   - Claude: 头部 system 提取为顶层 system 字段（由 interceptor 处理，这里不动）
  *   - Gemini: 合并头部 system 为一条（兼容层转 systemInstruction）
- *   - DeepSeek R1: system 合并进首条 user（R1 不接受 system role）
+ *   - DeepSeek R1: 保留 system role，仅清理不可回传的 reasoning_content
  *   - OpenAI o-series: system → developer role
  *   - 通用: 合并多条 system 为一条（本地推理兼容性）
  *
@@ -34,6 +34,7 @@ export const PROVIDER_ENUM = [
   "gemini",
   "deepseek-r1",
   "deepseek",
+  "kimi",
   "qwen",
   "openai-reasoning",
   "openai",
@@ -46,16 +47,17 @@ export const PROVIDER_ENUM = [
 // 的回填值与新建缺省，用户可改可清空）。hint 只做前端可见提示，禁驱动任何静默参数改写
 // （2026-07-08 裁决：参数冲突让 API 报错可见，不替用户改）。各默认端点与坑均经官方文档核实
 // （调研出处：工作日志 claude选项消失调查_20260711/采集_四家API机制调研.md）。
-// claude 默认给官方 OpenAI 兼容端点（本生成器出站是 OpenAI 格式，Anthropic 原生 /v1/messages
-// 属 claude-api 生成器的领域，此处禁填以免格式错配）。
+// Claude 不提供官方 OpenAI-compatible chat-completions 端点。本生成器出站是 OpenAI 格式，
+// 因此默认 URL 必须留空，要求用户填真实中转；Anthropic 原生 /v1/messages 属 claude-api 生成器。
 export const PROVIDER_META = {
   "": { label: "自动检测（按 URL/模型名，不推荐）", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "" },
-  claude: { label: "Anthropic Claude", defaultUrl: "https://api.anthropic.com/v1/chat/completions", hint: "Claude 官方：temperature 与 top_p 不能同时设置（同传返回 400）；max_tokens 必填。默认为官方 OpenAI 兼容端点，用中转/反代直接替换地址" },
+  claude: { label: "Anthropic Claude（OpenAI 兼容中转）", defaultUrl: "", hint: "Anthropic 官方原生端点是 /v1/messages，不提供 /v1/chat/completions。此 proxy 发送 OpenAI 格式，必须填写真实兼容中转地址；官方直连请使用 claude-api 生成器" },
   "openrouter-claude": { label: "OpenRouter → Claude", defaultUrl: "https://openrouter.ai/api/v1/chat/completions", hint: "Claude 系：temperature 与 top_p 不能同时设置（同传返回 400）" },
   openrouter: { label: "OpenRouter", defaultUrl: "https://openrouter.ai/api/v1/chat/completions", hint: "" },
   gemini: { label: "Gemini（OpenAI 兼容端点）", defaultUrl: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", hint: "reasoning_effort 与 thinking_config 功能重叠，不能同传" },
   "deepseek-r1": { label: "DeepSeek R1（推理系）", defaultUrl: "https://api.deepseek.com/chat/completions", hint: "deepseek-reasoner 官方标注 2026-07-24 弃用，建议迁 V4 系 + 思考模式" },
   deepseek: { label: "DeepSeek", defaultUrl: "https://api.deepseek.com/chat/completions", hint: "思考模式下 temperature/top_p/惩罚参数会被静默忽略" },
+  kimi: { label: "Kimi（Moonshot）", defaultUrl: "https://api.moonshot.cn/v1/chat/completions", hint: "思维链经 thinking.type 开关；kimi-k2.7-code 强制思考，传关闭会报错（2026-08-01 官方文档核实）" },
   qwen: { label: "Qwen（通义 DashScope）", defaultUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", hint: "开启思考（enable_thinking）必须用流式；temperature 不能为 0；不同地区站点 base_url 不同" },
   "openai-reasoning": { label: "OpenAI 推理系（o1/o3/o4）", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "" },
   openai: { label: "OpenAI", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "" },
@@ -82,7 +84,7 @@ export function resolveProvider({ url = "", model = "", declared = "" } = {}) {
  * 根据 URL 和模型名识别 API 提供商（探测兜底；正路是 resolveProvider 的显式声明）
  * @param {string} url
  * @param {string} model
- * @returns {'claude'|'openrouter-claude'|'openrouter'|'gemini'|'deepseek-r1'|'deepseek'|'qwen'|'openai-reasoning'|'openai'|'generic'}
+ * @returns {'claude'|'openrouter-claude'|'openrouter'|'gemini'|'deepseek-r1'|'deepseek'|'kimi'|'qwen'|'openai-reasoning'|'openai'|'generic'}
  */
 export function detectProvider(url, model) {
   const u = (url || "").toLowerCase();
@@ -108,6 +110,10 @@ export function detectProvider(url, model) {
     if (m.includes("reasoner") || m.includes("-r1")) return "deepseek-r1";
     return "deepseek";
   }
+
+  // Kimi/Moonshot
+  if (u.includes("moonshot") || u.includes("kimi") || m.includes("kimi") || m.includes("moonshot"))
+    return "kimi";
 
   // Qwen/DashScope（qwq=通义 thinking-only 系模型名）
   if (u.includes("dashscope") || m.includes("qwen") || m.includes("qwq"))
@@ -163,19 +169,6 @@ function mergeHeadSystemIntoOne(messages) {
   return [{ role: "system", content: mergedText }, ...rest];
 }
 
-/**
- * 将消息体中间位置的 system 消息转为 user
- * 保留头部第一条 system 不动
- */
-function demoteMiddleSystem(messages) {
-  for (let i = 1; i < messages.length; i++) {
-    if (messages[i].role === "system") {
-      messages[i] = { ...messages[i], role: "user" };
-    }
-  }
-  return messages;
-}
-
 // ============================================================
 // Provider 专用适配
 // ============================================================
@@ -229,59 +222,26 @@ function adaptOpenRouter(messages) {
 }
 
 /**
- * Gemini: 合并头部 system 为一条 + 中间 system → user
+ * Gemini OpenAI-compatible：合并连续头部 system，保留中段 system。
  *
- * Gemini OpenAI 兼容层会自动把首条 system 转为 systemInstruction。
- * 但多条 system 行为未定义，所以我们主动合并。
- * 中间夹杂的 system 必须转 user（Gemini 只支持 user/model 角色）。
- *
- * 提示词效力保护：
- *   - 所有 system 内容合并到一条 system，确保完整传入 systemInstruction
- *   - 不会丢失任何内容
+ * Google 官方 OpenAI compatibility 示例直接使用 role:"system"；不能把原生 Gemini
+ * contents 只有 user/model 的限制错误套到 OpenAI 兼容端点。连续头部 system 合并仅整理
+ * 同权限消息，不改变中段 system 的角色或位置。
  */
 function adaptGemini(messages) {
   const merged = mergeHeadSystemIntoOne([...messages]);
-  demoteMiddleSystem(merged);
   return { messages: merged };
 }
 
 /**
- * DeepSeek R1: system 合并进首条 user
+ * DeepSeek R1 / reasoner：保留 system 权限。
  *
- * R1 模型不接受 system role（返回 400）。
- * 策略：提取所有 system 内容，用 XML 标签包裹后注入首条 user 消息前方。
- * 策略温和：只处理 system，不动 user/assistant。
- *
- * 提示词效力保护：
- *   - 用 <system_instructions> 标签明确标识，让模型知道这是系统指令
- *   - 放在 user 消息最前面，利用 primacy bias
+ * 当前 DeepSeek Chat Completion 官方 schema 明确包含 system message。旧实现依据过期假设，
+ * 把所有 system 删除后包装成首条 user XML，属于静默降权。推理消息仍复用标准 DeepSeek
+ * 的 reasoning_content 清理，除此之外不改 role。
  */
 function adaptDeepSeekR1(messages) {
-  const result = [];
-  const systemParts = [];
-
-  for (const msg of messages) {
-    if (msg.role === "system") {
-      const text = extractText(msg);
-      if (text) systemParts.push(text);
-    } else {
-      result.push({ ...msg });
-    }
-  }
-
-  if (systemParts.length > 0 && result.length > 0) {
-    const systemBlock = `<system_instructions>\n${systemParts.join("\n\n")}\n</system_instructions>\n\n`;
-    const first = result[0];
-    const firstText = extractText(first);
-    first.content = systemBlock + firstText;
-  } else if (systemParts.length > 0) {
-    result.unshift({
-      role: "user",
-      content: `<system_instructions>\n${systemParts.join("\n\n")}\n</system_instructions>`,
-    });
-  }
-
-  return { messages: result };
+  return adaptDeepSeek(messages);
 }
 
 /**
@@ -380,6 +340,10 @@ export function adaptForProvider(messages, { url, model, provider: _resolved }) 
     case "qwen":
       // DashScope compatible-mode 是标准 OpenAI 格式（messages 内 system 角色），零改写透传；
       // 思考模式约束（enable_thinking 非流式报错/temp≠0）不在此静默修正，由 API 报错可见（0708 裁决）
+      result = adaptOpenAI(messages);
+      break;
+    case "kimi":
+      // Moonshot 是标准 OpenAI 格式，零改写透传；思维链开关走 body.thinking（providerPatch applyThinkingMode）
       result = adaptOpenAI(messages);
       break;
     default:

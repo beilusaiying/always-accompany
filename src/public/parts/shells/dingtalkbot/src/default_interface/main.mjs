@@ -439,7 +439,7 @@ export async function createSimpleDingTalkInterface(charAPI, ownerUsername, botC
 		} catch (error) {
 			diag.error(`DoMessageReply: msgId="${data.msgId}" 处理失败`, error)
 			// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-			broadcastBotError({ platform: 'dingtalkbot', botname: botCharname, phase: 'runtime', error })
+			broadcastBotError({ username: ownerUsername, platform: 'dingtalkbot', botname: botCharname, phase: 'runtime', error })
 			pushMessageLog({
 				type: 'error',
 				channelId: conversationId,
@@ -603,7 +603,7 @@ export async function createSimpleDingTalkInterface(charAPI, ownerUsername, botC
 					}
 				} catch (error) {
 					diag.error(`DoDelegateWakeReply: conv="${conversationId}" 失败`, error)
-					broadcastBotError({ platform: 'dingtalkbot', botname: botCharname, phase: 'runtime', error })
+					broadcastBotError({ username: ownerUsername, platform: 'dingtalkbot', botname: botCharname, phase: 'runtime', error })
 				}
 			}, { onBusy: () => diag.warn(`DoDelegateWakeReply: conv="${conversationId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) })
 		}

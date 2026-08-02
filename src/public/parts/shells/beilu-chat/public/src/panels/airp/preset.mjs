@@ -343,7 +343,8 @@ let presetBuckets = {};
 // [0716 分类扩容·凛倾原话] "需要细分,去增加多个自定义,增加分身,bot自定义.然后ppt制作那些需要再创建一个skill"
 //   → 新增 clone/bot/ppt 三 bucket 分类；tab/tagOrder 全走本表派生（Object.values），
 //   加分类=只扩本 map 零新分支。撤 2026-07-11 "clone→code 显示映射"旧指示，clone 有独立 tab。
-const _CAT_TO_TAG = { chat: "🎭聊天", code: "💻编程", work: "📋工作", clone: "🤖分身", bot: "📨Bot", ppt: "📊PPT" };
+// [0731 P9 分类] 新增 p9 独立分类：P9 词库维护子模式配套预设（registry bucket:"p9"），与 chat/code 等平级独立 tab。
+const _CAT_TO_TAG = { chat: "🎭聊天", code: "💻编程", work: "📋工作", clone: "🤖分身", bot: "📨Bot", ppt: "📊PPT", p9: "📚P9词库" };
 // 单源派生：内置分类顺序（Object.values 保序=对象字面量声明序）+ 通用兜底尾。
 // 加/减分类=只改 _CAT_TO_TAG 一处，tagOrder/顶部tab/归档下拉/浮层分组全联动。
 const TAG_ORDER = [...Object.values(_CAT_TO_TAG), "📦通用"];
@@ -1064,20 +1065,8 @@ paramMinP?.addEventListener("input", () => {
   if (paramMinPValue) paramMinPValue.textContent = parseFloat(paramMinP.value).toFixed(2);
 });
 
-// Claude Extended Thinking: 开关联动 budget 显隐
-document
-  .getElementById("param-claude-thinking")
-  ?.addEventListener("change", (e) => {
-    const budgetRow = document.getElementById("claude-thinking-budget-row");
-    if (budgetRow) budgetRow.style.display = e.target.checked ? "" : "none";
-  });
-// budget slider 实时显示值
-document
-  .getElementById("param-thinking-budget")
-  ?.addEventListener("input", (e) => {
-    const valEl = document.getElementById("param-thinking-budget-value");
-    if (valEl) valEl.textContent = e.target.value;
-  });
+// Extended Thinking 控件已删（2026-08-01 凛倾收口：思维链控制唯一入口=AI 源面板 per-源设置，
+//   预设参数区不再持有 thinking 开关/预算）
 
 window.syncModelParamsUI = syncModelParamsUI;
 function syncModelParamsUI(params) {
@@ -1103,25 +1092,7 @@ function syncModelParamsUI(params) {
   // T11-A penalty 回显（model_params 层）：非空即显（含 0）；仅 null/undefined 留空（预设无此键）。
   if (params.frequency_penalty != null && paramFrequencyPenalty) paramFrequencyPenalty.value = params.frequency_penalty;
   if (params.presence_penalty != null && paramPresencePenalty) paramPresencePenalty.value = params.presence_penalty;
-  // 同步 Claude Extended Thinking 回显
-  const thinkingToggle = document.getElementById("param-claude-thinking");
-  const thinkingBudgetSlider = document.getElementById("param-thinking-budget");
-  const thinkingBudgetValue = document.getElementById(
-    "param-thinking-budget-value",
-  );
-  const thinkingBudgetRow = document.getElementById(
-    "claude-thinking-budget-row",
-  );
-  if (thinkingToggle && params.extended_thinking != null) {
-    thinkingToggle.checked = !!params.extended_thinking;
-    if (thinkingBudgetRow)
-      thinkingBudgetRow.style.display = params.extended_thinking ? "" : "none";
-  }
-  if (thinkingBudgetSlider && params.thinking_budget != null) {
-    thinkingBudgetSlider.value = params.thinking_budget;
-    if (thinkingBudgetValue)
-      thinkingBudgetValue.textContent = params.thinking_budget;
-  }
+  // Extended Thinking 回显已删（2026-08-01 收口到 AI 源面板）
   // 同步 Claude 专属 UI（top_p 提示 + 预填充下拉显隐）
   updateClaudeUI();
 }
@@ -1147,11 +1118,7 @@ function updateClaudeUI() {
   const claudePrefillGroup = document.getElementById("claude-prefill-group");
   if (claudePrefillGroup) claudePrefillGroup.style.display = "";
 
-  // Extended Thinking 开关：常驻可见（与预填充同铁律——0708 凛倾「不按名字猜渠道」；
-  //   后端 httpFetch:162 extended_thinking/thinking_budget 已无条件提取，不门控渠道名；
-  //   前端按 isClaude 藏=网关/自定义源用户永远看不到。生效范围由后端把关，前端不隐藏）。
-  const thinkingGroup = document.getElementById("claude-thinking-group");
-  if (thinkingGroup) thinkingGroup.style.display = "";
+  // Extended Thinking 开关已删（2026-08-01 收口到 AI 源面板 per-源设置）
 }
 
 // 监听 api-type 变更以更新 Claude UI
@@ -1188,15 +1155,8 @@ modelParamsSave?.addEventListener("click", async () => {
   const _ppNum = _pp ? parseFloat(_pp) : 0;
   params.presence_penalty = Number.isNaN(_ppNum) ? 0 : _ppNum;
 
-  // 收集 Claude Extended Thinking 参数
-  const thinkingToggle = document.getElementById("param-claude-thinking");
-  const thinkingBudgetSlider = document.getElementById("param-thinking-budget");
-  if (thinkingToggle) {
-    params.extended_thinking = thinkingToggle.checked;
-    params.thinking_budget = thinkingBudgetSlider
-      ? parseInt(thinkingBudgetSlider.value, 10)
-      : 8000;
-  }
+  // Extended Thinking 收集已删（2026-08-01 收口：预设 model_params 不再写 thinking 键；
+  //   存量预设里的旧键由后端 mergeRuntimeParams/buildMessages 主动剥除，不进请求体）
 
   // （2026-07-09 删"后端会自动删除 top_p"提示——静默参数改写 2026-07-08 已从
   //   patchBodyForClaude 删除，冲突时 API 报错直达前端，UI 不再宣称不存在的自动处理；

@@ -65,7 +65,9 @@ const STORAGE_KEY = KEYS.BEILU_ST_COMPAT_ENABLED;
 /**
  * 检查 ST 兼容模式是否开启
  *
- * 默认为 true（开启），用户可通过 UI 关闭。
+ * [0731 凛倾拍板"这两个默认关闭"] 默认 false（opt-in）：ST 卡适配件不用不开。
+ * 与 pluginManager beilu-mvu 条目同键同默认（此前本函数默认 true、面板默认 false=
+ * 同键两默认散写，面板显示关闭而兼容运行时照注入——同型摆设病）。
  * 即使开启，也只在检测到内容使用 ST API 时才注入。
  *
  * @returns {boolean}
@@ -73,12 +75,12 @@ const STORAGE_KEY = KEYS.BEILU_ST_COMPAT_ENABLED;
 export function isSTCompatEnabled() {
   try {
     const saved = storage.get(STORAGE_KEY);
-    // 默认开启：只有明确设为 'false' 时才关闭
-    const enabled = saved !== "false";
+    // 默认关闭：只有明确设为 'true' 才开启（opt-in，与面板 defaultEnabled 单一口径）
+    const enabled = saved === "true";
     diag.debug("开关状态:", enabled ? "开启" : "关闭");
     return enabled;
   } catch {
-    return true;
+    return false;
   }
 }
 

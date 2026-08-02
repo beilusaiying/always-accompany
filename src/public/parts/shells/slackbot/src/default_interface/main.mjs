@@ -272,7 +272,7 @@ export async function createSimpleSlackInterface(charAPI, ownerUsername, botChar
 					}
 				} catch (e) {
 					diag.error(`DoDelegateWakeReply: channel="${channelId}" 失败`, e);
-					broadcastBotError({ platform: 'slackbot', botname: botCharname, phase: 'runtime', error: e });
+					broadcastBotError({ username: ownerUsername, platform: 'slackbot', botname: botCharname, phase: 'runtime', error: e });
 				}
 			}, { onBusy: () => diag.warn(`DoDelegateWakeReply: channel="${channelId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) });
 		}
@@ -389,7 +389,7 @@ export async function createSimpleSlackInterface(charAPI, ownerUsername, botChar
 			} catch (e) {
 				diag.error(`DoMessageReply失败`, e);
 				// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-				broadcastBotError({ platform: 'slackbot', botname: botCharname, phase: 'runtime', error: e })
+				broadcastBotError({ username: ownerUsername, platform: 'slackbot', botname: botCharname, phase: 'runtime', error: e })
 				pushMessageLog({ type: "error", chatId: channelId, author: "System", content: `回复失败: ${e.message}` });
 				try { await client.chat.postMessage({ channel: channelId, text: fillInjectText("bots.error_reply", { error: (e.message || '').slice(0, 200) }) }); } catch { }
 			}

@@ -12,6 +12,7 @@ import { wbT, wbD } from "../../../../../../server/wbStub.mjs";
 import { adaptForProvider } from "./apiAdapters.mjs";
 import {
   applyTailPrefill,
+  applyThinkingMode,
   normalizeProviderError,
   patchBodyForClaude,
   patchBodyForDeepSeek,
@@ -41,22 +42,10 @@ export async function fetchChatCompletion(
 ) {
   let imgIndex = 0;
 
-  // reasoning_effort 兼容映射：不同 API 提供商使用不同的值名称
-  // Gemini 原生: none/min/low/medium/high/max
-  // OpenAI 兼容反代: low/medium/high (部分只支持 low/high)
+  // （2026-08-01 删 reasoning_effort 静默重映射——原 none→low/max→high 把"关思考"反转成
+  //   "开低档思考"，与 0708「不静默改写用户参数」裁决相逆；值域不匹配时端点报错可见。
+  //   用户显式设置原样透传；三态 thinking_mode 的映射在下方 applyThinkingMode 单点做。）
   const normalizedModelArgs = { ...(config.model_arguments || {}) };
-  if (normalizedModelArgs.reasoning_effort) {
-    const effortMap = {
-      none: "low",
-      min: "low",
-      max: "high",
-    };
-    const original = normalizedModelArgs.reasoning_effort;
-    const mapped = effortMap[original];
-    if (mapped) {
-      normalizedModelArgs.reasoning_effort = mapped;
-    }
-  }
 
   // （2026-07-08 NON_OPENAI_PARAMS 过滤已删——凛倾:「错误肯定有返回,直接给提醒啊」：
   //   旧实现按"URL 是否 openrouter.ai"字符串猜测删除用户显式设置的 top_k/min_p/top_a/
@@ -136,52 +125,43 @@ export async function fetchChatCompletion(
     }
   }
 
-  // ★ 提示词后处理（管线重排 2026-07-18，对齐 ST convertClaudeMessages 设计：先 prefill 再 merge）：
+  // ★ 提示词后处理（先 prefill 再按用户明确选择处理）：
   //   旧管线 pp(:115) 在 prefill(:157) 之前跑，applyTailPrefill(user_assistant) 把尾部
   //   assistant 改 user → 产生新 user+user，此后无 re-merge → 连续同角色原样发出(0718 实证)。
   //   ST 同构设计：convertClaudeMessages 内部 :329-335 追加 prefill assistant → :339-346 同函数内
   //   merge 兜底；chat-completions.js:1736 用户 pp 也在 source 分发前跑(全 provider 生效)。
   //   现管线：adapt → prefill → resumePrefix → 【pp 在此】 → patchClaude → 发送。
   //   pp 在 prefill/resume 之后 = 任何改角色操作产生的连续同 role 都被 pp 兜住。
-  //   原 DeepSeek 专属 re-merge(:140-145) 已删——pp 统一兜底，不再需要 provider 特例。
-  const _ppIntent = config.convert_config?.prompt_post_processing;
-  let postProcessType;
-  if (_ppIntent && _ppIntent !== "none") {
-    postProcessType = _ppIntent;
-  } else {
-    switch (_provider) {
-      case "deepseek":
-      case "deepseek-r1":
-        postProcessType = "semi";
-        break;
-      default:
-        postProcessType = "merge";
-    }
-  }
+  //   2026-07-29 契约：none 必须是真关闭。旧代码把 none/空值按 provider 偷换成
+  //   merge 或 semi（DeepSeek），造成 UI/存储显示关闭而最终请求仍被改写。
+  //   provider 的协议差异只允许在 adaptForProvider/patch 层显式处理，不能冒充 PP 默认值。
+  //   共享 builder 已按同一配置处理一次；这里在 tail/resume 之后再执行是为了收拢尾部改形
+  //   新产生的连续同角色。merge/semi/strict 均幂等，none 原样返回。
+  const postProcessType =
+    config.convert_config?.prompt_post_processing || "none";
   requestBodyObj.messages = postProcessMessages(requestBodyObj.messages, postProcessType);
 
-  // Claude 专项预处理（temperature/top_p 互斥 + 不支持参数过滤 + off 漏网兜底 + Extended Thinking）
-  // 从 requestBodyObj 中提取 extended_thinking / thinking_budget（前端通过 model_arguments 传入）
-  // 这两个参数不能直接留在 requestBodyObj 的顶层，必须由 patchBodyForClaude 转换为标准格式
-  // thinking 六口·口6（2026-07-25）：requestBodyObj 有键（预设/子模式/runtime 覆盖链产物）优先，
-  //   无键回退 config 顶层键 = per-源默认思考态（settingsSlots AI源面板写点，原为零消费死配置）。
-  //   预设面板保存过参数的预设恒带 extended_thinking 键（true/false 均显式）→ per-源兜底只在
-  //   预设从未保存该键时生效，优先级语义=覆盖链 > per-源默认。
-  const _extendedThinking = requestBodyObj.extended_thinking !== undefined
-    ? !!requestBodyObj.extended_thinking
-    : !!config.extended_thinking;
-  const _thinkingBudget = Number(requestBodyObj.thinking_budget) || Number(config.thinking_budget) || paramDefault("thinking_budget");
+  // 思维链三态（2026-08-01 凛倾收口「开关放这里(AI源面板)」）：唯一入口=per-源 config.thinking_mode。
+  //   旧覆盖链（预设/子模式/runtime/分身）producer 已全删；requestBodyObj 里若仍有存量污染键
+  //   （旧 char 模板/外部注入）一律剥离，不参与决策。
+  //   存量迁移：无 thinking_mode 时，旧 boolean extended_thinking===true 视同 standard；
+  //   false/缺失 = ""（渠道默认，不发任何 thinking 参数——注意 DeepSeek 等渠道默认思考【开启】，
+  //   真要关必须选 off 显式发 disabled）。
+  const _thinkingMode = (config.thinking_mode !== undefined && config.thinking_mode !== null && config.thinking_mode !== "")
+    ? String(config.thinking_mode)
+    : (config.extended_thinking ? "standard" : "");
   delete requestBodyObj.extended_thinking;
   delete requestBodyObj.thinking_budget;
+  // Claude 专项预处理（预填充 off 漏网兜底 + image_url 转换 + 缓存断点）
   requestBodyObj = patchBodyForClaude(requestBodyObj, {
     provider: _provider,
     url: config.url,
     model: config.model,
     claudePrefillMode: config.convert_config?.claude_prefill_mode || "off",
-    extendedThinking: _extendedThinking,
-    thinkingBudget: _thinkingBudget,
     cacheBreakpoints: config.convert_config?.cache_breakpoints,
   });
+  // 三态映射单点（全渠道，按显式声明的 provider 分发；""=不发参数）
+  requestBodyObj = applyThinkingMode(requestBodyObj, { provider: _provider, mode: _thinkingMode });
 
   // ★ 内部元数据剥离（2026-07-07，对标本机代理参考实现的剥离逻辑）：
   //   _identifier/_section/_name/_source 等 _ 前缀字段是 beilu 内部路由元数据。
@@ -324,7 +304,10 @@ export async function fetchChatCompletion(
       const validFiles = newFiles.filter(Boolean);
       if (validFiles.length > 0) {
         result.files.push(...validFiles);
-        previewUpdater(result);
+        // [2026-08-01 严重bug修·Call路径TypeError] previewUpdater 是可选回调（proxy main.mjs Call()
+        //   与 fallback/change-prompt 调用方不传）——use_stream 默认 true 下首个 delta 裸调即炸。
+        //   按契约可选化（?.），本文件三处同修。
+        previewUpdater?.(result);
       }
     })();
     imageProcessingPromises.push(promise);
@@ -433,7 +416,7 @@ export async function fetchChatCompletion(
                 result.content += "<think>\n";
               }
               result.content += reasoning;
-              previewUpdater(result);
+              previewUpdater?.(result); // [2026-08-01] 可选回调，同 :307 注释
             }
 
             const content = delta?.content || message?.content || "";
@@ -444,7 +427,7 @@ export async function fetchChatCompletion(
                 result.content += "\n</think>\n";
               }
               result.content += content;
-              previewUpdater(result);
+              previewUpdater?.(result); // [2026-08-01] 可选回调，同 :307 注释
             }
 
             // Handle images if present in delta or message (Custom extension support)

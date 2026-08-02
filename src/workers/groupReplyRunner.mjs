@@ -52,7 +52,7 @@ function _serializableReply(r) {
 /**
  * groupWorker.mjs 的 _runner(payload, ctx)。
  * @param {{data_path:string, chatid:string, charname?:string}} payload
- * @param {{groupId:string, signal:AbortSignal, emit:(chunk:any)=>void}} ctx
+ * @param {{groupId:string, workerId:string, signal:AbortSignal, emit:(chunk:any)=>void, emitEvent:(event:any)=>boolean}} ctx
  */
 export async function run(payload, ctx) {
   wbT(payload?.chatid ?? null, "groupReplyRunner", "run:enter", { chatid: payload?.chatid, charname: payload?.charname, groupId: ctx?.groupId });
@@ -64,13 +64,20 @@ export async function run(payload, ctx) {
   try {
     _bridge = await import("../yonban/core/transport/isolateBridge.mjs");
     _bridge.bindWorkerEmitter(payload.chatid, ctx.emit);
+    // 工具 lifecycle 使用 worker 常驻控制通道，不随本次 GetReply 的 stream emitter 解绑。
+    _bridge.bindWorkerLifecycleEmitter(ctx.emitEvent);
   } catch (_ibErr) { wbD(payload?.chatid ?? null, "group", "run:bridgeBindFail", false, _ibErr?.message || String(_ibErr), {}); /* 桥不可用→退回收口前行为，不阻断生成 */ }
-  if (payload.bridgeState) {
-    try {
-      const { ideClient: _ic } = await import("../yonban/core/transport/ideClient.mjs");
+  try {
+    const { ideClient: _ic } = await import("../yonban/core/transport/ideClient.mjs");
+    const _ownerRegistered = _ic.registerChatOwner?.(payload.chatid, payload.username);
+    if (_ownerRegistered === false) {
+      wbD(payload?.chatid ?? null, "group", "run:ownerRegisterFail", false,
+        "worker 会话 owner 注册冲突，工具结果将 fail-closed", { username: payload.username });
+    }
+    if (payload.bridgeState) {
       _ic.applyBridgeState(payload.bridgeState, payload.username);
-    } catch (_bsErr) { wbD(payload?.chatid ?? null, "group", "run:bridgeStateApplyFail", false, _bsErr?.message || String(_bsErr), {}); }
-  }
+    }
+  } catch (_bsErr) { wbD(payload?.chatid ?? null, "group", "run:bridgeStateApplyFail", false, _bsErr?.message || String(_bsErr), {}); }
   // per-group 工作区根：在本 isolate 的 ideClient 设内存覆盖（不持久化、不写共享磁盘），
   // 使本组 worker 的 workspaceRoot/file_op 沙箱/路径解析都用本组根，两组互不串（isolate 隔离 + 内存覆盖）。
   if (payload.workspaceRoot) {
@@ -149,7 +156,7 @@ export async function run(payload, ctx) {
     const { ideClient } = await import(
       "../yonban/core/transport/ideClient.mjs"
     );
-    reply.pendingResults = ideClient.consumePendingResults(payload.chatid) || [];
+    reply.pendingResults = ideClient.consumePendingResults(payload.chatid, payload.username) || [];
     wbT(payload?.chatid ?? null, "group", "run:pendingResultsBack", { count: reply.pendingResults.length });
   } catch (_prErr) { wbD(payload?.chatid ?? null, "group", "run:pendingResultsFail", false, _prErr?.message || String(_prErr), { chatid: payload?.chatid }); reply.pendingResults = []; }
   // 债-C：file_op 结果在本 worker isolate 的 beilu-files 私有池（主进程续轮门查不到它）。

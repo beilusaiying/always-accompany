@@ -38,6 +38,9 @@ import { wbSpan } from "../../../server/whitebox.mjs";
 import { registry } from "./registry.mjs";
 import { resolveScope } from "./scopeResolver.mjs";
 import { remoteInvoke, subprocessInvoke } from "../transport/index.mjs";
+// dispatcher 是所有节点派发的唯一入口；内建出口必须随入口自举，不能依赖调用方碰巧先 import functions/all。
+// exits 只向 registry 注册节点，不反向导入 dispatcher，故这里不会形成派发循环。
+import "./exits.mjs";
 
 let _reqSeq = 0;
 

@@ -42,6 +42,113 @@ import { sendAction } from "./sendAction.mjs"; // T6b批7：出向统一门面�
 const diag = createDiag("websocket");
 let _wakeupTimerId = null;
 
+function _getToolJobsMap() {
+  if (window._beiluToolJobs instanceof Map) return window._beiluToolJobs;
+  const rows = Array.isArray(window._beiluToolJobs) ? window._beiluToolJobs : [];
+  const map = new Map();
+  for (const job of rows) {
+    const id = job?.jobId || job?.requestId;
+    if (id) map.set(id, job);
+  }
+  window._beiluToolJobs = map;
+  return map;
+}
+
+function _formatToolJobDuration(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value < 0) return "";
+  if (value < 1000) return `${Math.round(value)}ms`;
+  if (value < 60000) return `${(value / 1000).toFixed(value < 10000 ? 1 : 0)}s`;
+  return `${Math.floor(value / 60000)}m ${Math.round((value % 60000) / 1000)}s`;
+}
+
+const _toolJobEventSignatures = new Set();
+const _terminalToolJobStates = new Set([
+  "succeeded",
+  "failed",
+  "connection_lost",
+  "orphan_result",
+]);
+
+function _pruneToolJobsMap(jobs) {
+  const limit = Number(window._beiluToolJobHistoryLimit);
+  if (!Number.isFinite(limit) || limit < 1 || jobs.size <= limit) return;
+  const terminal = [...jobs.entries()]
+    .filter(([, value]) => _terminalToolJobStates.has(value?.state || value?.status))
+    .sort(([, a], [, b]) => String(a?.updatedAt || a?.createdAt || "")
+      .localeCompare(String(b?.updatedAt || b?.createdAt || "")));
+  for (const [id] of terminal) {
+    if (jobs.size <= limit) break;
+    jobs.delete(id);
+  }
+}
+
+function _handleToolJobUpdate(payload) {
+  const job = payload?.job;
+  const id = job?.jobId || job?.requestId;
+  if (!id) return;
+  const jobs = _getToolJobsMap();
+  const existing = jobs.get(id);
+  const incomingVersion = Number(job?.version);
+  const existingVersion = Number(existing?.version);
+  if (
+    Number.isFinite(incomingVersion) &&
+    Number.isFinite(existingVersion) &&
+    incomingVersion < existingVersion
+  ) return;
+  if (
+    (!Number.isFinite(incomingVersion) || !Number.isFinite(existingVersion)) &&
+    existing?.updatedAt &&
+    job?.updatedAt &&
+    String(job.updatedAt) < String(existing.updatedAt)
+  ) return;
+  // 用户广播可能经本页多个 chat WS 到达；同一状态版本只消费一次，避免重复弹窗。
+  const signature = [
+    id,
+    job.version ?? "",
+    job.updatedAt || "",
+    job.state || job.status || "",
+    job.duration ?? "",
+    job.error?.message || job.error || "",
+    payload?.notify === true ? "1" : "0",
+  ].join("|");
+  if (_toolJobEventSignatures.has(signature)) return;
+  _toolJobEventSignatures.add(signature);
+  if (_toolJobEventSignatures.size > 500) {
+    _toolJobEventSignatures.delete(_toolJobEventSignatures.values().next().value);
+  }
+  const merged = { ...(jobs.get(id) || {}), ...job };
+  jobs.set(id, merged);
+  _pruneToolJobsMap(jobs);
+  window._beiluToolJobsRevision = Number(window._beiluToolJobsRevision || 0) + 1;
+
+  const detail = { job: merged, notify: payload?.notify === true };
+  window.dispatchEvent(new CustomEvent("beilu:tool-job-update", { detail }));
+  window.dispatchEvent(new CustomEvent("beilu:smart-task-update", { detail }));
+
+  if (payload?.notify === true) {
+    // 后端 phase 是本次通知的真实生命周期节点；长任务仍处于 running，
+    // 若只显示 state 会丢掉“已越过长运行阈值”这一关键反馈。
+    const status = payload?.phase || merged.state || merged.status || "unknown";
+    const duration = _formatToolJobDuration(merged.duration);
+    const error = typeof merged.error === "string"
+      ? merged.error
+      : merged.error?.message || "";
+    const parts = [merged.backendKind, duration, error].filter(Boolean);
+    const message = parts.join(" · ");
+    const isError = status === "failed" || status === "connection_lost" || status === "orphan_result";
+    showCrossModeNotification({
+      fromMode: "code",
+      type: isError ? "error" : "info",
+      title: `${merged.tool || id} · ${status}`,
+      message,
+      targetTab: "files",
+    });
+  }
+}
+
+_getToolJobsMap();
+
 // ============================================================
 // EventBus 事件桥接 — 对标 JS-Slash-Runner event.ts
 // ============================================================
@@ -379,14 +486,18 @@ async function _handleModeSwitchPreset(entry) {
     window.dispatchEvent(new CustomEvent("beilu:subModeSwitched", { detail: subModeSwitch }));
   }
 
-  // 4. AI主动停止自动继续（<stopContinue/>标签）— 仅临时关闭，不持久化
+  // 4. AI主动停止自动继续（<stopContinue/>标签）— 纯运行态信号，停止语义全在后端
+  //   （generation.mjs stopContinue 分支：本轮不续 + loop 双停阈值计数），前端无功能消费者。
+  // 【红线·0731 凛倾拍板】「操作后自动继续」（系统配置域开关）与 <stopContinue/>（AI 任务域：
+  //   "本轮任务做完了"）是两个开关，禁止合流——AI 停止只是任务上的，不是系统上禁止自动继续，
+  //   翻了配置开关用户下一次派任务就没有自动继续。禁止任何运行态代码碰 #ide-auto-continue。
+  //   [0731 根修] 原在此把 #ide-auto-continue 翻 false（注释称"仅临时不持久化"）——但该开关是
+  //   持久配置 yonban_config.auto_continue.enabled 的 UI（idePanel init 后端回填 + 用户 change 写回），
+  //   被当运行状态灯翻假后：①AI 每发一次停止符开关就显示"关"，用户刚打开立刻又见关闭；
+  //   ②面板任一其它项 change 触发 _syncAutoContinueToBackend 全量覆写，把假 false 持久化进后端
+  //   = 用户配置随机丢失。运行态信号禁碰配置 UI，只留日志。
   if (ext._stopContinue) {
-    console.log("[websocket] AI请求停止自动继续（本轮临时）");
-    const autoContinueToggle = document.getElementById("ide-auto-continue");
-    if (autoContinueToggle) {
-      autoContinueToggle.checked = false;
-    }
-    // 注: 原 dispatch beilu:stopContinue 无任何 listener，且 UI 效果(取消勾选)已在上方直接完成，故移除冗余广播
+    console.log("[websocket] AI已结束本轮自动继续（配置开关不变，停止语义由后端处理）");
   }
 
   // 5. AI定时唤醒（<scheduleWakeup/>标签）— 先停，N秒后自动恢复继续
@@ -406,8 +517,10 @@ async function _handleModeSwitchPreset(entry) {
       _wakeupTimerId = null;
       if (currentChatId !== _snapChatId) { console.log("[websocket] scheduleWakeup: 对话已切换，跳过"); return; }
       console.log(`[websocket] 定时唤醒触发: ${reason}`);
-      const autoContinueToggle = document.getElementById("ide-auto-continue");
-      if (autoContinueToggle) autoContinueToggle.checked = true;
+      // 【红线】禁碰 #ide-auto-continue（同上方 stopContinue 红线：运行态禁改配置域开关）。
+      // [0731 根修] 原在此把 #ide-auto-continue 翻 true——与上方 stopContinue 翻 false 同型劫持
+      //   （反向：用户显式关闭配置时被翻"开"，再经面板全量覆写持久化）。唤醒动作本身由下方
+      //   triggerCharacterReply 完成，不依赖该开关，配置 UI 只归 idePanel 两触点（init 回填/用户 change）。
       const charId = _snapCharId || _getCharName();
       if (!charId) { console.warn("[websocket] scheduleWakeup: charId 为空，跳过触发"); return; }
       import("./endpoints.mjs").then(m => m.triggerCharacterReply(charId)).catch(e => console.warn("[websocket] scheduleWakeup触发失败:", e.message));
@@ -679,6 +792,15 @@ function connect(targetChatId) {
           msg.ok ? p.resolve({ ok: true, data: msg.data }) : p.reject(new Error(msg.error?.msg || "dispatch failed"));
         }
         return; // 不走 broadcast 路径
+      }
+
+      // 工具 Job 是用户级后台状态，不属于某个可见消息 DOM。无论事件来自当前线还是后台线，
+      // 都只消费一次并更新全局 store；否则后台线无窗口时会漏事件，有窗口时又可能重复通知。
+      if (msg.type === "tool_job_update") {
+        handleBroadcastEvent(msg, cid).catch((err) => {
+          console.error("[websocket] tool_job_update 处理失败:", err);
+        });
+        return;
       }
 
       // [并行链路可见 0726] 线活动状态：**对所有线统一派发**（活跃/非活跃都发），纯状态不碰 DOM。
@@ -1087,6 +1209,15 @@ async function handleBroadcastEvent(event, winId) {
       console.log(`[websocket] 工具结果就绪: ${payload.count}条 (${payload.source})${payload.traceId ? ` [trace ${payload.traceId}]` : ""}`);
       window.dispatchEvent(new CustomEvent("beilu:toolResultsReady", { detail: payload }));
       break;
+    case "tool_job_update":
+      wbTrace("websocket", "tool_job_update", {
+        jobId: payload?.job?.jobId,
+        tool: payload?.job?.tool,
+        state: payload?.job?.state || payload?.job?.status,
+        notify: payload?.notify === true,
+      });
+      _handleToolJobUpdate(payload);
+      break;
     case "token_usage":
       // ★ AI生成完成后的cache token统计 → 转发给token bar
       wbTrace("websocket", "token_usage", { keys: payload ? Object.keys(payload) : [] });
@@ -1119,6 +1250,15 @@ async function handleBroadcastEvent(event, winId) {
       // consumer=companion.mjs(设置区提示 dwellMs 停留 + 感知控件回填)。payload={applied,dwellMs,at}
       wbTrace("websocket", "capture_control_applied", { keys: payload ? Object.keys(payload) : [] });
       window.dispatchEvent(new CustomEvent("beilu:capture-control-applied", { detail: payload }));
+      break;
+    case "mcp_connect_requests_changed":
+      // 只桥接数据变化信号；MCP 面板按当前 chatId 过滤并重拉服务端请求记录。
+      wbTrace("websocket", "mcp_connect_requests_changed", {
+        requestId: payload?.requestId,
+        chatId: payload?.chatId,
+        status: payload?.status,
+      });
+      window.dispatchEvent(new CustomEvent("beilu:mcp-connect-requests-changed", { detail: payload }));
       break;
     case "pending_approvals":
       wbTrace("websocket", "pending_approvals", { keys: payload ? Object.keys(payload) : [] });

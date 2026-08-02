@@ -36,6 +36,7 @@ const _workers = new Map();
 // 跨线并发硬上限（借 OpenClaw 4/8、Hermes 3）：防多线 worker 同时占内存 / 打爆 API / $47k 递归。
 const MAX_CONCURRENT_WORKERS = 5;        // 同时存活的线 worker 上限（满则先回收最久空闲者）
 const WORKER_IDLE_TTL_MS = 10 * 60_000;  // 空闲超时回收（常驻 isolate 防内存单调涨）
+const WORKER_EVENT_DEDUP_LIMIT = 4096;
 // 空闲 worker 回收 sweeper：每 2min 终止 inFlight===0 且超 TTL 的线 worker。
 const _idleSweeper = setInterval(() => {
   const now = Date.now();
@@ -62,10 +63,86 @@ function _spawn(groupId, runnerUrl) {
   wbT(null, "group", "spawn:worker", { groupId, workerCount: _workers.size });
   const worker = new Worker(_WORKER_URL, { type: "module" });
   const pending = new Map(); // seq → {resolve,reject,onStream}
+  // eventId → { status:"pending"|"accepted", at:number }。main 拒绝/异常必须释放，
+  // 否则合法 workerId 的畸形事件能抢占 eventId，令修正后的合法重试被永久去重。
+  const seenEventIds = new Map();
+  const lifecycleStats = { eventReceived: 0, eventAccepted: 0, eventRejected: 0, eventDeduped: 0 };
+  let lifecycleTail = Promise.resolve();
+  let announcedWorkerId = null;
   let seq = 0;
 
   worker.onmessage = (e) => {
-    const { kind, id, result, error, chunk } = e.data || {};
+    const { kind, id, result, error, chunk, event } = e.data || {};
+    // 常驻 worker lifecycle 必须在 request pending 查找之前消费：reply 后 pending 已删，
+    // 迟到事件仍须进入主进程权威 ideClient，不能退化成无匹配 request 后静默 return。
+    if (kind === "event") {
+      lifecycleStats.eventReceived++;
+      const eventId = typeof event?.eventId === "string" ? event.eventId : "";
+      // 身份门必须先于 eventId 去重：未完成 init 身份握手或伪造 workerId 的事件不能
+      // 污染去重窗口，进而把随后来自真实 worker 的同 eventId 合法事件静默挡掉。
+      if (!announcedWorkerId || event?.workerId !== announcedWorkerId) {
+        lifecycleStats.eventRejected++;
+        wbD(event?.chatid || null, "group", "worker:eventWorkerMismatch", false,
+          "lifecycle workerId 缺失或与 init 身份不一致，已拒绝", {
+            groupId, announcedWorkerId, actualWorkerId: event?.workerId || null, eventId,
+          });
+        return;
+      }
+      if (eventId && seenEventIds.has(eventId)) {
+        lifecycleStats.eventDeduped++;
+        wbT(event?.chatid || null, "group", "worker:eventDeduped", {
+          groupId,
+          eventId,
+          phase: event?.phase,
+          workerId: event?.workerId,
+          status: seenEventIds.get(eventId)?.status || null,
+        });
+        return;
+      }
+      if (eventId) {
+        // 入队到 main 验证前只占 pending；仅 main accepted 后才成为永久去重项。
+        seenEventIds.set(eventId, { status: "pending", at: Date.now() });
+      }
+      wbT(event?.chatid || null, "group", "worker:eventReceived", {
+        groupId, eventId: eventId || null, phase: event?.phase, workerId: event?.workerId || null,
+      });
+      // 串行交付同一 worker 的 phase，避免 started/wait_timeout/late_result 因动态 import/异步
+      // chat 校验发生重排。此队列独立于 request promise，request reply 后仍继续存活。
+      lifecycleTail = lifecycleTail
+        .then(async () => {
+          const { ideClient } = await import("../../../../../../yonban/core/transport/ideClient.mjs");
+          const accepted = await ideClient.acceptWorkerToolLifecycle?.(event);
+          if (accepted?.accepted) {
+            lifecycleStats.eventAccepted++;
+            if (eventId) {
+              seenEventIds.set(eventId, { status: "accepted", at: Date.now() });
+              let acceptedCount = 0;
+              for (const seen of seenEventIds.values()) {
+                if (seen?.status === "accepted") acceptedCount++;
+              }
+              if (acceptedCount > WORKER_EVENT_DEDUP_LIMIT) {
+                for (const [seenId, seen] of seenEventIds) {
+                  if (acceptedCount <= WORKER_EVENT_DEDUP_LIMIT) break;
+                  if (seen?.status === "accepted") {
+                    seenEventIds.delete(seenId);
+                    acceptedCount--;
+                  }
+                }
+              }
+            }
+          } else {
+            lifecycleStats.eventRejected++;
+            if (eventId) seenEventIds.delete(eventId);
+          }
+        })
+        .catch((err) => {
+          lifecycleStats.eventRejected++;
+          if (eventId) seenEventIds.delete(eventId);
+          wbD(event?.chatid || null, "group", "worker:eventDispatchFail", false,
+            err?.message || String(err), { groupId, eventId: eventId || null, phase: event?.phase });
+        });
+      return;
+    }
     if (kind === "fatal") {
       wbD(null, "group", "worker:fatal", false, "worker fatal: " + error, { groupId, pendingCount: pending.size });
       for (const p of pending.values()) p.reject(new Error("worker fatal: " + error));
@@ -93,7 +170,10 @@ function _spawn(groupId, runnerUrl) {
       worker.postMessage({ kind, id, payload });
     });
 
-  const ready = send("init", { groupId, runnerUrl });
+  const ready = send("init", { groupId, runnerUrl }).then((result) => {
+    announcedWorkerId = result?.workerId || null;
+    return result;
+  });
 
   return {
     groupId,
@@ -101,6 +181,8 @@ function _spawn(groupId, runnerUrl) {
     ready,
     lastUsedAt: Date.now(),
     inFlight: 0,
+    lifecycleStats,
+    waitForLifecycle: () => lifecycleTail,
     request: (payload, onStream, signal) => {
       const id = ++seq;
       // ★ 用户中止转发：stream.signal 中止 → 向 worker 发 abort，命中该 request 的 AbortController

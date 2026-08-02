@@ -403,7 +403,7 @@ export const DEFAULT_MEMORY_PRESETS = [
   {
     id: "P1",
     name: "检索AI",
-    description: "根据当前对话上下文从温/冷层检索相关记忆",
+    description: "根据当前对话上下文从热层/表格/温层/冷层检索关联记忆（每轮对话自动触发）",
     enabled: true,
     builtin: true,
     deletable: false,
@@ -479,7 +479,7 @@ export const DEFAULT_MEMORY_PRESETS = [
   {
     id: "P3",
     name: "每日总结AI",
-    description: "日终时汇总当天事件生成日总结",
+    description: "AI日总结与归档补漏（仅手动运行；不由\"结束今天\"按钮触发——endDay 的日总结由内置JS逻辑单独生成，两者独立）",
     enabled: false,
     builtin: true,
     deletable: false,
@@ -513,7 +513,7 @@ export const DEFAULT_MEMORY_PRESETS = [
   {
     id: "P4",
     name: "热→温转移AI",
-    description: "将热层中过期/低权重的记忆移入温层",
+    description: "手动运行，把 hot/remember_about_user、hot/forever.json、hot/appointments.json 中的旧/低权重条目迁到 warm/archived_hot/（backgroundTasks 自动搬迁只覆盖 #4 临时记忆表，不含这三个文件）",
     enabled: false,
     builtin: true,
     deletable: false,
@@ -547,7 +547,7 @@ export const DEFAULT_MEMORY_PRESETS = [
   {
     id: "P5",
     name: "月度总结/归档AI",
-    description: "为满归档期的温层月份编纂月总结（归档天数按系统配置，物理搬移由系统自动执行）",
+    description: "为满归档期的温层月份编纂月总结（物理搬移由系统自动执行；trigger声明manual_or_auto，但代码里未接入任何自动调用点，实际仅能手动运行）",
     enabled: false,
     builtin: true,
     deletable: false,

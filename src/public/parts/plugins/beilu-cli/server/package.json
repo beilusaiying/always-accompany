@@ -1,0 +1,16 @@
+{
+  "name": "beilu-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "beilu IDE工具的CLI本地执行器（替代YonBan VSCode扩展）",
+  "dependencies": {
+    "ws": "^8.21.1",
+    "diff": "^8.0.4",
+    "jszip": "^3.10.1",
+    "xlsx": "^0.18.5",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "1.1.1",
+    "word-extractor": "^1.0.4",
+    "html-validate": "^10.9.0"
+  }
+}

@@ -65,7 +65,21 @@ register("bus:broadcast", {
 		async emitAll(payload, context) {
 			if (!payload?.event?.type) return { ok: false, error: { code: "E_ARGS", msg: "bus:broadcast.emitAll 需要 payload.event{type,…}" } };
 			const { broadcastAllChatUi } = await _mod("shells/beilu-chat/src/lib/broadcast.mjs");
-			broadcastAllChatUi(payload.event, context?.user ?? payload?.username);
+			const accepted = broadcastAllChatUi(payload.event, context?.user ?? payload?.username);
+			if (accepted === false) return { ok: false, error: { code: "E_OWNER", msg: "用户级广播缺少可用 owner 索引" } };
+			return { ok: true };
+		},
+		// 无 chatId 但有认证 owner 的用户级事件。与 emitAll 分开成 fail-closed 入口：
+		// 调用方遗漏 username 时不得退化成全用户广播。
+		async emitOwner(payload, context) {
+			if (!payload?.event?.type) return { ok: false, error: { code: "E_ARGS", msg: "bus:broadcast.emitOwner 需要 payload.event{type,…}" } };
+			const username = context?.user ?? payload?.username;
+			if (typeof username !== "string" || !username) {
+				return { ok: false, error: { code: "E_OWNER", msg: "bus:broadcast.emitOwner 需要 username" } };
+			}
+			const { broadcastAllChatUi } = await _mod("shells/beilu-chat/src/lib/broadcast.mjs");
+			const accepted = broadcastAllChatUi(payload.event, username);
+			if (accepted === false) return { ok: false, error: { code: "E_OWNER", msg: "bus:broadcast.emitOwner 无法解析用户 socket 范围" } };
 			return { ok: true };
 		},
 		// 跨窗口广播（broadcast.mjs:340 broadcastCrossChatEvent：按 username fan-out、源 chatid 被跳过）。
@@ -75,7 +89,12 @@ register("bus:broadcast", {
 		async emitCross(payload, context) {
 			if (!payload?.event?.type) return { ok: false, error: { code: "E_ARGS", msg: "bus:broadcast.emitCross 需要 payload.event{type,…}" } };
 			const { broadcastCrossChatEvent } = await _mod("shells/beilu-chat/src/lib/broadcast.mjs");
-			broadcastCrossChatEvent(context?.chatId ?? payload?.chatid ?? null, payload.event);
+			const sourceChatId = context?.chatId ?? payload?.chatid ?? null;
+			const username = context?.user ?? payload?.username ?? null;
+			const accepted = broadcastCrossChatEvent(sourceChatId, payload.event, username);
+			if (accepted === false) {
+				return { ok: false, error: { code: "E_OWNER", msg: "bus:broadcast.emitCross 无法解析用户广播范围" } };
+			}
 			return { ok: true };
 		},
 	},

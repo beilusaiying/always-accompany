@@ -90,6 +90,8 @@ const __pluginDir = fileURLToPath(new URL("../../../../../public/parts/plugins/b
 const DEFAULTS_DIR = join(__pluginDir, "defaults");
 // 旧全局目录（仅用于一次性迁移脚本判空/备份，运行时不读回退——禁旧路径回退，见 T065 规划四）
 const LEGACY_GLOBAL_DIR = __pluginDir;
+// 首次进入窗口时的可配置种子。窗口级 exact 记录一旦存在，后续完全由用户/AI 切换结果决定。
+const MODE_DEFAULT_PRESETS = Object.freeze({ chat: "AIRP通用", smart: "全智能通用" });
 
 // ---- [T065 per-user] 存储路径：常量 → (username)=>path 函数，锚 data/users/<user>/presets/ ----
 // 空 username 回退 "_default" 桶（getUserDataDir 内部同款兜底）——匿名/主链无 user 时不崩，与既有 _default 语义一致。
@@ -114,7 +116,12 @@ function loadGlobalConfig(username) {
   //   而调用链 loadGlobalConfig→改 map→saveGlobalConfig 会把默认结构写回=active_preset_map/
   //   deleted_builtins 整表销毁）。首装无文件仍返默认（合法路径不变）；抛错由上层 REST/action
   //   catch 承接报错可见。
-  return readJsonSafeSync(globalConfigFileOf(username), { active_preset: "", default_preset: "", auto_seed_defaults: true });
+  return readJsonSafeSync(globalConfigFileOf(username), {
+    active_preset: "",
+    default_preset: "",
+    auto_seed_defaults: true,
+    mode_default_presets: { ...MODE_DEFAULT_PRESETS },
+  });
 }
 
 /** 保存某用户 config.json。失败返回 false + 日志警告（不抛出，防调用方连锁崩溃） */
@@ -224,6 +231,61 @@ async function actClearLine(username, cid, mode) {
     if (cid in gc.active_preset_map) { delete gc.active_preset_map[cid]; n++; }
     return { changed: n > 0, removed: n };
   });
+}
+
+/**
+ * 为一个真实窗口补齐 chat/smart 两个模式的 exact 绑定。
+ * 旧数据只有裸键或其他模式精确键时先继承已有预设，避免迁移改变用户已经选过的预设；
+ * 没有旧值才使用 mode_default_presets。写入仍走 active_preset_map 唯一漏斗，因此新旧窗口最终都具备
+ * 可追踪的 [chatid:mode] 记录，而不是在 UI 里伪造一个名字。
+ */
+export async function ensureWindowModePresetBindings(username, cid) {
+  if (!cid) return { changed: false, bindings: {} };
+  const st = getStore(username);
+  const configData = st.configData;
+  const modes = ["chat", "smart"];
+  const bindings = {};
+  const out = await _activationMutate(username, `ensureWindowDefaults ${cid}`, (gc) => {
+    const oldDefaults = gc.mode_default_presets && typeof gc.mode_default_presets === "object"
+      ? { ...gc.mode_default_presets } : {};
+    gc.mode_default_presets = {
+      ...MODE_DEFAULT_PRESETS,
+      ...oldDefaults,
+    };
+    let changed = modes.some((mode) => oldDefaults[mode] !== gc.mode_default_presets[mode]);
+    const changedModes = [];
+    for (const mode of modes) {
+      const key = `${cid}:${mode}`;
+      const current = gc.active_preset_map[key];
+      if (current && configData.presets[current]) {
+        bindings[mode] = current;
+        continue;
+      }
+      // 迁移优先继承这个窗口已经绑定过的任一预设：旧实现可能只留下 cid:code
+      // 或 cid:work，没有裸键；不能因为切到 chat/smart 就凭空换成另一套。
+      const legacy = gc.active_preset_map[cid]
+        || Object.entries(gc.active_preset_map)
+          .find(([key, value]) => key.startsWith(`${cid}:`) && configData.presets[value])?.[1];
+      const configured = gc.mode_default_presets[mode] || MODE_DEFAULT_PRESETS[mode];
+      const next = (legacy && configData.presets[legacy] ? legacy : null)
+        || (configured && configData.presets[configured] ? configured : null);
+      if (!next) continue;
+      if (current !== next) {
+        gc.active_preset_map[key] = next;
+        changed = true;
+        changedModes.push(mode);
+      }
+      bindings[mode] = next;
+    }
+    // 配置字段本身也要落盘，方便用户按窗口默认覆盖；完整时不重复写。
+    return { changed, changedModes };
+  });
+  for (const mode of (out.changedModes || [])) {
+    try { await actBroadcastLine(cid, mode, bindings[mode] || ""); } catch (e) {
+      console.warn(`[beilu-preset] ensureWindowModePresetBindings 广播失败(${cid}:${mode}):`, e?.message);
+    }
+  }
+  return { changed: !!out.changed, bindings };
 }
 
 // [0725 凛倾「没有全局」] actSetGlobal 已删除——全局槽概念废除,全部调用点(切换/删除换选/首激活/
@@ -671,10 +733,9 @@ const RUNTIME_PARAMS_DEFAULTS = {
   frequency_penalty: null,  // null=使用预设值（penalty 合法范围 -2~2，不能用 -1 当哨兵）
   presence_penalty: null,   // null=使用预设值（penalty 合法范围 -2~2，不能用 -1 当哨兵）
   min_p: -1,              // -1=使用预设值
-  // thinking 六口·口2（2026-07-25）：boolean 域 false 是合法显式值不能当哨兵，用 null=使用预设值（对齐 penalty 范式）；
-  //   budget 合法域 ≥1024（PARAM_SCHEMA），0 可安全作"使用预设值"哨兵。
-  extended_thinking: null,
-  thinking_budget: 0,
+  // thinking runtime 覆盖键已删（2026-08-01 凛倾收口：思维链控制唯一入口=AI 源面板 per-源 config，
+  //   httpFetch 只读源 config；预设/runtime/子模式一律不再持有 thinking 覆盖）。旧持久化文件里的
+  //   残留键经 loadRuntimeParams spread 进 rt 也无消费方（mergeRuntimeParams 已不读）。
 };
 
 /** 加载某用户持久化的 runtime params */
@@ -1006,13 +1067,7 @@ export async function applyRuntimeParams(body, username) {
       rp.min_p = parseFloat(body.min_p);
       if (isNaN(rp.min_p)) rp.min_p = -1;
     }
-    // thinking 六口·口2：extended_thinking null=解除覆盖回预设值，其余强制 boolean；budget 非法值落 0=解除覆盖
-    if (body.extended_thinking !== undefined) {
-      rp.extended_thinking = body.extended_thinking === null ? null : !!body.extended_thinking;
-    }
-    if (body.thinking_budget !== undefined) {
-      rp.thinking_budget = parseInt(body.thinking_budget, 10) || 0;
-    }
+    // thinking runtime 写口已删（2026-08-01 收口到 AI 源面板，见 RUNTIME_PARAMS_DEFAULTS 处注释）
     // 持久化
     saveRuntimeParams(username);
     // 广播 runtime_params_changed → YonBan 面板实时同步（同 preset_changed pattern）
@@ -1057,9 +1112,10 @@ export function mergeRuntimeParams(presetModelParams, rt, smExt, scopedKey) {
   if (rt.presence_penalty != null) _mergedModelParams.presence_penalty = rt.presence_penalty;
   if (rt.openai_max_context > 0) { _mergedModelParams.openai_max_context = rt.openai_max_context; _mergedModelParams.max_context = rt.openai_max_context; } // B10: 镜像 max_context（proxy 读此键，runtime 覆盖同步生效）
   if (rt.openai_max_tokens > 0) _mergedModelParams.max_tokens = rt.openai_max_tokens;
-  // thinking 六口·口2：null=用预设值（boolean 域禁 -1 哨兵）；budget 0=用预设值
-  if (rt.extended_thinking != null) _mergedModelParams.extended_thinking = !!rt.extended_thinking;
-  if (rt.thinking_budget > 0) _mergedModelParams.thinking_budget = rt.thinking_budget;
+  // thinking runtime 覆盖消费已删（2026-08-01 收口到 AI 源面板）；预设 base 里的存量
+  //   extended_thinking/thinking_budget 键随 spread 透传也无妨——httpFetch 已只读源 config。
+  delete _mergedModelParams.extended_thinking;
+  delete _mergedModelParams.thinking_budget;
   return {
     ..._mergedModelParams,
     stream: rt.stream,
@@ -1091,9 +1147,7 @@ export function mergeRuntimeParams(presetModelParams, rt, smExt, scopedKey) {
       // 确诊-B（prefill 每轮读收口）：子模式 prefill_enabled 覆盖 runtime 基线（:762 rt.prefill_enabled）。
       //   boolean 且 false 有效 → 用 !== undefined 判定（同 _smTemp），使编辑活跃子模式 prefill 当轮生效。
       const _smPrefillEnabled = _smExt?.sub_mode_prefill_enabled;
-      // thinking 六口·口3/口4：boolean undefined=无覆盖（同 prefill_enabled）；budget 生产端 0 已折 undefined
-      const _smExtThinking = _smExt?.sub_mode_extended_thinking;
-      const _smThinkBudget = _smExt?.sub_mode_thinking_budget;
+      // thinking 子模式覆盖消费口已删（2026-08-01 收口到 AI 源面板 per-源单点，httpFetch 只读源 config）
       return {
         ...(_smModel ? { model_override: _smModel } : {}),
         ...(_smApi ? { api_source_override: _smApi } : {}),
@@ -1106,8 +1160,6 @@ export function mergeRuntimeParams(presetModelParams, rt, smExt, scopedKey) {
         ...(_smMinP !== undefined ? { min_p: _smMinP } : {}), // 链路2扩展：子模式 min_p 覆盖
         ...(_smPP ? { prompt_post_processing: _smPP } : {}),
         ...(_smPrefillEnabled !== undefined ? { prefill_enabled: !!_smPrefillEnabled } : {}), // 确诊-B：子模式覆盖 runtime prefill_enabled
-        ...(_smExtThinking !== undefined ? { extended_thinking: !!_smExtThinking } : {}), // thinking 六口·口3/口4：子模式/流程组覆盖
-        ...(_smThinkBudget ? { thinking_budget: _smThinkBudget } : {}),
       };
     })()),
   };
@@ -1238,8 +1290,14 @@ function _loadGlobalCfgFresh(username) {
 //   「回退到全局默认凑的值」——原先三个显示字段（active_preset_resolved/by_mode/using_preset）
 //   都只下发回退后的最终字符串，全局槽一被污染（导入夺槽/删除换选）所有无记录的格子齐变且前端
 //   无从分辨（0724 四格全变实证）。source 值域：exact=[cid:mode] 精确键 / bare=[cid] 裸键（旧数据
-//   跨模式共享槽）/ global=用户级默认（active_preset）/ none=全无。
+//   跨模式共享槽）/ submode=code/work 子模式默认 / mode-default=chat/smart 首次种子 / none=全无。
 // 【功能链】GetData active_preset_by_mode(_src) → 前端四格诚实渲染；生成链仍消费 .name（语义不变）。
+function _resolveModeDefaultPreset(configData, cfg, mode) {
+  if (mode !== "chat" && mode !== "smart") return null;
+  const configured = cfg?.mode_default_presets?.[mode] || MODE_DEFAULT_PRESETS[mode];
+  return configured && configData.presets[configured] ? configured : null;
+}
+
 function resolveActivePresetWithSource(username, cid, mode) {
   const st = getStore(username);
   const configData = st.configData;
@@ -1260,9 +1318,11 @@ function resolveActivePresetWithSource(username, cid, mode) {
       if (_smPreset && configData.presets[_smPreset]) return { name: _smPreset, source: "submode" };
     } catch { /* 子模式配置不可读=诚实落下一层，不拿猜测值凑 */ }
   }
-  // [0725 凛倾「没有全局,马上删除」] 原第三/四级回退(cfg.active_preset/内存 active_preset)整体摘除——
-  //   线级记录是唯一"在用"储存,code/work 无记录=子模式预设(上方),chat/smart 无记录=none(诚实空,
-  //   首次切换才建记录)。active_preset 字段全面退役:不再读(此处)不再写(saveConfigToDisk 停写)。
+  // chat/smart 首次访问在 GetData/生成入口会写 exact；写入失败时仍用同一可配置种子，
+  // 保证运行时不会再得到空引擎。返回 mode-default 只表示持久化修复尚未完成。
+  const modeDefault = _resolveModeDefaultPreset(configData, cfg, mode);
+  if (cid && modeDefault) return { name: modeDefault, source: "mode-default" };
+  // [0725 凛倾「没有全局,马上删除」] 不再回退退役的 active_preset 全局槽。
   return { name: "", source: "none" };
 }
 
@@ -1550,6 +1610,12 @@ const pluginExport = {
       GetData: async (requestedPreset, username, chatid, charName) => {
         const st = getStore(username);
         const { engine, macroMemory, configData } = st;
+        // 首次打开/旧窗口迁移：先把 chat/smart exact 记录写好，再计算四格和顶栏，
+        // 读侧与生成侧看到的是同一份 active_preset_map，而不是 UI 临时默认。
+        if (chatid) {
+          try { await ensureWindowModePresetBindings(username, chatid); }
+          catch (e) { console.warn(`[beilu-preset] 窗口预设初始化失败(${chatid}):`, e?.message); }
+        }
         // 2026-07-09 收口审计：chatid（桥层统一注入）→ 下发 active_preset_resolved 权威解析值
         //   （resolveActivePresetName 精确键>裸键>全局，与生成链同源）。原前端 resolveActivePresetFor 只读
         //   裸键自行解析：同 cid 跨模式（code/work 共 chatId）时裸键停在别模式最后切的预设 → 选择器高亮/
@@ -2184,11 +2250,8 @@ const pluginExport = {
           if (ok) await _tpSync();
         }
 
-        // 批量切换
-        if (data.batch_toggle) {
-          const count = _tpEng.batchToggle(data.batch_toggle);
-          if (count > 0) await _tpSync();
-        }
+        // [2026-08-01 删] batch_toggle：全库零调用方（batch②确认），死 action 删除。
+        //   需要时从 git 恢复：engine.batchToggle(data.batch_toggle) + _tpSync()。
 
         // 新增条目
         if (data.add_entry) {
@@ -2254,11 +2317,8 @@ const pluginExport = {
         // 修改宏变量（#30 隐患1同族修复：宏记忆按目标预设取——激活=全局 macroMemory，
         // 非激活=getMacroMemFor 缓存；_tpSync 非激活分支 syncPresetEngineToConfig 内部
         // 同源 getMacroMemFor 落 macro_variables，写盘闭环）
-        if (data.update_macro_vars) {
-          const _mvMem = (_tpEng === engine) ? macroMemory : getMacroMemFor(username, _tpName);
-          Object.assign(_mvMem.variables, data.update_macro_vars);
-          await _tpSync();
-        }
+        // [2026-08-01 删] update_macro_vars：全库零调用方（batch②确认）。
+        //   需要时从 git 恢复：getMacroMemFor + Object.assign + _tpSync()。
 
         // 更新预设描述
         if (data.update_preset_description) {
@@ -2277,16 +2337,8 @@ const pluginExport = {
           }
         }
 
-        // 清除当前预设（从列表移除）
-        if (data.clear_preset) {
-          const activeName = configData.active_preset;
-          if (activeName && configData.presets[activeName]) {
-            delete configData.presets[activeName];
-          }
-          engine.load({}, "");
-          macroMemory.variables = {};
-          // [0725 凛倾「没有全局」] actSetGlobal/全局广播删除——字段退役,清的只是主引擎运行时容器
-        }
+        // [2026-08-01 删] clear_preset：全库零调用方（batch②确认）。
+        //   需要时从 git 恢复：delete configData.presets[activeName] + engine.load({}, "")。
 
         // 任何 SetData 变更都可能改预设内容 → 单点失效该 user 的 per-preset 引擎缓存（重建成本低）
         invalidateEngineCaches(username);

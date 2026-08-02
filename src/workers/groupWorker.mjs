@@ -7,11 +7,12 @@ import { wbT, wbD } from "../server/wbStub.mjs";
  * runner 模块提供（init 时传 runnerUrl，runner 在本 worker 的 isolate 内 import，
  * 其 import 链上的 configData/ideClient/workspaceRoot 即随 isolate 隔离 = 一组一套）。
  *
- * 协议（主进程 ↔ worker，全部带 id 关联请求/响应）：
+ * 协议（主进程 ↔ worker）：
  *   → {kind:"init", id, payload:{groupId, runnerUrl}}      ← {kind:"reply", id, result:{ready,hasRunner}}
  *   → {kind:"request", id, payload:{...}}                  ← (多条){kind:"stream", id, chunk} 然后 {kind:"reply"|"error", id, ...}
  *   → {kind:"abort", id, payload:{requestId}}              ← {kind:"reply", id, result:{aborted}}
  *   → {kind:"ping", id}                                    ← {kind:"reply", id, result:{pong}}
+ *   worker 生命周期事件（不绑定 request pending）          ← {kind:"event", event:{type:"tool_lifecycle",version:1,...}}
  */
 
 // ★ D1：标记本 isolate 为 worker，使 parts_loader 用 per-isolate 内存门跑 part.Init
@@ -21,12 +22,31 @@ globalThis.__BEILU_WORKER_ISOLATE = true;
 let _runner = null;
 let _groupId = null;
 const _aborts = new Map(); // 进行中请求 id → AbortController（abort 用）
+const _workerId = globalThis.crypto?.randomUUID?.()
+  || `group_worker_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+let _eventSeq = 0;
 
 function reply(id, result) { self.postMessage({ kind: "reply", id, result }); }
 function fail(id, err) {
   self.postMessage({ kind: "error", id, error: err?.stack || err?.message || String(err) });
 }
 function emit(id, chunk) { self.postMessage({ kind: "stream", id, chunk }); }
+function emitEvent(event) {
+  if (!event || typeof event !== "object") return false;
+  const eventId = (typeof event.eventId === "string" && event.eventId)
+    || `${_workerId}:${Date.now()}:${++_eventSeq}`;
+  self.postMessage({
+    kind: "event",
+    event: {
+      ...event,
+      type: "tool_lifecycle",
+      version: 1,
+      workerId: _workerId,
+      eventId,
+    },
+  });
+  return true;
+}
 
 self.onmessage = async (e) => {
   const { kind, id, payload } = e.data || {};
@@ -41,7 +61,7 @@ self.onmessage = async (e) => {
           _runner = mod.run || mod.default || null;
         }
         wbT(null, "groupWorker", "init:done", { groupId: _groupId, hasRunner: typeof _runner === "function" });
-        reply(id, { ready: true, groupId: _groupId, hasRunner: typeof _runner === "function" });
+        reply(id, { ready: true, groupId: _groupId, workerId: _workerId, hasRunner: typeof _runner === "function" });
         break;
       }
       case "request": {
@@ -55,8 +75,10 @@ self.onmessage = async (e) => {
         try {
           const result = await _runner(payload, {
             groupId: _groupId,
+            workerId: _workerId,
             signal: ac.signal,
             emit: (chunk) => emit(id, chunk),
+            emitEvent,
           });
           wbT(payload?.chatid ?? null, "groupWorker", "request:done", { id });
           reply(id, result);
@@ -76,7 +98,7 @@ self.onmessage = async (e) => {
         break;
       }
       case "ping":
-        reply(id, { pong: true, groupId: _groupId });
+        reply(id, { pong: true, groupId: _groupId, workerId: _workerId });
         break;
       default:
         wbD(null, "groupWorker", "onmessage:unknownKind", false, "unknown kind: " + kind, { kind });

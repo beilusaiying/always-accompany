@@ -132,6 +132,7 @@ export default {
 			 * 3. 使用场景和注意事项
 			 */
 			GetPrompt: (arg) => {
+				// ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
 				// 尝试从 prompt_struct 的 plugin_prompts 中获取 beilu-preset 的条目信息
 				const _chatid = arg && (arg.chat_id != null ? arg.chat_id : arg.chatid) || null;
 				wbT(_chatid, "toggle:gate", "getprompt_entry", null);

@@ -38,6 +38,8 @@ import { showOptimisticUserMessage, clearOptimisticUserMessage } from "../render
 
 import { addDragAndDropSupport } from "../widgets/dragAndDrop.mjs";
 import { switchModeTo } from "../../panels/feature/featureControls.mjs";
+// 打字式联想（002 0731）：input 停顿→P1 轻量召回→联想词 chip；默认关，开关在 P1 运行/测试面板
+import { initTypingSuggest, onTypingInput } from "./typingSuggest.mjs";
 import { TAB_TO_MODE, MODE_BADGE } from "../state/modeTabMap.mjs"; // D3 收口：tab→mode 权威表（_TAB_TO_INPUT_MODE 派生源）；D2：快速命令词典派生源
 // skillPicker import 已删（凛倾 0723「说明书库可以删除,和inj重复」：说明书库整域删除，上传按钮回归直传）
 // 注入坞（0726）：本轮 ⚡ 队列的读点与清点。队列是 injectDock 的模块态，发送链只读不持有，
@@ -165,9 +167,11 @@ export function initializeMessageInput() {
   sendButtonElement?.addEventListener("click", sendMessage);
   messageInputElement?.addEventListener("keydown", handleKeyPress);
   // 输入时自动调整高度 + U01 落盘草稿（按当前模式隔离，刷新/切卡回来可恢复）
+  // + 打字式联想（002 0731）：开关关闭时 onTypingInput 内部 no-op 零开销
   messageInputElement?.addEventListener("input", () => {
     autoResizeTextarea(messageInputElement);
     _saveDraft(messageInputElement.value);
+    onTypingInput(messageInputElement.value);
   });
   voiceButtonElement?.addEventListener("click", toggleVoiceRecording);
   // photo-button 已在 HTML 中移除（替换为 single-inject-btn）；?. 在元素不存在时自动跳过绑定
@@ -193,6 +197,7 @@ export function initializeMessageInput() {
   // U01：初始化（含刷新/切卡后 DOM 重建）恢复当前模式草稿
   _restoreDraft();
   initInputResize();
+  initTypingSuggest(messageInputElement); // 打字式联想（002 0731）：Esc 关闭 + focus 一次性预热
   messageInputElement?.focus();
 }
 

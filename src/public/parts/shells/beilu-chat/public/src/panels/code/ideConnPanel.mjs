@@ -67,8 +67,9 @@ const IDE_PROFILES = [
     id: "vscode",
     name: "VS Code / Cursor",
     icon: '<i data-ic="vscode"></i>',
-    extensionName: "YonBan 扩展（beilu-vscode / beilu-cursor）",
-    version: "v0.1.0",
+    // [0731 分发校准] 扩展未上架市场，以仓库内 yonban-vscode/ 的 vsix 分发（版本随构建产物走，不在此硬编码）
+    extensionName: "YonBan 扩展（yonban）",
+    version: "",
     defaultPort: IDE_WS_PORT,
     wsPath: "/ide",
   },
@@ -378,8 +379,8 @@ function showSetupGuide(profile) {
     showToast(
       "info",
       `📖 ${profile.name} 配置指南\n\n` +
-        `1. 在 ${profile.name} 扩展市场搜索 "beilu"\n` +
-        `2. 安装 ${profile.extensionName} 扩展\n` +
+        `1. 找到本体目录下 yonban-vscode/ 内的 .vsix 安装包\n` +
+        `2. 在 ${profile.name} 扩展面板选「从 VSIX 安装…」（Install from VSIX）选择该文件\n` +
         `3. 重启 ${profile.name}\n` +
         `4. 扩展会自动连接到 beilu (端口 ${profile.defaultPort})`,
     );
@@ -544,7 +545,7 @@ function renderConnSettings() {
 // 前端零硬编码；写走 sendAction 门面（verb=setConfig/restart/stop/start → 插件 SetData）。
 // status.port = 发现注册表按子进程 PID 反查的实际绑定端口（端口自增后的真值），非配置镜像。
 
-let _cliData = null; // { status:{running,pid,port,workspace,uptime}, config:{port,autoStart} }
+let _cliData = null; // { status:{running,pid,port,workspace,uptime}, config:{port,autoStart,autoRestart,coexistWithYonban} }
 
 async function _fetchCliData() {
   try {
@@ -627,6 +628,10 @@ function renderCliSettings() {
         <label style="font-size:0.72rem;" for="cli-autorestart-toggle" title="CLI 异常退出后 1 秒自动重启；60 秒内崩溃超 3 次自动熔断，需手动重启">崩溃自动重启</label>
         <input type="checkbox" class="conn-toggle" id="cli-autorestart-toggle" ${cfg.autoRestart !== false ? "checked" : ""}>
       </div>
+      <div class="conn-setting-row">
+        <label style="font-size:0.72rem;" for="cli-coexist-toggle" title="开启后 CLI 与 YonBan 可同时在线并由每条对话线选择执行端；关闭后 YonBan 在线时 CLI 自动让位停机以节省资源">允许与 YonBan 并存</label>
+        <input type="checkbox" class="conn-toggle" id="cli-coexist-toggle" ${cfg.coexistWithYonban !== false ? "checked" : ""}>
+      </div>
       <div style="display:flex;gap:4px;margin-top:2px;">
         <button class="conn-btn conn-btn-primary" id="cli-restart-btn" style="flex:1;font-size:0.7rem;">
           <i data-ic="refresh"></i> ${running ? "重启" : "启动"}
@@ -670,6 +675,15 @@ function renderCliSettings() {
   });
   container.querySelector("#cli-autorestart-toggle")?.addEventListener("change", async (e) => {
     const d = await _cliAction("setConfig", { autoRestart: !!e.target.checked }, "崩溃自动重启设置已保存（重启 CLI 生效）");
+    if (d?.config) _cliData = { ...(_cliData || {}), config: d.config };
+  });
+  container.querySelector("#cli-coexist-toggle")?.addEventListener("change", async (e) => {
+    const coexistWithYonban = !!e.target.checked;
+    const d = await _cliAction(
+      "setConfig",
+      { coexistWithYonban },
+      coexistWithYonban ? "CLI 与 YonBan 并存已开启" : "CLI 与 YonBan 互斥已开启（YonBan 在线时 CLI 自动让位）",
+    );
     if (d?.config) _cliData = { ...(_cliData || {}), config: d.config };
   });
 

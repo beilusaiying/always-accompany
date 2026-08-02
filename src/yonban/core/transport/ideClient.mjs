@@ -84,10 +84,21 @@ import * as fileEditRegistry from "../../../scripts/fileEditRegistry.mjs";
 //   统一由 storage 供给，删除本文件旧的 fileURLToPath 上溯 4 级本地推导，消除三头巧合对齐。
 //   storage 不回引本文件（无环）；ideClient→commandGate→storage 与 ideClient→storage 均单向到 storage。
 import { getFilesSettingsPath, __projectRoot as _IDE_PROJECT_ROOT } from "../functions/memory/storage_mod/storage.mjs";
+import {
+  ToolJobRegistry,
+  buildToolIoRuntimePolicy,
+  readToolRuntimeConfig,
+  resolveToolResponseTimeout,
+} from "./toolRuntime.mjs";
 // 跨 isolate 收口（isolateBridge，零依赖无环）：审批队列单一权威在主进程——worker isolate 的
 // addPendingApproval 改走桥上行（主进程审批面板读得到、批准后主进程执行）；写审批开关/主进程
 // 工作区根经 bridgeState 下行（applyBridgeState）。isolate 判定内化在本系统内部，调用方零改动。
-import { isWorkerIsolate, publishFromWorker, registerBridgeHandler } from "./isolateBridge.mjs";
+import {
+  isWorkerIsolate,
+  publishFromWorker,
+  publishWorkerLifecycle,
+  registerBridgeHandler,
+} from "./isolateBridge.mjs";
 
 // PJ-1 dir bug：canonical「有效工作区根」由 beilu-files 持久化到 <项目根>/data/beilu-files-settings.json。
 // beilu-memory 与 beilu-files 是不同插件、读不到对方 pluginData，故 AI 侧直接读该文件取 canonical 根。
@@ -160,8 +171,7 @@ const RECONNECT_DELAY = 5000;
 // 多开连接池：活跃端口注册表周期重扫间隔（新 YonBan 窗口接入 / 死窗口剪除 / CLI↔YonBan 互斥切换）。
 // 单次开销=读一个小 JSON + N 次 process.kill(pid,0) 探活，15s 粒度足够（窗口启停是人手速事件）。
 const RESCAN_INTERVAL = 15000;
-const TOOL_CALL_TIMEOUT = 30000;
-// ★ B3 写锁：per-file 写串行化的「锁等待」超时（> 单次 callTool 往返 30s，留余量给排队+IO）
+// ★ B3 写锁：只限制等待前序写的排队时间；工具实际响应时限由可编辑 tool_runtime 单源决定。
 const WRITE_LOCK_TIMEOUT = 45000;
 // ★ B3：per-file 写锁用 FILE_EDIT_TOOLS（下方 canonical 定义）。
 //   run_command/todo_write 不写文件锚点、且命令可长跑(130s)，纳入锁会被 45s 锁等待误杀 → 排除。
@@ -170,14 +180,44 @@ const WRITE_LOCK_TIMEOUT = 45000;
 //   整段 drain 独吞。改为：交付给某会话时打 _deliveredTo 标记（不重复交付同一会话），项保留在队列
 //   供其他会话各自拾取一次；超过 linger 时间才物理移除（防无界滞留）。命名语义=null项可滞留的最长时间。
 const NULL_ITEM_LINGER_MS = 10 * 60 * 1000; // 10 分钟
-const COMMAND_TIMEOUT = 60000;
-// 持久会话命令：client 超时须 ≥ 服务端默认(120s)，否则 client 先弃、服务端仍占 _shellSessionBusy 锁，
-// AI 重发被拒 busy，出现假死窗口。给 10s 缓冲让服务端 killTimer→dispose 先释放锁
-const SESSION_COMMAND_TIMEOUT = 130000;
 const HEARTBEAT_INTERVAL = 30000;
 // H3: 僵连接检测——连续超过 HEARTBEAT_TIMEOUT 无 pong 即判半开 TCP（防火墙静默丢/睡眠），
 //   主动 close 触发 onclose→重扫重连（_scheduleRescanSoon）。取 2.5× 心跳间隔，容忍单次丢包。
 const HEARTBEAT_TIMEOUT = 75000;
+
+const TOOL_PROGRESS_PHASES = new Set(["running", "stalled", "telemetry_unavailable"]);
+const TOOL_PROGRESS_NUMBER_FIELDS = [
+  "pid",
+  "processCount",
+  "cpuTimeMs",
+  "cpuDeltaMs",
+  "rssBytes",
+  "rssDeltaBytes",
+  "outputBytes",
+  "outputDeltaBytes",
+  "idleForMs",
+];
+
+/** 执行端 progress 是跨进程输入，只保留协议字段和有限长度诊断，不把任意对象灌进 Job/前端。 */
+function _normalizeToolProgress(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)
+    || !TOOL_PROGRESS_PHASES.has(raw.phase)) return null;
+  const progress = {
+    phase: raw.phase,
+    sampledAt: typeof raw.sampledAt === "string" ? raw.sampledAt.slice(0, 64) : new Date().toISOString(),
+    gpuAvailable: raw.gpuAvailable === true,
+  };
+  for (const key of TOOL_PROGRESS_NUMBER_FIELDS) {
+    const value = Number(raw[key]);
+    if (Number.isFinite(value)) progress[key] = Math.max(0, value);
+  }
+  if (raw.watchdogAction === "terminate" || raw.watchdogAction === "report") {
+    progress.watchdogAction = raw.watchdogAction;
+  }
+  if (typeof raw.errorCode === "string") progress.errorCode = raw.errorCode.slice(0, 96);
+  if (typeof raw.sampleError === "string") progress.sampleError = raw.sampleError.slice(0, 240);
+  return progress;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ★ IDE 工具集合 — 单一定义点（Canonical）
@@ -199,7 +239,7 @@ const IDE_TOOLS = [
     params: {
       path: { type: "string", required: true, description: "文件路径（相对于工作区根目录）" },
       offset: { type: "number", required: false, description: "起始行号（0-based），默认 0" },
-      limit: { type: "number", required: false, description: "读取行数限制，默认全部" },
+      limit: { type: "number", required: false, description: "读取行数限制，默认 500 行（另有 20000 字符预算先到先截；回执 nextOffset/nextCharOffset 为续读点）" },
     },
   },
   {
@@ -480,6 +520,9 @@ class IdeClient {
     if (!isWorkerIsolate) this._loadBindings();
     /** @type {number|null} 主连接端口（未绑定会话的默认路由目标） */
     this._primaryPort = null;
+    /** @type {"cli"|"yonban"|null} 未绑定会话默认后端种类；主实例暂时不可用时只允许同种类等价实例。 */
+    this._primaryKind = null;
+    this._connectionGeneration = 0;
     this._wsPath = DEFAULT_WS_PATH;
     this._rescanTimer = null; // 注册表周期重扫：新窗口上线接入 / 死窗口剪除 / CLI↔YonBan 互斥切换
     this._lastIdeMode = null; // 上一次分类器结果（resolveIdeMode().mode）；变化即广播 ide_mode_changed
@@ -487,6 +530,15 @@ class IdeClient {
 
     /** @type {Map<string, { resolve: Function, reject: Function, timer: ReturnType<typeof setTimeout>, port?: number }>} */
     this._pendingRequests = new Map();
+    /** 已删除会话的在飞工具回包墓碑：requestId → { chatid, jobId, connectionId, timer }。
+     * 本地 request 立即移除并 settle；执行端没有通用取消协议，所以短期保留连接身份，
+     * 让已知迟到回包被定向丢弃，而不是落成匿名 orphan_result。 */
+    this._deletedToolRequestTombstones = new Map();
+    this._toolJobs = new ToolJobRegistry();
+    /** @type {Map<string, string>} chatid → 已从权威会话元数据或认证入口确认的 owner。 */
+    this._chatOwners = new Map();
+    /** 主进程：workerId\0requestId → 主 ToolJob 与远端 lifecycle 相位。 */
+    this._workerLifecycleStates = new Map();
 
     this._autoReconnect = true;
     this._heartbeatTimer = null;
@@ -569,11 +621,16 @@ class IdeClient {
     return !!(conn && conn.connected && conn.ws && conn.ws.readyState === WebSocket.OPEN);
   }
 
-  /** 主连接条目（未绑定会话的默认路由目标）；不活则退池内任一活连接。 */
+  /** 主连接条目（未绑定会话的默认路由目标）；不活时只在同 backend kind 内选择等价实例。 */
   get _primaryConn() {
     const p = this._primaryPort != null ? this._conns.get(this._primaryPort) : null;
     if (this._isConnLive(p)) return p;
-    for (const c of this._conns.values()) if (this._isConnLive(c)) return c;
+    const expectedKind = this._primaryKind || p?.kind || null;
+    for (const c of this._conns.values()) {
+      if (!this._isConnLive(c)) continue;
+      if (expectedKind && c.kind !== expectedKind) continue;
+      return c;
+    }
     return null;
   }
 
@@ -641,6 +698,10 @@ class IdeClient {
     return this._primaryConn != null; // 池内任一活连接=IDE 可用（原单连接语义的自然扩展）
   }
 
+  isConnectedFor(chatid = null) {
+    return this._connFor(chatid || null) != null;
+  }
+
   /**
    * 等待连接就绪（或超时）。connect() 非阻塞（onopen 才置 _connected），worker isolate 首轮带工具的
    * GetReply 可能在握手完成前跑到 isConnected 判定 → 工具误判"未连接"失败（D3 竞态）。
@@ -661,6 +722,10 @@ class IdeClient {
 
   get ideInfo() {
     return this._primaryConn?.ideInfo ?? null; // 兼容旧单连接消费方：主连接的 hello/status 快照
+  }
+
+  ideInfoFor(chatid = null) {
+    return this._connFor(chatid || null)?.ideInfo ?? null;
   }
 
   get availableTools() {
@@ -718,9 +783,13 @@ class IdeClient {
   }
 
   get clientEnv() {
-    const _pc = this._primaryConn;
-    if (!_pc) return "beilu-chat";
-    const appName = _pc.ideInfo?.appName || _pc.ideInfo?.status?.appName || "";
+    return this.clientEnvFor(null);
+  }
+
+  clientEnvFor(chatid = null) {
+    const _conn = this._connFor(chatid || null);
+    if (!_conn) return "beilu-chat";
+    const appName = _conn.ideInfo?.appName || _conn.ideInfo?.status?.appName || "";
     if (/cursor/i.test(appName)) return "cursor";
     if (/code/i.test(appName) || /vscode/i.test(appName)) return "vscode";
     return "ide";
@@ -733,6 +802,47 @@ class IdeClient {
   }
 
   /**
+   * 面板/接口只读视图：按认证 owner 隔离并返回副本，不暴露内部数组、Set 或 owner 字段。
+   */
+  getPendingResults({ ownerUsername = "", chatid } = {}) {
+    const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!owner) return [];
+    if (chatid && this._chatOwners.get(chatid) !== owner) return [];
+    const rows = [];
+    for (const entry of this._pendingResults) {
+      const entryOwner = entry.ownerUsername || (entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "");
+      if (entryOwner !== owner) continue;
+      if (chatid != null && entry.chatid !== chatid) continue;
+      const { ownerUsername: _owner, _deliveredTo, _firstDeliveredAt, ...publicEntry } = entry;
+      rows.push({ ...publicEntry });
+    }
+    return rows;
+  }
+
+  getPendingResultCount(options = {}) {
+    return this.getPendingResults(options).length;
+  }
+
+  /**
+   * 认证入口登记 chat owner。只允许首次写入相同 owner；不同 owner 绝不覆盖。
+   * worker runner 同样调用，用于让仅带 chatid 的既有 producer 在 isolate 内获得安全 owner。
+   * @returns {boolean} 已登记/同 owner 幂等为 true；参数无效或 owner 冲突为 false。
+   */
+  registerChatOwner(chatid, ownerUsername) {
+    const chatKey = typeof chatid === "string" ? chatid.trim() : "";
+    const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!chatKey || !owner) return false;
+    const existing = this._chatOwners.get(chatKey);
+    if (existing && existing !== owner) {
+      wbD(chatKey, "ideClient", "chatOwner:conflict", false,
+        "会话 owner 已登记为其他用户，拒绝覆盖", { existingOwner: existing, assertedOwner: owner });
+      return false;
+    }
+    if (!existing) this._chatOwners.set(chatKey, owner);
+    return true;
+  }
+
+  /**
    * 工具结果入队（Hop 8）。本地工具结果与 worker 跨界回灌的单一入口。
    *
    * 链路：_callToolAndStoreInner → 本函数 → _pendingResults 队列 → generation.mjs consumePendingResults
@@ -742,10 +852,30 @@ class IdeClient {
    * @param {{ tool: string, params: object, result: object, chatid: string|null, timestamp: string }} entry
    */
   enqueuePendingResult(entry) {
-    this._pendingResults.push(entry);
+    if (!entry || typeof entry !== "object") return false;
+    const assertedOwner = typeof entry.ownerUsername === "string" ? entry.ownerUsername.trim() : "";
+    const registeredOwner = entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "";
+    if (entry.chatid && (!registeredOwner || (assertedOwner && assertedOwner !== registeredOwner))) {
+      wbD(entry.chatid, "ideClient", "pendingResults:ownerMismatch", false,
+        "定向 pendingResult 缺少已认证 owner 或 owner 冲突，已拒绝入队", {
+          tool: entry.tool || null,
+          registeredOwner: registeredOwner || null,
+          assertedOwner: assertedOwner || null,
+        });
+      return false;
+    }
+    const ownerUsername = assertedOwner || registeredOwner;
+    // 无 chatid 且无 owner 的 producer 没有安全消费域，禁止退化成所有用户共享结果。
+    if (!ownerUsername) {
+      wbD(null, "ideClient", "pendingResults:ownerMissing", false,
+        "pendingResult 缺少 owner，已拒绝进入队列", { tool: entry.tool || null });
+      return false;
+    }
+    const storedEntry = { ...entry, ownerUsername };
+    this._pendingResults.push(storedEntry);
     wbT(entry?.chatid ?? null, "ideClient", "pendingResults:push", { tool: entry?.tool, queueLen: this._pendingResults.length, hasChatid: !!entry?.chatid });
     const CAP = 200;
-    if (this._pendingResults.length <= CAP) return;
+    if (this._pendingResults.length <= CAP) return true;
     let overflow = this._pendingResults.length - CAP;
     const dropped = [], kept = [];
     for (const r of this._pendingResults) {
@@ -757,6 +887,7 @@ class IdeClient {
     if (dropped.length) wbD(entry?.chatid ?? null, "ideClient", "pendingResults:truncateDrop", false,
       `pendingResults 超 ${CAP}，丢弃 ${dropped.length} 项(会话感知:优先 null 广播,保未消费定向)`,
       { dropped: dropped.length, droppedChatids: dropped.map((d) => d.chatid || null) });
+    return true;
   }
 
   // ---- 写操作审批 ----
@@ -960,7 +1091,7 @@ class IdeClient {
           timestamp: new Date().toISOString(),
         };
         this.enqueuePendingResult(_failEntry);
-        this._operationHistory.push({ ..._failEntry, success: false });
+        this._recordOperation({ ..._failEntry, success: false });
         void this._maybeCommitCheckpoint(op.checkpointId, op.chatid || null);
         this._broadcastApprovalCount(op.chatid || null);
         wbD(op.chatid || null, "ideClient", "approval:fingerprintMismatch", false, "审批指纹漂移,fail-closed拒绝执行", { tool: op.tool, id: opId });
@@ -1011,7 +1142,7 @@ class IdeClient {
       timestamp: new Date().toISOString(),
     };
     this.enqueuePendingResult(_rejEntry);
-    this._operationHistory.push({ ..._rejEntry, success: false });
+    this._recordOperation({ ..._rejEntry, success: false });
     // 该检查点的待审批写全部消费完（含被拒）→ 提交，避免 deferred 检查点成永不闭合的孤儿（fire-and-forget）
     void this._maybeCommitCheckpoint(op.checkpointId, op.chatid || null);
     this._broadcastApprovalCount(op.chatid || null);
@@ -1055,20 +1186,585 @@ class IdeClient {
 
   /**
    * 当前连接的后端类型："cli"（beilu-cli 常驻工具后端）| "yonban"（VS Code/Cursor 真 IDE）| null（未连接）。
-   * 权威=hello 载荷 appName（代码cli/server.mjs:287 发 "beilu-cli"，YonBan 无此值或为扩展名）；
+   * 权威=hello 载荷 appName（plugins/beilu-cli/server/server.mjs 发 "beilu-cli"，YonBan 无此值或为扩展名）；
    * hello 未到时回退连接期注册表 type 初判。消费方：injectionSystem 识别（CLI 绑 INJ-2、
    * YonBan 绑 INJ-2-code，凛倾 0722）+ 心跳互斥升级（CLI 在连而 YonBan 出现 → 切 YonBan）。
    */
   get backendKind() {
-    const _pc = this._primaryConn;
-    if (_pc) {
-      const app = _pc.ideInfo?.appName;
+    return this.backendKindFor(null);
+  }
+
+  backendKindFor(chatid = null) {
+    const _conn = this._connFor(chatid || null);
+    if (_conn) {
+      const app = _conn.ideInfo?.appName;
       if (app) return app === "beilu-cli" ? "cli" : "yonban";
-      return _pc.kind || null;
+      return _conn.kind || null;
     }
     // 连接中（尚无活连接）时回退注册表初判——保持原「connecting 期间可判型」语义
-    for (const c of this._conns.values()) if (c.connecting) return c.kind || null;
+    if (!chatid) {
+      for (const c of this._conns.values()) if (c.connecting) return c.kind || null;
+    }
     return null;
+  }
+
+  getToolJobs({ ownerUsername = "", chatid, limit, includeTerminal = true } = {}) {
+    const owner = ownerUsername || (chatid ? this._chatOwners.get(chatid) || "" : "");
+    return this._toolJobs.list({ ownerUsername: owner, chatid, limit, includeTerminal });
+  }
+
+  clearTerminalToolJobs(chatid = null, ownerUsername = "") {
+    const owner = ownerUsername || (chatid ? this._chatOwners.get(chatid) || "" : "");
+    return this._toolJobs.clearTerminal(owner, chatid);
+  }
+
+  // forPrompt=true 走 listForPrompt 单次投递视图（终态 job 只进一次提示词，凛倾 0731
+  // 「a 执行、b 看到、c 消失」）；默认 false 保持全量视图（面板/REST 消费者 setDataActions.mjs:5394
+  // 读历史不推进投递标记）。两视图共用同一 registry，标记只在 forPrompt 路径写。
+  getRuntimeSnapshot(chatid = null, username = "", { forPrompt = false } = {}) {
+    const conn = this._connFor(chatid || null);
+    const config = readToolRuntimeConfig(username);
+    const jobsQuery = {
+      ownerUsername: username || (chatid ? this._chatOwners.get(chatid) || "" : ""),
+      chatid: chatid == null ? undefined : chatid,
+      limit: config.history_limit,
+    };
+    return {
+      chatid: chatid || null,
+      connected: !!conn,
+      backendKind: this.backendKindFor(chatid || null),
+      backendPort: conn?.port ?? null,
+      clientEnv: this.clientEnvFor(chatid || null),
+      workspaceRoot: this.workspaceRootFor(chatid || null),
+      binding: chatid ? this._bindingsSnapshot()[chatid] || null : null,
+      config,
+      jobs: forPrompt
+        ? this._toolJobs.listForPrompt(jobsQuery)
+        : this.getToolJobs(jobsQuery),
+    };
+  }
+
+  async _runtimeContextFor(chatid = null, assertedOwnerUsername = "") {
+    let metadataOwner = "";
+    if (chatid) {
+      try {
+        const { chatMetadatas } = await import("../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
+        metadataOwner = chatMetadatas?.get(chatid)?.username || "";
+      } catch { /* 无会话元数据时使用默认配置 */ }
+    }
+    const assertedOwner = typeof assertedOwnerUsername === "string" ? assertedOwnerUsername.trim() : "";
+    const registeredOwner = chatid ? this._chatOwners.get(chatid) || "" : "";
+    if ((metadataOwner && assertedOwner && metadataOwner !== assertedOwner)
+      || (registeredOwner && metadataOwner && registeredOwner !== metadataOwner)
+      || (registeredOwner && assertedOwner && registeredOwner !== assertedOwner)) {
+      return {
+        username: "",
+        ownerMismatch: true,
+        config: readToolRuntimeConfig(""),
+      };
+    }
+    const username = registeredOwner || metadataOwner || assertedOwner;
+    if (chatid && username && !this.registerChatOwner(chatid, username)) {
+      return {
+        username: "",
+        ownerMismatch: true,
+        config: readToolRuntimeConfig(""),
+      };
+    }
+    return { username, ownerMismatch: false, config: readToolRuntimeConfig(username) };
+  }
+
+  /**
+   * 返回认证用户可见的操作历史副本。
+   * ownerUsername 是强制边界；没有 owner 时 fail-closed，不退化为全局视图。
+   */
+  getOperationHistory({ ownerUsername = "", chatid, limit } = {}) {
+    const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!owner) return [];
+    if (chatid && this._chatOwners.get(chatid) !== owner) return [];
+    const rows = [];
+    for (const entry of this._operationHistory) {
+      const entryOwner = entry.ownerUsername || (entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "");
+      if (entryOwner !== owner) continue;
+      if (chatid != null && entry.chatid !== chatid) continue;
+      const { ownerUsername: _owner, ...publicEntry } = entry;
+      rows.push({ ...publicEntry });
+    }
+    const normalizedLimit = Number.isFinite(Number(limit))
+      ? Math.max(0, Math.floor(Number(limit)))
+      : rows.length;
+    if (normalizedLimit === 0) return [];
+    return normalizedLimit < rows.length ? rows.slice(-normalizedLimit) : rows;
+  }
+
+  /**
+   * 只清除认证用户自己的操作历史；跨 owner chat 或缺 owner 都不执行。
+   */
+  clearOperationHistory({ ownerUsername = "", chatid } = {}) {
+    const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!owner) return 0;
+    if (chatid && this._chatOwners.get(chatid) !== owner) return 0;
+    let cleared = 0;
+    this._operationHistory = this._operationHistory.filter((entry) => {
+      const entryOwner = entry.ownerUsername || (entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "");
+      const matches = entryOwner === owner && (chatid == null || entry.chatid === chatid);
+      if (matches) cleared++;
+      return !matches;
+    });
+    return cleared;
+  }
+
+  _recordOperation(entry, historyLimit = this._maxHistory) {
+    if (!entry || typeof entry !== "object") return false;
+    const ownerUsername = (typeof entry.ownerUsername === "string" && entry.ownerUsername.trim())
+      || (entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "");
+    this._operationHistory.push({ ...entry, ownerUsername });
+    const limit = Math.max(20, Number(historyLimit) || this._maxHistory);
+    if (this._operationHistory.length > limit) {
+      this._operationHistory = this._operationHistory.slice(-limit);
+    }
+    return true;
+  }
+
+  _broadcastToolJob(job, notify = false, phase = null) {
+    if (!job) return;
+    const ownerUsername = this._toolJobs.ownerOf(job.jobId);
+    const event = { type: "tool_job_update", payload: { job, notify: !!notify, phase: phase || job.state } };
+    import("../dispatch/dispatcher.mjs")
+      .then(({ dispatch }) => {
+        if (job.chatid) {
+          return dispatch({
+            target: "bus:broadcast",
+            verb: "emit",
+            source: "yonban",
+            payload: { chatid: job.chatid, event },
+          });
+        }
+        if (!ownerUsername) {
+          return { ok: false, error: { code: "E_OWNER", msg: "无会话 Job 缺少 owner，已禁止广播" } };
+        }
+        return dispatch({
+          target: "bus:broadcast",
+          verb: "emitOwner",
+          source: "yonban",
+          payload: { username: ownerUsername, event },
+        });
+      })
+      .then((r) => {
+        if (r && r.ok === false) {
+          console.warn(`[ideClient] tool_job_update 未送达(job=${job.jobId}): ${r?.error?.msg || r?.error?.code || "broadcast unavailable"}`);
+        }
+      })
+      .catch((e) => console.warn(`[ideClient] tool_job_update 广播异常(job=${job.jobId}): ${e?.message || e}`));
+  }
+
+  _publishWorkerToolLifecycle(pending, phase, extra = {}) {
+    if (!isWorkerIsolate || !pending) return false;
+    if (!pending.chatid || !pending.username || !pending.requestId || !pending.jobId) {
+      wbD(pending?.chatid || null, "ideClient", "workerLifecycle:routeMissing", false,
+        "worker lifecycle 缺少 chat/owner/request/job，已 fail-closed", {
+          phase,
+          requestId: pending?.requestId || null,
+          jobId: pending?.jobId || null,
+        });
+      return false;
+    }
+    if (phase !== "started" && !pending.lifecycleStarted) {
+      if (!this._publishWorkerToolLifecycle(pending, "started")) return false;
+    }
+    const event = {
+      eventId: globalThis.crypto?.randomUUID?.()
+        || `tool_lifecycle_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+      phase,
+      requestId: pending.requestId,
+      jobId: pending.jobId,
+      chatid: pending.chatid,
+      username: pending.username,
+      backend: {
+        kind: pending.backendKind,
+        port: pending.port,
+        connectionId: pending.connectionId || undefined,
+      },
+      tool: pending.tool,
+      params: pending.params,
+      occurredAt: new Date().toISOString(),
+      ...extra,
+    };
+    const sent = publishWorkerLifecycle(event);
+    if (sent && phase === "started") pending.lifecycleStarted = true;
+    if (!sent) {
+      wbD(pending.chatid, "ideClient", "workerLifecycle:publishFail", false,
+        "worker 常驻 lifecycle emitter 不可用", { phase, requestId: pending.requestId, jobId: pending.jobId });
+    }
+    return sent;
+  }
+
+  _armLateResultRetention(requestId, pending) {
+    if (pending.retentionTimer) return;
+    pending.retentionTimer = setTimeout(() => {
+      if (this._pendingRequests.get(requestId) !== pending) return;
+      this._pendingRequests.delete(requestId);
+      clearTimeout(pending.longTimer);
+      if (isWorkerIsolate) {
+        if (pending.waitTimedOut || pending.detached) {
+          this._publishWorkerToolLifecycle(pending, "transport_lost", {
+            errorCode: "late_result_retention_expired",
+          });
+        }
+        this._stats.toolCallsFailed++;
+        return;
+      }
+      const job = this._toolJobs.update(pending.jobId, {
+        state: "failed",
+        error: "late_result_retention_expired",
+        late: true,
+      });
+      this._stats.toolCallsFailed++;
+      this._broadcastToolJob(job, !!pending.config?.notify_failed, "retention_expired");
+      wbD(pending.chatid || null, "ideClient", "toolResult:retentionExpired", false,
+        "迟到结果接收窗口已到期", { requestId, jobId: pending.jobId });
+    }, pending.config.late_result_retention_ms);
+    pending.retentionTimer.unref?.();
+  }
+
+  _makeLateResultEntry(pending, result) {
+    const entry = {
+      tool: pending.tool,
+      params: pending.params,
+      result,
+      chatid: pending.chatid || null,
+      ownerUsername: pending.username || "",
+      timestamp: new Date().toISOString(),
+      jobId: pending.jobId,
+      backendKind: pending.backendKind,
+      backendPort: pending.port,
+      late: true,
+    };
+    const image = result?.success && result.result?.image === true ? result.result : null;
+    if (image && typeof image.base64 === "string" && image.base64) {
+      try {
+        entry.userImage = {
+          content: image.content || `[图片: ${pending.params?.path || ""}]`,
+          files: [{
+            name: (typeof pending.params?.path === "string" ? pending.params.path.split(/[\\/]/).pop() : "") || "image",
+            mime_type: image.mimeType || "image/png",
+            buffer: Buffer.from(image.base64, "base64"),
+          }],
+          marker: "ide_read_image",
+          keepN: 2,
+        };
+      } catch { /* 图片解码失败仍保留普通工具结果 */ }
+    }
+    return entry;
+  }
+
+  _publishLateToolResult(pending, result) {
+    // worker 只保留执行端 WS/requestId 运输职责；迟到结果不得在 isolate 本地入池、记录、
+    // 广播或唤醒。结构化 lifecycle 经常驻 kind:event 交回主进程唯一 owner。
+    if (isWorkerIsolate) {
+      this._publishWorkerToolLifecycle(pending, "late_result", { result });
+      return;
+    }
+    const entry = this._makeLateResultEntry(pending, result);
+    // 没有 chatid 的结果没有安全的 AI 注入目标；保留 operation/Job 诊断，但禁止进入全局 pending 队列。
+    if (pending.chatid && !this.enqueuePendingResult(entry)) {
+      wbD(pending.chatid, "ideClient", "lateResult:ownerRejected", false,
+        "迟到结果 owner 校验失败，禁止广播与唤醒", { jobId: pending.jobId });
+      return;
+    }
+    this._recordOperation({ ...entry, success: result?.success !== false }, pending.config.history_limit);
+    this._broadcastToolResultsReady(pending.chatid, pending.jobId, "late_tool_result");
+    if (pending.chatid) {
+      import("../../../public/parts/shells/beilu-chat/src/lib/generation.mjs")
+        .then((generation) => generation.notifyResultReady?.({
+          chatid: pending.chatid,
+          username: pending.username,
+          source: "late_tool_result",
+          delayMs: pending.config.late_result_continue_delay_ms,
+          enabled: pending.config.auto_continue_late_results,
+        }))
+        .catch((e) => console.warn(`[ideClient] 迟到工具结果续轮调度失败(job=${pending.jobId}): ${e?.message || e}`));
+    }
+  }
+
+  _broadcastToolResultsReady(chatid, jobId, source) {
+    if (!chatid) return;
+    const event = { type: "tool_results_ready", payload: { count: 1, source, jobId } };
+    import("../dispatch/dispatcher.mjs")
+      .then(({ dispatch }) => dispatch({
+        target: "bus:broadcast",
+        verb: "emit",
+        source: "yonban",
+        payload: { chatid, event },
+      }))
+      .then((r) => {
+        if (r && r.ok === false) {
+          console.warn(`[ideClient] tool_results_ready 未送达(job=${jobId}): ${r?.error?.msg || r?.error?.code}`);
+        }
+      })
+      .catch((e) => console.warn(`[ideClient] 工具结果广播异常(job=${jobId}): ${e?.message || e}`));
+  }
+
+  /**
+   * 主进程接收 worker 常驻 lifecycle 的唯一入口。
+   * schema/chat/认证 owner/相位任一不成立即 fail-closed：不建结果、不广播、不唤醒。
+   */
+  async acceptWorkerToolLifecycle(event) {
+    if (isWorkerIsolate) return { accepted: false, reason: "worker_cannot_own_lifecycle" };
+    const requiredStrings = ["eventId", "workerId", "chatid", "username", "requestId", "jobId", "occurredAt"];
+    const missing = requiredStrings.filter((key) => typeof event?.[key] !== "string" || !event[key].trim());
+    const validPhase = new Set(["started", "progress", "wait_timeout", "late_result", "transport_lost"]);
+    const backend = event?.backend;
+    const connectionId = typeof backend?.connectionId === "string"
+      ? backend.connectionId.trim()
+      : "";
+    if (event?.type !== "tool_lifecycle" || event?.version !== 1 || missing.length
+      || !validPhase.has(event?.phase)
+      || !backend || !["yonban", "cli"].includes(backend.kind)
+      || !Number.isSafeInteger(backend.port) || backend.port < 1 || backend.port > 65535
+      || !connectionId) {
+      wbD(event?.chatid || null, "ideClient", "workerLifecycle:schemaRejected", false,
+        "worker lifecycle schema 无效", {
+          missing,
+          phase: event?.phase,
+          version: event?.version,
+          backendPort: backend?.port ?? null,
+          hasConnectionId: !!connectionId,
+        });
+      return { accepted: false, reason: "invalid_schema" };
+    }
+    const chatid = event.chatid.trim();
+    const username = event.username.trim();
+    const registeredOwner = this._chatOwners.get(chatid) || "";
+    let chatData = null;
+    try {
+      const { chatMetadatas } = await import("../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
+      chatData = chatMetadatas?.get(chatid) || null;
+    } catch { /* 下方统一 fail-closed */ }
+    if (!registeredOwner || registeredOwner !== username || !chatData?.chatMetadata
+      || chatData.username !== username || chatData.chatMetadata.username !== username) {
+      wbD(chatid, "ideClient", "workerLifecycle:ownerRejected", false,
+        "worker lifecycle 的 chat/owner 不在主进程认证域或会话已删除/卸载", {
+          registeredOwner: registeredOwner || null,
+          eventOwner: username,
+          metadataOwner: chatData?.username || null,
+          hasMetadata: !!chatData?.chatMetadata,
+        });
+      return { accepted: false, reason: "chat_owner_invalid" };
+    }
+
+    const key = `${event.workerId}\0${event.requestId}`;
+    let state = this._workerLifecycleStates.get(key);
+    const config = readToolRuntimeConfig(username);
+    if (event.phase === "started") {
+      if (state) return { accepted: false, reason: "invalid_phase" };
+      const created = this._toolJobs.create({
+        requestId: event.requestId,
+        chatid,
+        ownerUsername: username,
+        tool: event.tool || "_unknown_tool",
+        params: event.params || {},
+        backendKind: backend.kind,
+        backendPort: Number(backend.port),
+        historyLimit: config.history_limit,
+      });
+      const running = this._toolJobs.update(created.jobId, {
+        state: "running",
+        startedAt: event.occurredAt || new Date().toISOString(),
+      });
+      state = {
+        key,
+        workerId: event.workerId,
+        requestId: event.requestId,
+        remoteJobId: event.jobId,
+        jobId: created.jobId,
+        chatid,
+        username,
+        tool: event.tool || "_unknown_tool",
+        params: event.params || {},
+        backendKind: backend.kind,
+        port: Number(backend.port),
+        connectionId,
+        phase: "started",
+        stallNotified: false,
+        config,
+      };
+      this._workerLifecycleStates.set(key, state);
+      this._broadcastToolJob(running, false, "started");
+      wbT(chatid, "ideClient", "workerLifecycle:started", {
+        workerId: event.workerId, requestId: event.requestId, jobId: created.jobId,
+      });
+      return { accepted: true, phase: "started", jobId: created.jobId };
+    }
+
+    if (!state || state.chatid !== chatid || state.username !== username
+      || state.remoteJobId !== event.jobId
+      || state.backendKind !== backend.kind || state.port !== backend.port
+      || state.connectionId !== connectionId) {
+      wbD(chatid, "ideClient", "workerLifecycle:routeRejected", false,
+        "worker lifecycle 无匹配 started 或路由事实漂移", {
+          phase: event.phase, workerId: event.workerId, requestId: event.requestId, hasState: !!state,
+        });
+      return { accepted: false, reason: "route_or_phase_invalid" };
+    }
+
+    if (event.phase === "progress") {
+      if (!["started", "wait_timeout"].includes(state.phase)) {
+        return { accepted: false, reason: "invalid_phase" };
+      }
+      const progress = _normalizeToolProgress(event.progress);
+      if (!progress) return { accepted: false, reason: "invalid_progress" };
+      const currentJob = this._toolJobs.get(state.jobId);
+      const startedAtMs = new Date(currentJob?.startedAt || currentJob?.createdAt || Date.now()).getTime();
+      const job = this._toolJobs.update(state.jobId, {
+        progress,
+        longRunning: currentJob?.longRunning || progress.phase === "stalled",
+        duration: Math.max(0, Date.now() - startedAtMs),
+      });
+      if (progress.phase === "running") state.stallNotified = false;
+      const shouldNotify = progress.phase === "stalled"
+        && !state.stallNotified
+        && !!config.notify_stalled;
+      if (progress.phase === "stalled") state.stallNotified = true;
+      this._broadcastToolJob(
+        job,
+        shouldNotify,
+        progress.phase,
+      );
+      return { accepted: true, phase: "progress", jobId: state.jobId };
+    }
+
+    if (event.phase === "wait_timeout") {
+      if (state.phase !== "started") return { accepted: false, reason: "invalid_phase" };
+      state.phase = "wait_timeout";
+      const job = this._toolJobs.update(state.jobId, {
+        state: "wait_timeout",
+        error: "response_wait_timeout",
+      });
+      this._broadcastToolJob(job, false, "wait_timeout");
+      return { accepted: true, phase: "wait_timeout", jobId: state.jobId };
+    }
+
+    if (event.phase === "transport_lost") {
+      if (!["started", "wait_timeout"].includes(state.phase)) return { accepted: false, reason: "invalid_phase" };
+      state.phase = "transport_lost";
+      // Map 顺序改为「进入终态的时间顺序」，让 per-owner 修剪删除最老终态，
+      // 而不是按 started 的先后误删刚完成的长任务。
+      this._workerLifecycleStates.delete(key);
+      this._workerLifecycleStates.set(key, state);
+      const job = this._toolJobs.update(state.jobId, {
+        state: "connection_lost",
+        error: event.errorCode || "worker_transport_lost",
+      });
+      this._broadcastToolJob(job, !!config.notify_failed, "transport_lost");
+      this._trimWorkerLifecycleStates(username);
+      return { accepted: true, phase: "transport_lost", jobId: state.jobId };
+    }
+
+    if (!["started", "wait_timeout"].includes(state.phase)
+      || !event.result || typeof event.result !== "object") {
+      return { accepted: false, reason: "invalid_phase_or_result" };
+    }
+    const success = event.result.success !== false;
+    const enriched = {
+      ...event.result,
+      jobId: state.jobId,
+      backendKind: state.backendKind,
+      backendPort: state.port,
+      late: true,
+      waitTimedOut: state.phase === "wait_timeout",
+    };
+    const entry = this._makeLateResultEntry(state, enriched);
+    if (!this.enqueuePendingResult(entry)) {
+      return { accepted: false, reason: "pending_owner_rejected" };
+    }
+    this._recordOperation({ ...entry, success }, config.history_limit);
+    state.phase = "late_result";
+    this._workerLifecycleStates.delete(key);
+    this._workerLifecycleStates.set(key, state);
+    const job = this._toolJobs.update(state.jobId, {
+      state: success ? "succeeded" : "failed",
+      error: success ? null : (event.result.error || "tool_failed"),
+      late: true,
+    });
+    this._broadcastToolJob(
+      job,
+      success ? !!config.notify_completed : !!config.notify_failed,
+      "late_result",
+    );
+    this._broadcastToolResultsReady(chatid, state.jobId, "worker_late_tool_result");
+    try {
+      const generation = await import("../../../public/parts/shells/beilu-chat/src/lib/generation.mjs");
+      generation.notifyResultReady?.({
+        chatid,
+        username,
+        source: "worker_late_tool_result",
+        delayMs: config.late_result_continue_delay_ms,
+        enabled: config.auto_continue_late_results,
+      });
+    } catch (e) {
+      console.warn(`[ideClient] worker 迟到结果续轮调度失败(job=${state.jobId}): ${e?.message || e}`);
+    }
+    this._trimWorkerLifecycleStates(username);
+    return { accepted: true, phase: "late_result", jobId: state.jobId };
+  }
+
+  /**
+   * 按 owner 的 tool_runtime.history_limit 修剪 lifecycle 终态。
+   * 非终态代表仍可能收到 late_result/transport_lost，绝不能为腾容量而删；
+   * 每个 owner 独立计数，避免一个用户的长历史挤掉另一个用户的关联状态。
+   */
+  _trimWorkerLifecycleStates(ownerUsername) {
+    const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!owner) return 0;
+    const limit = readToolRuntimeConfig(owner).history_limit;
+    const terminalKeys = [];
+    for (const [key, state] of this._workerLifecycleStates) {
+      if (state.username === owner
+        && (state.phase === "late_result" || state.phase === "transport_lost")) {
+        terminalKeys.push(key);
+      }
+    }
+    const removeCount = Math.max(0, terminalKeys.length - limit);
+    for (let i = 0; i < removeCount; i++) this._workerLifecycleStates.delete(terminalKeys[i]);
+    return removeCount;
+  }
+
+  _failPendingForConnection(requestId, pending, errorCode) {
+    clearTimeout(pending.timer);
+    clearTimeout(pending.longTimer);
+    clearTimeout(pending.retentionTimer);
+    this._pendingRequests.delete(requestId);
+    if (pending.kind !== "tool") {
+      pending.reject(new Error(errorCode));
+      return;
+    }
+    if (isWorkerIsolate) {
+      if (pending.waitTimedOut || pending.detached) {
+        this._publishWorkerToolLifecycle(pending, "transport_lost", { errorCode });
+      }
+      this._stats.toolCallsFailed++;
+      pending.resolve({
+        success: false,
+        error: errorCode,
+        errorCode,
+        jobId: pending.jobId,
+        backendKind: pending.backendKind,
+        backendPort: pending.port,
+      });
+      return;
+    }
+    const job = this._toolJobs.update(pending.jobId, { state: "connection_lost", error: errorCode });
+    this._stats.toolCallsFailed++;
+    this._broadcastToolJob(job, !!pending.config?.notify_failed, "connection_lost");
+    pending.resolve({
+      success: false,
+      error: errorCode,
+      errorCode,
+      jobId: pending.jobId,
+      backendKind: pending.backendKind,
+      backendPort: pending.port,
+    });
   }
 
   // ---- 多开实例绑定（chatid → YonBan 实例端口，producer=YonBan 窗口 selectChat 经 SetData bindIdeInstance） ----
@@ -1105,7 +1801,11 @@ class IdeClient {
       if (_br) this._bindingRoots.set(chatid, _br);
     }
     this._persistBindings();
-    if (this._autoReconnect) this._ensureConn(port, resolveTokenForPort(port), "yonban");
+    if (this._autoReconnect) {
+      const _knownKind = this._conns.get(port)?.kind
+        || (IdeClient.discoverActivePorts().find((entry) => entry?.port === port)?.type === "beilu-cli" ? "cli" : "yonban");
+      this._ensureConn(port, resolveTokenForPort(port), _knownKind);
+    }
     wbT(chatid, "ideClient", "bind:set", { port });
     return { success: true, port };
   }
@@ -1240,7 +1940,12 @@ class IdeClient {
   connect(options = {}) {
     this._autoReconnect = options.autoReconnect !== false;
     if (options.port) {
-      if (this._primaryPort == null) this._primaryPort = options.port;
+      if (this._primaryPort == null) {
+        this._primaryPort = options.port;
+        this._primaryKind = options.kind || null;
+      } else if (this._primaryPort === options.port && !this._primaryKind && options.kind) {
+        this._primaryKind = options.kind;
+      }
       this._ensureConn(options.port, options.token || resolveTokenForPort(options.port), options.kind || null);
       this._startHeartbeat();
       return;
@@ -1284,9 +1989,14 @@ class IdeClient {
           .catch((e) => console.warn(`[ideClient] IDE 模式切换广播异常: ${e?.message || e}`));
       }
     }
-    if (_ide.mode === "yonban") {
+    if (_ide.mode === "yonban" || _ide.mode === "hybrid") {
       // YonBan 模式：窗口维度=实例 → 每个在线窗口各建一条连接（多开的物理基础）
       targets = _ide.yonbans.map((e) => ({ port: e.port, kind: "yonban", time: e.time || 0 }));
+      if (_ide.mode === "hybrid") {
+        // CLI 自身按 chatid 分池，一个在线进程即可；YonBan 则保留每个实例的独立连接。
+        const cli = [..._ide.clis].sort((a, b) => (b.time || 0) - (a.time || 0))[0];
+        if (cli) targets.push({ port: cli.port, kind: "cli", time: cli.time || 0 });
+      }
     } else if (_ide.mode === "cli") {
       // CLI 模式：窗口维度=线 → 一个进程服务全部线，连一条即可（多线靠会话键在 CLI 侧分池）
       const cli = [..._ide.clis].sort((a, b) => (b.time || 0) - (a.time || 0))[0];
@@ -1298,15 +2008,24 @@ class IdeClient {
     // worker isolate 收敛：只连主端口一条（isolate 服务单会话；定向连接走 connect({port})，
     // 这里是无绑定回退）——避免 N 个 worker × M 个窗口的网状连接浪费。
     if (isWorkerIsolate && targets.length > 1) {
-      targets = [[...targets].sort((a, b) => (b.time || 0) - (a.time || 0))[0]];
+      const _workerTargets = targets.some((t) => t.kind === "yonban")
+        ? targets.filter((t) => t.kind === "yonban")
+        : targets;
+      targets = [[..._workerTargets].sort((a, b) => (b.time || 0) - (a.time || 0))[0]];
     }
     const targetPorts = new Set(targets.map((t) => t.port));
     for (const conn of [...this._conns.values()]) {
       if (!targetPorts.has(conn.port)) this._dropConn(conn, "registry-prune");
     }
-    this._primaryPort = targets.length
-      ? [...targets].sort((a, b) => (b.time || 0) - (a.time || 0))[0].port
+    // 未绑定会话保持 YonBan 优先的兼容默认；显式绑定的会话始终走自身 CLI/YonBan。
+    const _primaryCandidates = targets.some((t) => t.kind === "yonban")
+      ? targets.filter((t) => t.kind === "yonban")
+      : targets;
+    const _primaryTarget = _primaryCandidates.length
+      ? [..._primaryCandidates].sort((a, b) => (b.time || 0) - (a.time || 0))[0]
       : null;
+    this._primaryPort = _primaryTarget?.port ?? null;
+    this._primaryKind = _primaryTarget?.kind || null;
     for (const t of targets) {
       this._ensureConn(t.port, t.token || resolveTokenForPort(t.port), t.kind);
     }
@@ -1320,6 +2039,7 @@ class IdeClient {
     const conn = {
       port, kind: kind || null, ws: null, connected: false, connecting: true,
       ideInfo: null, lastPongAt: 0, token,
+      connectionId: `conn_${Date.now()}_${++this._connectionGeneration}`,
       authFailCount: existing?.authFailCount || 0, lastFailToken: existing?.lastFailToken || null,
     };
     this._conns.set(port, conn);
@@ -1336,6 +2056,10 @@ class IdeClient {
       const ws = new WebSocket(url);
       conn.ws = ws;
       ws.onopen = () => {
+        if (this._conns.get(port) !== conn) {
+          try { ws.close(1000, "stale connection"); } catch { /* ignore */ }
+          return;
+        }
         conn.connected = true;
         conn.connecting = false;
         conn.lastPongAt = Date.now(); // H3: 连上即设基线，避免首个心跳周期前误判僵连接
@@ -1355,6 +2079,7 @@ class IdeClient {
       };
       ws.onclose = (event) => this._handleConnClose(conn, event);
       ws.onerror = () => {
+        if (this._conns.get(port) !== conn) return;
         conn.connecting = false;
         wbT(null, "ideClient", "connect:wsError", { port }); // YonBan/IDE 可选,未起=正常态非异常(重扫已节流)
       };
@@ -1369,18 +2094,21 @@ class IdeClient {
 
   /** 单连接关闭处理：只拒本连接在飞 pending（多连接下禁全清）；鉴权失败计数；调度重扫重连。 */
   _handleConnClose(conn, event) {
+    const isCurrent = this._conns.get(conn.port) === conn;
     const wasConnected = conn.connected;
-    if (wasConnected) this._notifyBoundLinesGone(conn); // 停 YonBan → 通知绑在它上面的线（取 ideInfo 前调用）
+    if (isCurrent && wasConnected) this._notifyBoundLinesGone(conn); // 停 YonBan → 通知绑在它上面的线（取 ideInfo 前调用）
     conn.connected = false;
     conn.connecting = false;
     conn.ideInfo = null;
     conn.ws = null;
     for (const [id, pending] of [...this._pendingRequests]) {
-      if (pending.port === conn.port) {
-        clearTimeout(pending.timer);
-        this._pendingRequests.delete(id);
-        pending.reject(new Error("IDE 连接已断开"));
+      if (pending.connectionId === conn.connectionId) {
+        this._failPendingForConnection(id, pending, "backend_connection_lost");
       }
+    }
+    if (!isCurrent) {
+      wbT(null, "ideClient", "connect:staleCloseIgnored", { port: conn.port, connectionId: conn.connectionId });
+      return;
     }
     const code = event?.code;
     if (code === 4001 || code === 4003) {
@@ -1398,17 +2126,16 @@ class IdeClient {
 
   /** 剪除池内连接（窗口关闭 pid 失活 / CLI 被 YonBan 互斥顶掉）。 */
   _dropConn(conn, reason) {
+    const isCurrent = this._conns.get(conn.port) === conn;
     // [0726 修哑通知] 通知必须在置 connected=false 之前发：本函数先置 false，等 ws.close 的 onclose
     //   回调进 _handleConnClose 时 wasConnected 已是 false → 那里的通知不会触发。而「关掉 VSCode 窗口」
     //   走的正是本路径（重扫发现 pid 失活 → 不在 targets → 剪除），等于最常见场景下线收不到任何提示。
-    if (conn.connected) this._notifyBoundLinesGone(conn);
+    if (isCurrent && conn.connected) this._notifyBoundLinesGone(conn);
     // 在飞请求就地拒绝：本连接已被剪除，其 pending 不会再有回包，留着只能等 30s 超时白等。
     //   （被动断开路径由 _handleConnClose 做同样的事，此处补主动剪除路径。）
     for (const [id, pending] of [...this._pendingRequests]) {
-      if (pending.port === conn.port) {
-        clearTimeout(pending.timer);
-        this._pendingRequests.delete(id);
-        try { pending.reject(new Error(`IDE 连接已被剪除(${reason})`)); } catch { /* reject 抛错不阻断剪除 */ }
+      if (pending.connectionId === conn.connectionId) {
+        this._failPendingForConnection(id, pending, `backend_connection_pruned:${reason}`);
       }
     }
     try { conn.ws?.close(1000, "prune"); } catch { /* ignore */ }
@@ -1416,7 +2143,7 @@ class IdeClient {
     conn.connecting = false;
     conn.ws = null;
     conn.ideInfo = null;
-    this._conns.delete(conn.port);
+    if (isCurrent) this._conns.delete(conn.port);
     wbT(null, "ideClient", "conn:prune", { port: conn.port, reason });
   }
 
@@ -1433,6 +2160,7 @@ class IdeClient {
     }
     this._conns.clear();
     this._primaryPort = null;
+    this._primaryKind = null;
     console.log("[ideClient] 已手动断开");
   }
 
@@ -1457,12 +2185,32 @@ class IdeClient {
    * @returns {Promise<object>} { success, result, error, blocked, ... }
    */
   async callTool(tool, params = {}, timeout, traceId, gateCtx = {}) {
-    wbT(null, "ideClient", "callTool:enter", { tool, path: params?.path, source: gateCtx.source });
+    wbT(gateCtx.chatid || null, "ideClient", "callTool:enter", {
+      tool,
+      path: params?.path,
+      source: gateCtx.source,
+    });
     // ★ T16 abort：signal 已 aborted → 直接返回 blocked，不发 WS
     const _signal = gateCtx.signal;
     if (_signal?.aborted) {
       wbT(null, "ideClient", "callTool:abortedBeforeSend", { tool });
       return { success: false, aborted: true, error: "工具调用已被取消(signal aborted)" };
+    }
+    // owner 必须先于命令能力读取完成核验。否则前端可伪造 owner 选中别人的
+    // command_config，或命令闸只能永远退回默认能力，导致用户设置成为死开关。
+    const { username, config, ownerMismatch } = await this._runtimeContextFor(
+      gateCtx.chatid || null,
+      gateCtx.ownerUsername || "",
+    );
+    if (ownerMismatch || (gateCtx.chatid && !username)) {
+      wbD(gateCtx.chatid || null, "ideClient", "callTool:ownerMismatch", false,
+        "认证 owner 缺失或与会话 owner 不一致，已拒绝发送工具调用", { tool });
+      return {
+        success: false,
+        blocked: true,
+        error: ownerMismatch ? "工具调用 owner 与会话属主不一致" : "工具调用缺少已认证会话 owner",
+        errorCode: ownerMismatch ? "tool_owner_mismatch" : "tool_owner_missing",
+      };
     }
     // ★ D3 统一执行闸（单一 choke point）：所有 IDE 工具执行（三通道）在此强制过同一闸。
     //   fail-closed：被拦的命令返回 blocked 结果，绝不发 WS 到 YonBan（使危险命令到不了 YonBan）。
@@ -1472,6 +2220,7 @@ class IdeClient {
       params,
       source: gateCtx.source || (gateCtx.preChecked ? "ai" : "unknown"),
       preChecked: !!gateCtx.preChecked,
+      ownerUsername: username,
     });
     if (!_gate.allowed) {
       wbD(null, "ideClient", "callTool:gateBlocked", false, _gate.reason, { tool, riskLevel: _gate.riskLevel });
@@ -1529,12 +2278,23 @@ class IdeClient {
       return { success: false, error: "IDE 未连接" };
     }
 
-    const timeoutMs = timeout || (
-      tool === "run_command"
-        ? (params.session === true ? SESSION_COMMAND_TIMEOUT : COMMAND_TIMEOUT)
-        : TOOL_CALL_TIMEOUT
-    );
+    const timeoutMs = resolveToolResponseTimeout(config, params, timeout);
     const id = `ide_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const backendKind = (_conn.ideInfo?.appName === "beilu-cli" || _conn.kind === "cli") ? "cli" : "yonban";
+    const queuedJob = isWorkerIsolate ? null : this._toolJobs.create({
+        requestId: id,
+        chatid: gateCtx.chatid || null,
+        ownerUsername: username,
+        tool,
+        params,
+        backendKind,
+        backendPort: _conn.port,
+        waitTimeoutMs: timeoutMs,
+        historyLimit: config.history_limit,
+      });
+    if (queuedJob) this._broadcastToolJob(queuedJob, false, "queued");
+    const transportJobId = queuedJob?.jobId
+      || `worker_tool_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     this._stats.toolCallsSent++;
 
     return new Promise((resolve, reject) => {
@@ -1542,24 +2302,103 @@ class IdeClient {
       let _onAbort, _settled = false;
       const _resolve = (v) => { if (_settled) return; _settled = true; if (_signal && _onAbort) _signal.removeEventListener("abort", _onAbort); resolve(v); };
 
+      const pending = {
+        kind: "tool",
+        resolve: _resolve,
+        reject,
+        timer: null,
+        longTimer: null,
+        retentionTimer: null,
+        port: _conn.port,
+        connectionId: _conn.connectionId,
+        requestId: id,
+        jobId: transportJobId,
+        tool,
+        params,
+        chatid: gateCtx.chatid || null,
+        username,
+        config,
+        backendKind,
+        waitTimedOut: false,
+        detached: false,
+        lifecycleStarted: false,
+        stallNotified: false,
+      };
+
       const timer = setTimeout(() => {
-        this._pendingRequests.delete(id);
-        this._stats.toolCallsFailed++;
+        if (this._pendingRequests.get(id) !== pending) return;
+        pending.waitTimedOut = true;
+        if (isWorkerIsolate) {
+          this._publishWorkerToolLifecycle(pending, "wait_timeout");
+        } else {
+          const job = this._toolJobs.update(pending.jobId, {
+            state: "wait_timeout",
+            error: "response_wait_timeout",
+          });
+          this._broadcastToolJob(job, false, "wait_timeout");
+        }
+        this._armLateResultRetention(id, pending);
         wbD(null, "ideClient", "callTool:timeout", false, `工具调用超时(${timeoutMs}ms)`, { tool, id });
-        _resolve({ success: false, error: `工具调用超时 (${timeoutMs}ms): ${tool}` });
+        _resolve({
+          success: false,
+          pending: true,
+          waitTimedOut: true,
+          error: `工具调用等待超时 (${timeoutMs}ms)，执行端结果仍在接收`,
+          errorCode: "response_wait_timeout",
+          jobId: pending.jobId,
+          backendKind,
+          backendPort: _conn.port,
+        });
       }, timeoutMs);
+      pending.timer = timer;
 
-      this._pendingRequests.set(id, { resolve: _resolve, reject, timer, port: _conn.port });
+      pending.longTimer = setTimeout(() => {
+        if (this._pendingRequests.get(id) !== pending) return;
+        if (isWorkerIsolate) return;
+        const currentJob = this._toolJobs.get(pending.jobId);
+        const startedAtMs = new Date(currentJob?.startedAt || currentJob?.createdAt || Date.now()).getTime();
+        const job = this._toolJobs.update(pending.jobId, {
+          longRunning: true,
+          // 非终态 update 不会自动计算 duration；显式写入当前耗时，避免长任务提醒显示成 0ms。
+          duration: Math.max(0, Date.now() - startedAtMs),
+        });
+        this._broadcastToolJob(job, !!config.notify_long_running, "long_running");
+      }, config.long_running_after_ms);
+      pending.longTimer.unref?.();
 
-      // ★ T16 abort：signal abort 时清 timer + 从 pending 删 + resolve aborted
+      this._pendingRequests.set(id, pending);
+
+      // signal 只能停止本地等待；执行端没有取消协议，因此保留 request 接收迟到结果。
       if (_signal) {
         _onAbort = () => {
           clearTimeout(timer);
-          this._pendingRequests.delete(id);
+          clearTimeout(pending.longTimer);
+          pending.detached = true;
+          if (!isWorkerIsolate) {
+            const job = this._toolJobs.update(pending.jobId, {
+              state: "detached",
+              error: "caller_aborted",
+            });
+            this._broadcastToolJob(job, false, "detached");
+          }
+          this._armLateResultRetention(id, pending);
           wbT(null, "ideClient", "callTool:abortedBySignal", { tool, id });
-          _resolve({ success: false, aborted: true, error: "工具调用已被取消(signal aborted)" });
+          _resolve({
+            success: false,
+            aborted: true,
+            pending: true,
+            error: "工具调用等待已取消，执行端结果仍在接收",
+            errorCode: "caller_aborted",
+            jobId: pending.jobId,
+            backendKind,
+            backendPort: _conn.port,
+          });
         };
         _signal.addEventListener("abort", _onAbort, { once: true });
+        if (_signal.aborted) {
+          _onAbort();
+          return;
+        }
       }
 
       // traceId：贯穿三层(本体→YonBan→前端)的单轮关联 ID，供端到端日志拼接
@@ -1567,18 +2406,48 @@ class IdeClient {
       //   执行端（YonBan ToolExecutor / CLI executor 孪生）在池入口识别落 params._window_id，
       //   有 per-线状态的工具（run_command 持久会话等）从那里取键。替代原「后端对单个工具注入
       //   session_key」的字段级做法：窗口身份是指令属性，不是某个工具的参数。
-      const msg = { type: "tool_call", id, payload: { id, tool, params, traceId, chatid: gateCtx.chatid || null } };
+      const msg = {
+        type: "tool_call",
+        id,
+        payload: {
+          id,
+          tool,
+          params,
+          traceId,
+          chatid: gateCtx.chatid || null,
+          transport: {
+            runtimePolicy: buildToolIoRuntimePolicy(config),
+            ownerUsername: username || null,
+          },
+        },
+      };
 
       try {
         _conn.ws.send(JSON.stringify(msg));
+        if (!isWorkerIsolate) {
+          const sentJob = this._toolJobs.update(pending.jobId, { state: "sent" });
+          this._broadcastToolJob(sentJob, false, "sent");
+        }
         wbT(gateCtx.chatid || null, "ideClient", "callTool:wsSent", { tool, id, port: _conn.port, chatid: gateCtx.chatid || null }); // [窗口id 0726] 信封归因：哪条线→哪个窗口端口
         console.log(`[ideClient] 已发送工具调用: ${tool} (id=${id})`);
       } catch (err) {
         clearTimeout(timer);
+        clearTimeout(pending.longTimer);
         this._pendingRequests.delete(id);
         this._stats.toolCallsFailed++;
+        if (!isWorkerIsolate) {
+          const failedJob = this._toolJobs.update(pending.jobId, { state: "failed", error: "send_failed" });
+          this._broadcastToolJob(failedJob, !!config.notify_failed, "failed");
+        }
         wbD(null, "ideClient", "callTool:sendFail", false, err.message, { tool, id });
-        _resolve({ success: false, error: `发送失败: ${err.message}` });
+        _resolve({
+          success: false,
+          error: `发送失败: ${err.message}`,
+          errorCode: "send_failed",
+          jobId: pending.jobId,
+          backendKind,
+          backendPort: _conn.port,
+        });
       }
     });
   }
@@ -1811,6 +2680,10 @@ class IdeClient {
       tool, params, result,
       chatid: chatid || null,   // ★ B2 corrId隔离: 会话维度，null=广播给所有会话(向后兼容)
       timestamp: new Date().toISOString(),
+      jobId: result?.jobId || null,
+      backendKind: result?.backendKind || null,
+      backendPort: result?.backendPort ?? null,
+      late: !!result?.late,
     };
     // ★ [0723 图片进视觉·A方案] read_file 读图片 → 内层工具返回 {image:true, base64, mimeType}（CLI+YonBan 两套 file-tools 均产此结构）。
     //   传输契约：callTool resolve 的是外层包装 {id, success, result:<工具返回>}（CLI executor.mjs L221 / YonBan ToolCallResult 同形），
@@ -1861,10 +2734,8 @@ class IdeClient {
     }
     this.enqueuePendingResult(entry); // 单源入队+会话感知截断（与 worker 回灌共用）
     // 操作历史（持久，不随consume清空）
-    this._operationHistory.push({ ...entry, success });
-    if (this._operationHistory.length > this._maxHistory) {
-      this._operationHistory = this._operationHistory.slice(-this._maxHistory);
-    }
+    const { config: _historyConfig } = await this._runtimeContextFor(chatid);
+    this._recordOperation({ ...entry, success }, _historyConfig.history_limit);
     // ★ 读取类工具结果记录到缓存清单（AI可查看并决定清理）
     if (success && READ_TOOLS.has(tool) && result.result) {
       const _path = params.path || params.pattern || "(unknown)";
@@ -1979,6 +2850,50 @@ class IdeClient {
    */
   forgetChat(chatid) {
     if (!chatid) return;
+    const ownerUsername = this._chatOwners?.get(chatid) || "";
+    let pendingRequestsDetached = 0;
+    for (const [requestId, pending] of this._pendingRequests || []) {
+      if (pending?.kind !== "tool" || pending.chatid !== chatid) continue;
+      clearTimeout(pending.timer);
+      clearTimeout(pending.longTimer);
+      clearTimeout(pending.retentionTimer);
+      pending.detached = true;
+      pending.resolve?.({
+        success: false,
+        aborted: true,
+        pending: false,
+        error: "会话已删除，已停止等待该工具结果",
+        errorCode: "chat_deleted",
+        jobId: pending.jobId,
+        backendKind: pending.backendKind,
+        backendPort: pending.port,
+      });
+      this._pendingRequests.delete(requestId);
+      // 执行端没有通用取消协议：本地 active request 立即移除，只保留连接身份墓碑。
+      // 真实回包会删除墓碑；没有回包则按既有 late-result retention 自动到期。
+      const tombstone = {
+        chatid,
+        jobId: pending.jobId,
+        connectionId: pending.connectionId,
+        timer: null,
+      };
+      tombstone.timer = setTimeout(() => {
+        if (this._deletedToolRequestTombstones.get(requestId) === tombstone) {
+          this._deletedToolRequestTombstones.delete(requestId);
+        }
+      }, Math.max(1_000, Number(pending.config?.late_result_retention_ms) || 900_000));
+      tombstone.timer.unref?.();
+      this._deletedToolRequestTombstones.set(requestId, tombstone);
+      pendingRequestsDetached++;
+    }
+    const pendingResultsBefore = this._pendingResults.length;
+    this._pendingResults = this._pendingResults.filter((entry) => {
+      if (entry?.chatid === chatid) return false;
+      entry?._deliveredTo?.delete?.(chatid);
+      return true;
+    });
+    const pendingResultsRemoved = pendingResultsBefore - this._pendingResults.length;
+    const operationHistoryRemoved = this.clearOperationHistory({ ownerUsername, chatid });
     this._diagRepeat?.delete(chatid);
     this._lastDiagSig?.delete(chatid);
     this._externalChanges?.delete(chatid);
@@ -1987,7 +2902,18 @@ class IdeClient {
     this._bindingIds?.delete(chatid);   // 配对删链（编号身份随绑定回收）
     this._bindingSources?.delete(chatid); // 配对删链（绑定来源随绑定回收）
     this._bindingRoots?.delete(chatid); // 配对删链（根快照随绑定回收）
+    this._toolJobs?.forgetChat(chatid, ownerUsername);
+    for (const [key, state] of this._workerLifecycleStates || []) {
+      if (state.chatid === chatid && state.username === ownerUsername) this._workerLifecycleStates.delete(key);
+    }
+    this._chatOwners?.delete(chatid);
     this._persistBindings?.(); // 持久表同步剪除（防删聊天后盘上残留死键）
+    wbT(chatid, "ideClient", "forgetChat:toolStateCleared", {
+      pendingRequestsDetached,
+      pendingResultsRemoved,
+      operationHistoryRemoved,
+    });
+    return { pendingRequestsDetached, pendingResultsRemoved, operationHistoryRemoved };
   }
 
   /**
@@ -2036,7 +2962,7 @@ class IdeClient {
    * @param {string|null} chatid - 会话 ID，null 则全量 drain
    * @returns {Array<object>} 本会话可消费的结果数组
    */
-  consumePendingResults(chatid = null) {
+  consumePendingResults(chatid = null, ownerUsername = "") {
     // ★ B2 corrId隔离 + F4 null项真广播:
     //   - 带 chatid 的项(本会话专属): 取走并从队列移除(仍独占,语义=定向给该会话)。
     //   - null 项(无会话归属=广播给所有会话): 不再被首个续轮会话整段 drain 独吞。改为每会话各收一次——
@@ -2045,16 +2971,33 @@ class IdeClient {
     //   - 不传 chatid(=null) 退化为全量 drain(无会话标识的老调用方,如 worker runner 回传),保持旧行为不变。
     const _now = Date.now();
     if (!chatid) {
-      const all = [...this._pendingResults];
-      this._pendingResults.length = 0;
-      wbT(null, "ideClient", "pendingResults:consumeDrain", { taken: all.length });
-      return all;
+      const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+      if (!owner) return [];
+      const mine = [], rest = [];
+      for (const entry of this._pendingResults) {
+        const entryOwner = entry.ownerUsername || (entry.chatid ? this._chatOwners.get(entry.chatid) || "" : "");
+        if (entryOwner === owner) mine.push(entry);
+        else rest.push(entry);
+      }
+      this._pendingResults = rest;
+      wbT(null, "ideClient", "pendingResults:consumeOwnerDrain", { owner, taken: mine.length, remain: rest.length });
+      return mine;
+    }
+    const consumerOwner = this._chatOwners.get(chatid) || "";
+    const assertedConsumerOwner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!consumerOwner || (assertedConsumerOwner && assertedConsumerOwner !== consumerOwner)) {
+      wbD(chatid, "ideClient", "pendingResults:consumeOwnerRejected", false,
+        "消费 pendingResult 时缺少认证 owner 或 owner 冲突", {
+          registeredOwner: consumerOwner || null,
+          assertedOwner: assertedConsumerOwner || null,
+        });
+      return [];
     }
     const mine = [];
     const rest = [];
     let _lingerEvicted = 0;
     for (const r of this._pendingResults) {
-      if (r.chatid === chatid) {
+      if (r.chatid === chatid && r.ownerUsername === consumerOwner) {
         // 定向本会话: 取走 + 移除。
         mine.push(r);
       } else if (r.chatid) {
@@ -2062,6 +3005,10 @@ class IdeClient {
         rest.push(r);
       } else {
         // null 项 = 广播。本会话未收过 → 交付 + 标记;已收过 → 跳过。项保留(由 linger 决定何时删)。
+        if (!consumerOwner || !r.ownerUsername || r.ownerUsername !== consumerOwner) {
+          rest.push(r);
+          continue;
+        }
         if (!r._deliveredTo) r._deliveredTo = new Set();
         if (!r._deliveredTo.has(chatid)) {
           mine.push(r);
@@ -2085,14 +3032,20 @@ class IdeClient {
 
   // A2: 按 chatid 计数本会话可消费的 pending（与 consumePendingResults 同款过滤）。
   // 用于 generation autocontinue 判定，避免用全局 length 让多窗口下别的 chat 的 pending 串台误判。
-  countPendingResults(chatid = null) {
-    if (!chatid) return this._pendingResults.length;
+  countPendingResults(chatid = null, ownerUsername = "") {
+    if (!chatid) return this.getPendingResultCount({ ownerUsername });
+    const consumerOwner = this._chatOwners.get(chatid) || "";
+    const assertedConsumerOwner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+    if (!consumerOwner || (assertedConsumerOwner && assertedConsumerOwner !== consumerOwner)) return 0;
     let n = 0;
     for (const r of this._pendingResults) {
-      if (r.chatid === chatid) n++;
+      if (r.chatid === chatid && r.ownerUsername === consumerOwner) n++;
       // F4: null 项只在本会话尚未收过时才计数(与 consumePendingResults 同款,避免 linger 期内
       //   已交付的项被反复计入、误触发空续轮)。
-      else if (!r.chatid && !(r._deliveredTo && r._deliveredTo.has(chatid))) n++;
+      else if (!r.chatid
+        && consumerOwner
+        && r.ownerUsername === consumerOwner
+        && !(r._deliveredTo && r._deliveredTo.has(chatid))) n++;
     }
     return n;
   }
@@ -2247,6 +3200,7 @@ class IdeClient {
       }, timeout);
 
       this._pendingRequests.set(id, {
+        kind: "question",
         resolve: (payload) => {
           clearTimeout(timer);
           const answer = payload?.answer || payload?.result?.answer || "";
@@ -2321,19 +3275,190 @@ class IdeClient {
         if (conn.port === this._primaryPort) this._reconcileWorkspaceToCanonical();
         break;
 
+      case "tool_started": {
+        const requestId = msg.id || msg.payload?.id;
+        const deletedTombstone = this._deletedToolRequestTombstones.get(requestId);
+        if (deletedTombstone) {
+          wbT(deletedTombstone.chatid || null, "ideClient", "tool_started:deletedChatDiscarded", {
+            requestId,
+            jobId: deletedTombstone.jobId,
+            connectionMatch: deletedTombstone.connectionId === conn?.connectionId,
+          });
+          break;
+        }
+        const pending = this._pendingRequests.get(requestId);
+        if (pending?.kind === "tool" && pending.connectionId === conn?.connectionId) {
+          if (!isWorkerIsolate) {
+            const job = this._toolJobs.update(pending.jobId, {
+              state: "running",
+              startedAt: msg.payload?.startedAt || new Date().toISOString(),
+            });
+            this._broadcastToolJob(job, false, job?.state);
+          }
+        } else if (pending?.kind === "tool") {
+          wbD(null, "ideClient", "tool_started:connectionMismatch", false,
+            "tool_started 来自非请求所属连接，已忽略", {
+              requestId,
+              expectedConnectionId: pending.connectionId,
+              actualConnectionId: conn?.connectionId,
+            });
+        } else {
+          wbD(null, "ideClient", "tool_started:orphan", false, "tool_started 无匹配工具请求", { requestId, port: conn?.port });
+        }
+        break;
+      }
+
+      case "tool_progress": {
+        const requestId = msg.id || msg.payload?.id;
+        const deletedTombstone = this._deletedToolRequestTombstones.get(requestId);
+        if (deletedTombstone) {
+          wbT(deletedTombstone.chatid || null, "ideClient", "tool_progress:deletedChatDiscarded", {
+            requestId,
+            jobId: deletedTombstone.jobId,
+          });
+          break;
+        }
+        const pending = this._pendingRequests.get(requestId);
+        if (pending?.kind === "tool" && pending.connectionId === conn?.connectionId) {
+          const progress = _normalizeToolProgress(msg.payload?.progress);
+          if (!progress) {
+            wbD(pending.chatid || null, "ideClient", "tool_progress:schemaRejected", false,
+              "tool_progress payload 无效", { requestId, jobId: pending.jobId });
+            break;
+          }
+          if (isWorkerIsolate) {
+            this._publishWorkerToolLifecycle(pending, "progress", { progress });
+          } else {
+            const currentJob = this._toolJobs.get(pending.jobId);
+            const startedAtMs = new Date(
+              currentJob?.startedAt || currentJob?.createdAt || Date.now(),
+            ).getTime();
+            const job = this._toolJobs.update(pending.jobId, {
+              progress,
+              longRunning: currentJob?.longRunning || progress.phase === "stalled",
+              duration: Math.max(0, Date.now() - startedAtMs),
+            });
+            if (progress.phase === "running") pending.stallNotified = false;
+            const shouldNotify = progress.phase === "stalled"
+              && !pending.stallNotified
+              && !!pending.config.notify_stalled;
+            if (progress.phase === "stalled") pending.stallNotified = true;
+            this._broadcastToolJob(
+              job,
+              shouldNotify,
+              progress.phase,
+            );
+          }
+        } else if (pending?.kind === "tool") {
+          wbD(null, "ideClient", "tool_progress:connectionMismatch", false,
+            "tool_progress 来自非请求所属连接，已忽略", {
+              requestId,
+              expectedConnectionId: pending.connectionId,
+              actualConnectionId: conn?.connectionId,
+            });
+        } else {
+          wbD(null, "ideClient", "tool_progress:orphan", false,
+            "tool_progress 无匹配工具请求", { requestId, port: conn?.port });
+        }
+        break;
+      }
+
       case "tool_result": {
         const resultPayload = msg.payload;
         const requestId = msg.id || resultPayload?.id;
+        const deletedTombstone = this._deletedToolRequestTombstones.get(requestId);
+        if (deletedTombstone) {
+          const connectionMatch = deletedTombstone.connectionId === conn?.connectionId;
+          if (connectionMatch) {
+            clearTimeout(deletedTombstone.timer);
+            this._deletedToolRequestTombstones.delete(requestId);
+          }
+          wbT(deletedTombstone.chatid || null, "ideClient", "tool_result:deletedChatDiscarded", {
+            requestId,
+            jobId: deletedTombstone.jobId,
+            success: resultPayload?.success !== false,
+            connectionMatch,
+          });
+          break;
+        }
         const pending = this._pendingRequests.get(requestId);
-        if (pending) {
+        if (pending?.kind === "tool" && pending.connectionId === conn?.connectionId) {
           clearTimeout(pending.timer);
+          clearTimeout(pending.longTimer);
+          clearTimeout(pending.retentionTimer);
           this._pendingRequests.delete(requestId);
-          if (resultPayload?.success) this._stats.toolCallsSucceeded++;
+          const success = resultPayload?.success !== false;
+          if (success) this._stats.toolCallsSucceeded++;
           else this._stats.toolCallsFailed++;
-          pending.resolve(resultPayload);
+          const late = !!(pending.waitTimedOut || pending.detached);
+          const enriched = {
+            ...(resultPayload || {}),
+            jobId: pending.jobId,
+            backendKind: pending.backendKind,
+            backendPort: pending.port,
+            late,
+            waitTimedOut: !!pending.waitTimedOut,
+            detached: !!pending.detached,
+          };
+          if (isWorkerIsolate) {
+            if (late) this._publishLateToolResult(pending, enriched);
+            else pending.resolve(enriched);
+          } else {
+            const job = this._toolJobs.update(pending.jobId, {
+              state: success ? "succeeded" : "failed",
+              error: success ? null : (resultPayload?.error || "tool_failed"),
+              late,
+            });
+            this._broadcastToolJob(
+              job,
+              success ? !!pending.config.notify_completed : !!pending.config.notify_failed,
+              late ? "late_completed" : (success ? "completed" : "failed"),
+            );
+            if (late) this._publishLateToolResult(pending, enriched);
+            else pending.resolve(enriched);
+          }
+        } else if (pending?.kind === "tool") {
+          // request id 不是连接认证：旧连接或另一后端即使拿到 id，也不能完成不属于它的 pending。
+          wbD(null, "ideClient", "tool_result:connectionMismatch", false,
+            "tool_result 来自非请求所属连接，已拒绝匹配", {
+              requestId,
+              expectedConnectionId: pending.connectionId,
+              actualConnectionId: conn?.connectionId,
+            });
         } else {
-          // 暗角：结果到达但无匹配 pending（多为已超时/重连清空 _pendingRequests 后迟到的回包），静默丢弃。
-          wbD(null, "ideClient", "tool_result:orphan", false, "tool_result 无匹配 pending(迟到/已超时)，丢弃", { requestId });
+          if (isWorkerIsolate) {
+            wbD(null, "ideClient", "tool_result:workerOrphan", false,
+              "worker 收到无匹配 request 的 tool_result，缺少 chat/owner 路由，仅留运输诊断", {
+                requestId, port: conn?.port,
+              });
+            break;
+          }
+          // 真正未知的回包不注入任何会话，只保留可诊断 Job/历史；避免旧实现静默丢弃，也避免跨会话广播。
+          const orphan = this._toolJobs.create({
+            requestId,
+            chatid: null,
+            ownerUsername: "",
+            tool: resultPayload?.tool || "_unknown_tool",
+            params: {},
+            backendKind: (conn?.ideInfo?.appName === "beilu-cli" || conn?.kind === "cli") ? "cli" : "yonban",
+            backendPort: conn?.port ?? null,
+          });
+          const orphanJob = this._toolJobs.update(orphan.jobId, {
+            state: "orphan_result",
+            error: "unmatched_tool_result",
+            late: true,
+          });
+          this._recordOperation({
+            tool: resultPayload?.tool || "_unknown_tool",
+            params: {},
+            result: resultPayload || null,
+            success: false,
+            chatid: null,
+            timestamp: new Date().toISOString(),
+            jobId: orphanJob?.jobId || null,
+            state: "orphan_result",
+          });
+          wbD(null, "ideClient", "tool_result:orphan", false, "tool_result 无匹配 pending，已留诊断记录且未注入会话", { requestId, port: conn?.port });
         }
         break;
       }
@@ -2342,7 +3467,7 @@ class IdeClient {
         // 用户回答了提问
         const requestId = msg.id || msg.payload?.id;
         const pending = this._pendingRequests.get(requestId);
-        if (pending) {
+        if (pending?.kind === "question") {
           clearTimeout(pending.timer);
           this._pendingRequests.delete(requestId);
           pending.resolve(msg.payload);
@@ -2537,12 +3662,14 @@ export function partitionActiveIdeInstances() {
  *   "只能有一个窗口" → 本体拉第二条线时检测不到第二个实例 = 本体的多线被套进 YonBan 的
  *   多实例口径（凛倾原话「搞嵌套了，检测机制完全不分类」）。分类器把维度显式化，堵住这条。
  *
- * @returns {{mode:"yonban"|"cli"|"none", windowDimension:"instance"|"line"|null,
+ * @returns {{mode:"hybrid"|"yonban"|"cli"|"none", windowDimension:"backend"|"instance"|"line"|null,
  *            yonbans:Array, clis:Array, instances:Array}}
  */
 export function resolveIdeMode() {
   const { yonbans, clis } = partitionActiveIdeInstances();
-  // 互斥优先级与连接目标集同源（_syncConnections）：有 YonBan 就是 YonBan 模式，CLI 让位。
+  if (yonbans.length && clis.length) {
+    return { mode: "hybrid", windowDimension: "backend", yonbans, clis, instances: [...yonbans, ...clis] };
+  }
   if (yonbans.length) return { mode: "yonban", windowDimension: "instance", yonbans, clis: [], instances: yonbans };
   if (clis.length) return { mode: "cli", windowDimension: "line", yonbans: [], clis, instances: clis };
   return { mode: "none", windowDimension: null, yonbans: [], clis: [], instances: [] };

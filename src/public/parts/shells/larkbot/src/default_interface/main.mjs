@@ -422,7 +422,7 @@ export async function createSimpleLarkInterface(
 				}
 			} catch (error) {
 				diag.error(`DoDelegateWakeReply: chat="${chatId}" 失败`, error);
-				broadcastBotError({ platform: 'larkbot', botname: botCharname, phase: 'runtime', error });
+				broadcastBotError({ username: ownerUsername, platform: 'larkbot', botname: botCharname, phase: 'runtime', error });
 			}
 		}, { onBusy: () => diag.warn(`DoDelegateWakeReply: chat="${chatId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) });
 	}
@@ -555,7 +555,7 @@ export async function createSimpleLarkInterface(
 			diag.timeEnd(`DoMessageReply:${msg.message_id}`);
 		} catch (error) {
 			diag.error(`DoMessageReply: msgId="${msg.message_id}" 处理失败`, error);
-			broadcastBotError({ platform: 'larkbot', botname: botCharname, phase: 'runtime', error });
+			broadcastBotError({ username: ownerUsername, platform: 'larkbot', botname: botCharname, phase: 'runtime', error });
 			pushMessageLog({
 				type: "error",
 				chatId,

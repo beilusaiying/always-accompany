@@ -137,7 +137,11 @@ import {
   parseMemorySearchTags,
   parseOperationArgs,
   parseTableEditTags,
+  parseVocabEditTags, // P9 词库维护 <vocab_edit>（0731 子模式化：正常对话链也要执行，不再只有 P 系列执行器）
 } from "./replyParser.mjs";
+
+// <vocab_edit> 执行层单点收口（与 aiRunner.runMemoryPresetAI 共享；preview→confirm 两态跨请求 pending 在模块级）
+import { executeVocabEditOps } from "../tools/vocabEditExec.mjs";
 
 import {
   applyTaskPlan,
@@ -164,6 +168,7 @@ import { executeWebDownload } from "../../web/webDownload.mjs"; // [0727 下载�
 import { stripReasoningTags } from "../../api/proxy/lib/messageTransform.mjs"; // T8·回切：改指 yonban 新位实现体（原经 public 薄壳 re-export，已删壳）
 import { extractEmotion, extractMotion, extractOrbMessage } from "../../render/emotionExtract.mjs"; // T3b·render 组：标签抽取纯逻辑单源
 import { WRITE_TOOLS_ALL, FILE_EDIT_TOOLS, READ_TOOLS } from "../../../transport/ideClient.mjs";
+import { createMcpConnectRequest } from "../../mcp/connectRequestStore.mjs";
 
 /**
  * 并发上限池（多组并行/分身任务限流）。allSettled 语义——一个 thunk 崩不杀其余 worker。
@@ -373,7 +378,16 @@ async function _runBotDelegateWorker(username, charName, dlg) {
     // 写回队列（同 <report> 落点）：仅当条目仍 active（timeout/cancel 语义优先）
     const _qPath = path.join(ensureMemoryDir(username, charName), "work", "_delegate_queue.json");
     let _q = [];
-    try { _q = JSON.parse(await fs.promises.readFile(_qPath, "utf-8")); } catch {}
+    // [2026-08-01 批⑤危险#3] 读失败≠空队列——旧 catch{} 把文件损坏/ENOENT 折叠成 _q=[] → find=undefined
+    //   → 误判"已非 active（不存在）" → 报告丢弃、任务永不完成。现：读失败诚实报错+报告仍保住（写报告文件兜底）。
+    try { _q = JSON.parse(await fs.promises.readFile(_qPath, "utf-8")); } catch (qReadErr) {
+      console.error(`[beilu-memory] bot 委派 worker: 队列文件读取失败(${qReadErr?.message})，报告写独立文件兜底`);
+      try {
+        const _fallbackPath = _qPath.replace(".json", `_orphan_${dlg.id}_${Date.now()}.json`);
+        nicerWriteFileSync(_fallbackPath, JSON.stringify({ id: dlg.id, status: _status, report: _report, completedAt: new Date().toISOString(), error: "queue_read_failed" }, null, 2));
+      } catch {}
+      return;
+    }
     const _item = _q.find(d => d.id === dlg.id);
     if (!_item || _item.status !== "active") {
       console.warn(`[beilu-memory] bot 委派 worker: ${dlg.id} 已非 active（${_item?.status || "不存在"}），放弃写回`);
@@ -751,6 +765,12 @@ export async function handleReply(reply, args) {
   //   定向项→广播」的误映射。正常回合 args.chatid 存在时 _qcid===_cid===真实 chatid，与 generation.mjs 消费端
   //   consumePendingResults(chatid) 同源、定向命中，行为零变化。
   const _qcid = _cid || `__noChat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  if (_cid && args?.username) {
+    const _ownerBinding = ideClient.registerChatOwner?.(_qcid, args.username);
+    if (_ownerBinding === false) {
+      wbD(_cid, "memory", "handleReply:ownerMismatch", false, "会话 owner 绑定冲突，工具结果将 fail-closed", {});
+    }
+  }
   wbT(_cid, "memory", "handleReply:enter", { len: _replyLen, tags: _tagSummary });
 
   const _hasIdeToolCall = reply?.content?.includes?.("<ideToolCall") || false;
@@ -958,7 +978,25 @@ export async function handleReply(reply, args) {
     const _scTestContent = content.replace(/`[^`]*`/g, "").replace(/```[\s\S]*?```/g, "");
     if (/<stopContinue\s*\/?>/.test(_scTestContent)) _preExtracted.stopContinue = true;
 
+    // 0b. <vocab_edit>（P9 词库维护，0731 子模式化）：P9 作为聊天组子模式走正常对话链，
+    //   执行层与 P 系列执行器共享 vocabEditExec 单点（preview→confirm 两态，pending 模块级跨请求）。
+    //   标签**不清理**：AI 下一轮必须能看到自己发过的标签原文才能原样重发 confirm:true（清理=确认流物理断裂）；
+    //   代码零文案进对话（0731 铁律）——执行状态只进白盒，用户可见反馈由 P9 提示词（用户域）教 AI 在正文自述。
+    //   独立 try：词库失败不影响表格等后续段。
+    try {
+      const { blocks: _veBlocks } = parseVocabEditTags(content);
+      if (_veBlocks.length > 0) {
+        const _veResults = await executeVocabEditOps(_veBlocks);
+        wbT(_cid, "memory", "handleReply:vocabEdit", { blocks: _veBlocks.length, results: _veResults.map((r) => ({ status: r.status, file: r.file, total: r.total })) });
+      }
+    } catch (e) {
+      wbD(_cid, "memory", "handleReply:vocabEdit", false, e.message, {});
+      console.warn("[beilu-memory] vocab_edit 执行失败:", e.message);
+    }
+
     // 1. <tableEdit>
+    // [0730 框架修] try/catch 保护：saveTablesData/executeTableOperations 无内层保护，抛异常会跳到顶层 catch 跳过 section 7（ideToolCall）。
+    try {
     const { operations, cleanContent: afterTableEdit } = parseTableEditTags(content);
     content = afterTableEdit;
     // ★ 缓存命中时跳过表格操作（防重复执行），但标签仍然被清理
@@ -1058,6 +1096,7 @@ export async function handleReply(reply, args) {
       }
     } else if (operations.length > 0 && _skipTableEdit) {
     }
+    } catch (_teErr) { wbD(_cid, "memory", "handleReply:tableEdit", false, _teErr.message, {}); console.warn("[beilu-memory] tableEdit 处理失败:", _teErr.message); }
 
     // 1b. <taskPlan> / <taskCheck> — F3「AI 制定任务 + 打勾」（G2 新范式）
     // 与 tableEdit 同范式：从 content 提取标签 → 改 work_ctx/tasks.json（单一权威，不进 chat log/tables）
@@ -1128,23 +1167,23 @@ export async function handleReply(reply, args) {
     }
 
     // 2. <memoryArchive>
+    // [0730 框架修] try/catch 保护：H7 改 await 后 saveTablesData 可抛，无保护会跳到顶层 catch 跳过 section 7（ideToolCall）。
+    try {
     const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(content);
     content = afterArchive;
     if (archiveOps.length > 0) {
       const replyMemData = loadMemoryData(username, charName, undefined, _cid);
-      // [2026-07-16] 前置快照补齐：clearTable 一把清空整表行，原本分支无快照（tableEdit 有 A4、
-      //   此处没有=保护不对称，AI 清表只剩 .bak 一层）。与 tableEdit A4 同款，失败不阻断。
       try { createTableSnapshot(username, charName, replyMemData.tables, _cid || "", -1, "memoryArchive 前自动快照", replyMemData.activeMode); }
       catch (_maSnapErr) { wbD(_cid, "memory", "handleReply:memArchiveSnapshot", false, _maSnapErr.message, {}); }
       const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, replyMemData.tables);
       const archiveOkCount = archiveResults.filter((r) => r.status === "ok").length;
-      // H7：memoryArchive 写盘从 fire-and-forget 改为 await
       if (archiveOkCount > 0) {
         const _maWrite = await saveTablesData(username, charName, replyMemData.activeMode, _cid);
         if (_maWrite && _maWrite.ok === false) wbD(_cid, "memory", "handleReply:memArchive:writeFail", false, _maWrite.error, {});
       }
       opLog("memoryArchive", `exec ${archiveOkCount}/${archiveResults.length}`, { ops: archiveOps.map(o => o.action || o.type).slice(0, 10) }, archiveOkCount > 0 ? "ok" : "fail");
     }
+    } catch (_maErr) { wbD(_cid, "memory", "handleReply:memoryArchive", false, _maErr.message, {}); console.warn("[beilu-memory] memoryArchive 处理失败:", _maErr.message); }
 
     // 3. <memorySearch>
     const { searchOps: chatSearchOps, cleanContent: afterSearch } = parseMemorySearchTags(content);
@@ -1693,6 +1732,56 @@ export async function handleReply(reply, args) {
           const _readOps = _ideToolCalls.filter((_tc) => !IDE_WRITE_TOOLS.includes(_tc.tool));
           let _writeOps = _ideToolCalls.filter((_tc) => IDE_WRITE_TOOLS.includes(_tc.tool));
 
+          // [0730] 子模式工具权限过滤：per-子模式的 allowCodeEdit/allowRunCommand/allowDelete 开关。
+          //   默认不写=undefined=允许（兼容既有子模式零权限字段）。false=系统强制拒绝。
+          //   被拦截的工具调用回喂 AI 错误，让 AI 知道当前身份不允许该操作。
+          {
+            const _smModeGroup = resolveGenerationMode(args, username, charName, _cid);
+            if (_smModeGroup === "code" || _smModeGroup === "work") {
+              try {
+                const _smCfgPath = getYonbanConfigPath(username);
+                const _smCfg = loadJsonFileIfExists(_smCfgPath, {});
+                const _smActiveId = resolveActiveSubModeId(_smCfg, _smModeGroup, _cid);
+                const _smActive = (_smCfg.sub_modes || []).find((m) => m.id === _smActiveId);
+                if (_smActive) {
+                  const _smBlocked = [];
+                  if (_smActive.allowCodeEdit === false) {
+                    _writeOps = _writeOps.filter((_tc) => {
+                      if (FILE_EDIT_TOOLS.includes(_tc.tool)) { _smBlocked.push(_tc); return false; }
+                      return true;
+                    });
+                  }
+                  if (_smActive.allowRunCommand === false) {
+                    _writeOps = _writeOps.filter((_tc) => {
+                      if (_tc.tool === "run_command" || _tc.tool === "run_script") { _smBlocked.push(_tc); return false; }
+                      return true;
+                    });
+                  }
+                  if (_smActive.allowDelete === false) {
+                    _writeOps = _writeOps.filter((_tc) => {
+                      const _cmd = (_tc.params?.command || "").trim();
+                      if (_tc.tool === "run_command" && /\b(rm|del|rmdir|remove|unlink)\b/i.test(_cmd)) { _smBlocked.push(_tc); return false; }
+                      return true;
+                    });
+                  }
+                  for (const _bl of _smBlocked) {
+                    ideClient.enqueuePendingResult({
+                      tool: _bl.tool, params: _bl.params,
+                      result: { success: false, error: `🚫 当前子模式「${_smActive.label || _smActive.id}」不允许 ${_bl.tool} 操作。请按身份要求产出文档/清单，不要直接操作代码/脚本。` },
+                      chatid: _qcid, timestamp: new Date().toISOString(),
+                    });
+                    opLog("ideToolCall", `submode_block:${_bl.tool}`, { subMode: _smActive.id, tool: _bl.tool }, "blocked");
+                  }
+                  if (_smBlocked.length > 0) {
+                    wbD(_cid, "memory", "handleReply:subModePermBlock", false,
+                      `子模式「${_smActive.id}」拦截 ${_smBlocked.length} 项工具(${_smBlocked.map(b => b.tool).join(",")})`,
+                      { subMode: _smActive.id, blocked: _smBlocked.map(b => b.tool) });
+                  }
+                }
+              } catch (_smErr) { console.warn("[beilu-memory] 子模式权限读取失败:", _smErr.message); }
+            }
+          }
+
           // ★ run_command 安全检查（W13 命令白名单）
           {
             // 能力授权单源 = per-user command_config.json（getCommandConfigPath，写点=setCommandConfig，
@@ -2001,20 +2090,20 @@ export async function handleReply(reply, args) {
             // 立即执行集：F6 规则放行(_skipRuleOps) + 策略档免审批普通写(_execPolicyOps)——统一走下方执行路径
             //   （沙盒/checkpoint/route 一致；原 F6 在审批分支里裸 callToolAndStore 缺沙盒备份，随本次分流一并归一）。
             _writeOps = [..._skipRuleOps, ..._execPolicyOps];
-            _skipRuleOps = [];
-            if (_writeOps.length > 0) {
-              let _cpId = null;
-              try {
-                let _ideChatId = "";
-                let _ideMsgIndex = -1;
+              _skipRuleOps = [];
+              if (_writeOps.length > 0) {
+                let _cpId = null;
+                const _ideChatId = args?.chatid
+                  || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
                 try {
-                  const _chatOpsPath2 = path.join(
-                    __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
-                  );
-                  const _chatOps2 = await import(pathToFileURL(_chatOpsPath2).href);
-                  _ideChatId = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-                  if (_ideChatId) {
-                    const _logLen2 = await _chatOps2.GetChatLogLength(_ideChatId);
+                  let _ideMsgIndex = -1;
+                  try {
+                    const _chatOpsPath2 = path.join(
+                      __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
+                    );
+                    const _chatOps2 = await import(pathToFileURL(_chatOpsPath2).href);
+                    if (_ideChatId) {
+                      const _logLen2 = await _chatOps2.GetChatLogLength(_ideChatId);
                     _ideMsgIndex = _logLen2 > 0 ? _logLen2 - 1 : -1;
                   }
                 } catch (_chatOpsErr2) { /* chatOps unavailable */ }
@@ -2212,11 +2301,11 @@ export async function handleReply(reply, args) {
                     diag.warn(`自动清理标记写入失败: ${_cleanErr.message}`);
                   }
                 }
-              }
-              if (_cpId) {
-                try {
-                  await ideClient.commitCheckpoint(_cpId);
-                } catch (_cpE) {
+                }
+                if (_cpId) {
+                  try {
+                    await ideClient.commitCheckpoint(_cpId, _ideChatId);
+                  } catch (_cpE) {
                   console.warn("[beilu-memory] 文件检查点提交失败:", _cpE.message);
                 }
               }
@@ -2234,6 +2323,7 @@ export async function handleReply(reply, args) {
               params: _tc.params,
               result: { success: false, error: "IDE 未连接 — YonBan 插件未启动或 WebSocket 未建立。请让用户检查 IDE 连接状态。" },
               chatid: _qcid,
+              ownerUsername: username,
               timestamp: new Date().toISOString(),
             });
           }
@@ -2241,10 +2331,14 @@ export async function handleReply(reply, args) {
         content = _afterIdeTool;
 
         // W65: 工具执行完毕后通过WS广播通知前端（替代轮询等待）
-        if (ideClient.pendingResults.length > 0) {
+        const _chatPendingResults = ideClient.getPendingResults({
+          ownerUsername: username,
+          chatid: _qcid || undefined,
+        });
+        if (_chatPendingResults.length > 0) {
           const _isReadOnly = !_ideToolCalls.some(_tc => IDE_WRITE_TOOLS.includes(_tc.tool));
           // ★ P2-5: 收集失败的工具信息
-          const _failedTools = ideClient.pendingResults
+          const _failedTools = _chatPendingResults
             .filter(r => r.result && r.result.success === false)
             .map(r => ({ tool: r.tool, error: (r.result.error || "").substring(0, 100) }));
           try {
@@ -2254,7 +2348,7 @@ export async function handleReply(reply, args) {
               await dispatch({ target: "bus:broadcast", verb: "emit", source: "yonban", payload: { chatid: _bcChatId, event: {
                 type: "tool_results_ready",
                 payload: {
-                  count: ideClient.pendingResults.length,
+                  count: _chatPendingResults.length,
                   source: "ideToolCall",
                   traceId: _ideTraceId,
                   readOnly: _isReadOnly,
@@ -2545,6 +2639,7 @@ export async function handleReply(reply, args) {
             params: { taskCount: _pdResults.length, failedCount: _pdResults.filter(r => r.status === "error").length },
             result: { success: _pdResults.every(r => r.status !== "error"), result: `[并行委派结果 — ${_pdResults.length}个子任务]\n\n${_pdInjText}\n\n[/并行委派结果]` },
             chatid: _qcid,
+            ownerUsername: username,
             timestamp: new Date().toISOString(),
           });
           // 广播 tool_results_ready（信息性，与 clone 一致；自动继续实由后端 generation.mjs 驱动）
@@ -2552,9 +2647,13 @@ export async function handleReply(reply, args) {
             // [0716 T3对接首批] 改经 bus:broadcast.emit 出口。
             const _bcChatIdPd = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
             if (_bcChatIdPd) {
+              const _pdPendingCount = ideClient.getPendingResultCount({
+                ownerUsername: username,
+                chatid: _qcid,
+              });
               await dispatch({ target: "bus:broadcast", verb: "emit", source: "yonban", payload: { chatid: _bcChatIdPd, event: {
                 type: "tool_results_ready",
-                payload: { count: ideClient.pendingResults.length, source: "parallel_delegate", readOnly: true, stopContinue: false },
+                payload: { count: _pdPendingCount, source: "parallel_delegate", readOnly: true, stopContinue: false },
               } } });
             }
           } catch (_bcErrPd) { /* 广播失败不影响主流程 */ }
@@ -2643,7 +2742,14 @@ export async function handleReply(reply, args) {
         const _memDir = ensureMemoryDir(username, charName);
         const _rptQueuePath = path.join(_memDir, "work", "_delegate_queue.json");
         let _rptQueue = [];
-        try { _rptQueue = JSON.parse(await fs.promises.readFile(_rptQueuePath, "utf-8")); } catch {}
+        // [2026-08-01 批⑤危险#4] 同 :381 修——读失败≠空队列，报告正文写独立文件兜底保住。
+        try { _rptQueue = JSON.parse(await fs.promises.readFile(_rptQueuePath, "utf-8")); } catch (rptQErr) {
+          console.error(`[beilu-memory] <report> 队列读取失败(${rptQErr?.message})，报告写独立文件兜底`);
+          try {
+            const _rptFb = _rptQueuePath.replace(".json", `_orphan_report_${Date.now()}.json`);
+            nicerWriteFileSync(_rptFb, JSON.stringify({ status: _rptStatus || "completed", report: _rptContent?.trim() || "", error: "queue_read_failed" }, null, 2));
+          } catch {}
+        }
 
         // 找到最新活跃委派
         const _rptActiveIdx = _rptQueue.findLastIndex(d => d.status === "active");
@@ -2894,10 +3000,7 @@ export async function handleReply(reply, args) {
               ...(_fgSm.promptPostProcessing ? { prompt_post_processing: _fgSm.promptPostProcessing } : {}),
               ...(_fgSm.claudePrefillMode ? { claude_prefill_mode: _fgSm.claudePrefillMode } : {}),
               ...(_fgSm.prefillEnabled !== undefined ? { prefill_enabled: _fgSm.prefillEnabled } : {}),
-              // thinking 六口·口4（2026-07-25 走查补漏）：扁平归一构造同补——子模式无 model_params 副本
-              //   （B18 sync 只在已有副本时写）而只有扁平 thinking 键时，键枚举缺失=建组快照丢 thinking
-              ...(_fgSm.extended_thinking !== undefined ? { extended_thinking: _fgSm.extended_thinking } : {}),
-              ...(_fgSm.thinking_budget ? { thinking_budget: _fgSm.thinking_budget } : {}),
+              // thinking 快照键已删（2026-08-01 收口到 AI 源面板 per-源单点，快照不再携带 thinking）
             };
             if (Object.keys(_fgModelSnap).length === 0) _fgModelSnap = null; // 子模式零配置=不落死快照
             _fgApiSource = _fgModelSnap ? ((_fgModelSnap.api_source ?? _fgModelSnap.apiSource) || "") : "";
@@ -3080,31 +3183,52 @@ export async function handleReply(reply, args) {
     // 11c 已删（2026-07-16）：<browserAction> 队列随 beilu-browser 插件整体移除
     //   （写入的 _browser_actions_queue.json 全库无读取方，插件已删=悬空 producer）。
 
-    // 11d. W61: <mcpConnect> — AI自主接入MCP服务器
-    // [待实现] 写入 _mcp_connect_requests.json 但全库无消费者读取此文件（2026-06-24 审计确认），
-    //   MCP ImportHandler 侧无对应轮询/读取逻辑。功能设计未完成，保留写入管道待后续接通。
+    // 11d. <mcpConnect> — AI 只能提出请求；导入/挂载/命令批准均由 MCP 面板现有用户流程承担。
     {
       const _mcMatch = content.match(/<mcpConnect>([\s\S]*?)<\/mcpConnect>/i);
       if (_mcMatch) {
         try {
-          const _mcData = JSON.parse(_mcMatch[1].trim());
-          reply.extension._mcpConnectRequest = _mcData;
-          // 保存请求到用户目录供MCP ImportHandler处理
-          const _mcPath = path.join(__projectRoot, "data", "users", username, "_mcp_connect_requests.json");
-          let _mcQueue = loadJsonFileIfExists(_mcPath, []);
-          _mcQueue.push({ ..._mcData, requestedAt: new Date().toISOString(), status: "pending" });
-          if (_mcQueue.length > 20) _mcQueue = _mcQueue.slice(-20);
-          saveJsonFile(_mcPath, _mcQueue);
-          wbD(_cid, "memory", "handleReply:mcpConnect:pendingNoConsumer", true, "写入 _mcp_connect_requests.json 但无消费者（功能待实现）", { server: _mcData.server || _mcData.url || "unknown" });
+          const _mcRequest = await createMcpConnectRequest({
+            username,
+            chatId: _cid || "",
+            rawText: _mcMatch[1],
+            source: "ai:mcpConnect",
+          });
+          reply.extension._mcpConnectRequest = _mcRequest;
+          // 只广播“数据已变化”信号；面板按 chatId 过滤后重拉服务端记录，不在 WS 携带配置或触发导入。
+          const _mcBroadcast = await dispatch({
+            target: "bus:broadcast",
+            verb: "emitAll",
+            source: "yonban",
+            payload: {
+              username: username !== "_default" ? username : undefined,
+              event: {
+                type: "mcp_connect_requests_changed",
+                payload: {
+                  requestId: _mcRequest.requestId,
+                  chatId: _mcRequest.chatId,
+                  status: _mcRequest.status,
+                },
+              },
+            },
+          });
+          if (!_mcBroadcast?.ok) {
+            console.warn("[beilu-memory] mcpConnect 请求已登记，但刷新广播失败:", _mcBroadcast?.error?.msg);
+          }
+          wbD(_cid, "memory", "handleReply:mcpConnect:pendingReview", true, "MCP 请求已登记，等待用户在面板审查", {
+            requestId: _mcRequest.requestId,
+            validationError: _mcRequest.validationError,
+          });
         } catch (e) {
           wbD(_cid, "memory", "handleReply:mcpConnect", false, e.message, {});
-          console.warn("[beilu-memory] mcpConnect解析失败:", e.message);
+          console.warn("[beilu-memory] mcpConnect请求登记失败:", e.message);
         }
       }
       content = content.replace(/<mcpConnect>[\s\S]*?<\/mcpConnect>/gi, "");
     }
 
     // 12. <contextClean> — AI自主清理上下文中的冗余内容（立即执行，直接改chatLog）
+    // [0730] AI自动清理限制：① token<阈值时禁止清理（防缓存失效）② 禁止删除用户原话
     {
       const _cleanRegex = /<contextClean>([\s\S]*?)<\/contextClean>/gi;
       let _cleanMatch;
@@ -3114,6 +3238,32 @@ export async function handleReply(reply, args) {
         _cleanActions.push(_cleanCmd);
       }
       if (_cleanActions.length > 0) {
+        // [0730] token 阈值检查：上下文不够大时禁止AI清理（频繁清理破坏 prompt cache）
+        const _cleanConfig = loadJsonFileIfExists(getYonbanConfigPath(username), {}).context_clean || {};
+        const _cleanMinTokens = Number(_cleanConfig.min_tokens_for_ai_clean) || 200000;
+        let _currentTokens = 0;
+        try {
+          const _chatOpsToken = await import(pathToFileURL(path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs")).href);
+          const _chatIdToken = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
+          if (_chatIdToken) {
+            const _logLen = await _chatOpsToken.GetChatLogLength(_chatIdToken);
+            const _logAll = _logLen > 0 ? await _chatOpsToken.GetChatLog(_chatIdToken, 0, _logLen) : [];
+            for (const _e of (_logAll || [])) {
+              if (_e?.extension?._hidden) continue;
+              _currentTokens += Math.ceil(((_e?.content || "").length + (_e?.content_for_show || "").length) / 3.5);
+            }
+          }
+        } catch { /* token 估算失败不阻断 */ }
+        if (_currentTokens < _cleanMinTokens) {
+          diag.warn(`contextClean: 拒绝AI清理——当前token约${_currentTokens}，低于阈值${_cleanMinTokens}（防缓存失效）`);
+          ideClient.enqueuePendingResult({
+            tool: "_context_clean_blocked",
+            params: {},
+            result: { success: false, error: `🚫 上下文当前约 ${Math.round(_currentTokens / 1000)}K token，低于自动清理阈值 ${Math.round(_cleanMinTokens / 1000)}K。请继续工作，不需要清理。` },
+            chatid: _qcid, timestamp: new Date().toISOString(),
+          });
+          content = content.replace(/<contextClean>[\s\S]*?<\/contextClean>/gi, "");
+        } else {
         diag.log(`contextClean: 检测到${_cleanActions.length}个清理指令: ${_cleanActions.join(", ")}, chatid=${args?.chatid || "(无)"}`);
         // 立即执行：删除语义=不发送掩码（_hidden），留盘可逆，仅 requestBuilder:97 过滤不送 AI
         try {
@@ -3128,6 +3278,13 @@ export async function handleReply(reply, args) {
             const _fileOpRe = /<file_op\s+[^>]*tool="([^"]*)"[^>]*>[\s\S]*?<\/file_op>/gi;
             const _applyClean = async (_idxs, _isPurge, _label) => {
               if (!_idxs || _idxs.length === 0) return 0;
+              // [0730] 用户原话保护：AI清理禁止删除/隐藏 role="user" 的消息
+              const _protectedCount = _idxs.filter((i) => _chatLog[i]?.role === "user").length;
+              if (_protectedCount > 0) {
+                _idxs = _idxs.filter((i) => _chatLog[i]?.role !== "user");
+                diag.warn(`contextClean ${_label}: 保护了${_protectedCount}条用户原话不被清理`);
+              }
+              if (_idxs.length === 0) return 0;
               if (_isPurge) {
                 const { markDeleted } = await import("../../hide/chatEntryUtils.mjs"); // T8·回切：改指 yonban 新位实现体
                 let _n = 0;
@@ -3255,7 +3412,8 @@ export async function handleReply(reply, args) {
           wbD(_cid, "memory", "handleReply:contextClean", false, _e.message, { actions: _cleanActions.length });
           diag.error(`contextClean 执行失败: ${_e.message}`);
         }
-      }
+      } // close else (token threshold allowed)
+      } // close if (_cleanActions.length > 0)
       content = content.replace(/<contextClean>[\s\S]*?<\/contextClean>/gi, "");
     }
 
@@ -3535,9 +3693,7 @@ export async function handleReply(reply, args) {
                   claude_prefill_mode: _clone.claudePrefillMode || "",
                   // ★ 关闭模型自带thinking（用提示词的CoT引导）
                   include_reasoning: _clone.includeReasoning === true,
-                  extended_thinking: _clone.extendedThinking === true,
-                  // thinking 六口·口5（2026-07-25）：clone budget 同补（消费端 aiRunner:960 区 modelOverrides 转发）
-                  thinking_budget: _clone.thinkingBudget || undefined,
+                  // extended_thinking/thinking_budget 已删（2026-08-01 收口：思维链跟随所用 AI 源的 per-源设置）
                 },
               };
 
@@ -3783,7 +3939,7 @@ export async function handleReply(reply, args) {
                               : `[联网搜索无结果]${_csRes.error ? " — " + _csRes.error : ""}`;
                             // [0726] 成败判据改为 results.length（与 chat 入口同口径）：warning 不再影响成败，error 仍是真失败
                             _clToolResults.push({ tool: "web_search", params: _tc.params, result: { success: (_csRes.results || []).length > 0 || !_csRes.error, result: _csText } });
-                            ideClient._operationHistory?.push?.({ tool: "web_search", params: _tc.params, result: { count: (_csRes.results || []).length, engine: _csRes.engine }, success: !_csRes.error, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
+                            ideClient._recordOperation?.({ tool: "web_search", params: _tc.params, result: { count: (_csRes.results || []).length, engine: _csRes.engine }, success: !_csRes.error, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
                           }
                         } catch (_csErr) {
                           _clToolResults.push({ tool: "web_search", params: _tc.params, result: { success: false, error: _csErr.message } });
@@ -3800,7 +3956,7 @@ export async function handleReply(reply, args) {
                             const _dlMem = loadMemoryData(username, charName);
                             const _dlRes = await executeWebDownload(_dlUrl, { filename: _tc.params?.filename }, username, _dlMem.config?.web_search || {});
                             _clToolResults.push({ tool: "web_download", params: _tc.params, result: _dlRes.success ? { success: true, result: `[已下载] ${_dlRes.path} (${_dlRes.bytes} 字节)` } : { success: false, error: _dlRes.error } });
-                            ideClient._operationHistory?.push?.({ tool: "web_download", params: _tc.params, result: _dlRes, success: !!_dlRes.success, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
+                            ideClient._recordOperation?.({ tool: "web_download", params: _tc.params, result: _dlRes, success: !!_dlRes.success, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
                           }
                         } catch (_dlErr) {
                           _clToolResults.push({ tool: "web_download", result: { success: false, error: _dlErr.message } });
@@ -3815,10 +3971,10 @@ export async function handleReply(reply, args) {
                         const _r = await ideClient.callToolWithLock(_tc.tool, _tc.params, _cid);
                         _clToolResults.push({ tool: _tc.tool, params: _tc.params, result: _r });
                         // 记录到操作历史（让操作监控面板可见）
-                        ideClient._operationHistory.push({ tool: _tc.tool, params: _tc.params, result: _r, success: _r?.success !== false, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
+                        ideClient._recordOperation({ tool: _tc.tool, params: _tc.params, result: _r, success: _r?.success !== false, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
                       } catch (_e) {
                         _clToolResults.push({ tool: _tc.tool, result: { success: false, error: _e.message } });
-                        ideClient._operationHistory.push({ tool: _tc.tool, params: _tc.params, result: { error: _e.message }, success: false, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
+                        ideClient._recordOperation({ tool: _tc.tool, params: _tc.params, result: { error: _e.message }, success: false, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
                       }
                     }
                     _clTotalTools += _clToolResults.length;
@@ -3951,6 +4107,7 @@ export async function handleReply(reply, args) {
               params: { taskCount: _cloneResults.length, failedCount: _clFailedN, async: _clAsyncMode },
               result: { success: _cloneResults.every(r => r.status !== "error"), error: _clFailedN > 0 ? `${_clFailedN}/${_cloneResults.length} 个分身任务失败（详情见聚合结果）` : undefined, result: `${_clReminder}[分身AI执行结果 — ${_cloneResults.length}个任务]\n\n${_clResultText}\n\n[/分身AI执行结果]` },
               chatid: _qcid,
+              ownerUsername: username,
               timestamp: new Date().toISOString(),
             });
             };
@@ -3969,6 +4126,7 @@ export async function handleReply(reply, args) {
                   params: { dispatched: _clonePromises.length, async: true },
                   result: { success: true, result: _itMod.fillInjectText(_itMod.getInjectText("clone.async_dispatched", username), { count: String(_clonePromises.length) }) },
                   chatid: _qcid,
+                  ownerUsername: username,
                   timestamp: new Date().toISOString(),
                 });
               } catch (_dnErr) { diag.warn(`分身异步派发提示注入失败(不影响派发): ${_dnErr.message}`); }
@@ -3984,7 +4142,7 @@ export async function handleReply(reply, args) {
                 try { await _finishClones(_cloneResults); }
                 catch (_afErr) {
                   diag.error(`分身异步收尾失败: ${_afErr.message}\n${_afErr.stack || ''}`);
-                  try { ideClient.enqueuePendingResult({ tool: "_clone_results", params: { async: true }, result: { success: false, error: `分身异步收尾失败: ${_afErr.message}` }, chatid: _qcid, timestamp: new Date().toISOString() }); } catch { /* 入队失败仅日志 */ }
+                  try { ideClient.enqueuePendingResult({ tool: "_clone_results", params: { async: true }, result: { success: false, error: `分身异步收尾失败: ${_afErr.message}` }, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString() }); } catch { /* 入队失败仅日志 */ }
                 }
                 try {
                   const _genPath = path.join(__projectRoot, "src", "public", "parts", "shells", "beilu-chat", "src", "lib", "generation.mjs");
@@ -4004,9 +4162,13 @@ export async function handleReply(reply, args) {
             // [0716 T3对接首批] 改经 bus:broadcast.emit 出口。
             const _bcChatId8 = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
             if (_bcChatId8) {
+              const _clonePendingCount = ideClient.getPendingResultCount({
+                ownerUsername: username,
+                chatid: _qcid,
+              });
               await dispatch({ target: "bus:broadcast", verb: "emit", source: "yonban", payload: { chatid: _bcChatId8, event: {
                 type: "tool_results_ready",
-                payload: { count: ideClient.pendingResults.length, source: "clone_results", readOnly: true, stopContinue: false },
+                payload: { count: _clonePendingCount, source: "clone_results", readOnly: true, stopContinue: false },
               } } });
             }
           } catch (_bcErr8) { /* 广播失败不影响主流程 */ }
@@ -4019,6 +4181,7 @@ export async function handleReply(reply, args) {
             params: {},
             result: { success: false, error: `分身系统执行失败: ${e.message}` },
             chatid: _qcid,
+            ownerUsername: username,
             timestamp: new Date().toISOString(),
           });
         }
@@ -4030,6 +4193,9 @@ export async function handleReply(reply, args) {
     content = content.replace(/<presetSwitch>[\s\S]*?<\/presetSwitch>/gi, "");
 
     // 14b. <stopContinue/> — AI主动停止自动继续（使用预提取数据，排除反引号内引用）
+    // 【红线·0731】此标签语义=任务域"本轮任务做完了"，只产 extension._stopContinue 运行态信号
+    //   （消费端 generation.mjs stopContinue 分支：结束当前任务轮）。禁止由它触发任何持久配置写
+    //   （yonban_config.auto_continue）或前端配置开关翻转——「操作后自动继续」系统开关只归用户。
     const _scContent14b = content.replace(/`[^`]*`/g, "").replace(/```[\s\S]*?```/g, "");
     if (_preExtracted.stopContinue || /<stopContinue\s*\/?>/.test(_scContent14b)) {
       reply.extension._stopContinue = true;

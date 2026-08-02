@@ -62,6 +62,7 @@ function saveConfigToDisk(username, data) {
 		const dir = dirname(f)
 		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 		nicerWriteFileSync(f, JSON.stringify(data, null, 2), 'utf-8')
+		try { _diskMtimeByUser.set(_normUser(username), fs.statSync(f).mtimeMs || 0) } catch {}
 	} catch (e) {
 		console.warn('[beilu-airp] 保存配置到磁盘失败:', e.message)
 	}
@@ -98,6 +99,8 @@ function _freshStore() {
 
 /** @type {Map<string, object>} username → store */
 const perUserStore = new Map()
+// 【store 级失效】盘=真相指纹（2026-08-01 批① 同 regex/worldbook/preset 范式）
+const _diskMtimeByUser = new Map()
 
 /** 归一 username：空/未定义 → "_default" 桶（匿名/主链无 user 时的回退桶，同 regex _normUser）。 */
 function _normUser(username) {
@@ -112,7 +115,23 @@ function _normUser(username) {
 function getStore(username) {
 	const key = _normUser(username)
 	let data = perUserStore.get(key)
-	if (data) return data
+	if (data) {
+		// 【store 级失效】盘=真相（2026-08-01 批① 同 regex/worldbook 范式=preset/main.mjs:795-823）
+		try {
+			const f = configFileFor(key)
+			let curMt = 0
+			try { curMt = fs.existsSync(f) ? (fs.statSync(f).mtimeMs || 0) : 0 } catch { curMt = 0 }
+			if (curMt !== (_diskMtimeByUser.get(key) ?? 0)) {
+				const saved = loadConfigFromDisk(key)
+				if (saved && typeof saved === 'object') {
+					if (typeof saved.enabled === 'boolean') data.enabled = saved.enabled
+					if (saved.config && typeof saved.config === 'object' && !Array.isArray(saved.config)) data.config = saved.config
+				}
+				_diskMtimeByUser.set(key, curMt)
+			}
+		} catch (e) { console.warn(`[beilu-airp] getStore("${key}") 盘态失效检查失败(沿用旧快照):`, e?.message) }
+		return data
+	}
 
 	data = _freshStore()
 	perUserStore.set(key, data)
@@ -128,6 +147,7 @@ function getStore(username) {
 		console.warn(`[beilu-airp] getStore("${key}") 首访加载失败:`, e.message)
 	}
 
+	try { const _f = configFileFor(key); _diskMtimeByUser.set(key, fs.existsSync(_f) ? (fs.statSync(_f).mtimeMs || 0) : 0) } catch { _diskMtimeByUser.set(key, 0) }
 	return data
 }
 
@@ -221,28 +241,17 @@ const pluginExport = {
 			 * @returns {object|null} 注入对象；enabled=false 时 null
 			 */
 			GetPrompt: async (arg) => {
+				// ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
 				const store = getStore(arg?.username)
 				if (!store.enabled) return null
-
-				// 有效谱(全局出厂 ← data 全局 ← per-user 深merge)——dslGuide 从此取，单源不自持默认。
-				const caps = resolveEffectiveAirp(__projectRoot, store.config)
-				const guide = (typeof caps.dslGuide === 'string') ? caps.dslGuide.trim() : ''
 
 				// 累积当前数值态(首轮可能为空)——供后续消费，独立于说明注入。
 				const currentState = accumulateAirpState(arg?.chat_log || [])
 				const extension = currentState?.stat_data ? { airp_accumulated: currentState } : {}
 
-				// guide 为空(用户关闭)则不注入文本；仅传 extension。
-				if (!guide) {
-					return { text: [], additional_chat_log: [], extension }
-				}
-				return {
-					text: [{ content: guide, important: 0 }], // DSL 操作说明注入提示词（契约=数组，与上方空分支 text:[] 同形）
-					role: 'system',
-					name: 'beilu-airp',
-					additional_chat_log: [],
-					extension,
-				}
+				// DSL 操作说明已迁入 INJ-airp-dsl-guide 条目（可编辑、用户可控）；
+				// GetPrompt 只负责状态累积(extension)，不再直接注入 guide 文本。
+				return { text: [], additional_chat_log: [], extension }
 			},
 
 			/**

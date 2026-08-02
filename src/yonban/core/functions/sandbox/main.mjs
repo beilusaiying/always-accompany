@@ -21,6 +21,8 @@
  */
 
 import YAML from 'npm:yaml';
+import { writeFile, mkdir } from 'node:fs/promises'; // [0731 根修] 配置落盘（范式同 beilu-browser）
+import { readJsonSafeSync } from '../../../../scripts/safeJsonIO.mjs'; // [0731 根修] 配置读回（损坏备份后抛）
 
 import { deployGatedAllow } from '../security/path_confine.mjs';
 import { authenticate } from '../security/auth.mjs'; // A2-3：HTTP 端点鉴权中间件（未认证→401），与全站 router.get/post(path, authenticate, handler) 同型
@@ -42,7 +44,36 @@ const _ejsOptOutEffective = () => sandboxOptOut && deployGatedAllow('allowEjsSan
 let sandboxTimeoutMs = 3000;   // worker 超时（默认 3000ms）；正常 ST 模板 <50ms
 let sandboxOptOut = false;     // owner 级关闭沙箱开关；默认 false=沙箱开。开启需显式且 console 警告。
 
-let pluginEnabled = true;
+// [0731 凛倾拍板"这两个默认关闭"] EJS/MVU 是酒馆角色卡适配件，默认关闭（opt-in）：
+//   不用 ST 卡的用户零渲染零日志；需要时在 AIRP 脚本插件管理打开（落盘持久）。
+let pluginEnabled = false;
+
+// 【红线·0731 凛倾"我ejs都关闭了哪来的ejs/哪里来的硬开启"】enabled 等配置禁止纯内存态：
+//   SetData 只改内存变量=重启即回默认 true=硬开启，用户关了照样每轮渲染 chat_log（含 <% 的聊天
+//   内容被当模板改写=污染发给 AI 的正文）。配置必须落盘+模块加载读回（范式同 beilu-browser
+//   data/browser-config.json）。开关唯一 UI=AIRP 脚本插件管理（pluginManager.mjs）。
+const CONFIG_PERSIST_FILE = 'data/ejs-config.json';
+try {
+	const _saved = readJsonSafeSync(CONFIG_PERSIST_FILE, {});
+	if (typeof _saved.enabled === 'boolean') pluginEnabled = _saved.enabled;
+	if (Number.isFinite(Number(_saved.sandboxTimeoutMs)) && Number(_saved.sandboxTimeoutMs) >= 100) sandboxTimeoutMs = Number(_saved.sandboxTimeoutMs);
+	if (typeof _saved.sandboxOptOut === 'boolean') sandboxOptOut = _saved.sandboxOptOut;
+} catch (e) {
+	console.warn(`[beilu-ejs] ${CONFIG_PERSIST_FILE} 损坏（已备份 .corrupt.bak，用默认值继续）:`, e?.message || e);
+}
+let _cfgPersistTimer = null;
+function _persistConfig() {
+	if (_cfgPersistTimer) clearTimeout(_cfgPersistTimer);
+	_cfgPersistTimer = setTimeout(async () => {
+		_cfgPersistTimer = null;
+		try {
+			await mkdir('data', { recursive: true }).catch(() => {});
+			await writeFile(CONFIG_PERSIST_FILE, JSON.stringify({ enabled: pluginEnabled, sandboxTimeoutMs, sandboxOptOut }, null, 2), 'utf8');
+		} catch (err) {
+			console.warn('[beilu-ejs] 配置持久化失败:', err?.message || err);
+		}
+	}, 100);
+}
 
 // ============================================================
 // §1 SSTI 沙箱：Worker 调用器（渲染整段在权限全关的 Deno Worker 内执行）
@@ -190,10 +221,18 @@ async function renderEjsInPromptStruct(prompt_struct, renderInputs) {
 		for (const [cName, prompt] of Object.entries(prompt_struct.other_chars_prompt))
 			collect(prompt?.text, `other_char:${cName}`);
 	}
-	if (Array.isArray(prompt_struct.chat_log)) {                             // 6. chat_log（@depth 条目 + MVU YAML）
+	// 【红线·0731 凛倾"完全没有按照角色卡和世界书进行隔离"】chat_log 只许渲染【本轮注入】的条目
+	//   （worldbook @depth / MVU YAML，注入时带 extension.ephemeral:true——worldbook/main.mjs:1696、
+	//   mvu/main.mjs:684），真实聊天正文（用户/AI 历史消息）禁止当模板渲染：聊天里出现 <% 的代码
+	//   讨论会被 EJS 改写后发给 AI = 污染正文（0731 事故：无世界书角色卡每轮"1 个模板已渲染"，
+	//   渲染对象就是 chat_log[6]/[37] 聊天内容）。EJS 渲染成立条件=①世界书有 EJS 条目②开关开
+	//   ③是当前角色卡主世界书——③①由"只收注入条目"结构保证（没绑主世界书就没有注入），②由
+	//   pluginEnabled 门控（落盘持久，见 §0）。
+	if (Array.isArray(prompt_struct.chat_log)) {                             // 6. chat_log（仅 @depth 注入条目 + MVU YAML）
 		for (let i = 0; i < prompt_struct.chat_log.length; i++) {
 			const entry = prompt_struct.chat_log[i];
 			if (typeof entry.content !== 'string') continue;
+			if (entry.extension?.ephemeral !== true) { continue; }  // 真实聊天条目：不渲染也不计 skipped（它们不是模板候选）
 			if (!entry.content.includes('<%')) { skipped++; continue; }
 			jobs.push({ ref: entry, key: 'content', where: `chat_log[${i}]` });
 		}
@@ -345,6 +384,8 @@ const pluginExport = {
 						console.log('[beilu-ejs] EJS 沙箱已启用（sandboxOptOut=false，安全默认）');
 					}
 				}
+				// [0731 根修] 每次 SetData 落盘（防重启回默认=硬开启，红线见 §0 CONFIG_PERSIST_FILE 处）
+				_persistConfig();
 			},
 		},
 
@@ -354,6 +395,7 @@ const pluginExport = {
 			 *
 			 * beilu-ejs 不需要向 AI 注入自己的内容，
 			 * 它只负责渲染其他插件（尤其是 beilu-worldbook）注入的 EJS 模板。
+			 * ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText，操作说明走 INJ 条目。
 			 */
 			GetPrompt: async () => {
 				return { text: [], additional_chat_log: [], extension: {} };
@@ -379,6 +421,10 @@ const pluginExport = {
 			 */
 			TweakPrompt: async (arg, prompt_struct, my_prompt, detail_level) => {
 				// 在 detail_level=0 执行（最后一轮，所有注入已完成）
+				// [2026-08-01 批① sandbox 零失效修] worker isolate 的 pluginEnabled 是 import 时快照，
+				//   主 isolate SetData 改了 let 变量 + 落盘，worker 的 let 不更新 = 关了照渲染（EJS 红线复发口）。
+				//   每轮渲染前从盘文件读一次 enabled 同步本 isolate 的 let（1次 JSON.parse 开销 < 渲染本身万分之一）。
+				try { const _diskCfg = readJsonSafeSync(CONFIG_PERSIST_FILE, {}); if (typeof _diskCfg.enabled === 'boolean') pluginEnabled = _diskCfg.enabled; } catch {}
 				if (detail_level !== 0 || !pluginEnabled) return;
 
 				const _wbChatId = arg?.chat_id || null;

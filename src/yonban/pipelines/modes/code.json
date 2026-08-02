@@ -25,9 +25,9 @@
     "p1": {
       "enabled": true,
       "config": {
-        "selfDriven": false,
+        "selfDriven": true,
         "aiP1": true,
-        "_note_selfDriven": "[0724 002拍板] selfDriven(自驱动P1词库管线)=实验功能,完全不需要加载,全模式关闭。它会把 conceptnet/swow/activation_terms 等 119MB 词库 JSON 解析成数百MB 进程级永驻缓存(0723 内存2GB案主因)。给未来AI:禁把 selfDriven 改回 true 或绕过声明门直接 import p1_pipeline——实验成熟需 002 拍板;aiP1(检索AI)是正路不依赖JS词库,保持不动。门在 getPromptHandler Phase3 modeFeature(mode,\"p1\")。"
+        "_note_selfDriven": "[0730 002拍板投入使用] chat/code/work三模式开启selfDriven。内存由beilu-p1-selfdriven插件生命周期管理(Load零资源+idle自动卸载+Unload清缓存),经p1Bridge.mjs桥调用。ide内部映射到code,共用code词库(AT_code 2005词)。双门:selfDriven=mode级路由;插件enabled=用户级开关。"
       }
     },
     "websearch": {

@@ -103,29 +103,16 @@ const pluginExport = {
     },
 
     chat: {
-      async GetPrompt(_arg) {
-        if (!getReachConfig().enabled) return null;
-        const available = await getAvailablePlatforms();
-        if (available.length === 0) return null;
-
-        // 能力引导走 injectTexts 单源（reach.capabilities 键），零硬编码提示词
-        let text = getInjectText("reach.capabilities") + "\n";
-
-        // 动态平台列表（纯数据，非提示词）
-        const lines = available.map((p) =>
-          `- ${p.name} (${p.actions.join("/")}) — ${p.label}, backend: ${p.backend || "native"}`
-        );
-        text += "\nCurrently available platforms:\n" + lines.join("\n");
-
-        // [0727 契约修] text 契约=数组[{content,important}]（同批：sysinfo/airp/web）
-        return { text: text ? [{ content: text, important: 0 }] : [], role: "system" };
-      },
+      // [0730 迁 INJ] 平台触达能力注入已迁入 INJ-plugin-reach 条目（默认关闭）。
+      // 原硬编码 GetPrompt 违反铁律「GetPrompt 禁止硬编码提示词文本」，且前端 INJ 面板不可见不可控。
+      async GetPrompt() { return null; },
 
       async ReplyHandler(reply, args) {
         if (!getReachConfig().enabled) return false;
         if (!reply?.content) return false;
         const calls = _parseReachCalls(reply.content);
         if (calls.length === 0) return false;
+        const _ownerUsername = args?.username || "";
 
         let _chatid = null;
         try {
@@ -170,7 +157,7 @@ const pluginExport = {
               },
             };
           }
-          ideClient.enqueuePendingResult(entry);
+          ideClient.enqueuePendingResult({ ...entry, ownerUsername: _ownerUsername });
         }
 
         return false;

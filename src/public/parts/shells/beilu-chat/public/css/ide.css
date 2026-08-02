@@ -653,7 +653,7 @@
   width: 100% !important;
   border: none;
   display: block;
-  min-height: 200px;
+  min-height: 100px;
   border-radius: 0;
   background-color: transparent;
   /* 不加 transition: height — 高度变化应即时生效，避免视觉延迟 */
@@ -1033,4 +1033,3 @@
 #right-sidebar-container {
   display: none !important;
 }
-

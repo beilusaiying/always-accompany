@@ -1020,9 +1020,9 @@
         "postProcessing": "プロンプト後処理",
         "ppNone": "なし",
         "ppMerge": "同一ロールの連続発言を統合",
-        "ppSemi": "準厳格（統合+system→user交互）",
-        "ppStrict": "厳格（統合+user先頭+system1件のみ）",
-        "postProcessingHint": "一部のAPIは厳格なロール交互を要求します",
+        "ppSemi": "準厳格（旧設定、merge と同等、system を保持）",
+        "ppStrict": "厳格（旧設定、merge と同等、system を保持）",
+        "postProcessingHint": "後処理は system を user に降格せず、プロバイダー差異はアダプターで処理します",
         "save": "<i data-ic=\"save\"></i> パラメータ保存"
       },
       "presetEntries": {

@@ -65,6 +65,8 @@ function saveConfigToDisk(username, data) {
 		const dir = dirname(f)
 		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 		nicerWriteFileSync(f, JSON.stringify(data, null, 2), 'utf-8')
+		// 【store 级失效】自写推进指纹，防 getStore 把自己的写误判为外部变更（2026-08-01 批①修）
+		try { _diskMtimeByUser.set(_normUser(username), fs.statSync(f).mtimeMs || 0) } catch { /* 指纹推进失败仅退化为下次多一次无害重载 */ }
 		// [0716 W2 刷新机制] 写盘=规则/配置变更的唯一事实点（全部 CRUD case 收口于此，读写同源）
 		//   → 单点广播 regex_rules_changed（preset_list_changed 同范式，跨窗口/显示层缓存刷新）。
 		//   fire-and-forget（本函数 sync）；启动迁移回写也广播=前端拿到迁移后的干净列表，幂等无害。
@@ -534,6 +536,11 @@ function _freshPluginData() {
 /** @type {Map<string, object>} username → pluginData */
 const perUserStore = new Map()
 
+// 【store 级失效】盘=真相指纹（2026-08-01 批①存写不生效修）：username → config_data.json mtimeMs。
+//   worker isolate 与主 isolate 各持一份本模块单例，旧实现惰性载入后零失效——UI 改正则后
+//   worker 内 TweakPrompt/ReplyHandler 持续用旧规则直到进程回收。照抄 preset getStore mtime 范式。
+const _diskMtimeByUser = new Map()
+
 /** 归一 username：空/未定义 → "_default" 桶（匿名/主链无 user 时的回退桶，与 preset/worldbook _normUser 同型） */
 function _normUser(username) {
 	return (typeof username === 'string' && username) ? username : '_default'
@@ -547,7 +554,31 @@ function _normUser(username) {
 function getStore(username) {
 	const key = _normUser(username)
 	let data = perUserStore.get(key)
-	if (data) return data
+	if (data) {
+		// 【store 级失效】盘=真相，内存桶=缓存（2026-08-01 批①修，范式=preset/main.mjs:795-823）：
+		//   写盘唯一事实点 saveConfigToDisk 同步推进本 isolate 指纹（不自失效）；跨 isolate/外部写盘
+		//   → mtime 前进 → 就地重建桶字段（不换对象引用，捕获旧引用的持有方同步看到新值）。
+		try {
+			const f = configFileFor(key)
+			let curMt = 0
+			try { curMt = fs.existsSync(f) ? (fs.statSync(f).mtimeMs || 0) : 0 } catch { curMt = 0 }
+			if (curMt !== (_diskMtimeByUser.get(key) ?? 0)) {
+				const saved = loadConfigFromDisk(key)
+				if (saved) {
+					if (Array.isArray(saved.rules)) data.rules = saved.rules.filter(r => !r?._builtin)
+					if (saved.enabled !== undefined) data.enabled = saved.enabled
+					if (saved.renderMode === 'sandbox' || saved.renderMode === 'free') data.renderMode = saved.renderMode
+					if (saved._outputFilterSeeded) data._outputFilterSeeded = true
+					if (saved.regexGuard && typeof saved.regexGuard === 'object') { data.regexGuard = saved.regexGuard; configureGuard(saved.regexGuard) }
+				}
+				_diskMtimeByUser.set(key, curMt)
+			}
+		} catch (e) {
+			// fail-loud 留痕但不吞任务：stat/读盘异常沿用旧快照（同 preset 范式）
+			console.warn(`[beilu-regex] getStore("${key}") 盘态失效检查失败(沿用旧快照):`, e?.message)
+		}
+		return data
+	}
 
 	data = _freshPluginData()
 	perUserStore.set(key, data)
@@ -591,6 +622,9 @@ function getStore(username) {
 	//   但生效的护栏配置是最后一次 configureGuard 的值——护栏是"安全上限"性质（防 ReDoS），
 	//   非用户私产语义，全局单态可接受（与 preset 全局 engine 单态同类，不属本次隔离资产）。
 	if (data.regexGuard) configureGuard(data.regexGuard)
+
+	// 【store 级失效】首访完成即记录盘指纹（2026-08-01 批①修）
+	try { const _f = configFileFor(key); _diskMtimeByUser.set(key, fs.existsSync(_f) ? (fs.statSync(_f).mtimeMs || 0) : 0) } catch { _diskMtimeByUser.set(key, 0) }
 
 	return data
 }
@@ -1009,11 +1043,15 @@ const pluginExport = {
 						}
 
 						if (entry.role === 'user') {
+							// [2026-08-01 W1 接线 runOnEdit] 编辑过的消息传 isEdit=true →
+							//   applyRegexRules:377 跳过 runOnEdit=false 的规则（只让标记了"编辑时也跑"的规则生效）。
+							//   编辑标记来源=chatOps editMessage:508 给条目打的 _editVersion（>0 即编辑过）。
+							const _isEdited = !!(entry._editVersion || entry.extension?._editVersion)
 							content = await applyRegexRules(
 								content,
 								pluginData.rules,
 								'user_input',
-								{ messageDepth: depth, macroValues, currentCharId, currentCharName, currentPresetName }
+								{ messageDepth: depth, macroValues, currentCharId, currentCharName, currentPresetName, isEdit: _isEdited }
 							)
 						}
 

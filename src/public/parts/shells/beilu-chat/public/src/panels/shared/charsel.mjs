@@ -284,6 +284,7 @@ function _initCharSelectorDropdown() {
         const files = ev.target.files;
         if (!files?.length) return;
         let lastImportedName = null;
+        let lastImportResp = null; // [0731] 服务端 import-char 响应带 modeChats（四窗口对话表），导入后跳转直接用
         for (const file of files) {
           try {
             const formData = new FormData();
@@ -291,6 +292,7 @@ function _initCharSelectorDropdown() {
             // 原 raw POST import-char（FormData）+ resp.ok 手检 → 门面 importChar（payload._form=FormData 直传，apiFetch 识别不 JSON 化）；!ok 由门面抛错走 catch
             const importResult = await sendAction({ verb: "importChar", target: "shells:chat", source: "web", payload: { _form: formData } });
             lastImportedName = importResult.name || null;
+            lastImportResp = importResult;
             window._beiluToast?.(`✅ 导入 ${file.name} 成功`, "success");
             recordImportHistory("角色卡", importResult.name || file.name); // T033：上报集中导入历史
 
@@ -321,35 +323,11 @@ function _initCharSelectorDropdown() {
           try {
             // [R6 身份收口 0713] 桥=commitCurrentChar（运行时+持久键一次写齐），原并排直写删除。
             window._beiluSetCharName?.(lastImportedName);
-            // 查找该角色的已有聊天。原 raw GET getchatlist + listRes.ok 手检 → 复用 getChatList；!ok 由门面抛错走外层 catch（导入后切换失败 console.warn）
-            const allChats = await sendAction({ verb: "getChatList", target: "shells:chat", source: "web" });
-            let targetChatId = null;
-            {
-              const mine = Array.isArray(allChats)
-                ? allChats.find(c => chatBelongsToChar(c, lastImportedName))
-                : null;
-              if (mine) targetChatId = mine.chatid || mine.id;
-            }
-            if (!targetChatId) {
-              const ALL_MODES = ["chat", "smart", "code", "work"];
-              try {
-                const { classifyNewChat } = await import("../../shared/chat-core/conversationManager.mjs");
-                for (const mode of ALL_MODES) {
-                  try {
-                    const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-                    const cid = newData.chatid;
-                    await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: cid }, payload: { charname: lastImportedName } });
-                    try { classifyNewChat(cid, lastImportedName, mode); } catch {}
-                    if (mode === "chat") targetChatId = cid;
-                  } catch (e) {
-                    if (mode === "chat") throw e;
-                    console.warn(`[charSelector] 导入：${mode} 模式对话创建失败，跳过`, e);
-                  }
-                }
-              } catch (outerErr) {
-                console.warn("[charSelector] 导入建对话失败:", outerErr.message);
-              }
-            }
+            // [0731 四窗口对话收口] 四模式对话由服务端 import-char 内 ensureModeChatsForChar 保障
+            //   （幂等：已有线返现值、缺失线新建），响应 modeChats 直接给跳转目标。
+            //   原"getChatList 查到任一已有对话就跳过建对话"短路删除——角色卡初始化会自动绑进
+            //   当前对话导致恒"已有"，四对话循环从未执行过（0731 一条对话被三窗共用的根因）。
+            const targetChatId = lastImportResp?.modeChats?.chat || null;
             if (targetChatId) {
               layoutState.activeTab = "chat";
               saveState();
@@ -369,27 +347,17 @@ function _initCharSelectorDropdown() {
         try {
           const charName = name.trim();
           // 原 raw POST create-char {name} + resp.ok 手检（!ok 读 body.error）→ 门面 createChar；!ok 由门面抛错（apiFetch 已解析 body.error 进消息）走 catch
-          await sendAction({ verb: "createChar", target: "shells:chat", source: "web", payload: { name: charName } });
+          // [0731 四窗口对话收口] 四模式对话由服务端 create-char 内 ensureModeChatsForChar 建好并挂
+          //   「在用」指针，响应带 modeChats 四键表。原前端四模式循环（与导入路径复制两份，且循环内
+          //   classifyNewChat 只是前端双写）随收口镜像删除——服务端单点保证任何建卡入口行为一致。
+          const createResp = await sendAction({ verb: "createChar", target: "shells:chat", source: "web", payload: { name: charName } });
           // [R6 身份收口 0713] 桥=commitCurrentChar（运行时+持久键一次写齐），原并排直写删除。
           window._beiluSetCharName?.(charName);
           window._beiluToast?.(`✅ 创建角色「${charName}」成功`, "success");
           closeOverlay();
           try {
-            const ALL_MODES = ["chat", "smart", "code", "work"];
-            let primaryChatId = null;
-            const { classifyNewChat } = await import("../../shared/chat-core/conversationManager.mjs");
-            for (const mode of ALL_MODES) {
-              try {
-                const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-                const cid = newData.chatid;
-                await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: cid }, payload: { charname: charName } });
-                try { classifyNewChat(cid, charName, mode); } catch {}
-                if (mode === "chat") primaryChatId = cid;
-              } catch (e) {
-                if (mode === "chat") throw e;
-                console.warn(`[charSelector] 新建角色：${mode} 模式对话创建失败，跳过`, e);
-              }
-            }
+            const primaryChatId = createResp?.modeChats?.chat || null;
+            if (!primaryChatId) throw new Error("服务端未返回 chat 窗口对话（modeChats.chat 缺失）");
             layoutState.activeTab = "chat";
             saveState();
             try { window.dispatchEvent(new CustomEvent("beilu:switchTab", { detail: { tab: "chat" } })); } catch {}

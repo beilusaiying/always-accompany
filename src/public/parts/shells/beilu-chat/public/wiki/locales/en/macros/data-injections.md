@@ -26,7 +26,8 @@ The following entries are injected on demand by the data production point (if th
 
 | Entry id | Content | Data Macros | Trigger condition |
 |----------|---------|-------------|-------------------|
-| `INJ-p1-act-data` | P1 self-driven direction words | `{{p1_act}}` | P1 pipeline has output |
+| `INJ-p1-act-data` | P1 self-driven recall memory data | `{{p1_act}}` | P1 pipeline has recall results |
+| `INJ-p1-recall-usage` | P1 recall memory usage guide | _(static text)_ | linked with INJ-p1-act-data |
 | `INJ-p1-retrieval-data` | Memory AI retrieval results | `{{p1_retrieval}}` `{{p1_retrieval_ts}}` | P1 retrieval has results |
 | `INJ-p8-web-search-data` | Web search results | `{{p8_results}}` | P8 search has results |
 | `INJ-chat-search-data` | Previous-turn chat AI search results | `{{chat_search_results}}` `{{chat_search_ts}}` | Pending search results to inject |

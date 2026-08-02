@@ -393,7 +393,7 @@ export async function createSimpleWechatInterface(
 				}
 			} catch (error) {
 				diag.error(`DoDelegateWakeReply: chat="${chatId}" 失败`, error)
-				broadcastBotError({ platform: 'wechatbot', botname: botCharname, phase: 'runtime', error })
+				broadcastBotError({ username: ownerUsername, platform: 'wechatbot', botname: botCharname, phase: 'runtime', error })
 			}
 		}, { onBusy: () => diag.warn(`DoDelegateWakeReply: chat="${chatId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) })
 	}
@@ -544,7 +544,7 @@ export async function createSimpleWechatInterface(
 		} catch (error) {
 			diag.error(`doMessageReply: msgId="${message.msgId}" 处理失败`, error)
 			// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-			broadcastBotError({ platform: 'wechatbot', botname: botCharname, phase: 'runtime', error })
+			broadcastBotError({ username: ownerUsername, platform: 'wechatbot', botname: botCharname, phase: 'runtime', error })
 			pushMessageLog({
 				type: 'error',
 				chatId,

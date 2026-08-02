@@ -437,7 +437,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 			} catch (e) {
 				diag.error(`doDMReply: convId="${convId}" 处理失败`, e)
 				// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-				broadcastBotError({ platform: 'xbot', botname: botCharname, phase: 'runtime', error: e })
+				broadcastBotError({ username: ownerUsername, platform: 'xbot', botname: botCharname, phase: 'runtime', error: e })
 			} finally {
 				diag.timeEnd(`doDMReply:${convId}`)
 			}
@@ -535,7 +535,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 			} catch (e) {
 				diag.error(`doMentionReply: tweetId="${tweet.id}" 处理失败`, e)
 				// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-				broadcastBotError({ platform: 'xbot', botname: botCharname, phase: 'runtime', error: e })
+				broadcastBotError({ username: ownerUsername, platform: 'xbot', botname: botCharname, phase: 'runtime', error: e })
 			} finally {
 				diag.timeEnd(`doMentionReply:${tweet.id}`)
 			}
@@ -698,7 +698,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 						chatLogs[convKey].shift()
 				} catch (error) {
 					diag.error(`DoDelegateWakeReply: channelId="${channelId}" 失败`, error)
-					broadcastBotError({ platform: 'xbot', botname: botCharname, phase: 'runtime', error })
+					broadcastBotError({ username: ownerUsername, platform: 'xbot', botname: botCharname, phase: 'runtime', error })
 				}
 			}, { onBusy: () => diag.warn(`DoDelegateWakeReply: channelId="${channelId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) })
 		}

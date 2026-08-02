@@ -165,7 +165,6 @@ export function platformToShell(platform) {
  * 通过此对象读当前选中 Bot / 平台，避免监听器随每次 init 叠加。
  */
 const _botPanelState = { selectedBot: null, platform: "discord", showToast: null };
-let _botPanelWindowBound = false;
 
 /**
  * 克隆替换元素以清空其上所有事件监听器（切平台重新 init 时防监听器叠加）。
@@ -1276,21 +1275,6 @@ export async function initDiscordBotPanel(deps) {
     }
   });
 
-  // 顶部角色卡切换 → 当前 Bot 绑定自动跟随 (仅在 Bot tab + 有选中 Bot 时)
-  // window 级监听只绑一次（切平台重复 init 不重复绑），从 _botPanelState 读当前态。
-  if (!_botPanelWindowBound) {
-    _botPanelWindowBound = true;
-    window.addEventListener("beilu:char-changed", (e) => {
-      const charId = e?.detail?.charName || e?.detail?.charId || getCurrentCharId();
-      const isOnBotTab = document.body?.dataset?.activeTab === "bot";
-      const cs = document.getElementById("dc-char-select");
-      if (!isOnBotTab || !_botPanelState.selectedBot || !charId || !cs) return;
-      if (cs.value === charId) return; // 已经一致
-      cs.value = charId;
-      _botPanelState.showToast?.(`Bot "${_botPanelState.selectedBot}" 绑定角色已更新为 "${charId}"（未保存，点击保存后生效）`, "info");
-    });
-  }
-
   // 连接字段的显隐切换在动态渲染时已逐字段绑定（data-conn-toggle）。
 
   saveBtn?.addEventListener("click", async () => {
@@ -1560,19 +1544,6 @@ export async function initDiscordBotPanel(deps) {
       }
     });
 
-  // [0723 凛倾「不要全部挤在一起,单独开窗口」] 三功能弹窗入口（原生 dialog.showModal，
-  // 同 settings ext-new-key-dialog 范式）；onclick 覆盖式赋值，平台切换重进不叠加
-  for (const [btnId, dlgId] of [
-    ["dc-open-inj-dialog", "dc-inj-dialog"],
-    ["dc-open-cf-dialog", "dc-cf-dialog"],
-    ["dc-open-bsm-dialog", "dc-bsm-dialog"],
-    ["dc-open-cmd-dialog", "dc-cmd-dialog"],
-    ["dc-open-hist-dialog", "dc-hist-dialog"],
-  ]) {
-    const _openBtn = document.getElementById(btnId);
-    if (_openBtn) _openBtn.onclick = () => document.getElementById(dlgId)?.showModal();
-  }
-
   // ---- 平台命令清单（后端 BOT_COMMAND_REGISTRY 单源；前端零命令清单）----
   // 范式同 VC_FIELD_META：预取 fire-and-forget + 失败降级，不在前端保留任何命令名/用法字面量。
   // 命令表是全局静态（与壳/角色/平台无关，9 壳同一套），故只拉一次、不随平台切换重拉。
@@ -1604,7 +1575,10 @@ export async function initDiscordBotPanel(deps) {
       host.innerHTML = `<div class="text-[10px] text-warning">命令清单拉取失败，请重试或检查后端。</div>`;
     }
   }
-  document.getElementById("dc-open-cmd-dialog")?.addEventListener("click", () => { loadBotCommandMeta(); });
+  const _cmdSection = document.getElementById("dc-cmd-section");
+  if (_cmdSection) _cmdSection.ontoggle = () => {
+    if (_cmdSection.open) loadBotCommandMeta();
+  };
 
   // ---- 对话记录（只读）：bot 线在 bot 模式下的唯一可见面 ----
   // 凛倾 07-09「前端其他的屏蔽,只有在bot模式出现」——左栏那半句（屏蔽）早已落地
@@ -1673,10 +1647,12 @@ export async function initDiscordBotPanel(deps) {
       if (meta) meta.textContent = "";
     }
   }
-  document.getElementById("dc-open-hist-dialog")?.addEventListener("click", async () => {
+  const _histSection = document.getElementById("dc-hist-section");
+  if (_histSection) _histSection.ontoggle = async () => {
+    if (!_histSection.open) return;
     await _histFillLines();
     await _histRender();
-  });
+  };
   {
     const _histSel = document.getElementById("dc-hist-line");
     if (_histSel) _histSel.onchange = () => { _histRender(); }; // 覆盖式赋值：平台切换重进不叠加监听
@@ -1689,6 +1665,7 @@ export async function initDiscordBotPanel(deps) {
   await loadPresetBinding();
   await loadBotSubModePanel();
   await loadBotList();
+  loadBotCommandMeta();
 
   if (_dcBotList.length > 0) {
     botSelect.value = _dcBotList[0];

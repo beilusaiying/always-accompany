@@ -123,6 +123,8 @@ export async function buildPromptStructShadow(args, mode, detail_level = 3) {
 				_pp.text = [];
 			}
 		}
+		// 硬编码检测已移除（误杀 beilu-web/reach 的 getInjectText 合法内容）。
+		// 防线改为 GetPrompt 函数体注释（12个插件已加铁律警告）+ 代码审查。
 	}
 
 	// user_prompt 兜底（旧线 :90-95 同语义）

@@ -6,8 +6,8 @@
 //   删除重复。pp 只有 3 个模式（merge/semi/strict）。
 //
 // 【消费方】proxy/main.mjs StructCall · claude/grok/claude-api/ollama/gemini 的 StructCall
-// 【管线】commander 分支 / compat 分支 → 图片注入 → 宏替换 → 输出 messages 数组
-//   pp / adapt / prefill / HTTP 发送由 httpFetch.mjs 统一做，不在此层。
+// 【管线】commander 分支 / compat 分支 → 图片注入 → 宏替换 → 用户选择的 PP → 输出 messages 数组
+//   provider adapt / prefill / HTTP 发送仍由各 generator 的真实发送层负责。
 
 import {
   margeStructPromptChatLog,
@@ -23,7 +23,7 @@ import {
   buildChatLogMessages,
   buildCompatMessages,
   squashSystemMessages,
-  mergeConsecutiveRoles,
+  postProcessMessages,
 } from "../proxy/lib/messageTransform.mjs";
 import { findVolatileStart } from "./volatileBoundary.mjs";
 
@@ -108,10 +108,10 @@ export function buildMessagesFromPromptStruct(prompt_struct, callConfig, configT
       modelParams.reasoning_effort !== "auto"
     )
       ema.reasoning_effort = modelParams.reasoning_effort;
-    if (modelParams.extended_thinking != null)
-      ema.extended_thinking = !!modelParams.extended_thinking;
-    if (modelParams.thinking_budget != null)
-      ema.thinking_budget = Number(modelParams.thinking_budget) || paramDefault("thinking_budget");
+    // extended_thinking/thinking_budget 转发已删（2026-08-01 收口：思维链唯一入口=源 config，
+    //   httpFetch 直读 config，预设 modelParams 不再携带/透传 thinking 键）
+    delete ema.extended_thinking;
+    delete ema.thinking_budget;
     callConfig.model_arguments = ema;
     const claudeMode = modelParams.claude_prefill_mode || "off";
     if (claudeMode !== "off") {
@@ -256,7 +256,13 @@ export function buildMessagesFromPromptStruct(prompt_struct, callConfig, configT
     }
   }
 
-  messages = mergeConsecutiveRoles(messages);
+  // 2026-07-29：PP 必须在所有 generator 上是同一个功能。旧代码在这里无条件 merge，
+  // 同时只有 proxy/httpFetch 真正消费 prompt_post_processing，导致 none 不是真关闭，
+  // claude-api/gemini/grok/ollama/claude 等直连 generator 又完全忽略用户选择。
+  // 共享出口先按本轮有效配置执行；proxy 会在 tail-prefill/resume 后按同一值幂等再执行一次。
+  const _finalPostProcess =
+    callConfig.convert_config?.prompt_post_processing || "none";
+  messages = postProcessMessages(messages, _finalPostProcess);
 
   // [0722 审计 M2 收口] 易变区起点在最终输出形状上用单源判据计算（merge 后索引不再漂移；
   //   mapMsg 已剥元数据故靠 volatileBoundary 的正文标签判据），随返回值流向断点消费方

@@ -387,6 +387,26 @@ function parseFileOperations(content) {
 //   由 Load 钩子启动时 mkdir recursive（幂等）根除——目录保证存在后此默认值才安全。
 const DEFAULT_WORKSPACE_ROOT = "ai玩耍空间";
 
+// 工作区根校验（2026-08-01 凛倾「不检测…直接创建一个」案根修——实证：YonBan 反向桥把按
+//   GitHub 仓库名拼出的不存在路径 D:/…/always-accompany/ai玩耍空间 写进 canonical，
+//   setWorkspaceRoot 零校验照单全收，重启后 mkdir recursive 整棵造出幽灵工作区）：
+//   绝对路径根：本身存在（目录）合法；本身不存在但【父目录真实存在】也合法（=在真实项目下
+//   新建玩耍空间，一层可建）；父链不存在=幽灵路径，一律拒绝且不落任何写。
+//   相对路径（含默认玩耍空间）锚 CWD 恒合法。返回 null=合法，string=拒绝原因（可见报错）。
+function validateWorkspaceRoot(p) {
+  if (!p || !(p.startsWith("/") || /^[a-zA-Z]:/.test(p))) return null;
+  try {
+    if (Deno.statSync(p).isDirectory) return null;
+    return `工作区根不是目录: ${p}`;
+  } catch { /* 根不存在，继续查父目录 */ }
+  const _norm = p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const parent = _norm.slice(0, _norm.lastIndexOf("/"));
+  try {
+    if (parent && Deno.statSync(parent).isDirectory) return null;
+  } catch { /* 父目录也不存在 */ }
+  return `工作区根及其父目录均不存在，拒绝创建幽灵工作区: ${p}`;
+}
+
 // ============================================================
 // 辅助函数：目录树构建 & 内容签名
 // ============================================================
@@ -2579,6 +2599,15 @@ async function loadPersistedSettings() {
       console.log("[beilu-files] 已迁移旧全局设置 → _global + _default 桶（per-user）");
     } else {
       if (saved._global?.workspaceRoot !== undefined) _globalSandbox.workspaceRoot = saved._global.workspaceRoot;
+      // 持久化根自愈（2026-08-01 幽灵工作区案）：盘上存的绝对根已不存在（或本就是幽灵路径）
+      //   → 诚实告警并回落默认玩耍空间（锚 CWD，Load 钩子保证存在），下次 save 即持久化痊愈值。
+      {
+        const _vErrLoad = validateWorkspaceRoot(_globalSandbox.workspaceRoot);
+        if (_vErrLoad) {
+          console.warn(`[beilu-files] 持久化工作区根非法，回落默认玩耍空间: ${_vErrLoad}`);
+          _globalSandbox.workspaceRoot = DEFAULT_WORKSPACE_ROOT;
+        }
+      }
       for (const [uname, bucket] of Object.entries(saved)) {
         if (uname === "_global" || !bucket || typeof bucket !== "object") continue;
         const d = _store(uname);
@@ -3373,8 +3402,11 @@ const pluginExport = {
                 const previousMode = getActiveMode(_cid);
                 setActiveMode(_cid, data.mode);
 
-                // 同步工作区根路径
+                // 同步工作区根路径（2026-08-01 幽灵根拒收：非法根保留旧值，模式切换本身不失败）
                 if (data.rootPath !== undefined) {
+                  const _vErr2 = validateWorkspaceRoot(data.rootPath || DEFAULT_WORKSPACE_ROOT);
+                  if (_vErr2) { console.warn(`[beilu-files] setMode 携带非法工作区根，保留旧根: ${_vErr2}`); }
+                  else {
                   pluginData.workspaceRoot = data.rootPath || DEFAULT_WORKSPACE_ROOT;
                   // FT-multiwin：同步写本窗口(_cid)隔离根，AI op 经 op._cid 锚到此根，多窗口不串台。
                   pluginData.workspaceRoots.set(_cid, pluginData.workspaceRoot);
@@ -3384,6 +3416,7 @@ const pluginExport = {
                   console.log(
                     `[beilu-files] 工作区根路径更新: ${pluginData.workspaceRoot}`,
                   );
+                  }
                 }
 
                 // 进入文件/记忆模式：记录起始点（N6：按会话键 _cid 分区，与 setActiveMode 同键）
@@ -3445,6 +3478,15 @@ const pluginExport = {
             }
             case "setWorkspaceRoot": {
               const _newRoot = data.rootPath || DEFAULT_WORKSPACE_ROOT;
+              // 幽灵根拒收（2026-08-01，见 validateWorkspaceRoot 注释）：拒绝即返回错误，
+              //   不改内存不落盘——调用方（YonBan 反向桥/前端）收到可见错误自行纠正。
+              {
+                const _vErr = validateWorkspaceRoot(_newRoot);
+                if (_vErr) {
+                  console.warn(`[beilu-files] setWorkspaceRoot 拒绝: ${_vErr}`);
+                  return { _result: { error: _vErr } };
+                }
+              }
               // IDE 保护：IDE(YonBan) 已设非默认根 → 本体初始化试图用默认值覆盖时跳过
               if (_newRoot === DEFAULT_WORKSPACE_ROOT
                   && pluginData._workspaceRootFromIDE
@@ -3546,6 +3588,7 @@ const pluginExport = {
        * 影响：drain pendingOpResults（一次性消费，读后清空该会话键）
        */
       GetPrompt: async (arg) => {
+        // ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
         return _als.run({ username: arg?.username || "_default" }, async () => { // 破口B: per-user 上下文（pluginData 透明路由）
         const _cid = arg?.chatid || arg?.chat_name?.replace("common_chat_", "") || null;
         wbT(_cid, "files", "GetPrompt:enter", {});

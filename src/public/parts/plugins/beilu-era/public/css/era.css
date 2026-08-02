@@ -1,0 +1,292 @@
+/**
+ * era.css — ERA 符号地图渲染样式（beilu-era 插件前端，eraRenderer.mjs 产物消费）。
+ *
+ * 结构（eraRenderer.renderEraMap 产出）：
+ *   .era-block                 消息气泡内地图容器（messageList maybeAppendEraBlock 直插）
+ *   └ .era-map                 单地图（--era-cell 单元像素来自后端谱 render.cellPx）
+ *     ├ .era-map-header        名称 + rev
+ *     ├ .era-floor-label       多层楼层标签
+ *     └ .era-grid              CSS grid 铺格（--era-cols/--era-rows 来自布局 JSON）
+ *       ├ .era-room            房间矩形（grid-area 占矩形；border-color 来自 palette 内联）
+ *       ├ .era-cell            单格（走廊/门/楼梯/覆盖层/实体共用基类）
+ *       └ .era-ent             实体（可点击→名字进输入框）
+ *
+ * 配色策略：具体色值(palette)由后端谱内联到元素 style（用户可配，禁前端副本）；
+ *   本文件只定基调（结构/字体/交互态），基调色走主题变量兜底，不写死品牌色。
+ */
+
+.era-block {
+	margin-top: 0.5rem;
+}
+
+.era-map {
+	display: inline-block;
+	max-width: 100%;
+	overflow-x: auto;
+	padding: 0.5rem;
+	border-radius: 0.5rem;
+	background: color-mix(in oklab, currentColor 6%, transparent);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+}
+
+.era-map-header {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	margin-bottom: 0.375rem;
+	font-size: 0.8rem;
+}
+
+.era-map-name {
+	font-weight: 600;
+}
+
+.era-map-rev {
+	opacity: 0.55;
+	font-size: 0.7rem;
+}
+
+.era-floor-label {
+	margin: 0.375rem 0 0.125rem;
+	font-size: 0.7rem;
+	opacity: 0.65;
+}
+
+.era-grid {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(var(--era-cols, 56), var(--era-cell, 14px));
+	grid-template-rows: repeat(var(--era-rows, 30), var(--era-cell, 14px));
+	line-height: var(--era-cell, 14px);
+	font-size: calc(var(--era-cell, 14px) * 0.8);
+}
+
+/* 地形色块瓦片（eraTW 视觉基底：色块矩阵，字符是叠加纹理） */
+.era-tile {
+	pointer-events: none;
+}
+
+.era-tile-zone {
+	opacity: 0.28;
+}
+
+.era-tile-road {
+	opacity: 0.85;
+	border-radius: 1px;
+}
+
+.era-terrain-ch {
+	opacity: 0.75;
+}
+
+.era-room {
+	position: relative;
+	border: 1px solid currentColor;
+	border-radius: 2px;
+	opacity: 0.9;
+	background: color-mix(in oklab, currentColor 8%, transparent);
+	overflow: hidden;
+}
+
+.era-room-label {
+	position: absolute;
+	top: 0;
+	left: 2px;
+	right: 2px;
+	font-size: 0.66rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	opacity: 0.85;
+	pointer-events: none;
+}
+
+.era-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	user-select: none;
+}
+
+.era-corridor {
+	opacity: 0.45;
+}
+
+.era-door {
+	opacity: 0.8;
+}
+
+.era-stairs {
+	opacity: 0.8;
+	cursor: help;
+}
+
+.era-overlay {
+	z-index: 2;
+}
+
+.era-ent {
+	z-index: 3;
+	cursor: pointer;
+	font-weight: 700;
+	border-radius: 3px;
+	transition: transform 0.12s ease, background-color 0.12s ease;
+}
+
+.era-ent:hover {
+	transform: scale(1.25);
+	background: color-mix(in oklab, currentColor 18%, transparent);
+}
+
+/* ============================================================
+ * 三层渲染叠加（地图/人物/动态，凛倾 0731「3层的动态层」）：
+ *   首层在流内定尺寸，后续层绝对叠加同位；各层默认不吃指针，
+ *   仅实体（data-ent）恢复指针可点击——层间互不遮挡交互。
+ * ============================================================ */
+
+.era-ascii-stack,
+.era-grid-stack {
+	position: relative;
+	display: inline-block;
+}
+
+.era-ascii-stack .era-layer,
+.era-grid-stack .era-layer {
+	pointer-events: none;
+}
+
+.era-ascii-stack .era-layer:not(:first-child),
+.era-grid-stack .era-layer:not(:first-child) {
+	position: absolute;
+	inset: 0;
+}
+
+.era-layer .era-ent,
+.era-layer [data-ent] {
+	pointer-events: auto;
+}
+
+/* ============================================================
+ * 字符画模式（render.mode='ascii'，eraRenderer.renderFloorAscii 产物）
+ * ============================================================ */
+
+/* 字符画 grid 底座（逐格锚定，任何字体不歪）：字符居中于格，CJK 占双列 */
+.era-agrid .era-cell {
+	font-size: calc(var(--era-cell, 14px) * 0.86);
+	line-height: 1;
+	overflow: visible;
+}
+
+.era-ascii {
+	margin: 0;
+	line-height: 1.05;
+	font-size: calc(var(--era-cell, 14px) * 0.9);
+	white-space: pre;
+	overflow-x: auto;
+	/* 等宽 CJK 优先（era 排版铁则：全角=2×半角才不错位）：
+	   Sarasa/Noto CJK Mono 命中则严格 2:1；缺失时回退西文等宽（汉字对齐尽力）。
+	   用户可经 --era-font 覆盖（era 传统：玩家自配等宽字体）。 */
+	font-family: var(--era-font, 'Sarasa Mono SC', 'Sarasa Term SC', 'Noto Sans Mono CJK SC', 'WenQuanYi Zen Hei Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace);
+}
+
+.era-ascii .era-ent {
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.era-ascii .era-ent:hover {
+	background: color-mix(in oklab, currentColor 20%, transparent);
+	border-radius: 2px;
+}
+
+.era-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 0.875rem;
+	margin-top: 0.375rem;
+	font-size: 0.72rem;
+	opacity: 0.85;
+}
+
+.era-legend-glyph {
+	font-weight: 700;
+	margin-right: 0.3em;
+}
+
+/* ============================================================
+ * 动态效果（caps.dynEffects 驱动，类由渲染器按开关挂；002「做做动态效果或者页面效果」）
+ * ============================================================ */
+
+/* 有色房间：霓虹辉光呼吸（色值来自 --era-room-color 内联变量，禁前端写死色） */
+@keyframes era-glow-breathe {
+	0%, 100% { box-shadow: 0 0 4px 0 var(--era-room-color, transparent); }
+	50% { box-shadow: 0 0 12px 1px var(--era-room-color, transparent); }
+}
+
+.era-glow {
+	animation: era-glow-breathe 2.6s ease-in-out infinite;
+}
+
+/* 覆盖层符号：霓虹闪烁（瞬时事件"门被炸开"类的注意力提示） */
+@keyframes era-flicker-kf {
+	0%, 92%, 100% { opacity: 1; }
+	94% { opacity: 0.25; }
+	96% { opacity: 0.9; }
+	98% { opacity: 0.4; }
+}
+
+.era-flicker {
+	animation: era-flicker-kf 1.8s steps(1, end) infinite;
+}
+
+/* 实体：轻微脉动（可点击提示） */
+@keyframes era-pulse-kf {
+	0%, 100% { transform: scale(1); }
+	50% { transform: scale(1.18); }
+}
+
+.era-pulse {
+	animation: era-pulse-kf 1.6s ease-in-out infinite;
+}
+
+/* 动态层·实体动作菜单（动作集=AI/做卡人数据，插件零预设语义） */
+.era-actions {
+	position: absolute;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 4px;
+	border-radius: 6px;
+	background: color-mix(in oklab, currentColor 12%, #101218);
+	border: 1px solid color-mix(in oklab, currentColor 30%, transparent);
+}
+
+.era-action-btn {
+	font: inherit;
+	font-size: 0.78rem;
+	padding: 2px 8px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+
+.era-action-btn:hover {
+	background: color-mix(in oklab, currentColor 18%, transparent);
+}
+
+/* 窄容器（对话框自适应，同 airp layout 语义）：横向滚动兜底已在 .era-map overflow-x */
+@media (prefers-reduced-motion: reduce) {
+	.era-ent {
+		transition: none;
+	}
+
+	.era-glow,
+	.era-flicker,
+	.era-pulse {
+		animation: none;
+	}
+}

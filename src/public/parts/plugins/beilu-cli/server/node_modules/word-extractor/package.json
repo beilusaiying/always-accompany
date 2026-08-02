@@ -1,0 +1,49 @@
+{
+  "name": "word-extractor",
+  "version": "1.0.4",
+  "description": "Node.js package to read Word .doc files",
+  "main": "lib/word.js",
+  "scripts": {
+    "test": "jest",
+    "test-watch": "jest --watch",
+    "coverage": "jest --coverage",
+    "jsdoc": "jsdoc --configure jsdoc.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morungos/node-word-extractor.git"
+  },
+  "keywords": [
+    "word"
+  ],
+  "author": "Stuart Watt <stuart@morungos.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/morungos/node-word-extractor/issues"
+  },
+  "homepage": "https://github.com/morungos/node-word-extractor",
+  "devDependencies": {
+    "eslint": "^7.25.0",
+    "jest": "^26.6.0",
+    "jest-specific-snapshot": "^4.0.0",
+    "jsdoc": "^3.6.6"
+  },
+  "dependencies": {
+    "saxes": "^5.0.1",
+    "yauzl": "^2.10.0"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js"
+    ],
+    "transform": {},
+    "transformIgnorePatterns": [],
+    "testRegex": "(/__tests__/.*?_test)\\.jsx?$",
+    "collectCoverageFrom": [
+      "lib/**/*.js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ]
+  }
+}

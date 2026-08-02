@@ -1256,7 +1256,7 @@ export function createBotLifecycle(shellname, { interfaceKey, createInterface, c
 			delete botCache[botname];
 			diag.error(`runBot: bot="${botname}" 启动失败`, error);
 			// BR2: 启动失败外显到前端 [O] 监控红点（phase=start）
-			_lcBroadcastBotError({ platform: shellname, botname, phase: "start", error });
+			_lcBroadcastBotError({ username, platform: shellname, botname, phase: "start", error });
 			throw error;
 		}
 	}

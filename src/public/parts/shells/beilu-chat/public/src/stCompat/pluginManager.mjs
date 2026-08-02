@@ -4,7 +4,9 @@
  * 在助手选项卡中提供插件开关面板，
  * 当前支持 beilu-mvu（MVU 变量系统）和 beilu-ejs（EJS 模板渲染）的启用/禁用。
  *
- * 使用 localStorage 存取开关状态（插件无需注册 config 处理器）。
+ * 开关真值来源=后端 config（getConfig 读回对齐 / setConfig 同步写入），localStorage 仅作
+ * 离线回显缓存（0731 修正：原注释"无需注册 config 处理器"已腐烂——只写 localStorage 的开关
+ * 管不住后端渲染管线）。
  * MVU 开关联动：关闭时隐藏变量管理器和脚本管理器 tab。
  *
  * 使用方式：
@@ -29,7 +31,7 @@ const PLUGINS = [
 		icon: '<i data-ic="chart"></i>',
 		description: '兼容 JS-Slash-Runner (酒馆助手) 的 MVU 变量累积、初始化、命令解析、YAML 注入',
 		storageKey: KEYS.BEILU_ST_COMPAT_ENABLED,
-		defaultEnabled: true,
+		defaultEnabled: false, // [0731 凛倾拍板"这两个默认关闭"] ST 卡适配件 opt-in，与后端默认一致（mvu/main.mjs）
 		// 后端 config 路由 base：开关需同步到后端的 pluginEnabled（getdata/setdata 返回/接受 { enabled }）
 		// 实际请求路径用字面量 ':'（后端路由注册的 '\\:' 只是 Express 转义）
 		// backendApiBase 现仅作「此插件有后端配置」的开关标记（真实端点在 sendAction plugins:beilu-mvu 注册段）
@@ -41,9 +43,17 @@ const PLUGINS = [
 		icon: '<i data-ic="edit"></i>',
 		description: '兼容 ST-Prompt-Template 的 EJS 模板语法，在提示词中嵌入变量和条件逻辑',
 		storageKey: 'beilu-plugin-ejs-enabled',
-		defaultEnabled: true,
+		defaultEnabled: false, // [0731 凛倾拍板"这两个默认关闭"] ST 卡适配件 opt-in，与后端默认一致（sandbox/main.mjs）
+		// [0731 门控断链根修] 此前无 backendApiBase → 开关只写 localStorage、后端 pluginEnabled
+		//   永远 true（sandbox/main.mjs），面板显示"已禁用"后端照渲染每轮 chat_log =「按钮是摆设」
+		//   事故。补标记接通 _syncBackendState/_loadBackendState（端点=sendAction plugins:beilu-ejs 注册段）。
+		backendApiBase: '/api/parts/plugins:beilu-ejs/config',
 	},
 ]
+// 【红线·0731 凛倾拍板】本面板是 MVU/EJS 开关的唯一控制面（额外插件管理平台的重复条目已删）。
+//   新增条目必须带 backendApiBase 接通后端 config——只写 localStorage 的开关是摆设（后端管线
+//   读的是它自己的 pluginEnabled，不读浏览器 localStorage）；后端侧 enabled 必须落盘持久
+//   （内存态默认 true=重启即硬开启，见 sandbox/mvu main.mjs 0731 根修注释）。
 
 // ============================================================
 // 状态

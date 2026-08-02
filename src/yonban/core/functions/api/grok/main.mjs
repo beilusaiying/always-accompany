@@ -149,14 +149,14 @@ async function GetSource(config) {
 				 */
 				const onDelta = (delta) => {
 					result.content += delta
-					previewUpdater(result)
+					previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 				}
 				// Use grok's streaming support via the call method
 				await grok.call(messages, model, true, onDelta, signal)
 			} else {
 				// Use non-streaming mode
 				result.content = await grok.call(messages, model, false)
-				previewUpdater(result)
+				previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 			}
 
 			wbT(_wbChatid, 'ai:grok', 'StructCall:return', { contentLen: result.content?.length ?? 0, files: result.files?.length ?? 0 })

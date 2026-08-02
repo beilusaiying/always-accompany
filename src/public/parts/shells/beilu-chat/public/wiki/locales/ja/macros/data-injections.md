@@ -26,7 +26,8 @@
 
 | エントリ id | 内容 | データマクロ | トリガー条件 |
 |------------|------|-------------|------------|
-| `INJ-p1-act-data` | P1 自律駆動方向語 | `{{p1_act}}` | P1 パイプラインに出力がある |
+| `INJ-p1-act-data` | P1 自律駆動リコール記憶データ | `{{p1_act}}` | P1 パイプラインにリコール結果がある |
+| `INJ-p1-recall-usage` | P1 リコール記憶使用ガイド | _(静的テキスト)_ | INJ-p1-act-data と連動 |
 | `INJ-p1-retrieval-data` | メモリAI検索結果 | `{{p1_retrieval}}` `{{p1_retrieval_ts}}` | P1 検索に結果がある |
 | `INJ-p8-web-search-data` | ウェブ検索結果 | `{{p8_results}}` | P8 検索に結果がある |
 | `INJ-chat-search-data` | 前ターンのチャットAI検索結果 | `{{chat_search_results}}` `{{chat_search_ts}}` | 注入待ち検索結果がある |

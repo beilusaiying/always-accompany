@@ -5,7 +5,7 @@ import sanitize from 'npm:sanitize-filename'
 
 import { saveJsonFile } from '../../../../../scripts/json_loader.mjs'
 import { getUserDictionary } from '../../../../../yonban/core/functions/security/auth.mjs'
-import { initPart, isPartLoaded, loadPart } from '../../../../../server/parts_loader.mjs'
+import { isPartLoaded, loadPart, unloadPart } from '../../../../../server/parts_loader.mjs'
 import { loadData, saveData } from '../../../../../server/setting_loader.mjs'
 import { safeTrash } from '../../../../../yonban/core/functions/rollback/safeDelete.mjs' // T026: AI源删除默认进回收站
 
@@ -205,7 +205,16 @@ export async function saveServiceSourceFile(username, fileName, data, serviceSou
 	parts_config[partpath] = { ...dataToSave }
 	saveData(username, 'parts_config')
 
-	if (isPartLoaded(username, partpath)) await initPart(username, partpath)
+	// 保存配置后重载部件（unload → loadPart 重跑完整 Init+Load 生命周期）。
+	// 旧版这里是 initPart：脚手架 main.mjs 没有 Init 函数 → no-op，而 loadPart 命中 parts_set 缓存
+	// 永不重跑 Load——新建源时（config.json 尚不存在）Load 挂上的 empty 假源会一直留在内存，
+	// 保存了正确 generator 后每次生成仍抛 empty 错，直到重启进程。「新建源→保存→立即可用」
+	// 这条动线的生效点就在此处：Load 重跑 loadFromConfigData，读到的是 SetData 已更新的配置。
+	// 加载失败让错误上抛：配置有问题在保存时就暴露，而不是拖到生成时。
+	if (isPartLoaded(username, partpath)) {
+		await unloadPart(username, partpath)
+		await loadPart(username, partpath)
+	}
 }
 
 /**
@@ -246,6 +255,18 @@ export async function addServiceSourceFile(username, fileName, serviceSourcePath
 export async function deleteServiceSourceFile(username, fileName, serviceSourcePath, mode = 'trash') {
 	const baseDir = getServiceSourceDir(username, serviceSourcePath, fileName)
 	if (!fs.existsSync(baseDir)) return
+	const partpath = `${normalizeServiceSourcePath(serviceSourcePath)}/${sanitize(fileName)}`
+	// [2026-08-01 严重bug修·删源三漏]（扫描报告 严重bug扫描_20260801_0340/scan_lifecycle_缓存陈旧.md 高#3）：
+	// ① 先卸载内存实例——原来只删目录，已删源在 parts_set 缓存里继续可被生成链使用直到重启；
+	if (isPartLoaded(username, partpath)) {
+		try { await unloadPart(username, partpath) } catch (e) { console.warn(`[serviceSourceManage] 删除前卸载失败(继续删盘): ${e?.message}`) }
+	}
+	// ② 清 parts_config 残留——permanent 模式对用户宣称"防留痕"，但 apikey 等整套 config 副本
+	//   留在 settings/parts_config.json（saveServiceSourceFile:204-206 写入的），必须一并删除。
+	try {
+		const parts_config = loadData(username, 'parts_config')
+		if (parts_config[partpath] !== undefined) { delete parts_config[partpath]; saveData(username, 'parts_config') }
+	} catch (e) { console.warn(`[serviceSourceManage] 清 parts_config 残留失败: ${e?.message}`) }
 	// T026 凛倾原话：「询问用户是否让api等的数据进回收站还是说直接完全删除，防止留痕」
 	// 默认 trash=进系统回收站（safeTrash 失败自带 _trash_fallback 兜底，绝不静默硬删）；
 	// permanent=彻底删（防留痕，用户在前端弹窗显式选择后才走这里）。

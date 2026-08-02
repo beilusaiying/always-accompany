@@ -15,13 +15,13 @@ const _lc = createBotLifecycle("telegrambot", {
 		const { createSimpleTelegramInterface } = await import("./default_interface/main.mjs");
 		return createSimpleTelegramInterface(char, username, charname);
 	},
-	connect: async (config, char, { botname }) => {
+	connect: async (config, char, { username, botname }) => {
 		const bot = new Bot(config.token);
 		await char.interfaces.telegram.OnBotReady(bot, config.config);
 		bot.catch((err) => {
 			diag.error(`bot="${botname}" 运行时错误`, err);
 			// BR2: 运行时错误外显到前端 [O] 监控红点（phase=runtime）
-			broadcastBotError({ platform: "telegrambot", botname, phase: "runtime", error: err });
+			broadcastBotError({ username, platform: "telegrambot", botname, phase: "runtime", error: err });
 		});
 		bot.start({
 			onStart: () => {

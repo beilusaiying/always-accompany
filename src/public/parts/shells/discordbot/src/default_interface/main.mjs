@@ -639,7 +639,7 @@ export async function createSimpleDiscordInterface(
           error,
         );
         // BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-        broadcastBotError({ platform: 'discordbot', botname: botCharname, phase: 'runtime', error })
+        broadcastBotError({ username: ownerUsername, platform: 'discordbot', botname: botCharname, phase: 'runtime', error })
         // 记录错误到消息日志
         const isDMErr = triggerMessage.channel.type === ChannelType.DM;
         pushMessageLog({
@@ -851,7 +851,7 @@ export async function createSimpleDiscordInterface(
           }
         } catch (error) {
           diag.error(`DoDelegateWakeReply: channel="${channelId}" 失败`, error);
-          broadcastBotError({ platform: 'discordbot', botname: botCharname, phase: 'runtime', error });
+          broadcastBotError({ username: ownerUsername, platform: 'discordbot', botname: botCharname, phase: 'runtime', error });
         }
       }, { onBusy: () => diag.warn(`DoDelegateWakeReply: channel="${channelId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) });
     }

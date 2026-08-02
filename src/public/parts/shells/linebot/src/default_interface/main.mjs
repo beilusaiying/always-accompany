@@ -419,7 +419,7 @@ export async function createSimpleLineInterface(
 				error,
 			);
 			// BR2: runtime 错误外显到前端 [O] 监控红点（phase=runtime）
-			broadcastBotError({ platform: "linebot", botname: botCharname, phase: "runtime", error });
+			broadcastBotError({ username: ownerUsername, platform: "linebot", botname: botCharname, phase: "runtime", error });
 			pushMessageLog({
 				type: "error",
 				sessionId,
@@ -605,7 +605,7 @@ export async function createSimpleLineInterface(
 				}
 			} catch (error) {
 				diag.error(`DoDelegateWakeReply: session="${sessionId}" 失败`, error);
-				broadcastBotError({ platform: "linebot", botname: botCharname, phase: "runtime", error });
+				broadcastBotError({ username: ownerUsername, platform: "linebot", botname: botCharname, phase: "runtime", error });
 			}
 		}, { onBusy: () => diag.warn(`DoDelegateWakeReply: session="${sessionId}" 持续繁忙，放弃本次唤醒（报告等下轮注入）`) });
 	}

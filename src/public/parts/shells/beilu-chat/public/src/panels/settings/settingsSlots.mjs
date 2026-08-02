@@ -1214,20 +1214,19 @@ async function initApiSlot() {
         </div>
         <select id="sa-api-model-list" class="select select-sm select-bordered w-full mt-1 hidden"></select>
       </div>
-      <!-- Extended Thinking（per-源配置，后端 httpFetch:162 无条件消费） -->
+      <!-- 思维链模式（2026-08-01 凛倾收口：thinking 控制唯一入口=本面板 per-源；三态+默认，
+           按 convert_config.provider 在后端 applyThinkingMode 映射成各家参数，见 providerPatch.mjs） -->
       <div class="form-control">
-        <label class="label py-0.5 cursor-pointer">
-          <span class="label-text text-xs"><i data-ic="brain"></i> Extended Thinking</span>
-          <input type="checkbox" id="sa-api-thinking" class="toggle toggle-xs toggle-warning" />
+        <label class="label py-0.5">
+          <span class="label-text text-xs"><i data-ic="brain"></i> 思维链（Thinking / CoT）</span>
         </label>
-        <div id="sa-api-thinking-budget-row" class="pl-1 space-y-1" style="display:none">
-          <label class="label py-0.5">
-            <span class="label-text text-xs">思考 Budget（tokens）</span>
-            <span id="sa-api-thinking-budget-value" class="label-text-alt font-mono text-xs">8000</span>
-          </label>
-          <input type="range" id="sa-api-thinking-budget" min="1024" max="32000" step="1024" value="8000" class="range range-xs range-warning" />
-        </div>
-        <span class="text-[9px] text-base-content/50 pl-1">发送 extended thinking 参数（需反代/网关支持；不开也可能有 AI 自发 thinking，由正则系统处理）</span>
+        <select id="sa-api-thinking-mode" class="select select-sm select-bordered w-full">
+          <option value="">渠道默认（不发参数）</option>
+          <option value="off">关闭思维链 · 最快直接输出</option>
+          <option value="standard">标准思维链 · 平衡速度和质量</option>
+          <option value="max">最大思维链 · 最深推理</option>
+        </select>
+        <span class="text-[9px] text-base-content/50 pl-1">按渠道自动映射参数（DeepSeek/Kimi: thinking.type；Claude: thinking+effort；OpenAI系: reasoning_effort）。部分模型不可关（Gemini 2.5 Pro、kimi-k2.7-code、Claude Fable），强关会由 API 报错提示。</span>
       </div>
       <!-- 操作 -->
       <div class="flex gap-2">
@@ -1388,15 +1387,14 @@ async function initApiSlot() {
       $('sa-api-model').value = cfg.model || '';
       $('sa-api-delete').disabled = false;
       $('sa-api-model-list').classList.add('hidden');
-      // Extended Thinking 回显（per-源）
-      const _thinkEl = $('sa-api-thinking');
-      if (_thinkEl) { _thinkEl.checked = !!cfg.extended_thinking; }
-      const _thinkBudgetRow = $('sa-api-thinking-budget-row');
-      if (_thinkBudgetRow) _thinkBudgetRow.style.display = cfg.extended_thinking ? '' : 'none';
-      const _thinkBudgetSlider = $('sa-api-thinking-budget');
-      if (_thinkBudgetSlider) _thinkBudgetSlider.value = cfg.thinking_budget || 8000;
-      const _thinkBudgetVal = $('sa-api-thinking-budget-value');
-      if (_thinkBudgetVal) _thinkBudgetVal.textContent = cfg.thinking_budget || 8000;
+      // 思维链模式回显（per-源）：新键 thinking_mode 优先；旧 boolean extended_thinking 迁移显示
+      //   （true=standard，false/缺失=渠道默认），与后端 httpFetch 迁移语义一致
+      const _thinkModeEl = $('sa-api-thinking-mode');
+      if (_thinkModeEl) {
+        _thinkModeEl.value = (cfg.thinking_mode !== undefined && cfg.thinking_mode !== null && cfg.thinking_mode !== '')
+          ? cfg.thinking_mode
+          : (cfg.extended_thinking ? 'standard' : '');
+      }
       syncChannelUI();
     } catch (e) { showStatus('加载失败: ' + e.message, 'error'); }
   };
@@ -1417,15 +1415,7 @@ async function initApiSlot() {
     _lastDefaultUrl = entry.defaultUrl || '';
   });
 
-  // Extended Thinking 开关联动 budget 显隐
-  $('sa-api-thinking')?.addEventListener('change', (e) => {
-    const row = $('sa-api-thinking-budget-row');
-    if (row) row.style.display = e.target.checked ? '' : 'none';
-  });
-  $('sa-api-thinking-budget')?.addEventListener('input', (e) => {
-    const lbl = $('sa-api-thinking-budget-value');
-    if (lbl) lbl.textContent = e.target.value;
-  });
+  // （旧 Extended Thinking 开关/预算联动已删——2026-08-01 三态下拉无需联动）
 
   $('sa-api-save').addEventListener('click', async () => {
     if (!currentName) { showStatus('请先选择或新建配置', 'error'); return; }
@@ -1437,12 +1427,13 @@ async function initApiSlot() {
     baseCfg.name = $('sa-api-name').value.trim() || currentName;
     baseCfg.apikey = $('sa-api-key').value.trim();
     baseCfg.model = $('sa-api-model').value.trim();
-    // Extended Thinking per-源（thinking 六口·口6 2026-07-25 接线）：本写点落 config 顶层键，
-    //   消费方=httpFetch Claude 专项预处理段——requestBodyObj（预设/子模式/runtime 覆盖链产物）有键
-    //   优先，无键才回退这里 = per-源默认思考态。原注释称"httpFetch:162 从 requestBodyObj 无条件
-    //   消费同键"为错误（requestBodyObj 只含 model_arguments 展开，顶层键此前零消费=死配置）。
-    baseCfg.extended_thinking = !!$('sa-api-thinking')?.checked;
-    baseCfg.thinking_budget = parseInt($('sa-api-thinking-budget')?.value, 10) || 8000;
+    // 思维链模式 per-源（2026-08-01 凛倾收口：thinking 控制唯一入口=本面板）：写 config 顶层
+    //   thinking_mode（""=渠道默认/off/standard/max），消费方=httpFetch→applyThinkingMode 按
+    //   convert_config.provider 显式映射各家参数。旧键 extended_thinking/thinking_budget 同步删除
+    //   （存量迁移读侧兜底：无 thinking_mode 时 extended_thinking===true 视同 standard）。
+    baseCfg.thinking_mode = $('sa-api-thinking-mode')?.value || '';
+    delete baseCfg.extended_thinking;
+    delete baseCfg.thinking_budget;
     if (_tempEntry && entry === _tempEntry) {
       // 未知生成器：只写探测到的地址字段，不清理其他键、不写 provider（保留原生成器语义）
       baseCfg[entry.urlField] = $('sa-api-url').value.trim();
@@ -2219,6 +2210,101 @@ function fmtUptime(sec) {
 }
 
 // ============================================================
+// ============================================================
+// [2026-08-01 W6] toggle 手动控制面
+// ============================================================
+
+async function initToggleSlot() {
+  const anchor = document.getElementById("settings-plugin-config");
+  if (!anchor || !anchor.parentElement) return;
+  if (document.getElementById("settings-toggle-slot")) return;
+
+  const slot = document.createElement("div");
+  slot.id = "settings-toggle-slot";
+  slot.className = "mt-4";
+  anchor.parentElement.appendChild(slot);
+
+  slot.innerHTML = `
+    <div class="collapse collapse-arrow bg-base-200/30 rounded-lg">
+      <input type="checkbox" />
+      <div class="collapse-title text-sm font-medium min-h-0 py-2 px-3"><i data-ic="shuffle"></i> AI 条目控制</div>
+      <div class="collapse-content px-3 pb-3 text-xs space-y-2">
+        <p class="opacity-50">AI 通过 &lt;toggle&gt; 标签动态启/禁预设条目。此面板可手动翻转或查看 AI 历史操作。</p>
+        <div id="toggle-entry-list" class="space-y-1"></div>
+        <div class="flex gap-2 mt-2">
+          <button id="toggle-refresh" class="btn btn-xs btn-outline btn-info">刷新</button>
+          <button id="toggle-clear-all" class="btn btn-xs btn-outline btn-warning">清除所有覆盖</button>
+        </div>
+        <div id="toggle-history" class="mt-2"></div>
+      </div>
+    </div>
+  `;
+
+  async function loadToggle() {
+    const listEl = slot.querySelector("#toggle-entry-list");
+    const histEl = slot.querySelector("#toggle-history");
+    if (!listEl) return;
+    try {
+      // 获取当前覆盖状态
+      const tgData = await sendAction({ verb: "getData", target: "plugins:beilu-toggle", source: "web" });
+      const overrides = tgData?.overrides || {};
+      const history = tgData?.history || [];
+
+      // 从 preset 获取可控条目列表（toggleable_entries）
+      let entries = [];
+      try {
+        const presetData = await sendAction({ verb: "getData", target: "plugins:beilu-preset", source: "web" });
+        entries = presetData?.toggleable_entries || [];
+      } catch {}
+
+      if (entries.length === 0) {
+        listEl.innerHTML = '<p class="opacity-40">当前预设无可控条目</p>';
+      } else {
+        listEl.innerHTML = entries.map(e => {
+          const overridden = overrides[e.identifier] !== undefined;
+          const currentEnabled = overridden ? overrides[e.identifier] : e.enabled;
+          return `<div class="flex items-center gap-2 px-2 py-1 rounded ${overridden ? 'bg-warning/10' : 'bg-base-200/40'}">
+            <input type="checkbox" class="toggle toggle-xs toggle-success toggle-entry-cb" data-identifier="${e.identifier}" ${currentEnabled ? 'checked' : ''} />
+            <span class="flex-1 truncate">${e.name || e.identifier}</span>
+            ${overridden ? '<span class="badge badge-xs badge-warning">已覆盖</span>' : ''}
+          </div>`;
+        }).join("");
+
+        listEl.querySelectorAll(".toggle-entry-cb").forEach(cb => {
+          cb.addEventListener("change", async () => {
+            try {
+              await sendAction({ verb: "setData", target: "plugins:beilu-toggle", source: "web",
+                payload: { manual_toggle: { identifier: cb.dataset.identifier, enabled: cb.checked } } });
+              loadToggle();
+            } catch (err) { console.error("[toggle] 手动翻转失败:", err); }
+          });
+        });
+      }
+
+      // 历史
+      if (history.length > 0) {
+        histEl.innerHTML = '<p class="text-[10px] opacity-40 mb-1">最近操作</p>' +
+          history.slice(-5).reverse().map(h => {
+            const t = h.time ? new Date(h.time).toLocaleTimeString() : '?';
+            return `<div class="text-[10px] opacity-50">${t} · ${h.source === 'ai' ? 'AI' : '手动'} · ${h.identifier} → ${h.enabled ? '启用' : '禁用'}</div>`;
+          }).join("");
+      } else {
+        histEl.innerHTML = '';
+      }
+    } catch (err) { listEl.innerHTML = `<p class="text-error text-xs">${err.message}</p>`; }
+  }
+
+  slot.querySelector("#toggle-refresh")?.addEventListener("click", loadToggle);
+  slot.querySelector("#toggle-clear-all")?.addEventListener("click", async () => {
+    try {
+      await sendAction({ verb: "setData", target: "plugins:beilu-toggle", source: "web", payload: { clear_overrides: true } });
+      loadToggle();
+    } catch (err) { console.error("[toggle] 清除覆盖失败:", err); }
+  });
+
+  loadToggle();
+}
+
 // 请求预览面板 (W63新增: fakeSend)
 // ============================================================
 
@@ -2678,6 +2764,7 @@ export function initSettingsSlots() {
   // 原 initWebConfigSlot 死 slot（零调用+与活跃入口同字段双默认分叉）已纯删
   initSysinfoConfigSlot();
   initInjectTextsSlot(); // AI 注入文本配置链（0710 收口专项）：落位同 sysinfo slot，锚 settings-plugin-config
+  initToggleSlot(); // [2026-08-01 W6] toggle 手动控制面
   initMonitorSlot();
   initFakeSendSlot();
 }

@@ -321,6 +321,138 @@ function _bindFindBarEvents(bar, textarea) {
 // ============================================================
 
 let _ideOpPollingTimer = null;
+let _ideToolJobListenerBound = false;
+
+const _TOOL_JOB_TERMINAL_STATES = new Set([
+  "succeeded",
+  "failed",
+  "connection_lost",
+  "orphan_result",
+]);
+
+function _getToolJobsMap() {
+  if (window._beiluToolJobs instanceof Map) return window._beiluToolJobs;
+  const rows = Array.isArray(window._beiluToolJobs) ? window._beiluToolJobs : [];
+  const map = new Map();
+  for (const job of rows) {
+    const id = job?.jobId || job?.requestId;
+    if (id) map.set(id, job);
+  }
+  window._beiluToolJobs = map;
+  return map;
+}
+
+function _applyToolJobsSnapshot(jobs, revisionAtRequest) {
+  if (!Array.isArray(jobs)) return;
+  const revisionNow = Number(window._beiluToolJobsRevision || 0);
+  const current = _getToolJobsMap();
+  const next = revisionNow === revisionAtRequest ? new Map() : new Map(current);
+  for (const job of jobs) {
+    const id = job?.jobId || job?.requestId;
+    if (!id) continue;
+    const existing = next.get(id);
+    const incomingVersion = Number(job?.version);
+    const existingVersion = Number(existing?.version);
+    if (
+      Number.isFinite(incomingVersion) &&
+      Number.isFinite(existingVersion) &&
+      incomingVersion < existingVersion
+    ) continue;
+    if (
+      (!Number.isFinite(incomingVersion) || !Number.isFinite(existingVersion)) &&
+      existing?.updatedAt &&
+      job?.updatedAt &&
+      String(existing.updatedAt) > String(job.updatedAt)
+    ) continue;
+    next.set(id, { ...(existing || {}), ...job });
+  }
+  window._beiluToolJobs = next;
+  window.dispatchEvent(new CustomEvent("beilu:smart-task-update", {
+    detail: { source: "tool-jobs-snapshot" },
+  }));
+}
+
+function _toolJobElapsed(job) {
+  const duration = Number(job?.duration);
+  if (Number.isFinite(duration) && duration >= 0) return duration;
+  const start = Date.parse(job?.startedAt || job?.createdAt || "");
+  return Number.isFinite(start) ? Math.max(0, Date.now() - start) : null;
+}
+
+function _formatToolJobDuration(ms) {
+  if (!Number.isFinite(ms)) return "";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}
+
+function _formatToolJobBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${Math.round(bytes)}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function _renderToolJobProgress(job) {
+  const progress = job?.progress;
+  if (!progress || typeof progress !== "object") return "";
+  if (progress.phase === "telemetry_unavailable") {
+    const detail = progress.sampleError || progress.errorCode || "process_telemetry_unavailable";
+    return `<div class="truncate text-[9px] text-warning" title="${escapeHtml(detail)}">进程遥测不可用 · 继续使用硬超时</div>`;
+  }
+  const parts = [];
+  if (Number.isFinite(Number(progress.pid))) parts.push(`PID ${Math.round(Number(progress.pid))}`);
+  if (Number.isFinite(Number(progress.processCount))) parts.push(`${Math.round(Number(progress.processCount))}进程`);
+  if (Number.isFinite(Number(progress.cpuDeltaMs))) parts.push(`CPU Δ${Math.round(Number(progress.cpuDeltaMs))}ms`);
+  if (Number.isFinite(Number(progress.rssBytes))) parts.push(`RSS ${_formatToolJobBytes(progress.rssBytes)}`);
+  if (Number.isFinite(Number(progress.outputBytes))) parts.push(`输出 ${_formatToolJobBytes(progress.outputBytes)}`);
+  if (Number.isFinite(Number(progress.idleForMs))) parts.push(`静默 ${_formatToolJobDuration(progress.idleForMs)}`);
+  if (!parts.length) return "";
+  const cls = progress.phase === "stalled" ? "text-error" : "text-base-content/45";
+  return `<div class="truncate text-[9px] ${cls}" title="${escapeHtml(parts.join(" · "))}">${escapeHtml(parts.join(" · "))}</div>`;
+}
+
+function _renderActiveToolJobs() {
+  const host = document.getElementById("ide-tool-jobs");
+  if (!host) return;
+  const stateMeta = {
+    queued: { label: "排队中", cls: "bg-base-content/30" },
+    sent: { label: "已发送", cls: "bg-info" },
+    running: { label: "执行中", cls: "bg-warning animate-pulse" },
+    active: { label: "执行中", cls: "bg-warning animate-pulse" },
+    wait_timeout: { label: "已超时，等待迟到结果", cls: "bg-warning" },
+    detached: { label: "调用方已取消等待", cls: "bg-warning" },
+  };
+  const jobs = [..._getToolJobsMap().values()]
+    .filter((job) => job && !_TOOL_JOB_TERMINAL_STATES.has(job.state || job.status))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+
+  if (jobs.length === 0) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = '<div class="text-[9px] font-bold text-base-content/50 mt-1">当前工具 Job</div>' +
+    jobs.map((job) => {
+      const state = job.state || job.status || "queued";
+      const progress = job.progress;
+      const meta = progress?.phase === "stalled"
+        ? { label: progress.watchdogAction === "terminate" ? "静默，正在终止" : "静默，已报告", cls: "bg-error animate-pulse" }
+        : (stateMeta[state] || { label: state, cls: "bg-base-content/30" });
+      const elapsed = _formatToolJobDuration(_toolJobElapsed(job));
+      const target = job.target ? `<div class="truncate text-[9px] text-base-content/40" title="${escapeHtml(job.target)}">${escapeHtml(job.target)}</div>` : "";
+      const progressHtml = _renderToolJobProgress(job);
+      return `<div class="bg-base-100/60 rounded px-1.5 py-1">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full shrink-0 ${meta.cls}"></span>
+          <span class="font-mono flex-1 truncate">${escapeHtml(job.tool || "tool")}</span>
+          <span class="text-base-content/50 shrink-0">${escapeHtml(meta.label)}${elapsed ? ` · ${elapsed}` : ""}</span>
+        </div>
+        ${target}
+        ${progressHtml}
+      </div>`;
+    }).join("");
+}
 
 /**
  * 初始化 IDE 控制面板的操作监控区域
@@ -329,6 +461,12 @@ let _ideOpPollingTimer = null;
 export function initIdeOpMonitor() {
   const clearBtn = document.getElementById("ide-clear-op-log");
   const refreshBtn = document.getElementById("ide-refresh-op-log");
+
+  if (!_ideToolJobListenerBound) {
+    _ideToolJobListenerBound = true;
+    window.addEventListener("beilu:tool-job-update", _renderActiveToolJobs);
+  }
+  _renderActiveToolJobs();
 
   if (clearBtn) {
     clearBtn.addEventListener("click", async () => {
@@ -389,6 +527,7 @@ async function pollIdeOpLog() {
   if (!logEl && !statsEl) return;
 
   try {
+    const toolJobsRevision = Number(window._beiluToolJobsRevision || 0);
     // 并行拉取两个来源：verb=真动作→各自通配路由。allSettled 把 sendAction 抛错归为 rejected（下方按 fulfilled 取值），
     //   保留原「某来源不可用（IDE 未连接等）则该源为 null，另一源仍渲染」的降级语义。
     const [filesRes, ideRes] = await Promise.allSettled([
@@ -398,6 +537,9 @@ async function pollIdeOpLog() {
 
     const filesData = filesRes.status === "fulfilled" ? filesRes.value : null;
     const ideData = ideRes.status === "fulfilled" ? ideRes.value : null;
+    // 新后端在历史响应中附带 jobs；旧后端缺失该字段时保持 WS store，不清空。
+    _applyToolJobsSnapshot(ideData?.jobs, toolJobsRevision);
+    _renderActiveToolJobs();
 
     // 合并操作历史
     const filesHistory = (filesData?.history || []).map(op => ({
@@ -631,6 +773,165 @@ function renderCheckpointDiffHtml(files) {
     .join("");
 }
 
+const _TOOL_RUNTIME_NUMBER_FIELDS = [
+  ["response_timeout_ms", "ide-tool-response-timeout-ms"],
+  ["transport_grace_ms", "ide-tool-transport-grace-ms"],
+  ["late_result_retention_ms", "ide-tool-late-retention-ms"],
+  ["long_running_after_ms", "ide-tool-long-running-after-ms"],
+  ["late_result_continue_delay_ms", "ide-tool-late-continue-delay-ms"],
+  ["history_limit", "ide-tool-history-limit"],
+  ["read_default_line_limit", "ide-tool-read-default-line-limit"],
+  ["read_max_line_limit", "ide-tool-read-max-line-limit"],
+  ["read_max_output_chars", "ide-tool-read-max-output-chars"],
+  ["search_default_page_size", "ide-tool-search-default-page-size"],
+  ["search_max_page_size", "ide-tool-search-max-page-size"],
+  ["search_snapshot_ttl_ms", "ide-tool-search-snapshot-ttl-ms"],
+  ["search_max_snapshot_results", "ide-tool-search-max-snapshot-results"],
+  ["search_snapshot_cache_max_entries", "ide-tool-search-snapshot-cache-max-entries"],
+  ["search_snapshot_cache_max_results", "ide-tool-search-snapshot-cache-max-results"],
+  ["search_timeout_ms", "ide-tool-search-timeout-ms"],
+  ["command_watchdog_stall_ms", "ide-tool-command-watchdog-stall-ms"],
+  ["command_watchdog_sample_ms", "ide-tool-command-watchdog-sample-ms"],
+  ["command_watchdog_cpu_delta_ms", "ide-tool-command-watchdog-cpu-delta-ms"],
+  ["command_watchdog_rss_delta_bytes", "ide-tool-command-watchdog-rss-delta-bytes"],
+  ["command_watchdog_progress_ms", "ide-tool-command-watchdog-progress-ms"],
+];
+
+const _TOOL_RUNTIME_BOOLEAN_FIELDS = [
+  ["notify_long_running", "ide-tool-notify-long-running"],
+  ["notify_stalled", "ide-tool-notify-stalled"],
+  ["notify_completed", "ide-tool-notify-completed"],
+  ["notify_failed", "ide-tool-notify-failed"],
+  ["auto_continue_late_results", "ide-tool-auto-continue-late-results"],
+  ["command_watchdog_enabled", "ide-tool-command-watchdog-enabled"],
+];
+
+const _TOOL_RUNTIME_ACTION_FIELDS = [
+  ["command_watchdog_action", "ide-tool-command-watchdog-terminate", "terminate", "report"],
+];
+
+let _toolRuntimeWriteQueue = Promise.resolve();
+let _toolRuntimeWriteSeq = 0;
+
+function _initToolRuntimeSettings() {
+  const fieldset = document.getElementById("ide-tool-runtime-settings");
+  const statusEl = document.getElementById("ide-tool-runtime-status");
+  if (!fieldset || fieldset.dataset.bound === "true") return;
+  fieldset.dataset.bound = "true";
+  let ready = false;
+
+  const setStatus = (text, isError = false) => {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.toggle("text-error", isError);
+    statusEl.classList.toggle("text-base-content/50", !isError);
+  };
+  const applyConfig = (config) => {
+    if (!config || typeof config !== "object") throw new Error("后端未返回工具运行时配置");
+    window._beiluToolJobHistoryLimit = Number(config.history_limit);
+    for (const [key, id] of _TOOL_RUNTIME_NUMBER_FIELDS) {
+      const value = Number(config[key]);
+      const input = document.getElementById(id);
+      if (!input || !Number.isFinite(value)) throw new Error(`配置字段缺失: ${key}`);
+      input.value = String(value);
+    }
+    for (const [key, id] of _TOOL_RUNTIME_BOOLEAN_FIELDS) {
+      const input = document.getElementById(id);
+      if (!input || typeof config[key] !== "boolean") throw new Error(`配置字段缺失: ${key}`);
+      input.checked = config[key];
+    }
+    for (const [key, id, checkedValue, uncheckedValue] of _TOOL_RUNTIME_ACTION_FIELDS) {
+      const input = document.getElementById(id);
+      if (!input || (config[key] !== checkedValue && config[key] !== uncheckedValue)) {
+        throw new Error(`配置字段缺失: ${key}`);
+      }
+      input.checked = config[key] === checkedValue;
+    }
+    return config;
+  };
+  const showConfigSource = (config, saved = false) => {
+    if (saved || config?._source === "persisted") {
+      setStatus(saved ? "已保存" : "已加载已保存配置");
+      return;
+    }
+    if (config?._source === "error") {
+      const message = config?._error?.message || "工具运行态配置不可读";
+      setStatus(`配置读取失败，通知与自动续轮已安全关闭；请先修复配置文件再重试，保存不会覆盖损坏文件：${message}`, true);
+      return;
+    }
+    setStatus("当前为未持久化默认值；首次修改后保存");
+  };
+  const collectFieldPatch = (target) => {
+    const id = target?.id;
+    const numberField = _TOOL_RUNTIME_NUMBER_FIELDS.find(([, fieldId]) => fieldId === id);
+    if (numberField) {
+      const [key] = numberField;
+      const raw = target?.value ?? "";
+      if (String(raw).trim() === "") throw new Error(`${key} 不能为空`);
+      const value = Number(raw);
+      if (!Number.isFinite(value)) throw new Error(`${key} 需要填写有效数字`);
+      return { [key]: value };
+    }
+    const booleanField = _TOOL_RUNTIME_BOOLEAN_FIELDS.find(([, fieldId]) => fieldId === id);
+    if (booleanField) return { [booleanField[0]]: !!target?.checked };
+    const actionField = _TOOL_RUNTIME_ACTION_FIELDS.find(([, fieldId]) => fieldId === id);
+    if (actionField) {
+      const [key, , checkedValue, uncheckedValue] = actionField;
+      return { [key]: target?.checked ? checkedValue : uncheckedValue };
+    }
+    throw new Error("无法识别修改的工具运行时字段");
+  };
+
+  fieldset.addEventListener("change", (event) => {
+    if (!ready) return;
+    let patch;
+    try {
+      patch = collectFieldPatch(event.target);
+    } catch (e) {
+      setStatus(e?.message || "工具运行时配置无效", true);
+      return;
+    }
+    const writeSeq = ++_toolRuntimeWriteSeq;
+    setStatus("正在保存…");
+    _toolRuntimeWriteQueue = _toolRuntimeWriteQueue
+      .catch(() => {})
+      .then(() => sendAction({
+        verb: "setToolRuntimeConfig",
+        target: "plugins:beilu-memory",
+        source: "web",
+        payload: { patch },
+      }))
+      .then((normalized) => {
+        if (writeSeq !== _toolRuntimeWriteSeq) return;
+        ready = false;
+        applyConfig(normalized);
+        ready = true;
+        showConfigSource(normalized, true);
+      })
+      .catch((e) => {
+        if (writeSeq !== _toolRuntimeWriteSeq) return;
+        ready = true;
+        setStatus(`保存失败: ${e?.message || e}`, true);
+      });
+  });
+
+  sendAction({
+    verb: "getToolRuntimeConfig",
+    target: "plugins:beilu-memory",
+    source: "web",
+    payload: {},
+  }).then((config) => {
+    applyConfig(config);
+    ready = true;
+    fieldset.disabled = false;
+    showConfigSource(config);
+  }).catch((e) => {
+    ready = false;
+    fieldset.disabled = true;
+    setStatus(`读取失败: ${e?.message || e}`, true);
+  });
+}
+
 // ============================================================
 // IDE 控制面板其他控件
 // ============================================================
@@ -642,6 +943,8 @@ function renderCheckpointDiffHtml(files) {
  * - 自动继续开关
  */
 export function initIdeControlPanel() {
+  _initToolRuntimeSettings();
+
   // --- 侧栏权限等级快速选择 ---
   const sidebarLevel = document.getElementById("sidebar-permission-level");
   if (sidebarLevel) {
@@ -738,6 +1041,11 @@ export function initIdeControlPanel() {
   }
 
   // --- 自动继续开关 + 延迟 ---
+  // 【红线·0731 凛倾拍板】#ide-auto-continue 是持久配置（yonban_config.auto_continue.enabled）的 UI，
+  //   全前端只许两个触点：本文件 init 后端回填 + 用户 change 写回。任何运行态信号（AI <stopContinue/>、
+  //   scheduleWakeup 唤醒、熔断、错误轮）禁止翻它的 checked——「操作后自动继续」（系统配置域）与
+  //   「AI 停止本轮任务」（任务域）是两个开关，合流即事故：_syncAutoContinueToBackend 是全量覆写，
+  //   被翻假的 checked 会在用户改任一其它项时持久化进后端（0731 已删 websocket.mjs 两处劫持，禁复发）。
   // 半接线修复（2026-07-14）：这两项原只写 localStorage、后端零消费者（悬空 UI）。
   // 现同步写后端单源 yonban_config.auto_continue（SetData setAutoContinueConfig），
   // 消费端=后端 generation 回合末续轮 + 审批完成续轮。localStorage 保留作 UI 回显。

@@ -12,6 +12,183 @@ import { createDiag } from "../diagLogger.mjs";
 // 诊断 server 模块常驻埋点（0716 死标记接线）：403 拒绝细节 + 高频静默路径的按需可见通道
 const diag = createDiag("server");
 
+// 请求日志重复聚合按“方法 + URL + 来源”分组，避免把真实重复请求伪装成服务端自激。
+// 配置位于主 config：request_log_repeat_window_ms（0=逐条打印）、
+// request_log_include_source（false=不附来源字段）。
+const _requestLogRepeatStates = new Map();
+let _requestLogSilentPatternKey = "";
+let _requestLogSilentPatternCache = [];
+
+function _boundedRequestLogWindow(value) {
+  const n = Number(value);
+  // 启动时由 default/config.json 补键；若运行中配置损坏，关闭聚合并逐条记录，避免静默套另一份默认策略。
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(60000, Math.round(n)));
+}
+
+function _requestLogSilentPatterns() {
+  const sources = Array.isArray(config?.request_log_silent_patterns)
+    ? config.request_log_silent_patterns.filter((value) => typeof value === "string")
+    : [];
+  const key = JSON.stringify(sources);
+  if (key === _requestLogSilentPatternKey) return _requestLogSilentPatternCache;
+  const compiled = [];
+  for (const source of sources) {
+    try {
+      compiled.push(new RegExp(source));
+    } catch (error) {
+      console.warn(`[request-log] 无效静默规则 ${JSON.stringify(source)}:`, error?.message || error);
+    }
+  }
+  _requestLogSilentPatternKey = key;
+  _requestLogSilentPatternCache = compiled;
+  return compiled;
+}
+
+function _requestHeader(req, name) {
+  if (typeof req.get === "function") return req.get(name) || "";
+  return req.headers?.[String(name).toLowerCase()] || "";
+}
+
+function _safeRequestPage(value) {
+  if (!value) return "";
+  try {
+    const parsed = new URL(String(value), "http://local.invalid");
+    return parsed.origin === "http://local.invalid"
+      ? parsed.pathname
+      : `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return String(value).slice(0, 160);
+  }
+}
+
+function _requestLogSource(req) {
+  const producer = String(_requestHeader(req, "x-beilu-request-source"))
+    .replace(/[^a-zA-Z0-9._:-]/g, "")
+    .slice(0, 80);
+  return {
+    ...(producer ? { producer } : {}),
+    ip: String(req.ip || req.socket?.remoteAddress || ""),
+    userAgent: String(_requestHeader(req, "user-agent")).slice(0, 160),
+    origin: _safeRequestPage(_requestHeader(req, "origin")),
+    referer: _safeRequestPage(_requestHeader(req, "referer")),
+  };
+}
+
+function _safeRequestUrl(req) {
+  return String(req.url || req.path || "").replace(/beilu-apikey=[^&]*/, "beilu-apikey=***");
+}
+
+function _emitRequestLog(request, safeUrl, source, repeat = null) {
+  const includeSource = config?.request_log_include_source === true;
+  const metadata = {
+    ...(includeSource ? { source } : {}),
+    ...(repeat ? { repeat } : {}),
+  };
+  const metadataText = Object.keys(metadata).length ? ` ${JSON.stringify(metadata)}` : "";
+  console.logI18n("beiluConsole.web.requestReceived", {
+    method: request.method + " ".repeat(Math.max(0, 8 - request.method.length)),
+    url: `${safeUrl}${metadataText}`,
+  });
+}
+
+function _scheduleRequestLogFlush(key, state) {
+  if (state.timer) clearTimeout(state.timer);
+  state.timer = setTimeout(() => {
+    const current = _requestLogRepeatStates.get(key);
+    if (current !== state) return;
+    const now = Date.now();
+    if (state.suppressedCount > 0) {
+      _emitRequestLog(state.request, state.safeUrl, state.source, {
+        count: state.suppressedCount,
+        suppressedCount: state.suppressedCount,
+        totalCount: state.totalCount,
+        firstSeenAt: new Date(state.firstSeenAt).toISOString(),
+        lastSeenAt: new Date(state.lastSeenAt).toISOString(),
+        elapsedMs: Math.max(0, state.lastSeenAt - state.firstSeenAt),
+      });
+      state.firstSeenAt = now;
+      state.totalCount = 0;
+      state.suppressedCount = 0;
+    }
+    if (now - state.lastSeenAt >= state.repeatWindowMs) {
+      _requestLogRepeatStates.delete(key);
+      state.timer = null;
+      return;
+    }
+    _scheduleRequestLogFlush(key, state);
+  }, state.repeatWindowMs);
+  state.timer?.unref?.();
+}
+
+function _flushAndDeleteRequestLogState(key, state) {
+  if (state.timer) clearTimeout(state.timer);
+  if (state.suppressedCount > 0) {
+    _emitRequestLog(state.request, state.safeUrl, state.source, {
+      count: state.suppressedCount,
+      suppressedCount: state.suppressedCount,
+      totalCount: state.totalCount,
+      firstSeenAt: new Date(state.firstSeenAt).toISOString(),
+      lastSeenAt: new Date(state.lastSeenAt).toISOString(),
+      elapsedMs: Math.max(0, state.lastSeenAt - state.firstSeenAt),
+    });
+  }
+  _requestLogRepeatStates.delete(key);
+}
+
+export function flushRequestLogAggregation() {
+  for (const [key, state] of _requestLogRepeatStates) {
+    _flushAndDeleteRequestLogState(key, state);
+  }
+}
+
+export function logRequestWithAttribution(req) {
+  const safeUrl = _safeRequestUrl(req);
+  const source = _requestLogSource(req);
+  const repeatWindowMs = _boundedRequestLogWindow(config?.request_log_repeat_window_ms);
+  if (repeatWindowMs === 0) {
+    _emitRequestLog(req, safeUrl, source);
+    return;
+  }
+
+  const now = Date.now();
+  const key = `${req.method}\n${safeUrl}\n${JSON.stringify(source)}`;
+  let state = _requestLogRepeatStates.get(key);
+  if (state && state.repeatWindowMs !== repeatWindowMs) {
+    _flushAndDeleteRequestLogState(key, state);
+    state = null;
+  }
+  if (!state) {
+    const next = {
+      request: { method: req.method },
+      safeUrl,
+      source,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      totalCount: 1,
+      suppressedCount: 0,
+      repeatWindowMs,
+      timer: null,
+    };
+    _requestLogRepeatStates.set(key, next);
+    _emitRequestLog(req, safeUrl, source);
+    _scheduleRequestLogFlush(key, next);
+  } else {
+    state.lastSeenAt = now;
+    state.totalCount++;
+    state.suppressedCount++;
+  }
+
+  if (_requestLogRepeatStates.size > 1000) {
+    for (const [entryKey, entry] of _requestLogRepeatStates) {
+      if (now - entry.lastSeenAt > entry.repeatWindowMs * 2) {
+        _flushAndDeleteRequestLogState(entryKey, entry);
+      }
+      if (_requestLogRepeatStates.size <= 800) break;
+    }
+  }
+}
+
 /**
  * 一个中间件，根据请求是否经过身份验证来应用不同的中间件。
  * @param {Function} if_auth - 如果请求经过身份验证，则应用的中间件。
@@ -111,7 +288,7 @@ export function registerMiddleware(router) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Api-Key');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Api-Key, X-Beilu-Request-Source');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
       }
       // CORS 预检请求直接 204 结束（不进后续认证/路由）。
@@ -158,53 +335,11 @@ export function registerMiddleware(router) {
 
   router.use(cookieParser());
 
-  // ★ 高频轮询路径过滤：eye/files 等轮询接口每几秒一次，不逐条打印
-  const HIGH_FREQ_PATH_PATTERNS = [
-    /\/api\/eye\/status/,
-    /\/api\/parts\/plugins:beilu-files\/config\/setdata/,
-    /\/api\/user-plugins\/status/,
-    /\/api\/parts\/plugins:beilu-memory\/config\/(getdata|setdata)/,
-    /\/api\/parts\/plugins:beilu-preset\/config\/(runtime-params|setdata|getdata)/,
-    /\/api\/parts\/shells:chat\/[^/]+\/fake-send/,
-    /\/api\/getdetails\//,
-    /\/api\/parts\/shells:chat\/[^/]+\/log/,
-    // ── 2026-06-25 追加：调查报告 P0/P1 高频轮询 + 静态资源 ──
-    /\/api\/parts\/shells:chat\/groups/,        // groupRuntimePanel 4s轮询（含 groups/engine）
-    /\/api\/eye\/getdata/,                      // eye 监控数据轮询
-    /\/api\/v1\/monitor\/plugins/,              // backendMonitor 面板周期轮询
-    /\/api\/parts\/shells:chat\/getchatlist/,   // 聊天列表查询
-    /^\/(esm-cache)\//,                         // ESM 缓存代理请求（冷启动 ~231 行）
-    /^\/(public|pages|assets)\//,               // 静态资源目录
-    /\.(mjs|js|css|html|woff2?|ttf|svg|png|jpg|ico)(\?|$)/,  // 静态资源扩展名
-    // ── 2026-07-05 追加（dispatch 刷屏事故根修）：中间站桥统一入口 ──
-    //   根因=迁移脱节（半链）：T6b（2026-07-02 sendAction.mjs）把 beilu-memory/browser/preset 等原走
-    //   REST 的高频轮询（getData/getMemoryAIOutput/getRuntimeParams/consumeBrowser 等，2~3s 一次 + 切卡/切模式
-    //   十余监听者 fan-out）统一切桥到 POST /api/yonban/dispatch。但本白名单当初只匹配它们的【旧 REST 路径】
-    //   （:158/:161/:162），dispatch 桥入口未纳入 → 所有轮询请求全经此单点、全部逐条打印 → 控制台高频刷屏
-    //   （凛倾 2026-07-05 19:27 实测：无间隔感的连续 requestReceived）。非自激励环、非 interval 叠加、非逻辑 bug，
-    //   前端事件环与全部走 dispatch 的 setInterval 均已核为收敛/有防重闸（poll:57/memoryai:185/eye:223/companion:397/
-    //   fileExplorer:1673 等），char-changed↔loadCharInfo 有 _loadedCharId+_skipCharChangedEvent 双防重。
-    //   静默整个桥入口=与旧 REST 轮询路径入白名单同构决策（切桥前这些写/读路径本就在本表被静默）；桥请求可观测性
-    //   由 wbSpan 白盒埋点承担（yonban_bridge.mjs:7，backendMonitor 面板可见），不依赖本条 requestReceived。
-    //   代价：低频写 verb（addRouteNote/setActiveSubMode 等）也不再打印于此——如需按 verb 精筛可见性，
-    //   后续把本日志中间件下移到 express.json(:188) 之后读 req.body.verb 精确静默高频只读 verb（框架级增强，非本次事故最小修范围）。
-    /^\/api\/yonban\/dispatch/,                 // 中间站桥：所有过桥 verb 的统一 dispatch 入口（高频轮询主力已全切此路）
-    // ── 2026-07-22 追加(凛倾"无限制重复和噪音"实拍刷屏):桌宠 Electron 端 orbPollSec(默认3s)节律轮询——
-    //   显示同步(pet-settings GET,含?raw=1)+AI消息拉取(orb-consume)+托盘/滚轮回写(pet-settings POST 停轮防抖),
-    //   加 web 陪伴面板 discordbot 运行清单轮询。均为已知节律请求,逐条打印=噪音;可观测性走 :204 diag.debug 通道。
-    /\/api\/eye\/pet-settings/,
-    /\/api\/eye\/orb-consume/,
-    /\/api\/parts\/shells:discordbot\/getrunningbotlist/,
-  ];
-
   router.use((req, res, next) => {
     res.setHeader("X-Powered-By", info.xPoweredBy);
-    const isHighFreq = HIGH_FREQ_PATH_PATTERNS.some((p) => p.test(req.path));
+    const isHighFreq = _requestLogSilentPatterns().some((pattern) => pattern.test(req.path));
     if (!req.path.endsWith("/heartbeat") && !isHighFreq)
-      console.logI18n("beiluConsole.web.requestReceived", {
-        method: req.method + " ".repeat(Math.max(0, 8 - req.method.length)),
-        url: req.url.replace(/beilu-apikey=[^&]*/, "beilu-apikey=45450721"),
-      });
+      logRequestWithAttribution(req);
     // 被高频白名单静默的请求走 diag 按需可见通道（BEILU_DIAG=server + debug 级），
     // 补上"静默即不可观测"的洞（:183 注释预留的按 verb 精筛之前的过渡观测口）
     else if (isHighFreq) diag.debug(req.method, req.url.replace(/beilu-apikey=[^&]*/, "beilu-apikey=***"));

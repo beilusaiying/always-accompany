@@ -1020,9 +1020,12 @@
         "postProcessing": "提示词后处理",
         "ppNone": "无",
         "ppMerge": "合并相同角色连续发言",
-        "ppSemi": "半严格（合并+system转user交替）",
-        "ppStrict": "严格（合并+user在前+system仅一条）",
-        "postProcessingHint": "部分API要求严格角色交替，按需选择",
+        "ppMergeTools": "合并 (保留工具)",
+        "ppSemi": "半严格 (无工具)",
+        "ppSemiTools": "半严格 (保留工具)",
+        "ppStrict": "严格 (无工具)",
+        "ppStrictTools": "严格 (保留工具)",
+        "postProcessingHint": "半严格/严格：历史中段 system→user，尾部保留；工具变体保留 tool 角色",
         "save": "<i data-ic=\"save\"></i> 保存参数"
       },
       "presetEntries": {

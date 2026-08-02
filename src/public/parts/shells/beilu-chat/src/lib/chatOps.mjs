@@ -5,7 +5,8 @@
  *
  * 链路：endpoints.mjs → 本模块（写操作）→ chatStorage.saveChat / broadcast.broadcastChatEvent
  *       generation.mjs → 本模块（addChatLogEntry 注入工具结果 system 条）
- *       requestBuilder.mjs → 本模块（getVisibleChatLog 构建 AI 可见上下文）
+ *       requestBuilder.mjs → 本模块（getVisibleChatLog 构建 AI 可见上下文 + addChatLogEntry 供插件
+ *         request.AddChatLogEntry 回调写入）
  *
  * 影响：每个写操作都遵循 RT-4 契约（先 await saveChat 落盘，再 broadcastChatEvent 推送前端）；
  *       chatLog 就地 push/splice（内存态变更）；广播 WS 事件（message_added/deleted/edited/hidden 等）
@@ -31,6 +32,7 @@ import {
   saveChat,
   newChat,
   renameChat,
+  setModeActiveChat,
   BOT_CHAT_SYMBOL,
 } from "./chatStorage.mjs";
 import { loadShellData, saveShellData } from "../../../../../../server/setting_loader.mjs"; // bot 对话指针 bot_chat_bindings
@@ -370,8 +372,18 @@ export async function deleteMessagesRange(chatid, startIndex, endIndex) {
   chatLogSnapshot(chatid, chatMetadata.chatLog, "deleteRange");
 
   const count = end - start;
-  for (let i = start; i < end; i++) {
-    if (chatMetadata.chatLog[i]) markDeleted(chatMetadata.chatLog[i], "rollback");
+  // [2026-08-01 凛倾拍板「回档=ctrl+z」] 删到末尾（回档即此形态）=物理截断：尾部截断不改变
+  //   存活消息的索引，checkpoint/hide 等索引锚全部稳定；误回档由上方快照兜底（beilu-files
+  //   listChatBackups/restoreChatBackup 恢复链已存在）。旧软删留尸体：渲染过滤后不可见但永久
+  //   累积、回档计数失真（自驱动2"11条"案）；物理截断顺带清掉范围内历史软删尸体
+  //   （="再次回档让系统清理"）。非尾部范围删除保留软删——中段物理抽除会使后续消息索引
+  //   漂移、错位 checkpoint 锚，语义不同不并轨。
+  if (end === len) {
+    chatMetadata.chatLog.splice(start);
+  } else {
+    for (let i = start; i < end; i++) {
+      if (chatMetadata.chatLog[i]) markDeleted(chatMetadata.chatLog[i], "rollback");
+    }
   }
 
   const last = _lastActiveEntry(chatMetadata.chatLog);
@@ -560,6 +572,50 @@ export async function trimEntryFiles(chatid, { keep, marker } = {}) {
 // ============================================================
 
 /**
+ * [0731 四窗口对话收口] 确保角色卡在四个模式窗口（chat/smart/code/work）各有一条专属对话。
+ * 凛倾 0628「角色卡都需要创建4个对话」+ 0731「一次新建4个,然后放到每个窗口」。
+ *
+ * 【why·根因】原实现是前端 charsel 两处复制的四模式建卡循环：导入路径先查"该角色已有对话吗"
+ *   才建——而角色卡初始化会自动绑进当前对话，恒"已有" → 循环恒被短路（0731 实测：一条对话被
+ *   聊天/全智能/工作 三个窗口共用）；且 create-char/import-char/ST 导入等服务端入口全都拿不到
+ *   前端循环。收口为服务端单点：路由收尾调用，任何入口接入即得同一行为，前端复制循环镜像删除。
+ *
+ * 【幂等】按 mode_active_chats 指针逐模式判缺（指针在且对话实存 → 保留现值），只补缺失线——
+ *   对已有角色重复调用不会新建对话。
+ * 【每条缺失线】newChat(mode)（建对话+chat_modes 徽标）→ addchar（绑卡+文件迁移+开场白，
+ *   与前端 bindCharToChat 路由同一实现）→ setModeActiveChat（「XX窗口在用」指针+跨端广播）。
+ * 【失败面】单模式线绑卡失败只跳过该线不中断其余；调用方应 try/catch 使其对建卡主链非致命。
+ *
+ * @param {string} username
+ * @param {string} charName - 角色目录名（与 primaryCharName 同域）
+ * @returns {Promise<Record<string,string>>} mode → chatid 四键全量表（已有线返现值，新建线返新值）
+ */
+export async function ensureModeChatsForChar(username, charName) {
+  const WINDOW_MODES = ["chat", "smart", "code", "work"]; // 窗口模式徽标域（chatStorage._VALID_CHAT_MODES 同域，禁与生成模式域混淆）
+  const modeChats = {};
+  for (const mode of WINDOW_MODES) {
+    const key = `${mode}:${charName}`;
+    const map = loadShellData(username, "chat", "mode_active_chats");
+    const existing = map[key];
+    if (existing && chatMetadatas.get(existing)?.username === username) {
+      modeChats[mode] = existing;
+      continue;
+    }
+    const chatid = await newChat(username, mode);
+    try {
+      await addchar(chatid, charName);
+    } catch (e) {
+      console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 线绑卡失败，跳过该线:`, e?.message);
+      continue;
+    }
+    const r = await setModeActiveChat(chatid, username, mode);
+    if (!r?.success) console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 在用指针写入失败:`, r?.message);
+    modeChats[mode] = chatid;
+  }
+  return modeChats;
+}
+
+/**
  * 向对话添加角色并获取首条 greeting。
  *
  * 链路：endpoints POST /:chatid/char → 本函数 → loadPart(角色) → getChatRequest → GetGreeting
@@ -646,8 +702,11 @@ export async function addchar(chatid, charname) {
       _wbG0({ contentLen: (result?.content || "").length, hasResult: !!result });
     }
 
-    if (!result) {
-      // 没有 greeting，直接保存
+    // [2026-08-01 空消息累计案·断链1] 空 greeting 拦截：角色卡 first_mes 为空时 GetGreeting 返回
+    //   {content:""}（truthy）穿过旧 `if (!result)` 落成一条永久空消息（alt 循环 :727 区有空检查，
+    //   index 0 主路径没有=两路径不对称）。空内容=无 greeting，同走无 greeting 分支，不落盘。
+    if (!result || !String(result.content ?? "").trim()) {
+      // 没有 greeting（或 greeting 为空），直接保存
       await saveChat(chatid); // RT-4 对齐：return 前 await 落盘
       return null;
     }

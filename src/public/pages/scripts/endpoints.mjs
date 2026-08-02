@@ -7,6 +7,7 @@ export async function ping(with_cache = false) {
 	const response = await fetch('/api/ping', {
 		credentials: 'omit',
 		cache: with_cache ? 'default' : 'no-cache',
+		headers: { 'X-Beilu-Request-Source': 'shared-endpoints-ping' },
 	})
 	if (!response.ok) return Promise.reject(Object.assign(new Error(`API request failed with status ${response.status}`), await response.json().catch(() => ({})), { response }))
 	return response.json()

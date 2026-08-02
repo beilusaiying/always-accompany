@@ -1,4 +1,6 @@
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 
 import { Client } from 'npm:@modelcontextprotocol/sdk/client/index.js'
 import { SSEClientTransport } from 'npm:@modelcontextprotocol/sdk/client/sse.js'
@@ -19,6 +21,10 @@ import { assertSafeOutboundInServerMode } from '../security/safe_fetch.mjs' // T
  * @param {object} [config.env] - Stdio 模式下的环境变量
  * @param {Array<string|object>} [config.roots] - 根目录列表
  * @param {Function} [config.samplingHandler] - 采样处理回调函数
+ * @param {(error: Error|null, tools: Array|null) => void} [config.toolsChangedHandler]
+ *   SDK tools/list_changed 自动刷新结果回调；仅在 server 声明 tools.listChanged 时启用
+ * @param {(event: {type: 'transport_error'|'transport_closed', error: Error|null}) => void} [config.lifecycleHandler]
+ *   transport 生命周期回调
  * @returns {Promise<object>} 封装后的客户端接口
  */
 // beilu SEC-T3：MCP 子进程环境最小化。
@@ -60,15 +66,50 @@ function buildMCPEnv(explicitEnv, extraAllowNames) {
 	return { ...env, ...(explicitEnv || {}) }
 }
 
+/**
+ * 构建 stdio MCP server 的沙箱包装参数。
+ * sandbox 启用时：通过 Deno sandbox_runner.mjs 代理 spawn，提供日志审计 + 空闲超时强杀。
+ * sandbox 未启用（默认）：直接 spawn 原始 command，行为不变。
+ * @param {object} config - MCP 配置
+ * @returns {{command: string, args: string[]}} 包装后的 command + args
+ */
+function buildSandboxedCommand(config) {
+	if (!config.sandbox?.enabled) {
+		return { command: config.command, args: config.args || [] }
+	}
+	const __dirname = path.dirname(fileURLToPath(import.meta.url))
+	const runnerPath = path.join(__dirname, 'sandbox_runner.mjs')
+	const denoArgs = ['run', '--allow-run', '--allow-env']
+	if (config.sandbox.allowRead)
+		denoArgs.push(`--allow-read=${Array.isArray(config.sandbox.allowRead) ? config.sandbox.allowRead.join(',') : config.sandbox.allowRead}`)
+	else
+		denoArgs.push('--allow-read')
+	if (config.sandbox.allowWrite)
+		denoArgs.push(`--allow-write=${Array.isArray(config.sandbox.allowWrite) ? config.sandbox.allowWrite.join(',') : config.sandbox.allowWrite}`)
+	if (config.sandbox.allowNet === false)
+		denoArgs.push('--deny-net')
+	else if (config.sandbox.allowNet)
+		denoArgs.push(`--allow-net=${Array.isArray(config.sandbox.allowNet) ? config.sandbox.allowNet.join(',') : config.sandbox.allowNet}`)
+	denoArgs.push(runnerPath)
+	const timeoutMs = config.sandbox.idleTimeoutMs || 300000
+	denoArgs.push('--timeout', String(timeoutMs))
+	if (config.sandbox.logPath)
+		denoArgs.push('--log', config.sandbox.logPath)
+	denoArgs.push('--')
+	denoArgs.push(config.command, ...(config.args || []))
+	return { command: Deno.execPath(), args: denoArgs }
+}
+
 export async function createMCPClient(config) {
 	// SEC-F4/G#2：server 部署下，远程 MCP transport 目标不可指内网（local 模式本地 MCP server 不受影响）。
 	if (config.url) await assertSafeOutboundInServerMode(config.url)
+	const sandboxed = config.command ? buildSandboxedCommand(config) : null
 	const transport = config.url
 		? config.url.startsWith('ws') ? new WebSocketClientTransport(new URL(config.url))
 			: new StreamableHTTPClientTransport(new URL(config.url))
 		: new StdioClientTransport({
-			command: config.command,
-			args: config.args || [],
+			command: sandboxed.command,
+			args: sandboxed.args,
 			// SEC-T3：只传 allowlist 命中的宿主 env + 显式 config.env，不再 {...process.env}
 			env: buildMCPEnv(config.env, config.envAllowlist)
 		})
@@ -80,10 +121,40 @@ export async function createMCPClient(config) {
 	const _srvName = config.serverName || (config.url ? String(config.url) : config.command) || "unknown";
 	// SDK RequestTimeout 错误码 -32001（@modelcontextprotocol/sdk McpError）；兼容 message 文案判定
 	const _isTimeoutErr = (e) => e?.code === -32001 || /timed?\s?out|超时/i.test(String(e?.message || e));
+	const _emitLifecycle = (type, error = null) => {
+		if (typeof config.lifecycleHandler !== 'function') return
+		try {
+			config.lifecycleHandler({
+				type,
+				error: error instanceof Error ? error : error === null ? null : new Error(String(error)),
+			})
+		} catch (callbackError) {
+			console.warn('[MCP] lifecycleHandler failed:', callbackError)
+		}
+	}
+	const listChanged = typeof config.toolsChangedHandler === 'function'
+		? {
+			tools: {
+				// SDK 1.29 only activates this handler when the server advertises
+				// tools.listChanged, auto-refreshes listTools, and applies its own
+				// bounded debounce. Unsupported servers retain explicit listTools.
+				onChanged: (error, updatedTools) => {
+					try { config.toolsChangedHandler(error, updatedTools) }
+					catch (callbackError) { console.warn('[MCP] toolsChangedHandler failed:', callbackError) }
+				},
+			},
+		}
+		: undefined
 	const client = new Client(
 		{ name: 'beilu-mcp-client', version: '1.0.0' },
-		{ capabilities: { sampling: {}, roots: { listChanged: true } }, requestTimeoutMs: MCP_REQUEST_TIMEOUT_MS }
+		{
+			capabilities: { sampling: {}, roots: { listChanged: true } },
+			requestTimeoutMs: MCP_REQUEST_TIMEOUT_MS,
+			...(listChanged ? { listChanged } : {}),
+		}
 	)
+	client.onclose = () => _emitLifecycle('transport_closed', new Error(`MCP transport closed (server=${_srvName})`))
+	client.onerror = (error) => _emitLifecycle('transport_error', error)
 
 	if (config.roots)
 		client.setRequestHandler(ListRootsRequestSchema, () => ({
@@ -97,10 +168,22 @@ export async function createMCPClient(config) {
 			model: 'default', stopReason: 'endTurn'
 		}))
 
-	const _connectWithTimeout = (t) => Promise.race([
-		client.connect(t),
-		new Promise((_, rej) => setTimeout(() => rej(new Error(`MCP connect 超时 (server=${_srvName}, ${MCP_CONNECT_TIMEOUT_MS}ms)`)), MCP_CONNECT_TIMEOUT_MS)), // T024：含 server 名
-	]);
+	const _connectWithTimeout = async (t) => {
+		let timeoutId = null
+		try {
+			return await Promise.race([
+				client.connect(t),
+				new Promise((_, rej) => {
+					timeoutId = setTimeout(
+						() => rej(new Error(`MCP connect 超时 (server=${_srvName}, ${MCP_CONNECT_TIMEOUT_MS}ms)`)),
+						MCP_CONNECT_TIMEOUT_MS,
+					)
+				}), // T024：含 server 名
+			])
+		} finally {
+			if (timeoutId !== null) clearTimeout(timeoutId)
+		}
+	}
 	try {
 		await _connectWithTimeout(transport)
 	}

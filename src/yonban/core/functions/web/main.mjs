@@ -4,6 +4,8 @@ import { authenticate } from '../security/auth.mjs' // config REST 端点鉴权�
 import info from '../../../../public/parts/plugins/beilu-web/info.json' with { type: 'json' } // T3a·3.8: part 元数据留原位
 import { wbT, wbD } from "../../../../server/wbStub.mjs";
 import { probeCrawlCapability, ensureBrowsers } from "./crawlProbe.mjs";
+import fs from "node:fs";
+import { nicerWriteFileSync } from "../../../../scripts/nicerWriteFile.mjs";
 import { getInjectText } from "../injectTexts/main.mjs"; // 注入文本单源（铁律：进 messages 的文本用户可配置，默认值在 injectTexts CATALOG）
 
 // ============================================================
@@ -337,6 +339,23 @@ function parseWebOperations(content) {
 // 插件数据
 // ============================================================
 
+// [2026-08-01 批② 纯内存不落盘修] 可持久化字段→盘文件 data/web-config.json
+//   非持久字段（searchHistory/结果缓存 Map）仍纯内存——数据量/引用型无法 JSON 序列化。
+const WEB_PERSIST_FILE = "data/web-config.json";
+const _WEB_PERSIST_KEYS = ["enabled", "autoSearch", "autoBrowse", "maxResults", "maxPageLength", "fetchTimeout", "maxHistory", "_browsersPath"];
+let _webPersistTimer = null;
+function _persistWebConfig() {
+	if (_webPersistTimer) clearTimeout(_webPersistTimer);
+	_webPersistTimer = setTimeout(() => {
+		_webPersistTimer = null;
+		try {
+			const obj = {};
+			for (const k of _WEB_PERSIST_KEYS) if (pluginData[k] !== undefined) obj[k] = pluginData[k];
+			nicerWriteFileSync(WEB_PERSIST_FILE, JSON.stringify(obj, null, 2), "utf-8");
+		} catch (e) { console.warn("[beilu-web] 持久化配置失败:", e?.message); }
+	}, 100);
+}
+
 let pluginData = {
 	enabled: true,
 	autoSearch: true,         // 自动执行搜索
@@ -355,6 +374,15 @@ let pluginData = {
 	_latestResults: new Map(), // Map<chatid|"", SearchResult[]>
 	_latestBrowse: new Map(),  // Map<chatid|"", {url,content}[]>
 }
+
+// [2026-08-01] 模块加载恢复持久化配置（同 sandbox CONFIG_PERSIST_FILE 范式）
+try {
+	if (fs.existsSync(WEB_PERSIST_FILE)) {
+		const _saved = JSON.parse(fs.readFileSync(WEB_PERSIST_FILE, "utf-8"));
+		for (const k of _WEB_PERSIST_KEYS) if (_saved[k] !== undefined) pluginData[k] = _saved[k];
+		console.log("[beilu-web] 已从磁盘恢复配置");
+	}
+} catch (e) { console.warn("[beilu-web] 恢复持久化配置失败(用默认值):", e?.message); }
 
 // 模块加载时后台触发浏览器内核自动安装（不阻塞启动）
 ensureBrowsers(pluginData._browsersPath).catch(e =>
@@ -446,29 +474,8 @@ const pluginExport = {
 
 				if (data._action) {
 					switch (data._action) {
-						case 'manualSearch': {
-							// [0717 配置断链修] 面板手动搜索同样铺 per-char 配置底（桥盖章有 chatid 即归位，
-							// 无则 _global——比原来的裸 {max_results} 至少多吃到 _global 级 engine/代理/名单）
-							const results = await searchViaBeilu(data.query, {
-								maxResults: data.maxResults || pluginData.maxResults,
-								baseConfig: await _perCharWebSearchConfig(data, data.chatid ?? data.chatId ?? null),
-							})
-							const record = {
-								id: generateId(),
-								query: data.query,
-								results,
-								timestamp: Date.now(),
-								status: results.length > 0 ? 'completed' : 'no_results',
-							}
-							pluginData.searchHistory.push(record)
-							// config 面板手动搜索无 chatid 上下文 → 兜底键 ""（对所有会话可见）
-							_pushToMap(pluginData._latestResults, '', results)
-							break
-						}
-						case 'clearHistory': {
-							pluginData.searchHistory = []
-							break
-						}
+						// [2026-08-01 删] manualSearch/clearHistory：全库零前端调用方（batch②确认）。
+						//   需要时从 git 恢复。
 						case 'diagnose': {
 							_wsEnsure()
 							if (!_wsMod) {
@@ -493,38 +500,36 @@ const pluginExport = {
 				if (data.fetchTimeout !== undefined) pluginData.fetchTimeout = data.fetchTimeout
 				if (data.maxHistory !== undefined) pluginData.maxHistory = data.maxHistory
 				if (data.browsersPath !== undefined) pluginData._browsersPath = data.browsersPath
+				// [2026-08-01] 字段更新后防抖落盘
+				_persistWebConfig();
 			},
 		},
 		chat: {
 			/**
 			 * GetPrompt: 注入搜索能力 + 最新结果
 			 */
+			// [0730 迁 INJ] 能力描述已迁入 INJ-plugin-web 条目（默认关闭）。
+			// 仅保留搜索/浏览结果的纯数据注入（有结果才注入，无结果返 null）。
 			GetPrompt: async (arg) => {
 				if (!pluginData.enabled) return null
-
-				// 能力引导块走 injectTexts 单源（web.capabilities 键）；结构尾换行留代码
-				let text = getInjectText('web.capabilities') + '\n'
-
 				const _cid = _cidOf(arg)
 				const _myResults = _drainFromMap(pluginData._latestResults, _cid)
 				const _myBrowse = _drainFromMap(pluginData._latestBrowse, _cid)
+				if (_myResults.length === 0 && _myBrowse.length === 0) return null
 				wbT(_cid, 'web:inject', 'GetPrompt.in', { latestResults: _myResults.length, latestBrowse: _myBrowse.length })
+				let text = ''
 				if (_myResults.length > 0) {
 					let _block = ''
 					for (const r of _myResults)
 						_block += `- ${r.title}\n  ${r.url}\n  ${r.snippet}\n\n`
-					text += '\n[Latest Search Results]\n' + _block + '\n'
+					text += '[Latest Search Results]\n' + _block
 				}
-
 				if (_myBrowse.length > 0) {
 					let _block = ''
 					for (const b of _myBrowse)
 						_block += `--- ${b.url} ---\n${b.content}\n---\n\n`
-					text += '\n[Browsed Page Content]\n' + _block + '\n'
+					text += '[Browsed Page Content]\n' + _block
 				}
-
-				// [0727 契约修] text 契约=数组[{content,important}]（decl/prompt_struct.ts，同批：sysinfo/airp/reach）——
-				//   裸字符串在 fake-send 的 change-prompt .sort 处炸，且每 15s 轮询被 shadowBuild 契约归一点名刷日志
 				return {
 					text: text ? [{ content: text, important: 0 }] : [],
 					role: 'system',

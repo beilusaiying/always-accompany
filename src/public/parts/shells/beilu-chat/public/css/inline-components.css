@@ -252,7 +252,7 @@
    ============================================================ */
 
 .thinking-toggle {
-  margin-left: 3.5rem;
+  margin-left: 0;
   margin-bottom: 0.25rem;
 }
 
@@ -851,4 +851,3 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
-

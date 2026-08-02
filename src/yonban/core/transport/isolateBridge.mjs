@@ -7,9 +7,11 @@
  *   与 pendingFileOps（债-C 上报门）两条散点专线；本模块把「跨界」收成一个系统：
  *   任何需要跨 isolate 的状态/事件，统一走本桥，不再各拉专线。
  *
- * 通道（复用 groupWorker 既有 stream 协议，不新开信道）：
+ * 通道：
  *   上行（worker→主，实时）：publishFromWorker() → ctx.emit({__isolateBridge:...}) → {kind:"stream"}
  *     → groupWorkerManager.dispatchReplyToGroup 的 onStream 包装层 dispatchBridgeChunk() → 域处理器。
+ *   生命周期上行（worker→主，常驻）：publishWorkerLifecycle() → ctx.emitEvent(event)
+ *     → {kind:"event"}。该 emitter 绑定 worker 实例，不随单次 request reply/stream 结束。
  *   下行（主→worker，随派发）：dispatchReplyToGroup 组装 payload.bridgeState 快照
  *     → groupReplyRunner 在 GetReply 前交各域 own 模块消费（ideClient.applyBridgeState）。
  *
@@ -28,6 +30,7 @@ export const isWorkerIsolate = !!globalThis.__BEILU_WORKER_ISOLATE;
 // ---- worker 侧：上行事件出口 ----
 // chatid → 本次在飞请求的 emit（groupReplyRunner 在 GetReply 前 bind、finally unbind）。
 const _workerEmitters = new Map();
+let _workerLifecycleEmitter = null;
 
 export function bindWorkerEmitter(chatid, emit) {
   if (chatid && typeof emit === "function") _workerEmitters.set(chatid, emit);
@@ -35,6 +38,27 @@ export function bindWorkerEmitter(chatid, emit) {
 
 export function unbindWorkerEmitter(chatid) {
   if (chatid) _workerEmitters.delete(chatid);
+}
+
+/**
+ * 绑定 worker 常驻 lifecycle emitter。groupReplyRunner 可在每轮幂等重绑，但不得在
+ * GetReply finally 中解绑；真正生命周期由 groupWorker isolate/terminate 决定。
+ */
+export function bindWorkerLifecycleEmitter(emitEvent) {
+  if (typeof emitEvent === "function") _workerLifecycleEmitter = emitEvent;
+}
+
+/**
+ * worker 工具运输层向主进程发布版本化 lifecycle。此通道不承载 broadcast/approval 等
+ * request-bound 业务事件，避免把原 stream 语义放大成永久广播。
+ */
+export function publishWorkerLifecycle(event) {
+  if (!isWorkerIsolate || typeof _workerLifecycleEmitter !== "function") return false;
+  try {
+    return _workerLifecycleEmitter(event) !== false;
+  } catch {
+    return false;
+  }
 }
 
 /**

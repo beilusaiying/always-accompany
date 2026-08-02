@@ -176,9 +176,26 @@ function configFileFor(username) {
   return join(getUserDataDir(username), "worldbooks", "config_data.json");
 }
 
+// [2026-08-01 W2 接线 useRegex] useRegex=true 时把非 /斜杠/ 形式的 key 强制包裹——
+//   ST 引擎 buildKeyList(world_info.mjs:23) 只按 parseRegexFromString(/形式/) 识别正则，
+//   useRegex 字段从未传进引擎→勾选框零作用。包裹让引擎认出来，不影响已有 /形式/ 的 key。
+function _wrapRegexKeys(keys, forceRegex) {
+  if (!forceRegex) return keys;
+  return keys.map(k => {
+    if (typeof k !== 'string' || !k) return k;
+    if (/^\/.*\/[gimsuy]*$/.test(k)) return k;
+    return `/${k}/`;
+  });
+}
+
 // [T074] 内存单例 → per-user Map。旧 `let configData` 全用户共享一个对象是内存态串台根因。
 //   getStore(username) 惰性加载：磁盘有 → 载入并跑旧格式迁移；磁盘无 → 空 store（新用户空列表）。
 const perUserStore = new Map(); // Map<username, {active_worldbook, worldbooks}>
+
+// 【store 级失效】盘=真相指纹（2026-08-01 批①存写不生效修）：username → config_data.json mtimeMs。
+//   worker isolate 与主 isolate 各持一份本模块单例，旧实现惰性载入后零失效——UI 改世界书后
+//   进行中的 worker 线持续用旧条目直到进程回收。照抄 preset getStore mtime 范式（preset/main.mjs:795-823）。
+const _diskMtimeByUser = new Map();
 
 function saveConfigToDisk(username) {
   const user = username || "_default";
@@ -188,6 +205,8 @@ function saveConfigToDisk(username) {
     fs.mkdirSync(dirname(file), { recursive: true });
     // 原子写(tmp+rename+D-09重试)，避免裸 writeFileSync 写盘中途崩留半截 config 致下次加载失败
     nicerWriteFileSync(file, JSON.stringify(store, null, 2));
+    // 【store 级失效】自写推进指纹，防 getStore 把自己的写误判为外部变更（2026-08-01 批①修）
+    try { _diskMtimeByUser.set(user, fs.statSync(file).mtimeMs || 0); } catch { /* 指纹推进失败仅退化为下次多一次无害重载 */ }
     // [0716 W1 刷新机制] 写盘=世界书变更唯一事实点（全部 SetData 写路收口于此，读写同源）
     //   → 单点广播 worldbook_changed（regex_rules_changed/preset_list_changed 同范式，跨窗口刷新）。
     //   fire-and-forget；迁移回写也广播=幂等无害。
@@ -221,7 +240,29 @@ function loadConfigFromDisk(username) {
 function getStore(username) {
   const user = username || "_default";
   let store = perUserStore.get(user);
-  if (store) return store;
+  if (store) {
+    // 【store 级失效】盘=真相，内存桶=缓存（2026-08-01 批①修，范式=preset/main.mjs:795-823）：
+    //   写盘唯一事实点 saveConfigToDisk 同步推进本 isolate 指纹（不自失效）；跨 isolate/外部写盘
+    //   → mtime 前进 → 就地重建桶字段（不换对象引用，捕获旧引用的持有方同步看到新值）。
+    try {
+      const file = configFileFor(user);
+      let curMt = 0;
+      try { curMt = fs.existsSync(file) ? (fs.statSync(file).mtimeMs || 0) : 0; } catch { curMt = 0; }
+      if (curMt !== (_diskMtimeByUser.get(user) ?? 0)) {
+        const saved = loadConfigFromDisk(user);
+        if (saved?.worldbooks) {
+          store.active_worldbook = saved.active_worldbook || "";
+          store.worldbooks = saved.worldbooks || {};
+          migrateStoreEntries(store, user);
+        }
+        _diskMtimeByUser.set(user, curMt);
+      }
+    } catch (e) {
+      // fail-loud 留痕但不吞任务：stat/读盘异常沿用旧快照（同 preset 范式）
+      console.warn(`[beilu-worldbook] getStore("${user}") 盘态失效检查失败(沿用旧快照):`, e?.message);
+    }
+    return store;
+  }
   store = { active_worldbook: "", worldbooks: {} };
   const saved = loadConfigFromDisk(user);
   if (saved?.worldbooks) {
@@ -230,6 +271,8 @@ function getStore(username) {
     migrateStoreEntries(store, user); // 旧格式迁移（原 Load 内联逻辑，抽为 per-user 函数）
   }
   perUserStore.set(user, store);
+  // 【store 级失效】首访完成即记录盘指纹（2026-08-01 批①修）
+  try { const _f = configFileFor(user); _diskMtimeByUser.set(user, fs.existsSync(_f) ? (fs.statSync(_f).mtimeMs || 0) : 0); } catch { _diskMtimeByUser.set(user, 0); }
   return store;
 }
 
@@ -1357,12 +1400,12 @@ const pluginExport = {
         if (regexEntries.length > 0) {
           const wiEntries = regexEntries.map((e) => ({
             ...e,
-            keys: Array.isArray(e.key) ? [...e.key] : e.key ? [e.key] : [],
-            secondary_keys: Array.isArray(e.keysecondary)
+            keys: _wrapRegexKeys(Array.isArray(e.key) ? [...e.key] : e.key ? [e.key] : [], e.useRegex),
+            secondary_keys: _wrapRegexKeys(Array.isArray(e.keysecondary)
               ? [...e.keysecondary]
               : e.keysecondary
                 ? [e.keysecondary]
-                : [],
+                : [], e.useRegex),
             enabled: !e.disable,
             constant: false, // 强制关闭，常驻模式已在上方处理
             extensions: {
@@ -1555,14 +1598,15 @@ const pluginExport = {
 
         // 正则条目：有 chat_log 才送引擎（前端渲染通常只激活 constant；regex 可选）
         if (regexEntries.length > 0 && Array.isArray(arg?.chat_log) && arg.chat_log.length) {
+          // [2026-08-01 W2] GetRenderEntries 同 GetPrompt 修——useRegex 包裹（_wrapRegexKeys 模块级定义）
           const wiEntries = regexEntries.map((e) => ({
             ...e,
-            keys: Array.isArray(e.key) ? [...e.key] : e.key ? [e.key] : [],
-            secondary_keys: Array.isArray(e.keysecondary)
+            keys: _wrapRegexKeys(Array.isArray(e.key) ? [...e.key] : e.key ? [e.key] : [], e.useRegex),
+            secondary_keys: _wrapRegexKeys(Array.isArray(e.keysecondary)
               ? [...e.keysecondary]
               : e.keysecondary
                 ? [e.keysecondary]
-                : [],
+                : [], e.useRegex),
             enabled: !e.disable,
             constant: false,
             extensions: {

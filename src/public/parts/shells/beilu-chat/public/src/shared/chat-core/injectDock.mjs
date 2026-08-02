@@ -561,6 +561,21 @@ export function getOnceInjectIds() {
 }
 
 /**
+ * 外部域排队单次注入（0731 002"能不能使用单次注入"）：P1 面板等系统域把自家条目 id 排进下一次发送。
+ * 域边界不变（凛倾0726）：注入坞候选列表仍只收用户 skill——本函数只是队列入口，条目不进坞 UI；
+ * 发送/清队/徽标走既有 getOnceInjectIds/clearOnceInjectQueue 同一条链。
+ * @param {string} id INJ 条目 id（如 INJ-p1-retrieval-data）
+ * @returns {boolean} true=已排队（重复排队幂等返回 true）
+ */
+export function queueOnceInject(id) {
+  if (typeof id !== "string" || !id) return false;
+  _onceIds.add(id);
+  _syncBadge();
+  if (_dock && !_dock.classList.contains("hidden")) _renderList();
+  return true;
+}
+
+/**
  * 清掉「已随这条消息送出去」的那批条目（发送成功后调；失败不清，用户可原样重发）。
  *
  * why 按 id 清而不是 clear()：`await addUserReply` 期间浮窗仍可操作，用户完全可能已经在

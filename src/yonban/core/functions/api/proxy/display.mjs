@@ -254,11 +254,18 @@ return async ({ data, containers, editors }) => {
 		</label>
 		<select id="post-processing-select" class="select select-sm select-bordered w-full">
 		  <option value="none" ${currentPostProcessing === "none" ? "selected" : ""}>无</option>
-		  <option value="merge" ${currentPostProcessing === "merge" ? "selected" : ""}>合并相同角色连续发言</option>
-		  <option value="semi" ${currentPostProcessing === "semi" ? "selected" : ""}>半严格（合并+system转user交替）</option>
-		  <option value="strict" ${currentPostProcessing === "strict" ? "selected" : ""}>严格（合并+user在前+system仅一条）</option>
+		  <optgroup label="保留工具">
+		  <option value="merge_tools" ${currentPostProcessing === "merge_tools" ? "selected" : ""}>合并 (保留工具)</option>
+		  <option value="semi_tools" ${currentPostProcessing === "semi_tools" ? "selected" : ""}>半严格 (保留工具)</option>
+		  <option value="strict_tools" ${currentPostProcessing === "strict_tools" ? "selected" : ""}>严格 (保留工具)</option>
+		  </optgroup>
+		  <optgroup label="无工具">
+		  <option value="merge" ${currentPostProcessing === "merge" ? "selected" : ""}>合并 (无工具)</option>
+		  <option value="semi" ${currentPostProcessing === "semi" ? "selected" : ""}>半严格 (无工具)</option>
+		  <option value="strict" ${currentPostProcessing === "strict" ? "selected" : ""}>严格 (无工具)</option>
+		  </optgroup>
 		</select>
-		<p class="text-xs opacity-50 ml-1 mt-1">部分API要求严格角色交替，按需选择。</p>
+		<p class="text-xs opacity-50 ml-1 mt-1">半严格/严格：历史中段 system→user，尾部保留；工具变体保留 tool 角色。</p>
 </div>
 <div class="form-control w-full max-w-xs mb-2">
 		<label class="label">

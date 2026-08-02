@@ -39,7 +39,14 @@
 		initTranslations('startPage')
 		const urlParams = new URLSearchParams(window.location.search)
 		if (!urlParams.get('cold_bootting')) try {
-			await fetch('/api/ping', { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(500) })
+			await fetch('/api/ping', {
+				method: 'GET',
+				mode: 'cors',
+				credentials: 'omit',
+				cache: 'no-store',
+				headers: { 'X-Beilu-Request-Source': 'start-page-bootstrap' },
+				signal: AbortSignal.timeout(500),
+			})
 		}
 		catch {
 			const iframe = document.createElement('iframe')

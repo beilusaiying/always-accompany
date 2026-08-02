@@ -77,6 +77,11 @@ export default {
         console.log(
           `[beilu-char][SetData] AIsource="${data.AIsource || "(空)"}", username="${username}", chardir="${path.basename(chardir)}"`,
         );
+        // [2026-08-01 改卡不重载修] chardata 分支——对齐 SillyTavern/Template/main.mjs:110-112：
+        //   update-char 端点保存 chardata.json 后经此分支刷新模块级 chardata + info → 改卡当场生效。
+        if (data.chardata) {
+          chardata = data.chardata;
+        }
         if (data.AIsource)
           AIsource = await loadPart(
             username,

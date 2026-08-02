@@ -933,6 +933,8 @@ export async function registerEndpoints(router) {
   router.get("/api/getusersetting", authenticate, asyncHandler(async (req, res) => {
     const user = await getUserByReq(req);
     const { key } = req.query;
+    const _allowedKeys = new Set(["displayName", "avatar", "theme", "language", "locale", "timezone", "settings", "preferences", "contentFilter"]);
+    if (!key || !_allowedKeys.has(key)) return res.status(400).json({ error: `不允许读取字段: ${key}` });
     res.status(200).json({ key, value: user[key] });
   }, "GET /api/getusersetting"));
 
@@ -2237,6 +2239,103 @@ export async function registerEndpoints(router) {
         persisted: _persisted,
         enabled: config.csp_enabled,
         envForcedOff: process.env.BEILU_CSP === "off",
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ---- 请求日志：重复聚合、来源字段和静默规则均由 owner 配置，middleware 实时读取 ----
+  router.get("/api/diagnostics/request-log", authenticate, async (req, res) => {
+    try {
+      const repeatWindowMs = Number(config?.request_log_repeat_window_ms);
+      if (!Number.isFinite(repeatWindowMs)) {
+        throw new Error("request_log_repeat_window_ms 配置无效");
+      }
+      if (typeof config?.request_log_include_source !== "boolean") {
+        throw new Error("request_log_include_source 配置无效");
+      }
+      res.json({
+        success: true,
+        repeatWindowMs,
+        includeSource: config.request_log_include_source,
+        silentPatterns: Array.isArray(config?.request_log_silent_patterns)
+          ? config.request_log_silent_patterns
+          : [],
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+  router.post("/api/diagnostics/request-log", requireOwner, async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      let repeatWindowMs = Number(config?.request_log_repeat_window_ms);
+      let includeSource = config?.request_log_include_source;
+      if (!Number.isFinite(repeatWindowMs)) {
+        return res.status(500).json({ success: false, error: "request_log_repeat_window_ms 配置无效" });
+      }
+      if (typeof includeSource !== "boolean") {
+        return res.status(500).json({ success: false, error: "request_log_include_source 配置无效" });
+      }
+      let silentPatterns = Array.isArray(config?.request_log_silent_patterns)
+        ? [...config.request_log_silent_patterns]
+        : [];
+      if (Object.hasOwn(body, "repeatWindowMs")) {
+        const value = Number(body.repeatWindowMs);
+        if (!Number.isFinite(value) || value < 0 || value > 60000) {
+          return res.status(400).json({ success: false, error: "repeatWindowMs 必须是 0 到 60000 的数字" });
+        }
+        repeatWindowMs = Math.round(value);
+      }
+      if (Object.hasOwn(body, "includeSource")) {
+        if (typeof body.includeSource !== "boolean") {
+          return res.status(400).json({ success: false, error: "includeSource 必须为布尔值" });
+        }
+        includeSource = body.includeSource;
+      }
+      if (Object.hasOwn(body, "silentPatterns")) {
+        if (!Array.isArray(body.silentPatterns) || body.silentPatterns.length > 200) {
+          return res.status(400).json({ success: false, error: "silentPatterns 必须是不超过 200 项的字符串数组" });
+        }
+        const patterns = [];
+        for (const raw of body.silentPatterns) {
+          if (typeof raw !== "string" || raw.length > 500) {
+            return res.status(400).json({ success: false, error: "每条静默规则必须是长度不超过 500 的字符串" });
+          }
+          const source = raw.trim();
+          if (!source) continue;
+          try { new RegExp(source); }
+          catch (error) {
+            return res.status(400).json({ success: false, error: `无效正则 ${JSON.stringify(source)}: ${error.message}` });
+          }
+          if (!patterns.includes(source)) patterns.push(source);
+        }
+        silentPatterns = patterns;
+      }
+      const previous = {
+        repeatWindowMs: config.request_log_repeat_window_ms,
+        includeSource: config.request_log_include_source,
+        silentPatterns: config.request_log_silent_patterns,
+      };
+      try {
+        config.request_log_repeat_window_ms = repeatWindowMs;
+        config.request_log_include_source = includeSource;
+        config.request_log_silent_patterns = silentPatterns;
+        save_config();
+      } catch (error) {
+        config.request_log_repeat_window_ms = previous.repeatWindowMs;
+        config.request_log_include_source = previous.includeSource;
+        config.request_log_silent_patterns = previous.silentPatterns;
+        throw error;
+      }
+      const { flushRequestLogAggregation } = await import("./middleware.mjs");
+      flushRequestLogAggregation();
+      res.json({
+        success: true,
+        repeatWindowMs,
+        includeSource,
+        silentPatterns,
       });
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });

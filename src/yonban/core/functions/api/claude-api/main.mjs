@@ -341,7 +341,7 @@ async function GetSource(config) {
 						}
 						if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
 							result.content += event.delta.text
-							previewUpdater(result)
+							previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 						}
 						// ★ 捕获 message_start 和 message_delta 中的 usage
 						if (event.type === 'message_start' && event.message?.usage) {
@@ -356,7 +356,7 @@ async function GetSource(config) {
 					const message = await client.messages.create({ ...params, signal })
 					result.content = message.content.filter(block => block.type === 'text').map(block => block.text).join('')
 					_usage = message.usage || null
-					previewUpdater(result)
+					previewUpdater?.(result) // [2026-08-01 严重bug修·可选回调] 调用方可不传预览回调（同 proxy httpFetch 修）
 				}
 			} catch (err) {
 				if (err?.name === 'AbortError') { wbT(_wbChatid, 'ai:claude-api', 'StructCall:aborted', { phase: 'in-stream' }); throw err }

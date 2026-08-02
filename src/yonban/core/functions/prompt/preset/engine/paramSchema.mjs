@@ -93,8 +93,16 @@ export const ENUM_SCHEMA = {
     options: [
       { value: "none",   label: "关闭" },
       { value: "merge",  label: "合并 (Merge)" },
-      { value: "semi",   label: "半严格 (Semi)" },
-      { value: "strict", label: "严格 (Strict)" },
+      { value: "merge_tools", label: "合并 (保留工具)",
+        title: "合并连续同角色，保留 tool 角色消息" },
+      { value: "semi",   label: "半严格",
+        title: "合并 + 历史对话中段 system→user（尾部保留）" },
+      { value: "semi_tools", label: "半严格 (保留工具)",
+        title: "半严格 + 保留 tool 角色消息" },
+      { value: "strict", label: "严格",
+        title: "半严格 + 首条 system 后插占位 user 保证交替" },
+      { value: "strict_tools", label: "严格 (保留工具)",
+        title: "严格 + 保留 tool 角色消息" },
     ],
   },
   claude_prefill_mode: {

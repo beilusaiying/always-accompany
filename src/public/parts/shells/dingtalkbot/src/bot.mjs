@@ -16,14 +16,14 @@ const _lc = createBotLifecycle('dingtalkbot', {
 		const { createSimpleDingTalkInterface } = await import('./default_interface/main.mjs')
 		return createSimpleDingTalkInterface(char, username, charname)
 	},
-	connect: async (config, char, { botname }) => {
+	connect: async (config, char, { username, botname }) => {
 		diag.log(`startBot: 启动 bot="${config.char}", clientId长度=${config.clientId?.length || 0}`)
 		const client = new DWClient({
 			clientId: config.clientId,
 			clientSecret: config.clientSecret,
 		})
 		// BR2 runtime：DWClient extends EventEmitter(2.x SDK .d.ts 坐实)，运行时 WS 错误外显红点(phase=runtime，补齐 M8 半修：原仅 start 阶段有 producer)
-		client.on('error', (error) => { try { broadcastBotError({ platform: 'dingtalkbot', botname, phase: 'runtime', error }) } catch { /* 外显失败不阻断 bot 主流程 */ } })
+		client.on('error', (error) => { try { broadcastBotError({ username, platform: 'dingtalkbot', botname, phase: 'runtime', error }) } catch { /* 外显失败不阻断 bot 主流程 */ } })
 		await char.interfaces.dingtalk?.OnceClientReady?.(client, config.config)
 		await client.connect()
 		diag.log(`startBot: 钉钉 Stream 已连接, char="${config.char}"`)

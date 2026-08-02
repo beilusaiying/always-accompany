@@ -18,7 +18,8 @@
  *
  * 【关联链】
  *   ← ideClient.mjs（import 本文件 + re-export 供 replyHandler/setDataActions 旧路径不断）
- *   → data/beilu-files-settings.json（commandGate 段：failClosedUnknown/capabilities/allowChannelBExec）
+ *   → data/beilu-files-settings.json（commandGate 段：failClosedUnknown/allowChannelBExec）
+ *   → data/users/<owner>/command_config.json（分类能力唯一真值）
  *
  * 【影响范围】
  *   改本文件 = 改全部三通道的命令拦截行为（高危）；黑/灰名单默认清单调整需同步 YonBan 副本。
@@ -32,7 +33,11 @@ import path from "node:path";
 //   立即求值）：它读 storage 的 `const __projectRoot`，顶层调用把「storage 已初始化完」变成承重
 //   不变量——storage 一旦获得任何传递到本文件的 import 边即 TDZ 崩全部插件（0722 事故实证，当时
 //   本注释写的"已核实无环"被 J1-B 新增边推翻）。一律函数内取值（endpoints.mjs 同范式）。
-import { getFilesSettingsPath } from "../memory/storage_mod/storage.mjs";
+import {
+  getCommandConfigPath,
+  getFilesSettingsPath,
+  loadJsonFileIfExists,
+} from "../memory/storage_mod/storage.mjs";
 
 // ★ 抽出适配：_isPathOutsideWorkspace 供本文件 B3 引擎与 ideClient（import 回去）共用，加 export。
 export const FILE_EDIT_TOOLS = new Set(["write_file", "replace_lines", "insert_at_line", "fuzzy_edit"]);
@@ -239,9 +244,10 @@ function _normalizeGitInvocations(command) {
  * 检查命令安全性
  * @param {string} command - 要执行的命令
  * @param {object} [userConfig] - 用户命令配置（与DEFAULT_COMMAND_CATEGORIES同结构）
+ * @param {object} [gateConfig] - 可选的统一闸配置；缺省从用户可编辑的 commandGate 设置读取
  * @returns {{ allowed: boolean, reason?: string, needsApproval?: boolean }}
  */
-export function checkCommandSecurity(command, userConfig) {
+export function checkCommandSecurity(command, userConfig, gateConfig) {
   if (!command || typeof command !== "string") {
     return { allowed: false, reason: "命令为空" };
   }
@@ -314,9 +320,15 @@ export function checkCommandSecurity(command, userConfig) {
     return { allowed: true };
   }
 
-  // ★ D3 fail-closed（翻转原 Q5=B 的 fail-open）：未知分类的命令不再默认放行，
-  //   改为「要求审批」（forced）。未知命令既不在白名单也不在黑/灰名单，无法判定安全性，
-  //   默认要 HITL 而非静默执行（设计 S1 fail-closed）。owner 可在 consent 卡片放行一次。
+  // ★ D3 fail-closed（翻转原 Q5=B 的 fail-open）：未知分类默认进入 forced 审批。
+  //   0715 设置链修复：failClosedUnknown 是用户可编辑的真实裁决项，不再只停留在 UI/存储层。
+  //   显式关闭时恢复旧 fail-open；黑名单、灰名单和已识别分类仍已在上方优先裁决。
+  const failClosedUnknown = gateConfig && typeof gateConfig === "object"
+    ? gateConfig.failClosedUnknown !== false
+    : _loadCommandGateConfig().failClosedUnknown;
+  if (!failClosedUnknown) {
+    return { allowed: true };
+  }
   return {
     allowed: true,
     needsApproval: true,
@@ -347,10 +359,9 @@ const _COMMAND_EXEC_TOOLS = new Set(["run_command", "exec", "run_script"]);
  *        放宽风险：设 true = 前端面板/分身可不经 HITL 直接发命令到 YonBan。
  *  ⚠ capabilities 段已废弃（0714 单源收口）：解释器/分类能力授权的唯一存储 = per-user
  *    data/users/<u>/command_config.json（读写动作 get/setCommandConfig，UI=workPanel+权限面板同链），
- *    由路径 A（replyHandler:1555 checkCommandSecurity(cmd, userConfig)）消费。本段曾出现的
- *    capabilities 是第二存储（多源分叉），已停止读取；B/C 通道无用户上下文，按 DEFAULT
- *    fail-closed 最严处理（解释器/未知恒 forced ask，不提供放宽面）。
- *  注：高危（黑名单 rm/format、删除、解释器）始终系统强制档，owner 完全信任也走 HITL（设计 S6/S8）。 */
+ *    由路径 A（replyHandler）与本统一闸共同消费。本段曾出现的 capabilities 是第二存储
+ *    （多源分叉），已停止读取；B/C 仅在 ideClient 核验 chat owner 后读取同一个 per-user 文件。
+ *  注：黑名单/强制灰名单始终优先于能力开关；未授权解释器、未知分类仍 fail-closed 入审批。 */
 function _loadCommandGateConfig() {
   try {
     const raw = fs.readFileSync(getFilesSettingsPath(), "utf-8");
@@ -366,15 +377,40 @@ function _loadCommandGateConfig() {
 }
 
 /**
+ * 读取已经过会话 owner 校验的用户命令能力。
+ * 缺 owner、文件缺失、损坏或非对象都回到默认安全能力；
+ * 绝不接受工具参数自带的能力声明。
+ */
+function _loadOwnerCommandConfig(ownerUsername) {
+  const owner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+  if (!owner) return undefined;
+  try {
+    const configured = loadJsonFileIfExists(getCommandConfigPath(owner));
+    return configured && typeof configured === "object" && !Array.isArray(configured)
+      ? configured
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * ★ D3 统一执行闸（纯函数 + 读配置，无 WS 副作用）。
  * @param {object} a
  * @param {string} a.tool   工具名
  * @param {object} a.params 工具参数
  * @param {string} [a.source] 来源："ai"(路径A) | "frontend"(路径B) | "subagent"(路径C) | "internal"
  * @param {boolean} [a.preChecked] 调用方已在上游过命令安全闸 + 审批（路径 A），本闸放行
+ * @param {string} [a.ownerUsername] 已由 ideClient 按 chatid/认证上下文核验的 owner
  * @returns {{ allowed:boolean, reason?:string, needsApproval?:boolean, forced?:boolean, riskLevel?:string }}
  */
-export function gateToolExecution({ tool, params = {}, source = "unknown", preChecked = false } = {}) {
+export function gateToolExecution({
+  tool,
+  params = {},
+  source = "unknown",
+  preChecked = false,
+  ownerUsername = "",
+} = {}) {
   // 0. 内部工具（_ 前缀：检查点/回档/诊断等）永远放行——它们是流水线基础设施，
   //    误拦会冻结整条流水线（设计 ⑥ 风险1）。
   if (typeof tool === "string" && tool.startsWith("_")) {
@@ -399,12 +435,26 @@ export function gateToolExecution({ tool, params = {}, source = "unknown", preCh
     return { allowed: false, reason: "命令执行工具缺少命令文本（已按 fail-closed 拦截）", riskLevel: "high" };
   }
 
+  // 2.5 路径 B/C/未知直调必须绑定已经过 ideClient 会话校验的 owner。
+  //     没有 owner 时不得读取任何用户能力，也不能借全局 allowChannelBExec 绕过用户隔离。
+  //     AI 路径由 replyHandler 先完成 per-user 裁决和审批，内部 "_" 工具已在上方放行。
+  const verifiedOwner = typeof ownerUsername === "string" ? ownerUsername.trim() : "";
+  if (!preChecked && source !== "ai" && !verifiedOwner) {
+    return {
+      allowed: false,
+      needsApproval: true,
+      forced: true,
+      riskLevel: "high",
+      reason: "命令执行缺少已认证的会话 owner，已按用户隔离规则拒绝",
+    };
+  }
+
   const cfg = _loadCommandGateConfig();
 
-  // 3. 过命令安全闸（黑/灰名单 + 分类白名单 + fail-closed 未知）。
-  //    B/C 通道无用户上下文 → 不读能力授权（单源在 per-user command_config.json，由路径 A 消费），
-  //    按 DEFAULT_COMMAND_CATEGORIES 最严处理：解释器/未知恒 forced ask。
-  const sec = checkCommandSecurity(command, undefined);
+  // 3. 过命令安全闸（黑/灰名单 + 分类能力 + fail-closed 未知）。
+  //    B/C 只有在 ideClient 已按 chatid 核验 owner 后才读取该 owner 的 command_config；
+  //    缺 owner/损坏配置仍按 DEFAULT_COMMAND_CATEGORIES 最严处理。
+  const sec = checkCommandSecurity(command, _loadOwnerCommandConfig(verifiedOwner), cfg);
 
   // 3a. 硬黑名单 / 显式禁用分类 → 永久拒（不可放行，设计 S2 黑名单保留为永禁硬层）。
   if (!sec.allowed) {

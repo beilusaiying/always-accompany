@@ -1,0 +1,1 @@
+{"version":3,"file":"html5.js","sources":["../../src/html5.ts"],"sourcesContent":["import { bundledElements } from \"./elements\";\n\nexport default bundledElements.html5;\n"],"names":[],"mappings":";;;;AAEA,YAAe,eAAA,CAAgB,KAAA;;;;"}

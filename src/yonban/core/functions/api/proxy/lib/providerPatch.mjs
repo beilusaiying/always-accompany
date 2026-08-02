@@ -99,15 +99,13 @@ export function patchBodyForClaude(
     url = "",
     model = "",
     claudePrefillMode = "off",
-    extendedThinking = false,
-    thinkingBudget = paramDefault("thinking_budget"),
     cacheBreakpoints = true,
   } = {},
 ) {
   const isClaude = provider === "claude" || provider === "openrouter-claude";
 
   if (!isClaude) { wbT(null, "ai:patch", "claude_skip", { model, provider }); return requestBody; }
-  wbT(null, "ai:patch", "claude_hit", { model, claudePrefillMode, extendedThinking });
+  wbT(null, "ai:patch", "claude_hit", { model, claudePrefillMode });
 
   const body = { ...requestBody };
 
@@ -117,25 +115,10 @@ export function patchBodyForClaude(
   //   官方 API 的约束按名字强加给自部署/中转源。参数冲突/不支持时 API 自己返回错误
   //   （httpFetch normalizeProviderError → 前端错误气泡），用户按提示自行调整。）
 
-  // 3) Extended Thinking 参数注入
-  // 当 extendedThinking=true 时，向请求体追加 thinking 字段
-  // Claude API 格式：{ type: "enabled", budget_tokens: N }
-  // 注意：thinking 模式下必须删除 temperature（两者不兼容）
-  if (extendedThinking) {
-    const budget = Math.max(
-      1024,
-      Math.min(Number(thinkingBudget) || paramDefault("thinking_budget"), 100000),
-    );
-    body.thinking = { type: "enabled", budget_tokens: budget };
-    // （2026-07-08 删"thinking 时静默删除 temperature/top_p"——用户两个显式设置冲突时
-    //   机制不替用户做主，API 返回的冲突错误直达前端提醒，用户自行调整。）
-    console.log(
-      `[patchBodyForClaude] Extended Thinking 已启用: budget_tokens=${budget}`,
-    );
-  } else {
-    // 确保不残留 thinking 字段（内部字段清理，非用户参数）
-    delete body.thinking;
-  }
+  // （2026-08-01 旧步骤3 Extended Thinking 注入已删——thinking 收口为 per-源三态
+  //   thinking_mode，由 applyThinkingMode（本文件下方）按声明渠道显式映射，全渠道生效，
+  //   不再只在 Claude 系渠道注入。旧 enabled+budget_tokens 格式在 Claude 4.7+ 已 400，
+  //   新映射用 adaptive/disabled + output_config.effort。）
 
   // 4) image_url → Claude 原生 image 格式转换（双保险：反代也会转，但 beilu 侧先转更稳妥）
   if (Array.isArray(body.messages)) {
@@ -291,6 +274,66 @@ export function patchBodyForDeepSeek(
     `[proxy/patchBodyForDeepSeek] DeepSeek 预处理已应用: top_p=${body.top_p}, tools=${body.tools?.length ?? "无"}`,
   );
 
+  return body;
+}
+
+// ============================================================
+// 思维链三态映射（2026-08-01 凛倾收口）
+// ============================================================
+
+/**
+ * 按声明渠道把 per-源三态 thinking_mode 显式映射成各家 API 参数。
+ * 单一入口：AI 源面板（settingsSlots）→ config.thinking_mode → httpFetch → 本函数。
+ * 预设/子模式/runtime/分身的 thinking 覆盖口已全部删除（2026-08-01），本函数是唯一写 body.thinking 的地方。
+ *
+ * 映射依据（官方文档核实 2026-08-01，见工作日志 thinking开关调查_20260801_0330/report_thinking_params.md）：
+ *   - claude 系:  disabled / adaptive / adaptive + output_config.effort=max（budget_tokens 在 4.7+ 已 400，弃用）
+ *   - deepseek:   thinking.type disabled/enabled + reasoning_effort max（默认 high 即标准档，不显式传避免 disabled+effort 冲突）
+ *   - kimi:       thinking.type disabled/enabled（无 effort 档；k2.7-code 强制思考传 disabled 报错=可见提醒）
+ *   - qwen:       enable_thinking 布尔（DashScope 语义）
+ *   - gemini/openai 系/generic: reasoning_effort none/high/max（值域模型相关，端点不支持时报错可见=0708 裁决，不静默改写）
+ * mode=""（渠道默认）= 不发任何 thinking 参数，保持端点自身默认行为。
+ *
+ * @param {object} requestBody
+ * @param {{ provider?: string, mode?: ""|"off"|"standard"|"max" }} context
+ * @returns {object} 处理后的请求体
+ */
+export function applyThinkingMode(requestBody = {}, { provider = "", mode = "" } = {}) {
+  if (!mode) return requestBody;
+  const body = { ...requestBody };
+  wbT(null, "ai:patch", "thinking_mode", { provider, mode });
+
+  switch (provider) {
+    case "claude":
+    case "openrouter-claude":
+      if (mode === "off") body.thinking = { type: "disabled" };
+      else if (mode === "standard") body.thinking = { type: "adaptive" };
+      else if (mode === "max") {
+        body.thinking = { type: "adaptive" };
+        body.output_config = { ...(body.output_config || {}), effort: "max" };
+      }
+      break;
+    case "deepseek":
+    case "deepseek-r1":
+      if (mode === "off") body.thinking = { type: "disabled" };
+      else if (mode === "standard") body.thinking = { type: "enabled" }; // 官方默认 effort=high
+      else if (mode === "max") body.thinking = { type: "enabled", reasoning_effort: "max" };
+      break;
+    case "kimi":
+      body.thinking = { type: mode === "off" ? "disabled" : "enabled" };
+      break;
+    case "qwen":
+      body.enable_thinking = mode !== "off";
+      break;
+    default:
+      // gemini(OpenAI兼容层)/openai/openai-reasoning/openrouter/generic：reasoning_effort 语义。
+      // standard 不发参数（端点默认档）；off/max 显式传，端点不支持时错误直达前端（0708 可见性裁决）。
+      if (mode === "off") body.reasoning_effort = "none";
+      else if (mode === "max") body.reasoning_effort = "max";
+      break;
+  }
+
+  console.log(`[proxy/applyThinkingMode] provider=${provider}, mode=${mode}`);
   return body;
 }
 

@@ -145,4 +145,8 @@ export const KEYS = Object.freeze({
   //   命名逃逸 beilu- 前缀域（删号 clearAll 清不掉），消费方带一次性旧键迁移
   BEILU_API_SOURCE: "beilu-current-api-source",
   BEILU_COMPANION_PREVIEW_H: "beilu-companion-preview-h",
+  BEILU_NOTIFY_HISTORY_MAX: "beilu-notify-history-max",
+  BEILU_NOTIFY_HISTORY_MAX_AGE_MS: "beilu-notify-history-max-age-ms",
+  BEILU_NOTIFY_MAX_VISIBLE: "beilu-notify-max-visible",
+  BEILU_NOTIFY_POPUP_DURATION_MS: "beilu-notify-popup-duration-ms",
 });

@@ -130,12 +130,12 @@ import {
 
 import {
   formatToolResultsForInjection,
-  getClientEnvString,
   ideClient,
   isIdeToolResultMsg,
   isIdeToolCallMsg,
   collectNoiseToHide,
 } from "../../../transport/ideClient.mjs";
+import { getMcpRuntimeSnapshot } from "../../mcp/runtimeRegistry.mjs";
 
 import {
   getDueJobsText,
@@ -146,6 +146,7 @@ import {
 import { countTokensSync } from "../nlp/tokenizer.mjs";
 import { loadTasks, remainingCount } from "../tools/taskStore.mjs";
 import { vectorPrefilter, formatVectorCandidates } from "../tools/vectorBridge.mjs"; // 0722 拍板：AI P1 前置向量初筛（未启用=恒[]零回归）
+import { runP1 } from "../tools/p1Bridge.mjs"; // 0729 插件化：P1自驱动召回经桥调用（照vectorBridge范式，未启用=null零回归）
 // 思维链剥离：复用 proxy 出站的同一函数（内置 <think>/<thinking> + 用户自定义 reasoning_tags），保证轮内压缩与出站同源。
 import { stripReasoningTags } from "../../api/proxy/lib/messageTransform.mjs"; // T8·回切：改指 yonban 新位实现体（原经 public 薄壳 re-export，已删壳）
 import { wbT, wbD } from "../../../../../server/wbStub.mjs";
@@ -179,6 +180,11 @@ function _stripConsumedTagsFromInjection(text) {
 // T09 in-flight 防抖（per-chat）：T09 是 fire-and-forget 异步，摘要落盘前 contextSummaryText 恒空，
 // 连续 urgent 轮会并发起多个 P7 压缩调用（重复花钱 + last-writer-wins 互相覆盖）。落盘/失败后释放。
 const _t09InFlight = new Set();
+
+// P1 自驱动 in-flight 防重入（per-chat，0730 修复并发重复触发）：多窗口/快速连发时
+// 多个 handleGetPrompt 同时到达 Phase3 → 同时 await runP1() → 多个 P1 并行跑。
+// 同范式：has → 跳过，add → finally delete。
+const _p1InFlight = new Set();
 
 /**
  * 每轮对话前的记忆/数据注入主函数（21步管线）。
@@ -268,12 +274,8 @@ export async function handleGetPrompt(arg) {
     //   （对齐 sub_mode_temperature 的 !== undefined 判定，非 truthy），使编辑活跃子模式的 prefill 当轮生效
     //   （不再仅切换时经 subModePanel:333 推 runtime 才生效）。
     let _subModePrefillEnabled = undefined;
-    // thinking 六口接线·口3（2026-07-25）：extended_thinking 是 boolean（false=显式关闭为有效意图），
-    //   对齐 prefill_enabled 确诊-B 的 undefined 哨兵；thinking_budget 合法域 ≥1024（PARAM_SCHEMA），0 可安全作未设哨兵。
-    //   消费链：extension.sub_mode_extended_thinking/sub_mode_thinking_budget → preset mergeRuntimeParams 子模式覆盖块
-    //   → buildMessages ema → httpFetch → patchBodyForClaude 注入 body.thinking。
-    let _subModeExtendedThinking = undefined;
-    let _subModeThinkingBudget = 0;
+    // thinking 子模式/流程组覆盖口已删（2026-08-01 凛倾「把子模式的思考模式删除」）：
+    //   思维链控制收口到 AI 源面板 per-源单点（settingsSlots→config→httpFetch），本链不再提取/下发。
     try {
       const _smConfigPath = getYonbanConfigPath(username);
       const _smConfig = loadJsonFileIfExists(_smConfigPath, { sub_modes: [], active_sub_mode: "前置任务专家" });
@@ -311,8 +313,6 @@ export async function handleGetPrompt(arg) {
               : (_activeSM.min_p !== undefined ? _activeSM.min_p : -1); // 链路2扩展：同 top_p 双路径
             _subModePostProcess = _mp.prompt_post_processing ?? _mp.promptPostProcessing ?? _activeSM.promptPostProcessing ?? "";
             _subModePrefillEnabled = _mp.prefill_enabled ?? _mp.prefillEnabled ?? _activeSM.prefillEnabled; // 确诊-B：boolean 直取，undefined=无覆盖
-            _subModeExtendedThinking = _mp.extended_thinking ?? _mp.extendedThinking ?? _activeSM.extended_thinking; // thinking 六口·口3：boolean 直取（false=显式关），undefined=无覆盖
-            _subModeThinkingBudget = (_mp.thinking_budget ?? _mp.thinkingBudget ?? _activeSM.thinking_budget) || 0;
           } else {
             _subModeModel = _activeSM.modelName || "";
             _subModeApiSource = _activeSM.apiSource || "";
@@ -325,8 +325,6 @@ export async function handleGetPrompt(arg) {
             _subModeMinP = _activeSM.min_p !== undefined ? _activeSM.min_p : -1; // 链路2扩展：扁平路径同步
             _subModePostProcess = _activeSM.promptPostProcessing || "";
             _subModePrefillEnabled = _activeSM.prefillEnabled; // 确诊-B：扁平路径同取（undefined=无覆盖）
-            _subModeExtendedThinking = _activeSM.extended_thinking; // thinking 六口·口3：扁平路径同取（undefined=无覆盖）
-            _subModeThinkingBudget = _activeSM.thinking_budget || 0;
           }
         }
       }
@@ -351,8 +349,6 @@ export async function handleGetPrompt(arg) {
         _subModeMinP = -1; // 链路2扩展：跨组原子清零同组
         _subModePostProcess = "";
         _subModePrefillEnabled = undefined; // 确诊-B：跨组原子清零（undefined=无覆盖，回退 runtime/预设基线）
-        _subModeExtendedThinking = undefined; // thinking 六口·口3：跨组原子清零同组
-        _subModeThinkingBudget = 0;
       }
       // 注意：此处禁止按"绑定值撞子模式源名"做任何 SetData 自愈——用户合法绑定与历史残留
       // 同名无法区分，曾导致绑定被洗空后随机换真实计费源（2026-06-12 洗源 bug，N19 删除）。
@@ -400,11 +396,7 @@ export async function handleGetPrompt(arg) {
                   if (_fgsPP) _subModePostProcess = _fgsPP;
                   const _fgsPfEn = _fgsMp.prefill_enabled ?? _fgsMp.prefillEnabled;
                   if (_fgsPfEn !== undefined) _subModePrefillEnabled = _fgsPfEn;
-                  // thinking 六口·口4：流程组快照同补（有键才盖，无键保留子模式层已解析值）
-                  const _fgsET = _fgsMp.extended_thinking ?? _fgsMp.extendedThinking;
-                  if (_fgsET !== undefined) _subModeExtendedThinking = _fgsET;
-                  const _fgsTB = _fgsMp.thinking_budget ?? _fgsMp.thinkingBudget;
-                  if (_fgsTB) _subModeThinkingBudget = _fgsTB;
+                  // thinking 快照转发已删（2026-08-01 收口到 AI 源面板，见上方声明处注释）
                 }
                 wbT(_cid, "memory", "getPrompt:flowGroupModelSnap", { workflow: _fgsSlot.active_workflow, source: _fgsSrc, model: _subModeModel });
               }
@@ -593,6 +585,10 @@ export async function handleGetPrompt(arg) {
     wbT(_cid, "getprompt", "macro:loopEnter", { injCount: injectionPrompts.length, mode: _activeMode, ideConnected: _ideConnected });
     const _injGate = resolveEffectiveInjections(injectionPrompts, _injCtx);
 
+    // {{tool_runtime_json}} 每轮只求值一次（跨条目共享）：forPrompt 快照带单次投递副作用
+    // （终态 job 标记已投递，listForPrompt），同轮第二次求值会拿到已被第一次消费掉的空反馈。
+    let _toolRuntimeJsonMemo = null;
+
     for (const [_injIdx, inj] of injectionPrompts.entries()) {
       const _gate = _injGate[_injIdx];
       if (!_gate.on) {
@@ -720,6 +716,11 @@ export async function handleGetPrompt(arg) {
         // MCP 工具清单的真路径=各 mcp_ 插件 Template GetPrompt 每轮 listTools 活数据（断连即消失，
         // 优于静态快照）。接此宏=stale 双通道。全数据源零引用；替空防用户手写字面原样漏出。
         .replace(/\{\{mcp_tools\}\}/g, "")
+        // forPrompt=单次投递视图（0731 缓存归零修复）：终态 job 只进一次提示词；活跃 job 持续可见。
+        // 本宏唯一合法住所=历史下方 depth:0 数据条目（INJ-1-write-code-data）——写进 depth>=1 条目
+        // 会让每轮变的展开值坐进缓存前缀区，从该处起全部 messages 缓存连坐失效（0722/0731 两次确诊）。
+        .replace(/\{\{tool_runtime_json\}\}/g, () => (_toolRuntimeJsonMemo ??= JSON.stringify(ideClient.getRuntimeSnapshot(_cid, username, { forPrompt: true }))))
+        .replace(/\{\{mcp_runtime_json\}\}/g, () => JSON.stringify(getMcpRuntimeSnapshot(username)))
         .replace(/\{\{env_tools\}\}/g, () => {
           if (!modeFeature(_activeMode, "ide").enabled) return ""; // 0716 接线：同上
           try {
@@ -728,7 +729,7 @@ export async function handleGetPrompt(arg) {
             const _etPath = fs.existsSync(_etPath1) ? _etPath1 : (fs.existsSync(_etPath2) ? _etPath2 : null);
             if (!_etPath) {
               // 无 _env_tools.json 时自动扫 workspace root 的 package.json
-              const _wsRoot = ideClient.workspaceRoot;
+              const _wsRoot = ideClient.workspaceRootFor(_cid);
               if (_wsRoot) {
                 const _autoPkg = path.join(_wsRoot, "package.json");
                 if (fs.existsSync(_autoPkg)) {
@@ -774,18 +775,18 @@ export async function handleGetPrompt(arg) {
             return ensureMemoryDir(username, charName);
           } catch { return "(路径获取失败)"; }
         })
-        .replace(/\{\{client_env\}\}/g, () => getClientEnvString())
+        .replace(/\{\{client_env\}\}/g, () => ideClient.clientEnvFor(_cid))
         .replace(/\{\{ide_workspace\}\}/g, () => {
           let _wsRoot = "";
-          if (ideClient.isConnected) {
-            const info = ideClient.ideInfo;
+          if (ideClient.isConnectedFor(_cid)) {
+            const info = ideClient.ideInfoFor(_cid);
             // 2026-07-09 收口审计：只读 status 嵌套单一真值位（ideClient status case 已改并入嵌套，
             //   顶层 workspaceFolders 形状不再产生，旧 fallback=读残留旧值风险）
             const folders = info?.status?.workspaceFolders || [];
             if (folders.length === 0) return "(IDE未打开文件夹)";
             _wsRoot = folders[0];
           } else {
-            _wsRoot = ideClient.workspaceRoot;
+            _wsRoot = ideClient.workspaceRootFor(_cid);
           }
           if (!_wsRoot) return "(未设置工作区)";
           // 紧凑目录树（2层，限3000字符）—— 省 AI 开局 list_files
@@ -813,7 +814,7 @@ export async function handleGetPrompt(arg) {
           return _tree.trimEnd();
         })
         .replace(/\{\{ide_read_cache\}\}/g, () => {
-          if (!ideClient.isConnected) return "";
+          if (!ideClient.isConnectedFor(_cid)) return "";
           const _items = [];
           if (arg?.chat_log?.length > 0) {
             for (let _ci = 0; _ci < arg.chat_log.length; _ci++) {
@@ -1091,7 +1092,12 @@ export async function handleGetPrompt(arg) {
         wbD(_cid, "getprompt", "dataInj:entryMissing", false, `数据注入条目缺失: ${injId}（用户副本未播种或已删，前端"恢复默认"可找回）`, { injId });
         return false;
       }
-      if (_entry.enabled === false) return false;
+      // [0731 单次注入·002问"能不能使用单次注入"] 数据注入条目接入 onceIds：条目被用户关闭
+      //   （enabled=false=平时不注入）但本轮 single_inject_ids 含该 id → 照常注入一次。
+      //   onceIds 传导链与注入坞同源（extension.once_inject_ids → resolveInjectionContext _injCtx.onceIds），
+      //   仅本轮：下轮 extension 不携带即自然失效，零清理。enabled=true 时 once 无感（本来就注入）。
+      //   域边界（凛倾0726）：P1 条目不进注入坞候选列表，排队入口在 P1 面板自己的域（p1panel queueOnceInject）。
+      if (_entry.enabled === false && !_injCtx.onceIds?.has(injId)) return false;
       let _text = String(_entry.content || "");
       for (const [_k, _v] of Object.entries(dataMap || {})) {
         _text = _text.replaceAll(`{{${_k}}}`, String(_v ?? ""));
@@ -1330,15 +1336,26 @@ export async function handleGetPrompt(arg) {
       const _isUserInput = !_lastMsg || _lastMsg.role === "user";
       // T06修复: 所有模式下非用户输入都跳过P1（凛倾原话：AI读取/联网→直接进入AI，不走P1）
       const _skipP1ForAutoReply = !_isUserInput;
-      // [0724 P1触发接线] ModeDef features.p1 原是死声明（0716 接线批未覆盖）——自驱动管线曾无条件跑：
-      //   每条消息拖起全套词库缓存进程级永驻（conceptnet/swow/AT 等 119MB JSON 解析后数百MB，
-      //   002 0723「内存2GB」案主因）。现接声明门（零硬编码模式名，同 L354 flowGroup 接线范式）：
-      //   enabled=false 整段跳过；selfDriven 只门自驱动管线（词库不加载）；aiP1 只门检索AI降级路。
-      // ⚠️ [0724 002拍板] selfDriven=自驱动P1词库管线是【实验功能，完全不需要加载】——已在全部
-      //   modes/*.json 声明 selfDriven:false（各 JSON 内 _note_selfDriven 有全文说明）。给未来AI：
-      //   禁把声明改回 true、禁绕过此门直接 import p1_pipeline；实验成熟需 002 拍板。
-      //   aiP1（检索AI）是正路、不依赖 JS 词库，保持不动。
+      // [0724→0729 P1触发接线] ModeDef features.p1 声明门（零硬编码模式名，同 L354 flowGroup 接线范式）：
+      //   enabled=false 整段跳过；selfDriven 只门自驱动管线；aiP1 只门检索AI降级路。
+      // [0724 背景] 自驱动管线曾无条件直接 import p1_pipeline → 119MB 词库 JSON 解析成数百MB
+      //   模块级缓存进程永驻（0723 内存2GB案主因）→ 全模式声明 selfDriven:false 封存。
+      // [0729 002拍板插件化解封] 内存由 beilu-p1-selfdriven 插件生命周期管理（Load零资源 + idle卸载
+      //   + Unload清缓存），经 p1Bridge.mjs 桥调用（照 vectorBridge 范式：读盘 config 启用门 + 动态
+      //   import 插件），chat 模式先行灰度（selfDriven:true），其余模式待验证后另批。
+      //   双门职责：selfDriven=mode级路由（该mode要不要自驱动）；插件 enabled=用户级开关（资源就绪否）。
+      //   禁绕门直接 import p1_pipeline（0724内存案教训不变，插件化是解法不是豁免）。
       const _p1Feat = modeFeature(_activeMode || "chat", "p1");
+      // [0731 T2 per-mode 开关前端化] 用户覆盖层：yonban_config.mode_feature_overrides（写口
+      //   setDataActions saveModeFeatureOverride，前端=P1 运行面板 per-mode 行）。只覆盖 config 子键
+      //   （selfDriven/aiP1），enabled 仍是 mode 声明门；无字段=沿用 modes json 声明值。
+      //   每次 GetPrompt 同步读盘（同 :284 _smConfig 开销量级），下一轮生效无需重启；
+      //   覆盖文件损坏→诚实降级回代码声明值，不阻断主链。
+      try {
+        const _mfOv = loadJsonFileIfExists(getYonbanConfigPath(username), {})
+          ?.mode_feature_overrides?.[_activeMode || "chat"]?.p1;
+        if (_mfOv && typeof _mfOv === "object") _p1Feat.config = { ..._p1Feat.config, ..._mfOv };
+      } catch { /* 覆盖层读取失败=用代码声明值 */ }
       if (retrievalConfig.auto_trigger && _p1Feat.enabled && !arg.isFakeSend && !_skipP1ForAutoReply) {
 
         // ★ 自驱动P1快速通道：已按凛倾指令移除（2026-07-02"自驱动p1召回和发散直接移除...因为这个还没有开发好"）。
@@ -1346,38 +1363,81 @@ export async function handleGetPrompt(arg) {
         //   组件库未动（继续开发用）：p1/p1_pipeline.mjs、storage_mod/memoryRecall.mjs、nlp/*。
         //   _selfDrivenSufficient 保留恒 false → AI P1 恒跑（原降级路径成为唯一路径，AI P1 块零改动）。
         let _selfDrivenSufficient = false;
-        // ★ P1自驱动管线接回（2026-07-20 beilu）
+        // ★ P1自驱动管线接回（2026-07-20 beilu → 2026-07-29 插件化改造）
         // why: P1在后台产出方向词注入主AI上下文，让主AI能想到自己想不到的跨域方向。
-        // 关联链: ← p1/p1_pipeline.mjs (runPipeline) → depthInjections (depth:1, order:100)
-        //         → beilu-preset TweakPrompt Round2 按 depth/order 注入到对话消息中
-        // 影响范围: 成功时_selfDrivenSufficient=true跳过AI P1; 失败时保持false走AI P1降级=零回归
+        // 关联链: ← p1Bridge.mjs → beilu-p1-selfdriven 插件 → p1_pipeline.mjs (runPipeline)
+        //         → depthInjections (depth:1, order:100) → beilu-preset TweakPrompt Round2
+        // 影响范围: 成功时_selfDrivenSufficient=true跳过AI P1; 失败/null保持false走AI P1降级=零回归
         // 回滚: 删除本代码块，_selfDrivenSufficient恒false即恢复原状
         // 铁律: P1_SELF_LEARN在live中保持默认(on)，由管线内部根据userCtx决定是否写盘
-        // [0724 P1触发接线] selfDriven 声明门：false（如 code 模式）→ 不 import 管线=词库家族零加载，
-        //   _selfDrivenSufficient 保持 false 走 AI P1（AI P1 不依赖 JS 词库）。
-        if (_p1Feat.config.selfDriven === true)
+        // [0729 插件化] selfDriven 声明门+插件enabled双门：
+        //   selfDriven=false（如code模式）→ 整段跳过零开销；
+        //   selfDriven=true+插件enabled=false → runP1返回null → AI P1降级（词库不加载）；
+        //   selfDriven=true+插件enabled=true → 经p1Bridge调用插件内runPipeline（词库由插件生命周期管理）。
+        //   禁绕门直接 import p1_pipeline（0724内存案教训，0729插件化解法）。
+        if (_p1Feat.config.selfDriven === true && !_p1InFlight.has(_cid))
         try {
-          const { runPipeline: _runP1 } = await import("../p1/p1_pipeline.mjs");
+          _p1InFlight.add(_cid);
           const _p1History = (arg?.chat_log || []).slice(-5).map(m => ({
             role: m.role || "user", content: String(m.content || "")
           }));
-          const _p1Res = await _runP1(
+          wbT(_cid, "getprompt", "p1:selfDrivenStart", {
+            mode: _activeMode || "chat",
+            historyCount: _p1History.length,
+          });
+          const _p1Res = await runP1(
             _lastMsg?.content || _lastMsg?.mes || "",
             _p1History,
             _activeMode || "chat",
-            { username: data.username, charName: data.charName }
+            { username, charName, chatId: _cid }
           );
-          if (_p1Res?.p1_act?.length > 0) {
+          wbT(_cid, "getprompt", "p1:selfDrivenResult", {
+            success: !!_p1Res,
+            directionCount: _p1Res?.p1_act?.length || 0,
+            recordCount: _p1Res?.recalledRecords?.length || 0,
+          });
+          const _selfDrivenRecords = Array.isArray(_p1Res?.recalledRecords)
+            ? _p1Res.recalledRecords.filter((record) => String(record?.content || "").trim())
+            : [];
+          if (_p1Res?.p1_act?.length > 0 || _selfDrivenRecords.length > 0) {
             _selfDrivenSufficient = true;
-            const _p1ActStr = _p1Res.p1_act.join(" / ");
-            // !!!禁止放入提示词!!! <p1_act> 包装在 INJ-p1-act-data 模板（前端可改），此处只供数据。
-            //   原硬编码 depth:1 混入头部 system=缓存全 miss 首犯（0722 确诊），收口归尾部。
-            _pushDataInj("INJ-p1-act-data", { p1_act: _p1ActStr }, { important: 6, pushText: false });
-            _p1ResultText = _p1ActStr;
+            const _p1Parts = [];
+            if (_selfDrivenRecords.length > 0) {
+              const _recordBody = _stripConsumedTagsFromInjection(
+                _selfDrivenRecords.map((record, index) => {
+                  const _meta = [
+                    record.layer,
+                    record.timestamp || null,
+                  ].filter(Boolean).join(" · ");
+                  return `${index + 1}. ${_meta ? `[${_meta}] ` : ""}${String(record.content).trim()}`;
+                }).join("\n\n")
+              );
+              // 复用既有可配置模板；这里只提供记录数据，不新增第二套提示词包装。
+              _pushDataInj("INJ-p1-retrieval-data", {
+                p1_retrieval: _recordBody,
+                p1_retrieval_ts: "",
+              }, { important: 6 });
+              _p1Parts.push(_recordBody);
+              wbT(_cid, "getprompt", "p1:selfDrivenRecallInject", {
+                recordCount: _selfDrivenRecords.length,
+                recordIds: _selfDrivenRecords.map((record) => record.recordId).filter(Boolean),
+              });
+            }
+            // [0801 双写修复] recalledRecords 已注入 INJ-p1-retrieval-data（结构化带层/编号/内容）;
+            // p1_act 通道只在 recalledRecords 无数据时才兜底（旧链兼容: 旧链 p1_act=方向词≠records,两路不同源;
+            // 新管线 p1_act=records.map(content) 同源,重复注入=主AI上下文里两遍同内容）。
+            if (_p1Res?.p1_act?.length > 0 && _selfDrivenRecords.length === 0) {
+              const _p1ActStr = _p1Res.p1_act.join(" / ");
+              _pushDataInj("INJ-p1-act-data", { p1_act: _p1ActStr }, { important: 6, pushText: false });
+              _p1Parts.push(_p1ActStr);
+            }
+            _p1ResultText = _p1Parts.join("\n\n");
           }
         } catch (_p1Err) {
           // P1失败→_selfDrivenSufficient保持false→走AI P1降级路径（零回归）
-          console.warn("[P1-selfDriven] runPipeline failed:", _p1Err?.message || _p1Err);
+          console.warn("[P1-selfDriven] runP1 failed:", _p1Err?.message || _p1Err);
+        } finally {
+          _p1InFlight.delete(_cid);
         }
 
 
@@ -2057,7 +2117,9 @@ export async function handleGetPrompt(arg) {
           // T09: Token到达上限时异步生成摘要（不阻塞GetPrompt）
           // 下一轮 GetPrompt 的 Phase 3D 经 readContextSummary 自动读取 context_summary.json 注入（grep `readContextSummary`）
           // ★ #12：自动触发与手动一致的真实 P7 AI 压缩（P7→P1→任意可用预设），机械裁剪仅作 AI 真失败时兜底。
-          if (!contextSummaryText && !_t09InFlight.has(_cid || "_")) {
+          // ★ P7 停用守卫（0802）：前端"停用"=p7Preset.enabled:false，T09 必须尊重——否则停用按钮形同虚设
+          const _p7ForT09 = presetsData.presets?.find((p) => p.id === "P7");
+          if (!contextSummaryText && !_t09InFlight.has(_cid || "_") && _p7ForT09?.enabled !== false) {
             _t09InFlight.add(_cid || "_");
             (async () => {
               try {
@@ -2264,10 +2326,7 @@ export async function handleGetPrompt(arg) {
         // 确诊-B：boolean 直传（false 为有效意图，禁用 || undefined 否则 false 被吞成"无覆盖"）；
         //   undefined=无覆盖，消费方 preset/main.mjs mergeRuntimeParams 以 !== undefined 判定是否覆盖 prefill_enabled。
         sub_mode_prefill_enabled: _subModePrefillEnabled,
-        // thinking 六口·口3/口4 下发：boolean 直传同 prefill_enabled（false 为有效意图，禁 || undefined）；
-        //   budget 0=未设不下发。消费方 preset/main.mjs mergeRuntimeParams 子模式覆盖块。
-        sub_mode_extended_thinking: _subModeExtendedThinking,
-        sub_mode_thinking_budget: _subModeThinkingBudget || undefined,
+        // thinking 下发键已删（2026-08-01 收口到 AI 源面板 per-源单点）
         active_mode: _activeMode,
         active_project: _activeProject,
         code_active_files: _codeActiveFiles,

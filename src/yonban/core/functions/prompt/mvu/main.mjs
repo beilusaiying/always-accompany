@@ -24,6 +24,8 @@ import YAML from "npm:yaml";
 import { setDefaultPart } from "../../../../../server/parts_loader.mjs";
 import info from "../../../../../public/parts/plugins/beilu-mvu/info.json" with { type: "json" };
 import { wbT, wbD } from "../../../../../server/wbStub.mjs";
+import { writeFile, mkdir } from "node:fs/promises"; // [0731 根修] 配置落盘（范式同 beilu-browser/beilu-ejs）
+import { readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // [0731 根修] 配置读回（损坏备份后抛）
 import { authenticate } from "../../security/auth.mjs"; // A2-3：HTTP 端点鉴权中间件（未认证→401），与全站 router.get/post(path, authenticate, handler) 同型（与同层 beilu-preset 同写法）
 
 // M10：DIAG 探针默认关。原 8 处无条件 console.log 把用户回复正文末300字符 + stat_data 明文 dump 到后端控制台(隐私/噪声)。
@@ -31,11 +33,39 @@ import { authenticate } from "../../security/auth.mjs"; // A2-3：HTTP 端点鉴
 const _MVU_DIAG = (() => { try { return globalThis.Deno?.env?.get?.("BEILU_MVU_DIAG") === "1"; } catch { return false; } })();
 function _mvuDiag(...args) { if (_MVU_DIAG) console.log(...args); }
 
-let pluginEnabled = true;
+// [0731 凛倾拍板"这两个默认关闭"] EJS/MVU 是酒馆角色卡适配件，默认关闭（opt-in）：
+//   不用 ST 卡的用户零累积零注入；需要时在 AIRP 脚本插件管理打开（落盘持久）。
+let pluginEnabled = false;
 // 闭标签哨兵开关（</UpdateVariable> 美化正则触发用），默认关——无条件追加曾把哨兵
 // 污染进每条落盘回复三字段并随历史回灌模型（2026-06-12 mock 铁证，N24 加开关）。
 // 需要哨兵的美化正则用户经 POST /api/parts/plugins:beilu-mvu/config/setdata {append_close_sentinel:true} 开启。
 let appendCloseSentinel = false;
+
+// 【红线·0731 凛倾"mvu重复+多处散写/哪里来的硬开启"】enabled 等配置禁止纯内存态：SetData 只改
+//   内存=重启即回默认 true=硬开启，用户关了照样跑。配置必须落盘+模块加载读回（范式同
+//   beilu-browser/beilu-ejs）。开关唯一 UI=AIRP 脚本插件管理（pluginManager.mjs）；额外插件
+//   管理平台的 MVU 重复条目已删（extensionsPanel.mjs 0731），禁止再加第二个控制面。
+const CONFIG_PERSIST_FILE = "data/mvu-config.json";
+try {
+  const _saved = readJsonSafeSync(CONFIG_PERSIST_FILE, {});
+  if (typeof _saved.enabled === "boolean") pluginEnabled = _saved.enabled;
+  if (typeof _saved.append_close_sentinel === "boolean") appendCloseSentinel = _saved.append_close_sentinel;
+} catch (e) {
+  console.warn(`[beilu-mvu] ${CONFIG_PERSIST_FILE} 损坏（已备份 .corrupt.bak，用默认值继续）:`, e?.message || e);
+}
+let _cfgPersistTimer = null;
+function _persistConfig() {
+  if (_cfgPersistTimer) clearTimeout(_cfgPersistTimer);
+  _cfgPersistTimer = setTimeout(async () => {
+    _cfgPersistTimer = null;
+    try {
+      await mkdir("data", { recursive: true }).catch(() => {});
+      await writeFile(CONFIG_PERSIST_FILE, JSON.stringify({ enabled: pluginEnabled, append_close_sentinel: appendCloseSentinel }, null, 2), "utf8");
+    } catch (err) {
+      console.warn("[beilu-mvu] 配置持久化失败:", err?.message || err);
+    }
+  }, 100);
+}
 
 // ============================================================
 // §1 变量累积 — 对标 ST-Prompt-Template precacheVariables
@@ -597,6 +627,8 @@ const pluginExport = {
           appendCloseSentinel = !!data.append_close_sentinel;
           console.log(`[beilu-mvu] 闭标签哨兵${appendCloseSentinel ? "已开启" : "已关闭"}`);
         }
+        // [0731 根修] 每次 SetData 落盘（防重启回默认=硬开启，红线见文件头 CONFIG_PERSIST_FILE 处）
+        _persistConfig();
       },
     },
 
@@ -608,8 +640,11 @@ const pluginExport = {
        * 不在此处注入文本 — 文本注入由 TweakPrompt 完成
        */
       GetPrompt: async (arg) => {
+        // ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
         const _cid = arg?.chatid || arg?.chat_name?.replace("common_chat_", "") || null;
         wbT(_cid, "mvu", "GetPrompt:enter", {});
+        // [2026-08-01 批① mvu 零失效修] 同 sandbox 修——worker isolate 的 let 是 import 快照，盘读同步
+        try { const _dc = readJsonSafeSync(CONFIG_PERSIST_FILE, {}); if (typeof _dc.enabled === 'boolean') pluginEnabled = _dc.enabled; } catch {}
         if (!pluginEnabled)
           return { text: [], additional_chat_log: [], extension: {} };
 

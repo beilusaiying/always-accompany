@@ -28,7 +28,7 @@ import fs from "node:fs";
 import path, { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs"; // 0716 收口：原子写单源（renameSyncWithRetry 死 import 已删） // T3e: memory/storage_mod/ 新位到 src/ 5 级(旧 lib/storage_mod/ 为 6 级)
-import { bakCorruptFile } from "../../../../../scripts/safeJsonIO.mjs"; // [0716 断电安全] 损坏备份单源（loadJsonFileIfExists 消费）
+import { bakCorruptFile, readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // [0716 断电安全] 损坏备份单源；严格 RMW 可选择损坏即抛
 
 import { createDiag } from "../../../../../server/diagLogger.mjs"; // T3e: 6→5 级
 import { confinePath } from "../../security/path_confine.mjs"; // T3e: 6→5 级
@@ -532,13 +532,20 @@ export async function withFileLock(filepath, fn) {
  *   ★ 若 mutator 显式返回哨兵 SKIP_SAVE，则本次不落盘（供「无变化不写盘」的等价保留，如
  *     removeChatSubModeMapping 原本仅在键存在时才 save；此时本函数返回 undefined）。
  * @param {any} [defaultValue] - 文件不存在时 load 的默认对象（同各写点原 loadJsonFileIfExists 第二参）
+ * @param {{strictRead?: boolean}} [options] - strictRead=true 时，已有文件损坏会先备份再抛错，
+ *   不允许以默认对象覆盖；用于通知、自动续轮等失败时必须 fail-closed 的配置链。
  * @returns {Promise<any>} mutator 的返回值（返回 SKIP_SAVE 时本函数返回 undefined）
  */
 export const SKIP_SAVE = Symbol("yonbanConfig:skipSave");
-export async function updateYonbanConfig(username, mutator, defaultValue = {}) {
+export async function updateYonbanConfig(username, mutator, defaultValue = {}, options = {}) {
   const cfgPath = getYonbanConfigPath(username || "_default");
   return withFileLock(cfgPath, async () => {
-    const cfg = loadJsonFileIfExists(cfgPath, defaultValue);
+    const cfg = options?.strictRead
+      ? readJsonSafeSync(cfgPath, defaultValue)
+      : loadJsonFileIfExists(cfgPath, defaultValue);
+    if (options?.strictRead && (!cfg || typeof cfg !== "object" || Array.isArray(cfg))) {
+      throw new TypeError(`yonban_config 必须是 JSON 对象: ${cfgPath}`);
+    }
     const ret = await mutator(cfg); // 支持 async mutator（如 getSubModes 迁移含 await 建预设——但建议把非 yonban_config 的 IO 留锁外）
     if (ret === SKIP_SAVE) return undefined; // 无变化：不落盘（保留原写点「仅变化时 save」语义）
     saveJsonFile(cfgPath, cfg); // saveJsonFile 自带目录创建+原子写
@@ -795,6 +802,11 @@ export function getSystemText(key, username, charName) {
 
 /** @type {Map<string, { tables: object, config: object, username: string }>} */
 export const memoryCache = new Map();
+
+// [2026-08-01 批①-E 确诊修] tables 盘态指纹：cacheKey → tables 文件 mtimeMs。
+//   原实现缓存命中只刷 config 不刷 tables → worker 写的 AI 记忆行被主 isolate 旧缓存回写覆盖。
+//   加 mtime 校验：盘新于基线 → tables 重读，同 preset/regex 范式。
+const _tablesMtimeByKey = new Map();
 
 /**
  * 清除指定角色的所有缓存条目（含该角色所有模式 #code/#work/@chatId 变体）。
@@ -1770,11 +1782,24 @@ export function loadMemoryData(username, charName, forceMode, chatId) {
 
   const cacheKey = getCacheKey(username, charName, safeMode, chatId);
   if (memoryCache.has(cacheKey)) {
-    // 缓存命中：tables 保留缓存（不丢未落盘的内存改动），但 config 用本次已读的 fresh configData
-    // 刷新——否则面板改归档开关/阈值（写 _config.json）在缓存进程内永不生效（只 setActiveMode 清缓存）。
-    // configData 在上方无条件已读盘，此处复用 = 零新增 IO。
+    // 缓存命中：config 用本次已读的 fresh configData 刷新（面板改归档开关/阈值不延迟生效）。
+    // [2026-08-01 批①-E 确诊修] tables 加 mtime 校验——盘文件比缓存基线新 → 重读 tables：
+    //   worker isolate AI 生成更新表格写盘后，主 isolate 面板刷新若命中旧缓存 → 后续编辑整表
+    //   回写会覆盖 worker 刚写的 AI 记忆行。mtime 前进 → 重读盘，同 preset/regex 范式。
     const cached = memoryCache.get(cacheKey);
     cached.config = configData;
+    try {
+      const _tblFile = path.join(getModeCtxDir(getMemoryDir(username, charName), safeMode, chatId), getTablesFileName(safeMode));
+      let _tblMt = 0;
+      try { _tblMt = fs.existsSync(_tblFile) ? (fs.statSync(_tblFile).mtimeMs || 0) : 0; } catch { _tblMt = 0; }
+      if (_tblMt !== (_tablesMtimeByKey.get(cacheKey) ?? 0)) {
+        const _freshTables = fs.existsSync(_tblFile) ? JSON.parse(fs.readFileSync(_tblFile, "utf-8")) : null;
+        if (_freshTables?.tables && Array.isArray(_freshTables.tables)) {
+          cached.tables = _freshTables.tables;
+        }
+        _tablesMtimeByKey.set(cacheKey, _tblMt);
+      }
+    } catch (e) { diag.warn(`loadMemoryData: tables mtime 校验失败(沿用旧缓存): ${e?.message}`); }
     return cached;
   }
 
@@ -1869,6 +1894,8 @@ export function loadMemoryData(username, charName, forceMode, chatId) {
   }
 
   memoryCache.set(cacheKey, data);
+  // [2026-08-01 批①-E] 首载后记录 tables 盘指纹
+  try { const _tblF = path.join(tablesDir, tablesFileName); _tablesMtimeByKey.set(cacheKey, fs.existsSync(_tblF) ? (fs.statSync(_tblF).mtimeMs || 0) : 0); } catch { _tablesMtimeByKey.set(cacheKey, 0); }
   return data;
 }
 
@@ -1943,6 +1970,8 @@ export function saveTablesData(username, charName, forceMode, chatId) {
       });
 
       saveJsonFile(tablesPath, { tables: data.tables });
+      // [2026-08-01 批①-E] 自写推进指纹，防 loadMemoryData 把自己的写误判为外部变更
+      try { _tablesMtimeByKey.set(cacheKey, fs.statSync(tablesPath).mtimeMs || 0); } catch {}
       return { ok: true }; // 写盘成功标记,供 await 调用方(updateTable等)判断是否真落盘
     } catch (e) {
       wbD(chatId || null, "storage", "saveTablesData:write_fail", false, "saveTablesData 写盘失败(fire-and-forget，表格数据未落盘丢失)", { path: tablesPath, username, charName, mode, err: e.message });

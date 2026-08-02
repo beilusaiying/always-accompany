@@ -26,7 +26,8 @@
 
 | 条目 id | 内容 | 数据宏 | 触发条件 |
 |---------|------|--------|----------|
-| `INJ-p1-act-data` | P1 自驱动方向词 | `{{p1_act}}` | P1 管线有产出 |
+| `INJ-p1-act-data` | P1 自驱动召回记忆数据 | `{{p1_act}}` | P1 管线有召回结果 |
+| `INJ-p1-recall-usage` | P1 召回记忆用法说明 | _(静态文本)_ | 与 INJ-p1-act-data 联动 |
 | `INJ-p1-retrieval-data` | 记忆AI检索结果 | `{{p1_retrieval}}` `{{p1_retrieval_ts}}` | P1 检索有结果 |
 | `INJ-p8-web-search-data` | 联网搜索结果 | `{{p8_results}}` | P8 搜索有结果 |
 | `INJ-chat-search-data` | 上轮聊天AI搜索结果 | `{{chat_search_results}}` `{{chat_search_ts}}` | 有待注入搜索结果 |

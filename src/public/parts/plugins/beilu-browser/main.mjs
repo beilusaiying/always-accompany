@@ -283,8 +283,21 @@ export function hasPendingResultsForChat(cid) {
 
 // Chrome 自启冷却时间戳（防 ensureConnected 高频调用时风暴式拉起多个实例）
 let _lastAutoLaunchAt = 0;
+// [0731 多开根修] 连续"拉起 Chrome 但附着超时"熔断计数：达 2 停止自启。
+//   why：拉起后端口仍不就绪的主因是同 user-data-dir 已有 Chrome 实例在跑（Windows Chrome 单实例
+//   转发：再执行 chrome.exe 只在既有实例上开新窗口、--remote-debugging-port 被忽略）——此时每次
+//   重试都只多开一个窗口、永远产不出端口，60s 冷却挡不住窗口无限累积。熔断后错误外显
+//   （wbD + 面板状态），用户在面板点"同步"（显式动作）清零重试。
+let _launchFailStreak = 0;
 
-async function ensureConnected() {
+/**
+ * 附着到 Chrome 调试端口；失败时按需自启 Chrome。
+ * 【红线·0731 凛倾"每次都自动打开"确诊】自启浏览器只许发生在"真的要用浏览器"的路径
+ *   （AI browser_op 执行 / 用户面板显式同步），插件 Load/服务启动期禁自启（allowLaunch=false
+ *   只附着探测）——否则每次打开项目都无条件弹一个 Chrome（启动器已开一个默认浏览器=用户看到双开）。
+ * @param {boolean} [allowLaunch=true] - false=只尝试附着已存在的实例，绝不拉起新 Chrome
+ */
+async function ensureConnected(allowLaunch = true) {
   if (connected && bd) return true;
   try {
     if (!bd) {
@@ -297,11 +310,19 @@ async function ensureConnected() {
     return true;
   } catch (e) {
     wbD(null, "browser:conn", "connect.fail", false, String(e?.message || e).slice(0, 160), { port: pluginData.port, driver: pluginData.driverPath || "builtin" });
+    if (!allowLaunch) return false; // 启动期/纯探测路径：附着不上就到此为止，不弹窗口
+    // [0731 多开根修] 拉起前先探端口：/json/version 有响应=Chrome 调试实例活着，附着失败是驱动层
+    //   问题——此时再执行 chrome.exe 不会产生新端口，只会在既有实例上多开一个窗口，禁止 launch。
+    const _st = await checkChromeStatus();
+    if (_st.connected) {
+      wbD(null, "browser:conn", "portAliveAttachFail", false, "调试端口活着但驱动附着失败（不自启，防多开窗口）", { port: pluginData.port });
+      return false;
+    }
     // [0727 凛倾"浏览器自己启动"] 驱动是纯附着模式，9222 没起=附着必败且此前只能等人手启
     //   （窗口假死事故的环境根因）。此处接入 launchChrome（原为从未被调用的死函数）：
     //   附着失败 → 自启 Chrome → 短轮询重附着。60s 冷却防连败风暴/多开实例；
     //   autoReconnect=false（面板可关）时不自启，尊重用户显式关闭。
-    if (pluginData.autoReconnect && Date.now() - _lastAutoLaunchAt > 60000) {
+    if (pluginData.autoReconnect && _launchFailStreak < 2 && Date.now() - _lastAutoLaunchAt > 60000) {
       _lastAutoLaunchAt = Date.now();
       const l = await launchChrome();
       wbT(null, "browser:conn", "autolaunch", { ok: !!l.ok, pid: l.pid || null, error: l.error || null });
@@ -312,12 +333,14 @@ async function ensureConnected() {
           try {
             await bd.connect(pluginData.port);
             connected = true;
+            _launchFailStreak = 0; // 自启成功附着=环境正常，熔断计数清零
             _persistStatus();
             console.log(`[beilu-browser] Chrome 自启并附着成功 (pid=${l.pid}, 等待${i + 1}s)`);
             return true;
           } catch { /* 端口未就绪，继续等 */ }
         }
-        wbD(null, "browser:conn", "autolaunch.attachTimeout", false, "Chrome 已启动但 10s 内调试端口未就绪", { port: pluginData.port });
+        _launchFailStreak++;
+        wbD(null, "browser:conn", "autolaunch.attachTimeout", false, `Chrome 已启动但 10s 内调试端口未就绪（连续${_launchFailStreak}次${_launchFailStreak >= 2 ? "，自启已熔断——疑似同配置 Chrome 已在运行，请关闭后在面板点同步重试" : ""}）`, { port: pluginData.port });
       }
     }
     return false;
@@ -420,24 +443,23 @@ async function checkChromeStatus() {
 }
 
 function launchChrome() {
-  return new Promise((resolve) => {
+  return new Promise((done) => {
     const chrome = pluginData.chromePath || _detectChromePath();
     if (!chrome) {
-      resolve({ ok: false, error: "未找到 Chrome，请在设置中指定路径或安装 Chrome: https://www.google.com/chrome/" });
+      done({ ok: false, error: "未找到 Chrome，请在设置中指定路径或安装 Chrome: https://www.google.com/chrome/" });
       return;
     }
     const args = [
       `--remote-debugging-port=${pluginData.port}`,
-      // Chrome 按自身 CWD 解析相对路径，此处 resolve 到后端 CWD 绝对化，避免歧义
       `--user-data-dir=${resolve(pluginData.userDataDir || "data/browser-profile")}`,
     ];
     try {
       const cmd = `"${chrome}" ${args.join(" ")}`;
       const child = exec(cmd);
       child.unref?.();
-      resolve({ ok: true, pid: child.pid });
+      done({ ok: true, pid: child.pid });
     } catch (e) {
-      resolve({ ok: false, error: e.message });
+      done({ ok: false, error: e.message });
     }
   });
 }
@@ -599,6 +621,8 @@ const pluginExport = {
       // 控制端点（面板控制界面消费）：手动同步到用户当前标签页 / 清空浏览记录
       router.post(/\/control\/sync$/, authenticate, async (_req, res) => {
         try {
+          // [0731 多开根修] 用户显式同步=自启熔断的复位口（用户已处理环境冲突后由此重试）
+          _launchFailStreak = 0;
           if (!(await ensureConnected())) return res.status(409).json({ error: "浏览器未连接" });
           const tab = await bd.browser.syncToUserTab();
           res.json({ ok: true, tab });
@@ -612,7 +636,11 @@ const pluginExport = {
       });
     }
     await ensureINJ(username);
-    ensureConnected().catch(() => {});
+    // 【红线·0731】启动期只附着已存在的调试实例（allowLaunch=false），禁自启 Chrome——
+    //   原裸 ensureConnected() 在每次服务启动时都拉起一个 Chrome 窗口（用户"打开项目开2次浏览器"
+    //   事故：启动器开默认浏览器 + 此处弹自动化 Chrome）。自启只归"真的要用浏览器"路径
+    //   （executeOp / 面板同步）。
+    ensureConnected(false).catch(() => {});
   },
 
   Unload: async () => {
@@ -672,6 +700,7 @@ const pluginExport = {
 
     chat: {
       GetPrompt: async (arg) => {
+        // ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
         if (!pluginData.enabled) return null;
 
         const textEntries = [];

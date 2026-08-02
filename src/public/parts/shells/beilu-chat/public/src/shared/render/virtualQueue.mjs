@@ -4,8 +4,9 @@
  *
  * 链路：websocket.mjs handleBroadcastEvent → 本模块 handle* 系列 → virtualList 增删替换 → messageList.renderMessage
  *       流式链路：handleStreamUpdate → applySlice(stream.mjs) → streamRenderer.updateTarget → DOM 逐字渲染
- * 影响：操作 virtualList（appendItem/replaceItem/deleteItem）、操作 streamRenderer（register/stop/updateTarget）、
- *       清空 MVU 变量（clearMessages）、广播 EventBus stream_token_received 事件
+ * 影响：操作 virtualList（appendItem/replaceItem；deleteItem 未使用——message_deleted 走 DOM
+ *       display:none 直接隐藏，不摘除虚拟列表项，见 handleMessageDeleted）、操作 streamRenderer
+ *       （register/stop/updateTarget）、清空 MVU 变量（clearMessages）、广播 EventBus stream_token_received 事件
  * 相交：← websocket.mjs（所有 message_* / stream_* / timeline_info 事件分发到此）
  *       → virtualList.mjs（底层虚拟滚动列表，管数据分页 + DOM 回收）
  *       → messageList.mjs（renderMessage 作为 renderItem 回调）
@@ -364,23 +365,30 @@ function updateLastCharMessageArrows() {
   if (messageContent) {
     enableSwipe(lastMessageElement);
 
-    // 底部导航栏：‹ 1/2 ›
+    // 酒馆式悬浮导航：按钮仍挂在气泡内，但由 CSS 绝对定位，不参与消息高度计算。
     const navBar = document.createElement("div");
     navBar.classList.add("swipe-nav");
+    navBar.setAttribute("aria-label", "切换回复");
 
-    const leftArrow = document.createElement("div");
+    const leftArrow = document.createElement("button");
+    leftArrow.type = "button";
     leftArrow.classList.add("arrow", "left");
     leftArrow.textContent = "❮";
+    leftArrow.title = "上一条回复";
+    leftArrow.setAttribute("aria-label", "上一条回复");
 
-    const counter = document.createElement("div");
+    const counter = document.createElement("span");
     counter.classList.add("swipe-counter");
     counter.textContent = `${currentTimeLineInfo.timeLineIndex + 1}/${currentTimeLineInfo.timeLinesCount}`;
     counter.style.opacity =
       currentTimeLineInfo.timeLinesCount > 1 ? "1" : "0.3";
 
-    const rightArrow = document.createElement("div");
+    const rightArrow = document.createElement("button");
+    rightArrow.type = "button";
     rightArrow.classList.add("arrow", "right");
     rightArrow.textContent = "❯";
+    rightArrow.title = "下一条回复";
+    rightArrow.setAttribute("aria-label", "下一条回复");
 
     navBar.append(leftArrow, counter, rightArrow);
     messageContent.after(navBar);

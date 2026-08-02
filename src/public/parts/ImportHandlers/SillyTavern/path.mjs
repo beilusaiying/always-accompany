@@ -27,6 +27,12 @@ export function resolvePath(username, type, name) {
 export async function getAvailablePath(username, type, name) {
 	const targetPath = resolvePath(username, type, name)
 	if (fs.existsSync(targetPath))
-		await uninstallPartBase(username, type, name)
+		// [2026-08-01 严重bug修·参数错位]（扫描报告 scan_lifecycle_缓存陈旧.md 高#2）：
+		// 旧调用 uninstallPartBase(username, type, name)——type("chars")落 partpath 位=卸载/trash
+		// 目标变成整个容器目录，name 落 unLoadargs 位被当卸载参数；且缺省 pathGetter=GetPartPath
+		// 可能回落到内置 src/public/parts 目录执行 trash（误删内置件）。
+		// 正确：partpath=`${type}/${name}`（签名见 parts_loader.mjs uninstallPartBase）；
+		// pathGetter 钉死本函数已解析且已确认存在的用户目录 targetPath——只删用户侧旧副本。
+		await uninstallPartBase(username, `${type}/${name}`, undefined, undefined, { pathGetter: () => targetPath })
 	return targetPath
 }

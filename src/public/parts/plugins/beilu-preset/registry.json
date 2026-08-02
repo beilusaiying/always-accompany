@@ -1,5 +1,14 @@
 {
   "presets": {
+    "P9词库维护": {
+      "file": "P9词库维护.json",
+      "source": "builtin",
+      "description": "P9 词库维护聊天组子模式配套预设：提示词正文由用户填写",
+      "tags": [],
+      "created_at": "2026-07-31T00:00:00.000Z",
+      "modified_at": "2026-07-31T00:00:00.000Z",
+      "bucket": "p9"
+    },
     "框架审查员": {
       "file": "框架审查员.json",
       "source": "builtin",
@@ -197,6 +206,24 @@
       "created_at": "2026-07-17T23:00:00.000Z",
       "modified_at": "2026-07-17T23:00:00.000Z",
       "bucket": "bot/通用"
+    },
+    "AIRP通用": {
+      "file": "AIRP通用.json",
+      "source": "builtin",
+      "description": "AIRP 通用角色卡对话：尊重角色卡、世界书、场景与前端卡片行为，保持连续性",
+      "tags": [],
+      "created_at": "2026-07-29T00:00:00.000Z",
+      "modified_at": "2026-07-29T00:00:00.000Z",
+      "bucket": "chat/AIRP"
+    },
+    "全智能通用": {
+      "file": "全智能通用.json",
+      "source": "builtin",
+      "description": "全智能通用：先识别用户意图，再选择合适的回答方式，保留角色卡上下文",
+      "tags": [],
+      "created_at": "2026-07-29T00:00:00.000Z",
+      "modified_at": "2026-07-29T00:00:00.000Z",
+      "bucket": "chat/全智能"
     },
     "办公助理": {
       "file": "办公助理.json",

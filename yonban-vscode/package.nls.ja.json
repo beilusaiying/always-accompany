@@ -1,0 +1,21 @@
+{
+  "command.connect.title": "YonBan: バックエンド接続",
+  "command.disconnect.title": "YonBan: 切断",
+  "command.showPanel.title": "YonBan: パネルを開く",
+  "command.startWsServer.title": "YonBan: IDEブリッジサービス起動",
+  "command.stopWsServer.title": "YonBan: IDEブリッジサービス停止",
+  "command.toggleSandboxMode.title": "YonBan: サンドボックスモード切替",
+  "command.showConnectionInfo.title": "YonBan: 現在の接続情報を表示",
+  "view.sidebar.name": "YonBan コントロールパネル",
+  "config.serverUrl.description": "beilu-always-accompany バックエンドアドレス（デフォルトは src/constants.ts DEFAULT_SERVER_URL と一致、ポート変更時は両方更新）",
+  "config.hints.enabled.description": "ツール結果にAI向け診断ヒント（_hint）を付加する総合スイッチ。オフにするとヒントテキストは付加されません",
+  "config.hints.overrides.description": "キーごとにヒントテキストを上書き（キー一覧は src/services/hintTexts.ts HINT_TEXTS 参照；{n}/{error} 等のプレースホルダはそのまま残す）",
+  "config.autoConnect.description": "起動時にバックエンドへ自動接続",
+  "config.autoStartWs.description": "起動時にIDEブリッジWebSocketサーバーを自動起動",
+  "config.wsPort.description": "IDEブリッジWebSocketサーバーポート（フロントエンド ideConnPanel がこのポートに接続；デフォルトは src/constants.ts DEFAULT_WS_PORT と一致）",
+  "config.sandboxMode.description": "サンドボックスモード：本番インスタンス(1314)ではなくサンドボックスインスタンス(13140)に接続、新機能テスト用",
+  "config.sandboxServerUrl.description": "サンドボックスモード時のbeiluバックエンドアドレス（デフォルトは src/constants.ts DEFAULT_SANDBOX_SERVER_URL と一致）",
+  "config.sandboxWsPort.description": "サンドボックスモード時のIDEブリッジWSポート（デフォルトは src/constants.ts DEFAULT_SANDBOX_WS_PORT と一致）",
+  "config.maxFileReferences.description": "1メッセージあたり@ファイル参照の最大件数（超過は切り捨て；0または負数=無制限）",
+  "config.autoRevealOnEdit.description": "AIがファイル編集後、エディタを自動で開き変更行をハイライトジャンプ（EditorRevealは常にこのキーを読み取り、以前は設定パネルで未宣言）"
+}

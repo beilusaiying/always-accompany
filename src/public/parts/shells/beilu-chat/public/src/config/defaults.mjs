@@ -15,6 +15,7 @@
  *   notify.maxVisible      ← shared/widgets/crossModeNotification.mjs:38 MAX_VISIBLE=3
  *   notify.historyMax      ← shared/widgets/crossModeNotification.mjs:43 HISTORY_MAX=20
  *   notify.historyMaxAgeMs ← shared/widgets/crossModeNotification.mjs:44 24*60*60*1000
+ *   notify.popupDurationMs ← shared/widgets/crossModeNotification.mjs 原 10000ms 定时器
  *
  * 影响范围：改这里 = 改全前端对应行为（超时挂起时间/日志内存占用/通知堆叠）。
  */
@@ -37,6 +38,8 @@ export const DEFAULTS = Object.freeze({
 		historyMax: 20,
 		/** 通知历史保留时长（ms） */
 		historyMaxAgeMs: 24 * 60 * 60 * 1000,
+		/** 页内通知自动消失时间（ms，0=不自动消失） */
+		popupDurationMs: 10000,
 		/** 图标角标提醒缺省开（🔔 通知中心可关；消费=crossModeNotification.getNotifyPrefs） */
 		badges: true,
 		/** 页内弹窗通知缺省开 */

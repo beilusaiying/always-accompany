@@ -2,6 +2,10 @@
   "active_preset": "框架审查员",
   "default_preset": "",
   "auto_seed_defaults": true,
+  "mode_default_presets": {
+    "chat": "AIRP通用",
+    "smart": "全智能通用"
+  },
   "active_preset_map": {
     "1p2kr2zj2u2": "任务前置设计师",
     "6qfgwgp9kip": "任务前置设计师",

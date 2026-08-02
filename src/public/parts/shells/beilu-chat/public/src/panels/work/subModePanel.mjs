@@ -1689,36 +1689,9 @@ function _renderManagePanel(targetContainer) {
     '<input type="number" id="submode-form-min-p" class="input input-xs input-bordered w-full text-xs" min="0" max="1" step="0.01" placeholder="默认" />' +
     "</div>" +
     "</div>" +
-    // thinking 六口·口3（2026-07-25 凛倾「子模式也需要可以选择」）：Extended Thinking 三态 + 思考预算
-    //   （boolean 覆盖需要"不覆盖"档，三态下拉对齐 claude-prefill 的"（使用默认）"范式；消费链
-    //   getPromptHandler 子模式提取→extension.sub_mode_extended_thinking/sub_mode_thinking_budget→
-    //   preset mergeRuntimeParams 覆盖块，与温度同通路；budget 值域=PARAM_SCHEMA 镜像退化，下方覆盖）
-    '<div class="flex gap-2 mt-1">' +
-    '<div class="form-control flex-1">' +
-    '<label class="label py-0"><span class="label-text text-[11px]">思考模式（Claude Extended Thinking）</span></label>' +
-    '<select id="submode-form-thinking" class="select select-xs select-bordered w-full text-xs">' +
-    '<option value="">（使用默认）</option>' +
-    '<option value="on">开启</option>' +
-    '<option value="off">关闭</option>' +
-    "</select>" +
-    "</div>" +
-    '<div class="form-control flex-1">' +
-    '<label class="label py-0"><span class="label-text text-[11px]">思考预算</span></label>' +
-    // [0727 凛倾「选择思考,努力不是拉条」] 预算改档位下拉：自由数字框没参考没边界感（旧 max=32000
-    //   还与后端上限 100000 矛盾——providerPatch.mjs:124-129 钳制 1024–100000 才是真值域）。
-    //   档位=值域内 2 的幂阶梯（呈现层），值本身诚实落 budget_tokens；旧数据的自定义值由回填处动态补项。
-    '<select id="submode-form-thinking-budget" class="select select-xs select-bordered w-full text-xs">' +
-    '<option value="">（使用默认）</option>' +
-    '<option value="1024">1024 · 最低</option>' +
-    '<option value="4096">4096</option>' +
-    '<option value="8192">8192</option>' +
-    '<option value="16384">16384</option>' +
-    '<option value="32768">32768</option>' +
-    '<option value="65536">65536</option>' +
-    '<option value="100000">100000 · 上限</option>' +
-    "</select>" +
-    "</div>" +
-    "</div>" +
+    // thinking 控件已删（2026-08-01 凛倾「把子模式的思考模式删除…开关放这里(AI源面板)」）：
+    //   思维链开关收口到 AI 源面板 per-源单点（settingsSlots→config→httpFetch 口6），
+    //   子模式不再持有 extended_thinking/thinking_budget 覆盖口。
     // 预填充
     '<div class="flex gap-2 items-center mt-1">' +
     '<div class="form-control flex-1">' +
@@ -1734,6 +1707,13 @@ function _renderManagePanel(targetContainer) {
     "</select>" +
     "</div>" +
     "</div>" +
+    // [0730] 子模式工具权限开关（系统强制，不靠AI自觉）
+    '<div class="bg-base-200/50 rounded-lg p-2 mt-2 space-y-1">' +
+    '<p class="text-[10px] font-bold text-base-content/60 mb-1">工具权限</p>' +
+    '<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="submode-form-allow-code-edit" class="toggle toggle-xs toggle-info" checked /><span class="text-xs">代码更改</span><span class="text-[10px] text-base-content/40">write_file / fuzzy_edit / replace_lines</span></label>' +
+    '<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="submode-form-allow-run-command" class="toggle toggle-xs toggle-warning" checked /><span class="text-xs">脚本运行</span><span class="text-[10px] text-base-content/40">run_command / run_script</span></label>' +
+    '<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="submode-form-allow-delete" class="toggle toggle-xs toggle-error" checked /><span class="text-xs">删除操作</span><span class="text-[10px] text-base-content/40">rm / del / rmdir 命令</span></label>' +
+    '</div>' +
     // 启用 + 操作按钮
     '<div class="flex items-center justify-between mt-1">' +
     '<label class="flex items-center gap-1 cursor-pointer">' +
@@ -1765,7 +1745,6 @@ function _renderManagePanel(targetContainer) {
     ["top_k", "submode-form-top-k"],
     ["min_p", "submode-form-min-p"],
     ["max_tokens", "submode-form-max-tokens"],
-    ["thinking_budget", "submode-form-thinking-budget"], // thinking 六口·口3
   ]);
 }
 
@@ -2377,23 +2356,15 @@ function _openEditForm(mode) {
   if (topKInput) topKInput.value = mode && mode.top_k !== undefined ? mode.top_k : "";
   var minPInput = document.getElementById("submode-form-min-p");
   if (minPInput) minPInput.value = mode && mode.min_p !== undefined ? mode.min_p : "";
-  // thinking 六口·口3 回填：extended_thinking 三态（undefined=用默认/true=on/false=off，false 是显式意图不能折叠进默认），
-  //   budget 同温度 !== undefined 判定
-  var thinkSel = document.getElementById("submode-form-thinking");
-  if (thinkSel) thinkSel.value = mode && mode.extended_thinking !== undefined ? (mode.extended_thinking ? "on" : "off") : "";
-  var thinkBudgetInput = document.getElementById("submode-form-thinking-budget");
-  if (thinkBudgetInput) {
-    var _tbVal = mode && mode.thinking_budget !== undefined ? String(mode.thinking_budget) : "";
-    // [0727 预算改下拉] 旧数据里的自定义值不在档位表时动态补一项再选中——select 赋不存在的值会
-    //   静默落空，界面显示成"使用默认"就是谎（用户配的值还在生效却看不见）。
-    if (_tbVal && thinkBudgetInput.tagName === "SELECT" && ![].some.call(thinkBudgetInput.options, function (o) { return o.value === _tbVal; })) {
-      var _tbOpt = document.createElement("option");
-      _tbOpt.value = _tbVal;
-      _tbOpt.textContent = _tbVal + "（自定义）";
-      thinkBudgetInput.appendChild(_tbOpt);
-    }
-    thinkBudgetInput.value = _tbVal;
-  }
+  // thinking 回填段已删（2026-08-01 收口到 AI 源面板，见表单处注释）
+
+  // [0730] 工具权限开关回填（undefined/缺字段=默认允许=checked）
+  var _aceEl = document.getElementById("submode-form-allow-code-edit");
+  if (_aceEl) _aceEl.checked = !mode || mode.allowCodeEdit !== false;
+  var _arcEl = document.getElementById("submode-form-allow-run-command");
+  if (_arcEl) _arcEl.checked = !mode || mode.allowRunCommand !== false;
+  var _adEl = document.getElementById("submode-form-allow-delete");
+  if (_adEl) _adEl.checked = !mode || mode.allowDelete !== false;
 
   var status = document.getElementById("submode-form-status");
   if (status) status.classList.add("hidden");
@@ -2552,8 +2523,6 @@ function _bindManagePanelEvents() {
       var _maxTokVal = document.getElementById("submode-form-max-tokens").value;
       var _topKVal = document.getElementById("submode-form-top-k").value;
       var _minPVal = document.getElementById("submode-form-min-p").value;
-      var _thinkVal = document.getElementById("submode-form-thinking").value; // thinking 六口·口3
-      var _thinkBudgetVal = document.getElementById("submode-form-thinking-budget").value;
       // 跨端字段保全（2026-07-10）：编辑时以旧对象为基底 merge——原整对象重建会抹掉本表单没有的
       //   字段（YonBan 写的 top_p/top_k/min_p/max_tokens 蛇形键、model_params 副本等），本体一编辑
       //   该子模式另一端设的值就丢。undefined 值经 JSON 序列化即字段消失，清空语义不受影响。
@@ -2575,10 +2544,17 @@ function _bindManagePanelEvents() {
         maxTokens: _maxTokVal !== "" ? parseInt(_maxTokVal) : undefined,
         top_k: _topKVal !== "" ? parseInt(_topKVal) : undefined,   // 链路2扩展：蛇形键对齐读侧 _activeSM.top_k
         min_p: _minPVal !== "" ? parseFloat(_minPVal) : undefined, // 链路2扩展：同上
-        extended_thinking: _thinkVal !== "" ? _thinkVal === "on" : undefined, // thinking 六口·口3：三态（undefined=不覆盖，蛇形键对齐读侧 _activeSM.extended_thinking）
-        thinking_budget: _thinkBudgetVal !== "" ? parseInt(_thinkBudgetVal) : undefined,
+        // thinking 收口清洗（2026-08-01）：控件已删，但本表单以旧对象为基底 merge——不显式置
+        //   undefined 则存量子模式里的旧 extended_thinking/thinking_budget 会被 merge 永久保留。
+        //   undefined 经 JSON 序列化即键消失 = 保存一次即清掉存量覆盖。
+        extended_thinking: undefined,
+        thinking_budget: undefined,
         backup_api_source: document.getElementById("submode-form-backup-api").value || "",
         enabled: document.getElementById("submode-form-enabled").checked,
+        // [0730] 工具权限开关（false=系统强制禁止，true/undefined=允许）
+        allowCodeEdit: document.getElementById("submode-form-allow-code-edit")?.checked !== false ? undefined : false,
+        allowRunCommand: document.getElementById("submode-form-allow-run-command")?.checked !== false ? undefined : false,
+        allowDelete: document.getElementById("submode-form-allow-delete")?.checked !== false ? undefined : false,
       });
       // B18 副本同步：merge 基底保留了旧 model_params，而读侧（getPromptHandler _mp.* ?? 扁平）以副本
       //   为最高优先——不同步则表单刚改的值被旧副本盖住（写活读死）。表单管辖的键全部写入副本，
@@ -2593,8 +2569,8 @@ function _bindManagePanelEvents() {
           max_tokens: newMode.maxTokens,
           top_k: newMode.top_k,
           min_p: newMode.min_p,
-          extended_thinking: newMode.extended_thinking, // thinking 六口·口3：B18 副本同步（undefined 序列化即键消失=不覆盖）
-          thinking_budget: newMode.thinking_budget,
+          extended_thinking: undefined, // thinking 收口清洗（2026-08-01）：副本存量键同步清除
+          thinking_budget: undefined,
           prompt_post_processing: newMode.promptPostProcessing || undefined,
           claude_prefill_mode: newMode.claudePrefillMode || undefined,
           prefill_enabled: newMode.prefillEnabled,

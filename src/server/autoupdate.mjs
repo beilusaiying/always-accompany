@@ -15,9 +15,8 @@ export let currentGitCommit = null
 
 const execFileAsync = promisify(execFile)
 const isGitRepo = existsSync(join(__dirname, '.git'))
-const CHECK_INTERVAL_MS = 10 * 60 * 1000
+const STARTUP_CHECK_DELAY_MS = 3000
 const P1_RESTART_MARKER = join(__dirname, 'data', 'p1', '.service-restart-required.json')
-let _timer = null
 let _initialCheckTimer = null
 let _checking = false
 let _enabled = false
@@ -38,12 +37,8 @@ function git(args) {
 	} catch { return null }
 }
 
-// 私人主仓工作副本优先使用显式 private remote；从私人仓 clone 的安装只有 origin，自动沿用 origin。
-// 不硬编码 URL，保留用户自行重命名/迁移 remote 的能力。
-const UPDATE_REMOTE = (() => {
-	const remotes = String(git(['remote']) || '').split(/\r?\n/).filter(Boolean)
-	return remotes.includes('private') ? 'private' : 'origin'
-})()
+// 发行版的应用内更新只跟随公共仓库 origin/main；私人维护仓不进入运行时更新链。
+const UPDATE_REMOTE = 'origin'
 
 async function gitAsync(args) {
 	try {
@@ -205,13 +200,14 @@ export function enableAutoUpdate() {
 		console.log('[更新] 非 git 仓库，在线更新不可用')
 		return
 	}
-	console.log(`[更新检测] 已启用（当前 ${currentGitCommit?.slice(0, 7) || '?'}，每 ${CHECK_INTERVAL_MS / 60000} 分钟检查；不会自动拉取）`)
-	_timer = setInterval(detectRemoteUpdate, CHECK_INTERVAL_MS)
-	_initialCheckTimer = setTimeout(detectRemoteUpdate, 120000)
+	console.log(`[更新检测] 已启用（当前 ${currentGitCommit?.slice(0, 7) || '?'}；仅启动时检查一次，不会自动拉取）`)
+	_initialCheckTimer = setTimeout(() => {
+		_initialCheckTimer = null
+		detectRemoteUpdate()
+	}, STARTUP_CHECK_DELAY_MS)
 }
 
 export function disableAutoUpdate() {
-	if (_timer) { clearInterval(_timer); _timer = null }
 	if (_initialCheckTimer) { clearTimeout(_initialCheckTimer); _initialCheckTimer = null }
 	_enabled = false
 }

@@ -212,7 +212,9 @@ Deno.test("store policy: root candidate & browse target (base containment / syst
       assert.equal(r.code, "E_WORKSPACE_ROOT_SYSTEM");
       const b = resolveBrowseListingTarget("alice", p, {});
       assert.equal(b.ok, false, `${p} must not be browsable`);
-      assert.equal(b.code, "E_BROWSE_SYSTEM_VOLUME");
+      // 附加 worktree 的 .git 是指向主仓的文件而非目录，仍须拒绝，但会在
+      // browse 的“只能列目录”层返回 E_BROWSE_SCOPE；普通 clone 保持 SYSTEM_VOLUME。
+      assert.ok(["E_BROWSE_SYSTEM_VOLUME", "E_BROWSE_SCOPE"].includes(b.code));
     }
 
     // blockedPaths deny-overrides：条目覆盖 fixture 时其内根候选被拒（不可被"显式选根"覆盖）

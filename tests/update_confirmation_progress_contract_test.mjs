@@ -13,13 +13,15 @@ const psLauncher = read('path/beilu-always-accompany.ps1')
 const shLauncher = read('path/beilu-always-accompany.sh')
 const exeLauncher = read('path/exe-launcher.ps1')
 
-assert.match(update, /setInterval\(detectRemoteUpdate, CHECK_INTERVAL_MS\)/, 'timer must only detect updates')
+assert.doesNotMatch(update, /setInterval\(/, 'runtime must not schedule recurring update checks')
+assert.match(update, /setTimeout\(\(\) => \{[\s\S]*detectRemoteUpdate\(\)[\s\S]*STARTUP_CHECK_DELAY_MS\)/, 'startup must schedule exactly one update check')
 assert.doesNotMatch(update, /setInterval\(applyAvailableUpdate|setTimeout\(applyAvailableUpdate/, 'apply must never be timer-triggered')
 assert.match(update, /let _applyPromise = null/, 'apply must be single-flight')
 assert.match(update, /remote !== expectedCommit/, 'apply must revalidate the confirmed commit after fetch')
 assert.match(update, /--untracked-files=no/, 'tracked worktree must be checked without deleting user data')
 assert.match(update, /\['pull', '--ff-only', UPDATE_REMOTE, 'main'\]/, 'only fast-forward pull is allowed')
-assert.match(update, /remotes\.includes\('private'\) \? 'private' : 'origin'/, 'private main must be preferred when that remote is configured')
+assert.match(update, /const UPDATE_REMOTE = 'origin'/, 'runtime updates must only follow public origin/main')
+assert.doesNotMatch(update, /remotes\.includes\('private'\)/, 'private remote must not enter the runtime update chain')
 for (const phase of ['checking', 'available', 'preflight', 'marker-written', 'pulling', 'verified', 'restart-scheduled']) {
 	assert.ok(update.includes(`'${phase}'`), `missing update phase ${phase}`)
 }
@@ -41,6 +43,7 @@ assert.doesNotMatch(server, /api\.github\.com\/repos\/\$\{repo\}\/releases\/late
 assert.doesNotMatch(server, /remoteVer !== localVer/, 'string inequality must not decide update availability')
 assert.doesNotMatch(psLauncher, /git .*pull --ff-only/, 'PowerShell launcher must not be a second update producer')
 assert.doesNotMatch(shLauncher, /git .*pull --ff-only/, 'shell launcher must not be a second update producer')
-assert.match(exeLauncher, /beilusaiying\/beilu-always-accompany\.git/, 'new installs must clone the private main repository')
+assert.match(exeLauncher, /beilusaiying\/always-accompany\.git/, 'new installs must clone the public main repository')
+assert.doesNotMatch(exeLauncher, /beilusaiying\/beilu-always-accompany\.git/, 'private repository must not be embedded in the launcher')
 
 console.log('update confirmation and progress contract test passed')

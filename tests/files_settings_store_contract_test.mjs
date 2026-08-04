@@ -3,7 +3,7 @@
  * 覆盖：三写者并发不丢字段 / revision 单调 / CAS 冲突 typed 错误 / 原子写读回 /
  *       损坏 fail-closed（备份+禁写+视图最严默认）/ 显式 repair 成功 readback 才恢复 /
  *       旧格式迁移（legacyUnassigned，不自动授予）+ owner 显式认领 /
- *       root/browse 统一政策（基包含/系统卷/blockedPaths deny-overrides/盘符根）。
+ *       root/browse 统一政策（C 盘普通目录/敏感目录/blockedPaths deny-overrides/盘符根）。
  * 全程经 __setSettingsPathForTest 指向临时文件，绝不触碰真实 data/beilu-files-settings.json。
  */
 import assert from "node:assert/strict";
@@ -159,7 +159,7 @@ Deno.test("store: legacy migration → legacyUnassigned (no auto-grant) → expl
     assert.equal(snap.doc._global.workspaceRoot, undefined, "legacy global root removed from runtime read path");
     assert.equal(snap.doc._global.legacyUnassigned.workspaceRoot, "D:\\old-root");
     assert.equal(snap.doc._global.legacyUnassigned.workspaceRoots.tlel3fq2eeh, "/c/Users/x/Temp/claude/ghost");
-    assert.deepEqual(snap.doc._default.blockedPaths, ["C:/"], "user bucket preserved");
+    assert.deepEqual(snap.doc._default.blockedPaths, ["C:/"], "existing user block remains explicit and must not be silently removed");
     // 运行时不自动授予：无 owner 分区 → 任何 owner 读根为空
     assert.equal(getOwnerWorkspaceRoot("_default"), "");
     assert.equal(getOwnerWorkspaceRoot("anyone", "tlel3fq2eeh"), "");
@@ -199,11 +199,20 @@ Deno.test("store policy: root candidate & browse target (base containment / syst
     assert.equal(ghost.ok, false);
     assert.equal(ghost.code, "E_WORKSPACE_ROOT_INVALID");
 
-    // 应用敏感目录（data/src/项目根本体）拒
-    for (const p of [_repoRoot, path.join(_repoRoot, "data"), path.join(_repoRoot, "src")]) {
+    // 项目根本体可作为 IDE/用户工作区与 browse 目标；内部 data/src/.git 仍拒。
+    const projectWorkspace = resolveWorkspaceRootCandidate("alice", _repoRoot, {});
+    assert.equal(projectWorkspace.ok, true, `project root must be a valid workspace: ${JSON.stringify(projectWorkspace)}`);
+    assert.equal(projectWorkspace.root, fs.realpathSync(_repoRoot));
+    const projectBrowse = resolveBrowseListingTarget("alice", _repoRoot, {});
+    assert.equal(projectBrowse.ok, true, `project root must be browsable: ${JSON.stringify(projectBrowse)}`);
+    assert.equal(projectBrowse.path, fs.realpathSync(_repoRoot));
+    for (const p of [path.join(_repoRoot, "data"), path.join(_repoRoot, "src"), path.join(_repoRoot, ".git")]) {
       const r = resolveWorkspaceRootCandidate("alice", p, {});
       assert.equal(r.ok, false, `${p} must be denied`);
       assert.equal(r.code, "E_WORKSPACE_ROOT_SYSTEM");
+      const b = resolveBrowseListingTarget("alice", p, {});
+      assert.equal(b.ok, false, `${p} must not be browsable`);
+      assert.equal(b.code, "E_BROWSE_SYSTEM_VOLUME");
     }
 
     // blockedPaths deny-overrides：条目覆盖 fixture 时其内根候选被拒（不可被"显式选根"覆盖）
@@ -215,20 +224,47 @@ Deno.test("store policy: root candidate & browse target (base containment / syst
     assert.equal(resolveWorkspaceRootCandidate("", sub, {}).ok, false);
 
     if (process.platform === "win32") {
-      // 系统卷（C:）不在 browseBases（除项目根例外）→ scope 拒；盘符根不可作工作区根
-      const cUsers = resolveWorkspaceRootCandidate("alice", "C:\\Users", {});
-      assert.equal(cUsers.ok, false, "system-drive path must be denied");
+      const cOrdinary = fs.mkdtempSync(path.join(os.homedir(), ".beilu_c_drive_policy_"));
+      try {
+        // C 盘普通目录进入现有统一政策；盘符根只可 browse，仍不可作工作区根。
+        const cWorkspace = resolveWorkspaceRootCandidate("alice", cOrdinary, {});
+        assert.equal(cWorkspace.ok, true, `ordinary C-drive workspace must be allowed: ${JSON.stringify(cWorkspace)}`);
+        assert.equal(cWorkspace.root, fs.realpathSync(cOrdinary));
+        const cBrowse = resolveBrowseListingTarget("alice", cOrdinary, {});
+        assert.equal(cBrowse.ok, true, `ordinary C-drive browse must be allowed: ${JSON.stringify(cBrowse)}`);
+
+        // 用户显式 C:/ 黑名单仍 deny-overrides；含其他条目的配置不会被迁移删除。
+        const explicitCBlock = resolveWorkspaceRootCandidate("alice", cOrdinary, { userBlockedPaths: ["C:/", "D:/private"] });
+        assert.equal(explicitCBlock.ok, false);
+        assert.equal(explicitCBlock.code, "E_WORKSPACE_ROOT_BLOCKED");
+
+        // 系统/用户敏感目录继续拒绝，即使它们位于现在可浏览的 C 盘基内。
+        const sensitive = [
+          "C:\\Windows",
+          "C:\\Program Files",
+          "C:\\ProgramData",
+          path.join(os.homedir(), "AppData"),
+          path.join(os.homedir(), ".ssh"),
+          path.join(os.homedir(), ".gnupg"),
+        ];
+        for (const target of sensitive) {
+          const denied = resolveWorkspaceRootCandidate("alice", target, {});
+          assert.equal(denied.ok, false, `${target} must remain denied`);
+          assert.equal(denied.code, "E_WORKSPACE_ROOT_SYSTEM");
+        }
+      } finally {
+        fs.rmSync(cOrdinary, { recursive: true, force: true });
+      }
+
       const driveRoot = resolveWorkspaceRootCandidate("alice", path.parse(_repoRoot).root, {});
       assert.equal(driveRoot.ok, false, "drive root cannot be a workspace root");
-      // browse：C:/ 拒（typed），仓库盘符根可列举（选根前逐级浏览入口）
+      // browse：C:/ 可列举用于 picker 探测；但不能被设为工作区根。
       const bc = resolveBrowseListingTarget("alice", "C:\\", {});
-      assert.equal(bc.ok, false);
-      assert.ok(["E_BROWSE_SCOPE", "E_BROWSE_SYSTEM_VOLUME", "E_BROWSE_BLOCKED"].includes(bc.code), `C:/ browse denied with typed code, got ${bc.code}`);
+      assert.equal(bc.ok, true, `C:/ drive root must be browsable for picker discovery: ${JSON.stringify(bc)}`);
       const bd = resolveBrowseListingTarget("alice", path.parse(_repoRoot).root, {});
       assert.equal(bd.ok, true, "repo drive root must be browsable");
       const bases = listBrowseBases();
-      assert.ok(!bases.some((b) => b.toLowerCase().startsWith("c:")) || _repoRoot.toLowerCase().startsWith("c:"),
-        "system drive must not be a browse base (unless the app itself lives there)");
+      assert.ok(bases.some((b) => b.toLowerCase().startsWith("c:")), "C drive must be present in default browse bases");
     }
 
     // browse：目录合法、文件拒、blocked 拒

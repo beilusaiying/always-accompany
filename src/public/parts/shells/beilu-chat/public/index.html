@@ -68,13 +68,8 @@
   </head>
 
   <body class="flex flex-col h-screen h-dvh m-0 w-full">
-    <!-- 首屏必要装配加载态：静态首节点保证聊天/角色数据未就绪前不会先露出半成品界面。
-         只覆盖 index.mjs 的必要装配；后台扩展预加载继续由 readiness 卡片展示。 -->
-    <div id="app-boot-overlay" role="status" aria-live="polite" aria-busy="true">
-      <span id="app-boot-spinner" class="loading loading-spinner loading-lg text-warning" aria-hidden="true"></span>
-      <p id="app-boot-status">正在准备界面与角色卡…</p>
-      <button id="app-boot-retry" class="btn btn-sm btn-outline" type="button" hidden>刷新重试</button>
-    </div>
+    <!-- boot overlay 已移除（0804：删黑屏遮罩，最小可用即展示）。
+         init() 失败态由 settleBootOverlay 兜底在 console 报错，不再阻塞首屏。 -->
 
     <!-- ====== 背景图层（C3: 自定义聊天背景） ====== -->
     <div id="bg1"></div>

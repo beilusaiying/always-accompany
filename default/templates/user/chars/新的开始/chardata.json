@@ -1,6 +1,6 @@
 {
 	"name": "新的开始",
-	"description": "我是你的第一张角色卡。你可以在角色卡编辑里把我改成任何样子，或导入你喜欢的角色卡。 / I'm your first character card. You can reshape me into anything in the card editor, or import a card you like.",
+	"description": "",
 	"personality": "",
 	"scenario": "",
 	"first_mes": "你好，我是你的第一张角色卡。你可以在角色卡编辑里把我改成任何样子，也可以导入或新建自己喜欢的角色卡。建议先去主页的「使用教程」和 Wiki 看看，了解这里能做什么。慢慢来，一切才刚刚开始。\n\nHi, I'm your first character card. You can reshape me into anything in the card editor, or import / create your own favorite cards. Check out the \"Usage Guide\" and the Wiki on the home page first to see what you can do here. Take your time — everything is just beginning.",

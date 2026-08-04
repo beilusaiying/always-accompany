@@ -15,6 +15,13 @@ function _positiveNumber(name, fallback) {
 	return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
+function _nonNegativeInteger(name, fallback) {
+	const raw = _env(name)
+	if (raw === undefined || raw === null || raw === '') return fallback
+	const value = Number(raw)
+	return Number.isFinite(value) && value >= 0 ? Math.trunc(value) : fallback
+}
+
 function _filePath(url) {
 	return decodeURIComponent(url.pathname.replace(/^\/([A-Za-z]:)/, '$1'))
 }
@@ -38,6 +45,8 @@ const START_WAIT_MS = _positiveNumber('P1_START_WAIT_MS', 10000)
 const START_POLL_MS = _positiveNumber('P1_START_POLL_MS', 250)
 const SPAWN_COOLDOWN_MS = _positiveNumber('P1_SPAWN_COOLDOWN_MS', 60000)
 const STOP_WAIT_MS = _positiveNumber('P1_STOP_WAIT_MS', 10000)
+const START_RETRY_COUNT = _nonNegativeInteger('P1_START_RETRY_COUNT', 2)
+const MAX_START_ATTEMPTS = START_RETRY_COUNT + 1
 const AUTOSTART = (_env('P1_AUTOSTART') || 'on') !== 'off'
 
 let _lastSpawnAt = 0
@@ -64,8 +73,41 @@ async function _tcpReachable(timeoutMs) {
 	])
 }
 
+function _spawnAttemptError(reason, message, options = {}) {
+	const error = new Error(message)
+	error.code = reason === 'spawn-not-created' ? 'E_P1_SPAWN_NOT_CREATED' : 'E_P1_SPAWN_UNCERTAIN'
+	error.reason = reason
+	error.retryable = reason === 'spawn-not-created' && options.retryable === true
+	if (options.cause !== undefined) error.cause = options.cause
+	if (Number.isInteger(Number(options.pid)) && Number(options.pid) > 0) error.pid = Number(options.pid)
+	if (options.owner) error.owner = options.owner
+	if (options.bootstrapDiagnostic) error.bootstrapDiagnostic = options.bootstrapDiagnostic
+	if (Number.isInteger(Number(options.bootstrapExitCode))) error.bootstrapExitCode = Number(options.bootstrapExitCode)
+	return error
+}
+
+function _isProvablyNotCreatedCommandError(error) {
+	return error?.name === 'NotFound' || error?.name === 'PermissionDenied'
+}
+
+function _decodeBootstrapOutput(output) {
+	if (typeof output === 'string') return output.replace(/[\r\n]+/g, ' ').trim().slice(0, 4000)
+	if (!(output instanceof Uint8Array) || output.length === 0) return ''
+	try { return new TextDecoder().decode(output).replace(/[\r\n]+/g, ' ').trim().slice(0, 4000) }
+	catch { return '' }
+}
+
+function _bootstrapDiagnostic(result) {
+	const stderr = _decodeBootstrapOutput(result?.stderr)
+	const stdout = _decodeBootstrapOutput(result?.stdout)
+	return [stderr && `stderr=${stderr}`, stdout && `stdout=${stdout}`].filter(Boolean).join(' | ')
+		|| `stderr/stdout 均无 bootstrap 诊断 (exit=${result?.code ?? 'unknown'})`
+}
+
 async function _spawnServiceProcess() {
-	if (!globalThis.Deno?.Command) throw new Error('当前运行时不支持 Deno.Command')
+	if (!globalThis.Deno?.Command) {
+		throw _spawnAttemptError('spawn-not-created', '当前运行时不支持 Deno.Command', { retryable: true })
+	}
 
 	// Windows 下 Deno.ChildProcess.unref() 只解除事件循环等待；短命 Deno 调用进程
 	// 退出时仍可能带走它直接创建的 Python，Python 来不及执行 cluster 回收，留下
@@ -74,46 +116,93 @@ async function _spawnServiceProcess() {
 	if (globalThis.Deno.build?.os === 'windows') {
 		const spawnResultFile = `${RUNTIME_ROOT.replace(/[\\\/]$/, '')}/.spawn-${globalThis.Deno.pid}-${Date.now()}.pid`
 		const bootstrap = [
+			'$ErrorActionPreference = "Stop"',
+			'[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+			'$OutputEncoding = [Text.Encoding]::UTF8',
+			'function Write-P1BootstrapDiagnostic { param([string]$Phase, [object]$Record); $message = [string]$Record.Exception.Message; $message = $message -replace "[\\r\\n]+", " "; [Console]::Error.WriteLine(("P1_BOOTSTRAP phase={0} error={1}" -f $Phase, $message)) }',
 			'$serviceDir = $env:P1_SERVICE_BOOTSTRAP_DIR',
 			'$servicePort = $env:P1_SERVICE_PORT',
 			'$runtimeDir = $env:P1_RUNTIME_DIR',
 			'$resultFile = $env:P1_SERVICE_SPAWN_RESULT',
-			'New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null',
+			"try { New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null } catch { Write-P1BootstrapDiagnostic 'prepare-runtime' $_; exit 40 }",
 			'$stdoutLog = Join-Path $runtimeDir "service.stdout.log"',
 			'$stderrLog = Join-Path $runtimeDir "service.stderr.log"',
-			"try { $process = Start-Process -FilePath 'python' -ArgumentList @('p1_server.py', '--port', $servicePort) -WorkingDirectory $serviceDir -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog; [IO.File]::WriteAllText($resultFile, [string]$process.Id, [Text.Encoding]::ASCII) } catch { [IO.File]::WriteAllText($stderrLog, ($_ | Out-String), [Text.Encoding]::UTF8); exit 1 }",
+			"try { $process = Start-Process -FilePath 'python' -ArgumentList @('p1_server.py', '--port', $servicePort) -WorkingDirectory $serviceDir -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog } catch { $startError = $_; Write-P1BootstrapDiagnostic 'start-process' $startError; try { [IO.File]::WriteAllText($stderrLog, ($startError | Out-String), [Text.Encoding]::UTF8) } catch { Write-P1BootstrapDiagnostic 'write-service-stderr' $_ }; exit 41 }",
+			"try { [IO.File]::WriteAllText($resultFile, [string]$process.Id, [Text.Encoding]::ASCII) } catch { $pidError = $_; Write-P1BootstrapDiagnostic 'publish-pid' $pidError; try { [IO.File]::WriteAllText($stderrLog, ($pidError | Out-String), [Text.Encoding]::UTF8) } catch { Write-P1BootstrapDiagnostic 'write-service-stderr' $_ }; exit 42 }",
 		].join('; ')
-		const result = await new globalThis.Deno.Command('powershell', {
-			args: ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', bootstrap],
-			env: p1ProcessEnv({
-				P1_SERVICE_BOOTSTRAP_DIR: SERVICE_DIR,
-				P1_SERVICE_PORT: String(P1_SERVICE_PORT),
-				P1_SERVICE_SPAWN_RESULT: spawnResultFile,
-			}),
-			stdout: 'null',
-			stderr: 'null',
-			stdin: 'null',
-		}).output()
+		let result
+		try {
+			result = await new globalThis.Deno.Command('powershell', {
+				args: ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', bootstrap],
+				env: p1ProcessEnv({
+					P1_SERVICE_BOOTSTRAP_DIR: SERVICE_DIR,
+					P1_SERVICE_PORT: String(P1_SERVICE_PORT),
+					P1_SERVICE_SPAWN_RESULT: spawnResultFile,
+				}),
+				stdout: 'piped',
+				stderr: 'piped',
+				stdin: 'null',
+			}).output()
+		} catch (error) {
+			const retryable = _isProvablyNotCreatedCommandError(error)
+			throw _spawnAttemptError(
+				retryable ? 'spawn-not-created' : 'spawn-uncertain',
+				`无法${retryable ? '创建' : '确认'} PowerShell 启动进程: ${error?.message || error}`,
+				{ retryable, cause: error },
+			)
+		}
 		let pidText = ''
 		try { pidText = (await globalThis.Deno.readTextFile(spawnResultFile)).trim() }
 		catch { /* failure handled below */ }
 		try { await globalThis.Deno.remove(spawnResultFile) } catch { /* best effort */ }
 		const pid = Number(pidText)
-		if (!result.success || !Number.isInteger(pid) || pid <= 0) {
-			throw new Error(`PowerShell Start-Process 未返回有效 PID: ${pidText || '(empty)'}；查看 ${RUNTIME_ROOT}/service.stderr.log`)
-		}
-		return { pid, owner: 'powershell-start-process' }
+		if (result.success && Number.isInteger(pid) && pid > 0) return { pid, owner: 'powershell-start-process' }
+		const bootstrapDiagnostic = _bootstrapDiagnostic(result)
+		// 只有尚未执行 Start-Process 的前置阶段（exit 40）能证明未创建进程。
+		// Start-Process 自身抛错（exit 41）也可能发生在 CreateProcess 之后，必须按不确定处理。
+		const provablyNotCreated = !result.success && result.code === 40
+		throw _spawnAttemptError(
+			provablyNotCreated ? 'spawn-not-created' : 'spawn-uncertain',
+			provablyNotCreated
+				? `PowerShell 在创建 P1 进程前失败 (exit=${result.code})；bootstrap 诊断: ${bootstrapDiagnostic}`
+				: `PowerShell 可能已创建 P1 进程，但未确认有效 PID (exit=${result.code}, pid=${pidText || '(empty)'})；不会自动重试；bootstrap 诊断: ${bootstrapDiagnostic}`,
+			{
+				retryable: provablyNotCreated, pid, owner: 'powershell-start-process',
+				bootstrapDiagnostic, bootstrapExitCode: result.code,
+			},
+		)
 	}
 
-	const child = new globalThis.Deno.Command('python', {
-		args: ['p1_server.py', '--port', String(P1_SERVICE_PORT)],
-		cwd: SERVICE_DIR,
-		env: p1ProcessEnv({ P1_SERVICE_PORT: String(P1_SERVICE_PORT) }),
-		stdout: 'null',
-		stderr: 'null',
-		stdin: 'null',
-	}).spawn()
-	child.unref?.()
+	let child
+	try {
+		child = new globalThis.Deno.Command('python', {
+			args: ['p1_server.py', '--port', String(P1_SERVICE_PORT)],
+			cwd: SERVICE_DIR,
+			env: p1ProcessEnv({ P1_SERVICE_PORT: String(P1_SERVICE_PORT) }),
+			stdout: 'null',
+			stderr: 'null',
+			stdin: 'null',
+		}).spawn()
+	} catch (error) {
+		const retryable = _isProvablyNotCreatedCommandError(error)
+		throw _spawnAttemptError(
+			retryable ? 'spawn-not-created' : 'spawn-uncertain',
+			`Deno.Command.spawn ${retryable ? '未创建' : '无法确认是否创建'} P1 进程: ${error?.message || error}`,
+			{ retryable, cause: error },
+		)
+	}
+	const pid = Number(child?.pid)
+	if (!Number.isInteger(pid) || pid <= 0) {
+		throw _spawnAttemptError('spawn-uncertain', 'Deno.Command.spawn 已返回，但未提供可确认的 P1 PID', {
+			pid, owner: 'deno-child-unref',
+		})
+	}
+	try { child.unref?.() }
+	catch (error) {
+		throw _spawnAttemptError('spawn-uncertain', `P1 子进程已创建，但 unref 失败: ${error?.message || error}`, {
+			cause: error, pid, owner: 'deno-child-unref',
+		})
+	}
 	return { pid: child.pid, owner: 'deno-child-unref' }
 }
 
@@ -336,16 +425,30 @@ async function _stopExistingServiceForUpdate() {
 }
 
 function _ensureFailure(state, code, error, extra = {}) {
-	return { liveness: false, readyForRecall: false, state, code, error, service: P1_SERVICE_BASE, ...extra }
+	const attempt = Number.isInteger(Number(extra.attempt)) && Number(extra.attempt) >= 0 ? Number(extra.attempt) : 0
+	const maxAttempts = Number.isInteger(Number(extra.maxAttempts)) && Number(extra.maxAttempts) > 0
+		? Number(extra.maxAttempts)
+		: MAX_START_ATTEMPTS
+	const reason = typeof extra.reason === 'string' && extra.reason ? extra.reason : state
+	const retryable = extra.retryable === true
+	return {
+		liveness: false, readyForRecall: false, state, code, error, service: P1_SERVICE_BASE,
+		...extra, attempt, maxAttempts, reason, retryable,
+	}
 }
 
-function _shuttingDownFailure() {
-	return _ensureFailure('shutting-down', 'E_P1_SHUTTING_DOWN', '宿主退出已开始，P1 服务不会再自动启动')
+function _shuttingDownFailure(attempt = 0) {
+	return _ensureFailure(
+		'shutting-down',
+		'E_P1_SHUTTING_DOWN',
+		'宿主退出已开始，P1 服务不会再自动启动',
+		{ attempt, reason: 'host-shutdown', retryable: false },
+	)
 }
 
 async function _ensureP1Service() {
 	if (_hostShutdownStarted) return _shuttingDownFailure()
-	const updateRestartRequired = await _hasUpdateRestartMarker()
+	let updateRestartRequired = await _hasUpdateRestartMarker()
 	if (_hostShutdownStarted) return _shuttingDownFailure()
 	const initialProbe = await probeP1Service()
 	if (_hostShutdownStarted) return _shuttingDownFailure()
@@ -360,6 +463,10 @@ async function _ensureP1Service() {
 			state: 'already-running',
 			service: P1_SERVICE_BASE,
 			probe: initialProbe,
+			attempt: 0,
+			maxAttempts: MAX_START_ATTEMPTS,
+			reason: 'already-running',
+			retryable: false,
 		}
 	}
 	if (initialProbe.portListening && updateRestartRequired) {
@@ -394,55 +501,147 @@ async function _ensureP1Service() {
 		)
 	}
 
-	_lastSpawnAt = Date.now()
-	let spawned
-	try {
-		if (_hostShutdownStarted) return _shuttingDownFailure()
-		spawned = await _spawnServiceProcess()
-		_serviceOwnership = {
-			pid: Number(spawned.pid),
-			owner: spawned.owner,
-			startedAt: Date.now(),
-			confirmed: false,
-		}
-	} catch (error) {
-		const message = `自动启动 P1 服务失败（${error?.message || error}）`
-		console.warn(`[shells:p1] ${message}——手动启动: cd ${SERVICE_DIR} && python p1_server.py`)
-		return _ensureFailure('spawn-failed', 'E_P1_SPAWN_FAILED', message)
+	// cooldown 从本轮最终终态开始；内部 retry 不再经过 cooldown 门。
+	const completeStartRound = (result) => {
+		_lastSpawnAt = Date.now()
+		return result
 	}
+	for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
+		if (attempt > 1) {
+			if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt - 1))
+			const retryUpdateRestartRequired = await _hasUpdateRestartMarker()
+			if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt - 1))
+			const retryProbe = await probeP1Service()
+			if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt - 1))
+			let blocked = null
+			if (_serviceOwnership) {
+				blocked = _ensureFailure(
+					'spawn-ownership-unconfirmed',
+					'E_P1_SPAWN_OWNERSHIP_UNCONFIRMED',
+					'P1 retry 前仍存在本轮进程 ownership；不会创建第二个服务进程',
+					{
+						attempt: attempt - 1, reason: 'ownership-present-before-retry', retryable: false,
+						pid: _serviceOwnership.pid, owner: _serviceOwnership.owner, probe: retryProbe,
+					},
+				)
+			} else if (retryProbe.portListening) {
+				blocked = retryUpdateRestartRequired
+					? _ensureFailure(
+						'update-restart-pending',
+						'E_P1_UPDATE_RESTART_PENDING',
+						'P1 retry 前发现更新标记且端口已监听；不会并行启动服务。',
+						{ attempt: attempt - 1, reason: 'update-restart-pending', retryable: false, probe: retryProbe },
+					)
+					: _ensureFailure(
+						'service-unhealthy',
+						'E_P1_SERVICE_UNHEALTHY',
+						'P1 retry 前端口已监听；无法证明该进程属于本轮，不会并行启动服务。',
+						{ attempt: attempt - 1, reason: 'port-listening-before-retry', retryable: false, probe: retryProbe },
+					)
+			} else if (retryUpdateRestartRequired && !updateRestartRequired) {
+				blocked = _ensureFailure(
+					'update-restart-pending',
+					'E_P1_UPDATE_RESTART_PENDING',
+					'P1 retry 前出现新的更新重启标记；本轮不会继续启动。',
+					{ attempt: attempt - 1, reason: 'update-restart-pending', retryable: false, probe: retryProbe },
+				)
+			}
+			if (blocked) {
+				console.warn(`[shells:p1] P1 自动启动 retry 已终止 (attempt=${blocked.attempt}/${blocked.maxAttempts}, reason=${blocked.reason}, retryable=${blocked.retryable}): ${blocked.error}`)
+				return completeStartRound(blocked)
+			}
+			updateRestartRequired = retryUpdateRestartRequired
+		}
 
-	const deadline = Date.now() + START_WAIT_MS
-	while (Date.now() < deadline) {
-		await _sleep(Math.min(START_POLL_MS, Math.max(1, deadline - Date.now())))
-		const probe = await probeP1Service({ timeoutMs: Math.min(HEALTH_TIMEOUT_MS, START_POLL_MS) })
-		if (!probe.liveness) continue
-		const observedPid = _servicePidFromProbe(probe)
-		if (observedPid !== _serviceOwnership?.pid) {
-			return _ensureFailure(
-				'spawn-ownership-unconfirmed',
-				'E_P1_SPAWN_OWNERSHIP_UNCONFIRMED',
-				observedPid === null
-					? 'P1 spawn 后 health 未返回 PID；不会认领或清除更新标记'
-					: `P1 spawn PID ${_serviceOwnership?.pid} 与 health PID ${observedPid} 不一致；不会认领或清除更新标记`,
-				{ pid: _serviceOwnership?.pid, owner: _serviceOwnership?.owner, observedPid, probe },
-			)
+		if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt - 1))
+		let spawned
+		try {
+			spawned = await _spawnServiceProcess()
+			_serviceOwnership = {
+				pid: Number(spawned.pid),
+				owner: spawned.owner,
+				startedAt: Date.now(),
+				confirmed: false,
+			}
+		} catch (error) {
+			if (Number.isInteger(Number(error?.pid)) && Number(error.pid) > 0) {
+				_serviceOwnership = {
+					pid: Number(error.pid),
+					owner: error.owner || 'spawn-uncertain',
+					startedAt: Date.now(),
+					confirmed: false,
+				}
+			}
+			if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt))
+			const reason = error?.reason === 'spawn-not-created' ? 'spawn-not-created' : 'spawn-uncertain'
+			const retryBlockedBy = updateRestartRequired ? 'update-restart-marker' : null
+			const retryable = reason === 'spawn-not-created' && error?.retryable === true
+				&& !retryBlockedBy && attempt < MAX_START_ATTEMPTS
+			const message = `自动启动 P1 服务失败（${error?.message || error}）`
+			if (retryable) {
+				console.warn(`[shells:p1] ${message}；准备内部 retry (attempt=${attempt}/${MAX_START_ATTEMPTS}, reason=${reason}, retryable=true)`)
+				continue
+			}
+			const failed = _ensureFailure('spawn-failed', 'E_P1_SPAWN_FAILED', message, {
+				attempt,
+				reason,
+				retryable: false,
+				retryExhausted: reason === 'spawn-not-created' && error?.retryable === true
+					&& !retryBlockedBy && attempt >= MAX_START_ATTEMPTS,
+				...(retryBlockedBy ? { retryBlockedBy } : {}),
+				...(error?.bootstrapDiagnostic ? {
+					bootstrapDiagnostic: error.bootstrapDiagnostic,
+					bootstrapExitCode: error.bootstrapExitCode,
+				} : {}),
+				...(error?.pid ? { pid: Number(error.pid), owner: error.owner } : {}),
+			})
+			console.warn(`[shells:p1] ${message} (attempt=${failed.attempt}/${failed.maxAttempts}, reason=${failed.reason}, retryable=${failed.retryable})——手动启动: cd ${SERVICE_DIR} && python p1_server.py`)
+			return completeStartRound(failed)
 		}
-		_serviceOwnership.confirmed = true
-		if (_hostShutdownStarted) return _shuttingDownFailure()
-		if (updateRestartRequired) await _clearUpdateRestartMarker()
-		console.log(`[shells:p1] P1 服务已自动启动 (${P1_SERVICE_BASE}, pid=${spawned?.pid ?? '?'}, owner=${spawned?.owner ?? '?'})`)
-		return {
-			liveness: true,
-			readyForRecall: probe.readyForRecall,
-			state: 'spawned', service: P1_SERVICE_BASE,
-			pid: spawned?.pid, owner: spawned?.owner, probe,
+
+		const deadline = Date.now() + START_WAIT_MS
+		while (Date.now() < deadline) {
+			await _sleep(Math.min(START_POLL_MS, Math.max(1, deadline - Date.now())))
+			const probe = await probeP1Service({ timeoutMs: Math.min(HEALTH_TIMEOUT_MS, START_POLL_MS) })
+			if (!probe.liveness) continue
+			const observedPid = _servicePidFromProbe(probe)
+			if (observedPid !== _serviceOwnership?.pid) {
+				const failed = _ensureFailure(
+					'spawn-ownership-unconfirmed',
+					'E_P1_SPAWN_OWNERSHIP_UNCONFIRMED',
+					observedPid === null
+						? 'P1 spawn 后 health 未返回 PID；不会认领或清除更新标记'
+						: `P1 spawn PID ${_serviceOwnership?.pid} 与 health PID ${observedPid} 不一致；不会认领或清除更新标记`,
+					{
+						attempt, reason: 'ownership-unconfirmed', retryable: false,
+						pid: _serviceOwnership?.pid, owner: _serviceOwnership?.owner, observedPid, probe,
+					},
+				)
+				console.warn(`[shells:p1] P1 自动启动未确认 ownership (attempt=${attempt}/${MAX_START_ATTEMPTS}, reason=${failed.reason}, retryable=false): ${failed.error}`)
+				return completeStartRound(failed)
+			}
+			_serviceOwnership.confirmed = true
+			if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt))
+			if (updateRestartRequired) await _clearUpdateRestartMarker()
+			console.log(`[shells:p1] P1 服务已自动启动 (${P1_SERVICE_BASE}, pid=${spawned?.pid ?? '?'}, owner=${spawned?.owner ?? '?'}, attempt=${attempt}/${MAX_START_ATTEMPTS}, reason=spawned, retryable=false)`)
+			return completeStartRound({
+				liveness: true,
+				readyForRecall: probe.readyForRecall,
+				state: 'spawned', service: P1_SERVICE_BASE,
+				pid: spawned?.pid, owner: spawned?.owner, probe,
+				attempt, maxAttempts: MAX_START_ATTEMPTS, reason: 'spawned', retryable: false,
+			})
 		}
+
+		if (_hostShutdownStarted) return completeStartRound(_shuttingDownFailure(attempt))
+		const message = `P1 服务 spawn 后 ${START_WAIT_MS}ms 未就绪 (${P1_SERVICE_BASE})；日志: ${RUNTIME_ROOT}`
+		const failed = _ensureFailure('spawned-not-ready', 'E_P1_START_TIMEOUT', message, {
+			attempt, reason: 'start-timeout', retryable: false,
+			pid: spawned?.pid, owner: spawned?.owner,
+		})
+		console.warn(`[shells:p1] ${message} (attempt=${attempt}/${MAX_START_ATTEMPTS}, reason=${failed.reason}, retryable=false)——查看 python 环境或手动启动: python ${SERVICE_DIR}p1_server.py`)
+		return completeStartRound(failed)
 	}
-
-	if (_hostShutdownStarted) return _shuttingDownFailure()
-	const message = `P1 服务 spawn 后 ${START_WAIT_MS}ms 未就绪 (${P1_SERVICE_BASE})；日志: ${RUNTIME_ROOT}`
-	console.warn(`[shells:p1] ${message}——查看 python 环境或手动启动: python ${SERVICE_DIR}p1_server.py`)
-	return _ensureFailure('spawned-not-ready', 'E_P1_START_TIMEOUT', message, { pid: spawned?.pid, owner: spawned?.owner })
 }
 
 /**

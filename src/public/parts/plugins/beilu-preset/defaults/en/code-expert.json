@@ -41,12 +41,6 @@
         "system_prompt": true
       },
       {
-        "identifier": "charDescription",
-        "name": "Char Description",
-        "marker": true,
-        "system_prompt": true
-      },
-      {
         "identifier": "charPersonality",
         "name": "Char Personality",
         "marker": true,
@@ -418,10 +412,6 @@
             "enabled": true
           },
           {
-            "identifier": "charDescription",
-            "enabled": true
-          },
-          {
             "identifier": "charPersonality",
             "enabled": true
           },
@@ -556,10 +546,6 @@
           },
           {
             "identifier": "worldInfoBefore",
-            "enabled": true
-          },
-          {
-            "identifier": "charDescription",
             "enabled": true
           },
           {

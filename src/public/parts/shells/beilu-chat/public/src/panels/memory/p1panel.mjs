@@ -1239,7 +1239,7 @@ async function _p1SaveVocab(container) {
 
 const _P9_SM_ID = "P9词库维护";
 // ST 8 marker 位（与预设面板 MARKERS 同集合）：内容运行时从对应模块提取，编辑器只放行名称/角色/启用/顺序
-const _P9_MARKERS = ["personaDescription", "worldInfoBefore", "charDescription", "charPersonality", "scenario", "worldInfoAfter", "dialogueExamples", "chatHistory"];
+const _P9_MARKERS = ["personaDescription", "worldInfoBefore", "charPersonality", "scenario", "worldInfoAfter", "dialogueExamples", "chatHistory"];
 const _P9_NUM_FIELDS = [ // [model_params 蛇形键=param_schema 键, DOM id]
   ["temperature", "p9-sm-temperature"], ["max_tokens", "p9-sm-max-tokens"],
   ["max_context", "p9-sm-max-context"], ["top_p", "p9-sm-top-p"],

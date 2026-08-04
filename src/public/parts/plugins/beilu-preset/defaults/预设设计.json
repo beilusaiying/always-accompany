@@ -170,12 +170,6 @@
         "forbid_overrides": false
       },
       {
-        "identifier": "charDescription",
-        "name": "Char Description",
-        "system_prompt": true,
-        "marker": true
-      },
-      {
         "identifier": "charPersonality",
         "name": "Char Personality",
         "system_prompt": true,
@@ -271,10 +265,6 @@
             "enabled": true
           },
           {
-            "identifier": "charDescription",
-            "enabled": true
-          },
-          {
             "identifier": "charPersonality",
             "enabled": true
           },
@@ -357,10 +347,6 @@
           },
           {
             "identifier": "worldInfoBefore",
-            "enabled": true
-          },
-          {
-            "identifier": "charDescription",
             "enabled": true
           },
           {

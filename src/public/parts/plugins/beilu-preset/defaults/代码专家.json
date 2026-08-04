@@ -41,12 +41,6 @@
         "system_prompt": true
       },
       {
-        "identifier": "charDescription",
-        "name": "Char Description",
-        "marker": true,
-        "system_prompt": true
-      },
-      {
         "identifier": "charPersonality",
         "name": "Char Personality",
         "marker": true,
@@ -75,17 +69,6 @@
         "name": "Chat History",
         "marker": true,
         "system_prompt": true
-      },
-      {
-        "identifier": "m_README",
-        "name": "README",
-        "content": "代码专家 v5（2026-07-24 未知分诊插入+U型重排）\n============================================================\n头部(chatHistory前)：身份 任务与节奏\n尾部(chatHistory后，按重要性升序排列，越靠后越贴近生成点、注意力越强)：README 专项方法索引 回复风格 纠正响应 分身协议 前后端对齐 信息时效 交付协议 边界与范围 单源收口 影响面 原话落位 执行分流 调查方法 未知分诊 协议集 读码守则 编码操作 修复原则 工作避免事项 逻辑底板 临门提醒 思维链 伪回复\n（U型：身份头部锚定；参考类/情境类靠前；范围与交付纪律居中；理解与手艺贴后；闸门与避免事项更后；逻辑底板+临门提醒+未知分诊CoT+思维链+伪回复最尾）\n真闸门全套共3处：整读落点文件（读码守则）、备份先行（编码操作）、补丁停手（修复原则）。危险操作拦截归系统机制，不占提示词。\"必须\"级强调词不超过5处。",
-        "role": "system",
-        "system_prompt": true,
-        "enabled": true,
-        "marker": false,
-        "injection_position": 0,
-        "injection_depth": 0
       },
       {
         "identifier": "nsfw",
@@ -418,10 +401,6 @@
             "enabled": true
           },
           {
-            "identifier": "charDescription",
-            "enabled": true
-          },
-          {
             "identifier": "charPersonality",
             "enabled": true
           },
@@ -439,10 +418,6 @@
           },
           {
             "identifier": "chatHistory",
-            "enabled": true
-          },
-          {
-            "identifier": "m_README",
             "enabled": true
           },
           {
@@ -559,10 +534,6 @@
             "enabled": true
           },
           {
-            "identifier": "charDescription",
-            "enabled": true
-          },
-          {
             "identifier": "charPersonality",
             "enabled": true
           },
@@ -580,10 +551,6 @@
           },
           {
             "identifier": "chatHistory",
-            "enabled": true
-          },
-          {
-            "identifier": "m_README",
             "enabled": true
           },
           {

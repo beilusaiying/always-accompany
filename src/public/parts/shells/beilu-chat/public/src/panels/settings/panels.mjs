@@ -168,8 +168,8 @@ async function _loadPresetPanel() {
   if (!container) return;
   container.innerHTML = '<p class="text-xs text-base-content/40">加载中...</p>';
 
-  const MARKERS = ["personaDescription","charDescription","charPersonality","scenario","worldInfoBefore","worldInfoAfter","chatHistory","dialogueExamples","enhanceDefinitions"];
-  const MARKER_NAMES = { personaDescription:"用户设定", charDescription:"角色描述", charPersonality:"角色性格", scenario:"场景", worldInfoBefore:"世界书(前)", worldInfoAfter:"世界书(后)", chatHistory:"聊天历史", dialogueExamples:"对话示例", enhanceDefinitions:"增强定义" };
+  const MARKERS = ["personaDescription","charPersonality","scenario","worldInfoBefore","worldInfoAfter","chatHistory","dialogueExamples","enhanceDefinitions"];
+  const MARKER_NAMES = { personaDescription:"用户设定", charPersonality:"角色性格", scenario:"场景", worldInfoBefore:"世界书(前)", worldInfoAfter:"世界书(后)", chatHistory:"聊天历史", dialogueExamples:"对话示例", enhanceDefinitions:"增强定义" };
   try {
     // 原 raw GET preset getdata → 复用 getData；!ok 由门面抛错走外层 catch
     const presetData = await sendAction({ verb: "getData", target: "plugins:beilu-preset", source: "web" });

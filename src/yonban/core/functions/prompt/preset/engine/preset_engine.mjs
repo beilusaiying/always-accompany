@@ -16,17 +16,16 @@ const _warnedNoChatHistory = new Set();
 // 常量定义
 // ============================================================
 
-/** 12 个 ST 内置标识符（含 main/nsfw/jailbreak/enhanceDefinitions 等非定位 marker，与用户自定义条目区分） */
+/** 11 个 ST 内置标识符（含 main/nsfw/jailbreak/enhanceDefinitions 等非定位 marker，与用户自定义条目区分；charDescription 已移除——角色卡描述如需注入应走可编辑预设条目+宏） */
 const BUILTIN_MARKERS = new Set([
 	'main', 'nsfw', 'jailbreak', 'chatHistory',
 	'worldInfoBefore', 'worldInfoAfter', 'enhanceDefinitions',
-	'charDescription', 'charPersonality', 'scenario',
+	'charPersonality', 'scenario',
 	'personaDescription', 'dialogueExamples'
 ]);
 
 /** Marker → 宏变量名的映射（用于司令员模式展开 marker 为模块内容） */
 const MARKER_MAPPING = {
-	charDescription: 'char_prompt',
 	charPersonality: 'char_prompt',
 	scenario: 'char_prompt',
 	personaDescription: 'user_prompt',
@@ -39,7 +38,6 @@ const MARKER_MAPPING = {
 
 /** Marker 对应的宏变量名（用于 buildAllEntries 展开） */
 const MARKER_TO_MACRO = {
-	charDescription: 'char_prompt',
 	charPersonality: 'char_personality',
 	scenario: 'scenario',
 	personaDescription: 'user_prompt',

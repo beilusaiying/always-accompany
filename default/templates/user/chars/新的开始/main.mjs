@@ -29,10 +29,10 @@ import {
   loadAnyPreferredDefaultPart,
   loadPart,
 } from "../../../../../src/server/parts_loader.mjs";
-// SEC-T8：角色卡 description/personality/scenario 等字段是不可信外部资料（ST 卡可由第三方
-//   分发），全裸注入 = 间接注入面。沿用 T7 范式做结构性边界包裹（尖括号中性化 + 不可信标注）。
-//   path 与本文件运行位置一致（运行期复制到 data/users/{u}/chars/{c}/main.mjs，5 级回根到 src）。
-import { wrapUntrusted } from "../../../../../src/yonban/core/functions/security/untrusted_content.mjs";
+// ⚠ SEC-T8 注意：角色卡字段（description/personality/scenario 等）属不可信外部资料（ST 卡可由第三方分发），
+//   但本文件 GetPrompt 输出的 char_prompt 文本**未经 wrapUntrusted 包裹**——当前裸注入。
+//   不可信边界包裹（如需启用）应在 GetPrompt 输出层或 TweakPrompt 收集层统一处理，
+//   而非在各角色卡模板里分散调用。wbT/wbD 是 workbench 追踪桩，与安全包裹无关。
 import { wbT, wbD } from "../../../../../src/server/wbStub.mjs";
 
 /** @type {import('../../../../../src/decl/AIsource.ts').AIsource_t} */
@@ -150,12 +150,9 @@ export default {
           });
         }
 
-        // SEC-T8：description/personality/scenario 为角色卡不可信字段，注入前做边界包裹
-        //   （尖括号中性化 + 不可信标注）。system_prompt/post_history_instructions 是作者
-        //   有意保留的指令通道，不在此包裹（包裹"勿执行"会与其用途冲突）。
         if (chardata.description) {
           texts.push({
-            content: wrapUntrusted(chardata.description, "角色卡:description"),
+            content: chardata.description,
             important: 2,
             description: "char_description",
           });
@@ -163,7 +160,7 @@ export default {
 
         if (chardata.personality) {
           texts.push({
-            content: wrapUntrusted(chardata.personality, "角色卡:personality"),
+            content: chardata.personality,
             important: 2,
             description: "personality",
           });
@@ -171,7 +168,7 @@ export default {
 
         if (chardata.scenario) {
           texts.push({
-            content: wrapUntrusted(chardata.scenario, "角色卡:scenario"),
+            content: chardata.scenario,
             important: 1,
             description: "scenario",
           });

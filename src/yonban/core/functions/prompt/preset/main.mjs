@@ -2206,7 +2206,6 @@ const pluginExport = {
               { identifier: "main", enabled: true },
               { identifier: "personaDescription", enabled: true },
               { identifier: "worldInfoBefore", enabled: true },
-              { identifier: "charDescription", enabled: true },
               { identifier: "charPersonality", enabled: true },
               { identifier: "scenario", enabled: true },
               { identifier: "nsfw", enabled: true },
@@ -2264,12 +2263,6 @@ const pluginExport = {
                 {
                   identifier: "scenario",
                   name: "Scenario",
-                  system_prompt: true,
-                  marker: true,
-                },
-                {
-                  identifier: "charDescription",
-                  name: "Char Description",
                   system_prompt: true,
                   marker: true,
                 },
@@ -2757,8 +2750,9 @@ const pluginExport = {
           // preset_engine.mjs:38，展开点 :646），卡字段从此走 prompt_order 可排序/可开关
           // （既有 Prompt Manager UI 直接生效，与酒馆同构）。
           // 其余标签（system_prompt/char_description/post_history_instructions/depth_prompt_*
-          // /无标签兜底）仍并入 char_prompt=charDescription marker——酒馆完整语义
-          // （system_prompt→override main、PHI→override jailbreak、depth_prompt→in-chat@depth）
+          // /无标签兜底）仍并入 char_prompt bucket（charDescription marker 已移除，
+          // char_prompt 内容不再自动注入——如需注入角色卡描述应在预设中用 {{char_prompt}} 宏）。
+          // 酒馆完整语义（system_prompt→override main、PHI→override jailbreak、depth_prompt→in-chat@depth）
           // 属下一阶段，本次先解排序塌缩、内容零丢失。
           {
             const _cpBuckets = { char_prompt: [], char_personality: [], scenario: [], dialogue_examples: [] };

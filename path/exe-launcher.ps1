@@ -81,7 +81,7 @@ if (-not ((Test-Path (Join-Path $APP 'run.bat')) -and (Test-Path (Join-Path $APP
 	$parent = Split-Path -Parent $APP
 	if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
 	$p = Start-Process -FilePath (Join-Path $BASE 'runtime\git\cmd\git.exe') `
-		-ArgumentList '-c', 'core.autocrlf=false', 'clone', 'https://github.com/beilusaiying/always-accompany.git', "`"$APP`"" `
+		-ArgumentList '-c', 'core.autocrlf=false', 'clone', 'https://github.com/beilusaiying/beilu-always-accompany.git', "`"$APP`"" `
 		-Wait -PassThru
 	if (-not (Test-Path (Join-Path $APP 'run.bat'))) {
 		Fail "download failed (git exit $($p.ExitCode)). Check the network and run again."

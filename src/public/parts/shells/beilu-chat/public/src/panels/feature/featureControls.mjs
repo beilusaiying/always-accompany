@@ -801,27 +801,34 @@ async function _doSwitchModeInner(targetMode, opts = {}) {
   //     原取"切换时刻 hash"=【旧 tab 的会话】：旧会话线级模式被盖成新模式、新模式绑定预设
   //     初始化到旧会话键上（裸键双写再污染），随后 restore 才把 hash 换到目标模式记住的 cid
   //     ——写点全部落在错误的线上（AIRP/chat 预设互换实证）。改为与 _restoreModeChatId 同源
-  //     （getModeChatIdKey(targetMode, BEILU_LAST_CHAR)）预读目标模式的 cid：写键=切换后真实活跃线。
-  //     目标模式无记住的 cid 时回退当前 hash（restore 不动 hash，当前会话确实被带进新模式）。
+  //     目标 cid 必须从服务端 mode_active_chats 投影取得，本地键只是缓存。
+  //     严禁回退当前 hash：切对话时 hash 早于 getInitialData 完成提交，此窗口把 hash
+  //     当目标模式线，会将 chat/smart 线写成 code 并永久污染 active_modes_map。
   //   · 就地切换（无 opts.tab：messageInput 快捷指令等）——意图=把当前会话切到该模式，维持当前 hash。
   let _chatid = window._beiluGetChatId?.() || "";
   if (opts.tab) {
-    const _tgtKey = getModeChatIdKey(targetMode, storage.get(KEYS.BEILU_LAST_CHAR) || "");
-    let _tgtCid = _tgtKey ? storage.get(_tgtKey) : null;
-    // [0804 反方补修·本地键空窗口] charsel 收口后四线由服务端建，本地模式键不再有前端写点
-    //   （原 classifyNewChat 三写已删）——切卡后未拉过列表时键空，直接回退当前 hash 会把
-    //   【chat 线】的线级 active_modes_map 写成目标模式（写点落错线，0711 注释记载的旧病形状），
-    //   要等 layout._restoreModeChatId 的 fetchChatList 校准才收敛。修法与 layout.mjs:287 同源：
-    //   键空先 fetchChatList（内含 _syncModePointerCache 服务端 mode_active_chats→本地键单向校准）
-    //   再重读；仍空才回退当前 hash（该角色确无目标模式线=当前会话被带进新模式，原语义保留）。
-    if (!_tgtCid && _tgtKey) {
-      try {
-        const { fetchChatList } = await import("../../shared/chat-core/conversationManager.mjs");
-        await fetchChatList();
-        _tgtCid = storage.get(_tgtKey);
-      } catch { /* 拉取失败=保持原回退行为，不阻断切模式 */ }
+    try {
+      const _targetChar = charName || storage.get(KEYS.BEILU_LAST_CHAR) || "";
+      const _tgtKey = getModeChatIdKey(targetMode, _targetChar);
+      const { fetchChatList } = await import("../../shared/chat-core/conversationManager.mjs");
+      const _list = await fetchChatList();
+      let _tgtCid = Array.isArray(_list)
+        ? _list.find((c) => c?.primaryCharName === _targetChar && Array.isArray(c?.usedByModes) && c.usedByModes.includes(targetMode))?.chatid
+        : null;
+      // 权威表真缺线时复用既有四模式幂等创建口；失败就终止本次切换，不拿当前 hash 凑目标。
+      if (!_tgtCid) {
+        const _rep = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: _targetChar } });
+        _tgtCid = _rep?.modeChats?.[targetMode] || null;
+      }
+      if (!_tgtCid || !isValidChatId(_tgtCid)) throw new Error(`无法解析 ${targetMode} 模式的权威对话`);
+      if (_tgtKey) storage.set(_tgtKey, _tgtCid);
+      _chatid = _tgtCid;
+    } catch (err) {
+      console.error("[featureControls] 模式目标对话解析失败:", err.message);
+      _publicToast("error", `模式切换失败: ${err.message}`);
+      updateModeSwitchUI(currentMode);
+      return false;
     }
-    if (_tgtCid && isValidChatId(_tgtCid)) _chatid = _tgtCid;
   }
   const _tab = opts.tab || undefined;
   let _currentMessageCount = -1;

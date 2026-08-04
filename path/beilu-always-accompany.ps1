@@ -188,57 +188,8 @@ function Start-Server {
 	deno run --allow-scripts --allow-all -c "$PROJECT_DIR/deno.json" @nmFlag --v8-flags="$v8Flags" "$PROJECT_DIR/src/server/index.mjs" @ServerArgs
 }
 
-# ── 安全源码更新 ───────────────────────
-# 更新只允许 fast-forward，绝不 clean/reset；这样不会删除 P1/service/data、角色数据或用户安装的扩展。
-# .noupdate 仍是显式总开关。已跟踪本地改动会阻止更新，避免把开发/用户配置写成“看似成功”的覆盖。
-function Invoke-SafeGitUpdate {
-	if (Test-Path (Join-Path $PROJECT_DIR '.noupdate')) {
-		Write-Host "  [beilu] .noupdate 已启用，跳过源码更新" -ForegroundColor DarkYellow
-		return
-	}
-	if ((-not (Test-Path (Join-Path $PROJECT_DIR '.git'))) -or (-not (Get-Command git -ErrorAction SilentlyContinue))) {
-		return
-	}
-	$trackedChanges = git -C "$PROJECT_DIR" status --porcelain=v1 --untracked-files=no
-	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 无法读取 Git 工作区状态，已跳过源码更新"
-		return
-	}
-	if ($trackedChanges) {
-		Write-Warning "  [beilu] 检测到本地已跟踪改动，已跳过源码更新；不会覆盖本地文件"
-		return
-	}
-	git -C "$PROJECT_DIR" fetch origin main --quiet
-	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 无法获取远端更新，继续使用当前版本"
-		return
-	}
-	$local = git -C "$PROJECT_DIR" rev-parse HEAD
-	$remote = git -C "$PROJECT_DIR" rev-parse origin/main
-	if (($LASTEXITCODE -ne 0) -or (-not $local) -or (-not $remote)) {
-		Write-Warning "  [beilu] 无法确认版本，继续使用当前版本"
-		return
-	}
-	if ($local -eq $remote) { return }
-	$marker = Join-Path $PROJECT_DIR 'data\p1\.service-restart-required.json'
-	try {
-		New-Item -ItemType Directory -Path (Split-Path -Parent $marker) -Force | Out-Null
-		@{ reason = 'application-update'; targetCommit = $remote; createdAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json -Compress | Set-Content -LiteralPath $marker -Encoding UTF8
-	}
-	catch {
-		Write-Warning "  [beilu] 无法写入 P1 重启标记，已取消源码更新以保持版本一致: $($_.Exception.Message)"
-		return
-	}
-	Write-Host "  [beilu] 检测到新版本，执行 fast-forward 更新..." -ForegroundColor Cyan
-	git -C "$PROJECT_DIR" pull --ff-only origin main
-	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 更新未完成（可能与未跟踪用户文件冲突）；当前版本未被覆盖"
-	}
-}
-
-# 依赖安装 / 更新（安全源码更新 + deno install）。
+# 依赖安装；源码版本检测与确认更新由运行中的 autoupdate.mjs 唯一负责。
 function Invoke-InstallOrUpdate {
-	Invoke-SafeGitUpdate
 	New-Item -Path (Join-Path $PROJECT_DIR 'node_modules') -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
 	# 两段式安装 + 网络容错重试（最多 3 次，递增等待）。
 	# 第一段裸 install 装 package.json 清单；第二段 --entrypoint 爬入口静态图并缓存远程模块。

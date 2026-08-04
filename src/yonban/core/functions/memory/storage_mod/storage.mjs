@@ -2487,6 +2487,28 @@ export function loadMemoryPresets(username, charName) {
         }
       }
     } catch (_seedErr4) { console.warn("[beilu-memory] v4 INJ 恢复迁移失败:", _seedErr4.message); }
+    // [0805 v5] INJ-2 删除路由说明的存量条件迁移：只升级仍与修改前官方默认正文逐字一致的副本。
+    //   用户改过 content 时 hash 不命中，保持原文；独立 marker 保证已跑过 v4 的用户仍会执行且只执行一次。
+    try {
+      const _m5 = path.join(memDir, "_inj_delete_routing_v5.done");
+      if (!fs.existsSync(_m5)) {
+        const _tplPath5 = path.join(__pluginDir, "default_memory_presets.json");
+        const _tpl5 = fs.existsSync(_tplPath5) ? loadJsonFile(_tplPath5) : null;
+        const _cur5 = data.injection_prompts.find((p) => p.id === "INJ-2");
+        const _te5 = (_tpl5?.injection_prompts || []).find((p) => p.id === "INJ-2");
+        let _changed5 = 0;
+        if (_cur5 && _te5) {
+          const _curHash5 = crypto.createHash("sha256").update(String(_cur5.content || ""), "utf8").digest("hex");
+          if (_curHash5 === "5c3c4e3faf3f33f5b7f40139d375706baf72a31aefe1c6c82219577387f88dd7") {
+            _cur5.content = _te5.content;
+            _changed5 = 1;
+            console.log("[beilu-memory] v5 条件迁移(删除路由说明): INJ-2");
+          }
+        }
+        if (_changed5 > 0) _writeMemoryPresetsStore(memDir, data);
+        fs.writeFileSync(_m5, new Date().toISOString());
+      }
+    } catch (_seedErr5) { console.warn("[beilu-memory] v5 INJ-2 删除路由迁移失败:", _seedErr5.message); }
     if (injMigrated) {
       _writeMemoryPresetsStore(memDir, data); // [0717 store v2] write through directory store
     }

@@ -48,6 +48,7 @@ const START_WAIT_MS = _positiveNumber('P1_START_WAIT_MS', 10000)
 const START_POLL_MS = _positiveNumber('P1_START_POLL_MS', 250)
 const SPAWN_COOLDOWN_MS = _positiveNumber('P1_SPAWN_COOLDOWN_MS', 60000)
 const STOP_WAIT_MS = _positiveNumber('P1_STOP_WAIT_MS', 10000)
+const HOST_ORPHAN_GRACE_SEC = _positiveNumber('P1_HOST_ORPHAN_GRACE_SEC', 120)
 const START_RETRY_COUNT = _nonNegativeInteger('P1_START_RETRY_COUNT', 2)
 const MAX_START_ATTEMPTS = START_RETRY_COUNT + 1
 const AUTOSTART = (_env('P1_AUTOSTART') || 'on') !== 'off'
@@ -178,6 +179,8 @@ async function _spawnServiceProcess() {
 					P1_SERVICE_BOOTSTRAP_DIR: SERVICE_DIR,
 					P1_SERVICE_PORT: String(P1_SERVICE_PORT),
 					P1_SERVICE_SPAWN_RESULT: spawnResultFile,
+					P1_HOST_PID: String(globalThis.Deno.pid),
+					P1_HOST_ORPHAN_GRACE_SEC: String(HOST_ORPHAN_GRACE_SEC),
 				}),
 				stdout: 'piped',
 				stderr: 'piped',
@@ -218,7 +221,11 @@ async function _spawnServiceProcess() {
 		child = new globalThis.Deno.Command('python', {
 			args: ['p1_server.py', '--port', String(P1_SERVICE_PORT)],
 			cwd: SERVICE_DIR,
-			env: p1ProcessEnv({ P1_SERVICE_PORT: String(P1_SERVICE_PORT) }),
+			env: p1ProcessEnv({
+				P1_SERVICE_PORT: String(P1_SERVICE_PORT),
+				P1_HOST_PID: String(globalThis.Deno.pid),
+				P1_HOST_ORPHAN_GRACE_SEC: String(HOST_ORPHAN_GRACE_SEC),
+			}),
 			stdout: 'null',
 			stderr: 'null',
 			stdin: 'null',

@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ctypes
 import errno
 import json
+import os as _nos
 import re
 import time
 import urllib.parse
@@ -151,6 +153,54 @@ _active_runs = 0
 _last_run_activity = time.time()
 
 
+def _positive_int_env(name: str, fallback: int) -> int:
+    try:
+        value = int(_nos.environ.get(name) or fallback)
+    except (TypeError, ValueError):
+        return fallback
+    return value if value > 0 else fallback
+
+
+_host_pid = _positive_int_env("P1_HOST_PID", 0)
+_host_missing_since: float | None = None
+_host_orphan_grace_sec = _positive_int_env("P1_HOST_ORPHAN_GRACE_SEC", 120)
+
+
+def _host_process_alive(pid: int) -> bool:
+    """Check the bound host without signalling it; signal 0 is unsafe on Windows."""
+    if pid <= 0:
+        return False
+    if _nos.name != "nt":
+        try:
+            _nos.kill(pid, 0)
+            return True
+        except PermissionError:
+            return True
+        except ProcessLookupError:
+            return False
+    from ctypes import wintypes
+
+    process_query_limited_information = 0x1000
+    still_active = 259
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenProcess(
+        process_query_limited_information, False, pid,
+    )
+    if not handle:
+        return ctypes.get_last_error() == 5  # access denied still proves the PID exists
+    exit_code = wintypes.DWORD()
+    try:
+        return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))) and exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 @app.middleware("http")
 async def _track_run_activity(req: Request, call_next):
     """真实召回和专用预热都持有重资源；两者共同刷新空闲生命周期。"""
@@ -167,9 +217,30 @@ async def _track_run_activity(req: Request, call_next):
 
 
 async def _idle_shutdown_monitor() -> None:
-    global _lifecycle_stopping, _lifecycle_task
+    global _lifecycle_stopping, _lifecycle_task, _host_missing_since
     while not _lifecycle_stopping:
         await asyncio.sleep(1)
+        if _lifecycle_stopping:
+            return
+        if _host_pid > 0:
+            if _host_process_alive(_host_pid):
+                _host_missing_since = None
+            else:
+                if _host_missing_since is None:
+                    _host_missing_since = time.monotonic()
+                    _safe_log(
+                        f"[p1_server] 本体 PID {_host_pid} 失联，保留 {_host_orphan_grace_sec}s 等待重连"
+                    )
+                missing_sec = time.monotonic() - _host_missing_since
+                if missing_sec < _host_orphan_grace_sec:
+                    continue
+                _lifecycle_stopping = True
+                _lifecycle_task = asyncio.current_task()
+                _safe_log(
+                    f"[p1_server] 本体连续失联 {int(missing_sec)}s，停止 P1 进程树释放重资源"
+                )
+                await _finish_lifecycle_stop()
+                return
         idle_sec = int(get_config().get("idleShutdownSec") or 0)
         if idle_sec <= 0 or _active_runs > 0:
             continue
@@ -605,7 +676,6 @@ async def health() -> dict[str, Any]:
 # why 常驻: node 侧词库+HanLP 加载秒级,每请求 spawn 不可用
 # 多路复用: requestId 标识并发请求, Node 侧 async 处理, 响应行带 _rid 对应回调
 import json as _njson
-import os as _nos
 import subprocess as _nsp
 import sys as _nsys
 import threading as _nth

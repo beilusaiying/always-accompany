@@ -26,6 +26,8 @@ function _filePath(url) {
 	return decodeURIComponent(url.pathname.replace(/^\/([A-Za-z]:)/, '$1'))
 }
 
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import {
 	RESOURCE_ROOT,
 	RUNTIME_ROOT,
@@ -38,6 +40,7 @@ export const P1_SERVICE_PORT = _positiveNumber('P1_SERVICE_PORT', 13150)
 export const P1_SERVICE_BASE = `http://127.0.0.1:${P1_SERVICE_PORT}`
 
 const SERVICE_DIR = _filePath(new URL('./service/', import.meta.url))
+const DEPS_MARKER = join(RUNTIME_ROOT, '.p1-deps-installed')
 const PROXY_TIMEOUT_MS = _positiveNumber('P1_PROXY_TIMEOUT_MS', 30000)
 const HEALTH_TIMEOUT_MS = _positiveNumber('P1_HEALTH_TIMEOUT_MS', 3000)
 const WARMUP_TIMEOUT_MS = _positiveNumber('P1_WARMUP_TIMEOUT_MS', 180000)
@@ -104,10 +107,43 @@ function _bootstrapDiagnostic(result) {
 		|| `stderr/stdout 均无 bootstrap 诊断 (exit=${result?.code ?? 'unknown'})`
 }
 
+// P1 依赖自动安装：首次启动时执行 pip install -r requirements.txt，
+// 标记文件 .p1-deps-installed 存在则跳过（requirements.txt 更新时删除标记即可重装）。
+async function _ensurePythonDeps() {
+	if (existsSync(DEPS_MARKER)) return
+	const reqFile = join(SERVICE_DIR, 'requirements.txt')
+	if (!existsSync(reqFile)) return
+	if (!globalThis.Deno?.Command) return
+	console.log('[shells:p1] 首次启动，自动安装 Python 依赖...')
+	try {
+		const result = await new globalThis.Deno.Command('python', {
+			args: ['-m', 'pip', 'install', '-r', reqFile, '--quiet', '--disable-pip-version-check'],
+			cwd: SERVICE_DIR,
+			stdout: 'piped',
+			stderr: 'piped',
+			stdin: 'null',
+		}).output()
+		if (result.success) {
+			try {
+				const { mkdirSync, writeFileSync } = await import('node:fs')
+				mkdirSync(RUNTIME_ROOT, { recursive: true })
+				writeFileSync(DEPS_MARKER, JSON.stringify({ installedAt: new Date().toISOString(), reqFile }), 'utf-8')
+			} catch { /* marker 写失败不阻塞启动，下次重装 */ }
+			console.log('[shells:p1] Python 依赖安装完成')
+		} else {
+			const stderr = _decodeBootstrapOutput(result?.stderr)
+			console.warn(`[shells:p1] pip install 失败 (exit=${result.code})${stderr ? ': ' + stderr.slice(0, 500) : ''}；P1 可能无法启动`)
+		}
+	} catch (e) {
+		console.warn(`[shells:p1] pip install 无法执行: ${e?.message || e}；如 Python 未安装，P1 将不可用`)
+	}
+}
+
 async function _spawnServiceProcess() {
 	if (!globalThis.Deno?.Command) {
 		throw _spawnAttemptError('spawn-not-created', '当前运行时不支持 Deno.Command', { retryable: true })
 	}
+	await _ensurePythonDeps()
 
 	// Windows 下 Deno.ChildProcess.unref() 只解除事件循环等待；短命 Deno 调用进程
 	// 退出时仍可能带走它直接创建的 Python，Python 来不及执行 cluster 回收，留下

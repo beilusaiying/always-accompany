@@ -20,7 +20,7 @@
  *   分区维度=username：截图安全/配置（eye_config.json）本就按 username 存，注入语义=用户级。
  *   有 username 上下文的调用点（/api/eye/* 认证路由、/api/eye/inject 的 body.username、gameCompanion）传精确键；
  *   无 username 上下文的调用点（beilu-eye/main.mjs 的 GetData/SetData parts 接口）落兜底键 ""。
- * @type {Map<string, { image: string, message: string, mode: string, timestamp: number, ttlMs: number }>}
+ * @type {Map<string, { image: string, message: string, mode: string, requestId: string, timestamp: number, ttlMs: number }>}
  */
 const _pendingInjections = new Map(); // Map<username|"", state>
 
@@ -80,6 +80,8 @@ export function setPendingInjection(data, username) {
     image: data.image,
     message: data.message || "",
     mode: data.mode || "passive",
+    // 陪伴“本句话附图”的关联键。空串表示普通主动感知/手动截图，不属于某个等待中的陪伴轮。
+    requestId: typeof data.requestId === "string" ? data.requestId : "",
     timestamp: Date.now(),
     ttlMs: Number(data.ttlMs) > 0 ? Number(data.ttlMs) : INJECTION_TTL_MS_DEFAULT,
   };
@@ -104,9 +106,12 @@ export function setPendingInjection(data, username) {
  * @param {string} [username]
  * @returns {{ image: string, message: string, mode: string, timestamp: number } | null}
  */
-export function consumePendingInjection(username) {
+export function consumePendingInjection(username, requestId = "") {
   const data = _getValid(username);
   if (!data) return null;
+  // 指定 requestId 时只允许发起该请求的轮消费；不匹配的普通截图/别轮截图留在原槽，
+  // 不能再用“这个用户恰好有一张图”冒充“这句话请求的那张图”。
+  if (requestId && data.requestId !== requestId) return null;
   // 删除命中的键（精确键优先，未命中精确键时删兜底键）
   const k = _scopeKey(username);
   if (_pendingInjections.get(k) === data) _pendingInjections.delete(k);
@@ -130,8 +135,9 @@ export function consumePendingInjection(username) {
  * @param {string} [username]
  * @returns {boolean}
  */
-export function hasPendingInjection(username) {
-  return !!_getValid(username);
+export function hasPendingInjection(username, requestId = "") {
+  const data = _getValid(username);
+  return !!data && (!requestId || data.requestId === requestId);
 }
 
 /**
@@ -147,6 +153,7 @@ export function getPendingStatus(username) {
     hasPending: true,
     mode: entry.mode,
     message: entry.message,
+    requestId: entry.requestId || "",
   };
 }
 
@@ -317,9 +324,16 @@ export function resolvePetToken(token) {
 
 /** 桌宠客户端距上次露面的毫秒数;从没见过=null。精确键→兜底键 ""(与 token 注册同口径)。 */
 export function getPetClientSeenAgoMs(username) {
+  const t = getPetClientSeenAtMs(username);
+  return typeof t === "number" ? Date.now() - t : null;
+}
+
+/** 桌宠客户端最近露面【时刻】(epoch ms;从没见过=null)。spawn 后心跳确认(WAITING_HEARTBEAT→RUNNING)
+ *  需要比较"露面时刻 vs spawn 时刻",距今毫秒数无法区分"spawn 前的旧心跳"——故单独暴露时刻。 */
+export function getPetClientSeenAtMs(username) {
   const k = typeof username === "string" && username ? username : "";
   const t = _petClientSeen.get(k) ?? (k !== "" ? _petClientSeen.get("") : undefined);
-  return typeof t === "number" ? Date.now() - t : null;
+  return typeof t === "number" ? t : null;
 }
 
 /** 回收桌宠令牌（killElectronPet 时调用）。 */
@@ -357,6 +371,81 @@ export function setEyeProcessState(update) {
  */
 export function getEyeProcessState() {
   return { ..._eyeProcessState };
+}
+
+// ============================================================
+// PetLifecycle 运行时镜像 + 互动租约（D5 §2.1 结构版，2026-08-04）
+// ============================================================
+//
+// 唯一进程 owner = screenshot/main.mjs（spawn/kill 只在那里发生）；它把每次状态迁移推进本镜像，
+// setDataActions/endpoints 只读镜像组装 PetOperationResult DTO——与 setEyeProcessState 同范式，
+// 避免 memory handler 直接 import 会 spawn 的插件模块（import 副作用隔离）。
+// 互动租约本体在 interaction_lease.mjs 叶子（零依赖可单测），此处 re-export 作单点门面。
+export {
+  acquireInteractionLease,
+  computeEffectiveDesired,
+  hasActiveInteractionLease,
+  listInteractionLeases,
+  onInteractionLeaseChange,
+  releaseInteractionLease,
+  resolveHeartbeatConfirm,
+  resolveStopOutcome,
+  revokeInteractionLeases,
+  STOP_ACK_DEADLINE_MS,
+} from "./interaction_lease.mjs";
+import { hasActiveInteractionLease as _hasLease } from "./interaction_lease.mjs";
+
+/** @type {{ status: string, pid: number|null, error: string|null, updatedAt: number,
+ *           stopRequestedAt: number, stopDeadlineMs: number, stopTimeout: boolean, operationId: string|null }} */
+let _petRuntimeState = {
+  status: "stopped", // stopped|installing|missing|starting|waiting_heartbeat|running|adopting|adopted|stopping|error|error_unconfirmed
+  pid: null,
+  error: null,
+  updatedAt: 0,
+  stopRequestedAt: 0,
+  stopDeadlineMs: 0,
+  stopTimeout: false,
+  operationId: null,
+};
+
+/** owner（screenshot/main.mjs）每次状态迁移推入；字段级 patch。 */
+export function setPetRuntimeState(update) {
+  if (!update || typeof update !== "object") return;
+  _petRuntimeState = { ..._petRuntimeState, ...update, updatedAt: Date.now() };
+}
+
+/** 读运行时镜像（DTO 组装/诊断）。 */
+export function getPetRuntimeState() {
+  return { ..._petRuntimeState };
+}
+
+/**
+ * 等待运行时镜像满足谓词（有界轮询；DTO 组装方用，如 stopGameCompanion 等 pet 收束 ≤10s）。
+ * 谓词抛错视为不满足；到期返回当时快照，不抛——调用方按快照如实上报（不谎报 stopped）。
+ * @param {(state: object) => boolean} predicate
+ * @param {number} [timeoutMs]
+ * @param {number} [pollMs]
+ * @returns {Promise<{ settled: boolean, state: object }>}
+ */
+export async function waitPetRuntimeSettled(predicate, timeoutMs = 11_000, pollMs = 200) {
+  const t0 = Date.now();
+  while (true) {
+    const state = getPetRuntimeState();
+    let ok = false;
+    try { ok = !!predicate(state); } catch { ok = false; }
+    if (ok) return { settled: true, state };
+    if (Date.now() - t0 >= timeoutMs) return { settled: false, state };
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+/**
+ * effective desired 快照（explicit 持久开关 || 活跃互动 lease）。
+ * 消费点：GET /api/eye/pet-settings（Electron 退出判据）/ DTO 组装。
+ * @param {string} projectRoot
+ */
+export function getPetEffectiveDesired(projectRoot) {
+  return !!loadPetSettingsStore(projectRoot).petEnabled || _hasLease();
 }
 
 // ============================================================
@@ -566,7 +655,11 @@ export function saveUserModelEntry(projectRoot, entry) {
 //   - Electron 桌宠主进程轮询 GET 本文件(经 beilu 端点)→ 应用显示设置(对话框/动态/模型);托盘改动 POST 回此文件(双写和解,避免回退打架)。
 // 放 data/(用户数据区,与源码分离=开源升级不覆盖用户)。
 const PET_SETTINGS_DEFAULT = {
-  petEnabled: false,        // 桌宠开关(插件读;默认关,用户开/关持久化)
+  petEnabled: false,        // 桌宠开关(插件读;默认关,用户开/关持久化)。语义固定=「用户显式想常驻桌宠」,
+                            //   互动开始不得改写它(D5 §2.1)。互动的临时要求走运行时 lease(interaction_lease.mjs),
+                            //   不落盘——重启后没有恢复的互动 session 就没有 lease,不遗留自动启用。
+                            //   (0804 iter6 的持久化标记 petAutoEnabledByInteraction 已被 lease 结构版替代删除;
+                            //   旧盘残留键无消费者,无害。)
   modelName: "",            // 形象(空=自动:按可用性选,不指名)。[凛倾 0722"为什么有硬编码?如果用户把贝露的图包删除
                             //   会怎么样"] 原默认写死"贝露"=代码指名用户可删资产;改空+读侧动态解析——渲染层:首个
                             //   图片包条目→字典首项→兜底小生物(live2dRenderer 初始选模);后端宏/env:resolvePetModelName
@@ -582,6 +675,7 @@ const PET_SETTINGS_DEFAULT = {
   // fallbackCreature 已移除(凛倾 2026-07-14:删除史莱姆和青蛙,贝露图片包为唯一默认形象)
   bannerEnabled: true,      // 是否显示 AI orbMessage 横幅/对话框(关=只截图不弹横幅)。设计⚙通知"横幅显示AI消息"
   bannerMaxChars: 0,        // 横幅最大字数(0=不限制,完整显示;>0=超出截断加…)。设计⚙通知"横幅最大字数",默认0不改变现有行为
+  companionMaxChars: 0,     // 陪伴正文独立最大字数；不能复用通知截断，否则用户只看到流式回答前几个字
   petCorner: "br",          // 桌宠初始角位(br右下/bl左下/tr右上/tl左上;默认br=旧位置)。仍可拖拽覆盖。悬浮球已删除(凛倾 2026-07-09),orbVisible/orbSize 键随之移除
   notifySound: false,       // AI 消息声音(设计⚙通知"AI消息声音",默认关=旧行为)。开=有新 orbMessage 时系统提示音(shell.beep)
   emotionTag: "emotion",    // 表情指令标签名(凛倾 2026-07-09"禁止硬编码,包括标签":AI 输出 <此标签>键</此标签> 驱动表情;replyHandler/桌宠剥离双读)
@@ -603,6 +697,15 @@ const PET_SETTINGS_DEFAULT = {
   alphaHitThreshold: 10,    // 魔法棒 alpha 阈值 0~255(图片包命中盒扫描;消费=imagePackRenderer 经 pet-config 下发)
   captureHotkey: "Alt+Shift+S", // 框选截图全局快捷键(B1 去硬编码 2026-07-13:原写死不可改,与游戏/系统冲突无路;Electron accelerator 格式,注册失败回退默认并通知)
   orbPollSec: 3,            // 桌宠拉取 AI 消息/设置同步的轮询秒数(C1 去硬编码:原 3s 写死=AI 消息上气泡最大延迟;1~30 消费端 clamp,越小越即时、请求越频)
+  companionStreamPollMs: 200, // 陪伴正文流轮询间隔；与低频 orb/config 轮询分离，100~2000ms
+  voiceAlwaysOn: false,    // 常开语音必须用户显式开启；桌宠进程拥有唯一录音 lifecycle
+  voiceQuickHotkey: "Alt+Shift+V", // 快速语音发送：按一次开始、再按一次结束并自动发送
+  voiceWakeWords: "beilu,贝露", // 逗号分隔，可由用户改名/扩展；命中后才把问题送入陪伴对话
+  voiceCaptureWithQuestion: false, // 每个唤醒问题是否请求同轮截图（仍受截图安全门约束）
+  voiceActivationPeak: 0.02, // 常开录音电平门限（STT continuous 模式消费）
+  voiceSilenceMs: 1000,    // 人声后连续静音多久收口一句
+  voiceMinSpeechMs: 300,   // 过滤点击/瞬时噪声
+  voiceMaxUtteranceSec: 20,// 单句最长时间，防持续噪声不收口
   // (手势开关三键已删,凛倾 2026-07-13 纠偏"菜单只可以右键.双击还有其他手势都是用户自己设置的":
   //  菜单入口=右键固定;双击并入触碰热区手势体系(caps.hitGestures 加 dblclick 档,用户在编辑器配动作);
   //  Ctrl+拖缩放=窗口操作惯例保持固定。开关式设计是错的——手势该配"做什么",不是配"开不开"。)

@@ -24,6 +24,64 @@ import { beiluPrompt } from "../../shared/widgets/beiluDialog.mjs"; // 0714 扫�
 import { setSttRecordDevice, setSttServerDenoise } from "../../shared/state/sttSettings.mjs"; // 0722 散写收口:STT 设备/降噪双 store 写唯一 owner(扩展面板同消费)
 import { applyParamSchemaToInputs } from "../../shared/state/paramSchemaCache.mjs"; // 0723 陪伴子模式实体表单:限值单源 PARAM_SCHEMA(同 bot dc-bsm 范式)
 import { ENUM_FALLBACK } from "../../shared/state/enumFallback.mjs"; // 0723:后处理/预填充选项集离线退化单源(权威=getSubModes 随包 enum_schema,同 subModePanel._enumOptions 语义)
+import { acceleratorFromKeyboardEvent } from "../../shared/input/accelerator.mjs";
+
+let _ensureCompanionRenderer = null;
+let _rendererRetryBound = false;
+
+function _wireRendererRetry() {
+  if (_rendererRetryBound) return;
+  const retry = document.getElementById("comp-renderer-retry");
+  if (!retry) return;
+  _rendererRetryBound = true;
+  retry.addEventListener("click", () => {
+    if (typeof _ensureCompanionRenderer !== "function") return;
+    _ensureCompanionRenderer().catch(() => { /* index.mjs 已将失败写入可见状态 */ });
+  });
+}
+
+function configureCompanionRendererLoader(ensureRenderer) {
+  if (typeof ensureRenderer !== "function") throw new TypeError("ensureRenderer 必须是函数");
+  _ensureCompanionRenderer = ensureRenderer;
+  _wireRendererRetry();
+}
+
+function setCompanionRendererState(state, error) {
+  const host = document.getElementById("comp-renderer-state");
+  const text = document.getElementById("comp-renderer-state-text");
+  const retry = document.getElementById("comp-renderer-retry");
+  if (!host || !text || !retry) return;
+  if (state === "ready" || state === "idle") {
+    host.classList.add("hidden");
+    retry.classList.add("hidden");
+    return;
+  }
+  host.classList.remove("hidden");
+  if (state === "loading") {
+    text.textContent = "正在加载虚拟形象…";
+    retry.classList.add("hidden");
+  } else {
+    text.textContent = `虚拟形象加载失败：${error?.message || error || "未知错误"}`;
+    retry.classList.remove("hidden");
+  }
+}
+
+async function _previewSelectedModel(name) {
+  if (!name) return true;
+  if (typeof _ensureCompanionRenderer !== "function") throw new Error("虚拟形象加载器未配置");
+  await _ensureCompanionRenderer();
+  const api = window.beiluLive2d;
+  if (!api || typeof api.reloadModel !== "function") throw new Error("虚拟形象渲染器未就绪");
+  const ok = await api.reloadModel(name);
+  if (!ok) throw new Error(`无法切换到形象: ${name}`);
+  return true;
+}
+
+function _reportPreviewSelectionError(error) {
+  const message = error?.message || String(error);
+  window._beiluToast?.("虚拟形象预览失败: " + message, "error");
+  window._reportError?.(`[companion] 虚拟形象预览失败: ${message}`, error?.stack);
+}
 
 // 🐾 桌宠设置面板(T5/T6/T8):读写 beilu 单一权威源 data/pet_settings.json(/api/eye/pet-settings)。
 // 桌宠主进程轮询该端点→实时应用(对话框颜色/透明度/停留/圆角、模型切换、动态预设、穿透、开关)。
@@ -103,9 +161,13 @@ let _compDyn = {};
 function _compDynGet(group, key, def) { const g = _compDyn[group]; return (g && g[key] != null) ? g[key] : def; }
 function _compDynSet(group, key, val) { if (!_compDyn[group] || typeof _compDyn[group] !== "object") _compDyn[group] = {}; _compDyn[group][key] = val; }
 // POST 全量 + 即时驱动 web 预览渲染层(桌面端经 beilu onPetConfig 同步;web 无 IPC 故直驱)。
+function _applyCompDynToRenderer() {
+  const api = window.beiluLive2d;
+  if (api && api.applyUserDynamics) api.applyUserDynamics(_compDyn);
+}
 function _compDynApply() {
   _petPost({ dynamics: _compDyn });
-  try { if (window.beiluLive2d && window.beiluLive2d.applyUserDynamics) window.beiluLive2d.applyUserDynamics(_compDyn); } catch (e) { /* 渲染层未就绪 */ }
+  try { _applyCompDynToRenderer(); } catch (e) { /* 渲染层未就绪 */ }
 }
 // ── 动态/物理 全量细分参数(凛倾 2026-07-09:"live的参数后端做了一堆前端全部没有"):
 //   谱=UI元数据(组/键/标签/范围/步长/单位),【默认值不在谱里】——单源=渲染层 DYN_DEFAULT(window.beiluLive2d._dynDefaults()),
@@ -171,6 +233,14 @@ function _compDynRefreshUI() {
   }
   if (g("comp-motion-idle")) g("comp-motion-idle").checked = _compDynGet("motion", "idleLoop", true) !== false;
   if (g("comp-motion-tap")) g("comp-motion-tap").checked = _compDynGet("motion", "tap", true) !== false;
+}
+
+function refreshCompanionRendererSettings() {
+  const api = window.beiluLive2d;
+  if (!api) return;
+  if (_petCaps?.hitLimits && api.setHitCountResetMs) api.setHitCountResetMs(_petCaps.hitLimits.countResetMs);
+  _compDynRefreshUI();
+  _applyCompDynToRenderer();
 }
 // ── 图片包编辑器(任务③,凛倾:"可以编辑图片,增加表情,增加图片") ──
 //   数据单源=pack.json(读:静态端点;写:saveImagepack 整包写回;图片:uploadImagepackImage base64 落盘)。
@@ -448,8 +518,10 @@ async function _petPost(patch) {
     // 原 raw POST /api/eye/pet-settings + r.ok 手检 → 门面 setPetSettings；!ok 由门面抛错走 catch（同源默认 credentials 已带 cookie）
     await sendAction({ verb: "setPetSettings", target: "server:eye", source: "web", payload: patch });
     if (status) { status.textContent = "已保存 · 桌宠会在数秒内生效"; status.className = "text-[10px] text-success pt-1"; }
+    return true;
   } catch (e) {
     if (status) { status.textContent = "保存失败(桌宠需 beilu 运行): " + e.message; status.className = "text-[10px] text-error pt-1"; }
+    return false;
   }
 }
 async function _petPopulateModels(selected) {
@@ -587,6 +659,98 @@ function _initVoiceSettings(cur) {
   // 回填桌宠侧已存值(petSettings 优先=桌宠实际生效值)
   if (cur && cur.sttDevice != null) sel.value = String(cur.sttDevice);
   if (cur && typeof cur.sttDenoise === "boolean" && dn) dn.checked = cur.sttDenoise;
+
+  // 常开语音所有字段写 pet_settings 单源，由 Electron 桌宠唯一持有麦克风 lifecycle；
+  // Web 只配置，不另起浏览器录音循环与桌宠争抢 STT 单槽。
+  const always = $("pet-stt-always"), quick = $("pet-stt-quick-hotkey"), quickCapture = $("pet-stt-quick-capture"), quickClear = $("pet-stt-quick-clear"), quickHint = $("pet-stt-quick-hint"), wake = $("pet-stt-wakewords"), cap = $("pet-stt-capture-question");
+  const silence = $("pet-stt-silence-ms"), peak = $("pet-stt-peak");
+  if (always) {
+    always.checked = cur?.voiceAlwaysOn === true;
+    always.addEventListener("change", () => {
+      _petPost({ voiceAlwaysOn: always.checked });
+      if (status) status.textContent = always.checked ? "常开模式已请求；首条语音会按已保存的陪伴角色绑定自动建立会话" : "常开模式已关闭";
+    });
+  }
+  if (quick) {
+    let stored = typeof cur?.voiceQuickHotkey === "string" ? cur.voiceQuickHotkey : "";
+    let capturing = false;
+    quick.value = stored;
+    quick.readOnly = true;
+    const setHint = (text, tone = "") => {
+      if (!quickHint) return;
+      quickHint.textContent = text;
+      quickHint.className = "text-[10px] " + (tone === "error" ? "text-error" : tone === "ok" ? "text-success" : "opacity-60");
+    };
+    const beginCapture = () => {
+      capturing = true;
+      quick.value = "请直接按下新的组合键…";
+      quick.classList.add("input-warning");
+      if (quickCapture) quickCapture.textContent = "录入中";
+      setHint("按下组合键；Esc 取消。普通字母/数字必须搭配修饰键。", "");
+      quick.focus();
+    };
+    quick.addEventListener("click", beginCapture);
+    quickCapture?.addEventListener("click", beginCapture);
+    quick.addEventListener("keydown", async (event) => {
+      if (!capturing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const result = acceleratorFromKeyboardEvent(event);
+      if (result.pending) { setHint("继续按一个非修饰键…"); return; }
+      if (result.cancelled) {
+        capturing = false;
+        quick.value = stored;
+        quick.classList.remove("input-warning");
+        if (quickCapture) quickCapture.textContent = "录入";
+        setHint("已取消，原快捷键未改变。");
+        return;
+      }
+      if (result.error) { setHint(result.error, "error"); return; }
+      capturing = false;
+      quick.value = result.accelerator;
+      quick.classList.remove("input-warning");
+      if (quickCapture) quickCapture.textContent = "录入";
+      const ok = await _petPost({ voiceQuickHotkey: result.accelerator });
+      if (ok) {
+        stored = result.accelerator;
+        setHint(`已保存 ${stored}；桌宠会尝试注册，若被占用会明确提示且保留旧快捷键。`, "ok");
+      } else quick.value = stored;
+    });
+    quickClear?.addEventListener("click", async () => {
+      capturing = false;
+      const ok = await _petPost({ voiceQuickHotkey: "" });
+      if (!ok) return;
+      stored = "";
+      quick.value = "";
+      quick.classList.remove("input-warning");
+      if (quickCapture) quickCapture.textContent = "录入";
+      setHint("全局快捷键已关闭；桌宠对话台的麦克风按钮仍可使用。", "ok");
+    });
+  }
+  if (wake) {
+    wake.value = typeof cur?.voiceWakeWords === "string" ? cur.voiceWakeWords : "";
+    wake.addEventListener("change", () => _petPost({ voiceWakeWords: wake.value.trim() }));
+  }
+  if (cap) {
+    cap.checked = cur?.voiceCaptureWithQuestion === true;
+    cap.addEventListener("change", () => _petPost({ voiceCaptureWithQuestion: cap.checked }));
+  }
+  if (silence) {
+    if (cur?.voiceSilenceMs != null) silence.value = Number(cur.voiceSilenceMs);
+    silence.addEventListener("change", () => {
+      const value = Number(silence.value);
+      if (!Number.isFinite(value)) { silence.value = cur?.voiceSilenceMs ?? ""; if (status) status.textContent = "静音收口必须是数字"; return; }
+      _petPost({ voiceSilenceMs: Math.max(200, Math.min(5000, value)) });
+    });
+  }
+  if (peak) {
+    if (cur?.voiceActivationPeak != null) peak.value = Number(cur.voiceActivationPeak);
+    peak.addEventListener("change", () => {
+      const value = Number(peak.value);
+      if (!Number.isFinite(value)) { peak.value = cur?.voiceActivationPeak ?? ""; if (status) status.textContent = "语音电平门限必须是数字"; return; }
+      _petPost({ voiceActivationPeak: Math.max(0.001, Math.min(1, value)) });
+    });
+  }
 }
 
 async function initCompanionPetSettings() {
@@ -626,9 +790,10 @@ async function initCompanionPetSettings() {
     else { $("pet-radius-val").textContent = "默认"; }
   }
   if ($("pet-passthrough")) $("pet-passthrough").checked = !!cur.passthrough;
-  // 通知偏好(设计⚙通知):bannerEnabled 默认 true(未设视为开),bannerMaxChars 默认 0=不限
+  // 通知与陪伴正文分别限长：短通知偏好不能截断流式回答。
   if ($("pet-banner-enabled")) $("pet-banner-enabled").checked = cur.bannerEnabled !== false;
   if ($("pet-banner-maxchars")) $("pet-banner-maxchars").value = Number(cur.bannerMaxChars) || 0;
+  if ($("pet-companion-maxchars")) $("pet-companion-maxchars").value = Number(cur.companionMaxChars) || 0;
   if ($("pet-notify-sound")) $("pet-notify-sound").checked = cur.notifySound === true;
   if ($("pet-corner")) $("pet-corner").value = PET_CORNERS.includes(cur.petCorner) ? cur.petCorner : PET_CORNER_DEFAULT;
   if ($("pet-idle-expression")) $("pet-idle-expression").value = cur.idleExpression || ""; // B2-3 待机表情(orphan 真字段)
@@ -656,7 +821,7 @@ async function initCompanionPetSettings() {
   if (cur.orbPollSec != null && $("pet-orb-poll")) $("pet-orb-poll").value = Number(cur.orbPollSec);
   // 动态/物理 细分滑块 + motion 开关:从 cur.dynamics 回填(深拷贝作完整状态,改动 POST 全量)
   _compDyn = (cur.dynamics && typeof cur.dynamics === "object") ? JSON.parse(JSON.stringify(cur.dynamics)) : {};
-  _compDynRefreshUI();
+  refreshCompanionRendererSettings();
   // 绑定改动 → POST 单字段
   // ── 形象模式(凛倾 2026-07-09:模式选择):模式=当前 modelName 的 format 判定(图片包名集合命中=image),
   //    radio 点选→跳对应段做具体选择(不直接写值;modelName 是唯一权威,选了具体形象模式自然跟着变)。 ──
@@ -677,17 +842,22 @@ async function initCompanionPetSettings() {
       if (!v) return;
       _petPost({ modelName: v });
       const mc = $("pet-mode-cur"); if (mc) mc.textContent = "当前:" + v;
-      try { if (window.beiluLive2d && window.beiluLive2d.reloadModel) await window.beiluLive2d.reloadModel(v); } catch (err) { /* 预览未就绪 */ }
+      try { await _previewSelectedModel(v); } catch (err) { _reportPreviewSelectionError(err); }
       _refreshMacroCard(v); // 宏值随形象变(petExpressions=新形象表情集)
       hitEditorLoad(v); // 热区随形象变
     });
   }
-  $("pet-enabled")?.addEventListener("change", e => _petPost({ petEnabled: e.target.checked }));
+  $("pet-enabled")?.addEventListener("change", e => {
+    // [D5 结构版 2026-08-04] petEnabled=唯一持久开关(「用户显式想常驻桌宠」)。互动的临时要求已迁到
+    //   后端运行时 lease(interaction_lease.mjs),前端不再写任何归属标记;显式关闭时后端 owner 自动
+    //   吊销全部互动租约(接管),UI 零分支。
+    _petPost({ petEnabled: e.target.checked });
+  });
   $("pet-model")?.addEventListener("change", async e => {
     _petPost({ modelName: e.target.value });
     const mc = $("pet-mode-cur"); if (mc) mc.textContent = "当前:" + (e.target.value || "(默认)");
     // web 预览即时切(桌面端经后端轮询同步;此前只 POST 不驱动=改了看不到,假反馈)
-    try { if (e.target.value && window.beiluLive2d && window.beiluLive2d.reloadModel) await window.beiluLive2d.reloadModel(e.target.value); } catch (err) { /* 预览未就绪 */ }
+    try { if (e.target.value) await _previewSelectedModel(e.target.value); } catch (err) { _reportPreviewSelectionError(err); }
     _refreshMacroCard(e.target.value); // 宏值随形象变
     hitEditorLoad(e.target.value); // 热区随形象变
   });
@@ -728,6 +898,7 @@ async function initCompanionPetSettings() {
   $("pet-passthrough")?.addEventListener("change", e => _petPost({ passthrough: e.target.checked }));
   $("pet-banner-enabled")?.addEventListener("change", e => _petPost({ bannerEnabled: e.target.checked }));
   $("pet-banner-maxchars")?.addEventListener("change", e => _petPost({ bannerMaxChars: Math.max(0, Number(e.target.value) || 0) }));
+  $("pet-companion-maxchars")?.addEventListener("change", e => _petPost({ companionMaxChars: Math.max(0, Number(e.target.value) || 0) }));
   $("pet-notify-sound")?.addEventListener("change", e => _petPost({ notifySound: e.target.checked }));
   // 行为节奏写回(凛倾 2026-07-13 去硬编码;值域与消费端 clamp 同源:orphan/backoff 0=关/每次,hitPoll 30~1000,alpha 0~255)
   $("pet-orphan-exit")?.addEventListener("change", e => _petPost({ orphanExitSec: Math.max(0, Math.min(3600, Number(e.target.value) || 0)) }));
@@ -996,6 +1167,37 @@ function _compTabVisible() {
   const tab = document.getElementById("center-tab-companion");
   return tab && !tab.classList.contains("hidden");
 }
+// PetOperationResult.runtime → 用户文案（D5 §4：不把 Electron spawn 写作“已启用”）。
+// 单一映射点：启动/停止 toast 与状态行共用，禁止各写一份。
+function _petRuntimeLabel(runtime, error) {
+  switch (runtime) {
+    case "running": case "adopted": return "桌宠已就绪";
+    case "waiting_heartbeat": case "starting": case "adopting": return "正在启动桌宠…";
+    case "installing": return "正在安装桌宠组件…";
+    case "missing": return "桌宠未确认启动：Electron 未安装（联网后重试可自动安装）";
+    case "stopping": return "正在停止桌宠…";
+    case "stopped": return "未启用";
+    case "error": case "error_unconfirmed":
+      return "桌宠未确认启动：" + (error || "未知错误");
+    default: return runtime ? String(runtime) : "状态未知";
+  }
+}
+function _renderCompanionRunControls(running) {
+  const start = document.getElementById("comp-start");
+  const stop = document.getElementById("comp-stop");
+  const label = document.getElementById("comp-start-label");
+  if (start) {
+    start.disabled = !!running;
+    start.setAttribute("aria-disabled", running ? "true" : "false");
+    // [0804 文案] "陪伴"→"互动"（凛倾：启动/关闭后面加个陪伴像临终关怀）；桌宠不再被互动隐式常驻开启
+    start.title = running ? "互动会话正在运行" : "开始互动会话（桌宠未启用时本次临时开启）";
+  }
+  if (stop) {
+    stop.disabled = !running;
+    stop.setAttribute("aria-disabled", running ? "false" : "true");
+  }
+  if (label) label.textContent = running ? "互动进行中" : "开始互动";
+}
 async function _pollCompanionStatus() {
   if (!_compTabVisible()) return;
   const strip = document.getElementById("comp-perception-stats");
@@ -1018,6 +1220,7 @@ async function _pollCompanionStatus() {
     st = await sendAction({ verb: "getGameCompanionStatus", target: "plugins:beilu-memory", source: "web" });
   } catch { return; /* 离线: 保持现状 */ }
   if (!st || !st.running) {
+    _renderCompanionRunControls(false);
     if (strip) strip.classList.add("hidden");
     if (dot) dot.style.background = "";
     if (txt) txt.textContent = "未运行"; // 单一渲染者:启停不再手写"已停止",此处无需让位特判(散写收口 2026-07-16)
@@ -1029,6 +1232,7 @@ async function _pollCompanionStatus() {
     if (prTxt0) prTxt0.textContent = "未运行";
     return;
   }
+  _renderCompanionRunControls(true);
   if (strip) strip.classList.remove("hidden");
   if (dot) dot.style.background = st.paused ? "var(--beilu-warning)" : "var(--beilu-success)";
   if (txt) txt.textContent = st.paused ? "已暂停" : "运行中";
@@ -1135,16 +1339,12 @@ const _COMP_ICON_PATHS = {
 function _compInjectIcons(root) {
   const scope = root || document.getElementById("center-tab-companion");
   if (!scope) return;
+  // 全站 themes-accents.css 已以 [data-ic]::before 作为唯一图标渲染器。旧版本曾向同一个
+  // data-ic 容器再塞一份 SVG，形成伪元素+子 SVG 的套娃；这里不再注入，只负责热更新时清掉
+  // 旧 DOM 残留，刷新与不刷新都回到同一 CSS 单源。
   scope.querySelectorAll("[data-ic]").forEach((el) => {
-    if (el.dataset.icDone) return; // 幂等:重进 tab 不重复注入
-    const p = _COMP_ICON_PATHS[el.dataset.ic];
-    if (!p) return;
-    el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full">${p}</svg>`;
-    // 初始隐藏的双态图标(录音钮 square)用内联 style="display:none" 隐藏(0727 根修:
-    // .hidden 类全库无全局规则,daisyUI v5 .btn grid 子项布局下类隐藏失效)。
-    // 此处检测:已有内联 display:none 的元素不覆盖,否则注入 SVG 后变可见=双图标同显。
-    if (el.style.display !== "none") el.style.display = el.style.display || "inline-flex";
-    el.dataset.icDone = "1";
+    if (el.dataset.icDone || el.querySelector(":scope > svg")) el.replaceChildren();
+    delete el.dataset.icDone;
   });
 }
 
@@ -1169,7 +1369,22 @@ function initCompanionActivityBar() {
   //  设计稿 20260618 起为 8 段设置中心,历史截图入口由"屏幕感知"段最新截图承载。)
   // T6b：COMP_API 常量随 apiFetch 收口删除——gameCompanion 动作走 memory 通配路由（verb=真动作组装 _action）。
 
-  _compInjectIcons(); // B2-1: emoji→Lucide SVG 内联注入(8 段图标/导航/按钮,0 emoji)
+  _compInjectIcons(); // 图标单源=themes-accents.css；同时清理热更新前遗留的内联 SVG
+  _wireRendererRetry();
+
+  // 形象字典/用户模型/图片包只在 companion 首次激活后读取。
+  // initLayout 在首屏会无条件调用本函数，因此不能在此处直接启动 initCompanionPetSettings。
+  const activatePetSettings = () => {
+    initCompanionPetSettings().catch((error) => {
+      const message = error?.message || String(error);
+      window._beiluToast?.("陪伴设置加载失败: " + message, "error");
+      window._reportError?.(`[companion] 设置加载失败: ${message}`, error?.stack);
+    });
+  };
+  window.addEventListener("beilu:tab-activated", (event) => {
+    if (event.detail === "companion") activatePetSettings();
+  });
+  if (document.body.dataset.activeTab === "companion") activatePetSettings();
 
   // 段导航=隔离切换(凛倾 2026-07-09:"我让你做隔离"——不是滚动锚,同刻只显示目标段,其余段隐藏)。
   const _compShowSeg = (segId) => {
@@ -1183,8 +1398,7 @@ function initCompanionActivityBar() {
   // 初始只显示导航当前 active 段(HTML 默认=启动绑定)
   { const _act = document.querySelector("[data-scroll-to].active"); if (_act) _compShowSeg(_act.dataset.scrollTo); }
 
-  // 桌宠形象段常显, pet-* 控件接线在此一次性初始化。守卫 _petSettingsInited 防重复。
-  initCompanionPetSettings();
+  // pet-* 控件由上方 companion 激活门控一次性初始化。
   // 直播接入段(beilu-live,0726)。双重捕获——本函数是整个 companion tab 的接线入口,
   //   任何未捕获异常会被 initLayout 的 catch 吞掉 → 后续接线全断且无提示(:1388 同款事故)。
   //   ⚠ initCompanionLiveSettings 是 async:同步 try 只挡得住它【第一个 await 之前】的异常,
@@ -1375,7 +1589,7 @@ function initCompanionActivityBar() {
         // 原 raw GET /api/eye/screenshots?limit=1 + r.ok 手检 → 门面 getScreenshots（payload.limit）；!ok 由门面抛错走 catch
         const j = await sendAction({ verb: "getScreenshots", target: "server:eye", source: "web", payload: { limit: 1 } });
         const w = j.screenshots?.[0]?.windowTitle;
-        if (el) el.textContent = w || "无(暂无截图,先启动陪伴或手动截图)";
+        if (el) el.textContent = w || "无(暂无截图,先开始互动或手动截图)";
       } catch (e) { if (el) el.textContent = "检测失败: " + e.message; }
     });
     // 检测当前窗口 = 取最新截图的 windowTitle（/api/eye/screenshots 已带）
@@ -1414,14 +1628,11 @@ function initCompanionActivityBar() {
     //   非法 hash（分段气泡/IDE 内部锚点）返 ""，不再裸读 substring 当 chatid 送后端 startGameCompanion 分区键；
     //   空值时后端按 :543 bindWarnings 语义回退到当前对话。对齐 cardsPanel.mjs:62 _cur() 范式（window 全局桥单源）。
     const _chatid = window._beiluGetChatId?.() || "";
-    // 两处启动收口(凛倾 2026-07-22"两处启动,但是不同步的散写"):按钮名义=启动桌宠,此前只启陪伴轮,
-    // 桌宠进程归"启用桌宠"开关另一条写路=同名启动各写各的。现启动即写 petEnabled=true 走同一 funnel
-    // (_petPost→/api/eye/pet-settings→后端 savePetSettingsStore 订阅立即拉起),并镜像开关控件同一真值。
-    // 桌宠侧不可达时 _petPost 内部已如实提示,陪伴轮照常启动,状态灯按真值显示离线。
-    await _petPost({ petEnabled: true });
-    { const _tg = document.getElementById("pet-enabled"); if (_tg) _tg.checked = true; }
+    // [D5 结构版 2026-08-04] UI 不再预写 petEnabled（原 0804 iter6 标记方案整体删除）：
+    //   「开始互动」只发 startGameCompanion 一个事务；后端 gameCompanion 成功后 acquire 互动租约,
+    //   PetLifecycle owner 按 effectiveDesired=explicit||lease 拉起桌宠。UI 是 PetOperationResult
+    //   DTO 的消费者：session 与 pet 分项显示,不用一个 success toast 抹平（互动可成功而桌宠未就绪）。
     try {
-      // 原 POST setdata {_action:startGameCompanion,...} → memory 通配路由；!ok 由门面抛错走 catch
       // D-1:绑定的角色/对话失效 → 后端回退并随 startGameCompanion 返回 bindWarnings,前端不静默提示
       //   (独立模式未选对话、或绑定目标被删,都会回退到当前角色/对话)。
       const _startRes = await sendAction({ verb: "startGameCompanion", target: "plugins:beilu-memory", source: "web", payload: { interval, chatid: _chatid } }) || {};
@@ -1432,19 +1643,46 @@ function initCompanionActivityBar() {
         }
       }
       if (_startRes && _startRes.success === false) throw new Error(_startRes.error || "启动失败");
-      window._beiluToast?.("陪伴模式已启动", "success");
-    } catch (e) { window._beiluToast?.("启动失败: " + e.message, "error"); }
+      const _pet = _startRes.pet || {};
+      const _shortChat = String(_startRes.chatid || "").slice(0, 8);
+      const _petLabel = _petRuntimeLabel(_pet.runtime, _pet.error);
+      if (_pet.runtime === "running" || _pet.runtime === "adopted" || !_pet.interactionLease) {
+        window._beiluToast?.(`互动已开始，承载对话：${_shortChat}。桌宠：${_petLabel}`, "success");
+      } else {
+        // 桌宠未就绪:如实分项提示,不报纯 success(D5 §4)
+        window._beiluToast?.(`互动已开始，桌宠尚未就绪：${_petLabel}`, "warning");
+      }
+      // 显式开关镜像:后端真值回填(lease 不改 petEnabled,checkbox 保持服务端显式值)
+      const _tg = document.getElementById("pet-enabled");
+      if (_tg && typeof _pet.explicitEnabled === "boolean") _tg.checked = _pet.explicitEnabled;
+    } catch (e) { window._beiluToast?.("互动启动失败: " + e.message, "error"); }
     // 散写收口(凛倾 2026-07-16"多处散写,启动不同步"):状态灯不再手写 DOM——唯一渲染者=_pollCompanionStatus
     // (后端 getGameCompanionStatus 真值),启停后立即回读,左灯/右列灯/运行区一次同步,消灭双灯打架窗口。
     _pollCompanionStatus();
   });
 
   document.getElementById("comp-stop")?.addEventListener("click", async () => {
+    // [D5 结构版 2026-08-04] 停止=单事务:后端 stopGameCompanion 内 release 本次互动租约,
+    //   PetLifecycle owner 走优雅停止(10s ack);回包已含 session 与 pet 分项收束结果——
+    //   UI 只消费 DTO,不再读标记/不再自己写 petEnabled(原 iter6 标记回滚逻辑整体删除)。
+    const _stopLabel = document.getElementById("comp-start-label");
+    const _prevLabel = _stopLabel?.textContent;
+    if (_stopLabel) _stopLabel.textContent = "正在停止互动与本次临时桌宠…";
     try {
-      // 原 POST setdata {_action:stopGameCompanion} → memory 通配路由；!ok 由门面抛错走 catch
-      await sendAction({ verb: "stopGameCompanion", target: "plugins:beilu-memory", source: "web" });
-      window._beiluToast?.("陪伴模式已停止", "info");
+      const _stopRes = await sendAction({ verb: "stopGameCompanion", target: "plugins:beilu-memory", source: "web" }) || {};
+      if (_stopRes.success === false) throw new Error(_stopRes.error || "停止失败");
+      const _pet = _stopRes.pet || {};
+      if (_pet.explicitEnabled && (_pet.runtime === "running" || _pet.runtime === "adopted" || _pet.runtime === "waiting_heartbeat")) {
+        window._beiluToast?.("互动已停止。桌宠仍按你的「启用桌宠」设置运行，可在桌宠形象区关闭", "info");
+      } else if (_stopRes.petLeaseReleased && _pet.runtime === "stopped") {
+        window._beiluToast?.("互动已停止，本次临时开启的桌宠已确认关闭", "info");
+      } else if (_pet.stopTimeout) {
+        window._beiluToast?.("互动已停止；桌宠退出暂未确认（仍在收束观察中，稍后自动关闭）", "warning");
+      } else {
+        window._beiluToast?.("互动已停止", "info");
+      }
     } catch (e) { window._beiluToast?.("停止失败: " + e.message, "error"); }
+    finally { if (_stopLabel && _prevLabel !== undefined) _stopLabel.textContent = _prevLabel; }
     _pollCompanionStatus(); // 同上:停止后立即回读真值,不手写状态灯
   });
 
@@ -1452,8 +1690,9 @@ function initCompanionActivityBar() {
   document.getElementById("comp-manual-capture")?.addEventListener("click", async () => {
     try {
       // 原 POST setdata {_action:gameCompanionAction,...} → memory 通配路由；!ok 由门面抛错走 catch
-      await sendAction({ verb: "gameCompanionAction", target: "plugins:beilu-memory", source: "web", payload: { action: "reply" } });
-      window._beiluToast?.("截图已触发", "success");
+      const r = await sendAction({ verb: "gameCompanionAction", target: "plugins:beilu-memory", source: "web", payload: { action: "captureNow" } });
+      if (!r?.success) throw new Error(r?.error || "截图请求未被接受");
+      window._beiluToast?.(r.screenshot === "attached" ? "截图已附入陪伴轮" : "截图未到达，已按当前状态处理", r.screenshot === "attached" ? "success" : "warning");
     } catch (e) { window._beiluToast?.("截图失败: " + e.message, "error"); }
   });
 
@@ -1627,7 +1866,7 @@ function initCompanionActivityBar() {
     const _soSyncActivation = async (force) => { // force=已绑定也重绑一次(保存后 presetName 变更即刻应用)
       const cid = await _soChatid();
       const _on = _soEntity && _soEntity.enabled === true;
-      if (!cid) { if (_soHint) _soHint.textContent = _on ? "已启用:启动陪伴后自动绑定生效" : "未启用:陪伴完全跟随承载对话配置"; return; }
+      if (!cid) { if (_soHint) _soHint.textContent = _on ? "已启用:开始互动后自动绑定生效" : "未启用:互动完全跟随承载对话配置"; return; }
       let act = "";
       try { const st = await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: {} }); act = st?.active_sub_modes_map?.[cid] || ""; } catch (e) { return; /* 读不到真值不盲写 */ }
       try {
@@ -1635,7 +1874,7 @@ function initCompanionActivityBar() {
           await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: COMPANION_SM_ID, chatId: cid } });
           if (_soHint) _soHint.textContent = "已绑定承载对话(预设即刻应用,参数每轮生效)";
         } else if (!_on && act === COMPANION_SM_ID) {
-          await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { clear: true, chatId: cid } });
+          await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { clear: true, clearPreset: true, modeGroup: "chat", chatId: cid } });
           if (_soHint) _soHint.textContent = "已解除覆盖(回承载对话预设/runtime 基线)";
         } else if (_soHint) {
           _soHint.textContent = _on ? "已绑定承载对话(预设即刻应用,参数每轮生效)" : "未启用:陪伴完全跟随承载对话配置";
@@ -1649,14 +1888,17 @@ function initCompanionActivityBar() {
       if (!form) return;
       const sm = _soEntity;
       if (!sm) { form.style.display = "none"; return; }
-      form.style.display = "flex";
+      // 未启用时的真实语义是复用承载对话 AIRP/角色 API 源/模型；隐藏空覆盖表单，避免把
+      // “没有覆盖值”显示成“没有同步到 API”。只有用户打开专属覆盖后才加载并展示这些字段。
+      form.style.display = sm.enabled === true ? "flex" : "none";
       const enEl = document.getElementById("comp-sm-enabled"); if (enEl) enEl.checked = sm.enabled === true;
+      if (sm.enabled !== true) return;
       const mp = (sm.model_params && typeof sm.model_params === "object") ? sm.model_params : {};
       const pEl = document.getElementById("comp-sm-preset"); if (pEl) pEl.value = sm.presetName || "";
       const srcSel = document.getElementById("comp-sm-api-source");
       if (srcSel) {
         const sources = await _soFetchApiSources();
-        srcSel.innerHTML = `<option value="">(不覆盖)</option>`;
+        srcSel.innerHTML = `<option value="">(跟随 AIRP / 角色 API 源)</option>`;
         for (const s of sources) { const o = document.createElement("option"); o.value = s; o.textContent = s; srcSel.appendChild(o); }
         srcSel.value = sources.includes(mp.api_source) ? mp.api_source : "";
       }
@@ -1685,6 +1927,7 @@ function initCompanionActivityBar() {
       try {
         await sendAction({ verb: "saveSubModes", target: "plugins:beilu-memory", source: "web", payload: { sub_modes: _soAll } });
       } catch (err) { window._beiluToast?.("保存失败: " + (err?.message || err), "error"); e.target.checked = !e.target.checked; _soEntity.enabled = e.target.checked; return; }
+      await _soFillForm();
       await _soSyncActivation();
     });
     document.getElementById("comp-sm-save")?.addEventListener("click", async () => {
@@ -1843,4 +2086,9 @@ async function _initCompanionSettings() {
   } catch { /* 用默认 30 */ }
 }
 
-export { initCompanionActivityBar };
+export {
+  configureCompanionRendererLoader,
+  initCompanionActivityBar,
+  refreshCompanionRendererSettings,
+  setCompanionRendererState,
+};

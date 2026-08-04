@@ -15,19 +15,54 @@
  * 前置：P9 预设已创建（P1「P9 维护」面板一键创建，或 createMemoryPreset verb）。
  */
 
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+
 const args = Object.fromEntries(
   process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => {
     const i = a.indexOf("=");
-    return i === -1 ? [a.slice(2), true] : [a.slice(2), a.slice(i + 1)];
+    return i === -1 ? [a.slice(2), true] : [a.slice(2, i), a.slice(i + 1)];
   }),
 );
 
 const host = args.host || "http://127.0.0.1:1314";
 const charName = args.char || "";
 if (!charName) {
-  console.error("用法: node src/scripts/runP9.mjs --char=<角色名> [--host=http://127.0.0.1:1314] [--apikey=<key>|--cookie=<cookie>] [--dry]");
+  console.error("用法: node src/scripts/runP9.mjs --char=<角色名> [--feedback=用户反馈] [--feedback-file=反馈或JSON] [--whitebox-file=P1白盒文件] [--host=http://127.0.0.1:1314] [--apikey=<key>|--cookie=<cookie>] [--dry]");
   process.exit(1);
 }
+
+const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
+function readEvidenceFile(flag, label) {
+  const rawPath = args[flag];
+  if (!rawPath || rawPath === true) return "";
+  const filepath = resolve(String(rawPath));
+  if (!existsSync(filepath)) throw new Error(`${label}不存在: ${filepath}`);
+  const size = statSync(filepath).size;
+  if (size > MAX_EVIDENCE_BYTES) throw new Error(`${label}超过2MB，拒绝静默截断: ${filepath} (${size} bytes)`);
+  return readFileSync(filepath, "utf8");
+}
+
+let feedbackFile = "";
+let whiteboxFile = "";
+try {
+  feedbackFile = readEvidenceFile("feedback-file", "反馈文件");
+  whiteboxFile = readEvidenceFile("whitebox-file", "白盒文件");
+} catch (error) {
+  console.error(`[runP9] 证据读取失败: ${error?.message || error}`);
+  process.exit(1);
+}
+const cliEvidence = {
+  schema: "p9_cli_feedback_v1",
+  userFeedback: typeof args.feedback === "string" ? args.feedback : "",
+  feedbackFile,
+  p1Whitebox: whiteboxFile,
+};
+const hasCliEvidence = Object.values(cliEvidence).some((value, index) => index > 0 && String(value || "").trim());
+// JSON 包裹并转义尖括号：反馈是证据数据，不允许其中伪造标签越出边界变成系统指令。
+const chatHistory = hasCliEvidence
+  ? `<p9_cli_evidence>\n${JSON.stringify(cliEvidence, null, 2).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")}\n</p9_cli_evidence>`
+  : "";
 
 const headers = { "Content-Type": "application/json" };
 if (args.apikey) headers["x-api-key"] = String(args.apikey);
@@ -38,7 +73,7 @@ const body = {
   presetId: "P9",
   charDisplayName: charName,
   userDisplayName: "用户",
-  chatHistory: "", // 最近对话由 P9 自己经 <memorySearch> 工具取，CLI 场景无 DOM 可拼
+  chatHistory,
   dryRun: args.dry === true || args.dry === "true",
 };
 
@@ -58,6 +93,14 @@ try {
     process.exit(1);
   }
   console.log("═══ P9 词库维护运行结果 ═══");
+  if (body.dryRun && Array.isArray(j.messages)) {
+    console.log(`dry-run: ${j.messages.length} 条模型输入（未调用模型、未写词库）`);
+    for (const [index, message] of j.messages.entries()) {
+      console.log(`\n── message ${index} · ${message.role || "unknown"} ──`);
+      console.log(message.content || "");
+    }
+    process.exit(0);
+  }
   if (j.reply) console.log(j.reply);
   // runMemoryPreset 返回 {success, ...runMemoryPresetAI结果}：工具操作在 operations（=allExecutedOps）
   const vocabOps = (j.operations || j.executedOps || []).filter((o) => o?.type === "vocabEdit");

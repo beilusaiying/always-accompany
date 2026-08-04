@@ -157,6 +157,7 @@ import {
   deleteMessage,
   deleteMessagesRange,
   editMessage,
+  getEditOperationReceipt,
   exportChat,
   getCharListOfChat,
   getChatList,
@@ -184,15 +185,42 @@ import {
   triggerCharReply,
 } from "./chat.mjs";
 import { addfile, getfile } from "./files.mjs";
+import {
+  prepareEditMessageRequest,
+  prepareEditOperationIdentity,
+} from "./lib/editMessageRequest.mjs";
 // B16: WS token 解析单一权威 —— 与 ideClient（后端→IDE 客户端）共用同一实现，
 // 防双实现路径漂移（前端代读端点与后端客户端读到不同 token/端口）。
 import { resolveIdeWsToken, ideClient } from "../../../../../yonban/core/transport/ideClient.mjs"; // T066：ideClient 迁 transport，改指 yonban 新位实现体
 // D-4 路B：手动工具调用经后端 ideClient（统一执行闸）+ 结果作 _hidden 的 IDE工具结果 条目接入对话。
 import { addChatLogEntry, ensureBotChat, ensureModeChatsForChar, getRecentUserReply } from "./lib/chatOps.mjs"; // getRecentUserReply=0719 幂等窗查询（POST message 重放判定）；ensureModeChatsForChar=0731 四窗口对话收口
+// [P0-A 2026-08-03] Smart 提案确认协调器：提案由 replyHandler 硬门产生（pending 非 running），
+// 确认/取消/状态三端点只信 session owner + 单次 claim；目标线复用 ensureModeChatsForChar 单源。
+import {
+  claimConfirmation,
+  completeClaim,
+  failClaim,
+  cancelConfirmation,
+  listConfirmations,
+  projectConfirmation,
+} from "./lib/confirmationStore.mjs";
+// 目标线模式绑定（active_modes_map[chatId]，投递线 INJ/预设解析依赖）——直调 yonban 权威写点
+import { setActiveMode } from "../../../../../yonban/core/functions/memory/storage_mod/storage.mjs";
+// task_start 文本走可编辑注入文本链（铁律：代码不持进 messages 的提示词）
+import { fillInjectText } from "../../../../../yonban/core/functions/injectTexts/main.mjs";
+
+const REQUIRED_MODE_CHAT_MODES = ["chat", "smart", "code", "work"];
+function getMissingModeChatModes(modeChats) {
+  return REQUIRED_MODE_CHAT_MODES.filter((mode) => !modeChats?.[mode]);
+}
 import { branchChat, loadChat, getChatMetadatas } from "./lib/chatStorage.mjs";
 import { broadcastUserActiveChat } from "./lib/broadcast.mjs";
 import { chatLogEntry_t } from "./lib/models.mjs";
 import { safeTrash, safeUnlink } from "../../../../../yonban/core/functions/rollback/safeDelete.mjs"; // T8·回切：改指 yonban 新位实现体
+import {
+  executeRollback as executeCoordinatedRollback,
+  getRollbackPreview as getCoordinatedRollbackPreview,
+} from "../../../../../yonban/core/functions/rollback/rollbackCoordinator.mjs";
 import { isDeleted } from "../../../../../yonban/core/functions/hide/chatEntryUtils.mjs"; // T8·回切：改指 yonban 新位实现体
 // 多组并行 v4：组管理 API 的单一权威源（chatid→groupId 映射 + 广播按组 scope 的依据）
 import {
@@ -233,6 +261,17 @@ const CHAR_TEMPLATE_DIR = path.join(
 // /log 端点日志去重：前端轮询/切换频繁调用 → 原 DIAG P0 每次打整批 entry 刷屏。
 // 按 chatid 记上次响应签名（条数+ids），相同则不打，变化或有问题才打。
 const _lastLogDiag = new Map();
+
+// 路由不能用 parseInt："1abc" 会被静默解释为 1，"" 还会被 Number 解释为 0。
+// 消息索引是持久化写操作的兼容提示，必须是明确的非负整数。
+function parseNonNegativeInteger(value) {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  }
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
 
 export function setEndpoints(router) {
   // SEC（红方 round2 隔离审计·破口1）：chatid 是全局命名空间，:chatid 端点原只 authenticate 不校验属主
@@ -298,6 +337,7 @@ export function setEndpoints(router) {
         const { username } = await getUserByReq(req);
         const chatid = req.body?.chatid;
         if (!chatid) return res.status(400).json({ error: "缺少 chatid" });
+        if (!(await _assertChatOwner(req, res, chatid))) return;
         broadcastUserActiveChat(chatid, "attach");
         res.status(200).json({ ok: true, chatid });
       } catch (err) {
@@ -741,10 +781,21 @@ export function setEndpoints(router) {
         // 添加角色卡=建永久链路（凛倾0705拍板；单源 storage.addPermanentCharLink，与 addCharLink verb 同落盘）
         try { await addPermanentCharLink(username, charName); } catch (e) { console.warn("[beilu-chat] 建永久链路失败(非致命):", e.message); } // T4：now async，await 保留错误被此 try/catch 捕获
         try { sendEventToUser(username, "char-data-changed", { charName, created: true }); } catch (e) { console.warn("[同步广播] char-data-changed(created) 推送失败(不阻塞创建):", e?.message); }
-        // [0731 四窗口对话收口] 四模式窗口各建一条专属对话+「在用」指针（单点=chatOps.ensureModeChatsForChar，
-        //   幂等）。放 notifyPartInstall 之后：addchar 内 loadPart 需要 parts 缓存已刷新。非致命：失败只少对话。
-        let modeChats = {};
-        try { modeChats = await ensureModeChatsForChar(username, charName); } catch (e) { console.warn("[beilu-chat] 建四窗口对话失败(非致命):", e.message); }
+        // 角色卡创建完成不等于四个模式的作业线已经成立。不能把缺线当作成功返回，
+        // 否则前端会带着一个共享/缺失对话继续运行，直到用户切窗才暴露问题。
+        const modeChats = await ensureModeChatsForChar(username, charName);
+        const missingModes = getMissingModeChatModes(modeChats);
+        if (missingModes.length) {
+          return res.status(409).json({
+            success: false,
+            partial: true,
+            code: "E_MODE_CHAT_INCOMPLETE",
+            name: charName,
+            modeChats,
+            missingModes,
+            error: `角色卡已创建，但模式对话未建全: ${missingModes.join(", ")}`,
+          });
+        }
         res.status(201).json({ success: true, name: charName, modeChats });
       } catch (error) {
         console.error("[beilu-chat] Error creating char:", error);
@@ -930,6 +981,78 @@ export function setEndpoints(router) {
     },
   );
 
+  // [D1 §4 删除契约·单源分类+指纹] preview 端点与 delete-char 执行侧共用本函数——
+  //   [0804 反方补修] 原两处各写一份分类+djb2 逻辑（注释自认"改一处须同步另一处"）：漂移则指纹
+  //   恒不符（删除永远被拒）或恒相符（预览失去保护），两个方向都危险，故抽单源。
+  //   分类：managedModeChats（四模式指针受管理线）/extraOwnedChats（同角色额外自有）/diskExtraChats
+  //   （chars/<char>/chats 磁盘存在但内存索引缺，执行时经 deleteChat 做 owner 验证）/legacyCandidates
+  //   （旧路径 shells/chat/chats 按 timeSlice.chars 弱归属，仅候选默认不删）。
+  //   previewRevision=分类结果指纹（djb2，无 crypto 依赖）。
+  function _computeDeleteCharPreview(username, charName) {
+    const userDir = getUserDictionary(username);
+    const charDir = path.join(userDir, "chars", charName);
+    const chatShell = parts_set[username]?.["shells/beilu-chat"];
+    let cls = { managedModeChats: [], extraOwnedChats: [], managedChatIds: [] };
+    if (chatShell?.interfaces?.chat?.classifyCharChatsForDeletion) {
+      cls = chatShell.interfaces.chat.classifyCharChatsForDeletion(username, charName);
+    }
+    const knownIds = new Set([...(cls.managedChatIds || []), ...(cls.extraOwnedChats || [])]);
+    const diskExtraChats = [];
+    const chatsDir = path.join(charDir, "chats");
+    if (fs.existsSync(chatsDir)) {
+      for (const f of fs.readdirSync(chatsDir).filter((x) => x.endsWith(".json"))) {
+        const id = f.replace(/\.json$/, "");
+        if (!knownIds.has(id)) diskExtraChats.push(id);
+      }
+    }
+    const legacyCandidates = [];
+    const oldChatsDir = path.join(userDir, "shells", "chat", "chats");
+    if (fs.existsSync(oldChatsDir)) {
+      for (const f of fs.readdirSync(oldChatsDir).filter((x) => x.endsWith(".json"))) {
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(oldChatsDir, f), "utf-8"));
+          const chars = raw.chatLog?.[raw.chatLog.length - 1]?.timeSlice?.chars || [];
+          if (Array.isArray(chars) && chars.includes(charName)) legacyCandidates.push(f.replace(/\.json$/, ""));
+        } catch { /* 解析失败跳过 */ }
+      }
+    }
+    const _basis = JSON.stringify({
+      m: (cls.managedChatIds || []).slice().sort(),
+      e: (cls.extraOwnedChats || []).slice().sort(),
+      d: diskExtraChats.slice().sort(),
+      l: legacyCandidates.slice().sort(),
+    });
+    let _h = 5381;
+    for (let i = 0; i < _basis.length; i++) _h = ((_h << 5) + _h + _basis.charCodeAt(i)) >>> 0;
+    return { cls, diskExtraChats, legacyCandidates, previewRevision: _h.toString(16) };
+  }
+
+  // GET /api/parts/shells:chat/delete-char/:charName/cleanup-preview — [D1 §4 删除契约] 无副作用删除预览。
+  //   分类/指纹单源=_computeDeleteCharPreview；执行时重算比对不符 → E_DELETE_PREVIEW_STALE 拒绝
+  //   （防预览后状态漂移误删）。删除执行契约见 delete-char handler。
+  router.get(
+    "/api/parts/shells\\:chat/delete-char/:charName/cleanup-preview",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const charName = confineSegment(req.params.charName);
+        if (!charName) return res.status(400).json({ message: "缺少角色名称" });
+        const charDir = path.join(getUserDictionary(username), "chars", charName);
+        if (!fs.existsSync(charDir)) return res.status(404).json({ message: `角色 "${charName}" 不存在` });
+
+        const { cls, diskExtraChats, legacyCandidates, previewRevision } = _computeDeleteCharPreview(username, charName);
+        res.json({
+          success: true,
+          preview: { charName, managedModeChats: cls.managedModeChats || [], extraOwnedChats: cls.extraOwnedChats || [], diskExtraChats, legacyCandidates, previewRevision },
+        });
+      } catch (err) {
+        console.error("[beilu-chat] cleanup-preview error:", err);
+        res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
   // DELETE /api/parts/shells:chat/delete-char/:charName — 删除角色卡（原 beilu-home/delete-char）
   // 8步清理（顺序不可改）：
   //   1. 正则规则 — 始终自动删除 boundCharName 匹配的规则（磁盘+内存双清）
@@ -960,6 +1083,15 @@ export function setEndpoints(router) {
           return res
             .status(404)
             .json({ message: `角色 "${charName}" 不存在` });
+        }
+
+        // [0804 反方补修·校验前移] previewRevision 比对必须发生在【任何破坏性步骤之前】——
+        //   原实现放在步骤3（正则/世界书已删之后），预览过期时前两步已破坏=D1 §4"revision 不符
+        //   则零破坏"语义被打穿。此处零副作用早退；分类快照冻结供步骤3 复用（用户确认的正是这份
+        //   集合，删除按已验证快照执行，不在步骤间重算——重算=校验与执行两个集合可再漂移）。
+        const _delPreview = options.deleteChats ? _computeDeleteCharPreview(username, charName) : null;
+        if (options.previewRevision && _delPreview && _delPreview.previewRevision !== options.previewRevision) {
+          return res.status(409).json({ success: false, code: "E_DELETE_PREVIEW_STALE", message: "删除预览已过期，请重新预览确认", currentRevision: _delPreview.previewRevision });
         }
 
         const partpath = `chars/${charName}`;
@@ -1091,18 +1223,21 @@ export function setEndpoints(router) {
         if (options.deleteChats) {
           try {
             const chatShell = parts_set[username]?.["shells/beilu-chat"];
+            // [D1 §4 删除契约 / 0804 反方补修] 分类+revision 校验已在 handler 开头（任何破坏性步骤前）
+            //   经单源 _computeDeleteCharPreview 完成；此处只消费冻结快照 _delPreview.cls——
+            //   删除集合=用户在 preview 确认的那份，不重算（重算=校验与执行集合可再漂移）。
+            const _cls = _delPreview?.cls || { managedModeChats: [], extraOwnedChats: [], managedChatIds: [] };
+            // 删角色卡默认 all-owned-chats（删该角色全部 owned；向后兼容=原 getChatIdsByCharName 全部=managed+extra）；
+            //   显式 managed-mode-chats 只删四条受管理线。legacy 由 includeLegacyCandidates 单控（方式3 默认不删）。
+            const _policy = options.deletePolicy || "all-owned-chats";
             let chatIdsToDelete = [];
 
-            // 方式1：通过 beilu-chat 接口获取该角色的所有 chatId，然后统一删除
-            if (
-              chatShell?.interfaces?.chat?.getChatIdsByCharName &&
-              chatShell?.interfaces?.chat?.deleteChat
-            ) {
-              chatIdsToDelete =
-                chatShell.interfaces.chat.getChatIdsByCharName(
-                  username,
-                  charName,
-                );
+            // 方式1：[D1 §4] 按 deletePolicy 选删除集合走 deleteChat（owner 校验/事务/per-chat 清理），
+            //   非原「无差别删 getChatIdsByCharName 全部」——managed-mode-chats 只删四条受管理线，all-owned 含额外自有。
+            if (chatShell?.interfaces?.chat?.deleteChat) {
+              chatIdsToDelete = _policy === "all-owned-chats"
+                ? [...new Set([...(_cls.managedChatIds || []), ...(_cls.extraOwnedChats || [])])]
+                : [...(_cls.managedChatIds || [])];
               if (chatIdsToDelete.length > 0) {
                 const results = await chatShell.interfaces.chat.deleteChat(
                   chatIdsToDelete,
@@ -1124,36 +1259,44 @@ export function setEndpoints(router) {
                 .filter((f) => f.endsWith(".json"));
               for (const file of chatFiles) {
                 const chatid = file.replace(".json", "");
-                if (!chatIdsToDelete.includes(chatid)) {
+                // [D1 §4] 只 safeUnlink 真孤儿（完全无内存索引）：内存索引存在（可能 primaryCharName
+                //   已漂移到别角色）的不在此删，交方式1 deleteChat（owner/事务/清理）或保留，防绕 owner 误删别角色会话。
+                const _isIndexed = chatShell?.interfaces?.chat?.isIndexedChat?.(chatid) ?? false;
+                if (!chatIdsToDelete.includes(chatid) && !_isIndexed) {
                   try {
-                    await safeUnlink(path.join(chatsDir, file), "delete-char_聊天文件");
+                    await safeUnlink(path.join(chatsDir, file), "delete-char_孤儿聊天文件(无内存索引)");
                     cleanupResults.chats++;
                   } catch (e) {
-                    console.warn(`[beilu-chat] 删除聊天文件 ${file} 失败:`, e.message);
+                    console.warn(`[beilu-chat] 删除孤儿聊天文件 ${file} 失败:`, e.message);
                   }
                 }
               }
             }
 
-            // 方式3（兼容旧路径）：检查 shells/chat/chats/ 下是否有该角色的聊天文件
-            const oldChatsDir = path.join(userDir, "shells", "chat", "chats");
-            if (fs.existsSync(oldChatsDir)) {
-              const oldChatFiles = fs
-                .readdirSync(oldChatsDir)
-                .filter((f) => f.endsWith(".json"));
-              for (const file of oldChatFiles) {
-                try {
-                  const raw = JSON.parse(
-                    fs.readFileSync(path.join(oldChatsDir, file), "utf-8"),
-                  );
-                  const lastEntry = raw.chatLog?.[raw.chatLog.length - 1];
-                  const chars = lastEntry?.timeSlice?.chars || [];
-                  if (Array.isArray(chars) && chars.includes(charName)) {
-                    await safeUnlink(path.join(oldChatsDir, file), "delete-char_旧路径聊天");
-                    cleanupResults.chats++;
+            // 方式3（兼容旧路径 legacyCandidates）：shells/chat/chats/ 按 timeSlice.chars 弱归属。
+            // [D1 §4 删除契约] 默认**不删**——末条 timeSlice.chars 是弱归属证据，可能误删他人/别角色聊天
+            //   （凛倾契约：不以 timeSlice.chars 自动当足够归属证据）。仅在调用方显式
+            //   options.includeLegacyCandidates 时才清（cleanup-preview 已把这些列为 legacyCandidates 供用户确认）。
+            if (options.includeLegacyCandidates) {
+              const oldChatsDir = path.join(userDir, "shells", "chat", "chats");
+              if (fs.existsSync(oldChatsDir)) {
+                const oldChatFiles = fs
+                  .readdirSync(oldChatsDir)
+                  .filter((f) => f.endsWith(".json"));
+                for (const file of oldChatFiles) {
+                  try {
+                    const raw = JSON.parse(
+                      fs.readFileSync(path.join(oldChatsDir, file), "utf-8"),
+                    );
+                    const lastEntry = raw.chatLog?.[raw.chatLog.length - 1];
+                    const chars = lastEntry?.timeSlice?.chars || [];
+                    if (Array.isArray(chars) && chars.includes(charName)) {
+                      await safeUnlink(path.join(oldChatsDir, file), "delete-char_旧路径聊天");
+                      cleanupResults.chats++;
+                    }
+                  } catch (_) {
+                    /* 解析失败跳过 */
                   }
-                } catch (_) {
-                  /* 解析失败跳过 */
                 }
               }
             }
@@ -1715,11 +1858,24 @@ export function setEndpoints(router) {
     async (req, res) => {
       try {
         const { chatid, index } = req.params;
-        await deleteMessage(chatid, parseInt(index, 10));
-        res.status(200).json({ success: true });
+        const { username } = await getUserByReq(req);
+        const parsedIndex = parseNonNegativeInteger(index);
+        if (parsedIndex == null) {
+          return res.status(400).json({ error: "Invalid index" });
+        }
+        const messageId = typeof req.query?.messageId === "string"
+          ? req.query.messageId.trim()
+          : "";
+        if (!messageId) {
+          return res.status(400).json({ success: false, error: "messageId is required" });
+        }
+        const result = await deleteMessage(chatid, parsedIndex, { messageId, expectedUsername: username });
+        res.status(200).json({ success: result.applied, ...result });
       } catch (err) {
         // "Invalid index" / "Chat not found" = 客户端参数错 → 400；其余 → 500
-        const _code = err.message === "Invalid index" || err.message === "Chat not found" ? 400 : 500;
+        const _code = Number.isInteger(err?.statusCode)
+          ? err.statusCode
+          : err.message === "Invalid index" || err.message === "Chat not found" ? 400 : 500;
         if (_code >= 500) console.error("[chat/deleteMessage] Error:", err);
         res.status(_code).json({ error: err.message });
       }
@@ -1733,56 +1889,173 @@ export function setEndpoints(router) {
       try {
       const {
         params: { chatid, index },
-        body: { content },
       } = req;
-      // ★ 防御：files 中的 buffer 可能是 "file:hash"（toData 序列化格式）或 base64 字符串
-      // "file:hash" 格式的文件已经存储在服务端，不需要重新解码
-      if (content?.files?.length) {
-        content.files = content.files
-          .map((file) => {
-            if (!file || !file.buffer) return file; // 无 buffer 则保持原样
-            if (
-              typeof file.buffer === "string" &&
-              file.buffer.startsWith("file:")
-            ) {
-              // 已存储的文件引用，保持原样（后端 BuildChatLogEntry 会处理）
-              return file;
-            }
-            try {
-              return { ...file, buffer: Buffer.from(file.buffer, "base64") };
-            } catch (e) {
-              console.warn(
-                "[chat/editMessage] Buffer.from failed for file:",
-                file.name,
-                e.message,
-              );
-              return file; // 解码失败则保持原样
-            }
-          })
-          .filter(Boolean);
-        // 图片格式校验 + 压缩（仅对有 Buffer 实例的文件）
-        const bufferFiles = content.files.filter((f) =>
-          Buffer.isBuffer(f.buffer),
-        );
-        if (bufferFiles.length) {
-          const processed = await processImageFiles(bufferFiles);
-          // 合并：用处理后的替换原 buffer 文件，保留 "file:" 引用文件
-          const refFiles = content.files.filter(
-            (f) => !Buffer.isBuffer(f.buffer),
-          );
-          content.files = [...refFiles, ...processed];
-        }
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const rawContent = body.content;
+      const { username } = await getUserByReq(req);
+      const parsedIndex = parseNonNegativeInteger(index);
+      if (parsedIndex == null) {
+        return res.status(400).json({
+          success: false, applied: false, chatCommitted: false, status: "invalid_request",
+          revision: null, derived: null, code: "E_EDIT_INDEX_HINT_INVALID", error: "Invalid index",
+        });
       }
-      const entry = await editMessage(chatid, parseInt(index, 10), content);
-      res.status(200).json({
-        success: true,
-        entry: await entry.toData((await getUserByReq(req)).username),
+      const messageId = typeof (body.messageId ?? req.query?.messageId) === "string"
+        ? (body.messageId ?? req.query.messageId).trim()
+        : "";
+      if (!messageId) {
+        return res.status(400).json({
+          success: false,
+          applied: false,
+          chatCommitted: false,
+          status: "invalid_request",
+          revision: null,
+          derived: null,
+          code: "E_EDIT_MESSAGE_ID_REQUIRED",
+          error: "messageId is required",
+        });
+      }
+      if (!rawContent || typeof rawContent !== "object" || Array.isArray(rawContent)) {
+        return res.status(400).json({
+          success: false,
+          applied: false,
+          chatCommitted: false,
+          status: "invalid_request",
+          revision: null,
+          derived: null,
+          messageId,
+          indexHint: parsedIndex,
+          code: "E_EDIT_CONTENT_INVALID",
+          error: "content must be an object",
+        });
+      }
+      const preparedEdit = await prepareEditMessageRequest(
+        username,
+        rawContent,
+        body.editOperationId,
+      );
+      const result = await editMessage(
+        chatid,
+        messageId,
+        parsedIndex,
+        preparedEdit.content,
+        {
+          expectedUsername: username,
+          editOperationId: preparedEdit.editOperationId,
+          payloadFingerprint: preparedEdit.payloadFingerprint,
+        },
+      );
+      const responseStatus = result.applied
+        ? 200
+        : result.reason === "message_id_not_found" ? 404 : 409;
+      res.status(responseStatus).json({
+        success: result.applied === true && result.chatCommitted === true,
+        applied: result.applied === true,
+        entry: result.entry,
+        reason: result.reason,
+        messageId: result.messageId,
+        index: result.index,
+        indexHint: result.indexHint,
+        chatCommitted: result.chatCommitted,
+        status: result.status,
+        revision: result.revision,
+        derived: result.derived,
+        warning: result.warning,
+        editOperationId: result.editOperationId,
+        payloadFingerprint: result.payloadFingerprint,
+        deduped: result.deduped === true,
       });
       } catch (err) {
-        console.error("[chat/editMessage] Error:", err);
-        if (/not found/i.test(err.message))
-          return res.status(404).json({ error: "Chat not found" });
-        res.status(500).json({ error: err.message });
+        const failedIndexHint = parseNonNegativeInteger(req.params?.index);
+        const failedBody = req.body && typeof req.body === "object" ? req.body : {};
+        const failedMessageId = typeof (failedBody.messageId ?? req.query?.messageId) === "string"
+          ? (failedBody.messageId ?? req.query.messageId).trim()
+          : "";
+        const statusCode = Number.isInteger(err?.statusCode)
+          ? err.statusCode
+          : /not found/i.test(err.message) ? 404 : 500;
+        if (statusCode >= 500) console.error("[chat/editMessage] Error:", err);
+        if (/not found/i.test(err.message)) {
+          return res.status(404).json({
+            success: false,
+            applied: false,
+            chatCommitted: false,
+            status: "not_found",
+            revision: null,
+            derived: null,
+            messageId: failedMessageId,
+            indexHint: failedIndexHint,
+            error: "Chat not found",
+          });
+        }
+        res.status(statusCode).json({
+          success: false,
+          applied: false,
+          chatCommitted: err?.chatCommitted === true,
+          status: err?.status || "precommit_failed",
+          revision: null,
+          derived: null,
+          messageId: failedMessageId,
+          indexHint: failedIndexHint,
+          error: err.message,
+          code: err.code,
+        });
+      }
+    },
+  );
+
+  router.post(
+    "/api/parts/shells\\:chat/:chatid/message/:index/edit-operation/:operationId/reconcile",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const indexHint = parseNonNegativeInteger(req.params?.index);
+        const reconcileBody = req.body && typeof req.body === "object" ? req.body : {};
+        const messageId = typeof reconcileBody.messageId === "string" ? reconcileBody.messageId.trim() : "";
+        if (indexHint == null || !messageId) {
+          return res.status(400).json({
+            success: false,
+            code: indexHint == null ? "E_EDIT_INDEX_HINT_INVALID" : "E_EDIT_MESSAGE_ID_REQUIRED",
+            error: indexHint == null ? "Invalid index" : "messageId is required",
+          });
+        }
+        const identity = prepareEditOperationIdentity(
+          reconcileBody.content,
+          req.params.operationId,
+        );
+        const receipt = await getEditOperationReceipt(
+          req.params.chatid,
+          messageId,
+          identity.editOperationId,
+          identity.payloadFingerprint,
+          { expectedUsername: username },
+        );
+        if (!receipt) {
+          return res.status(404).json({
+            success: false,
+            applied: false,
+            chatCommitted: false,
+            status: "not_found",
+            code: "E_EDIT_OPERATION_NOT_FOUND",
+            messageId,
+            indexHint,
+            editOperationId: req.params.operationId,
+            error: "edit operation not found",
+          });
+        }
+        return res.status(200).json({ success: true, ...receipt });
+      } catch (error) {
+        const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+        if (statusCode >= 500) console.error("[chat/getEditOperationReceipt] Error:", error);
+        return res.status(statusCode).json({
+          success: false,
+          applied: false,
+          chatCommitted: false,
+          status: "reconciliation_failed",
+          code: error?.code,
+          error: error?.message || String(error),
+        });
       }
     },
   );
@@ -1852,8 +2125,8 @@ export function setEndpoints(router) {
       cancelAutoContinue(chatid);
 
       if (client_msg_id) replyObj.client_msg_id = String(client_msg_id); // 幂等键随写入登记（chatOps 剥离不进 entry）
-      const entry = await addUserReply(chatid, replyObj);
       const username = (await getUserByReq(req)).username;
+      const entry = await addUserReply(chatid, replyObj, { expectedUsername: username });
 
       // autoReply: 保存用户消息后自动触发AI回复（避免前端分两次请求导致双重触发）
       if (autoReply !== false) {
@@ -1954,6 +2227,10 @@ export function setEndpoints(router) {
     authenticate,
     async (req, res) => {
       const reqStartAt = Date.now();
+      // [0804 根因修] 本 handler 原缺认证身份声明：2162 的 ensureModeChatsForChar(username,...)
+      //   裸引用未定义 username → ReferenceError → 500——绑卡（addchar）已成功却被伪装成失败，
+      //   四模式补齐整条不执行（新角色只剩 1 条对话的服务端断点）。与全文件其余 handler 同范式取认证身份。
+      const { username } = await getUserByReq(req);
       const {
         params: { chatid },
         body: { charname },
@@ -1972,14 +2249,32 @@ export function setEndpoints(router) {
           return res.status(400).json({ error: "Invalid charname" });
         }
         logReq(`▶ POST /char 收到请求 chatid=${chatid} charname=${charname}`);
+        // [0804 根因修] 绑卡前先验 chat 属主：addchar 内部用 chat 元数据的 username，而下方
+        //   ensureModeChatsForChar 用认证 username——两者不同人时会把四模式线建到错误用户名下。
+        //   fail-closed：目标 chat 不存在或不属于认证用户 → 404（不泄露他人 chat 存在性）。
+        const _bindMeta = await loadChat(chatid).catch(() => null);
+        if (!_bindMeta || getChatMetadatas().get(chatid)?.username !== username) {
+          return res.status(404).json({ error: "Chat not found" });
+        }
         const tAddchar = Date.now();
         await addchar(chatid, charname);
         logReq(
           `◀ POST /char addchar 完成, addcharCost=${Date.now() - tAddchar}ms, 准备返回 200`,
         );
-        // 自动补齐4模式对话：绑定角色时检测该角色是否已有四窗口对话，无则创建
-        let modeChats;
-        try { modeChats = await ensureModeChatsForChar(username, charname); } catch (e) { logReq(`四窗口对话补齐失败(非致命): ${e.message}`); }
+        // 绑定成功后仍需确认四模式作业线完整；不能把部分成功伪装成绑定完成。
+        const modeChats = await ensureModeChatsForChar(username, charname);
+        const missingModes = getMissingModeChatModes(modeChats);
+        if (missingModes.length) {
+          return res.status(409).json({
+            success: false,
+            partial: true,
+            code: "E_MODE_CHAT_INCOMPLETE",
+            modeChats,
+            missingModes,
+            error: `角色已绑定当前对话，但模式对话未建全: ${missingModes.join(", ")}`,
+            _diag: { reqDiagId, totalMs: Date.now() - reqStartAt },
+          });
+        }
         res.status(200).json({
           success: true,
           modeChats,
@@ -2089,10 +2384,147 @@ export function setEndpoints(router) {
         if (!charname || typeof charname !== "string" || !charname.trim())
           return res.status(400).json({ error: "缺少 charname" });
         const modeChats = await ensureModeChatsForChar(username, charname.trim());
-        res.status(200).json({ modeChats });
+        const missingModes = getMissingModeChatModes(modeChats);
+        if (missingModes.length) {
+          return res.status(409).json({
+            success: false,
+            code: "E_MODE_CHAT_INCOMPLETE",
+            modeChats,
+            missingModes,
+            error: `模式对话未建全: ${missingModes.join(", ")}`,
+          });
+        }
+        res.status(200).json({ success: true, modeChats });
       } catch (err) {
+        // [0804] 角色不存在（换用户残留/已删角色名）→ 结构化 404：ensure 现已先验角色零建线，
+        //   前端据此提示清 stale 角色而不是收到 500 幽灵错误（与 POST /char 的映射同范式）。
+        if (err.code === "CHAR_NOT_FOUND")
+          return res.status(404).json({ error: "Char not found", code: "CHAR_NOT_FOUND", charname: err.charname });
         console.error("[chat/ensure-mode-chats] Error:", err.message);
         res.status(500).json({ error: err.message });
+      }
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // [P0-A 2026-08-03] Smart 提案确认协调入口（confirm / cancel / status）
+  // 功能链：replyHandler 提案硬门产生 pending 记录 → 前端确认卡 → 本三端点。
+  // 契约：只信 session owner（getUserByReq）+ 记录内 sourceChatId；payload 不能覆盖 owner；
+  //   confirm=单次 claim（并发只有一个执行者），confirmed 重放幂等返回既有结果；
+  //   目标线只从服务端单源 ensureModeChatsForChar 导出（不信任何 payload chatid）；
+  //   返回 status:"accepted" 只表达 task_start 已落盘被接受，不冒充 AI ready/succeeded。
+  // ═══════════════════════════════════════════════════════════════
+  router.post(
+    "/api/parts/shells\\:chat/smart-confirmations/confirm",
+    authenticate,
+    async (req, res) => {
+      let _claimedRec = null;
+      let _confUser = "";
+      try {
+        _confUser = (await getUserByReq(req)).username;
+        const { confirmationId, revision, sourceChatId, note } = req.body || {};
+        if (!confirmationId || typeof confirmationId !== "string")
+          return res.status(400).json({ success: false, code: "E_CONFIRM_BAD_REQUEST", error: "缺少 confirmationId" });
+        const _claim = claimConfirmation(_confUser, {
+          confirmationId,
+          revision,
+          sourceChatId: typeof sourceChatId === "string" ? sourceChatId : "",
+        });
+        if (!_claim.ok) {
+          // confirmed 重放 → 幂等返回既有执行结果（重放对账），不重复执行
+          if (_claim.code === "E_CONFIRM_ALREADY_EXECUTED") {
+            return res.status(200).json({ success: true, status: "accepted", deduped: true, confirmation: projectConfirmation(_claim.record) });
+          }
+          const _httpCode = _claim.code === "E_CONFIRM_NOT_FOUND" ? 404 : _claim.code === "E_CONFIRM_OWNER_MISMATCH" ? 403 : 409;
+          return res.status(_httpCode).json({ success: false, code: _claim.code, error: _claim.error, confirmation: projectConfirmation(_claim.record) });
+        }
+        _claimedRec = _claim.record;
+        // 1. 目标 mode chat：服务端单源补齐（缺失线新建，幂等；不复制前端创建逻辑）
+        const _modeChats = await ensureModeChatsForChar(_confUser, _claimedRec.sourceCharName);
+        const _targetChatId = _modeChats?.[_claimedRec.targetMode];
+        if (!_targetChatId) throw new Error(`目标 ${_claimedRec.targetMode} 模式对话补齐失败（ensureModeChatsForChar 未返回该线）`);
+        // 2. 目标线模式绑定（active_modes_map[chatId]）——失败向上传导，不静默
+        const _bindRes = setActiveMode(_confUser, _claimedRec.sourceCharName, _claimedRec.targetMode, _targetChatId);
+        if (!_bindRes?.success) throw new Error(`目标线模式绑定失败: ${_bindRes?.error || "未知错误"}`);
+        // 3. task_start 落盘（文本=injectTexts 可编辑模板；client_msg_id 幂等键防 claim 后半程崩溃重试双写）
+        const _noteStr = typeof note === "string" ? note.trim().slice(0, 2000) : "";
+        const _startContent = fillInjectText("smart.task_start", {
+          mode: _claimedRec.targetMode,
+          title: _claimedRec.taskTitle || "",
+          note: _noteStr,
+          confirmation_id: _claimedRec.confirmationId,
+        });
+        const _startMsgKey = `smartconf_${_claimedRec.confirmationId}`;
+        let _entry = getRecentUserReply(_targetChatId, _startMsgKey);
+        if (!_entry) {
+          _entry = await addUserReply(
+            _targetChatId,
+            { content: _startContent, files: [], client_msg_id: _startMsgKey },
+            { expectedUsername: _confUser },
+          );
+        }
+        completeClaim(_confUser, _claimedRec.confirmationId, { targetChatId: _targetChatId, taskStartMessageId: _entry?.id || "" });
+        const _executedId = _claimedRec.confirmationId;
+        _claimedRec = null; // 已收尾，catch 不再回退
+        // 4. 目标线生成异步触发：返回值只表达 task_start 已接受/已持久化，不把异步 AI 完成写成成功
+        triggerCharReply(_targetChatId, undefined, { userInitiated: true }).catch((err) => {
+          console.warn("[chat/smart-confirm] 目标线生成触发失败（task_start 已落盘，用户可在目标窗口手动触发）:", err?.message);
+        });
+        return res.status(200).json({
+          success: true,
+          status: "accepted",
+          confirmationId: _executedId,
+          targetChatId: _targetChatId,
+          taskStartMessageId: _entry?.id || "",
+        });
+      } catch (err) {
+        // claim 后执行失败：回退 pending + 记 lastError（用户可见可重试），绝不显示成功
+        if (_claimedRec && _confUser) {
+          try { failClaim(_confUser, _claimedRec.confirmationId, err); } catch { /* 回退失败仅日志 */ }
+        }
+        console.error("[chat/smart-confirm] Error:", err?.message);
+        return res.status(500).json({ success: false, code: "E_CONFIRM_EXEC_FAILED", error: err?.message || String(err) });
+      }
+    },
+  );
+
+  router.post(
+    "/api/parts/shells\\:chat/smart-confirmations/cancel",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const { confirmationId, sourceChatId } = req.body || {};
+        if (!confirmationId || typeof confirmationId !== "string")
+          return res.status(400).json({ success: false, code: "E_CONFIRM_BAD_REQUEST", error: "缺少 confirmationId" });
+        const _r = cancelConfirmation(username, {
+          confirmationId,
+          sourceChatId: typeof sourceChatId === "string" ? sourceChatId : "",
+        });
+        if (!_r.ok) {
+          const _httpCode = _r.code === "E_CONFIRM_NOT_FOUND" ? 404 : _r.code === "E_CONFIRM_OWNER_MISMATCH" ? 403 : 409;
+          return res.status(_httpCode).json({ success: false, code: _r.code, error: _r.error, confirmation: projectConfirmation(_r.record) });
+        }
+        return res.status(200).json({ success: true, confirmation: projectConfirmation(_r.record) });
+      } catch (err) {
+        console.error("[chat/smart-cancel] Error:", err?.message);
+        return res.status(500).json({ success: false, error: err?.message || String(err) });
+      }
+    },
+  );
+
+  // 状态查询（刷新/重连重新投影确认卡；只返回本 owner 的记录）
+  router.get(
+    "/api/parts/shells\\:chat/:chatid/smart-confirmations",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { username } = await getUserByReq(req);
+        const _list = listConfirmations(username, req.params.chatid);
+        return res.status(200).json({ success: true, confirmations: _list });
+      } catch (err) {
+        console.error("[chat/smart-confirmations] Error:", err?.message);
+        return res.status(500).json({ success: false, error: err?.message || String(err) });
       }
     },
   );
@@ -2188,11 +2620,25 @@ export function setEndpoints(router) {
     authenticate,
     async (req, res) => {
       try {
-        const result = await deleteChat(
-          req.body.chatids,
-          (await getUserByReq(req)).username,
-        );
-        res.status(200).json(result);
+        const { username } = await getUserByReq(req);
+        const chatids = req.body?.chatids;
+        if (!Array.isArray(chatids) || chatids.length === 0
+          || chatids.some((chatid) => typeof chatid !== "string" || !chatid)) {
+          return res.status(400).json({ error: "chatids 必须是非空会话 ID 数组" });
+        }
+        if (new Set(chatids).size !== chatids.length) {
+          return res.status(400).json({ error: "chatids 不得包含重复会话 ID" });
+        }
+        // 先验证整批，再执行第一项删除，避免遇到越权/不存在 ID 时留下半批提交。
+        for (const chatid of chatids) {
+          if (!(await _assertChatOwner(req, res, chatid))) return;
+        }
+        const result = await deleteChat(chatids, username);
+        const failed = result.find((item) => item?.success !== true);
+        const status = failed
+          ? (Number.isInteger(failed.statusCode) ? failed.statusCode : 409)
+          : 200;
+        res.status(status).json(result);
       } catch (err) {
         console.error("[chat/delete] Error:", err.message);
         res.status(500).json({ error: err.message });
@@ -2286,17 +2732,36 @@ export function setEndpoints(router) {
     authenticate,
     async (req, res) => {
       try {
-        const { chatid, messageIndex } = req.body;
-        if (!chatid || messageIndex == null) {
-          return res.status(400).json({ error: "缺少chatid或messageIndex" });
+        const { chatid, messageId, messageIndex, wholeChat } = req.body || {};
+        const normalizedMessageId = typeof messageId === "string" ? messageId.trim() : "";
+        const wantsWholeChat = wholeChat === true;
+        if (!chatid) {
+          return res.status(400).json({ success: false, code: "E_BRANCH_CHAT_REQUIRED", error: "缺少 chatid" });
+        }
+        if ((normalizedMessageId && wantsWholeChat) || (!normalizedMessageId && !wantsWholeChat)) {
+          return res.status(400).json({
+            success: false,
+            code: normalizedMessageId ? "E_BRANCH_SELECTOR_AMBIGUOUS" : "E_BRANCH_SELECTOR_REQUIRED",
+            error: normalizedMessageId
+              ? "messageId 与 wholeChat=true 只能选择一种分叉意图"
+              : "必须提供非空 messageId 或显式 wholeChat=true",
+          });
+        }
+        if (messageIndex != null && (!Number.isSafeInteger(messageIndex) || messageIndex < 0)) {
+          return res.status(400).json({ success: false, code: "E_BRANCH_INDEX_HINT_INVALID", error: "messageIndex 必须是非负安全整数" });
         }
         // SEC：chatid 来自 body，router.param 不触发 → inline 校验属主
         if (!(await _assertChatOwner(req, res, chatid))) return;
-        const newChatid = await branchChat(chatid, messageIndex, (await getUserByReq(req)).username);
+        const newChatid = await branchChat(chatid, {
+          ...(normalizedMessageId ? { messageId: normalizedMessageId } : {}),
+          ...(messageIndex != null ? { indexHint: messageIndex } : {}),
+          wholeChat: wantsWholeChat,
+        }, (await getUserByReq(req)).username);
         res.json({ chatid: newChatid });
       } catch (e) {
-        console.error("[branch] Error:", e.message);
-        res.status(500).json({ error: e.message });
+        const status = Number.isInteger(e?.statusCode) ? e.statusCode : 500;
+        if (status >= 500) console.error("[branch] Error:", e.message);
+        res.status(status).json({ success: false, code: e?.code || "E_BRANCH_UNEXPECTED", error: e.message });
       }
     },
   );
@@ -2345,18 +2810,123 @@ export function setEndpoints(router) {
     async (req, res) => {
       try {
         const { chatid } = req.params;
-        const { startIndex, endIndex } = req.body;
+        const { username } = await getUserByReq(req);
+        const { startIndex, endIndex, anchorMessageId } = req.body || {};
         if (startIndex == null)
           return res.status(400).json({ error: "Missing startIndex" });
+        if (typeof anchorMessageId !== "string" || !anchorMessageId.trim()) {
+          return res.status(400).json({ success: false, error: "anchorMessageId is required" });
+        }
+        const parsedStartIndex = parseNonNegativeInteger(startIndex);
+        const parsedEndIndex = endIndex != null
+          ? parseNonNegativeInteger(endIndex)
+          : undefined;
+        if (parsedStartIndex == null || (endIndex != null && parsedEndIndex == null)) {
+          return res.status(400).json({ error: "Invalid message range" });
+        }
         const result = await deleteMessagesRange(
           chatid,
-          parseInt(startIndex, 10),
-          endIndex != null ? parseInt(endIndex, 10) : undefined,
+          parsedStartIndex,
+          parsedEndIndex,
+          { anchorMessageId: anchorMessageId.trim(), expectedUsername: username },
         );
-        res.status(200).json({ success: true, ...result });
+        res.status(200).json({ success: result.applied, ...result });
       } catch (err) {
-        console.error("[chat/deleteMessagesRange] Error:", err);
-        res.status(500).json({ error: err.message });
+        const _code = Number.isInteger(err?.statusCode)
+          ? err.statusCode
+          : err.message === "Invalid startIndex" || err.message === "Invalid endIndex" || err.message === "Chat not found" ? 400 : 500;
+        if (_code >= 500) console.error("[chat/deleteMessagesRange] Error:", err);
+        res.status(_code).json({ error: err.message });
+      }
+    },
+  );
+
+  // ---- 统一跨存储回档：稳定消息锚 → 生成静默 → 记忆/IDE → chat 截断 ----
+  router.post(
+    "/api/parts/shells\\:chat/:chatid/rollback/preview",
+    authenticate,
+    async (req, res) => {
+      try {
+        const targetIndex = parseNonNegativeInteger(req.body?.targetIndex);
+        const anchorMessageId = req.body?.anchorMessageId;
+        if (typeof anchorMessageId !== "string" || !anchorMessageId.trim() || targetIndex == null) {
+          return res.status(400).json({
+            success: false,
+            applied: false,
+            partial: false,
+            code: "E_INVALID_ROLLBACK_REQUEST",
+            error: "anchorMessageId and non-negative targetIndex are required",
+          });
+        }
+        const { username } = await getUserByReq(req);
+        const result = await getCoordinatedRollbackPreview({
+          chatId: req.params.chatid,
+          username,
+          anchorMessageId,
+          targetIndex,
+        });
+        const status = result.success
+          ? 200
+          : result.code === "E_ROLLBACK_ANCHOR_NOT_FOUND" ? 404 : 409;
+        return res.status(status).json(result);
+      } catch (error) {
+        const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+        if (status >= 500) console.error("[chat/rollback/preview] Unexpected error:", error);
+        return res.status(status).json({
+          success: false,
+          applied: false,
+          partial: false,
+          code: error?.code || "E_ROLLBACK_PREVIEW_UNEXPECTED",
+          error: error?.message || String(error),
+        });
+      }
+    },
+  );
+
+  router.post(
+    "/api/parts/shells\\:chat/:chatid/rollback",
+    authenticate,
+    async (req, res) => {
+      try {
+        const targetIndex = parseNonNegativeInteger(req.body?.targetIndex);
+        const anchorMessageId = req.body?.anchorMessageId;
+        if (typeof anchorMessageId !== "string" || !anchorMessageId.trim() || targetIndex == null) {
+          return res.status(400).json({
+            success: false,
+            applied: false,
+            partial: false,
+            code: "E_INVALID_ROLLBACK_REQUEST",
+            error: "anchorMessageId and non-negative targetIndex are required",
+          });
+        }
+        const { username } = await getUserByReq(req);
+        const result = await executeCoordinatedRollback({
+          chatId: req.params.chatid,
+          username,
+          anchorMessageId,
+          targetIndex,
+          expectedIdeConnected: req.body?.expectedIdeConnected,
+          expectedIdeRoute: req.body?.expectedIdeRoute,
+          checkpointIds: req.body?.checkpointIds,
+          tableSnapshotId: req.body?.tableSnapshotId,
+          expectedCharacterScope: req.body?.expectedCharacterScope,
+          characterScopeToken: req.body?.characterScopeToken,
+        });
+        const status = result.partial !== true
+          && (result.confirmed === true || result.noOpConfirmed === true)
+          ? 200
+          : result.code === "E_ROLLBACK_ANCHOR_NOT_FOUND" ? 404 : 409;
+        return res.status(status).json(result);
+      } catch (error) {
+        const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+        if (status >= 500) console.error("[chat/rollback] Unexpected error:", error);
+        return res.status(status).json({
+          success: false,
+          applied: false,
+          partial: false,
+          code: error?.code || "E_ROLLBACK_UNEXPECTED",
+          error: error?.message || String(error),
+        });
       }
     },
   );
@@ -2369,7 +2939,19 @@ export function setEndpoints(router) {
     async (req, res) => {
       try {
         const { chatid } = req.params;
-        const { startIndex, endIndex, indices, hide, meta: _reqMeta } = req.body;
+        const { username } = await getUserByReq(req);
+        const { startIndex, endIndex, indices, messageIds, hide, meta: _reqMeta } = req.body || {};
+        const hasMessageIds = Object.prototype.hasOwnProperty.call(req.body || {}, "messageIds");
+        let normalizedMessageIds;
+        if (hasMessageIds) {
+          if (!Array.isArray(messageIds) || messageIds.length === 0 || messageIds.some((id) => typeof id !== "string" || !id.trim())) {
+            return res.status(400).json({ success: false, code: "E_HIDE_MESSAGE_IDS_INVALID", error: "messageIds 必须是非空字符串 ID 数组" });
+          }
+          normalizedMessageIds = messageIds.map((id) => id.trim());
+          if (new Set(normalizedMessageIds).size !== normalizedMessageIds.length) {
+            return res.status(400).json({ success: false, code: "E_HIDE_MESSAGE_IDS_DUPLICATED", error: "messageIds 不得包含重复 ID" });
+          }
+        }
         let idxList;
         if (Array.isArray(indices)) {
           idxList = indices.map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
@@ -2379,16 +2961,25 @@ export function setEndpoints(router) {
           const end = endIndex != null ? Math.min(total, parseInt(endIndex, 10)) : total;
           idxList = [];
           for (let i = start; i < end; i++) idxList.push(i);
-        } else {
+        } else if (!hasMessageIds) {
           return res.status(400).json({ error: "Missing startIndex or indices" });
+        } else {
+          idxList = [];
         }
         // T4: 调用方可通过 body.meta 传入真实来源(auto/ai)；缺省→手动端点 by=user
         const _meta = _reqMeta && _reqMeta.by ? { by: _reqMeta.by, reason: _reqMeta.reason || _reqMeta.by } : { by: "user", reason: "manual" };
-        const result = await hideMessages(chatid, idxList, hide !== false, { meta: _meta });
-        res.status(200).json({ success: true, ...result });
+        const result = await hideMessages(chatid, idxList, hide !== false, {
+          ...(hasMessageIds ? { ids: normalizedMessageIds } : {}),
+          messageMeta: _meta,
+          expectedUsername: username,
+        });
+        const status = result.success !== false
+          ? 200
+          : result.partial ? 409 : result.code === "E_HIDE_MESSAGE_IDS_NOT_FOUND" ? 404 : 400;
+        res.status(status).json(result);
       } catch (err) {
         console.error("[chat/hideMessages] Error:", err);
-        res.status(500).json({ error: err.message });
+        res.status(Number.isInteger(err?.statusCode) ? err.statusCode : 500).json({ error: err.message });
       }
     },
   );
@@ -2959,10 +3550,21 @@ export function setEndpoints(router) {
         );
         // 添加角色卡=建永久链路（凛倾0705拍板；导入用 finalName=重名加后缀后的最终落盘名）
         try { await addPermanentCharLink(username, finalName); } catch (e) { console.warn("[beilu-chat] 建永久链路失败(非致命):", e.message); } // T4：now async，await 保留错误被此 try/catch 捕获
-        // [0731 四窗口对话收口] 与 create-char 同点：四模式窗口各建专属对话（幂等补缺）。
-        //   原前端导入路径"已有对话就跳过建对话"短路是三窗共用一对话的根因，已随本收口镜像删除。
-        let modeChats = {};
-        try { modeChats = await ensureModeChatsForChar(username, finalName); } catch (e) { console.warn("[beilu-chat] 建四窗口对话失败(非致命):", e.message); }
+        // 导入角色同样以四模式对话完整为成功条件；不能让导入接口掩盖缺失作业线。
+        const modeChats = await ensureModeChatsForChar(username, finalName);
+        const missingModes = getMissingModeChatModes(modeChats);
+        if (missingModes.length) {
+          return res.status(409).json({
+            success: false,
+            partial: true,
+            code: "E_MODE_CHAT_INCOMPLETE",
+            name: finalName,
+            original_name: charName,
+            modeChats,
+            missingModes,
+            error: `角色卡已导入，但模式对话未建全: ${missingModes.join(", ")}`,
+          });
+        }
         res.status(201).json({
           success: true,
           name: finalName,

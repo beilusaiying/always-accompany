@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { getResDir } from "../p1/p1_resdir.mjs";  // P0-2 统一资源定位(env P1_RESOURCE_DIR > memory/p1_res > 旧运行位)
+import { getResDir } from "../p1/p1_resdir.mjs";  // P1 单一资源根
 const RES_DIR = getResDir();
 
 let _posMap = null;
@@ -111,7 +111,7 @@ function _loadPOS() {
 function _loadConcreteness() {
   _concMap = new Map();
   // 中文具体度(最高优先级，实测 87942 词；文件名 _78k 为历史命名，实际词数以 json 为准)
-  const zh78k = path.join(__dirname, "..", "concreteness_78k.json");
+  const zh78k = path.join(getResDir(), "concreteness_78k.json");
   if (fs.existsSync(zh78k)) {
     try {
       const data = JSON.parse(fs.readFileSync(zh78k, "utf-8"));
@@ -119,7 +119,7 @@ function _loadConcreteness() {
     } catch {}
   }
   // 中文Gemini标注(补充)
-  const zhFile = path.join(__dirname, "..", "concreteness_zh.json");
+  const zhFile = path.join(getResDir(), "concreteness_zh.json");
   if (fs.existsSync(zhFile)) {
     try {
       const data = JSON.parse(fs.readFileSync(zhFile, "utf-8"));
@@ -209,7 +209,7 @@ function _loadVAD() {
     } catch {}
   }
   // EmoBank EN VAD (句子级统计→词级平均, 3807词, 1-5 scale)
-  const ebFile = path.join(__dirname, "..", "emobank_en_vad.json");
+  const ebFile = path.join(getResDir(), "emobank_en_vad.json");
   if (fs.existsSync(ebFile)) {
     try {
       let added = 0;
@@ -285,7 +285,7 @@ function _loadGlasgow() {
 function _loadCogmech() {
   _cogmechMap = new Map();
   _cogmechModesMap = new Map();
-  const f = path.join(__dirname, "..", "cogmech_gemini.json");
+  const f = path.join(getResDir(), "cogmech_gemini.json");
   if (!fs.existsSync(f)) return;
   try {
     const data = JSON.parse(fs.readFileSync(f, "utf-8"));
@@ -407,7 +407,7 @@ export function getLancaster(word) {
 
 function _loadAtomic() {
   _atomicMap = new Map();
-  const f = path.join(__dirname, "..", "atomic_index.json");
+  const f = path.join(getResDir(), "atomic_index.json");
   if (!fs.existsSync(f)) return;
   try {
     const data = JSON.parse(fs.readFileSync(f, "utf-8"));
@@ -571,11 +571,11 @@ let _synonymMap = null;
 function _loadSwow() {
   if (_swowZh) return;
   // 优先zh24_official(ZH24真版带strength+rank), fallback zh_full, 再zh_small
-  const zhReal = path.join(__dirname, "..", "swow_zh24_official.json");
-  const zhFull = path.join(__dirname, "..", "swow_zh_full.json");
-  const zhSmall = path.join(__dirname, "..", "swow_associations.json");
-  const enFull = path.join(__dirname, "..", "swow_en_full.json");
-  const enSmall = path.join(__dirname, "..", "swow_associations_en.json");
+  const zhReal = path.join(getResDir(), "swow_zh24_official.json");
+  const zhFull = path.join(getResDir(), "swow_zh_full.json");
+  const zhSmall = path.join(getResDir(), "swow_associations.json");
+  const enFull = path.join(getResDir(), "swow_en_full.json");
+  const enSmall = path.join(getResDir(), "swow_associations_en.json");
   try {
     const _rawZh = JSON.parse(fs.readFileSync(fs.existsSync(zhReal) ? zhReal : (fs.existsSync(zhFull) ? zhFull : zhSmall), "utf-8"));
     // zh24_official是数组[{cue,responses:[{word,strength}]}], 需转为字典{cue:[{word,strength}]}

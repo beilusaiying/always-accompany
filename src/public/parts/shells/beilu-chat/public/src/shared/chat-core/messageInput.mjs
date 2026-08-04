@@ -5,7 +5,7 @@
  * 职责：
  *   1. initializeMessageInput()：绑定输入框、发送按钮、文件/语音/照片按钮的所有交互事件
  *   2. sendMessage()：收集输入内容 + 附件，调 addUserReply() 发送，发送后清空输入框
- *   3. toggleVoiceRecording()：MediaRecorder 录音 → WAV Blob → 作为附件塞进 SelectedFiles
+ *   3. toggleVoiceRecording()：后端/浏览器采集语音 → STT 转文字 → 写回消息输入框
  *   4. autoResizeTextarea()：输入时自动撑开 textarea 高度
  *   5. 文件选择/拖拽支持：fileInputElement change → handleFilesSelect；拖入文件同样入 SelectedFiles
  *   6. uploadButton：直接打开文件选择器（原 code/work 技能菜单已随说明书库域删除 0723）
@@ -13,7 +13,7 @@
  * 链路：initializeMessageInput() 在 chat.mjs initializeChat() 末尾调用，完成输入框装配
  *       用户点击"发送" / Ctrl+Enter → sendMessage() → addUserReply(endpoints.mjs) → 后端收消息
  *       用户点击"上传" → fileInput.click → handleFilesSelect → SelectedFiles
- *       用户点击"录音" → toggleVoiceRecording → MediaRecorder → WAV → handleFilesSelect
+ *       用户点击"语音转文字" → toggleVoiceRecording → record → transcribe → #message-input
  * 影响：写 SelectedFiles（模块级附件暂存）；调 addUserReply 发后端请求；清空 #message-input；
  *       写 localStorage（草稿，通过 KEYS）；toast 提示（空消息/录音错误）
  * 相交：← chat.mjs（initializeMessageInput 调用）
@@ -295,7 +295,13 @@ async function toggleVoiceRecording() {
   // 后端录音模式（凛倾 20260722"别把录音放到浏览器"）：浏览器音频栈遇虚拟麦矩阵
   // (NVIDIA Broadcast/Voicemeeter)会采到静音;改由 stt_service 用 sounddevice 直采
   // 系统/指定设备,浏览器只做遥控+试听。STT 开启时默认走后端。
-  const _sttOn = storage.get("beilu-stt-enabled") === "true";
+  const _sttOn = storage.get("beilu-stt-enabled") !== "false";
+  // 主输入栏的麦克风契约只有“语音转文字”。关闭 STT 时必须明确拒绝，不能静默
+  // 改道音频附件；否则同一个按钮会随本地设置变成另一种产品行为。
+  if (!_sttOn) {
+    window._beiluToast?.("语音转文字已关闭，请先在额外插件 → 语音转录中启用", "warning");
+    return;
+  }
   if (_sttOn && storage.get("beilu-stt-backend-record") !== "false") {
     const r = await _toggleBackendRecording();
     // "fallback"=record 代理未注册(beilu 重启前的内存态),落回浏览器录音保持可用
@@ -348,17 +354,14 @@ async function toggleVoiceRecording() {
           const audioBlob = new Blob(audioChunks, { type: actualMime });
           stream.getTracks().forEach((track) => track.stop());
 
-          const sttEnabled = storage.get("beilu-stt-enabled") === "true";
           // 自动转录默认开（凛倾 20260722 调试闭环后拍板:不需要审查步骤）；
           // 关闭时保留审查窗流程（试听+白盒）作为调试入口。
           const autoTranscribe = storage.get("beilu-stt-auto-transcribe") !== "false";
 
-          if (sttEnabled && autoTranscribe) {
+          if (autoTranscribe) {
             await _handleSttTranscription(audioBlob);
-          } else if (sttEnabled) {
-            await _reviewThenTranscribe(audioBlob);
           } else {
-            isRecording = await _attachRecording(audioBlob);
+            await _reviewThenTranscribe(audioBlob);
           }
         } finally {
           _resolveStopDone();
@@ -446,6 +449,13 @@ async function _toggleBackendRecording() {
       }
       const stop = await stopResp.json();
       console.log("[stt-chain] ①后端录音节点:", stop);
+      // 自动转录是主功能契约：开启时录音只是 STT 的本地临时输入，停止后直接转文字，
+      // 绝不能进入“作为音频附件”分支。审查窗只属于用户显式关闭自动转录后的实验路径。
+      const autoTranscribe = storage.get("beilu-stt-auto-transcribe") !== "false";
+      if (autoTranscribe) {
+        await _transcribeBackendRecording();
+        return;
+      }
       // 试听音频从服务端取回(WAV)
       let blob = null;
       try {
@@ -458,7 +468,6 @@ async function _toggleBackendRecording() {
       const { showRecordingReviewPopup } = await import("../widgets/transcriptPopup.mjs");
       const action = await showRecordingReviewPopup(blob || new Blob([], { type: "audio/wav" }), stats);
       if (action === "transcribe") await _transcribeBackendRecording();
-      else if (action === "attach" && blob) await _attachRecording(blob);
     } catch (err) {
       console.error("[stt-chain] 后端录音停止失败:", err);
       window._beiluToast?.("停止录音失败: " + err.message, "error");
@@ -493,17 +502,6 @@ async function _transcribeBackendRecording() {
   }
 }
 
-/** 录音转附件（STT 关闭时的原路径；文件名/类型沿用历史行为） */
-async function _attachRecording(audioBlob) {
-  const audioFile = new File(
-    [audioBlob],
-    `voice_message_${Date.now()}.wav`,
-    { type: "audio/wav" },
-  );
-  const fakeEvent = { target: { files: [audioFile] } };
-  return await handleFilesSelect(fakeEvent, SelectedFiles, attachmentPreviewContainer);
-}
-
 /** 前端录音体检：decodeAudioData → 时长/峰值/RMS（白盒链路第一节点） */
 async function _analyzeAudioBlob(audioBlob) {
   const actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -536,8 +534,6 @@ async function _reviewThenTranscribe(audioBlob) {
   const action = await showRecordingReviewPopup(audioBlob, stats);
   if (action === "transcribe")
     await _handleSttTranscription(audioBlob, { skipGate: true });
-  else if (action === "attach")
-    await _attachRecording(audioBlob);
 }
 
 async function _handleSttTranscription(audioBlob, { skipGate = false } = {}) {

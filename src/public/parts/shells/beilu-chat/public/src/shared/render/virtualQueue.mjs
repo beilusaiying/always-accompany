@@ -133,6 +133,10 @@ export function dropWindowCtx(chatid) {
   //   跑 renderFrame 打到已移除的 DOM 上（每窗口一份 → 每窗口都要各自 teardown）
   try { w.streamRenderer?.stopLoop?.(); w.streamRenderer?.streamingMessages?.clear?.(); } catch { /* 已销毁 */ }
   _wins.delete(chatid);
+  const editPrefix = `${chatid}\u0000`;
+  for (const key of _authoritativeEditState.keys()) {
+    if (key.startsWith(editPrefix)) _authoritativeEditState.delete(key);
+  }
   wbTrace("window", "ctx:drop", { win: chatid, left: _wins.size });
 }
 
@@ -214,7 +218,11 @@ const deletionListeners = [];
  * @returns {Promise<string|null>} 占位 id（供失败时 clearOptimisticUserMessage 定位）；无容器/空内容返回 null
  */
 export async function showOptimisticUserMessage(reply) {
-  if (!_W().container) return null;
+  // 乐观气泡从渲染到 await 后挂 DOM 是同一个用户动作：入口即冻结窗口。
+  // 切窗口不得让气泡的操作闭包与最终 DOM 容器分属两个 chatId。
+  const ownerChatId = _winKey();
+  const ownerW = _W(ownerChatId);
+  if (!ownerW.container) return null;
   const content = (reply?.content || "").trim();
   const fileCount = Array.isArray(reply?.files) ? reply.files.length : 0;
   if (!content && !fileCount) return null;
@@ -233,14 +241,18 @@ export async function showOptimisticUserMessage(reply) {
   };
   try {
     // itemIndex 给一个大值（占位在最底部），totalCount 用当前渲染计数回退（depth/floor 查队列找不到本 id 会安全回退）
-    const el = await renderMessage(optimisticMsg, { itemIndex: _W().renderTotalCount, totalCount: _W().renderTotalCount });
+    const el = await renderMessage(optimisticMsg, {
+      itemIndex: ownerW.renderTotalCount,
+      totalCount: ownerW.renderTotalCount,
+      chatId: ownerChatId,
+    });
     if (!el) return null;
     el.dataset.optimistic = "1";
     el.classList.add("beilu-optimistic-sending"); // 视觉"发送中"态由 CSS 决定（设计域，此处仅打标不设视觉数值）
-    _W().container.appendChild(el);
-    _W().optimisticElements.push({ id: optimisticId, element: el });
+    ownerW.container.appendChild(el);
+    ownerW.optimisticElements.push({ id: optimisticId, element: el });
     // 滚到底让用户立即看到自己的气泡
-    _W().container.scrollTop = _W().container.scrollHeight;
+    ownerW.container.scrollTop = ownerW.container.scrollHeight;
     return optimisticId;
   } catch (err) {
     diag.warn("showOptimisticUserMessage 渲染失败（降级：无乐观气泡，仍走 WS 回推）:", err?.message);
@@ -441,6 +453,10 @@ export async function initializeVirtualQueue(initialData) {
       _activeWinId = _k;
       if (_wins.has("__main__")) dropWindowCtx("__main__");
     } // 解析不到对话 id 时**不**把 _activeWinId 钉在无名键上：钉住＝后面 chatid 就位了也不再解析，键又分家
+    // 从这里起所有 await 前后都使用这一份 owner；后台窗口的 virtualList
+    // 之后收到 append/replace 时，不得因当前显示窗口已变而重解析 `_W()`。
+    const ownerChatId = _k;
+    const ownerW = _W(ownerChatId);
 
     // 初始化 timeline 信息（用于 swipe 计数器显示）
     if (initialData?.timeLineIndex !== undefined) {
@@ -450,16 +466,16 @@ export async function initializeVirtualQueue(initialData) {
       };
     }
 
-    if (_W().virtualList) _W().virtualList.destroy();
+    if (ownerW.virtualList) ownerW.virtualList.destroy();
 
     // M-09/M-10：清空前取消所有 pending 骨架屏 timer + 停 RAF loop，防切卡后回调/帧写到新对话或已销毁 DOM
-    for (const _st of _W().streamingMessages.values()) { if (_st._skeletonTimer) { clearTimeout(_st._skeletonTimer); _st._skeletonTimer = null; } }
-    _W().streamingMessages.clear();
+    for (const _st of ownerW.streamingMessages.values()) { if (_st._skeletonTimer) { clearTimeout(_st._skeletonTimer); _st._skeletonTimer = null; } }
+    ownerW.streamingMessages.clear();
     // M-09/M-10 + [0727 多窗口]：只停**本窗口**的 RAF loop 与流式态。
     //   原来这行打的是全站单例 → 开新窗口/补拉时把别的窗口正在生成的消息一起掐断且永不恢复
     //   （凛倾「每个窗口都是并行的，哪里来的影响？」）。现在 renderer 每窗口一份，各停各的。
-    _W().streamRenderer.stopLoop();
-    _W().streamRenderer.streamingMessages.clear();
+    ownerW.streamRenderer.stopLoop();
+    ownerW.streamRenderer.streamingMessages.clear();
 
     // ★ 修复：重新对话时清空旧的 MVU 变量和楼层映射
     // 否则旧对话的 messages 变量会累积到新对话中
@@ -484,16 +500,18 @@ export async function initializeVirtualQueue(initialData) {
       offsetShift = total - msgLoadLimit;
       effectiveTotal = msgLoadLimit;
     }
-    _W().chatLogOffsetShift = offsetShift;
+    ownerW.chatLogOffsetShift = offsetShift;
 
-    // ★ 渲染深度修复：将 effectiveTotal 保存为模块变量
-    // 初始渲染时 _W().virtualList 尚未赋值，getQueue() 返回 []，
+    // renderMessage 的 itemIndex / totalCount 使用持久 chatLog 的绝对坐标系。
+    // virtualList 自身仍只管理末尾 effectiveTotal 条；两套坐标不能混用，否则开启
+    // msgLoadLimit 后菜单会把局部 index 当成持久下标，分叉/隐藏命中错误消息。
+    // 初始渲染时 ownerW.virtualList 尚未赋值，getQueue() 返回 []，
     // 导致 renderMessage 无法正确计算渲染深度。
     // 通过 renderItem 闭包传递 { itemIndex, totalCount } 作为回退。
-    _W().renderTotalCount = effectiveTotal;
+    ownerW.renderTotalCount = total;
 
-    _W().virtualList = await createVirtualList({
-      container: _W().container,
+    ownerW.virtualList = await createVirtualList({
+      container: ownerW.container,
       /**
        * 异步函数，用于获取数据块。
        * @param {number} offset - 数据块的起始偏移量。
@@ -530,7 +548,11 @@ export async function initializeVirtualQueue(initialData) {
         return { items, total: effectiveTotal };
       },
       renderItem: (item, itemIndex) =>
-        renderMessage(item, { itemIndex, totalCount: _W().renderTotalCount }),
+        renderMessage(item, {
+          itemIndex: itemIndex + offsetShift,
+          totalCount: ownerW.renderTotalCount,
+          chatId: ownerChatId,
+        }),
       initialIndex: effectiveTotal > 0 ? effectiveTotal - 1 : 0,
       onRenderComplete: updateLastCharMessageArrows,
       itemIdKey: "id", // Use the unique 'id' property as the key
@@ -541,7 +563,7 @@ export async function initializeVirtualQueue(initialData) {
     // 导致 _syncMvuVariablesToStore 从未被调用，__beiluVarStore.chat 为空。
     // 修复：加载完成后，从队列中找到最后一条有 mvu_variables 的消息，执行一次同步。
     try {
-      const queue = _W().virtualList.getQueue();
+      const queue = ownerW.virtualList.getQueue();
       if (queue.length > 0) {
         // 从后往前找第一条有 mvu_variables 的消息
         for (let i = queue.length - 1; i >= 0; i--) {
@@ -550,7 +572,7 @@ export async function initializeVirtualQueue(initialData) {
             msg?.extension?.mvu_variables &&
             Object.keys(msg.extension.mvu_variables).length > 0
           ) {
-            const logIndex = _W().virtualList.getChatLogIndexByQueueIndex(i);
+            const logIndex = ownerW.virtualList.getChatLogIndexByQueueIndex(i);
             console.log(
               `[virtualQueue] 初始加载 MVU 变量同步: queueIndex=${i}, logIndex=${logIndex}, keys=${Object.keys(msg.extension.mvu_variables).join(",")}`,
             );
@@ -575,10 +597,11 @@ export async function initializeVirtualQueue(initialData) {
  * @param {number} queueIndex - 队列中要替换的消息的索引。
  * @param {object} message - 新的消息对象。
  */
-export async function replaceMessageInQueue(queueIndex, message) {
-  if (!_W().virtualList) return;
-  const logIndex = _W().virtualList.getChatLogIndexByQueueIndex(queueIndex);
-  await _W().virtualList.replaceItem(logIndex, message);
+export async function replaceMessageInQueue(queueIndex, message, winId) {
+  const w = _W(winId);
+  if (!w.virtualList) return;
+  const logIndex = w.virtualList.getChatLogIndexByQueueIndex(queueIndex);
+  await w.virtualList.replaceItem(logIndex, message);
 }
 
 /**
@@ -586,8 +609,9 @@ export async function replaceMessageInQueue(queueIndex, message) {
  * @param {HTMLElement} element - 要获取索引的 DOM 元素。
  * @returns {number} 元素的队列索引，如果不是有效消息元素则返回 -1。
  */
-export function getQueueIndex(element) {
-  return _W().virtualList ? _W().virtualList.getQueueIndex(element) : -1;
+export function getQueueIndex(element, winId) {
+  const w = _W(winId);
+  return w.virtualList ? w.virtualList.getQueueIndex(element) : -1;
 }
 
 /**
@@ -606,11 +630,187 @@ export function getChatLogIndexByQueueIndex(queueIndex) {
  * @param {number} queueIndex - 队列中的索引。
  * @returns {HTMLElement|null} 对应的消息 DOM 元素，如果不存在则为 null。
  */
-export function getMessageElementByQueueIndex(queueIndex) {
-  if (!_W().virtualList) return null;
-  const item = _W().virtualList.getQueue()[queueIndex];
+export function getMessageElementByQueueIndex(queueIndex, winId) {
+  const w = _W(winId);
+  if (!w.virtualList) return null;
+  const item = w.virtualList.getQueue()[queueIndex];
   if (!item) return null;
-  return document.getElementById(item.id);
+  const element = document.getElementById(item.id);
+  return element && w.container?.contains(element) ? element : null;
+}
+
+// 编辑回填的唯一权威入口。HTTP ack 与 WS message_edited 都必须按
+// chatId + messageId 找到原窗口，再按 _editVersion 单调应用；不得在 await 后重读当前 _W()。
+const _authoritativeEditState = new Map();
+const _authoritativeEditChains = new Map();
+
+function _authoritativeEditKey(chatId, messageId) {
+  return `${chatId}\u0000${messageId}`;
+}
+
+function _validEditVersion(entry) {
+  return Number.isSafeInteger(entry?._editVersion) && entry._editVersion > 0
+    ? entry._editVersion
+    : null;
+}
+
+function _findMessageInWindow(chatId, messageId) {
+  const w = _W(chatId);
+  if (!w.virtualList) return { w, queueIndex: -1, logIndex: -1, entry: null, element: null };
+  const queue = w.virtualList.getQueue();
+  const queueIndex = queue.findIndex((item) => item?.id === messageId);
+  if (queueIndex < 0) return { w, queueIndex: -1, logIndex: -1, entry: null, element: null };
+  const candidate = document.getElementById(messageId);
+  return {
+    w,
+    queueIndex,
+    logIndex: w.virtualList.getChatLogIndexByQueueIndex(queueIndex),
+    entry: queue[queueIndex],
+    element: candidate && w.container?.contains(candidate) ? candidate : null,
+  };
+}
+
+function _queueAuthoritativeEdit(key, task) {
+  const previous = _authoritativeEditChains.get(key) || Promise.resolve();
+  const current = previous
+    .catch((error) => {
+      console.error("[virtualQueue] previous authoritative edit failed:", error);
+    })
+    .then(task);
+  _authoritativeEditChains.set(key, current);
+  return current.finally(() => {
+    if (_authoritativeEditChains.get(key) === current) _authoritativeEditChains.delete(key);
+  });
+}
+
+/** 标记某个窗口的某条消息已进入编辑态，WS 编辑广播在此期间只挂起最新版本。 */
+export function beginAuthoritativeEdit(chatId, messageId) {
+  if (!chatId || !messageId) return false;
+  const key = _authoritativeEditKey(chatId, messageId);
+  const found = _findMessageInWindow(chatId, messageId);
+  if (!found.entry) return false;
+  const state = _authoritativeEditState.get(key) || {};
+  state.editing = true;
+  state.pending = null;
+  state.appliedVersion = Math.max(
+    Number.isSafeInteger(state.appliedVersion) ? state.appliedVersion : 0,
+    _validEditVersion(found.entry) || 0,
+  );
+  _authoritativeEditState.set(key, state);
+  return true;
+}
+
+/**
+ * 按窗口和稳定消息 ID 应用后端权威编辑条目。
+ * @returns {Promise<{applied:boolean,deferred?:boolean,stale?:boolean,reason?:string,version?:number}>}
+ */
+export function applyAuthoritativeEdit(
+  chatId,
+  entry,
+  {
+    deferWhileEditing = false,
+    source = "unknown",
+    editOperationId = null,
+    payloadFingerprint = null,
+  } = {},
+) {
+  const messageId = typeof entry?.id === "string" ? entry.id : "";
+  const version = _validEditVersion(entry);
+  if (!chatId || !messageId || version == null) {
+    return Promise.resolve({ applied: false, reason: "invalid_authoritative_edit" });
+  }
+  const key = _authoritativeEditKey(chatId, messageId);
+  return _queueAuthoritativeEdit(key, async () => {
+    const state = _authoritativeEditState.get(key) || {
+      editing: false,
+      pending: null,
+      appliedVersion: 0,
+    };
+    const found = _findMessageInWindow(chatId, messageId);
+    if (!found.entry || found.logIndex < 0) {
+      return { applied: false, reason: "message_not_rendered", version };
+    }
+
+    const localVersion = _validEditVersion(found.entry) || 0;
+    const pendingVersion = _validEditVersion(state.pending?.entry) || 0;
+    const knownVersion = Math.max(localVersion, state.appliedVersion || 0, pendingVersion);
+    if (version <= knownVersion) {
+      return {
+        applied: false,
+        stale: true,
+        reason: "stale_edit_version",
+        version,
+        editOperationId,
+        payloadFingerprint,
+      };
+    }
+    if (state.editing && deferWhileEditing) {
+      state.pending = { entry, source, editOperationId, payloadFingerprint };
+      _authoritativeEditState.set(key, state);
+      return { applied: false, deferred: true, version, editOperationId, payloadFingerprint };
+    }
+
+    if (found.element) {
+      await found.w.virtualList.replaceItem(found.logIndex, entry);
+    } else {
+      // virtualList.replaceItem 在该行没有当前 DOM 时会直接 return，连 queue 也不更新。
+      // 离屏消息仍要先写队列真值，否则之后滚回来会渲染旧版。
+      found.w.virtualList.getQueue()[found.queueIndex] = entry;
+    }
+    state.appliedVersion = version;
+    state.pending = null;
+    _authoritativeEditState.set(key, state);
+    return { applied: true, version, editOperationId, payloadFingerprint };
+  });
+}
+
+/** 退出编辑态；如果期间收到更新 WS 版本，在原 chatId 窗口继续单调应用。 */
+export async function endAuthoritativeEdit(chatId, messageId, { applyPending = true } = {}) {
+  const key = _authoritativeEditKey(chatId, messageId);
+  const state = _authoritativeEditState.get(key);
+  if (!state) return { applied: false, reason: "edit_state_missing" };
+  state.editing = false;
+  const pending = state.pending;
+  state.pending = null;
+  _authoritativeEditState.set(key, state);
+  if (applyPending && pending?.entry) {
+    return applyAuthoritativeEdit(chatId, pending.entry, {
+      deferWhileEditing: false,
+      source: pending.source || "pending_websocket",
+      editOperationId: pending.editOperationId,
+      payloadFingerprint: pending.payloadFingerprint,
+    });
+  }
+  return { applied: false, reason: "no_pending_edit" };
+}
+
+/**
+ * 未知 HTTP 结果时，只消费与本次 operationId 对应的权威 WS；不匹配则保持 textarea。
+ */
+export async function consumePendingAuthoritativeEdit(chatId, messageId, editOperationId) {
+  const key = _authoritativeEditKey(chatId, messageId);
+  const state = _authoritativeEditState.get(key);
+  if (!state?.pending || !editOperationId || state.pending.editOperationId !== editOperationId) {
+    return { applied: false, reason: "matching_pending_edit_missing" };
+  }
+  state.editing = false;
+  const pending = state.pending;
+  state.pending = null;
+  _authoritativeEditState.set(key, state);
+  return applyAuthoritativeEdit(chatId, pending.entry, {
+    deferWhileEditing: false,
+    source: pending.source || "pending_websocket_reconcile",
+    editOperationId: pending.editOperationId,
+    payloadFingerprint: pending.payloadFingerprint,
+  });
+}
+
+/** 仅重渲染原窗口当前队列真值，用于取消/失败退出 textarea，不改写编辑版本。 */
+export async function rerenderMessageForChat(chatId, messageId) {
+  const found = _findMessageInWindow(chatId, messageId);
+  if (!found.entry || found.logIndex < 0) return false;
+  await found.w.virtualList.replaceItem(found.logIndex, found.entry);
+  return true;
 }
 
 /**
@@ -797,9 +997,10 @@ export async function handleMessageReplaced(index, message, winId) {
 
 /**
  * 处理消息移除事件。
- * @param {number} index - 被移除消息的日志索引。
+ * @param {number} index - 被移除消息的日志索引（旧广播兼容提示）。
+ * @param {string} [messageId] - 被移除消息的稳定 ID；存在时必须优先于 index。
  */
-export async function handleMessageDeleted(index, winId) {
+export async function handleMessageDeleted(index, messageId, winId) {
   const _w = _W(winId); // [多窗口] 按消息自带的窗口 id 取该窗口渲染上下文（参数传递，无全局交错）
   if (!_w.virtualList) return;
 
@@ -808,8 +1009,12 @@ export async function handleMessageDeleted(index, winId) {
   for (let i = 0; i < queue.length; i++) {
     const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(i);
     const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
-    if (logIndex === index) {
-      const item = queue[i];
+    const item = queue[i];
+    // 新协议有 messageId 时绝不退回 index，避免另一个客户端已回档/删除后错藏相同下标的新消息。
+    const matched = typeof messageId === "string" && messageId
+      ? item?.id === messageId
+      : logIndex === index;
+    if (matched) {
       if (item && _w.streamingMessages.has(item.id)) {
         _w.streamRenderer.stop(item.id);
         _w.streamingMessages.delete(item.id);
@@ -849,18 +1054,25 @@ export function handleMessagesHidden(indices, hide, winId) {
  * 处理批量消息删除事件（文件模式退出时的清理）。
  * @param {number} startIndex - 起始索引（含）
  * @param {number} count - 删除数量
+ * @param {string[]} [messageIds] - 实际落盘删除的稳定 ID 列表；存在时优先于索引范围。
  */
-export async function handleMessagesRangeDeleted(startIndex, count, winId) {
+export async function handleMessagesRangeDeleted(startIndex, count, messageIds, winId) {
   const _w = _W(winId); // [多窗口] 按消息自带的窗口 id 取该窗口渲染上下文（参数传递，无全局交错）
   if (!_w.virtualList || count <= 0) return;
 
   const queue = _w.virtualList.getQueue();
   const _ofs = _w.chatLogOffsetShift || 0; // virtualList 内部索引是局部的，需加 offset 才是绝对 chatLog 下标
+  const deletedMessageIds = Array.isArray(messageIds) && messageIds.length > 0
+    ? new Set(messageIds)
+    : null;
   for (let j = 0; j < queue.length; j++) {
     const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(j);
     const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
-    if (logIndex >= startIndex && logIndex < startIndex + count) {
-      const item = queue[j];
+    const item = queue[j];
+    const matched = deletedMessageIds
+      ? deletedMessageIds.has(item?.id)
+      : logIndex >= startIndex && logIndex < startIndex + count;
+    if (matched) {
       if (item && _w.streamingMessages.has(item.id)) {
         _w.streamRenderer.stop(item.id);
         _w.streamingMessages.delete(item.id);

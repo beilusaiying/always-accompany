@@ -112,6 +112,10 @@ if (args.length) {
 // 初始化应用程序。
 const okey = await init(beilu_config)
 
+// 自动更新只在服务器成功进入服务态后启用。此前仅有 .noupdate 的热切换分支，
+// 首次启动时 starts.Base.AutoUpdate=true 却没有实际定时器，形成“配置显示开启、机制未运行”的假状态。
+if (okey && beilu_config.starts?.Base?.AutoUpdate) enableAutoUpdate()
+
 // 如果提供了命令，则通过 IPC 发送。
 if (command_obj) try {
 	if (!beilu_config.starts.IPC) throw new Error('cannot send command when IPC not enabled')

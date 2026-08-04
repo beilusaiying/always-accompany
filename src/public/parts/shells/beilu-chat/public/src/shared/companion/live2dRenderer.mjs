@@ -28,7 +28,7 @@
  *   ← 桌面壳（注入 __BEILU_PET_MODEL / __BEILU_CHAR_MODELS / __BEILU_USER_MODELS / __BEILU_USER_DICT_URL）
  *   → vendor/cubism4.min.js（pixi-live2d-display：Live2DModel / MotionManager / expressionManager）
  *   → /api/eye/usermodel-dict（http 同源默认用户自定义模型字典端点，file:// 不请求）
- *   ← index.mjs init()（入口调用 initLive2dRenderer）
+ *   ← index.mjs（companion 首次激活后 dynamic import 并调用 initLive2dRenderer）
  *
  * 影响范围：
  *   #live2d-host 容器（PIXI Canvas 挂载点）；ResizeObserver（自适应容器大小）；
@@ -37,12 +37,13 @@
  *
  * 使用效果：
  *   AI 回复带情感标记 → 模型自动切换表情和动作；AI 说话/TTS 播放 → 口型同步；
- *   桌面壳可通过 window.beiluLive2d API 程序化控制模型；网页端无 #live2d-host 时静默退化。
+ *   桌面壳可通过 window.beiluLive2d API 程序化控制模型；关键初始化失败向调用方抛出。
  */
 // 图片模式后端(2026-07-09 任务②):dict 条目 format==="image" 时代替 PIXI 渲染,本模块只做路由。
 import * as imagePack from "./imagePackRenderer.mjs";
 // 加载模型挂 #live2d-host(网页端=companion tab 桌宠预览位;桌面端=Electron 桌宠窗),订阅 WS 事件驱动表情/口型。
 let app = null, model = null, modelCfg = null, mouthTimer = null, hostEl = null;
+let _ensureVendorRuntime = null; // web 壳注入的唯一 vendor loader；图片形象全程不调用
 let _unitDims = null; // 模型单位体型(relayout 回填;热区坐标系锚点=_hitFrame 用它推形象基准框)
 let dict = []; // model_dict(模块级,供模型切换 reloadModel 用)
 let _talking = false; // 说话中(talkPulse/talkWithAudio 期间)→ 待机微张嘴让位真实口型
@@ -106,18 +107,22 @@ async function _mergeUserModels() {
 /**
  * 初始化 Live2D 渲染器（本模块唯一导出函数）。
  *
- * 链路：index.mjs init() → 本函数 → fetch model_dict.json → _mergeUserModels → PIXI.Application
+ * 链路：index.mjs companion 激活 ensure → 本函数 → fetch model_dict.json → _mergeUserModels → PIXI.Application
  *       → Live2DModel.from(modelCfg.url) → _setupLoadedModel → bindEvents → startIdleFace
  * 影响：创建 PIXI.Application + Canvas、挂 ResizeObserver/window.resize、注册 window 事件监听器、
  *       暴露 window.beiluLive2d 全局 API
- * 约束：DOM 中必须有 #live2d-host 元素才会渲染，否则静默退化（网页端设置界面"桌宠形象"预览位）；
- *       必须先加载 PIXI + pixi-live2d-display（vendor/cubism4.min.js），否则 warn 并退出
+ * 约束：DOM 中必须有 #live2d-host；图片形象不加载 vendor，Live2D 形象通过
+ *       ensureVendorRuntime 按 core→pixi→cubism4 懒加载。任一关键失败都抛出，不伪装 ready。
  */
-export async function initLive2dRenderer() {
+export async function initLive2dRenderer({ ensureVendorRuntime } = {}) {
+  if (ensureVendorRuntime !== undefined && typeof ensureVendorRuntime !== "function") {
+    throw new TypeError("ensureVendorRuntime 必须是函数");
+  }
+  if (typeof ensureVendorRuntime === "function") _ensureVendorRuntime = ensureVendorRuntime;
   // 桌宠渲染挂自己的专属容器 #live2d-host，不抢占 #comp-preview（那是截图预览区，有截图放大功能在用）。
-  // 主场=桌面 deskpet；网页端在设置界面的"桌宠形象"预览位提供 #live2d-host 时才渲染，否则静默退化。
+  // 主场=桌面 deskpet；网页端在设置界面的"桌宠形象"预览位提供 #live2d-host。
   const host = document.getElementById("live2d-host");
-  if (!host) { return; }
+  if (!host) throw new Error("Live2D 渲染容器 #live2d-host 不存在");
   hostEl = host;
   // (PIXI 存在性检查移入 _ensurePixiApp:图片模式不需要 PIXI,缺库时图片包仍可渲染。)
   try {
@@ -131,11 +136,11 @@ export async function initLive2dRenderer() {
     // 清单是模型枚举的唯一来源,读不到=live2d 整体不可用(下方 dict.find 全部落空),必须让用户看见。
     // 改经 _beiluToast(同文案在屏自动去重不刷屏,呼应下方 178/285 两处同型降级)。
     window._beiluToast?.("Live2D 模型清单读取失败: " + e.message, "error");
-    return;
+    throw e;
   }
   if (!Array.isArray(dict)) dict = [];
   await _mergeUserModels(); // 用户模型/配置 overlay 合并(自定义最多:用户覆盖/新增,不改内置)
-  if (!dict.length) { console.warn("[live2d] model_dict 为空"); return; }
+  if (!dict.length) throw new Error("Live2D 模型清单为空");
   _initCharModels(); // D-2 角色卡→模型 映射(壳/设置页经 window.__BEILU_CHAR_MODELS 注入)
   // 初始模型(优先级):① 当前角色卡绑定模型(D-2) ② 全局 __BEILU_PET_MODEL(用户选择) ③ dict[0]。
   //   当前角色名:桌面壳经 query 注入 __BEILU_PET_CHAR;web 端用 sharedState 暴露的 _beiluGetCharName()。
@@ -157,10 +162,13 @@ export async function initLive2dRenderer() {
   // ── 形象格式路由(airi resolveBuiltInStageModelRenderer 同型):format==="image" → 图片包后端;缺省 live2d(零迁移)。 ──
   if ((modelCfg.format || "live2d") === "image") {
     const ok = await imagePack.load(modelCfg, host);
-    if (ok) { bindEvents(); console.log("[live2d] 图片模式就绪:", modelCfg.name); }
-    return;
+    if (!ok) throw new Error(`图片形象加载失败: ${modelCfg.name || "(未命名)"}`);
+    bindEvents();
+    console.log("[live2d] 图片模式就绪:", modelCfg.name);
+    return true;
   }
-  if (!_ensurePixiApp()) return;
+  await _requireVendorRuntime();
+  if (!_ensurePixiApp()) throw new Error("Live2D vendor 运行时未就绪");
   try {
     const M = window.PIXI.live2d.Live2DModel;
     model = await M.from(modelCfg.url, { autoInteract: false });
@@ -180,6 +188,19 @@ export async function initLive2dRenderer() {
     // [0727 可见降级] 原仅 console.warn=桌宠区静默空白,普通用户不开控制台完全无感;
     // 改经 _beiluToast(错误型首个 toast 会追加报错引导),同文案在屏自动去重不刷屏。
     window._beiluToast?.("Live2D 模型加载失败: " + e.message, "error");
+    throw e;
+  }
+  return true;
+}
+
+async function _requireVendorRuntime() {
+  if (window.PIXI?.live2d?.Live2DModel && window.Live2DCubismCore) return;
+  if (typeof _ensureVendorRuntime !== "function") {
+    throw new Error("Live2D vendor 运行时未预加载，且未提供 ensureVendorRuntime");
+  }
+  await _ensureVendorRuntime();
+  if (!window.PIXI?.live2d?.Live2DModel || !window.Live2DCubismCore) {
+    throw new Error("ensureVendorRuntime 完成后 Live2D vendor 全局对象仍不完整");
   }
 }
 
@@ -270,11 +291,13 @@ async function reloadModel(name) {
     return ok;
   }
   // 目标是 live2d:清图片后端 + 懒建 PIXI(初始形象是图片包时 init 未建过 app)。
-  imagePack.destroy();
-  if (!_ensurePixiApp()) return false;
-  const M = window.PIXI && PIXI.live2d && PIXI.live2d.Live2DModel;
-  if (!M) return false;
   try {
+    // 先确保 vendor 就绪再卸当前图片形象；加载失败时保留旧预览，并允许 loader 重试。
+    await _requireVendorRuntime();
+    imagePack.destroy();
+    if (!_ensurePixiApp()) throw new Error("Live2D vendor 运行时未就绪");
+    const M = window.PIXI?.live2d?.Live2DModel;
+    if (!M) throw new Error("Live2DModel 未就绪");
     _teardownLive2dModel();
     _lean.pos = _lean.vel = _lean.target = 0; // 重置拖动倾态
     modelCfg = cfg;

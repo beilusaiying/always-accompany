@@ -165,9 +165,32 @@ beilu-memory 的 ReplyHandler（`memory/handler/replyHandler.mjs` 的 `handleRep
 
 所有改变 chatLog 后需要通知前端的操作，都必须先 `await saveChat`（落盘），再 `broadcastChatEvent`（WS 推送）。如果顺序反过来，前端收到 WS 事件后 refetch 端点可能读到旧数据。
 
+## 消息删除与回档：身份、锁与结果契约
+
+删除和回档不是“拿到一个数组下标就改”的操作。前端在用户点击时冻结三项身份：`chatId`、`messageId` 和当时的 `indexHint`；`indexHint` 只用于诊断/兼容，后端以 `messageId` 经 `resolveMessageAnchor` 重新定位真实下标。找不到锚点时应拒绝本次操作，而不是把旧下标套到另一条消息上。
+
+`chatOps` 目前把用户消息、AI 消息、Bot 消息、删除、范围删除和隐藏等 chatLog 写入放入同一条 **per-chat mutation queue**。这保证同一对话的“读 → 改 → 落盘 → 广播”按顺序发生；不同对话仍可并行。它不是全系统的万能事务锁：记忆表、文件检查点、IDE 连接与其他插件副作用仍有各自的存储/异步边界，新增写链前不能假定它已自动受这把锁保护。
+
+“回档到此”走协调器而不是把“记忆回档”和“删消息”拆成两个前端请求：
+
+1. 先用稳定消息 ID 解析锚点，并读取只读预览；
+2. 预览返回精确令牌：`expectedIdeRoute`、`checkpointIds`、`tableSnapshotId`；
+3. 执行时先让当前生成到达静默点，再重新解析锚点；
+4. 记忆/IDE 回档与聊天截断按固定锁序执行；令牌或 IDE 路由漂移时拒绝执行，要求重新预览。
+
+完整成功的唯一判据是 `success === true && applied === true && partial !== true`。如果前一层已经改动而后一层失败，响应必须保留 `partial`、已完成层和错误详情；客户端不得把它渲染成“已回档”。网络请求已结束但客户端刷新本地视图失败时，YonBan 还会标成 `indeterminate`，意思是“本地无法确认最终状态”，不是成功。
+
+## 提示词文本的可配置边界
+
+提示词链中的**协议结构**（例如标签名、注入位置、解析器消费的字段）属于代码契约，不能用任意文本替换；但实际给模型看的产品文案不应散落为不可改字符串。当前任务清单教学文本由 `config.system_texts.task_plan_howto` 读取，缺省时才使用 `DEFAULT_SYSTEM_TEXTS.task_plan_howto`；保存空字符串也会被当作用户选择，不会被默认值悄悄覆盖。
+
+同一原则适用于其他 `system_texts` 项：默认值只提供新配置/缺失配置的起点，用户配置才是运行时文案来源。新增面向模型的固定文案时，应先判断它是协议还是可配置内容，并在请求预览中核对最终注入结果。
+
 ## 导航
 
 - [系统架构](architecture.md) — 整体架构
+- [API 端点参考](api-reference.md) — 删除与协调回档的请求/响应契约
 - [预设系统概览](../presets/overview.md) — 预设引擎
 - [司令员模式](../presets/commander.md) — 五段拼装
 - [插件概览](../plugins/overview.md) — 插件接口
+- [回档、快照与回收站](../backup/recovery.md) — 用户侧恢复入口与边界

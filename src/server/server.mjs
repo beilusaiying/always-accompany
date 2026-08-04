@@ -27,11 +27,13 @@ import { console } from '../scripts/i18n_core.mjs' // [0722 解环] console 改 
 import { notify } from '../scripts/notify.mjs'
 import { runSimpleWorker } from '../workers/index.mjs'
 
-import { initAuth } from '../yonban/core/functions/security/auth.mjs'
+import { getUserDictionary, initAuth } from '../yonban/core/functions/security/auth.mjs'
+import { registerBridgeRequestHandler } from '../yonban/core/transport/isolateBridge.mjs'
 import { __dirname, startTime } from './base.mjs'
 import idleManager from './idle.mjs'
 import { ReStartJobs } from './jobs.mjs'
-import { shallowLoadAllDefaultParts, fullLoadAllParts, migrateStaleShells } from './parts_loader.mjs'
+import { shallowLoadAllDefaultParts, fullLoadAllParts, migrateStaleShells, parts_set, getAllDefaultParts } from './parts_loader.mjs'
+import { markReadinessStage, setBackgroundPreloadState, setChatInteractiveProbe } from './readiness.mjs'
 // [0722 解环] 环境态（config/data_path/save_config/restartor/skip_report/setDefaultStuff/setWindowTitle）
 //   下沉 svr_state.mjs 叶子：下层模块（ratelimit/timers/jobs/auth/parts_loader）改引叶子，不再 import
 //   本编排者文件——11 成员启动环因此解开。本处 re-export 保环外旧 import 路径（server.mjs 面）不断。
@@ -57,6 +59,53 @@ export let tray
  * @type {number}
  */
 export let lastWebRequestTime = 0
+
+const _p1BridgeTimeoutRaw = Number(globalThis.Deno?.env?.get?.('P1_BRIDGE_HANDLER_TIMEOUT_MS') || process.env.P1_BRIDGE_HANDLER_TIMEOUT_MS)
+const P1_BRIDGE_HANDLER_TIMEOUT_MS = Number.isFinite(_p1BridgeTimeoutRaw) && _p1BridgeTimeoutRaw > 0
+	? Math.trunc(_p1BridgeTimeoutRaw)
+	: 60_000
+let _p1BridgeHandlerRegistered = false
+
+function _p1BridgeError(code, message) {
+	const error = new Error(message)
+	error.code = code
+	return error
+}
+
+function _registerP1BridgeHandler() {
+	if (_p1BridgeHandlerRegistered) return
+	registerBridgeRequestHandler('p1_service', async (payload, trustedContext) => {
+		const username = typeof trustedContext?.username === 'string' ? trustedContext.username.trim() : ''
+		const chatid = typeof trustedContext?.chatid === 'string' ? trustedContext.chatid.trim() : ''
+		if (!username || !chatid) {
+			throw _p1BridgeError('E_P1_BRIDGE_TRUSTED_CONTEXT_INVALID', 'P1 bridge request 缺少可信 username 或 chatid')
+		}
+		const action = typeof payload?.action === 'string' ? payload.action.trim() : ''
+		if (!action) throw _p1BridgeError('E_P1_BRIDGE_ACTION_REQUIRED', 'P1 bridge request 缺少 action')
+		if (!payload?.body || typeof payload.body !== 'object' || Array.isArray(payload.body)) {
+			throw _p1BridgeError('E_P1_BRIDGE_BODY_INVALID', 'P1 bridge request body 必须是 object')
+		}
+		const timeoutMs = Number(payload.timeoutMs)
+		if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+			throw _p1BridgeError('E_P1_BRIDGE_TIMEOUT_INVALID', 'P1 bridge request timeoutMs 必须是正有限数')
+		}
+		const body = {
+			...payload.body,
+			username,
+			chatId: chatid,
+			chatid,
+			...(action === 'runP1' ? { historyChatId: chatid } : {}),
+		}
+		const { requestP1Service } = await import('../yonban/core/functions/memory/p1/serviceRuntime.mjs')
+		return await requestP1Service(action, {
+			body,
+			timeoutMs,
+			username,
+			memoryRoot: getUserDictionary(username),
+		})
+	}, { timeoutMs: P1_BRIDGE_HANDLER_TIMEOUT_MS })
+	_p1BridgeHandlerRegistered = true
+}
 /**
  * 标记上次 Web 请求的时间戳。
  * @returns {void}
@@ -90,6 +139,21 @@ export async function init(start_config) {
 		for (const event of ['error', 'unhandledRejection', 'uncaughtException']) {
 			unset_shutdown_listener(event)
 			process.on(event, handleError)
+		}
+		// Base-only worker 也会调用 init，但不拥有宿主服务生命周期；仅真实 IPC/Web 服务端注册退出收口。
+		if (starts.IPC || starts.Web) {
+			_registerP1BridgeHandler()
+			on_shutdown(async () => {
+				try {
+					const { stopP1Service } = await import('../yonban/core/functions/memory/p1/serviceRuntime.mjs')
+					const stopped = await stopP1Service({ finalExit: true })
+					if (!stopped.success) {
+						console.warn(`[server:p1] 宿主退出时 P1 受控停止失败 (${stopped.state}): ${stopped.error || stopped.code}`)
+					}
+				} catch (error) {
+					console.warn(`[server:p1] 宿主退出时无法完成 P1 受控停止: ${error?.message || error}`)
+				}
+			})
 		}
 		if (start_config.needs_output) logoPromise = runSimpleWorker('logogener')
 		starts.Base = Object(starts.Base)
@@ -220,6 +284,8 @@ export async function init(start_config) {
 				})
 			})
 		})
+		// [D5 §2.4] 启动 Readiness 分层(2026-08-04):listen 成功=LISTENING(/api/ping 可答=transport liveness,
+		// 不再冒充"应用 ready");SHELL_READY/BACKGROUND_PRELOAD 见下方编排段。启动器改等 /api/readiness.shellReady。
 		// beilu SEC-T3：监听地址安全默认。
 		// 优先级：env BEILU_LISTEN > config.listen > 默认 'localhost'(loopback)。
 		// 安全默认：未显式配置时仅绑 127.0.0.1，不对全网卡(0.0.0.0)暴露。
@@ -235,6 +301,7 @@ export async function init(start_config) {
 				is_localhost = await listen('localhost')
 			else throw error
 		}
+		markReadinessStage('LISTENING')
 
 		// beilu: 打印局域网访问地址 + 自动加入Host白名单
 		if (!is_localhost) {
@@ -279,19 +346,45 @@ export async function init(start_config) {
 		}
 		runEnvCheck().catch((e) => console.warn('[envCheck] 环境检查失败（不影响运行）:', e?.message))
 	}
-	// 启动时全量预加载（同步 await）：组件在接受首个用户请求前全部加载完毕。
-	// 原延迟方案（setTimeout 2s + setInterval 1s + 13s 强制超时）导致首个用户连接时触发懒加载，
-	// 前端同时启动轮询 → 请求打到空后端 → 超时级联。改为同步预加载：启动多 1-2 秒，但用户打开时一切就绪。
-	// 后续除非有新部件/代码变动，不重新加载（懒更新）。
-	getApp?.()
+	// [D5 §2.4 启动分层 2026-08-04] 原「同步 await 全量预加载」把基础聊天可交互性绑死在 24-60s 的
+	// 全插件预载屏障后（01 §P1-3：launcher 只等 /api/ping 就开浏览器 → 用户面对黑屏；日志实测 24-29s）。
+	// 分层后：
+	//   SHELL_READY = Express app(路由/认证/静态) 就绪 + 默认部件浅加载完成 → 启动器此刻才开浏览器，
+	//     页面可打开可登录；登录后所需 Part 走既有 loadPart 懒加载（并发门/断路器保护），
+	//     该 user 的 chat shell+memory 落定即 chatInteractive=true（探针见下）。
+	//   fullLoadAllParts 移到 SHELL_READY 之后的【可观察后台任务】（BACKGROUND_PRELOAD）：
+	//     逐 Part 状态经 parts_loader 上报 readiness 注册表，失败 Part 记 degraded 不装死、不倒退阶段；
+	//     与请求路径懒加载并跑无双初始化（loadPart in-flight 并发门既有保障）。
+	// per-user chat 可交互探针：该 user 全部默认 shell + memory 插件在 parts_set 完整落定（非 in-flight Promise）。
+	setChatInteractiveProbe((username) => {
+		const _loaded = (partpath) => {
+			const inst = parts_set[username]?.[partpath]
+			return !!inst && !(inst instanceof Promise)
+		}
+		let shells = []
+		try { shells = getAllDefaultParts(username, 'shells') } catch { shells = [] }
+		if (!shells.length) shells = ['beilu-chat'] // 无默认壳记录=新装兜底判据（与 DEPRECATED_SHELLS 迁移目标一致）
+		return shells.every((s) => _loaded('shells/' + s)) && _loaded('plugins/beilu-memory')
+	})
+	// await:SHELL_READY 必须建立在 Express app(路由/认证/静态)真实就绪之后(原 fire-and-forget 只是热身)。
+	// 失败不抛穿启动:保持原语义(requestListener 对每个请求兜底报 500),错误可见不装死。
+	if (getApp) await getApp().catch(e => console.error('[server] Web 应用预加载失败(启动继续,请求将持续报错——上方错误即根因):', e))
 	if (starts.Base) {
 		if (starts.Base.Jobs) await ReStartJobs().catch(e => console.warn("[startup] ReStartJobs 失败:", e?.message))
 		wbTrace(null, "startup", "shallowLoadAllDefaultParts:begin", null)
 		await shallowLoadAllDefaultParts().catch(e => { wbDetect(null, "startup", "shallowLoadAllDefaultParts:failed", false, "启动期默认部件批量加载抛错", { err: e?.message || String(e) }); throw e })
 		wbTrace(null, "startup", "shallowLoadAllDefaultParts:done", null)
+		markReadinessStage('SHELL_READY')
 		wbTrace(null, "startup", "fullLoadAllParts:begin", null)
-		await fullLoadAllParts().catch(e => wbDetect(null, "startup", "fullLoadAllParts:failed", false, "启动期部件全量完整预加载抛错", { err: e?.message || String(e) }))
-		wbTrace(null, "startup", "fullLoadAllParts:done", null)
+		markReadinessStage('BACKGROUND_PRELOAD')
+		setBackgroundPreloadState('running')
+		// 后台可观察预加载：不再阻塞启动主线（浏览器/登录/基础聊天先行）。逐 Part 明细在 /api/readiness。
+		fullLoadAllParts()
+			.catch(e => wbDetect(null, "startup", "fullLoadAllParts:failed", false, "启动期部件全量完整预加载抛错", { err: e?.message || String(e) }))
+			.finally(() => {
+				setBackgroundPreloadState('done')
+				wbTrace(null, "startup", "fullLoadAllParts:done", null)
+			})
 		if (starts.Base.Timers) startTimerHeartbeat()
 		if (starts.Base.Idle) idleManager.start()
 		// 自动更新检测（启动后延迟检查 GitHub 最新版本，有新版通知前端）
@@ -350,4 +443,3 @@ export function getLanIPs() {
 	}
 	return ips
 }
-

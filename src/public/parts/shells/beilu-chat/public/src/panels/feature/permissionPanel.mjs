@@ -198,11 +198,16 @@ function render() {
         <summary class="text-[10px] cursor-pointer text-base-content/70"><i data-ic="folder"></i> 路径配置（允许/屏蔽）</summary>
         <div id="perm-path-config" class="mt-1"></div>
       </details>
+
+      <!-- [D6 §4 2026-08-04] settings 健康/旧根认领（filesSettingsStore 单写者的用户可见面：
+           损坏必须显示"文件损坏"而非静默用默认；修复=显式 owner 动作） -->
+      <div id="perm-settings-health" class="mt-1"></div>
     </div>
   `;
 
   renderBadges();
   renderFilesPathConfig(container.querySelector("#perm-path-config"));
+  _renderSettingsHealthSection(container.querySelector("#perm-settings-health"));
 
   container.querySelector("#perm-open-rules")?.addEventListener("click", () => openRulesWindow());
   container.querySelector("#perm-rules-refresh")?.addEventListener("click", async () => { await loadRules(); render(); });
@@ -211,6 +216,80 @@ function render() {
   // 悬浮窗开着 → 规则数据可能已变，只刷规则列表（不重建整个窗体，保住用户正填的新增表单）
   const win = document.getElementById("perm-rules-window");
   if (win && !win.classList.contains("hidden")) renderRulesList();
+}
+
+// ── [D6 §4 2026-08-04] settings 健康/旧根认领区块 ──
+//   数据源=beilu-files getData（settingsHealth/settingsRevision/hasLegacyWorkspace 已下发）；
+//   修复走 /api/security/files-settings/{health,repair}（server:security ctrlGet/ctrlPost 动态端点路由，
+//   免新注册）；认领走 plugins:beilu-files#adoptLegacyWorkspaceRoots 通配桥。
+async function _renderSettingsHealthSection(el) {
+  if (!el) return;
+  let cfg = null;
+  try {
+    cfg = await sendAction({ verb: "getData", target: "plugins:beilu-files", source: "web" });
+  } catch { return; } // 面板读路失败不阻塞权限区（getData 失败其它区块同样已报错）
+  const health = cfg?.settingsHealth;
+  const hasLegacy = cfg?.hasLegacyWorkspace === true;
+  if (!health && !hasLegacy) { el.innerHTML = ""; return; }
+  let html = "";
+  if (health) {
+    html += `
+      <div class="rounded border border-error/60 bg-error/10 p-1.5 space-y-1">
+        <p class="text-[10px] font-medium text-error"><i data-ic="warning"></i> 安全设置文件${health.state === "corrupt" ? "已损坏" : "不可读"}（fail-closed 生效中）</p>
+        <p class="text-[9px] text-base-content/70 leading-snug break-all">${_esc(health.detail || "")}${health.backupPath ? `<br/>原件已备份: ${_esc(health.backupPath)}` : ""}</p>
+        <p class="text-[9px] text-base-content/60">文件操作/根变更/整机浏览已全部拒绝，修复成功后自动恢复（不会静默套用默认值）。</p>
+        <div class="flex gap-1">
+          <button id="perm-sh-repair-revalidate" class="btn btn-xs btn-error text-[9px]" title="外部工具已手工修好原文件时：重新严格读取并校验">重新校验修复</button>
+          <button id="perm-sh-repair-backup" class="btn btn-xs btn-ghost text-[9px]" title="从最近一次损坏备份恢复">从最近备份恢复</button>
+        </div>
+      </div>`;
+  }
+  if (hasLegacy) {
+    html += `
+      <div class="rounded border border-warning/60 bg-warning/10 p-1.5 space-y-1 mt-1">
+        <p class="text-[10px] font-medium text-warning"><i data-ic="folder"></i> 检测到未认领的旧工作区根</p>
+        <p class="text-[9px] text-base-content/70 leading-snug">升级后旧的全局工作区根已归档（不再自动生效）。认领后归入你的账号并重新经安全政策校验（非法旧根不会复活）。</p>
+        <button id="perm-sh-adopt" class="btn btn-xs btn-warning text-[9px]">认领到当前账号</button>
+      </div>`;
+  }
+  el.innerHTML = html;
+  el.querySelector("#perm-sh-repair-revalidate")?.addEventListener("click", async () => {
+    if (!(await beiluConfirm("确认已（由你或外部工具）修好设置文件，现在重新严格校验？校验失败将保持 fail-closed。"))) return;
+    await _repairSettings({ revalidate: true }, el);
+  });
+  el.querySelector("#perm-sh-repair-backup")?.addEventListener("click", async () => {
+    try {
+      const h = await sendAction({ verb: "ctrlGet", target: "server:security", source: "web", payload: { _endpoint: "/api/security/files-settings/health" } });
+      const latest = Array.isArray(h?.backups) ? h.backups[0] : null;
+      if (!latest) { showToast("error", "没有可用的损坏备份"); return; }
+      if (!(await beiluConfirm(`从备份「${latest}」恢复设置文件？此后所有写入基于该备份内容。`))) return;
+      await _repairSettings({ fromBackup: latest }, el);
+    } catch (e) {
+      showToast("error", "备份清单读取失败: " + (e?.message || e));
+    }
+  });
+  el.querySelector("#perm-sh-adopt")?.addEventListener("click", async () => {
+    if (!(await beiluConfirm("将旧工作区根认领到当前账号？（仍会逐条过安全政策，非法旧根会被拒绝）"))) return;
+    try {
+      const r = await sendAction({ verb: "adoptLegacyWorkspaceRoots", target: "plugins:beilu-files", source: "web", payload: {} });
+      if (r?._result?.success === false) throw new Error(r._result.error || "认领失败");
+      showToast("info", "旧工作区根已认领（非法项已按政策拒绝，详见后端日志）");
+      _renderSettingsHealthSection(el);
+    } catch (e) {
+      showToast("error", "认领失败: " + (e?.message || e));
+    }
+  });
+}
+
+async function _repairSettings(source, el) {
+  try {
+    const r = await sendAction({ verb: "ctrlPost", target: "server:security", source: "web", payload: { _endpoint: "/api/security/files-settings/repair", ...source } });
+    if (r?.success === false) throw new Error(r?.error || "修复失败");
+    showToast("info", `设置文件修复成功（revision=${r?.revision ?? "?"}），防护已恢复`);
+    _renderSettingsHealthSection(el);
+  } catch (e) {
+    showToast("error", "修复失败（保持 fail-closed）: " + (e?.message || e));
+  }
 }
 
 // ── 第 2/3 层悬浮窗（拍板#3：详细权限配置=code 原档位选择处的悬浮窗） ──

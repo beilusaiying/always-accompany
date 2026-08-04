@@ -403,6 +403,7 @@ import { showCrossModeNotification } from "../widgets/crossModeNotification.mjs"
 import { beiluConfirm } from "../widgets/beiluDialog.mjs";
 import { promptFlowGroupModelChange } from "../widgets/flowGroupModelDialog.mjs";
 import {
+  applyAuthoritativeEdit,
   handleMessageAdded,
   handleMessageDeleted,
   handleMessageReplaced,
@@ -447,9 +448,9 @@ async function _handleModeSwitchPreset(entry) {
     }
   }
 
-  // 1b-orig. 子模式绑定API源（已在后端replyHandler中通过char.SetData切换）
+  // 1b-orig. 子模式带 API 覆盖（[0804] 后端已删角色全局 AIsource 写；此值=per-request 覆盖源，下轮生成局部生效）
   if (ext._subModeSwitchApiSource) {
-    console.log("[websocket] 子模式API源已切换:", ext._subModeSwitchApiSource);
+    console.log("[websocket] 子模式 API 覆盖（per-request）:", ext._subModeSwitchApiSource);
   }
 
   // 1c. 子模式绑定model_params → 通知前端同步（#180: 原死extension，前端无消费导致参数面板不刷新）
@@ -457,20 +458,28 @@ async function _handleModeSwitchPreset(entry) {
     window.dispatchEvent(new CustomEvent("beilu:runtime-params-changed", { detail: ext._subModeSwitchModelParams }));
   }
 
+  // 2a. [P0-A 2026-08-03] Smart 提案待确认 → 只投影确认卡，零副作用。
+  //   建线/绑定/指针/task_start 全部延后到认证 confirm 端点（服务端单源 ensureModeChatsForChar），
+  //   前端此处禁止任何创建动作（旧 _ensureModeChatId 预建线=确认前副作用，已随散写函数一并删除）。
+  const pendingConf = ext._pendingConfirmation;
+  if (pendingConf?.confirmationId) {
+    window.dispatchEvent(new CustomEvent("beilu:smart-pending-confirmation", { detail: { confirmation: pendingConf } }));
+    console.log("[websocket] Smart 提案待确认:", pendingConf.confirmationId, pendingConf.sourceMode, "→", pendingConf.targetMode);
+  }
+  if (ext._pendingConfirmationError) {
+    // 提案登记失败（服务端 fail-closed，本轮副作用已全拒）——真实错误可见，不伪装成功
+    console.warn("[websocket] Smart 提案登记失败:", ext._pendingConfirmationError);
+    try { window.showToast?.("error", "Smart 提案登记失败: " + ext._pendingConfirmationError, 5000); } catch {}
+  }
+
   // 2. Tab跟随模式切换（_modeSwitch是对象 { from, to }）
+  //   [P0-A] 投递语义（smart/chat→code/work）已在后端提案硬门收口、不再产生 _modeSwitch，
+  //   此处只剩真实状态转移（work/code→chat/smart、code↔work）的 Tab 跟随。
   const modeSwitch = ext._modeSwitch;
   if (modeSwitch?.to) {
     // 映射权威源 ./modeTabMap.mjs（T-3）。裸表无回退：未知 mode→undefined，由下方 else 分支 warn+toast。
     const targetTab = MODE_TO_TAB[modeSwitch.to];
-    const inSmart = document.body.dataset.activeTab === "smart";
-    if (inSmart && (modeSwitch.to === "work" || modeSwitch.to === "code")) {
-      // 全智能设计 2.3 + P0-2: 不立即切 Tab, 显示临时对话 + 自动新建工作聊天
-      _ensureModeChatId(modeSwitch.to).catch(() => { /* 静默 */ });
-      window.dispatchEvent(new CustomEvent("beilu:smart-mode-switch", {
-        detail: { from: modeSwitch.from, to: modeSwitch.to, taskTitle: ext._taskOverlay?.title || "" }
-      }));
-      console.log("[websocket] smart模式下modeSwitch: 准备临时对话,不切Tab", modeSwitch);
-    } else if (targetTab) {
+    if (targetTab) {
       console.log("[websocket] AI模式切换 → Tab跟随:", modeSwitch.from, "→", modeSwitch.to, "→ Tab:", targetTab);
       window.dispatchEvent(new CustomEvent("beilu:switchTab", { detail: { tab: targetTab } }));
     } else {
@@ -529,69 +538,10 @@ async function _handleModeSwitchPreset(entry) {
 
 }
 
-// 全智能设计 P0-2: 确保工作/代码模式有对应 chatid (不存在就自动新建)
-// N38: 解析后调 bindChatMode 把该线绑到对应模式（active_modes_map[chatId]）——
-// modeSwitch 不再做 char 级全局翻转，投递线的模式解析依赖此绑定（幂等，失败回退 char 级）。
-async function _ensureModeChatId(mode) {
-  const { getModeChatIdKey } = await import("../../panels/feature/featureControls.mjs");
-  const _charName = storage.get(KEYS.BEILU_LAST_CHAR) || "";
-  // [补丁扫描修复二批 2026-07-13] 原 `|| 旧全局键` 回退是死分支+掩病：getModeChatIdKey 对
-  //   合法 mode（含 charName 空时）恒返回键，返 null 仅=mode 非法——此时兜到 work/code 旧键
-  //   等于把非法模式静默写进别的模式线。改为诚实拒绝。
-  const key = getModeChatIdKey(mode, _charName);
-  if (!key) { console.warn(`[websocket] _ensureModeChatId: 非法 mode "${mode}"，跳过`); return ""; }
-  const existing = storage.get(key);
-  if (existing) {
-    _bindModeChatId(existing, mode);
-    return existing;
-  }
-  try {
-    // T6b批7：POST /new → sendAction shells:chat#new。!ok 门面抛错走 catch（原 !res.ok return "" → catch 也 return ""，等价）。
-    const data = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-    const cid = data?.chatid || "";
-    if (cid) {
-      // [R1 配套 0713] 懒建补绑卡：其余 6 条新建路径（doCreateNewChat/charsel×3/chat.mjs 规则3与
-      //   init 兜底）全部 await bindCharToChat 后才写指针/分类，唯此处漏绑 → 对话无 primaryCharName，
-      //   服务端 /using 反查定键失败、文件落旧路径无归属。绑卡失败不阻断懒建（指针写被服务端
-      //   拒收时经 R4 toast 可见，非静默）。
-      if (_charName) {
-        try {
-          await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: cid }, payload: { charname: _charName } });
-        } catch (e) { console.warn("[websocket] 懒建绑卡失败（在用指针将被服务端拒收）:", e?.message); }
-      }
-      // 0713 直写收口：原 storage.set(key, cid) 只写本地——模式线指针的最后一个绕收口写点。
-      //   本地换线服务端 mode_active_chats 不知情 → 恢复链/横幅（读本地）与「XX窗口在用」徽标
-      //   （读服务端）从此分叉（chat.mjs:658 同型病：直写=半标记脏指针）。改走 markModeActiveChat
-      //   单源（本地+服务端双写；动态 import 防 websocket↔conversationManager 静态环）。
-      const { markModeActiveChat, classifyNewChat } = await import("../chat-core/conversationManager.mjs");
-      markModeActiveChat(mode, _charName, cid);
-      // [D6 收口 0713] 懒建对话补分类落位（convMeta.mode+服务端 chat_modes 双写）——原漏调=
-      //   该对话在列表永无模式徽章。显式传 mode：AI 驱动切模式场景目标模式≠getCurrentMode()。
-      classifyNewChat(cid, _charName, mode);
-      console.log("[websocket] 自动新建", mode, "聊天:", cid);
-      _bindModeChatId(cid, mode);
-    }
-    return cid;
-  } catch (e) {
-    console.warn("[websocket] 自动新建聊天失败:", e.message);
-    return "";
-  }
-}
-
-function _bindModeChatId(chatid, mode) {
-  // T6b批7：setdata {_action:bindChatMode} → sendAction beilu-memory#*（通配组装）。fire-and-forget，失败静默 .catch。
-  sendAction({
-    verb: "bindChatMode",
-    target: "plugins:beilu-memory",
-    source: "web",
-    payload: {
-      mode,
-      chat_id: chatid,
-      // 角色名三级链与 :332 _getCharName 同口径（该函数是局部作用域，此处不可引用）
-      charName: window._beiluGetCharName?.() || storage.get(KEYS.BEILU_LAST_CHAR) || "",
-    },
-  }).catch(() => { /* 绑定失败不阻塞——后端按 char 级默认解析 */ });
-}
+// [P0-A 2026-08-03 删除] _ensureModeChatId / _bindModeChatId 前端散写建线（new+bindCharToChat+
+//   markModeActiveChat+classifyNewChat+bindChatMode 复制循环）已整体删除——Fable 审查阻断2/非阻断1：
+//   模式线创建唯一权威=服务端 chatOps.ensureModeChatsForChar（确认通过后由 smart-confirmations/confirm
+//   端点调用），前端不再持有第二套创建/绑定逻辑。原唯一调用方=上方 _modeSwitch smart 分支（同批删除）。
 
 // W66: 通用自动继续 @deprecated — 原前端函数 _maybeAutoContinue 已停用、全库零调用点，
 // 自动继续现统一由后端 generation.mjs 触发；为消除死代码已删除该函数（2026-06-01 点3优化）。
@@ -618,6 +568,7 @@ function _evictWsPoolIfNeeded(keepCid) {
   cands.sort((a, b) => a[1] - b[1]); // 最久未活跃在前
   while (_wsPool.size > WS_POOL_MAX && cands.length) {
     const [cid, , sock] = cands.shift();
+    _rejectDispatchPendingForSocket(cid, sock, "WS 连接已被连接池逐出");
     try { if (sock) { sock.onclose = null; sock.close(1000, "pool-evict"); } } catch { /* ignore */ }
     _wsPool.delete(cid);
     _wsLastUsed.delete(cid);
@@ -628,8 +579,26 @@ function _evictWsPoolIfNeeded(keepCid) {
 }
 
 // WS dispatch：前端发 dispatch 请求 → 后端回 dispatch_response，按 id 关联 Promise
-const _dispatchPending = new Map(); // Map<id, { resolve, reject, timer }>
+const _dispatchPending = new Map(); // Map<id, { resolve, reject, timer, chatId, socket }>
 let _dispatchSeq = 0;
+
+function _rejectDispatchPendingForChat(chatId, reason = "WS 连接断开") {
+  for (const [id, pending] of _dispatchPending) {
+    if (pending.chatId !== chatId) continue;
+    clearTimeout(pending.timer);
+    _dispatchPending.delete(id);
+    pending.reject(new Error(reason));
+  }
+}
+
+function _rejectDispatchPendingForSocket(chatId, socket, reason = "WS 连接断开") {
+  for (const [id, pending] of _dispatchPending) {
+    if (pending.chatId !== chatId || pending.socket !== socket) continue;
+    clearTimeout(pending.timer);
+    _dispatchPending.delete(id);
+    pending.reject(new Error(reason));
+  }
+}
 
 // 「另一窗口在用」角标的自持判定桥：后端 getchatlist.inUseCount 数的是全部窗口的连接，
 // 列表渲染方（conversationManager，同步渲染无法动态 import）需减掉本窗口自己持有的连接
@@ -706,15 +675,31 @@ export function sendWebsocketMessage(message) {
  *   WS 可用时返回 Promise，resolve(data) 或 reject(Error)
  */
 export function dispatchViaWs(message, timeout = DEFAULTS.request.timeoutMs) {
-  if (!ws || ws.readyState !== 1) return null; // WS 不可用 → 返回 null，调用方走 HTTP 兜底
+  // dispatch 必须锁定请求所属的 chat：模块级 ws 只代表“当前可见窗口”，
+  // 多窗口并行时借用它会把后台窗口的操作发到另一个对话。
+  const rawChatId = message?.scope?.chatId;
+  const targetChatId = typeof rawChatId === "string" ? rawChatId.trim() : "";
+  if (!targetChatId) return null;
+
+  const targetWs = _wsPool.get(targetChatId);
+  if (!targetWs || targetWs.readyState !== WebSocket.OPEN) return null;
+
+  // 快照请求范围，避免调用方在发送期间切窗口/改写 scope 后改变目标。
+  const dispatchScope = Object.freeze({ ...message.scope, chatId: targetChatId });
   const id = `wd-${++_dispatchSeq}-${Date.now().toString(36)}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       _dispatchPending.delete(id);
       reject(new Error(`[WS dispatch] 超时 (${timeout}ms): ${message.target}#${message.verb}`));
     }, timeout);
-    _dispatchPending.set(id, { resolve, reject, timer });
-    ws.send(JSON.stringify({ type: "dispatch", id, target: message.target, verb: message.verb, payload: message.payload, scope: message.scope }));
+    _dispatchPending.set(id, { resolve, reject, timer, chatId: targetChatId, socket: targetWs });
+    try {
+      targetWs.send(JSON.stringify({ type: "dispatch", id, target: message.target, verb: message.verb, payload: message.payload, scope: dispatchScope }));
+    } catch (error) {
+      clearTimeout(timer);
+      _dispatchPending.delete(id);
+      reject(error);
+    }
   });
 }
 
@@ -779,6 +764,9 @@ function connect(targetChatId) {
   };
 
   newWs.onmessage = (event) => {
+    // 同一 chat 的新连接已经替换连接池后，旧 socket 仍可能吐出排队中的晚到消息。
+    // 所有消息（不只 dispatch_response）都必须由当前池实例消费，否则会重复/倒序更新状态与 DOM。
+    if (_wsPool.get(cid) !== newWs) return;
     _wsLastUsed.set(cid, Date.now()); // 债#7：有消息即算活跃，逐出永远挑真正闲置的那条
     try {
       const msg = JSON.parse(event.data);
@@ -786,10 +774,22 @@ function connect(targetChatId) {
       // WS dispatch 响应：按 id 关联回发送方的 Promise，短路返回不走 broadcast 路径
       if (msg.type === "dispatch_response") {
         const p = _dispatchPending.get(msg.id);
-        if (p) {
+        if (p && p.chatId === cid && p.socket === newWs) {
           clearTimeout(p.timer);
           _dispatchPending.delete(msg.id);
-          msg.ok ? p.resolve({ ok: true, data: msg.data }) : p.reject(new Error(msg.error?.msg || "dispatch failed"));
+          if (msg.ok) {
+            p.resolve({ ok: true, data: msg.data });
+          } else {
+            // 保留后端“处理器未执行”的结构字段，让 sendAction 能只对插件接线竞态做安全重试；
+            // 不能把 E_NODE/E_PART_* 压成纯 message，否则上层无法区分未执行与结果不确定。
+            const error = new Error(msg.error?.msg || "dispatch failed");
+            for (const field of ["code", "retryable", "retryAfterMs", "partpath"]) {
+              if (Object.prototype.hasOwnProperty.call(msg.error ?? {}, field)) error[field] = msg.error[field];
+            }
+            p.reject(error);
+          }
+        } else if (p) {
+          console.error(`[websocket] dispatch_response 连接归属不匹配: expected=${p.chatId}, actual=${cid}, sameSocket=${p.socket === newWs}, id=${msg.id}`);
         }
         return; // 不走 broadcast 路径
       }
@@ -816,6 +816,13 @@ function connect(targetChatId) {
         if (_gen !== null) {
           window.dispatchEvent(new CustomEvent("beilu:line-activity", { detail: { chatid: cid, generating: _gen } }));
         }
+      }
+
+      // 陪伴纯正文流属于承载 chat，但消费面可能不是当前主聊天窗口。对所有已连接线统一桥接，
+      // 由 companionChat 按 detail.chatid 精确过滤；不进入主消息 DOM 的 handleBroadcastEvent。
+      if (msg.type === "companion_stream") {
+        window.dispatchEvent(new CustomEvent("beilu:companion-stream", { detail: { chatid: cid, ...(msg.payload || {}) } }));
+        return;
       }
 
       // 只有当前活跃 chatid 的事件更新 DOM；其他窗口的事件静默（后端已保存）
@@ -860,15 +867,14 @@ function connect(targetChatId) {
   };
 
   newWs.onclose = () => {
-    _wsPool.delete(cid);
-    if (cid === currentChatId) { ws = null; }
+    const isCurrentPoolSocket = _wsPool.get(cid) === newWs;
+    if (isCurrentPoolSocket) _wsPool.delete(cid);
+    if (ws === newWs) ws = null;
 
-    // WS dispatch：连接断开 → 拒绝所有未完成的 dispatch Promise，让调用方可走 HTTP 兜底
-    for (const [id, p] of _dispatchPending) {
-      clearTimeout(p.timer);
-      p.reject(new Error("WS 连接断开"));
-    }
-    _dispatchPending.clear();
+    // pending 既按会话也按连接实例归属：A 断开不影响 B；同一 A 的旧 socket
+    // 延迟 close 也不能拒绝已经通过新 socket 发出的请求。
+    _rejectDispatchPendingForSocket(cid, newWs);
+    if (!isCurrentPoolSocket) return;
 
     if (_accountDeleted) return;
     const fails = (_wsFailCounts.get(cid) || 0) + 1;
@@ -1087,14 +1093,14 @@ async function handleBroadcastEvent(event, winId) {
       }
       break;
     case "message_deleted":
-      wbTrace("websocket", "message_deleted", { index: payload.index });
-      await handleMessageDeleted(payload.index, winId);
+      wbTrace("websocket", "message_deleted", { index: payload.index, messageId: payload.messageId });
+      await handleMessageDeleted(payload.index, payload.messageId, winId);
       // ★ EventBus 桥接: 消息删除 → MESSAGE_DELETED（对标 tavern_events.message_deleted）
       _emitEventBus("message_deleted", payload.index);
       break;
     case "messages_range_deleted":
-      wbTrace("websocket", "messages_range_deleted", { startIndex: payload.startIndex, count: payload.count });
-      await handleMessagesRangeDeleted(payload.startIndex, payload.count, winId);
+      wbTrace("websocket", "messages_range_deleted", { startIndex: payload.startIndex, count: payload.count, messageIdCount: payload.messageIds?.length });
+      await handleMessagesRangeDeleted(payload.startIndex, payload.count, payload.messageIds, winId);
       break;
     case "messages_hidden":
       // _hidden 掩码变化（smartClean/contextClean/手动恢复）→ 当前视图即时灰显/恢复，他端同步
@@ -1103,7 +1109,28 @@ async function handleBroadcastEvent(event, winId) {
       break;
     case "message_edited":
       wbTrace("websocket", "message_edited", { index: payload.index });
-      await handleMessageReplaced(payload.index, payload.entry, winId);
+      // 编辑广播不走通用 message_replaced 的 index/追加策略：它必须在事件所属
+      // winId 中按 messageId 定位，并受 _editVersion 单调门约束。编辑器开启时只挂起，
+      // 不用 WS 回显打断 textarea。
+      {
+        const editApply = await applyAuthoritativeEdit(winId, payload.entry, {
+          deferWhileEditing: true,
+          source: "websocket",
+          editOperationId: payload.editOperationId,
+          payloadFingerprint: payload.payloadFingerprint,
+        });
+        if (editApply.applied !== true && editApply.deferred !== true) {
+          if (editApply.stale !== true) {
+            wbDetect("websocket", "message_edited.authoritativeApply", false,
+              editApply.reason || "edit_not_applied", {
+                winId,
+                messageId: payload.entry?.id,
+                editVersion: payload.entry?._editVersion,
+              });
+          }
+          break;
+        }
+      }
       // ★ MVU 变量同步到 __beiluVarStore
       _syncMvuVariablesToStore(payload.index, payload.entry);
       // ★ EventBus 桥接: 消息编辑 → MESSAGE_EDITED + MESSAGE_UPDATED（设计 §4.5）
@@ -1462,6 +1489,11 @@ export function reconnectWebSocket() {
   connect(currentChatId);
 }
 
+/** 为后台承载对话建立/复用 WS，但不切换 currentChatId；陪伴面板据此接收同一主生成流。 */
+export function ensureChatWebSocket(chatid) {
+  if (typeof chatid === "string" && chatid) connect(chatid);
+}
+
 /**
  * 关闭指定 chatid 的并行 WS 连接（cardsPanel 关标签时调用）。
  * 不影响其他连接。
@@ -1469,6 +1501,8 @@ export function reconnectWebSocket() {
 export function closeParallelWs(chatid) {
   if (!chatid) return;
   const poolWs = _wsPool.get(chatid);
+  if (poolWs) _rejectDispatchPendingForSocket(chatid, poolWs, "WS 连接已被主动关闭");
+  else _rejectDispatchPendingForChat(chatid, "WS 连接已被主动关闭");
   if (poolWs) {
     poolWs.onclose = null;
     poolWs.close();

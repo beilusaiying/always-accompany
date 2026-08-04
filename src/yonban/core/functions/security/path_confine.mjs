@@ -125,23 +125,53 @@ export function confinePath(root, userPath, opts = {}) {
 		throw new Error(`path escapes confinement root: ${userPath}`)
 	}
 
-	// symlink 实路径校验（防软链指向 root 外）：对已存在的最深祖先做 realpath 再比对。
+	// symlink/junction 实路径校验：根和目标必须进入同一 physical canonical 域。
+	// 目标不存在时，解析最近的已存在祖先，再把未存在后缀接到该祖先的真实路径下。
+	// 任何 realpath 权限/竞态/文件系统错误都 fail closed；不再回落到仅字符串边界。
 	const useReal = opts.realpath ?? (getDeployMode() === 'server')
-	if (useReal) try {
-		let probe = resolved
-		while (!fs.existsSync(probe) && path.dirname(probe) !== probe) probe = path.dirname(probe)
-		if (fs.existsSync(probe)) {
-			const real = norm(fs.realpathSync(probe))
-			if (real !== nRoot && !real.startsWith(nRoot + path.sep)) {
-				wbDetect(null, 'deploy', 'confinePath:symlink_escape', false, '路径越界:软链指向沙箱根外(server实路径校验)', { root: absRoot, userPath, real })
-				throw new Error(`path escapes confinement root via symlink: ${userPath}`)
-			}
-		}
+	if (!useReal) return resolved
+
+	const realpathSync = fs.realpathSync.native ?? fs.realpathSync
+	let realRoot
+	try {
+		realRoot = realpathSync(absRoot)
 	} catch (e) {
-		if (String(e.message).includes('escapes')) throw e
-		// realpath 自身失败（权限/竞态）不放行也不误杀：已通过字符串边界检查，记录交调用方
+		wbDetect(null, 'deploy', 'confinePath:root_realpath_failed', false, '沙箱根实路径解析失败,拒绝放行', { root: absRoot, userPath, error: e?.message || String(e) })
+		throw new Error(`confinement root realpath failed: ${absRoot}: ${e?.message || e}`)
 	}
-	return resolved
+
+	let probe = resolved
+	let realProbe
+	while (true) {
+		try {
+			realProbe = realpathSync(probe)
+			break
+		} catch (e) {
+			// ENOENT: 目标/某级父目录尚未创建；ENOTDIR: 未存在后缀经过一个文件。
+			// 两者可继续向上找最深已存在祖先，其余错误一律拒绝。
+			if (e?.code !== 'ENOENT' && e?.code !== 'ENOTDIR') {
+				wbDetect(null, 'deploy', 'confinePath:target_realpath_failed', false, '目标实路径解析失败,拒绝放行', { root: absRoot, userPath, probe, error: e?.message || String(e) })
+				throw new Error(`target realpath failed: ${probe}: ${e?.message || e}`)
+			}
+			const parent = path.dirname(probe)
+			if (parent === probe) {
+				wbDetect(null, 'deploy', 'confinePath:target_ancestor_missing', false, '无法找到目标的已存在祖先,拒绝放行', { root: absRoot, userPath, resolved })
+				throw new Error(`target has no resolvable existing ancestor: ${userPath}`)
+			}
+			probe = parent
+		}
+	}
+
+	const unresolvedSuffix = path.relative(probe, resolved)
+	const physicalTarget = path.resolve(realProbe, unresolvedSuffix)
+	const nRealRoot = norm(realRoot)
+	const nPhysicalTarget = norm(physicalTarget)
+	if (nPhysicalTarget !== nRealRoot && !nPhysicalTarget.startsWith(nRealRoot + path.sep)) {
+		wbDetect(null, 'deploy', 'confinePath:symlink_escape', false, '路径越界:软链或目录联接指向沙箱根外', { root: absRoot, realRoot, userPath, physicalTarget })
+		throw new Error(`path escapes confinement root via symlink or junction: ${userPath}`)
+	}
+
+	return physicalTarget
 }
 
 /**

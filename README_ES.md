@@ -1,196 +1,267 @@
 <p align="center">
-  <img src="imgs/icon.jpg" alt="always accompany" width="200">
+  <img src="imgs/icon.jpg" alt="always-accompany" width="180">
 </p>
 
-<h1 align="center">always accompany</h1>
+<h1 align="center">always-accompany</h1>
+
+<p align="center"><strong>Un proyecto multi-IA + Agent centrado en los mecanismos de contexto y atención</strong></p>
+
+<p align="center">Acompañar, chatear, programar y trabajar comparten un mismo marco de memoria y contexto: como esas IA de la ciencia ficción, que te acompañan y también te ayudan a sacar el trabajo adelante.</p>
+
+<p align="center"><strong>Atención dinámica · Inyección fija · Aislamiento por proyecto · Modos especializados</strong></p>
 
 <p align="center">
-  <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Unirse_a_la_comunidad-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Únete_a_la_comunidad-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
-  <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Dale_una_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Deja_una_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
 
-<p align="center"><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | Español</p>
-
-> Todo este proyecto —diseño, arquitectura y desarrollo— fue completado de forma independiente por un recién graduado universitario, apoyándose en programación asistida por IA, con habilidades que abarcan diseño de algoritmos, principios de biomimética, arquitectura de frameworks y pensamiento lógico.
+<p align="center"><a href="README.md">English</a> · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · <a href="README_DE.md">Deutsch</a> · Español · <a href="README_FR.md">Français</a> · <a href="README_PT.md">Português</a></p>
 
 ---
+
+## ¿Qué puede hacer directamente?
+
+- Mantener chats de largo plazo y juegos de rol, con importación directa de tarjetas de personaje, presets, worldbooks y otros formatos de la comunidad de SillyTavern;
+- Leer y modificar archivos de un proyecto y ejecutar comandos, como una mesa de trabajo de Agent local;
+- Extenderse más allá del navegador mediante Live2D / mascotas de escritorio en imagen, percepción de pantalla, compañía en juegos, entrada de voz y un sistema de Bot que cubre 9 plataformas;
+- Conservar el material de largo plazo en archivos locales, encontrar automáticamente en cada turno los fragmentos relevantes para la pregunta actual y dejar que el contexto antiguo que ya no hace falta se retire;
+- Editar personajes, el contenido y el orden de los prompts, la identidad y la posición de las inyecciones, las reglas de activación condicional, las rutas de recuperación de memoria, los permisos y los plugins, para convertirlo en tu propia IA.
+
+**¿Qué tenemos?** Detrás de todas estas interfaces hay un mismo sistema; la diferencia real se concentra en cuatro cosas:
+
+- **Un marco singular de memoria y contexto** — Data + capas hot / warm / cold conservan el material de largo plazo, y una herramienta que reúne contexto y recupera memoria (P1) recupera antes de cada respuesta los fragmentos relevantes en este momento; la limpieza de contexto llega a la granularidad de la lectura de archivo, es reversible, y la propia IA puede descartar archivos ya leídos que no vuelve a necesitar (en el entorno del autor, medido según el criterio de facturación, la eficiencia de caché ronda el 70–80 %, no es un valor prometido);
+- **Todo el contenido es editable** — personajes, prompts, inyecciones, memoria, rutas de recuperación, permisos y plugins no son cajas negras; hay un punto de entrada para modificar cualquier capa;
+- **Un marco de alta extensibilidad** — las funciones centrales se organizan como plugins, se transmiten a través de una estación de información intermedia, y el frontend solo se encarga de mostrar y operar; los plugins de usuario pueden escribirse en JS, Python o como programas independientes;
+- **Todo lo que tiene un agent** — archivos, comandos, navegador, MCP, múltiples ventanas, aprobación y recuperación, todo presente y compartiendo el mismo marco de memoria y contexto; nació para completar proyectos grandes, y su núcleo es justamente usar la atención limitada allí donde importa.
+
+---
+
+## Inicio rápido
+
+Solo hacen falta dos cosas:
+
+- Una API de IA que funcione;
+- Saber escribir prompts sencillos.
+
+Con eso ya puedes empezar a probarlo. Conviene aclarar de antemano: los prompts de AIRP y Chat todavía los estamos afinando en detalle; por ahora el foco está en la productividad, y el pulido orientado a la compañía irá llegando poco a poco.
+
+Si solo quieres empezar a chatear, ese es todo el coste. El servicio local de recuperación del P1 autodirigido (con un pico de memoria medido actualmente del orden de unos 2 GiB) se puede apagar por completo; los parámetros de P1, la posición de inyección de los prompts, Code, Work y los plugins son configuraciones para profundizar según haga falta, no una asignatura previa para el primer uso.
 
 ```bash
 git clone https://github.com/beilusaiying/always-accompany.git
 cd always-accompany
 run.bat          # Windows
-# o chmod +x run.sh && ./run.sh   # Linux/macOS
+# o chmod +x run.sh && ./run.sh   # Linux / macOS
 ```
 
-Abre tu navegador en `http://localhost:1314` → configura una fuente de servicio de IA → importa una tarjeta de personaje → empieza a chatear. El runtime de Deno se descarga solo automáticamente en el primer arranque, sin instalación manual necesaria. Necesitarás al menos una clave de API de IA. La aplicación incluye un tutorial de wiki completo integrado.
+El lanzador descargará automáticamente el runtime si falta Deno y completará la instalación si las dependencias están incompletas. Cuando la página esté lista, el navegador suele abrirse solo; también puedes acceder manualmente a `http://localhost:1314`.
 
-> **Nota:** El primer inicio tarda más de lo habitual — el entorno necesita descargar dependencias e inicializar la base de datos. Por favor, espere a que la página cargue completamente antes de interactuar. Los inicios posteriores serán mucho más rápidos.
+| 1. Elige el idioma de la interfaz | 2. Vincula una fuente de servicio de IA |
+|---|---|
+| ![Elegir idioma](imgs/screenshots/onboarding-language.png) | ![Vincular API](imgs/screenshots/onboarding-api.png) |
+
+Introduce la dirección del servicio, la API Key y el modelo; tras guardar, elige o importa una tarjeta de personaje y ya puedes empezar a chatear. Se necesita al menos una API de IA que funcione; la capacidad del modelo y el coste dependen del servicio que vincules. La aplicación incluye una [Wiki completa](site/wiki/getting-started/overview.md), y también puedes visitar la [versión en línea](https://beilusaiying.github.io/always-accompany/).
+
+> El primer arranque suele tardar más: el runtime necesita descargar dependencias e inicializar los datos locales. Espera a que la página aparezca por completo antes de operar; los arranques posteriores serán más rápidos. Capacidades opcionales como la voz o la mascota de escritorio pueden tener su propia descarga inicial o requisitos de entorno.
 
 ---
 
-Una memoria recursiva de tres capas (archivado día → mes → año, JSON puro, capacidad de 260 años) + una IA de recuperación anticipada (una IA dedicada que solo busca recuerdos relevantes y entrega lo que encuentra a la IA de respuesta —cada una se mantiene en su propio carril—) + limpieza de contexto por niveles (limpiar algo solo evita que se vuelva a enviar; el texto original permanece intacto y siempre puede restaurarse). Estas tres piezas encajan entre sí para que la IA siga recordando cada palabra que has dicho, sin estar limitada por la ventana de contexto. Sobre esa base, hemos construido chat/rol, modo de programación tipo IDE, modo de trabajo (incluyendo presentaciones hechas por IA), una mascota de escritorio Live2D (conciencia de pantalla + compañía en juegos), entrada de voz, un Bot de Discord e integración de herramientas externas MCP —cada punto de entrada comparte la misma memoria, así que cambiar de ventana no hace que la IA te olvide—. El motor de recuperación autodirigido ya está en producción (algoritmo puro, cero LLM, cero red, a escala de milisegundos, filtrado en tres capas BLQ+NB300+WordNet).
-
----
-
-## Resumen de funciones
+## Funciones de un vistazo
 
 <table>
 <tr>
 <td width="33%">
 
-**💬 Chat / Rol**
+**💬 Chat / juego de rol**
 ![Interfaz de chat](imgs/screenshots/chat-interface-mode.png)
 
 </td>
 <td width="33%">
 
-**🖥️ Modo de programación IDE**
+**🖥️ Modo de programación tipo IDE**
 ![Programación IDE](imgs/screenshots/ide-coding.png)
 
 </td>
 <td width="33%">
 
-**📊 Modo de trabajo (presentaciones hechas por IA)**
-![Modo trabajo PPT](imgs/screenshots/work-ppt-mode.png)
+**📊 Modo Work y PPT**
+![Modo Work PPT](imgs/screenshots/work-ppt-mode.png)
 
 </td>
 </tr>
 <tr>
 <td width="33%">
 
-**🐾 Mascota de escritorio Live2D + conciencia de pantalla**
+**🐾 Mascota de escritorio Live2D + percepción de pantalla**
 ![Mascota de escritorio](imgs/screenshots/live2d-pet-mode.png)
 
 </td>
 <td width="33%">
 
-**🔒 Puerta de permisos de seis niveles L0–L5**
+**🔒 Seis plantillas de permisos + reglas por herramienta**
 ![Configuración de permisos](imgs/screenshots/ai-permissions.png)
 
 </td>
 <td width="33%">
 
-**🗜️ Compresión por niveles × control línea por línea**
+**🗜️ Compresión por capas × control uno a uno**
 ![Mecanismo de compresión](imgs/screenshots/compression-detail.png)
 
 </td>
 </tr>
 </table>
 
-- **🧠 Memoria de tres capas**: caliente (inyectada cada turno) / templada (recuperada bajo demanda) / fría (archivo profundo), JSON puro + totalmente impulsado por prompts, cero base de datos
-- **🎯 Recuperación anticipada P1**: una IA pequeña dedicada busca recuerdos primero y se los entrega a la IA de respuesta, motor dual BM25 + regex, la recuperación puede correr en un modelo gratuito
-- **🗜️ Sistema de compresión**: tres niveles (un clic / por tipo / línea por línea) × cuatro granularidades (mensajes de chat / lecturas de archivos / inyecciones del sistema / contenido de proceso) + limpieza autónoma de IA con `<contextClean>`, todo reversible
-- **📊 10 tablas de memoria**: almacenamiento estructurado, mantenido automáticamente por la IA vía `<tableEdit>`, logrando aislamiento de información (si el personaje no debería saber algo, simplemente no está en la tabla)
-- **👑 Motor de prompts**: estructura de mensajes de 5 segmentos + toma de control de tres rondas de TweakPrompt, variables de macro + inyección dinámica del libro del mundo (modos siempre activo / regex / dinámico)
-- **💻 Flujo de trabajo a nivel IDE**: diseño de tres paneles estilo VSCode, la IA lee y escribe archivos directamente, ejecución de comandos aprobada línea por línea
-- **🔌 Herramientas externas MCP**: pega un fragmento JSON para conectar; los servidores basados en comandos se bloquean por defecto hasta que el propietario los apruebe, con una lista blanca de variables de entorno para prevenir fugas
-- **🐾 Mascota de escritorio + compañía en juegos**: mascota Live2D / paquete de imágenes, tres niveles de privacidad, capturas de pantalla automáticas + intervenciones espontáneas + frecuencia adaptativa
-- **🎙️ Entrada de voz**: transcripción con modelo local, separación de hablantes + línea de tiempo, el audio nunca sale del equipo
-- **🤖 Bot multiplataforma**: despliegue en Discord, gestión visual + registro de mensajes en tiempo real
-- **🧩 22 plugins de funciones** + host de plugins a nivel de usuario + compatibilidad de ecosistema (importa tarjetas de personaje/presets/libros del mundo en múltiples formatos)
-- **🛡️ Todos los datos permanecen locales**: las eliminaciones van a una papelera y pueden recuperarse, copia de seguridad automática multicapa + reversión con git
-- **🌐 Multilingüe** (chino/inglés/japonés/chino tradicional) · **🔬 Diagnóstico full-stack** (registros de 12 módulos + empaquetado con un clic) · **🎨 Múltiples temas CSS**
+- **🧭 Cuatro modos principales + vistas auxiliares**: Smart totalmente inteligente, Chat / juego de rol, Code programación y Work trabajo tienen cada uno su propia tabla de memoria y ruta P1; además hay vistas auxiliares de gestión de Bot, compañía en juegos, gestión de memoria, adaptación a ST, etc.;
+- **🧠 Data (tabla de memoria estructurada y editable) + memoria en tres capas**: Data y los archivos JSON / MD normales `hot / warm / cold` se encargan respectivamente de los hechos actuales, el material reciente y el archivo; el contenido es consultable y editable;
+- **🎯 P1 (recuperación previa de memoria)**: antes de que la IA principal responda, busca primero fragmentos relevantes en el material de largo plazo que el personaje y el modo actuales permiten leer. Chat / Code / Work usan actualmente por defecto la ruta de algoritmo local; los modos Smart / Bot conservan una ruta de recuperación por IA independiente; las dos rutas son mutuamente excluyentes, y también se pueden apagar;
+- **🗜️ Gestión de contexto**: consulta el consumo por mensaje, lectura de archivo, resultado de herramienta e inyección del sistema; la limpieza normal solo oculta el contenido y deja de enviarlo a la IA, pero el registro permanece en disco y es recuperable;
+- **📊 Tablas de memoria por modo**: Chat tiene las tablas #0–#9, Code y Work usan sus propias tablas y directorios privados, sin amontonar todos los escenarios en una sola tabla;
+- **👑 Todos los prompts son editables**: contenido, orden, interruptor, identidad system / user / assistant, posición de inyección y condiciones, todo se puede ajustar;
+- **💻 Flujo de trabajo de nivel IDE**: diseño de tres columnas, lectura y edición de archivos, ejecución de comandos, lista de tareas, múltiples ventanas y puente de extensión para VS Code;
+- **🔌 MCP (protocolo de conexión de herramientas externas)**: pega un JSON para integrar herramientas externas; los servicios de tipo comando deben pasar por puertas de seguridad como el owner y la lista blanca de variables de entorno;
+- **🐾 Mascota de escritorio y compañía en juegos**: Live2D / packs de imágenes, tres formas de percepción de pantalla, comentarios proactivos, un bucle de compañía en juegos independiente y frecuencia adaptativa;
+- **🎙️ Entrada de voz local**: transcripción local con MOSS-Transcribe-Diarize, con separación de hablantes y marcas de tiempo; por ahora solo hace voz a texto, no incluye lectura en voz por IA;
+- **🤖 Bot en 9 plataformas**: el código fuente actual incluye las carcasas de Discord, Telegram, Slack, LINE, Feishu, DingTalk, WeChat, WeCom y la plataforma X; cada plataforma aún requiere configurar Token, Webhook o puentes de terceros según sus propios requisitos;
+- **🔎 Búsqueda vectorial semántica opcional**: incluye beilu-vectordb (basado en Orama, con búsqueda de texto completo / vectorial / híbrida), apagada por defecto, requiere configurar un endpoint de embedding para activarla; complementa al P1 autodirigido, no es una elección entre uno u otro;
+- **🧩 Sistema de plugins**: el código fuente actual tiene 23 directorios de plugins integrados, y la plantilla de usuario nuevo enumera 14 por defecto; además puedes escribir plugins de usuario en Python, Node o como programas independientes;
+- **🛡️ Datos locales y recuperación**: los datos de la aplicación se guardan en tu equipo, con soporte para ocultar-recuperar, papelera y cadena de copias de seguridad; el contenido que se envía a una IA remota o a un servicio de embedding remoto sigue estando sujeto a la política de datos del servicio que elijas;
+- **🌐 Multilingüe · 🔬 diagnóstico de caja blanca · 🎨 varios temas**: además de las interfaces centrales en chino / inglés / japonés / chino tradicional, se ofrecen otras traducciones de la comunidad; algunos idiomas de pocos recursos pueden estar incompletos.
 
 ---
 
-## Mecanismos detallados
+## ¿Qué pretendemos resolver en realidad?
+
+Guardar la memoria no tiene en sí nada de misterioso. Data es una tabla que se puede escribir; `hot / warm / cold` no es más que crear tú tres carpetas por “tiempo + evento” y anotar md dentro; INJ (entradas editables de inyección de prompt) y los presets también prolongan la forma de orquestar prompts que frontends de personaje como SillyTavern llevan mucho tiempo explorando.
+
+Pero al combinarlos, y añadir P1 (una herramienta que reúne contexto y recupera memoria), surge un ecosistema natural de “vector + inyección dinámica + memoria que sigue a la tarea actual”: una biblioteca de memoria de alta atención y alta densidad de información; y al sumarle la compresión que hemos llevado al nivel de archivo, la cadena completa queda cerrada.
+
+En realidad, al principio pensábamos hacer de P1 una pequeña IA desplegada por separado. Pero el verdadero problema aparece después de guardar: cuanta más memoria se acumula, si en cada turno hay que arrancar expresamente una segunda IA para rebuscar, ¿aguantarán la velocidad y el coste? ¿De verdad esa pequeña IA lo encontrará todo? ¿Hay que usar por fuerza una IA de pago? ¿Cuanto más recuerde, más lenta será la respuesta?
+
+Bajado al día a día, son unos cuantos escenarios conocidos: en un proyecto grande, le pides a la IA que primero mire la cadena, el marco y los MD antes de darle la tarea, y a medio camino los tokens ya están casi llenos; en cuanto comprimes hay que volver a leerlo todo, y cuando varios agents corren a la vez, el contexto es un desastre aún mayor; en tareas largas la IA lee una y otra vez el mismo archivo del que solo cambiaron unas líneas, el contexto se amontona hasta reventar y tú no puedes borrarlo; a veces querías abrir un proyecto nuevo, pero la IA se ancla de golpe a la memoria de un proyecto viejo anterior.
+
+Esto no son suposiciones sacadas de la nada:
+
+- [Issue #6](https://github.com/beilusaiying/always-accompany/issues/6)
+- [Codex #35226](https://github.com/openai/codex/issues/35226) · [Claude Code #34556](https://github.com/anthropics/claude-code/issues/34556);
+- [Discusión de la comunidad](https://www.reddit.com/r/SillyTavernAI/comments/1q7p33c/how_longterm_memory_works_in_sillytavernai/);
+- Los usuarios de los productos de chat web también plantean la transparencia de la memoria de proyecto y la interferencia entre proyectos: [petición de transparencia en la recuperación](https://community.openai.com/t/feature-request-make-project-memory-transparent-searchable-and-user-controlled/1385159) · [petición de memoria específica por proyecto](https://community.openai.com/t/project-specific-memory-in-chatgpt/1140856).
+
+### Tras guardar, ¿cómo se entrega a la IA?
+
+Mediante la **recuperación previa de memoria P1** de desarrollo propio: primero amplía las pistas de búsqueda en torno a la conversación actual del usuario, luego encuentra el texto original relevante dentro del material de largo plazo que el personaje y el modo actuales permiten leer, y se lo entrega a la IA principal. Puedes entenderlo como un mecanismo de atención dinámica que corre fuera del modelo: la pregunta actual decide qué buscar, el material de largo plazo aporta candidatos, y solo los fragmentos seleccionados en este turno entran en la respuesta.
+
+En la práctica esto significa: no tienes que repetir la frase original, una frase relacionada pero no exactamente igual también puede traer de vuelta lo antiguo; tras la recuperación, la interfaz muestra qué memorias se usaron realmente en este turno; lo que verificas es el registro en sí, no un “lo recuerdo” de la IA.
+
+---
+
+## Mecanismos en detalle
 
 <details>
-<summary><strong>🧠 Memoria recursiva de tres capas — Por qué organizarla en capas</strong></summary>
+<summary><strong>🧠 Data y la memoria recursiva en tres capas — por qué seguir estratificando</strong></summary>
 
-Volcar todo el historial en un solo gran depósito hace que las búsquedas sean lentas —y los datos experimentales lo respaldan ([Lost in the Middle](https://arxiv.org/abs/2307.03172) / [RULER](https://arxiv.org/abs/2404.06654) / [NoLiMa](https://arxiv.org/abs/2502.05167)): aunque esté ahí, es posible que el modelo en realidad no lo vea. Basándonos en cómo el hipocampo forma recuerdos y en la curva del olvido de Ebbinghaus, dividimos la información en tres capas según la distancia temporal:
+`hot / warm / cold` son ante todo directorios de ciclo de vida legibles y escribibles, no una base de datos misteriosa:
 
+```text
+🔥 hot  — material reciente, de alta frecuencia, en uso ahora mismo
+🌤️ warm — material de organización y archivo por etapas
+❄️ cold — material histórico de más largo plazo
+📊 Data — hechos estructurados, editables y verificables del modo actual
 ```
-🔥 Capa caliente — inyectada automáticamente cada turno: perfil de usuario / memorias permanentes / tareas pendientes / recuerdos recientes
-🌤️ Capa templada — recuperada bajo demanda (último mes): resúmenes diarios / archivos temporales / índice mensual
-❄️ Capa fría — recuperación profunda (más de un mes): resúmenes mensuales / resúmenes diarios históricos / índice anual
+
+Estratificar da a la inyección fija, la recuperación bajo demanda y el archivo profundo costes y usos distintos. El material original queda en JSON / MD normal, que el usuario puede inspeccionar y corregir directamente; luego P1 decide de qué capas recuperar fragmentos en este turno.
+
+La investigación sobre contexto largo ya ha observado el sesgo de posición y la caída de aprovechamiento cuando la tarea se vuelve más compleja: [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) · [RULER](https://arxiv.org/abs/2404.06654) · [Found in the Middle](https://aclanthology.org/2024.findings-acl.890/). Estos trabajos muestran que “poder meterlo dentro” y “usarlo de forma estable” no son lo mismo, pero no prueban directamente que la solución de este proyecto sea mejor.
+
+</details>
+
+<details>
+<summary><strong>🗜️ Gestión de contexto — de comprimir bloques enteros a la limpieza a nivel de lectura de archivo</strong></summary>
+
+Cuando la IA ejecuta tareas reales genera gran cantidad de contenido de proceso: archivos leídos una y otra vez, resultados de herramientas antiguos, etiquetas de instrucción ya consumidas y mensajes obsoletos. always-accompany ofrece a la vez compresión automática, limpieza por tipo y selección uno a uno; la limpieza por defecto usa la marca `_hidden`, que deja el registro en disco pero deja de enviarlo a la IA.
+
+La IA también puede emitir `<contextClean>` para solicitar una limpieza; el sistema protege las palabras originales del usuario y permite fijar un umbral mínimo de tokens, para evitar romper con frecuencia la caché de prompts cuando el contexto todavía es pequeño. Las operaciones permanentes o de alto riesgo no deben mezclarse con el ocultado normal.
+
+| Compresión multicapa y granularidad | Limpieza a nivel de lectura de archivo |
+|---|---|
+| ![Panel de compresión multicapa](imgs/screenshots/compression-multi.png) | ![Limpieza a nivel de lectura de archivo](imgs/screenshots/context-file-cleanup.png) |
+
+El usuario común solo tiene que elegir las lecturas de archivo o los mensajes que ya no necesita; cuando quiera un control más profundo, puede consultar la factura de tokens, el tipo, el tiempo y el origen.
+
+</details>
+
+<details>
+<summary><strong>🔬 P1 autodirigido — la cadena de atención de memoria dinámica fuera del modelo</strong></summary>
+
+La cadena de producción actual es Node0–4, y no la descripción de 21 nodos de la documentación antigua:
+
+```text
+Node0  entrada actual + mensajes de usuario recientes + Data del modo actual
+  ↓
+Node1  segmentación, categoría gramatical, tiempo, nombres propios y anclas de frase
+  ↓
+Node2  expansión asociativa con SWOW / ConceptNet / Cilin / ATOMIC / léxicos de dominio, etc.
+  ↓
+Node3  filtrado de señales multi-evidencia con BLQ (algoritmo propio) / NB300 / WordNet, etc.
+  ↓
+Node4  vuelta a Data, hot / warm / cold y los registros del modo, con ordenación por BM25, tiempo, capa, Top, importance, etc.
+  ↓
+recalledRecords + directionWords + trace
 ```
 
-La capa caliente cuesta solo ~7.000–11.000 tokens por turno (5–9% de una ventana de 128K). La decadencia de la memoria se inspira en la curva del olvido de Ebbinghaus: `score = weight × (1 / (1 + days × 0.1))`. Totalmente impulsado por prompts —cambia la estrategia de archivado, los significados de las tablas o el estilo de recuperación con solo editar el prompt, sin necesidad de tocar código.
+Las palabras asociadas no son hechos de memoria; los candidatos deben volver a la capa de registro real para convertirse en el resultado final de la recuperación. El panel de caja blanca muestra las unidades de entrada, los candidatos de cada nodo y los motivos de eliminación, el estado del índice, el origen final y los errores, para poder juzgar si un “no se recuperó” se debe a que no hubo coincidencia, a una degradación de recursos o a un fallo de la cadena.
+
+![Prueba de caja blanca del P1 autodirigido](imgs/screenshots/p1-self-driven-diagnostics.png)
+
+El panel de caja blanca demuestra que cada nodo y cada origen real pueden inspeccionarse; la calidad de la recuperación aún debe evaluarse sobre el mismo corpus, la misma tarea y datos con respuestas de referencia. Para los límites completos de ejecución, consulta el [contrato de producción actual de P1](site/wiki/p1-recall/ch7-current-runtime.md).
 
 </details>
 
 <details>
-<summary><strong>🎯 IA de recuperación anticipada P1 — Por qué dividirlo en dos IAs</strong></summary>
+<summary><strong>👑 Todos los prompts son editables — usables por defecto, y también moldeables hasta convertirlos en tu propia IA</strong></summary>
 
-Si la IA de respuesta tuviera que elegir por sí misma las partes relevantes entre cientos de entradas del historial, estaría buscando y respondiendo al mismo tiempo, y su atención se diluiría entre ambas tareas. Así que separamos "encontrar recuerdos" en una IA pequeña dedicada:
+Las entradas de prompt como la configuración del personaje, las reglas del sistema, la descripción del modo, las ranuras de datos de memoria y la enseñanza de herramientas se pueden editar en la interfaz. Cada entrada de contenido admite ajustes:
 
-```
-El usuario envía un mensaje → IA de recuperación P1 (<5K tokens, enfocada solo en recordar) → recuerdos seleccionados + chat actual → IA de respuesta (enfocada solo en responder)
-```
-
-Filtrado grueso con BM25 + coincidencia exacta con regex, acierta el objetivo en máximo 3 rondas. La recuperación funciona bien con un modelo ligero gratuito, así que el costo real por conversación es esencialmente el de una sola llamada a la IA de respuesta. P1 también gestiona el cambio automático de presets (con un enfriamiento de 5 turnos para evitar oscilaciones).
-
-</details>
-
-<details>
-<summary><strong>🗜️ Gestión de contexto — Granularidad de compresión × niveles × limpieza autónoma de IA</strong></summary>
-
-Mientras la IA trabaja, el contenido de proceso se va acumulando (releer el mismo archivo, resultados de búsqueda obsoletos, salidas antiguas de herramientas). Nuestra limpieza solo oculta cosas —todo puede restaurarse en cualquier momento.
-
-**Limpieza autónoma de IA**: el sistema le da a la IA señales sobre su propio uso de contexto (50% sugerido / 70% advertencia / 85% urgente), y la IA usa comandos `<contextClean>` para recortarse a sí misma de forma autónoma. Escribe las cosas antes de limpiar, así que una mala decisión sigue siendo reversible.
-
-**Control fino del usuario**: tres niveles (limpieza completa con un clic / por tipo / selección manual línea por línea) × cuatro granularidades (mensajes de chat / facturación de tokens por lectura de archivo línea por línea / cinco categorías marcables de inyecciones del sistema / contenido de proceso recortado automáticamente).
-
-Tasa de aciertos de caché medida (Opus + DeepSeek, incluyendo cambio de persona de IA + compresión autónoma): **75%–80%**.
-
-![Panel de compresión](imgs/screenshots/compression-multi.png)
+- el texto real
+- el orden
+- si está activada
+- si se envía con identidad system, user o assistant;
+- en qué posición del historial de chat se inserta;
+- que solo tenga efecto en Chat, Code, Work, Bot o bajo condiciones específicas.
 
 </details>
 
 <details>
-<summary><strong>🔬 P1 autodirigido — Un motor de recuperación sin LLM ya en producción</strong></summary>
+<summary><strong>🔒 La IA puede actuar, pero cada tipo de operación tiene su propio límite</strong></summary>
 
-La IA P1 tiene que disparar una solicitud de API cada turno —eso significa latencia, costo y ningún uso sin conexión. Hemos construido una canalización completamente algorítmica (21 nodos, ~9.000 líneas) que alcanza velocidad de milisegundos, cero dependencia de red y atención a nivel de frase.
+La escritura de archivos obtiene `deny / ask / allow` según la herramienta, la ruta y una regla de tres estados; los comandos, además, pasan por listas negra, gris y blanca remota; en despliegue de servidor, la configuración sensible y las capacidades de subproceso requieren que el owner las active.
 
-**Base de datos**: la [red de asociación china SWOW](https://smallworldofwords.org/) / [vectores de palabras de 300 dimensiones ConceptNet Numberbatch](https://github.com/commonsense/conceptnet-numberbatch) (~300.000 palabras) / el grafo de relaciones chino de ConceptNet / THUOCL y otros diccionarios multi-fuente. El léxico se ensambló mediante búsqueda web con IA + 2 días de auto-revisión, a un costo de construcción cercano a cero.
+L0–L5 es un conjunto de plantillas rápidas que van del control estricto a la apertura total, y el usuario aún puede subdividir hasta herramientas y rutas concretas. L5 salta la aprobación y es una elección de alto riesgo explícita; la valla del workspace, el modo de despliegue y las puertas de seguridad propias de cada plugin deben entenderse igualmente por separado.
 
-**Canalización**: tokenización → divergencia asociativa SWOW (la difusión de sinónimos está prohibida —habilitarla reduce la calidad medible en un 55–76%) → puntuación paralela de seis ejes (psicológico / informacional / social / lógico / lingüístico / cognitivo) → localización de 47 subdirecciones → confirmación cruzada multi-recurso → ranking por votación espacial (IDW aditivo, no multiplicativo) → divergencia secundaria (5 rutas independientes) → puntuación BLQ (referenciando la fusión aditiva CombSUM, con pesos de dimensión de investigación propia) → selección de palabra-dirección → inyección de contexto. Los 21 nodos son algoritmo puro, cero LLM.
-
-**Experimentos**: 27 iteraciones de versión; la puntuación de divergencia pasó de 2,01 a 4,05 entre v9 y v26 (+101%, sobre 5, juzgado palabra por palabra a mano); tasa de aciertos de recall ~90%; puntuación promedio general ~3,5. La tasa de respuestas genéricas cayó del 74% al 4%.
-
-**Salida real** (registros en bruto de una ejecución por lotes de 200 casos):
-
-| Entrada del usuario | Dirección divergente del sistema | Disciplina alcanzada |
-| --- | --- | --- |
-| "Apenas puedo aguantar más, ¿por qué es tan difícil estar vivo?" | Conciencia del momento presente / conciencia interoceptiva / **cuál es la naturaleza de lo real** | Psicología → **filosofía existencialista** |
-| "Preparándome para una entrevista en una empresa unicornio, ¿cómo se me ocurren preguntas realmente profundas?" | Análisis de causa raíz / **zona de desarrollo próximo** | Gestión → **psicología educativa** |
-| "Recuperar usuarios perdidos en operaciones de tráfico propio con presupuesto limitado" | **Activación de la red neuronal por defecto** / **BDNF (factor neurotrófico derivado del cerebro)** | Marketing → **neurociencia cognitiva** |
-| "Las consultas a la base de datos son dolorosamente lentas, ¿cómo las optimizo?" | Inmutabilidad y actualizaciones de estado / **SRP (principio de responsabilidad única)** | Operaciones → **metodología de ingeniería de software** |
-| "Una historia sobre un espadachín que se encuentra con un enemigo en una montaña nevada" | **El fusil de Chéjov** / arquetipos junguianos | Ficción → **narratología + psicología analítica** |
-| Un poema original de un usuario, "Morí antes de que llegara la luz" | **Mundos posibles y universos paralelos** | Poesía → **interpretación de muchos mundos en física** |
-
-Estándar de admisión del léxico: **cualquier palabra que el modelo principal ya pudiera inferir con solo leer la entrada en bruto es una palabra desperdiciada** —el valor de P1 reside en darle al modelo direcciones a las que no llegaría por sí mismo.
+![Subdivisión de permisos de edición de la IA](imgs/screenshots/ai-permission-rules.png)
 
 </details>
 
 <details>
-<summary><strong>👑 Motor de prompts + inyección dinámica del libro del mundo</strong></summary>
+<summary><strong>🏗️ Arquitectura del sistema y límites de aislamiento</strong></summary>
 
-**Las tres rondas de TweakPrompt** toman el control de la salida de cada módulo de forma unificada: la Ronda 1 recopila → la Ronda 2 reconstruye la estructura de mensajes de 5 segmentos (beforeChat / injectionAbove / chatHistory / injectionBelow / afterChat) + sustitución de macros → la Ronda 3 toma una instantánea.
+always-accompany funciona con un backend Deno y un frontend web nativo, y organiza las capacidades a través de Shell, Plugin, Service Generator y la capa de funciones yonban. Las llamadas de interfaz, el enrutamiento de modos, la ejecución de archivos / herramientas, la persistencia y los resultados asíncronos tienen cada uno un punto de entrada claro.
 
-**El libro del mundo tiene 3 modos de activación**: siempre activo (inyectado cada turno) / regex (activado por palabra clave) / dinámico (activado al leer condiciones numéricas de las tablas de memoria —por ejemplo, afecto > 80 desbloquea un diálogo especial, o el progreso de la misión al llegar al capítulo 3 cambia la descripción de la cosmovisión).
-
-**Sistema de macros**: `{{char}}` / `{{user}}` / `{{tableData}}` / `{{hotMemory}}` / `{{current_date}}` / `{{time}}` / `{{idle_duration}}` + macros personalizadas.
-
-</details>
-
-<details>
-<summary><strong>🏗️ Arquitectura del sistema</strong></summary>
-
-Tres capas: **capa de función** (memoria / compresión / recuperación / presets / libro del mundo / red / operaciones de archivos… una única copia global) → **capa de transporte** (cada ventana tira de su propia línea, aislada por id, de forma natural asíncrona y sin bloquearse entre sí) → **capa de interfaz** (web / Bot / mascota de escritorio / extensión VSCode —cambia la interfaz sin perder ninguna capacidad).
-
-Aislamiento de datos: a nivel de usuario (fuentes de IA / configuración global) / a nivel de tarjeta de personaje (memoria / chat / libro del mundo / regex) / a nivel de conversación (historial de chat / modo / submodo).
-
-Los 22 plugins crecen bajo una especificación unificada, MCP conecta herramientas externas, y el host de plugins a nivel de usuario monta programas Python/Node —las extensiones nunca tocan el código base.
+| Límite | Función actual |
+|---|---|
+| Usuario | El límite raíz de persistencia en escenarios multiusuario / servidor |
+| Tarjeta de personaje | Distintos personajes, relaciones, clientes o proyectos usan distintas raíces de memoria, configuraciones y conversaciones |
+| Modo | Chat / Code / Work usan tablas distintas, directorios privados, registros de preset y rutas P1; el material de largo plazo común de una misma tarjeta de personaje aún puede compartirse |
+| Ventana | Acota la entrada de este turno, los candidatos y resultados de P1, el workspace y el retorno asíncrono |
 
 </details>
 
 <details>
-<summary><strong>🔭 Sobre la era de las ventanas de contexto gigantes</strong></summary>
+<summary><strong>🔭 Sobre las ventanas de contexto de 1M, 2M y más grandes</strong></summary>
 
-Incluso si las ventanas de contexto se expanden a 10M+ tokens, seguimos manteniendo la memoria por capas: ① hay evidencia experimental sólida de que la utilización del contexto decae a medida que aumenta la longitud; ② ~10K tokens de memoria curada llevan la información de 100K+ tokens de historial en bruto, a un costo un orden de magnitud menor; ③ las tablas estructuradas son más fáciles de leer y escribir con precisión por una IA que la información dispersa en una conversación.
+Las ventanas más grandes son muy valiosas, pero capacidad, atención, coste y estado de la tarea no son lo mismo. always-accompany hace estratificación y recuperación sobre todo para elevar la atención y optimizar la forma de almacenar dentro del contexto, especialmente de cara a los grandes proyectos de código y los chats de largo plazo de hoy.
+
+Quizá te haya pasado: cuanto más largo el chat y más memoria, más recibe la IA, y su respuesta y su memoria empiezan en cambio a confundirse y a ralentizarse; y al programar es que, aunque te den 1M de contexto, un proyecto grande puede chocar de inmediato contra el límite.
 
 </details>
 
@@ -198,51 +269,59 @@ Incluso si las ventanas de contexto se expanden a 10M+ tokens, seguimos mantenie
 
 ## Hoja de ruta
 
-**Completado**: memoria de tres capas · sistema de compresión · recuperación P1 · P1 autodirigido (algoritmo puro, cero LLM, atención a nivel de frase) · motor de prompts · cambio automático de presets · tablas de memoria · inyección dinámica del libro del mundo · mascota de escritorio Live2D · compañía en juegos · entrada de voz · presentaciones hechas por IA · MCP · paralelismo multiventana · puente de extensión VSCode · Bot de Discord · 22 plugins · papelera de reciclaje y reversión de copias de seguridad · diagnóstico full-stack · soporte multilingüe
+**Puntos de entrada e implementaciones que el repositorio ya tiene**: Data + memoria en tres capas · gestión de contexto · P1 autodirigido / AI P1 · edición de todos los prompts y cambio de preset · tablas de memoria por modo · inyección dinámica de conocimiento condicional · mascota de escritorio Live2D / imagen · percepción de pantalla y compañía en juegos · entrada de voz local · generación de PPT · MCP · múltiples ventanas · puente de extensión para VS Code · Bot en 9 plataformas · 23 directorios de plugins integrados · anfitrión de plugins de usuario · cadena de papelera / copia de seguridad · diagnóstico de caja blanca · múltiples idiomas y temas.
 
-**Planes a corto plazo**: más plataformas de Bot · ecosistema de plugins · TTS / texto a imagen · motor de juego con IA (en el linaje de juegos "era" —código determinista para el estado numérico + narrativa de LLM + renderizado simbólico) · modo de transmisión en vivo
+**Direcciones próximas**: más plataformas de Bot · ecosistema de plugins y ejemplos · TTS / texto a imagen · motor de juegos con IA (estado numérico determinista + narrativa LLM + renderizado simbólico)
 
 ---
 
 ## Stack tecnológico
 
-Runtime fount (Deno) · capa de compatibilidad backend Node.js + enrutamiento estilo Express · frontend JS vanilla (ESM) · recuperación inteligente BM25 + regex (JS puro, sin dependencias) · mascota de escritorio Electron · modelo de transcripción de voz local · multiplataforma discord.js v14 · almacenamiento JSON puro
+Runtime Deno (compatible con Node.js) · enrutamiento estilo Express · frontend en JavaScript / ESM nativo · WebSocket · almacenamiento local en JSON / MD · mascota de escritorio Electron · servicios opcionales en Python (recursos de P1, STT, PPT) · discord.js v14 · puente de extensión para VS Code.
+
+Para la explicación de la arquitectura, consulta [Arquitectura del sistema](site/wiki/developer/architecture.md); para las cadenas de mensajes, herramientas y permisos, consulta el [sistema de herramientas YonBan](site/wiki/yonban/tools.md) y el [mecanismo de aprobación](site/wiki/yonban/approval.md).
 
 ---
 
 ## Comunidad
 
-<a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Unirse_ahora-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+<a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Únete_ya-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-Comparte tarjetas de personaje · publica presets · contribuye libros del mundo · reporta errores · sugiere funciones · contribuye código —¡todos son bienvenidos!
+Comparte tarjetas de personaje · publica presets y conocimiento condicional · aporta plugins · reporta bugs · propón casos de uso reales · participa en el benchmark · contribuye código.
 
 ---
 
 ## Tecnologías y recursos utilizados
 
-- **Transcripción de voz**: [MOSS-Transcribe-Diarize](https://huggingface.co/ICTNLP/MOSS-Transcribe-Diarize) (despliegue local con diarización de hablantes; el modelo, ~1,8 GB, se descarga automáticamente en el primer uso)
+- **Transcripción de voz**: [MOSS-Transcribe-Diarize](https://huggingface.co/ICTNLP/MOSS-Transcribe-Diarize) (despliegue local, modelo de unos 1,8 GB, se descarga por separado en el primer uso)
 - **Vectores de palabras**: [ConceptNet Numberbatch](https://github.com/commonsense/conceptnet-numberbatch) (Speer & Lowry-Duda, 2017)
-- **Datos de asociación**: el conjunto de datos de asociación china [SWOW (Small World of Words)](https://smallworldofwords.org/)
-- **Tokenización y diccionarios**: THUOCL / CoreNatureDictionary / Chinese-Synonyms y otros recursos públicos
-- **Puente de motor de búsqueda**: [ddgs](https://pypi.org/project/ddgs/) (una capa de huella digital TLS en Python que resuelve el problema de que las solicitudes fetch en bruto sean degradadas por los motores de búsqueda)
+- **Datos asociativos**: datos de asociación en chino de [SWOW (Small World of Words)](https://smallworldofwords.org/)
+- **Segmentación y diccionarios**: THUOCL, CoreNatureDictionary, Chinese-Synonyms y otros recursos públicos
+- **Puente de motor de búsqueda**: [ddgs](https://pypi.org/project/ddgs/) (para las solicitudes de búsqueda y la obtención de resultados)
 
 ## Agradecimientos
 
-- **[fount](https://github.com/steve02081504/fount)** — el framework de referencia inicial en los primeros días de este proyecto, que proporcionó infraestructura central como el manejo de mensajes de IA, la gestión de fuentes de servicio y la carga de módulos. El proyecto ha evolucionado desde entonces hacia una arquitectura totalmente independiente, pero fount nos ahorró mucho tiempo de desarrollo de bajo nivel en las primeras etapas y nos dio muchas ideas valiosas de las que partir —un sincero agradecimiento por ello
-- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — el proyecto pionero en el rol con IA; su formato de presets, especificación de tarjetas de personaje y sistema de libro del mundo se han convertido en estándares de la comunidad, y este proyecto es totalmente compatible con su ecosistema
-- **Comunidad de plugins de SillyTavern** — gracias a cada autor de plugins de código abierto por su exploración y aportes en torno a motores de renderizado, extensiones de funciones y más
+- **[fount](https://github.com/steve02081504/fount)** — el marco de referencia en los inicios del proyecto, que aportó ideas de infraestructura como el procesamiento de mensajes de IA, la gestión de fuentes de servicio y la carga de módulos, y ahorró mucho tiempo de desarrollo de base;
+- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — un pionero importante del ecosistema de juego de rol con IA y de prompts. always-accompany admite importar sus tarjetas de personaje, presets, worldbooks y otros formatos de la comunidad;
+- **La comunidad de plugins de SillyTavern y todos los autores de recursos de código abierto** — gracias por la exploración y por compartir en renderizado, personajes, extensiones, recuperación y cadenas de herramientas.
+
+## Por qué hago este proyecto
+
+> El diseño, la arquitectura y el desarrollo de este proyecto los ha hecho un ni-ni que quiere encontrar trabajo (es broma, más o menos), con la ayuda de la programación asistida por IA, combinando diseño de algoritmos, ideas de biónica, arquitectura de marco y razonamiento lógico.
+
+always-accompany no busca embutir funciones de moda en un mismo menú: al principio solo era que el autor quería usarlo él mismo :). Por supuesto, también tiene de verdad un sistema completo de plugins y marco, y es compatible con varios idiomas.
 
 ---
 
 <details>
-<summary><strong>📸 Más capturas de pantalla de funciones (haz clic para expandir)</strong></summary>
+<summary><strong>📸 Más capturas de funciones (haz clic para ver)</strong></summary>
 
 | | | |
 |---|---|---|
-| ![Detalle PPT](imgs/screenshots/ppt-detail.png) **Flujo completo de PPT** | ![Configuración de seguridad](imgs/screenshots/security-settings.png) **Seguridad y flujo de tareas** | ![Centro de seguridad](imgs/screenshots/security-center.png) **Centro de seguridad** |
-| ![Multilingüe](imgs/screenshots/i18n-support.png) **Soporte multilingüe** | ![Temas CSS](imgs/screenshots/css-themes.png) **Múltiples temas** | ![wiki](imgs/screenshots/wiki-guide.png) **Wiki integrada** |
-| ![Submodo](imgs/screenshots/sub-mode-agent.png) **Flujo de trabajo de submodo** | ![Menú](imgs/screenshots/hamburger-menu.png) **Vistazo al contexto** | ![loop](imgs/screenshots/auto-loop.png) **Loop automático/programado** |
-| ![Detección de herramientas](imgs/screenshots/tool-detection.png) **Detección de entorno** | ![Capas de memoria](imgs/screenshots/memory-data-layers.png) **Estructura de archivos de memoria** | ![Extensiones](imgs/screenshots/browser-automation.png) **Automatización de navegador** |
-| ![Interfaz externa](imgs/screenshots/external-interface.png) **Interfaz externa** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Bot de Discord** | |
+| ![PPT detallado](imgs/screenshots/ppt-detail.png) **Flujo completo de PPT** | ![Configuración de seguridad](imgs/screenshots/security-settings.png) **Seguridad y flujo de tareas** | ![Centro de seguridad](imgs/screenshots/security-center.png) **Centro de protección de seguridad** |
+| ![Multilingüe](imgs/screenshots/i18n-support.png) **Soporte multilingüe** | ![Temas CSS](imgs/screenshots/css-themes.png) **Varios temas** | ![Wiki](imgs/screenshots/wiki-guide.png) **Wiki integrada** |
+| ![Submodo](imgs/screenshots/sub-mode-agent.png) **Flujo de submodos** | ![Menú](imgs/screenshots/hamburger-menu.png) **Vista rápida del contexto** | ![Loop](imgs/screenshots/auto-loop.png) **Loop automático / programado** |
+| ![Detección de herramientas](imgs/screenshots/tool-detection.png) **Detección del entorno** | ![Capas de memoria](imgs/screenshots/memory-data-layers.png) **Estructura de archivos de memoria** | ![Extensión](imgs/screenshots/browser-automation.png) **Automatización del navegador** |
+| ![Interfaz externa](imgs/screenshots/external-interface.png) **Interfaz externa** | | |
 
 </details>

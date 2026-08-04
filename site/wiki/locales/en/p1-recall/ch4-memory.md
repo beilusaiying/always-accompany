@@ -95,7 +95,7 @@ The default tables in chat mode and their archival rules are as follows: the spa
 
 ### 4.2.5 Three-Mode Isolation and Concurrency Control
 
-The system supports three operating modes — chat, code, and work — with memory spaces isolated along multiple dimensions: three sets of table files are fully independent, table caches are keyed by mode, and code and work modes each have dedicated private subdirectories. Session-based task state is isolated per session. The three modes **share** the hot/warm/cold three layers (written by chat mode archival; all three modes can read and search). Mode switching is recorded per session without mutual interference. The designer noted that storage-layer isolation is natural — character cards and conversation files inherently carry isolation information, so storage can be organized directly according to this information.
+The system supports chat, code, and work modes. Their three table files are separate, table caches are keyed by mode, and code and work each have dedicated private subdirectories. Within one character card, however, the hot/warm/cold layers and `tasks.json` are shared. Mode, submode, and preset selection may be recorded per conversation, but `getModeCtxDir` now always resolves to the character-card memory root and no longer splits persistent tasks or memory by `chatId`. Use separate character cards when projects require a hard storage boundary.
 
 Concurrency correctness is ensured by three types of in-process locks: table save locks serialize write queues by file path to prevent concurrent overwrites; read-modify-write locks serialize read-modify-write sequences by file path to prevent lost updates. Additionally, configuration is refreshed from disk on each load to prevent cache staleness after panel modifications.
 
@@ -103,13 +103,13 @@ Concurrency correctness is ensured by three types of in-process locks: table sav
 
 ## 4.3 Memory Processing Pipeline
 
-The memory processing pipeline consists of a set of archival/maintenance presets numbered P2 through P6, corresponding to the human memory encoding-consolidation process from short-term to long-term. A core fact must be stated upfront: among these presets, P3 through P6 are disabled by default, and actual production archival is handled by mechanical archival logic (automatic archival trigger checks and end-of-day archival flow); P2 is the only preset that automatically participates in the archival flow.
+The memory processing pipeline includes archival/maintenance presets P2 through P6. Production archival is handled by mechanical threshold checks and the end-of-day flow, while the background P2 callback has been stopped. The current manual button calls `triggerP2Summary` with `manual:true`, so it is no longer rejected by the `manual_button` auto-trigger guard. This proves that the manual call contract is connected; it does not prove a fresh end-to-end run of the external model call or final summary output. P3 through P6 remain disabled by default or require individual verification.
 
 ### 4.3.1 Preset Responsibilities and Default States
 
 | Preset | Name | Default state | Trigger timing | Responsibility | Corresponding human memory stage (post-hoc) |
 |------|------|--------|----------|------|------------------------------|
-| P2 | Table summary/archival | Enabled | Temporary memory table exceeds threshold | Reads archived temporary memory data; adds a refined summary to the event summary table | Short-term to long-term encoding consolidation |
+| P2 | Table summary/archival | Configurable, not automatic | Manual button; real-model output still needs acceptance | Intended to read archived temporary memory and add a refined event summary | Short-term to long-term encoding consolidation |
 | P3 | Daily summary | Disabled | Manual | Consolidates the day's summaries; generates a daily summary and executes end-of-day archival | Sleep-phase memory consolidation |
 | P4 | Hot-to-warm transfer | Disabled | Manual | Reviews the hot layer; calculates transfer scope by rules and archives (user profile is never moved) | Working memory to episodic memory migration |
 | P5 | Monthly summary/archival | Disabled | Manual/automatic | Consolidates over-age daily summaries from the warm layer into monthly summaries and moves them to the cold layer | Episodic to semantic memory monthly consolidation |
@@ -140,11 +140,11 @@ End-of-day archival is a multi-step process that executes in sequence: merge the
 
 The warm-to-cold migration details are: at most once per day, gated by a date stamp; migrated by entire monthly directories; uses copy-then-delete rather than atomic rename (to accommodate cross-volume scenarios; engineering records note this method may not be atomic but does not lose data); after migration, the cold-layer yearly index and warm-layer monthly index are updated, and empty directories are cleaned up.
 
-### 4.3.4 P2 Trigger Path
+### 4.3.4 Current P2 Trigger State
 
-The complete trigger path of P2 is: the automatic archival trigger check, upon detecting that the temporary memory table row count exceeds the threshold, first executes physical archival to write temporary memory to disk as a warm-layer batch file, then asynchronously triggers P2 summarization; internally, P2 summarization first performs a safety-fallback re-archival to ensure disk persistence, then reloads memory data (at which point the temporary memory table has been cleared), and finally runs the P2 preset to perform table edits and write the refined summary into the event summary table.
+Since 2026-08, the automatic archive check performs mechanical archival only and no longer invokes P2 asynchronously. The UI button now passes `manual:true` to `triggerP2Summary`; the function skips only `trigger=manual_button` calls that are not explicit manual invocations. The button therefore passes the former early-return point, but this turn did not re-run the final summary with a real model service.
 
-The warm-layer batch files produced by P2 archival can be retrieved by subsequent recall searches. The system also has a maintenance-layer preset that runs silently every few turns, responsible for reading the current month's conversations, calibrating the multi-axis weights used by divergence, and outputting weight and co-occurrence boost files. Its output is used preferentially by the divergence stage; this maintenance layer has no direct invocation relationship with the P2-through-P6 archival pipeline.
+Warm-layer batches produced by mechanical archival remain searchable. P2 is intended to read that persisted material and write a refined event summary. The current evidence supports a connected manual call path, not a claim that the external model call, writeback, and summary quality have completed live acceptance. A separate maintenance preset calibrates divergence weights and has no direct invocation relationship with the P2-through-P6 pipeline.
 
 ---
 

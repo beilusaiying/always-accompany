@@ -1,12 +1,12 @@
 /**
  * [beilu-ppt] — 字符画 PPT 管线（ppt_ascii_pipeline）的本体侧原生插件桥。
  * 不管 spec 内容质量（那是 AI/预设的事），不管布局几何（那是管线 solver 的事），
- * 不做提示词内容（指令说明文案走 injectTexts CATALOG，用户可配置——凛倾预设域）。
+ * 不做提示词内容（静态协议走可编辑 INJ；结果/错误回喂文案走 injectTexts CATALOG）。
  *
  * 链路：
- *   注入路: GetPrompt → work/code 模式门控 → fillInjectText("ppt.usage") 指令说明
- *     + extension.macro_env（{{ppt_usage}}/{{ppt_out_root}}/{{ppt_last_deck}} 宏，
- *     经 beilu-preset Round1 通用 macro_env 通路进宏环境，供预设取用）
+ *   注入路: GetPrompt → work/code 模式门控 → extension.macro_env
+ *     （{{ppt_out_root}}/{{ppt_last_deck}} 运行态，经 beilu-preset Round1 通用 macro_env 通路
+ *     进入历史后的 INJ-*-ppt-data；静态操作协议住 INJ-work-ppt/INJ-code-ppt）
  *   执行路: AI 回复 <ppt_op ...>{spec JSON}</ppt_op> → ReplyHandler 解析 →
  *     deployGatedAllow 闸 → spec 落盘 outDir/spec.json → Deno.Command 起 python
  *     跑 pipeline.run()（固定 runner 代码，argv 直传不走 shell）→ 解析 JSON 结果 →
@@ -54,8 +54,8 @@ const DEFAULTS = {
 	pythonCmd: "",        // 空=自动（windows→python，其他→python3）
 	outRoot: "",          // 空=<pipelineDir>/works/beilu_decks
 	// [0718 归一 INJ·凛倾"把 ppt usage 删除,我们已经有 inj"] injectUsage/usageDepth/usageOrder 三键退役：
-	// GetPrompt text 自动注入线已删——<ppt_system> 教学唯一入口=INJ-work-ppt/INJ-code-ppt 条目内挂
-	// {{ppt_usage}} 宏（macro_env→preset env→INJ macro:true 二次求宏展开），开关/深度/排序全在 INJ 面板。
+	// GetPrompt text 自动注入线已删——静态教学唯一入口=INJ-work-ppt/INJ-code-ppt；
+	// 配置输出根/最近 deck 走历史后的 INJ-*-ppt-data，开关/深度/排序全在 INJ 面板。
 	maxAsciiChars: 20000, // 回喂字符画预览上限（超出截断，防撑爆上下文）
 	timeoutMs: 300000,    // 管线子进程超时
 	attachPngLimit: 12,   // 挂到回复气泡的 PNG 预览页数上限（pptx 恒附）
@@ -1024,27 +1024,22 @@ const pluginExport = {
 
 		chat: {
 			/**
-			 * GetPrompt — work/code 模式下注入 <ppt_op> 指令说明 + 宏变量。
-			 * 未配置 pipelineDir = 休眠（不注入不产宏，功能对 AI 不可见）。
+			 * GetPrompt — work/code 模式下只提供 PPT 运行态宏。
+			 * 未配置 pipelineDir = 休眠（只产空运行态宏，depth:0 数据条目据此声明不可用）。
 			 */
 			GetPrompt: (arg) => {
 				// ⚠ [铁律] GetPrompt 禁止硬编码提示词文本。引导文案走 injectTexts/fillInjectText（用户可配），操作说明走 INJ 条目。shadowBuild 会检测并隐藏 >200 字符的非宏内容。
-				// [0717 宏残留修] 门控只关"注入文本", 宏恒定义——预设 main 尾挂 {{ppt_usage}}
-				// (preset 装配断链修), 非 work/code 模式若宏未定义会字面残留"{{ppt_usage}}"进上下文
+				// 门控外仍定义空运行态，防 INJ 数据条目出现未展开宏；静态协议不由插件动态生产。
 				if (!ENABLED_MODES.has(resolveMode(arg)) || !settings.pipelineDir) {
-					return { text: [], additional_chat_log: [], extension: { macro_env: { ppt_usage: "", ppt_out_root: "", ppt_last_deck: "" } } };
+					return { text: [], additional_chat_log: [], extension: { macro_env: { ppt_out_root: "", ppt_last_deck: "" } } };
 				}
 
 				const outRoot = resolveOutRoot();
-				const usage = fillInjectText("ppt.usage", { out_root: outRoot });
-				// [0718 归一 INJ] text 自动注入线已删——教学唯一入口=INJ 条目内 {{ppt_usage}} 宏展开
-				//   （INJ 可开关/可配 depth·order/随 autoMode 门控, 一处管理; 文本仍单源 injectTexts）
 				return {
 					text: [],
 					additional_chat_log: [],
 					extension: {
 						macro_env: {
-							ppt_usage: usage,
 							ppt_out_root: outRoot,
 							ppt_last_deck: lastResult?.deck || "",
 						},

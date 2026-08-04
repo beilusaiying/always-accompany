@@ -9,6 +9,7 @@ import { sendAction } from '../../shared/transport/sendAction.mjs' // 6c尾·根
 import { storage, KEYS } from "../../shared/state/storage.mjs" // 6c尾·根级散件归位; // R2: localStorage 集中
 import { beiluChoice, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs" // 6c尾·根级散件归位; // T026: confirm→choice（删除去向询问）
 import { loadChannels } from "./apiChannels.mjs" // 0711 渠道下拉恢复：渠道表单源（后端 PROVIDER_META）
+import { assertApiSourceReadback, isApiSourceMarkedUsable } from "./apiSourceContract.mjs"
 import { whenVisible } from "../../shared/state/utils.mjs" // 0718 可见性门控
 
 // ============================================================
@@ -55,8 +56,6 @@ let _tempEntry = null
 // 「用户没改过 URL」判据：空或仍等于上个渠道默认 → 切渠道才自动换新默认
 let _lastDefaultUrl = ''
 
-const _FALLBACK_ENTRY = { value: 'proxy', label: 'OpenAI 兼容', generator: 'proxy', provider: '', urlField: 'url', urlLabel: 'API URL（完整端点地址）', defaultUrl: '', hint: '' }
-
 async function ensureChannels() {
 	if (!CH) CH = await loadChannels()
 	return CH
@@ -81,9 +80,10 @@ function _rebuildTypeOptions() {
 }
 
 export function getCurrentChannelEntry() {
-	const v = apiTypeSelect?.value || 'proxy'
+	const v = apiTypeSelect?.value
+	if (!v) return null
 	if (_tempEntry && _tempEntry.value === v) return _tempEntry
-	return CH?.byValue.get(v) || CH?.byValue.get('proxy') || _FALLBACK_ENTRY
+	return CH?.byValue.get(v) || null
 }
 
 // ============================================================
@@ -116,7 +116,7 @@ let apiSaveBtn, apiDeleteBtn, apiNewBtn, apiStatus
 // ============================================================
 
 export function getCurrentApiType() {
-	return apiTypeSelect?.value || 'proxy'
+	return apiTypeSelect?.value || ''
 }
 
 // resource:api-changed 自触发抑制：本面板派发该事件时跳过自身监听器重载（dispatchEvent 同步，
@@ -159,6 +159,7 @@ export async function initApiConfig() {
 		resetBtn.title = '回填该渠道的默认端点（可随意修改或清空，此按钮随时可恢复）'
 		resetBtn.addEventListener('click', () => {
 			const e = getCurrentChannelEntry()
+			if (!e) return
 			if (apiUrlInput) apiUrlInput.value = e.defaultUrl || ''
 			_lastDefaultUrl = e.defaultUrl || ''
 		})
@@ -195,6 +196,7 @@ export async function initApiConfig() {
 	apiTypeSelect?.addEventListener('change', () => {
 		// 用户没改过 URL（空或=上个渠道默认）才自动换新默认；改过的值不动（凛倾：可删可改）
 		const e = getCurrentChannelEntry()
+		if (!e) return
 		if (apiUrlInput && (!apiUrlInput.value || apiUrlInput.value === _lastDefaultUrl))
 			apiUrlInput.value = e.defaultUrl || ''
 		_lastDefaultUrl = e.defaultUrl || ''
@@ -238,26 +240,29 @@ async function _renderBindingIndicator() {
 	} catch { el.textContent = '' }
 }
 
-export async function loadApiConfig() {
-	if (!apiSelect) return
+export async function loadApiConfig({ preferredName = '' } = {}) {
+	if (!apiSelect) return false
 	_renderBindingIndicator()
 	try {
 		const list = await fetchApiList()
 		apiSources = list
 		renderApiSelect(list)
 		if (list.length > 0) {
-			// 优先使用 localStorage 中保存的上次选择
+			// 显式目标（如刚创建的源）优先，其次当前源，最后才是 localStorage 历史选择。
 			const saved = storage.get(STORAGE_KEY)
-			const defaultName = (saved && list.includes(saved)) ? saved
+			const defaultName = (preferredName && list.includes(preferredName)) ? preferredName
 				: (currentApiName && list.includes(currentApiName)) ? currentApiName
+					: (saved && list.includes(saved)) ? saved
 				: list[0]
-			await loadApiSource(defaultName)
+			return await loadApiSource(defaultName)
 		} else {
 			clearForm()
+			return true
 		}
 	} catch (err) {
 		console.error('[beilu-chat] 加载 API 配置列表失败:', err)
 		showApiStatus('加载失败: ' + err.message, 'error')
+		return false
 	}
 }
 
@@ -289,7 +294,6 @@ function clearForm() {
 	_removeTempOption()
 	_lastDefaultUrl = ''
 	if (apiNameInput) apiNameInput.value = ''
-	if (apiTypeSelect) apiTypeSelect.value = 'proxy'
 	if (apiUrlInput) apiUrlInput.value = ''
 	if (apiKeyInput) apiKeyInput.value = ''
 	var _clrM = window._beiluSetModel; if (_clrM) _clrM(''); else if (apiModelInput) apiModelInput.value = ''
@@ -315,14 +319,14 @@ function _ensureTempOption(entry) {
 function syncUrlLabel() {
 	const e = getCurrentChannelEntry()
 	const label = document.getElementById('api-url-label')
-	if (label) label.textContent = e.urlLabel
-	if (apiUrlInput) apiUrlInput.placeholder = e.defaultUrl || ''
+	if (label) label.textContent = e?.urlLabel || 'API URL'
+	if (apiUrlInput) apiUrlInput.placeholder = e?.defaultUrl || ''
 	const hintEl = document.getElementById('api-channel-hint')
 	if (hintEl) {
-		hintEl.textContent = e.hint || ''
-		hintEl.classList.toggle('hidden', !e.hint)
+		hintEl.textContent = e?.hint || ''
+		hintEl.classList.toggle('hidden', !e?.hint)
 	}
-	document.getElementById('api-url-reset')?.classList.toggle('hidden', !e.defaultUrl)
+	document.getElementById('api-url-reset')?.classList.toggle('hidden', !e?.defaultUrl)
 }
 
 // ============================================================
@@ -330,7 +334,7 @@ function syncUrlLabel() {
 // ============================================================
 
 async function loadApiSource(name) {
-	if (!name) return
+	if (!name) return false
 	currentApiName = name
 	storage.set(STORAGE_KEY, name)
 	if (apiSelect) apiSelect.value = name
@@ -341,13 +345,27 @@ async function loadApiSource(name) {
 		//   （与 subModePanel._modelSelectReqId 同语义，复用既有单源零新状态），
 		//   await 后不等=用户已切走，丢弃本响应。ensureChannels 后同判（它也 await）。
 		if (currentApiName !== name) return
-		const generator = data.generator || 'proxy'
-		const config = data.config || {}
+		const generator = typeof data?.generator === 'string' ? data.generator.trim() : ''
+		const config = data?.config && typeof data.config === 'object' && !Array.isArray(data.config) ? data.config : {}
 		await ensureChannels()
 		if (currentApiName !== name) return
 		_rebuildTypeOptions()
 
 		if (apiNameInput) apiNameInput.value = config.name || name
+		if (!generator) {
+			// 旧空壳必须可见并可由用户明确选择渠道后修复，不能把它静默解释为 proxy。
+			_removeTempOption()
+			if (apiUrlInput) apiUrlInput.value = config.url || config.base_url || config.host || ''
+			if (apiKeyInput) apiKeyInput.value = config.apikey || ''
+			const setModel = window._beiluSetModel
+			if (setModel) setModel(config.model || '')
+			else if (apiModelInput) apiModelInput.value = config.model || ''
+			_lastDefaultUrl = ''
+			syncUrlLabel()
+			if (apiDeleteBtn) apiDeleteBtn.disabled = false
+			showApiStatus('该配置缺少渠道；请选择渠道后重新保存。', 'error')
+			return
+		}
 		const chValue = CH.valueFor(generator, config)
 		let entry
 		if (chValue) {
@@ -400,9 +418,11 @@ async function loadApiSource(name) {
 				fetchBtn.click()
 			}
 		}, 100)
+		return true
 	} catch (err) {
 		console.error('[beilu-chat] 加载 API 配置失败:', err)
 		showApiStatus('加载失败: ' + err.message, 'error')
+		return false
 	}
 }
 
@@ -415,35 +435,59 @@ async function handleSave() {
 		showApiStatus('请先选择或新建一个配置', 'error')
 		return
 	}
+	const sourceName = currentApiName
+	// 点击瞬间冻结表单与渠道；等待旧配置读回期间切换到别的源，不能把新 DOM 值写回旧源。
+	const channelValue = apiTypeSelect?.value || ''
+	const isTempEntrySnapshot = _tempEntry?.value === channelValue
+	const tempEntrySnapshot = isTempEntrySnapshot ? { ..._tempEntry } : null
+	const formSnapshot = {
+		name: (apiNameInput?.value || '').trim(),
+		apikey: (apiKeyInput?.value || '').trim(),
+		model: (apiModelInput?.value || '').trim(),
+		url: (apiUrlInput?.value || '').trim(),
+	}
 	await ensureChannels()
-	const entry = getCurrentChannelEntry()
+	const entry = tempEntrySnapshot || CH?.byValue.get(channelValue) || null
+	if (!entry) {
+		showApiStatus('请先选择一个 API 渠道', 'error')
+		return
+	}
 	const generator = entry.generator
 
 	// 获取现有配置作为基础，保留高级字段不被覆盖
 	let baseConfig = {}
 	try {
-		const existing = await fetchApiConfig(currentApiName)
+		const existing = await fetchApiConfig(sourceName)
 		baseConfig = existing.config || {}
-	} catch {
-		// 如果获取失败（可能是新建），尝试用生成器模板
-		try { baseConfig = await fetchConfigTemplate(generator) } catch { /* 空对象兜底 */ }
+	} catch (err) {
+		// 已有源读取失败时禁止拿模板冒充原配置继续保存：这会丢失高级字段，
+		// 也会把后端刚刚显式报告的损坏配置覆盖成“看似成功”的新空壳。
+		showApiStatus('无法读取现有配置，已停止保存: ' + err.message, 'error')
+		return
 	}
 
 	// 更新表单中的字段（0714 trim：脏 URL 曾致后端 getModels 解析炸=模型下拉静默空，全字段去首尾空白）
-	baseConfig.name = (apiNameInput?.value || '').trim() || currentApiName
-	baseConfig.apikey = (apiKeyInput?.value || '').trim()
-	baseConfig.model = (apiModelInput?.value || '').trim()
-	if (_tempEntry && entry === _tempEntry) {
+	baseConfig.name = formSnapshot.name || sourceName
+	baseConfig.apikey = formSnapshot.apikey
+	baseConfig.model = formSnapshot.model
+	if (isTempEntrySnapshot) {
 		// 未知生成器：只写探测到的地址字段，不清理其他键、不写 provider（保留原生成器语义）
-		baseConfig[entry.urlField] = (apiUrlInput?.value || '').trim()
+		baseConfig[entry.urlField] = formSnapshot.url
 	} else {
 		// 渠道选中即声明：URL 字段互斥清理 + proxy 渠道写 convert_config.provider（保留其他键）
-		CH.applyToConfig(entry, baseConfig, apiUrlInput?.value || '')
+		CH.applyToConfig(entry, baseConfig, formSnapshot.url)
 	}
 
 	try {
-		await saveApiSource(currentApiName, { generator, config: baseConfig })
-		showApiStatus('✅ 已保存', 'success')
+		const saveResult = await saveApiSource(sourceName, { generator, config: baseConfig })
+		// POST 成功后必须从后端权威读回，不能只凭请求未报错就显示保存成功。
+		const persisted = await fetchApiConfig(sourceName)
+		assertApiSourceReadback(persisted, { generator, config: baseConfig }, '保存')
+		// 保存期间用户若已切换到另一源，不把旧请求结果反向覆盖当前表单。
+		if (currentApiName === sourceName && !await loadApiSource(sourceName))
+			throw new Error('保存已完成，但界面刷新失败；请重新打开 API 设置')
+		const usable = isApiSourceMarkedUsable(saveResult, sourceName)
+		showApiStatus(usable ? '✅ 已保存' : '已保存草稿；请补全 API 地址和模型后再次保存。', usable ? 'success' : 'warning')
 		_emitApiChanged()
 	} catch (err) {
 		showApiStatus('❌ ' + err.message, 'error')
@@ -491,15 +535,37 @@ async function handleNew() {
 		return
 	}
 
-	// 用 proxy 模板作为默认配置
-	let defaultConfig = {}
-	try { defaultConfig = await fetchConfigTemplate('proxy') } catch { /* 空对象兜底 */ }
+	await ensureChannels()
+	const entry = getCurrentChannelEntry()
+	if (!entry) {
+		showApiStatus('请先选择一个 API 渠道', 'error')
+		return
+	}
+
+	// 新建时以用户当前可见的渠道为准；不把新源隐式写成 proxy。
+	let defaultConfig
+	try {
+		defaultConfig = await fetchConfigTemplate(entry.generator)
+	} catch (err) {
+		// 新建必须以生成器真实模板为基线；模板链失败时不创建空 config 假成功。
+		showApiStatus('无法读取渠道模板，已停止创建: ' + err.message, 'error')
+		return
+	}
+	CH.applyToConfig(entry, defaultConfig, entry.defaultUrl || '')
 
 	try {
-		await saveApiSource(safeName, { generator: 'proxy', config: defaultConfig })
+		const saveResult = await saveApiSource(safeName, { generator: entry.generator, config: defaultConfig })
+		const persisted = await fetchApiConfig(safeName)
+		assertApiSourceReadback(persisted, { generator: entry.generator, config: defaultConfig }, '创建')
 		currentApiName = safeName
-		await loadApiConfig()
-		showApiStatus('✅ 已创建', 'success')
+		storage.set(STORAGE_KEY, safeName)
+		if (!await loadApiConfig({ preferredName: safeName })) {
+			showApiStatus('创建已完成，但界面刷新失败；请重新打开 API 设置。', 'error')
+			_emitApiChanged()
+			return
+		}
+		const usable = isApiSourceMarkedUsable(saveResult, safeName)
+		showApiStatus(usable ? '✅ 已创建并可用' : '已创建配置草稿；请填写 API 地址、密钥和模型后保存。', usable ? 'success' : 'warning')
 		_emitApiChanged()
 	} catch (err) {
 		showApiStatus('创建失败: ' + err.message, 'error')

@@ -28,7 +28,7 @@
  *
  * 【关联链】
  *   ← generation.mjs finalizeEntry / runCodeRoundTriggers（R1 交叉）
- *   → ideClient.mjs（callToolAndStore / addPendingApproval / enqueuePendingResult — R3 IDE 交叉）
+ *   → ideClient.mjs（callToolAndStore / await submitPendingApproval / enqueuePendingResult — R3 IDE 交叉）
  *   → backgroundTasks.mjs（autoCheckArchiveTriggers → 触发 P2 总结 — R4 归档交叉）
  *   → beilu-regex ReplyHandler 在本模块之后由框架按插件序调用（R8 正则交叉，不在本文件内）
  *   → storage.mjs（loadMemoryData / saveTablesData / getActiveMode / setActiveMode）
@@ -67,7 +67,8 @@
  *   4. <memoryNote> → parseMemoryNoteTags
  *   5. <codeMemoryWrite>/<workMemoryWrite> → 写热层 md（dataWrite 已删=2026-07-16 去重，框架/问题归记忆表格）
  *   6. <modeSwitch> → setActiveMode（per-chatId，chat→work/code 走投递语义不落盘）
- *   6b. <subModeSwitch> → writeActiveSubModeId + 回路检测
+ *   6b. <subModeSwitch> → skill组域门/回路检测（本入口专属）→ activateSubModeCore（D3 0804 三入口收口：
+ *       map+activation记录+默认预设+事件体单源，autoAdvance 同走；delegate/report 仍 writeActiveSubModeId=legacy 写者）
  *   7. <ideToolCall> → 读写分离 → 安全检查 → 审批门/直接执行 → 外部修改检测 → route 埋点
  *   8. <delegate> → 委派队列入队 + 目标子模式切换
  *   8b. <parallelDelegate> → 并行 runMemoryPresetAI + pendingResults 同步注入
@@ -87,6 +88,7 @@ import { pathToFileURL } from "node:url";
 import { wbT, wbD } from "../../../../../server/wbStub.mjs";
 import { readJsonSafe, readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // 0716 T019 差集收编：委派/审批队列损坏备份后抛（防空表 push 写回覆盖整表）
 import { hasPreset as presetExists, createPreset as createBeiluPreset, getRegistry as getPresetRegistry, applySubModePresetDefault } from "../ai/presetBridge.mjs";
+import { activateSubMode as activateSubModeCore } from "../storage_mod/subModeActivation.mjs"; // D3 0804 三入口收口：<subModeSwitch>/autoAdvance 的 map+activation记录+默认预设+事件体统一走激活 owner
 import { DEFAULT_INJECTION_DEPTH } from "../../prompt/preset/engine/preset_engine.mjs"; // T8·回切：改指 yonban 新位实现体
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs"; // M3：央原子写替裸 fs.writeFileSync 防半写损坏
 import { sanitizeFilename } from "../../../../../scripts/sanitizeName.mjs"; // 0716 轮子收口：文件名安全清洗共享原语
@@ -167,6 +169,7 @@ import { executeWebSearch, buildInjectableSearchText } from "../../web/webSearch
 import { executeWebDownload } from "../../web/webDownload.mjs"; // [0727 下载能力] URL→落盘，主AI/分身 ideToolCall 双入口拦截
 import { stripReasoningTags } from "../../api/proxy/lib/messageTransform.mjs"; // T8·回切：改指 yonban 新位实现体（原经 public 薄壳 re-export，已删壳）
 import { extractEmotion, extractMotion, extractOrbMessage } from "../../render/emotionExtract.mjs"; // T3b·render 组：标签抽取纯逻辑单源
+import { projectCompanionVisibleText } from "../../render/companionOutput.mjs";
 import { WRITE_TOOLS_ALL, FILE_EDIT_TOOLS, READ_TOOLS } from "../../../transport/ideClient.mjs";
 import { createMcpConnectRequest } from "../../mcp/connectRequestStore.mjs";
 
@@ -228,12 +231,17 @@ import {
   parseIdeToolCallTags,
   parseQuestionTags,
   readFilesPermission,
+  renderStaticIdeToolSignatures,
 } from "../../../transport/ideClient.mjs";
 
 import { parseScheduleTaskTag } from "../../notification/scheduler.mjs";
 import { loadPart } from "../../../../../server/parts_loader.mjs";
 // N42 Bot 访问档位（L0-3）：从 args.chat_log 解析本轮触发者档位，非 Bot 来源返回 null=零变化。
+// [P0-B] 返回形状扩展 {isBot, level, isOwner, hostControl, senderId, policyRev}（旧条目缺字段=fail-closed）。
 import { resolveRequestBotPermission, notifyBotDelegateReport } from "../../../../../scripts/botContentShared.mjs";
+// [P0-B 2026-08-03] 操作注册表 + 统一权限 admission：本文件所有可执行标签段先过 admitOperation
+// 单一裁决（ModeDef 声明面=执行面 + Bot 档位/owner/宿主能力 fail-closed），禁再散写裸档位 if。
+import { admitOperation } from "./operationRegistry.mjs";
 import { dispatch } from "../../../dispatch/dispatcher.mjs"; // [0716 T3对接首批] 广播副作用改经 bus:broadcast 出口节点（exits.mjs），删 10 处动态 import broadcast.mjs 散拼样板
 
 // 降噪#74：N42 Bot 访问档位拒绝告警 5 处逐字同模板（modeSwitch/ideToolCall/delegate/parallelDelegate/clone）合并 helper。
@@ -712,7 +720,7 @@ function _parseTaskCheckBody(content) {
  *   - 修改 reply 对象（content_for_show / extension.* / _memory_tags_processed）
  *   - 写表格（tableEdit/memoryArchive → await saveTablesData，H7 修复）
  *   - 写热层 md（codeMemoryWrite/workMemoryWrite）
- *   - IDE 工具执行（ideToolCall → callToolAndStore / addPendingApproval）
+ *   - IDE 工具执行（ideToolCall → callToolAndStore / await submitPendingApproval）
  *   - 分身/并行委派 AI 调用（阻塞式 runMemoryPresetAI）
  *   - 多种 WS 广播（emotion_changed / tool_results_ready / task_update 等）
  * 约束：
@@ -788,6 +796,35 @@ export async function handleReply(reply, args) {
   const charName = args?.char_id;
   if (!username || !charName) return false;
 
+  // 生成层权威回复坐标：新链路直接传 reply_message_id/index，避免并发续轮时
+  // GetChatLogLength()-1 被更晚消息推移。旧调用方未传 index 时才回退原有长度算法。
+  let _replyCoordinatesPromise = null;
+  const _getReplyCoordinates = () => {
+    if (_replyCoordinatesPromise) return _replyCoordinatesPromise;
+    _replyCoordinatesPromise = (async () => {
+      const chatId = _cid || "";
+      const suppliedId = typeof args?.reply_message_id === "string" && args.reply_message_id
+        ? args.reply_message_id
+        : (typeof reply?.id === "string" ? reply.id : "");
+      if (Number.isInteger(args?.reply_message_index) && args.reply_message_index >= 0) {
+        return { chatId, messageIndex: args.reply_message_index, messageId: suppliedId };
+      }
+      let messageIndex = -1;
+      if (chatId) {
+        try {
+          const chatOpsPath = path.join(
+            __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
+          );
+          const chatOps = await import(pathToFileURL(chatOpsPath).href);
+          const logLen = await chatOps.GetChatLogLength(chatId);
+          messageIndex = logLen > 0 ? logLen - 1 : -1;
+        } catch { /* 旧链路无 chatOps 时保留 -1 语义 */ }
+      }
+      return { chatId, messageIndex, messageId: suppliedId };
+    })();
+    return _replyCoordinatesPromise;
+  };
+
   // 任务D: 标记消息所属模式
   if (!reply.extension) reply.extension = {};
   reply.extension._mode = resolveGenerationMode(args, username, charName, _cid);
@@ -796,7 +833,36 @@ export async function handleReply(reply, args) {
   // 非 Bot 来源（本地用户）= null = 零行为变化（回归红线）。Bot 来源按档位路由各通道：
   //   L<3 → ideToolCall / 分身 / modeSwitch 整通道跳过（标签照剥）；L<2 → delegate / parallelDelegate 跳过。
   const botPerm = resolveRequestBotPermission(args?.chat_log);
-  if (botPerm) opLog("entry", "botPermission", { level: botPerm.level }, "ok");
+  if (botPerm) opLog("entry", "botPermission", { level: botPerm.level, isOwner: botPerm.isOwner, hostControl: botPerm.hostControl, senderId: botPerm.senderId }, "ok");
+
+  // ═══════════════════════════════════════════════════════════════
+  // [P0-B 2026-08-03] 统一权限 admission（operationRegistry 单一裁决数据源）。
+  // 用法：各标签段执行前 `_admit("<opId>", "<detail>")`——true=放行走既有执行体；
+  // false=已完成可见拒绝三件套（opLog blocked + wbD + _operation_denied pendingResult 回喂 AI），
+  // 调用方只需跳过执行（标签由既有 replace/_stripAllTags 照剥，不"执行后清标签"）。
+  // 裁决维度：ModeDef 声明面=执行面（requiredModeFeature）+ Bot 档位/ownerOnly/宿主能力（fail-closed）。
+  // 本地来源（botPerm=null）只受 ModeDef 声明维度约束——本地用户权限走既有 permission_level/审批门/规则集。
+  // ═══════════════════════════════════════════════════════════════
+  const _denyOperation = (opId, decision, detail) => {
+    opLog(opId, "operation_denied", { code: decision.code, reason: decision.reason, detail }, "blocked");
+    wbD(_cid, "memory", `handleReply:deny:${opId}`, false, `${decision.code}: ${decision.reason}`, { detail });
+    if (botPerm) _warnBotPermGate(botPerm.level, `${opId}${detail ? " " + detail : ""}（${decision.code}）`);
+    try {
+      ideClient.enqueuePendingResult({
+        tool: "_operation_denied",
+        params: { op: opId, code: decision.code },
+        result: { success: false, error: `🚫 操作 ${opId} 被权限门拒绝：${decision.reason}` },
+        chatid: _qcid,
+        ownerUsername: username,
+        timestamp: new Date().toISOString(),
+      });
+    } catch { /* 拒绝回喂入队失败仅日志（opLog/wbD 已记账） */ }
+  };
+  const _admit = (opId, detail = "") => {
+    const decision = admitOperation(opId, { mode: reply?.extension?._mode, botPerm });
+    if (!decision.allowed) _denyOperation(opId, decision, detail);
+    return decision.allowed;
+  };
 
   // T6-S1: 取本轮召回落盘(getPromptHandler 写)，挂到 reply.extension 做「运用可溯源」。
   // consume-once(读后删) + 10min 新鲜窗，防止上一轮未消费的残留误标到本轮回复。
@@ -937,6 +1003,58 @@ export async function handleReply(reply, args) {
     wbT(_cid, "memory", "handleReply:xmlFixRewrite", { before: _replyLen, after: content.length });
     reply.content = content;
 
+    // 显示态收尾单源（P0-A 提取，2026-08-03）：提案硬门提前收尾与正常尾步共用同一实现，
+    // 防「剥离清单 + 输出管控」两处散写分叉。行为与原尾步逐字等价（strip → W24 输出管控正则）。
+    const _composeContentForShow = async () => {
+      const baseForShow = reply.content_for_show || reply.content;
+      const _customPatterns = await _loadCustomStripPatterns(username);
+      // 可配置桌宠标签名(emotionTag/motionTag/orbMessageTag)读同一权威源,剥离跟随配置(白检同 _safeTag,非法丢弃)
+      let _petStripTags = [];
+      try {
+        const _tsm = await import(new URL("../../screenshot/injection_state.mjs", import.meta.url).href);
+        const _tss = _tsm.loadPetSettingsStore ? _tsm.loadPetSettingsStore(__projectRoot) : {};
+        _petStripTags = [_tss.emotionTag, _tss.motionTag, _tss.orbMessageTag]
+          .filter((t) => typeof t === "string" && /^[\w\u4e00-\u9fff-]+$/.test(t));
+      } catch { /* 配置不可读:默认名已由字面量剥离覆盖 */ }
+      reply.content_for_show = _stripAllTags(baseForShow, _customPatterns, _petStripTags);
+      wbT(_cid, "memory", "handleReply:stripAllTags", { before: (baseForShow || "").length, after: (reply.content_for_show || "").length });
+
+      // W24 §三: 输出管控正则 — content_for_show中过滤违规内容
+      try {
+        const _filterPath = path.join(__projectRoot, "data", "users", username, "output_filter_rules.json");
+        if (fs.existsSync(_filterPath)) {
+          const _filterRules = JSON.parse(await fs.promises.readFile(_filterPath, "utf-8"));
+          const _rules = (_filterRules.rules || []).filter(r => r.enabled);
+          let _violations = [];
+          for (const rule of _rules) {
+            try {
+              const regex = new RegExp(rule.pattern, "gi");
+              if (regex.test(reply.content_for_show)) {
+                reply.content_for_show = reply.content_for_show.replace(regex, rule.replacement || "[已过滤]");
+                if (rule.warn_ai) {
+                  _violations.push({ name: rule.name, message: rule.warn_message || rule.name });
+                }
+              }
+            } catch (_reErr) {
+              console.warn(`[beilu-memory] 输出管控: 规则"${rule.name}"正则错误:`, _reErr.message);
+            }
+          }
+          // 存储违规记录供下轮GetPrompt注入警告
+          if (_violations.length > 0) {
+            const _warningPath = path.join(__projectRoot, "data", "users", username, "_output_filter_violations.json");
+            nicerWriteFileSync(_warningPath, JSON.stringify(_violations, null, 2));
+          }
+        }
+      } catch (_filterErr) {
+        wbD(_cid, "memory", "handleReply:outputFilter", false, _filterErr.message, {});
+        console.warn("[beilu-memory] 输出管控检查失败:", _filterErr.message);
+      }
+      // 陪伴历史/终态与流式气泡使用同一个纯正文投影；写入 extension 后刷新/重启仍不必让
+      // 前端重新发明一份标签清理规则。思维链和操作内容不进入该字段。
+      reply.extension ??= {};
+      reply.extension._companion_visible_text = projectCompanionVisibleText(reply.content_for_show, username, _petStripTags);
+    };
+
     // ★ W66优化：预提取所有操作标签（防止嵌套/顺序导致匹配丢失）
     // 先从原始 content 中提取，再在后续步骤中清理
     const _preExtracted = {};
@@ -978,6 +1096,72 @@ export async function handleReply(reply, args) {
     const _scTestContent = content.replace(/`[^`]*`/g, "").replace(/```[\s\S]*?```/g, "");
     if (/<stopContinue\s*\/?>/.test(_scTestContent)) _preExtracted.stopContinue = true;
 
+    // ═══════════════════════════════════════════════════════════════
+    // P0-A Smart 提案硬门（2026-08-03 全智能确认收口；Fable 审查阻断1/2/6 根修）
+    // why：Smart/Chat → Code/Work 的 <modeSwitch> 是【提案】不是执行。旧链在用户确认前就写
+    //   status:"running" 的角色级 work/_active_task_overlay.json（多任务互覆），且同回复的
+    //   tableEdit/ideToolCall/delegate/分身等可变标签照常执行——「确认」从未成为服务端状态。
+    //   根因层=ReplyHandler 缺统一 admission gate：提案轮必须整体拒绝可变操作，不是逐标签拦截。
+    // 行为（检测到投递语义 modeSwitch：chat|smart → code|work；Bot L<3 沿用既有档位闸不产提案）：
+    //   1. confirmationStore.createPendingConfirmation 建 per-owner 持久化 pending 记录（非 running）；
+    //   2. 本轮全部可变标签一律不执行（提前收尾：只做显示剥离+去重标记，回复正文照常落盘展示）；
+    //   3. 不入任何 pendingResults 池（防触发自动续轮）；generation 按 _pendingConfirmation 硬停续轮/loop；
+    //   4. extension._pendingConfirmation 投影给前端确认卡；确认/取消/状态走 endpoints
+    //      smart-confirmations 认证端点（session owner + 单次 claim），不走前端事件。
+    //   提案登记失败=fail-closed：本轮同样不执行任何可变操作（extension._pendingConfirmationError
+    //   透出真实错误给前端），绝不回退到「无门执行」。
+    // ═══════════════════════════════════════════════════════════════
+    let _proposalGate = false;
+    let _smartProposal = null;
+    let _smartProposalError = "";
+    {
+      const _propMatch = content.match(/<modeSwitch>(chat|code|work)<\/modeSwitch>/i);
+      if (_propMatch) {
+        const _propTarget = _propMatch[1].toLowerCase();
+        const _propCur = resolveGenerationMode(args, username, charName, _cid);
+        const _propDelivery = (_propCur === "chat" || _propCur === "smart") && (_propTarget === "code" || _propTarget === "work");
+        if (_propDelivery && !(botPerm && botPerm.level < 3)) {
+          _proposalGate = true;
+          try {
+            const _confStorePath = path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "confirmationStore.mjs");
+            const _confStore = await import(pathToFileURL(_confStorePath).href);
+            const _cleanReplyTitle = (reply.content || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+            const _propRec = _confStore.createPendingConfirmation({
+              ownerUsername: username,
+              sourceChatId: _cid || "",
+              sourceCharName: charName === "_global" ? (args?.char_name || charName) : charName,
+              sourceMode: _propCur,
+              sourceMessageId: (typeof args?.reply_message_id === "string" && args.reply_message_id) || (typeof reply?.id === "string" ? reply.id : ""),
+              targetMode: _propTarget,
+              taskTitle: _cleanReplyTitle.substring(0, 80) || `${_propTarget}模式任务`,
+              deferredTags: _tagSummary,
+            });
+            _smartProposal = _confStore.projectConfirmation(_propRec);
+          } catch (_propErr) {
+            _smartProposalError = _propErr?.message || String(_propErr);
+            wbD(_cid, "memory", "handleReply:smartProposal:createFail", false, _smartProposalError, { target: _propTarget });
+            console.error(`[beilu-memory] Smart 提案登记失败（fail-closed：本轮可变操作仍全部拒绝）: ${_smartProposalError}`);
+          }
+        }
+      }
+    }
+    if (_proposalGate) {
+      if (_smartProposal) {
+        reply.extension._pendingConfirmation = _smartProposal;
+        opLog("modeSwitch", `proposal ${_smartProposal.sourceMode}→${_smartProposal.targetMode}`, { confirmationId: _smartProposal.confirmationId, deferredTags: _tagSummary }, "ok");
+        wbT(_cid, "memory", "handleReply:smartProposal", { confirmationId: _smartProposal.confirmationId, deferred: _tagSummary });
+      } else {
+        reply.extension._pendingConfirmationError = _smartProposalError || "提案登记失败";
+        opLog("modeSwitch", "proposal_create_fail", { error: _smartProposalError }, "fail");
+      }
+      // 提前收尾：不进任何副作用段（tableEdit/归档/搜索/热层写/ideToolCall/委派/分身/调度/清理…），
+      // 不跑 autoCheckArchiveTriggers（会触发 P2 归档 AI）。显示剥离与输出管控走同一单源。
+      await _composeContentForShow();
+      reply._memory_tags_processed = true;
+      wbT(_cid, "memory", "handleReply:exit", { pendingConfirmation: true });
+      return false;
+    }
+
     // 0b. <vocab_edit>（P9 词库维护，0731 子模式化）：P9 作为聊天组子模式走正常对话链，
     //   执行层与 P 系列执行器共享 vocabEditExec 单点（preview→confirm 两态，pending 模块级跨请求）。
     //   标签**不清理**：AI 下一轮必须能看到自己发过的标签原文才能原样重发 confirm:true（清理=确认流物理断裂）；
@@ -985,8 +1169,8 @@ export async function handleReply(reply, args) {
     //   独立 try：词库失败不影响表格等后续段。
     try {
       const { blocks: _veBlocks } = parseVocabEditTags(content);
-      if (_veBlocks.length > 0) {
-        const _veResults = await executeVocabEditOps(_veBlocks);
+      if (_veBlocks.length > 0 && _admit("vocabEdit", `×${_veBlocks.length}`)) {
+        const _veResults = await executeVocabEditOps(_veBlocks, { username: args?.username || "" });
         wbT(_cid, "memory", "handleReply:vocabEdit", { blocks: _veBlocks.length, results: _veResults.map((r) => ({ status: r.status, file: r.file, total: r.total })) });
       }
     } catch (e) {
@@ -1000,26 +1184,12 @@ export async function handleReply(reply, args) {
     const { operations, cleanContent: afterTableEdit } = parseTableEditTags(content);
     content = afterTableEdit;
     // ★ 缓存命中时跳过表格操作（防重复执行），但标签仍然被清理
-    if (operations.length > 0 && !_skipTableEdit) {
+    if (operations.length > 0 && !_skipTableEdit && _admit("tableEdit", `ops×${operations.length}`)) {
       // [A4] tableEdit 前自动快照
       try {
-        const _chatOpsPath = path.join(
-          __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
-        );
-        let _chatId = "";
-        let _msgIndex = -1;
-        try {
-          const _chatOps = await import(pathToFileURL(_chatOpsPath).href);
-          _chatId = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-          if (_chatId) {
-            const _logLen = await _chatOps.GetChatLogLength(_chatId);
-            _msgIndex = _logLen > 0 ? _logLen - 1 : -1;
-          }
-        } catch (_chatOpsErr) {
-          /* chatOps 不可用时仍创建快照 */
-        }
+        const { chatId: _chatId, messageIndex: _msgIndex, messageId: _msgId } = await _getReplyCoordinates();
         const _snapData = loadMemoryData(username, charName, undefined, _cid);
-        createTableSnapshot(username, charName, _snapData.tables, _chatId, _msgIndex, "tableEdit前自动快照", _snapData.activeMode);
+        createTableSnapshot(username, charName, _snapData.tables, _chatId, _msgIndex, "tableEdit前自动快照", _snapData.activeMode, _msgId);
       } catch (e) {
         wbD(_cid, "memory", "handleReply:tableEditSnapshot", false, e.message, {});
         console.warn("[beilu-memory] A4 tableEdit 快照失败:", e.message);
@@ -1109,7 +1279,7 @@ export async function handleReply(reply, args) {
 
       // <taskPlan>：JSON 数组 或 行清单 → 全量替换 tasks
       const _tpMatch = content.match(/<taskPlan>([\s\S]*?)<\/taskPlan>/i);
-      if (_tpMatch) {
+      if (_tpMatch && _admit("taskPlan", "")) {
         const _rawTasks = _parseTaskPlanBody(_tpMatch[1]);
         _taskStore = await applyTaskPlan(username, charName, _taskMode, _cid, _rawTasks);
         _taskChanged = true;
@@ -1125,7 +1295,8 @@ export async function handleReply(reply, args) {
       // <taskCheck>：按 id 或 content 勾掉一项（status=completed）。支持自闭合属性式与块式。
       // <taskCheck id="t123"/> | <taskCheck content="..."/> | <taskCheck>整句任务内容</taskCheck>
       const _tcSelectors = _parseTaskCheckBody(content);
-      for (const _sel of _tcSelectors) {
+      const _tcAdmitted = _tcSelectors.length === 0 || _admit("taskCheck", `×${_tcSelectors.length}`);
+      for (const _sel of (_tcAdmitted ? _tcSelectors : [])) {
         const _res = await applyTaskCheck(username, charName, _taskMode, _cid, _sel);
         if (_res.matched) {
           _taskStore = _res.store;
@@ -1171,9 +1342,12 @@ export async function handleReply(reply, args) {
     try {
     const { archiveOps, cleanContent: afterArchive } = parseMemoryArchiveTags(content);
     content = afterArchive;
-    if (archiveOps.length > 0) {
+    if (archiveOps.length > 0 && _admit("memoryArchive", `ops×${archiveOps.length}`)) {
       const replyMemData = loadMemoryData(username, charName, undefined, _cid);
-      try { createTableSnapshot(username, charName, replyMemData.tables, _cid || "", -1, "memoryArchive 前自动快照", replyMemData.activeMode); }
+      try {
+        const { chatId: _maChatId, messageIndex: _maMsgIndex, messageId: _maMsgId } = await _getReplyCoordinates();
+        createTableSnapshot(username, charName, replyMemData.tables, _maChatId, _maMsgIndex, "memoryArchive 前自动快照", replyMemData.activeMode, _maMsgId);
+      }
       catch (_maSnapErr) { wbD(_cid, "memory", "handleReply:memArchiveSnapshot", false, _maSnapErr.message, {}); }
       const archiveResults = executeMemoryArchiveOps(archiveOps, username, charName, replyMemData.tables);
       const archiveOkCount = archiveResults.filter((r) => r.status === "ok").length;
@@ -1188,7 +1362,7 @@ export async function handleReply(reply, args) {
     // 3. <memorySearch>
     const { searchOps: chatSearchOps, cleanContent: afterSearch } = parseMemorySearchTags(content);
     content = afterSearch;
-    if (chatSearchOps.length > 0) {
+    if (chatSearchOps.length > 0 && _admit("memorySearch", `ops×${chatSearchOps.length}`)) {
       try {
         const chatSearchResults = await executeMemorySearchOps(chatSearchOps, username, charName); // async 化（0722 向量 fallback 接入）
         // [0728 top-k] 记召回频率：结果缓存进 pendingChatSearchResults 下轮必注入，执行点=记录点
@@ -1213,7 +1387,7 @@ export async function handleReply(reply, args) {
 
     // 3b. <needWebSearch> — 聊天AI直接请求联网搜索（使用预提取数据；0717 起多 searchKeyword 逐条查合并回喂）
     const _searchQueries = _preExtracted.webSearchQueries || [];
-    if (_searchQueries.length > 0) {
+    if (_searchQueries.length > 0 && _admit("needWebSearch", `×${_searchQueries.length}`)) {
       const _memData = loadMemoryData(username, charName);
       const _wsConfig = _memData.config?.web_search || {};
       // P8开启或web_search.enabled不为false均可搜索
@@ -1334,7 +1508,9 @@ export async function handleReply(reply, args) {
     {
       const { notes: _mnNotes, cleanContent: _mnClean } = parseMemoryNoteTags(content);
       content = _mnClean;
-      try { await appendPendingTasks(username, charName, _mnNotes); }
+      try {
+        if (_mnNotes.length === 0 || _admit("memoryNote", `×${_mnNotes.length}`)) await appendPendingTasks(username, charName, _mnNotes);
+      }
       catch (e) { console.error("[beilu-memory] 保存 memoryNote 失败:", e.message); }
     }
 
@@ -1436,54 +1612,28 @@ export async function handleReply(reply, args) {
     //   · 其余方向（work/code→chat、code↔work）= 本对话线内转移：只写
     //     active_modes_map[_cid]，零跨窗副作用。
     const modeSwitchMatch = content.match(/<modeSwitch>(chat|code|work)<\/modeSwitch>/i);
-    if (modeSwitchMatch && botPerm && botPerm.level < 3) {
-      // N42 Bot 访问档位策略：L<3 不处理 modeSwitch（跳过解析，标签由下方 replace 照剥）
-      _warnBotPermGate(botPerm.level, `modeSwitch→${modeSwitchMatch[1]}`);
-      opLog("modeSwitch", "bot_permission_block", { level: botPerm.level, target: modeSwitchMatch[1] }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:modeSwitch", false, `L${botPerm.level}<3`, { target: modeSwitchMatch[1] });
+    if (modeSwitchMatch && !_admit("modeSwitch", `→${modeSwitchMatch[1]}`)) {
+      // [P0-B] 拒绝三件套已由 _admit 内 _denyOperation 记账；标签由下方 replace 照剥
     } else if (modeSwitchMatch) {
       const targetMode = modeSwitchMatch[1].toLowerCase();
       const currentMode = resolveGenerationMode(args, username, charName, _cid);
       if (targetMode !== currentMode) {
-        // smart 放行（凛倾0706 smart 升独立模式值）：全智能临时对话机制本就为"全智能"设计，
-        // smart 坍缩进 chat 时代写死 "chat"——smart 模式下 AI 切出 work/code 同样走交付出站。
-        const _isDeliveryOut = (currentMode === "chat" || currentMode === "smart") && (targetMode === "work" || targetMode === "code");
-        let _switchOk = true;
-        if (!_isDeliveryOut) {
-          const switchResult = setActiveMode(username, charName, targetMode, _cid);
-          _switchOk = !!switchResult.success;
-          if (!_switchOk) {
-            console.warn(`[beilu-memory] ReplyHandler modeSwitch 失败: ${switchResult.error || "未知错误"}`);
-          }
+        // [P0-A 2026-08-03] 投递语义（chat|smart → work|code）已整体收口到上游提案硬门
+        //   （createPendingConfirmation + 提前收尾），本段不再可达该方向——原 status:"running"
+        //   的 _taskOverlay/_active_task_overlay.json 写点（确认前副作用，Fable 审查阻断2/6）随之删除。
+        //   此处只剩「本对话线内真实状态转移」（work/code→chat/smart、code↔work）：写
+        //   active_modes_map[_cid]，零跨窗副作用。
+        const switchResult = setActiveMode(username, charName, targetMode, _cid);
+        const _switchOk = !!switchResult.success;
+        if (!_switchOk) {
+          console.warn(`[beilu-memory] ReplyHandler modeSwitch 失败: ${switchResult.error || "未知错误"}`);
         }
         if (_switchOk) {
-          opLog("modeSwitch", `${currentMode}→${targetMode}${_isDeliveryOut ? "(投递)" : ""}`, {}, "ok");
+          opLog("modeSwitch", `${currentMode}→${targetMode}`, {}, "ok");
           reply.extension._modeSwitch = { from: currentMode, to: targetMode };
 
-          // ★ 全智能临时对话机制（W17+W18 Q1=B）
-          // 从chat/smart切出到work/code时，生成taskOverlay让聊天界面显示任务卡片（smart 放行同 :1093）
-          if ((currentMode === "chat" || currentMode === "smart") && (targetMode === "work" || targetMode === "code")) {
-            const _taskId = `task_${Date.now().toString(36)}`;
-            // 提取任务描述（从AI回复中截取前100字作为title）
-            const _cleanReply = (reply.content || "")
-              .replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-            const _taskTitle = _cleanReply.substring(0, 80) || `${targetMode}模式任务`;
-            reply.extension._taskOverlay = {
-              id: _taskId,
-              status: "running",
-              title: _taskTitle,
-              mode: targetMode,
-              startedAt: new Date().toISOString(),
-            };
-            // 记录到文件，以便report返回时能找到
-            try {
-              const _toDir = getMemoryDir(username, charName);
-              const _toPath = path.join(_toDir, "work", "_active_task_overlay.json");
-              saveJsonFile(_toPath, { ...reply.extension._taskOverlay, from: currentMode });
-            } catch (_e) { /* non-critical */ }
-          }
-
-          // 从work/code切回chat/smart时，自动完成taskOverlay（smart 放行同 :1093）
+          // 从work/code切回chat/smart时，自动完成taskOverlay（旧存量 overlay 文件的收尾读点保留：
+          // 提案链已不再产生该文件，此块只为消化历史残留，读不到即无操作）
           if ((targetMode === "chat" || targetMode === "smart") && (currentMode === "work" || currentMode === "code")) {
             try {
               const _backDir = getMemoryDir(username, charName);
@@ -1512,7 +1662,7 @@ export async function handleReply(reply, args) {
     // A5: 正则放宽 [\w-]+ → [^<>]+ 支持中文/空格 label；解析走 resolveSubMode 单一权威，
     //     限定当前 modeGroup（allowCrossGroup=false）——subModeSwitch 不允许跨组跳出。
     const subModeSwitchMatch = content.match(/<subModeSwitch>([^<>]+)<\/subModeSwitch>/i);
-    if (subModeSwitchMatch) {
+    if (subModeSwitchMatch && _admit("subModeSwitch", `→${subModeSwitchMatch[1].trim()}`)) {
       const targetSubModeRaw = subModeSwitchMatch[1].trim();
       try {
         const smUser = username;
@@ -1563,31 +1713,28 @@ export async function handleReply(reply, args) {
             });
             console.warn(`[beilu-memory] subModeSwitch 回路保护触发，强制停止`);
           } else {
-          // T4 收口：write→save 走 updateYonbanConfig 串行锁（基于最新磁盘态改 active_sub_mode，
-          //   不覆盖并发写入的其他字段）。oldSubMode 已在上方从旧 smConfig 读出，语义不变。
-          await updateYonbanConfig(smUser, (cfg) => {
-            writeActiveSubModeId(cfg, _targetMg, targetSubModeId, _cid);
-            return cfg;
-          }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-          // 生效模型（凛倾 2026-07-08）：AI 切入子模式=一次性应用其默认预设为「正在使用」（下轮生成即用），
-          //   之后步内 AI 可 <presetSwitch> 自由微调——生成时无强切盖回（原 T046 每轮强切已删=切换不再被堵）。
-          try { await applySubModePresetDefault(username, targetSubMode, _cid); } catch (e) { console.warn(`[beilu-memory] AI 子模式默认预设应用失败: ${e.message}`); }
-          reply.extension._subModeSwitch = buildSubModeSwitchEvent({ from: oldSubMode, to: targetSubModeId, sm: targetSubMode, modeGroup: _targetMg, chatId: _cid }); // 键收口 2026-07-13：契约单源构造器（storage.mjs），chatId=与上方 write 同 _cid
+          // D3 0804 三入口收口：map 写 + activation 记录（revision/provenance 审计）+ 默认预设应用
+          //   （0708 生效模型）+ 事件体构造，统一走 subModeActivation.activateSubMode（source="ai_tag"，
+          //   updateYonbanConfig 单事务）。原 T4 内联 write→save + applySubModePresetDefault +
+          //   buildSubModeSwitchEvent 三段=core 的第二实现，镜像清零。skill组域门/回路检测是本入口
+          //   专属语义（AI 标签独有），保留 handler 层——core 只拥有「激活」本体。
+          const _actRes = await activateSubModeCore({ username: smUser, charName, chatId: _cid, subModeId: targetSubModeId, source: "ai_tag" });
+          if (_actRes?.success) {
+          reply.extension._subModeSwitch = _actRes.event; // 事件体单源（core 内 buildSubModeSwitchEvent，chatId=map 写盘同键）
           // T046：不再下发 _subModeSwitchPreset（前端强制切预设=死绑）。_subModeSwitch 保留（驱动 tab 跟随/面板刷新）。
           // T14修复：子模式绑定model_params → 写入extension供前端同步
           if (targetSubMode.model_params) {
             reply.extension._subModeSwitchModelParams = targetSubMode.model_params;
             diag.log(`subModeSwitch: model_params → ${JSON.stringify(targetSubMode.model_params)}`);
           }
-          // ★ 子模式绑定API源 → 切换角色的AIsource
+          // [0804 根因修·RC11断点7] 原此处 SetData({AIsource}) 直接改写角色全局绑定源——AI 切子模式
+          //   的持久副作用会让其他窗口/角色会话跟着换源（用户点击进入同一子模式却只做 per-request，
+          //   三入口不同副作用）。删除全局写：active submode 已在 core 落盘，下轮 getPromptHandler 按
+          //   chatId 解析新子模式 → sub_mode_api_source extension → char-template 局部 _effSource
+          //   本轮生效（per-request override 既有链，与手动生成同路）。extension 字段保留供前端感知。
           if (targetSubMode.apiSource) {
-            try {
-              await args?.char?.interfaces?.config?.SetData?.({ AIsource: targetSubMode.apiSource });
-              reply.extension._subModeSwitchApiSource = targetSubMode.apiSource;
-              diag.log(`subModeSwitch: API源切换 → "${targetSubMode.apiSource}"`);
-            } catch (_apiErr) {
-              diag.warn(`subModeSwitch: API源切换失败: ${_apiErr.message}`);
-            }
+            reply.extension._subModeSwitchApiSource = targetSubMode.apiSource;
+            diag.log(`subModeSwitch: 子模式带 API 覆盖 "${targetSubMode.apiSource}"（per-request 生效，不改角色全局绑定）`);
           }
           // ★ 推合成结果到pendingResults，确保自动继续（切换后新预设需要接管）
           ideClient.enqueuePendingResult({
@@ -1597,6 +1744,17 @@ export async function handleReply(reply, args) {
             chatid: _qcid,
             timestamp: new Date().toISOString(),
           });
+          } else {
+            // core fail-closed 拒绝（chat 未知/子模式不存在）：可见错误回执，零静默零半写
+            ideClient.enqueuePendingResult({
+              tool: "_sub_mode_switch",
+              params: { from: oldSubMode, to: targetSubModeId },
+              result: { success: false, error: `⚠️ 子模式激活被拒绝: ${_actRes?.error || _actRes?.code || "未知错误"}` },
+              chatid: _qcid,
+              timestamp: new Date().toISOString(),
+            });
+            console.warn(`[beilu-memory] subModeSwitch 激活拒绝: ${_actRes?.code || ""} ${_actRes?.error || ""}`);
+          }
           }
           } // [0720 skill组域门] if(!_wfDenied) 闭合
         } else {
@@ -1614,7 +1772,7 @@ export async function handleReply(reply, args) {
     //     renameChat 内部 sendEventToUser chat-list-changed → 各端列表自动刷新）。
     //     动态 import shell lib = ideClient.mjs:959 chatStorage 同款先例。长度上限与 renameChat 的 100 字符截断同口径。
     const chatRenameMatch = content.match(/<chatRename>([^<>]+)<\/chatRename>/i);
-    if (chatRenameMatch) {
+    if (chatRenameMatch && _admit("chatRename", "")) {
       const _newChatName = chatRenameMatch[1].trim().substring(0, 100);
       if (_newChatName && _cid) {
         try {
@@ -1667,11 +1825,39 @@ export async function handleReply(reply, args) {
           timestamp: new Date().toISOString(),
         });
       }
-      if (_ideToolCalls.length > 0 && botPerm && botPerm.level < 3) {
-        // N42 Bot 访问档位策略：L<3 不处理 ideToolCall 整通道（不执行不入确认队列；标签在此剥，因正常路径剥离在执行块内）
-        _warnBotPermGate(botPerm.level, `ideToolCall ×${_ideToolCalls.length}（${_ideToolCalls.map(tc => tc.tool).join(",")}）`);
-        opLog("ideToolCall", "bot_permission_block", { level: botPerm.level, tools: _ideToolCalls.map(tc => tc.tool) }, "blocked");
-        wbD(_cid, "memory", "bot_permission_block:ideToolCall", false, `L${botPerm.level}<3`, { count: _ideToolCalls.length });
+      // [P0-B 2026-08-03] web_download 先行分流（websearch 域能力，与 IDE 连接/features.ide 声明无关）：
+      //   独立 admission（webDownload），从工具清单摘除后再裁决 ideToolCall 本体——
+      //   否则 smart/chat 等 ide:false 模式的声明门会把联网下载一并误拒。
+      const _ideSignal = args?.generation_options?.signal || null; // T16 abort：取消信号传播（web_download 与 IDE 段共用）
+      {
+        const _wdCalls = [];
+        for (let _wdI = _ideToolCalls.length - 1; _wdI >= 0; _wdI--) {
+          if (_ideToolCalls[_wdI].tool === "web_download") _wdCalls.unshift(_ideToolCalls.splice(_wdI, 1)[0]);
+        }
+        if (_wdCalls.length > 0 && _admit("webDownload", `×${_wdCalls.length}`)) {
+          for (const _tc of _wdCalls) {
+            if (_ideSignal?.aborted) continue;
+            try {
+              const _dlUrl = (_tc.params?.url || "").toString().trim();
+              const _dlMem = loadMemoryData(username, charName);
+              const _dlRes = _dlUrl
+                ? await executeWebDownload(_dlUrl, { filename: _tc.params?.filename }, username, _dlMem.config?.web_search || {})
+                : { success: false, error: "web_download 缺少 url 参数" };
+              ideClient.enqueuePendingResult({
+                tool: "web_download", params: _tc.params,
+                result: _dlRes.success ? { success: true, result: `[已下载] ${_dlRes.path} (${_dlRes.bytes} 字节${_dlRes.mime ? ", " + _dlRes.mime : ""})` } : { success: false, error: _dlRes.error },
+                chatid: _qcid, timestamp: new Date().toISOString(),
+              });
+              opLog("ideToolCall", "web_download", { url: _dlUrl.substring(0, 120), ok: !!_dlRes.success }, _dlRes.success ? "ok" : "fail");
+            } catch (_dlE) {
+              ideClient.enqueuePendingResult({ tool: "web_download", params: _tc.params, result: { success: false, error: `下载失败: ${_dlE.message}` }, chatid: _qcid, timestamp: new Date().toISOString() });
+            }
+          }
+        }
+      }
+      if (_ideToolCalls.length > 0 && !_admit("ideToolCall", `×${_ideToolCalls.length}（${_ideToolCalls.map(tc => tc.tool).join(",")}）`)) {
+        // [P0-B] 拒绝三件套已由 _admit 记账（含 ModeDef features.ide 执行门——声明面=执行面，
+        //   修 Fable 审查「smart.json ide:false 只影响提示词」分叉）；标签在此剥
         content = _afterIdeTool;
       } else if (_ideToolCalls.length > 0) {
         // 系统输出标记：本条 AI 回复发出了 IDE 工具调用（YonBan 命令）→ 标 _opType=ide_tool_call，
@@ -1701,32 +1887,8 @@ export async function handleReply(reply, args) {
         });
         // ★ 三层关联 ID（本轮所有 IDE 工具共享）：本体 opLog + YonBan ideOpLog + 前端广播 都带它，单次操作端到端可拼
         const _ideTraceId = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-        const _ideSignal = args?.generation_options?.signal || null; // T16 abort：取消信号传播
         opLog("ideToolCall", "details", { traceId: _ideTraceId, tools: _ideToolCalls.map(tc => ({ tool: tc.tool, params: Object.keys(tc.params || {}) })) });
-        // [0727 下载能力] web_download 是联网套件能力、与 IDE 连接无关——必须在 isConnected 闸【前】
-        //   拦截执行并从工具清单摘除，否则 IDE 未连接时（纯网页 code 窗/YonBan 断连）会被
-        //   "未连接"分支整批拒绝。围栏在功能层 webDownload.mjs，结果走 pendingResults 既有管道。
-        for (let _wdI = _ideToolCalls.length - 1; _wdI >= 0; _wdI--) {
-          const _tc = _ideToolCalls[_wdI];
-          if (_tc.tool !== "web_download") continue;
-          _ideToolCalls.splice(_wdI, 1);
-          if (_ideSignal?.aborted) continue;
-          try {
-            const _dlUrl = (_tc.params?.url || "").toString().trim();
-            const _dlMem = loadMemoryData(username, charName);
-            const _dlRes = _dlUrl
-              ? await executeWebDownload(_dlUrl, { filename: _tc.params?.filename }, username, _dlMem.config?.web_search || {})
-              : { success: false, error: "web_download 缺少 url 参数" };
-            ideClient.enqueuePendingResult({
-              tool: "web_download", params: _tc.params,
-              result: _dlRes.success ? { success: true, result: `[已下载] ${_dlRes.path} (${_dlRes.bytes} 字节${_dlRes.mime ? ", " + _dlRes.mime : ""})` } : { success: false, error: _dlRes.error },
-              chatid: _qcid, timestamp: new Date().toISOString(),
-            });
-            opLog("ideToolCall", "web_download", { url: _dlUrl.substring(0, 120), ok: !!_dlRes.success }, _dlRes.success ? "ok" : "fail");
-          } catch (_dlE) {
-            ideClient.enqueuePendingResult({ tool: "web_download", params: _tc.params, result: { success: false, error: `下载失败: ${_dlE.message}` }, chatid: _qcid, timestamp: new Date().toISOString() });
-          }
-        }
+        // [P0-B] web_download 分流已上提到本段头部（独立 admission），此处清单内不再含该工具
         if (ideClient.isConnected) {
           // 分离读操作和写操作
           const _readOps = _ideToolCalls.filter((_tc) => !IDE_WRITE_TOOLS.includes(_tc.tool));
@@ -2053,39 +2215,74 @@ export async function handleReply(reply, args) {
             if (_queueOps.length > 0) {
               // ★ 需要审批：加入待审批队列，不立即执行
               let _cpId = null;
+              let _approvalGenerationId = "";
               try {
-                let _ideChatId = "";
-                let _ideMsgIndex = -1;
-                try {
-                  const _chatOpsPath2 = path.join(
-                    __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
-                  );
-                  const _chatOps2 = await import(pathToFileURL(_chatOpsPath2).href);
-                  _ideChatId = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-                  if (_ideChatId) {
-                    const _logLen2 = await _chatOps2.GetChatLogLength(_ideChatId);
-                    _ideMsgIndex = _logLen2 > 0 ? _logLen2 - 1 : -1;
-                  }
-                } catch (_chatOpsErr2) { /* chatOps unavailable */ }
+                const { chatId: _ideChatId, messageIndex: _ideMsgIndex, messageId: _ideMsgId } = await _getReplyCoordinates();
+                _approvalGenerationId = _ideMsgId || _ideTraceId;
                 // deferred=true：审批检查点不抢占全局 _activeId、不被后续轮 start auto-commit；
                 // 批准写操作时靠 approveOperation 注入的 _checkpointId 钉住快照目标（见 ideClient.approveOperation）
-                const _cpResult = await ideClient.startCheckpoint(_ideChatId, _ideMsgIndex, true);
+                const _cpResult = await ideClient.startCheckpoint(_ideChatId, _ideMsgIndex, true, _ideMsgId);
                 _cpId = _cpResult.id;
               } catch (_cpE) {
                 console.warn("[beilu-memory] 审批检查点启动失败:", _cpE.message);
               }
+              if (!_approvalGenerationId) _approvalGenerationId = _ideTraceId;
               for (const _tc of _queueOps) {
-                ideClient.addPendingApproval(_tc, _cpId, _qcid);
-                opLog("ideToolCall", `approval:${_tc.tool}`, { params: _tc.params }, "ok");
-                ideClient.enqueuePendingResult({
-                  tool: _tc.tool, params: _tc.params,
-                  result: { success: false, pending: true, error: `⏳ ${_tc.tool} 已提交审批队列，等待用户确认后执行。请勿重复提交此操作。` },
-                  chatid: _qcid,
-                  timestamp: new Date().toISOString(),
-                });
+                // 每项只生成一次 operationId；submit 内部不重试。若主端 timeout/拒绝，保留同 ID
+                // 进入显式错误协议，禁止换 ID 盲发形成重复审批。
+                const _approvalOperationId = typeof _tc._approvalOperationId === "string" && _tc._approvalOperationId
+                  ? _tc._approvalOperationId
+                  : (crypto.randomUUID?.() || crypto.randomBytes(16).toString("hex"));
+                _tc._approvalOperationId = _approvalOperationId;
+                try {
+                  const _approvalAck = await ideClient.submitPendingApproval(_tc, _cpId, _qcid, {
+                    operationId: _approvalOperationId,
+                    username,
+                    generationId: _approvalGenerationId,
+                  });
+                  opLog("ideToolCall", `approval:${_tc.tool}`, {
+                    params: _tc.params,
+                    approvalId: _approvalAck.approvalId,
+                    operationId: _approvalAck.operationId,
+                  }, "ok");
+                  ideClient.enqueuePendingResult({
+                    tool: _tc.tool, params: _tc.params,
+                    result: {
+                      success: false,
+                      pending: true,
+                      approvalId: _approvalAck.approvalId,
+                      operationId: _approvalAck.operationId,
+                      error: `⏳ ${_tc.tool} 已提交审批队列，等待用户确认后执行。请勿重复提交此操作。`,
+                    },
+                    chatid: _qcid,
+                    timestamp: new Date().toISOString(),
+                  });
+                } catch (_approvalError) {
+                  const _approvalIndeterminate = _approvalError?.indeterminate === true;
+                  opLog("ideToolCall", `approval:${_tc.tool}`, {
+                    params: _tc.params,
+                    operationId: _approvalOperationId,
+                    code: _approvalError?.code || "E_APPROVAL_SUBMISSION_FAILED",
+                    indeterminate: _approvalIndeterminate,
+                  }, "fail");
+                  ideClient.enqueuePendingResult({
+                    tool: _tc.tool,
+                    params: _tc.params,
+                    result: {
+                      success: false,
+                      pending: false,
+                      operationId: _approvalOperationId,
+                      errorCode: _approvalError?.code || "E_APPROVAL_SUBMISSION_FAILED",
+                      indeterminate: _approvalIndeterminate,
+                      error: _approvalError?.message || String(_approvalError),
+                    },
+                    chatid: _qcid,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
               }
-              // ★ W66 审批入队广播已收口进 ideClient.addPendingApproval（队列 owner 读权威队列出角标数；
-              //   worker isolate 下经 isolateBridge 上行主进程后由主队列广播——生产者读非权威源=角标恒 0 的病根）。
+              // ★ W66 审批入队广播已收口进主进程 ideClient 队列写口（队列 owner 读权威队列出角标数；
+              //   worker 必须 await 桥 ack，禁止把非权威 isolate 本地状态当作已提交）。
             }
             // 立即执行集：F6 规则放行(_skipRuleOps) + 策略档免审批普通写(_execPolicyOps)——统一走下方执行路径
             //   （沙盒/checkpoint/route 一致；原 F6 在审批分支里裸 callToolAndStore 缺沙盒备份，随本次分流一并归一）。
@@ -2093,25 +2290,15 @@ export async function handleReply(reply, args) {
               _skipRuleOps = [];
               if (_writeOps.length > 0) {
                 let _cpId = null;
-                const _ideChatId = args?.chatid
-                  || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
+                let _ideChatId = "";
                 try {
-                  let _ideMsgIndex = -1;
-                  try {
-                    const _chatOpsPath2 = path.join(
-                      __pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs",
-                    );
-                    const _chatOps2 = await import(pathToFileURL(_chatOpsPath2).href);
-                    if (_ideChatId) {
-                      const _logLen2 = await _chatOps2.GetChatLogLength(_ideChatId);
-                    _ideMsgIndex = _logLen2 > 0 ? _logLen2 - 1 : -1;
-                  }
-                } catch (_chatOpsErr2) { /* chatOps unavailable */ }
-                const _cpResult = await ideClient.startCheckpoint(_ideChatId, _ideMsgIndex);
-                _cpId = _cpResult.id;
-              } catch (_cpE) {
-                console.warn("[beilu-memory] 文件检查点启动失败:", _cpE.message);
-              }
+                  const _replyCoords = await _getReplyCoordinates();
+                  _ideChatId = _replyCoords.chatId;
+                  const _cpResult = await ideClient.startCheckpoint(_ideChatId, _replyCoords.messageIndex, false, _replyCoords.messageId);
+                  _cpId = _cpResult.id;
+                } catch (_cpE) {
+                  console.warn("[beilu-memory] 文件检查点启动失败:", _cpE.message);
+                }
               // ★ Phase 2 模块4：简易沙盒 — 物理备份（写操作执行前，_sandboxBackup 在审批判断前的外层提前定义，grep `let _sandboxBackup = false`）
               if (_sandboxBackup) {
                 for (const _tc of _writeOps) {
@@ -2371,10 +2558,8 @@ export async function handleReply(reply, args) {
     //   结果用 string 形态（格式化器 typeof string 直通分支），对象形态会被字段白名单丢弃 AI 看不到。
     if (content.includes("<question>")) {
       const { questions: _ideQuestions, cleanContent: _afterQuestion } = parseQuestionTags(content);
-      if (_ideQuestions.length > 0 && botPerm && botPerm.level < 3) {
-        // N42 Bot 访问档位策略：与 ideToolCall 同门——L<3 不弹窗打扰用户，标签照剥
-        _warnBotPermGate(botPerm.level, `question ×${_ideQuestions.length}`);
-        opLog("question", "bot_permission_block", { level: botPerm.level, count: _ideQuestions.length }, "blocked");
+      if (_ideQuestions.length > 0 && !_admit("question", `×${_ideQuestions.length}`)) {
+        // [P0-B] 拒绝三件套已由 _admit 记账（含 features.ide 执行门 + Bot 宿主能力门），标签照剥
       } else if (_ideQuestions.length > 0 && !readFilesPermission(username, "questions", true)) {
         // 权限门：workPanel「向用户提问」开关（beilu-files permissions.questions，默认 true）。
         // 该键此前是双域死键（file_op 无 type / B3 桥无映射），本通道即其消费方——键与通道闭环。
@@ -2415,10 +2600,15 @@ export async function handleReply(reply, args) {
     }
 
     // scheduleTask 标签解析（AI创建定时任务）
+    // [P0-B] 原为无门段（Bot 任意档位可建定时任务）——收进注册表（feature scheduler / Bot≥L2）
     if (content.includes("<scheduleTask>")) {
-      const _stResult = parseScheduleTaskTag(content, username, charName, _cid);
-      if (_stResult.found) {
-        content = _stResult.cleanedContent;
+      if (_admit("scheduleTask", "")) {
+        const _stResult = parseScheduleTaskTag(content, username, charName, _cid);
+        if (_stResult.found) {
+          content = _stResult.cleanedContent;
+        }
+      } else {
+        content = content.replace(/<scheduleTask>[\s\S]*?<\/scheduleTask>/gi, "");
       }
     }
 
@@ -2428,11 +2618,8 @@ export async function handleReply(reply, args) {
     const _delegateMatch = content.match(
       /<delegate\s+target="([^"]+)"(?:\s+priority="(\w+)")?(?:\s+timeout="(\d+)")?>([\s\S]*?)<\/delegate>/i,
     );
-    if (_delegateMatch && botPerm && botPerm.level < 2) {
-      // N42 Bot 访问档位策略：L<2 不处理 delegate（跳过入队与子模式切换，标签由下方块照剥）
-      _warnBotPermGate(botPerm.level, `delegate→${_delegateMatch[1]}`);
-      opLog("delegate", "bot_permission_block", { level: botPerm.level, target: _delegateMatch[1] }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:delegate", false, `L${botPerm.level}<2`, { target: _delegateMatch[1] });
+    if (_delegateMatch && !_admit("delegate", `→${_delegateMatch[1]}`)) {
+      // [P0-B] 拒绝三件套已由 _admit 记账；标签由下方块照剥
     } else if (_delegateMatch) {
       const [, _dlgTargetRaw, _dlgPriority, _dlgTimeout, _dlgTask] = _delegateMatch;
       try {
@@ -2540,12 +2727,8 @@ export async function handleReply(reply, args) {
 
     // 8b. <parallelDelegate> — W57: 并行多任务委派
     const _pdMatch = content.match(/<parallelDelegate>([\s\S]*?)<\/parallelDelegate>/i);
-    if (_pdMatch && botPerm && botPerm.level < 2) {
-      // N42 Bot 访问档位策略：parallelDelegate 是 delegate 并行同族（且直接执行 aiRunner，比 delegate 入队更重），
-      // 只对 delegate 设策略点而漏此处=未覆盖的同族分支 → 同 L<2 不放行。标签由下方 :replace 照剥。
-      _warnBotPermGate(botPerm.level, "parallelDelegate");
-      opLog("delegate", "bot_permission_block:parallel", { level: botPerm.level }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:parallelDelegate", false, `L${botPerm.level}<2`, {});
+    if (_pdMatch && !_admit("parallelDelegate", "")) {
+      // [P0-B] 拒绝三件套已由 _admit 记账；标签由下方 replace 照剥
     } else if (_pdMatch) {
       wbT(_cid, "memory", "handleReply:parallelDelegate", { hasMatch: true });
       const _pdBody = _pdMatch[1];
@@ -2736,7 +2919,7 @@ export async function handleReply(reply, args) {
     const _reportMatch = content.match(
       /<report(?:\s+status="(\w+)")?>([\s\S]*?)<\/report>/i,
     );
-    if (_reportMatch) {
+    if (_reportMatch && _admit("report", "")) {
       const [, _rptStatus, _rptContent] = _reportMatch;
       try {
         const _memDir = ensureMemoryDir(username, charName);
@@ -2856,7 +3039,7 @@ export async function handleReply(reply, args) {
     const _approvalMatch = content.match(
       /<approval(?:\s+type="(\w+)")?(?:\s+id="([^"]*)")?>([\s\S]*?)<\/approval>/i,
     );
-    if (_approvalMatch) {
+    if (_approvalMatch && _admit("approval", "")) {
       const [, _aprType, _aprId, _aprContent] = _approvalMatch;
       try {
         let _aprData;
@@ -2970,7 +3153,7 @@ export async function handleReply(reply, args) {
     const _flowGroupMatch = content.match(
       /<createFlowGroup>([\s\S]*?)<\/createFlowGroup>/i,
     );
-    if (_flowGroupMatch) {
+    if (_flowGroupMatch && _admit("createFlowGroup", "")) {
       try {
         const _fgData = JSON.parse(_flowGroupMatch[1]);
         const _fgName = _fgData.name || `flow_${Date.now()}`;
@@ -3095,7 +3278,7 @@ export async function handleReply(reply, args) {
     //   AI 给非法值忽略，禁旁路写非法态。
     {
       const _ccMatch = content.match(/<captureControl>([\s\S]*?)<\/captureControl>/i);
-      if (_ccMatch) {
+      if (_ccMatch && _admit("captureControl", "")) {
         try {
           const _ccData = JSON.parse(_ccMatch[1].trim());
           // 保存到用户eye_config
@@ -3186,7 +3369,7 @@ export async function handleReply(reply, args) {
     // 11d. <mcpConnect> — AI 只能提出请求；导入/挂载/命令批准均由 MCP 面板现有用户流程承担。
     {
       const _mcMatch = content.match(/<mcpConnect>([\s\S]*?)<\/mcpConnect>/i);
-      if (_mcMatch) {
+      if (_mcMatch && _admit("mcpConnect", "")) {
         try {
           const _mcRequest = await createMcpConnectRequest({
             username,
@@ -3237,7 +3420,7 @@ export async function handleReply(reply, args) {
         const _cleanCmd = _cleanMatch[1].trim();
         _cleanActions.push(_cleanCmd);
       }
-      if (_cleanActions.length > 0) {
+      if (_cleanActions.length > 0 && _admit("contextClean", `×${_cleanActions.length}`)) {
         // [0730] token 阈值检查：上下文不够大时禁止AI清理（频繁清理破坏 prompt cache）
         const _cleanConfig = loadJsonFileIfExists(getYonbanConfigPath(username), {}).context_clean || {};
         const _cleanMinTokens = Number(_cleanConfig.min_tokens_for_ai_clean) || 200000;
@@ -3383,8 +3566,30 @@ export async function handleReply(reply, args) {
                     let _new = _orig.replace(_ideTagRe, (_, t) => `[已执行: ${t}]`);
                     _new = _new.replace(_fileOpRe, (_, t) => `[已执行: ${t}]`);
                     if (_new.length < _orig.length) {
-                      await _chatOps.editMessage(_chatId, i, { content: _new });
-                      _cleanedCount++;
+                      const _messageId = typeof e.id === "string" ? e.id.trim() : "";
+                      if (!_messageId) {
+                        diag.warn(`contextClean code_output: 消息 indexHint=${i} 缺少稳定 ID，已拒绝按 index 编辑`);
+                        opLog("contextClean", "code_output_edit_rejected", { indexHint: i, code: "E_EDIT_MESSAGE_ID_REQUIRED" }, "error");
+                        continue;
+                      }
+                      const _editResult = await _chatOps.editMessage(
+                        _chatId,
+                        _messageId,
+                        i,
+                        { content: _new },
+                        { expectedUsername: username },
+                      );
+                      if (_editResult?.applied !== true) {
+                        diag.warn(`contextClean code_output: messageId=${_messageId} 未确认编辑 (${_editResult?.reason || _editResult?.error || "unknown"})`);
+                        opLog("contextClean", "code_output_edit_not_applied", {
+                          indexHint: i,
+                          messageId: _messageId,
+                          code: _editResult?.code || "E_EDIT_NOT_APPLIED",
+                          reason: _editResult?.reason || null,
+                        }, "error");
+                        continue;
+                      }
+                      _cleanedCount += 1;
                     }
                   }
                 }
@@ -3420,7 +3625,7 @@ export async function handleReply(reply, args) {
     // 12b. <fileDelivery> — AI发送文件给用户 (T18新增)
     {
       const _fileDeliveryMatch = content.match(/<fileDelivery\s+path="([^"]+)"(?:\s+name="([^"]*)")?>([\s\S]*?)<\/fileDelivery>/i);
-      if (_fileDeliveryMatch) {
+      if (_fileDeliveryMatch && _admit("fileDelivery", "")) {
         const _fdPath = _fileDeliveryMatch[1];
         const _fdName = _fileDeliveryMatch[2] || path.basename(_fdPath);
         const _fdDesc = (_fileDeliveryMatch[3] || "").trim();
@@ -3435,11 +3640,8 @@ export async function handleReply(reply, args) {
     // 设计：只有一个分身配置，数字只是任务编号，所有任务用同一个分身并行执行
     {
       const _cloneTasks = _preExtracted.cloneTasks || [];
-      if (_cloneTasks.length > 0 && botPerm && botPerm.level < 3) {
-        // N42 Bot 访问档位策略：L<3 不派发分身（标签由本块尾 replace 照剥）
-        _warnBotPermGate(botPerm.level, `分身 ×${_cloneTasks.length}`);
-        opLog("clone", "bot_permission_block", { level: botPerm.level, count: _cloneTasks.length }, "blocked");
-        wbD(_cid, "memory", "bot_permission_block:clone", false, `L${botPerm.level}<3`, { count: _cloneTasks.length });
+      if (_cloneTasks.length > 0 && !_admit("clone", `×${_cloneTasks.length}`)) {
+        // [P0-B] 拒绝三件套已由 _admit 记账；标签由本块尾 replace 照剥
       } else if (_cloneTasks.length > 0) {
         diag.log(`分身系统: 检测到 ${_cloneTasks.length} 个分身任务`);
         try {
@@ -3582,55 +3784,34 @@ export async function handleReply(reply, args) {
               } catch (_e) { /* 忽略 */ }
             };
 
+            const _injPrompts = _presetsData.injection_prompts || [];
+
             // ★ 加载IDE工具文档（INJ-2-code），让分身知道怎么用ideToolCall
             let _clIdeToolDoc = "";
             if (ideClient.isConnected) {
-              const _injPrompts = _presetsData.injection_prompts || [];
               const _inj2code = _injPrompts.find(p => p.id === "INJ-2-code" && p.enabled);
               if (_inj2code) {
-                // ★ W71: 构建 env_tools 文本给分身
-                let _clEnvToolsText = "";
-                try {
-                  const _etPath1 = path.join(ensureMemoryDir(username, charName), "code", "_env_tools.json");
-                  const _etPath2 = path.join(ensureMemoryDir(username, "_global"), "code", "_env_tools.json");
-                  const _etPath = fs.existsSync(_etPath1) ? _etPath1 : (fs.existsSync(_etPath2) ? _etPath2 : null);
-                  if (_etPath) {
-                    const _etc = JSON.parse(await fs.promises.readFile(_etPath, "utf-8"));
-                    const _parts = [];
-                    const _descs = Object.entries(_etc.descriptions || {}).filter(([k,v]) => k && v);
-                    if (_descs.length > 0) _parts.push("[项目工具说明]\n" + _descs.map(([n,d]) => `- ${n}: ${d}`).join("\n") + "\n[/项目工具说明]");
-                    if (Array.isArray(_etc.scan_dirs)) {
-                      for (const _sd of _etc.scan_dirs) {
-                        const _dp = typeof _sd === "string" ? _sd : _sd.path;
-                        const _lb = typeof _sd === "string" ? path.basename(_sd) : (_sd.label || path.basename(_sd.path));
-                        const _pp = path.join(_dp, "package.json");
-                        if (fs.existsSync(_pp)) {
-                          const _pk = JSON.parse(await fs.promises.readFile(_pp, "utf-8"));
-                          const _deps = { ..._pk.dependencies, ..._pk.devDependencies };
-                          const _ns = Object.keys(_deps);
-                          if (_ns.length > 0) _parts.push(`[${_lb}]\n` + _ns.map(n => `- ${n} ${(_deps[n]||"").replace(/^\^|~/,"")}`).join("\n"));
-                        }
-                      }
-                    }
-                    _clEnvToolsText = _parts.join("\n\n");
-                  }
-                } catch {}
-
                 _clIdeToolDoc = (_inj2code.content || "")
                   .replace(/\{\{user\}\}/g, username)
-                  .replace(/\{\{env_tools\}\}/g, _clEnvToolsText || "")
+                  // 动态项目环境只允许在主链 depth:0 data INJ；分身稳定工具文档不展开此旧宏。
+                  .replace(/\{\{env_tools\}\}/g, "")
+                  .replace(/\{\{ide_tools\}\}/g, renderStaticIdeToolSignatures())
                   // ★ 过滤分身相关段落，防止分身递归调用分身
                   .replace(/<ide_extended>[\s\S]*?## 分身AI[\s\S]*?(?=##|<\/ide_extended>)/, "")
                   .replace(/并行调用分身AI[\s\S]*?结果下一轮自动注入/g, "");
               }
             }
 
+            // 分身联网教学同样只读用户可编辑 INJ；不在代码里另写一份永远启用的旧文案。
+            const _clModeGroup = resolveGenerationMode(args, username, charName, _cid);
+            const _clWebInjId = _clModeGroup === "work" ? "INJ-5-web-work" : "INJ-5-web-code";
+            const _clWebToolDoc = _injPrompts.find((p) => p.id === _clWebInjId && p.enabled)?.content || "";
+
             const _clonePromises = _cloneTasks.map((_task) => () => {
               const _clone = _resolveClone(_task.cloneName);
               // ★ 构建完整上下文（参考Claude Code：系统提示 + IDE工具文档 + tableData + 对话上下文 + 任务）
-              // !!!禁止放入提示词!!! 提示词文本只允许住 INJ 条目和预设（凛倾 0722）——本区已知存量硬编码
-              //   （web_search_capability 整段文档/memory_tables·recent_context 包装标签）属 0722 清查在案项，
-              //   处置待凛倾裁决；禁止在此新增任何代码字符串提示词，新文档一律做成 INJ 条目引用。
+              // !!!禁止放入提示词!!! 本区只消费预设与 INJ；禁止新增任何代码字符串提示词。
+              // 稳定能力文档在 INJ-2/INJ-5，动态表格/上下文在 depth:0 clone data INJ。
               const _clPrompts = [
                 { role: "system", content: _clSystemPrompt, enabled: true },
               ];
@@ -3638,13 +3819,10 @@ export async function handleReply(reply, args) {
               if (_clIdeToolDoc) {
                 _clPrompts.push({ role: "system", content: _clIdeToolDoc, enabled: true });
               }
-              // ★ K1 联网套件工具文档（分身路径，凛倾 2026-06-10 点名）：
-              //   无条件注入，不依赖 IDE 连接——分身可直接用 web_search 工具调通用联网套件。
-              _clPrompts.push({
-                role: "system",
-                content: '<web_search_capability>\n## 联网搜索工具\n需要查互联网时，用 ideToolCall 调 web_search：\n<ideToolCall tool="web_search" query="搜索关键词" />\n\n- query: 搜索关键词（系统会自动优化：去语气词、拆关键词、排序去重）\n- 可选 engine: bing / google / edge（浏览器三选；进阶 API 通道 tavily / searxng）（默认用角色配置）\n- 结果在下一轮工具结果中注入\n- 用于查实时信息/不确定的事实/最新文档；纯推理任务不需要联网\n</web_search_capability>',
-                enabled: true,
-              });
+              // 联网教学来自当前模式启用的 INJ-5 变体，编辑/关闭会同步影响主 AI 与分身。
+              if (_clWebToolDoc) {
+                _clPrompts.push({ role: "system", content: _clWebToolDoc, enabled: true });
+              }
               // !!!禁止放入提示词!!! [0722 动态内容归尾] 分身的动态任务态（表格快照/对话上下文）模板收进
               //   INJ-clone-tables-data / INJ-clone-context-data 条目（前端可改），代码只供宏数据。
               //   模板外层 <volatile_data section="clone"> = 代理易变区识别标签（interceptor isVolatile /
@@ -4206,11 +4384,8 @@ export async function handleReply(reply, args) {
     const _swTag = content.match(/<scheduleWakeup\s([^>]*?)\/?>/i);
     const _swDelayMatch = _swTag?.[1]?.match(/delay="(\d+)"/);
     const _swReasonMatch = _swTag?.[1]?.match(/reason="([^"]*)"/);
-    if (_swDelayMatch && botPerm && botPerm.level < 2) {
-      // N42 Bot 访问档位策略：scheduleWakeup 触发未来自主唤醒，与 delegate 同族跨时操作 → L<2 不放行（标签由下方 replace 照剥）
-      _warnBotPermGate(botPerm.level, `scheduleWakeup delay=${_swDelayMatch[1]}`);
-      opLog("scheduleWakeup", "bot_permission_block", { level: botPerm.level, delay: _swDelayMatch[1] }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:scheduleWakeup", false, `L${botPerm.level}<2`, { delay: _swDelayMatch[1] });
+    if (_swDelayMatch && !_admit("scheduleWakeup", `delay=${_swDelayMatch[1]}`)) {
+      // [P0-B] 拒绝三件套已由 _admit 记账；标签由下方 replace 照剥
     } else if (_swDelayMatch) {
       const _swDelay = Math.max(5, Math.min(3600, parseInt(_swDelayMatch[1])));
       const _swReason = _swReasonMatch?.[1] || "";
@@ -4230,12 +4405,8 @@ export async function handleReply(reply, args) {
     // 与 14c scheduleWakeup（自窗口定时）区分：此为跨窗口 + 立即触发，经统一入口 dispatchActivation wake（后端已通）。
     // 凛倾简化唤醒：一命令发一次，不做 corrId 轮询。同方向30s防循环（与sendToWindow同模式）。
     const _wwTag = content.match(/<wakeWindow\s([^>]*?)\/?>/i);
-    if (_wwTag && botPerm && botPerm.level < 2) {
-      // N42 Bot 访问档位策略：wakeWindow 跨窗口唤醒，与 delegate 同族跨窗操作 → L<2 不放行（标签由下方 replace 照剥）
-      const _wwChatidBlocked = _wwTag[1].match(/chatid="([^"]+)"/)?.[1] || "";
-      _warnBotPermGate(botPerm.level, `wakeWindow→${_wwChatidBlocked}`);
-      opLog("wakeWindow", "bot_permission_block", { level: botPerm.level, target: _wwChatidBlocked }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:wakeWindow", false, `L${botPerm.level}<2`, { target: _wwChatidBlocked });
+    if (_wwTag && !_admit("wakeWindow", `→${_wwTag[1].match(/chatid="([^"]+)"/)?.[1] || ""}`)) {
+      // [P0-B] 拒绝三件套已由 _admit 记账；标签由下方 replace 照剥
     } else if (_wwTag) {
       const _wwChatid = _wwTag[1].match(/chatid="([^"]+)"/)?.[1] || "";
       const _wwReason = _wwTag[1].match(/reason="([^"]*)"/)?.[1] || "";
@@ -4266,11 +4437,8 @@ export async function handleReply(reply, args) {
     // 目标会话插入用户位消息「[来自窗口 X] 内容」+ 触发其生成（dispatchActivation type:"message"）。
     // 与 14d wakeWindow（只唤醒不带话）区分。C-4 防循环：同一方向 30s 内重复投递跳过（防 A→B→A 死循环）。
     const _stwTags = [...content.matchAll(/<sendToWindow\s([^>]*?)>([\s\S]*?)<\/sendToWindow>/gi)];
-    if (_stwTags.length > 0 && botPerm && botPerm.level < 2) {
-      // N42 Bot 访问档位策略：sendToWindow 跨窗口传话，与 delegate 同族跨窗操作 → L<2 不放行（标签由下方 replace 照剥）
-      _warnBotPermGate(botPerm.level, `sendToWindow ×${_stwTags.length}`);
-      opLog("sendToWindow", "bot_permission_block", { level: botPerm.level, count: _stwTags.length }, "blocked");
-      wbD(_cid, "memory", "bot_permission_block:sendToWindow", false, `L${botPerm.level}<2`, { count: _stwTags.length });
+    if (_stwTags.length > 0 && !_admit("sendToWindow", `×${_stwTags.length}`)) {
+      // [P0-B] 拒绝三件套已由 _admit 记账；标签由下方 replace 照剥
     } else {
       for (const _stw of _stwTags) {
         const _stwChatid = _stw[1].match(/chatid="([^"]+)"/)?.[1] || "";
@@ -4298,49 +4466,9 @@ export async function handleReply(reply, args) {
       content = content.replace(/<sendToWindow\s[^>]*?>[\s\S]*?<\/sendToWindow>/gi, "");
     }
 
-    const baseForShow = reply.content_for_show || reply.content;
-    const _customPatterns = await _loadCustomStripPatterns(username);
-    // 可配置桌宠标签名(emotionTag/motionTag/orbMessageTag)读同一权威源,剥离跟随配置(白检同 _safeTag,非法丢弃)
-    let _petStripTags = [];
-    try {
-      const _tsm = await import(new URL("../../screenshot/injection_state.mjs", import.meta.url).href);
-      const _tss = _tsm.loadPetSettingsStore ? _tsm.loadPetSettingsStore(__projectRoot) : {};
-      _petStripTags = [_tss.emotionTag, _tss.motionTag, _tss.orbMessageTag]
-        .filter((t) => typeof t === "string" && /^[\w\u4e00-\u9fff-]+$/.test(t));
-    } catch { /* 配置不可读:默认名已由字面量剥离覆盖 */ }
-    reply.content_for_show = _stripAllTags(baseForShow, _customPatterns, _petStripTags);
-    wbT(_cid, "memory", "handleReply:stripAllTags", { before: (baseForShow || "").length, after: (reply.content_for_show || "").length });
-
-    // W24 §三: 输出管控正则 — content_for_show中过滤违规内容
-    try {
-      const _filterPath = path.join(__projectRoot, "data", "users", username, "output_filter_rules.json");
-      if (fs.existsSync(_filterPath)) {
-        const _filterRules = JSON.parse(await fs.promises.readFile(_filterPath, "utf-8"));
-        const _rules = (_filterRules.rules || []).filter(r => r.enabled);
-        let _violations = [];
-        for (const rule of _rules) {
-          try {
-            const regex = new RegExp(rule.pattern, "gi");
-            if (regex.test(reply.content_for_show)) {
-              reply.content_for_show = reply.content_for_show.replace(regex, rule.replacement || "[已过滤]");
-              if (rule.warn_ai) {
-                _violations.push({ name: rule.name, message: rule.warn_message || rule.name });
-              }
-            }
-          } catch (_reErr) {
-            console.warn(`[beilu-memory] 输出管控: 规则"${rule.name}"正则错误:`, _reErr.message);
-          }
-        }
-        // 存储违规记录供下轮GetPrompt注入警告
-        if (_violations.length > 0) {
-          const _warningPath = path.join(__projectRoot, "data", "users", username, "_output_filter_violations.json");
-          nicerWriteFileSync(_warningPath, JSON.stringify(_violations, null, 2));
-        }
-      }
-    } catch (_filterErr) {
-      wbD(_cid, "memory", "handleReply:outputFilter", false, _filterErr.message, {});
-      console.warn("[beilu-memory] 输出管控检查失败:", _filterErr.message);
-    }
+    // [P0-A 2026-08-03] 显示剥离 + W24 输出管控收口单源 _composeContentForShow（定义见 XML 容错段后），
+    // 与提案硬门提前收尾共用同一实现，行为与原内联代码等价。
+    await _composeContentForShow();
 
     reply._memory_tags_processed = true;
 
@@ -4452,36 +4580,32 @@ export async function handleReply(reply, args) {
                   _aaState.status = "awaiting_approval";
                 } else {
                   // 自动切预设/模式
-                  if (nextStep?.mode || nextStep?.preset_name) {
-                    // T4 收口：load→find→write→save 走 updateYonbanConfig 串行锁；_aaTargetSm 经 closure 传出供后续 extension。
-                    let _aaTargetSm;
-                    await updateYonbanConfig(username, (_smConfig) => {
-                      if (nextStep.mode) {
-                        _aaTargetSm = (_smConfig.sub_modes || []).find(m => m.id === nextStep.mode);
-                        writeActiveSubModeId(_smConfig, _aaTargetSm?.modeGroup || nextStep.modeGroup || "code", nextStep.mode, _cid);
-                      }
-                      return _smConfig; // 无条件落盘（等价原 saveJsonFile：nextStep.mode 空时也写回未改内容）
-                    }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-                    // 生效模型（凛倾 2026-07-08）：auto_advance 切入下一步子模式=一次性应用其默认预设（生成时无强切盖回）
-                    if (_aaTargetSm) { try { await applySubModePresetDefault(username, _aaTargetSm, _cid); } catch (e) { console.warn(`[beilu-memory] auto_advance 预设应用失败: ${e.message}`); } }
-                    // ★ O11修复：auto_advance推进后写reply.extension，通知前端切预设/API源/模型参数
-                    //   对齐 <subModeSwitch> 标签路径(:1044-1062)的完整字段集
+                  if (nextStep?.mode) {
+                    // D3 0804 三入口收口：map 写 + activation 记录 + 默认预设应用（0708 生效模型）+ 事件体
+                    //   统一走 activateSubModeCore（source="auto_advance"）。嵌套锁序不变=work外→yonban内
+                    //   （core 内 updateYonbanConfig 与原内联同位）。行为差异（root修）：
+                    //   ① 未知子模式 id 由 core fail-closed 拒绝，不再写悬空 active id（原 find 落空仍
+                    //      writeActiveSubModeId=悬空引用）；拒绝 wbD 可见留痕，流程推进本身不回滚。
+                    //   ② 事件 from=map 实际前值（core 单源）非流程步声明 mode——实际状态优于声明。
+                    //   ③ 原 nextStep 仅 preset_name 无 mode 时发 to:"" 空事件已删（无语义消费者，T046 后
+                    //      preset 不再由此块处理）。
                     reply.extension = reply.extension || {};
-                    const _aaPrevStep = _aaWf.steps[_aaState.current_step - 1];
-                    const _aaFromMode = _aaPrevStep?.mode || "";
-                    const _aaModeGroup = _aaTargetSm?.modeGroup || nextStep.modeGroup || "code";
-                    reply.extension._subModeSwitch = buildSubModeSwitchEvent({ from: _aaFromMode, to: nextStep.mode || "", sm: _aaTargetSm, modeGroup: _aaModeGroup, chatId: _cid }); // 键收口 2026-07-13：契约单源构造器，chatId=与上方 write 同 _cid
-                    // T046：不再下发 _subModeSwitchPreset（前端强制切预设=死绑）——后端生成时按子模式绑定隔离。
-                    if (_aaTargetSm?.model_params) {
-                      reply.extension._subModeSwitchModelParams = _aaTargetSm.model_params;
-                    }
-                    if (_aaTargetSm?.apiSource) {
-                      try {
-                        await args?.char?.interfaces?.config?.SetData?.({ AIsource: _aaTargetSm.apiSource });
-                        reply.extension._subModeSwitchApiSource = _aaTargetSm.apiSource;
-                      } catch (_aaApiErr) {
-                        console.warn(`[beilu-memory] autoAdvance: API源切换失败: ${_aaApiErr.message}`);
+                    const _aaAct = await activateSubModeCore({ username, charName, chatId: _cid, subModeId: nextStep.mode, source: "auto_advance" });
+                    if (_aaAct?.success) {
+                      const _aaTargetSm = _aaAct.subMode;
+                      reply.extension._subModeSwitch = _aaAct.event;
+                      // T046：不再下发 _subModeSwitchPreset（前端强制切预设=死绑）——后端生成时按子模式绑定隔离。
+                      if (_aaTargetSm?.model_params) {
+                        reply.extension._subModeSwitchModelParams = _aaTargetSm.model_params;
                       }
+                      // [0804 根因修·RC11断点7] 同 <subModeSwitch> 路径：零角色全局 AIsource 写，
+                      //   流程推进的源覆盖走既有 per-request 链（active submode 已落盘→下轮生成局部生效）。
+                      if (_aaTargetSm?.apiSource) {
+                        reply.extension._subModeSwitchApiSource = _aaTargetSm.apiSource;
+                      }
+                    } else {
+                      wbD(_cid, "memory", "handleReply:autoAdvance:activate", false, `${_aaAct?.code || ""} ${_aaAct?.error || ""}`, { to: nextStep.mode });
+                      console.warn(`[beilu-memory] auto_advance 子模式激活被拒: ${nextStep.mode} — ${_aaAct?.error || _aaAct?.code || "未知错误"}`);
                     }
                   }
                 }

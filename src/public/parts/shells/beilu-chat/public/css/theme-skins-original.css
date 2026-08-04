@@ -1,0 +1,518 @@
+/*
+ * Lightweight identity skins for the 36 original theme IDs.
+ * These themes share the semantic interaction system and add only restrained
+ * shape, edge and material cues. No foreground animation loops here.
+ */
+
+html[data-theme]:not([data-beilu-enhanced]) {
+  --beilu-skin-marker-size: 3px;
+  --beilu-skin-panel-border: var(--beilu-border-default);
+  --beilu-skin-panel-edge: var(--beilu-identity-edge);
+  --beilu-skin-panel-texture: var(--beilu-panel-texture);
+  isolation: isolate;
+}
+
+html[data-theme]:not([data-beilu-enhanced]) > body {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  .left-panel,
+  #right-panel,
+  .panel,
+  .card,
+  .settings-panel,
+  .editor-panel,
+  .work-panel
+) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-skin-panel-texture);
+  border: var(--beilu-border-width) solid var(--beilu-skin-panel-border);
+  border-inline-start-width: var(--beilu-skin-marker-size);
+  border-inline-start-color: var(--beilu-skin-panel-edge);
+  border-radius: var(--beilu-radius-panel);
+  box-shadow: var(--beilu-panel-shadow);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  #main-content,
+  #chat-container,
+  #chat-messages,
+  .chat-workspace,
+  .file-tree,
+  .file-explorer,
+  .file-editor,
+  .editor-section,
+  .plugin-panel
+) {
+  background-color: var(--beilu-surface-workspace);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) #top-bar {
+  background-color: var(--beilu-surface-raised);
+  background-image: none;
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  .floating-window,
+  .popover,
+  [popover],
+  .dropdown-content,
+  .model-selector-dropdown,
+  .ide-menu-dropdown,
+  .context-menu,
+  .tooltip-content,
+  .toast,
+  .drawer-side,
+  [role="menu"],
+  [role="listbox"]
+) {
+  background-color: var(--beilu-surface-floating);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(.tooltip::before, [role="tooltip"]) {
+  background-color: var(--beilu-surface-floating);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .modal-box,
+  [role="dialog"]
+) {
+  background-color: var(--beilu-surface-modal);
+  border-color: var(--beilu-border-strong);
+  color: var(--beilu-fg-primary);
+  box-shadow: var(--beilu-panel-shadow);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea,
+  select,
+  .input,
+  .textarea,
+  .select
+) {
+  background-color: var(--beilu-surface-input);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea
+)::placeholder {
+  color: var(--beilu-fg-secondary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(code, pre, .code-editor, .editor-textarea) {
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-theme]:not([data-beilu-enhanced]) :where(
+  .top-tab.top-tab-active,
+  .top-tab.active,
+  .top-tab[data-active="true"],
+  [role="tab"][aria-selected="true"]
+) {
+  border-block-end-color: var(--beilu-identity-active-edge);
+  animation: beilu-original-edge-in var(--beilu-motion-fast) var(--beilu-ease-enter) both;
+}
+
+html[data-theme]:not([data-beilu-enhanced])::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  background: var(--beilu-backdrop-effect);
+}
+
+@keyframes beilu-original-edge-in {
+  from { box-shadow: inset 0 0 0 var(--beilu-feedback-selected-edge); }
+  to { box-shadow: inset 0 -3px 0 var(--beilu-feedback-selected-edge); }
+}
+
+/* Graphite underline. */
+html[data-theme="default"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 5px;
+  --beilu-radius-panel: 8px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-texture: linear-gradient(90deg, var(--beilu-border-subtle) 1px, transparent 1px);
+}
+
+/* Cold black and thin structural divisions. */
+html[data-theme="dark"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 4px;
+  --beilu-radius-panel: 6px;
+  --beilu-skin-marker-size: 1px;
+  --beilu-panel-shadow: 0 10px 26px rgb(0 0 0 / 0.38);
+}
+
+/* Single orbital line. */
+html[data-theme="night"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 8px;
+  --beilu-radius-panel: 12px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-texture: radial-gradient(circle at 92% 8%, var(--beilu-border-subtle) 0 1px, transparent 2px);
+}
+
+/* Matte surfaces with a stronger boundary. */
+html[data-theme="dim"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 4px;
+  --beilu-radius-panel: 5px;
+  --beilu-border-width: 2px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-shadow: none;
+}
+
+/* Violet black with a rose side marker. */
+html[data-theme="dracula"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 5px;
+  --beilu-radius-panel: 9px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-skin-panel-edge: var(--beilu-theme-accent);
+  --beilu-panel-texture: linear-gradient(135deg, transparent 0 78%, var(--beilu-border-subtle) 78% 80%, transparent 80%);
+}
+
+/* Depth scale and backdrop-only breathing. */
+html[data-theme="abyss"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px;
+  --beilu-radius-panel: 5px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-texture: repeating-linear-gradient(0deg, transparent 0 23px, var(--beilu-border-subtle) 24px);
+  --beilu-backdrop-effect: radial-gradient(circle at 50% 85%, var(--beilu-active), transparent 58%);
+}
+
+html[data-theme="abyss"]:not([data-beilu-enhanced])::before {
+  animation: beilu-original-ambient var(--beilu-motion-ambient) var(--beilu-ease-standard) infinite alternate;
+}
+
+/* A single horizon line; no grid on content surfaces. */
+html[data-theme="synthwave"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px;
+  --beilu-radius-panel: 4px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(180deg, transparent 0 70%, var(--beilu-border-subtle) 70% 71%, transparent 71%);
+}
+
+/* Warm top edge. */
+html[data-theme="sunset"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 6px;
+  --beilu-radius-panel: 10px 10px 6px 6px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-texture: linear-gradient(180deg, var(--beilu-hover), transparent 28%);
+}
+
+/* Cream paper tag. */
+html[data-theme="coffee"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 4px 8px 8px 4px;
+  --beilu-radius-panel: 5px 12px 12px 5px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-shadow: 0 8px 22px rgb(0 0 0 / 0.32);
+}
+
+/* Fine leaf-vein diagonal. */
+html[data-theme="forest"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 7px 3px;
+  --beilu-radius-panel: 12px 5px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(145deg, transparent 0 68%, var(--beilu-border-subtle) 69%, transparent 70%);
+}
+
+/* Champagne double edge. */
+html[data-theme="luxury"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px;
+  --beilu-radius-panel: 3px;
+  --beilu-border-width: 2px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-shadow: inset 0 0 0 1px var(--beilu-border-subtle), 0 14px 34px rgb(0 0 0 / 0.42);
+}
+
+/* Regular grid. */
+html[data-theme="business"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px;
+  --beilu-radius-panel: 4px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(90deg, var(--beilu-border-subtle) 1px, transparent 1px);
+}
+
+/* OLED hard edge. */
+html[data-theme="black"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 0;
+  --beilu-radius-panel: 0;
+  --beilu-border-width: 2px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-shadow: none;
+}
+
+/* Orange chevron edge, event-driven only. */
+html[data-theme="halloween"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px 7px;
+  --beilu-radius-panel: 4px 12px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(135deg, transparent 0 88%, var(--beilu-hover) 88% 94%, transparent 94%);
+}
+
+/* Frost-blue layer lines. */
+html[data-theme="nord"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 5px;
+  --beilu-radius-panel: 7px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-texture: repeating-linear-gradient(0deg, transparent 0 31px, var(--beilu-border-subtle) 32px);
+}
+
+/* Milk paper and a dark graphite edge. */
+html[data-theme="light"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 5px;
+  --beilu-radius-panel: 8px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-shadow: 0 10px 24px rgb(44 39 31 / 0.14);
+}
+
+/* Mint and berry label shape. */
+html[data-theme="cupcake"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 10px 4px;
+  --beilu-radius-panel: 16px 7px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(90deg, transparent 0 78%, var(--beilu-hover) 78%);
+}
+
+/* Emerald cut edge. */
+html[data-theme="emerald"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px 8px;
+  --beilu-radius-panel: 3px 12px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(135deg, transparent 0 93%, var(--beilu-border-default) 93%);
+}
+
+/* Corporate ruled line. */
+html[data-theme="corporate"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px;
+  --beilu-radius-panel: 4px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(180deg, transparent 0 95%, var(--beilu-border-subtle) 95%);
+}
+
+/* Printed paper offset. */
+html[data-theme="retro"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px;
+  --beilu-radius-panel: 2px;
+  --beilu-border-width: 2px;
+  --beilu-skin-marker-size: 5px;
+  --beilu-panel-texture: radial-gradient(circle, var(--beilu-border-subtle) 0 1px, transparent 1px);
+  --beilu-panel-shadow: 3px 3px 0 var(--beilu-border-default);
+}
+
+/* Backdrop-only frost light. */
+html[data-theme="winter"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 6px;
+  --beilu-radius-panel: 10px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-backdrop-effect: radial-gradient(circle at 70% 15%, var(--beilu-selection-inactive), transparent 52%);
+}
+
+html[data-theme="winter"]:not([data-beilu-enhanced])::before {
+  animation: beilu-original-ambient var(--beilu-motion-ambient) var(--beilu-ease-standard) infinite alternate;
+}
+
+/* Rust leaf edge. */
+html[data-theme="autumn"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px 9px;
+  --beilu-radius-panel: 5px 13px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(150deg, transparent 0 86%, var(--beilu-hover) 86% 92%, transparent 92%);
+}
+
+/* Low-color tape label. */
+html[data-theme="lofi"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px;
+  --beilu-radius-panel: 3px;
+  --beilu-skin-marker-size: 5px;
+  --beilu-panel-shadow: 0 5px 0 var(--beilu-border-subtle);
+}
+
+/* Ribbon divider. */
+html[data-theme="silk"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 9px 3px;
+  --beilu-radius-panel: 14px 5px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(115deg, transparent 0 74%, var(--beilu-hover) 74% 77%, transparent 77%);
+}
+
+/* Layered caramel card. */
+html[data-theme="caramellatte"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 7px;
+  --beilu-radius-panel: 12px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-shadow: 0 7px 0 var(--beilu-border-subtle), 0 13px 24px rgb(64 42 25 / 0.12);
+}
+
+/* Rose bookmark. */
+html[data-theme="valentine"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 4px 10px;
+  --beilu-radius-panel: 6px 14px;
+  --beilu-skin-marker-size: 5px;
+  --beilu-panel-texture: linear-gradient(90deg, transparent 0 91%, var(--beilu-hover) 91%);
+}
+
+/* Botanical corner tag. */
+html[data-theme="garden"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 8px 2px;
+  --beilu-radius-panel: 13px 3px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: linear-gradient(135deg, transparent 0 90%, var(--beilu-hover) 90%);
+}
+
+/* Neutral surface with a multicolor tab edge. */
+html[data-theme="pastel"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 8px;
+  --beilu-radius-panel: 11px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-skin-panel-edge: var(--beilu-theme-accent-aux);
+  --beilu-panel-texture: linear-gradient(90deg, transparent 0 82%, var(--beilu-hover) 82%);
+}
+
+/* Industrial numbered slab. */
+html[data-theme="bumblebee"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 1px 7px 1px 1px;
+  --beilu-radius-panel: 2px 12px 2px 2px;
+  --beilu-skin-marker-size: 5px;
+  --beilu-panel-texture: repeating-linear-gradient(90deg, transparent 0 39px, var(--beilu-border-subtle) 40px);
+}
+
+/* Cyan/red terminal edge; yellow remains warning-only. */
+html[data-theme="cyberpunk"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 0 7px 0 0;
+  --beilu-radius-panel: 0 14px 0 0;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(135deg, transparent 0 94%, var(--beilu-border-default) 94%);
+}
+
+/* Square experimental label. */
+html[data-theme="acid"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 1px;
+  --beilu-radius-panel: 2px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: radial-gradient(circle, var(--beilu-border-subtle) 0 1px, transparent 1px);
+}
+
+/* Citrus paper cut and green action edge. */
+html[data-theme="lemonade"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px 9px;
+  --beilu-radius-panel: 4px 13px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-texture: linear-gradient(145deg, transparent 0 91%, var(--beilu-hover) 91%);
+}
+
+/* High-contrast wireframe. */
+html[data-theme="wireframe"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 0;
+  --beilu-radius-panel: 0;
+  --beilu-border-width: 2px;
+  --beilu-skin-marker-size: 2px;
+  --beilu-panel-shadow: none;
+  --beilu-skin-panel-border: var(--beilu-border-strong);
+}
+
+/* Registration marks without coloring body text. */
+html[data-theme="cmyk"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 1px;
+  --beilu-radius-panel: 2px;
+  --beilu-skin-marker-size: 4px;
+  --beilu-panel-shadow: 2px 0 0 var(--beilu-theme-accent-aux), -2px 0 0 var(--beilu-theme-accent);
+}
+
+/* Gold symbol corner. */
+html[data-theme="fantasy"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 3px 10px;
+  --beilu-radius-panel: 5px 15px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: radial-gradient(circle at 95% 8%, var(--beilu-hover) 0 8px, transparent 9px);
+}
+
+/* Depth scale and waterline. */
+html[data-theme="aqua"]:not([data-beilu-enhanced]) {
+  --beilu-radius-control: 2px 8px;
+  --beilu-radius-panel: 3px 12px;
+  --beilu-skin-marker-size: 3px;
+  --beilu-panel-texture: repeating-linear-gradient(0deg, transparent 0 27px, var(--beilu-border-subtle) 28px);
+}
+
+@keyframes beilu-original-ambient {
+  from { opacity: 0.08; transform: translate3d(0, 0, 0); }
+  to { opacity: 0.16; transform: translate3d(0, -1%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme]:not([data-beilu-enhanced])::before,
+  html[data-theme]:not([data-beilu-enhanced]) :where(.top-tab, [role="tab"]) {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-theme]:not([data-beilu-enhanced])::before {
+    background: none;
+    opacity: 0;
+  }
+
+  html[data-theme]:not([data-beilu-enhanced]) :where(
+    #main-content,
+    #chat-container,
+    #chat-messages,
+    .chat-workspace,
+    .file-tree,
+    .file-explorer,
+    .file-editor,
+    .editor-section,
+    .plugin-panel,
+    #top-bar,
+    .left-panel,
+    #right-panel,
+    .panel,
+    .card,
+    .settings-panel,
+    .editor-panel,
+    .work-panel,
+    .floating-window,
+    .popover,
+    [popover],
+    .dropdown-content,
+    .model-selector-dropdown,
+    .ide-menu-dropdown,
+    .context-menu,
+    .tooltip-content,
+    [role="tooltip"],
+    .toast,
+    .drawer-side,
+    .settings-modal,
+    .editor-modal,
+    .fp-modal,
+    .expand-editor-modal,
+    .modal-box,
+    [role="menu"],
+    [role="listbox"],
+    [role="dialog"]
+  ) {
+    background-image: none;
+  }
+
+  html[data-theme]:not([data-beilu-enhanced]) .tooltip::before {
+    background-image: none;
+  }
+}

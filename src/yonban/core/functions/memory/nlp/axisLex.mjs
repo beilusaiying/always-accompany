@@ -25,7 +25,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// P0-2 起统一走 p1_resdir.mjs(env P1_RESOURCE_DIR > memory/p1_res > 旧运行位)。原本地候选含 "<PROJECT_ROOT>" 字面量死路径。
+// P0-2 起统一走 p1_resdir.mjs；0803 收口为本次启动的唯一 P1_RESOURCE_DIR。
 import { findResource } from "../p1/p1_resdir.mjs";
 
 // 加载格式: "词\tcount\n" 或 "词\n"

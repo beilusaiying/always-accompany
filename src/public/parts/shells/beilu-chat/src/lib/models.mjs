@@ -312,6 +312,12 @@ export class chatMetadata_t {
   timeLineIndex = 0;
   /** @type {timeSlice_t} */
   LastTimeSlice = new timeSlice_t();
+  /**
+   * 已提交编辑操作的持久回执（仅协议元数据，不含正文/附件字节）。
+   * chatOps 负责写入与限长；模型层负责随主聊天 JSON 原子保存和复制。
+   * @type {Array<{operationId:string,payloadFingerprint:string,messageId:string,index:number,editVersion:number,committedAt:string}>}
+   */
+  editOperationReceipts = [];
 
   constructor(username) {
     this.username = username;
@@ -348,12 +354,19 @@ export class chatMetadata_t {
   }
 
   toJSON() {
-    return {
+    const data = {
       username: this.username,
       chatLog: this.chatLog.map((log) => log.toJSON()),
       timeLines: this.timeLines.map((entry) => entry.toJSON()),
       timeLineIndex: this.timeLineIndex,
+      editOperationReceipts: this.editOperationReceipts.map((receipt) => ({ ...receipt })),
     };
+    // chatLog 非空时 LastTimeSlice 始终由最后一条有效消息的 timeSlice 派生，禁止再造第二份状态。
+    // 但全新会话没有消息可承载角色/人设/世界书：若角色 first_mes 为空，addchar 只会更新
+    // LastTimeSlice。旧格式此时保存一个空 chatLog，重载后角色挂载消失，bot 绑定随后稳定传播成
+    // no_character。仅在空会话写入这份显式快照，使“无开场白角色”仍具备可持久化会话状态。
+    if (this.chatLog.length === 0) data.emptyLastTimeSlice = this.LastTimeSlice.toJSON();
+    return data;
   }
 
   async toData() {
@@ -408,6 +421,7 @@ export class chatMetadata_t {
         }),
       ),
       timeLineIndex: this.timeLineIndex,
+      editOperationReceipts: this.editOperationReceipts.map((receipt) => ({ ...receipt })),
     };
   }
 
@@ -465,12 +479,22 @@ export class chatMetadata_t {
     for (const entry of timeLines)
       if (entry.is_generating) entry.is_generating = false;
 
+    const persistedEmptyTimeSlice = chatLog.length === 0 && json.emptyLastTimeSlice
+      ? await timeSlice_t.fromJSON(json.emptyLastTimeSlice, json.username)
+      : new timeSlice_t();
+
     return Object.assign(new chatMetadata_t(), {
       username: json.username,
       chatLog,
       timeLines,
       timeLineIndex: json.timeLineIndex ?? 0,
-      LastTimeSlice: (_findLastActive(chatLog) || chatLog[chatLog.length - 1])?.timeSlice || new timeSlice_t(),
+      editOperationReceipts: Array.isArray(json.editOperationReceipts)
+        ? json.editOperationReceipts
+          .filter((receipt) => receipt && typeof receipt === "object" && !Array.isArray(receipt))
+          .map((receipt) => ({ ...receipt }))
+        : [],
+      // 有消息时只信消息尾部；只有空会话才读取 emptyLastTimeSlice，避免双源漂移。
+      LastTimeSlice: (_findLastActive(chatLog) || chatLog[chatLog.length - 1])?.timeSlice || persistedEmptyTimeSlice,
     });
   }
 

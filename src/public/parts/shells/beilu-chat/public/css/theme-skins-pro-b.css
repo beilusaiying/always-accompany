@@ -1,0 +1,391 @@
+/*
+ * Pro-B identity skins.
+ *
+ * Palette and interaction behavior belong to theme-palettes.css and
+ * theme-skins-pro-core.css. This file only supplies material, shape and
+ * feedback appearance for Synthwave, Acid, Lemonade and Aqua.
+ */
+
+/* Synthwave Pro: hard horizontal horizon, dark solid panels, pink/cyan edge. */
+[data-beilu-enhanced="synthwave"] {
+  --beilu-radius-control: 2px;
+  --beilu-radius-panel: 4px;
+  --beilu-border-width: 1px;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent-aux);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-raised) 82%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-press-border: var(--beilu-theme-accent);
+  --beilu-feedback-press-shadow: inset 0 -2px 0
+    var(--beilu-theme-accent-aux);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-panel) 84%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-theme-accent-aux);
+  --beilu-panel-shadow:
+    0 12px 30px color-mix(in srgb, var(--beilu-backdrop) 76%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--beilu-theme-accent) 24%, transparent);
+  --beilu-panel-texture: linear-gradient(
+    90deg,
+    var(--beilu-theme-accent) 0 18%,
+    var(--beilu-theme-accent-aux) 18% 36%,
+    var(--beilu-border-default) 36% 100%
+  );
+  --beilu-backdrop-effect:
+    linear-gradient(
+      180deg,
+      transparent 0 58%,
+      color-mix(in srgb, var(--beilu-theme-accent) 20%, transparent) 58% 59%,
+      transparent 59% 100%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 12%, transparent) 0 1px,
+      transparent 1px 44px
+    );
+}
+
+[data-beilu-enhanced="synthwave"] :is(.left-panel, #right-panel) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  background-position: top left;
+  background-repeat: no-repeat;
+  background-size: 100% var(--beilu-border-width);
+  border-radius: var(--beilu-radius-panel);
+}
+
+[data-beilu-enhanced="synthwave"] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  border-bottom-color: var(--beilu-identity-edge);
+  box-shadow: inset 0 -1px 0 var(--beilu-identity-edge-aux);
+}
+
+[data-beilu-enhanced="synthwave"] .top-tab {
+  position: relative;
+  border-radius: var(--beilu-radius-control) var(--beilu-radius-control) 0 0;
+  overflow: clip;
+}
+
+[data-beilu-enhanced="synthwave"] .top-tab::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--beilu-identity-edge),
+    var(--beilu-identity-edge-aux)
+  );
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--beilu-motion-fast) var(--beilu-ease-enter);
+}
+
+[data-beilu-enhanced="synthwave"]
+  .top-tab:is(.active, .top-tab-active, [data-active="true"], [aria-selected="true"])::after {
+  transform: scaleX(1);
+}
+
+/* Acid Pro: square lab labels, dot signal material, lime/violet pulse edge. */
+[data-beilu-enhanced="acid"] {
+  --beilu-radius-control: 0;
+  --beilu-radius-panel: 2px;
+  --beilu-border-width: 1px;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-raised) 80%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-press-border: var(--beilu-theme-accent);
+  --beilu-feedback-press-shadow:
+    inset 3px 0 0 var(--beilu-theme-accent-aux),
+    inset 0 0 0 1px var(--beilu-theme-accent);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-panel) 80%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-theme-accent);
+  --beilu-panel-shadow:
+    5px 5px 0 color-mix(in srgb, var(--beilu-theme-accent-aux) 18%, transparent),
+    inset 0 0 0 1px var(--beilu-border-subtle);
+  --beilu-panel-texture: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--beilu-theme-accent-aux) 18%, transparent) 0 1px,
+    transparent 1px
+  );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      circle at 18% 24%,
+      color-mix(in srgb, var(--beilu-theme-accent) 18%, transparent) 0 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 78% 68%,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 16%, transparent) 0 1px,
+      transparent 2px
+    );
+}
+
+[data-beilu-enhanced="acid"] :is(.left-panel, #right-panel) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  background-size: 12px 12px;
+  border-radius: var(--beilu-radius-panel);
+  border-inline-start: 3px solid var(--beilu-identity-edge);
+}
+
+[data-beilu-enhanced="acid"] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  border-block: var(--beilu-border-width) solid var(--beilu-border-default);
+  box-shadow: inset 4px 0 0 var(--beilu-identity-edge-aux);
+}
+
+[data-beilu-enhanced="acid"] :is(.panel-title, .section-label, .tag, .badge) {
+  border-radius: 0;
+  border-inline-start: 3px solid var(--beilu-identity-edge-aux);
+  letter-spacing: 0.06em;
+}
+
+[data-beilu-enhanced="acid"] :is(.activity-item, .preset-item) {
+  position: relative;
+  border-radius: 0;
+}
+
+[data-beilu-enhanced="acid"] :is(.activity-item, .preset-item)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border: var(--beilu-border-width) solid var(--beilu-identity-edge-aux);
+  background: var(--beilu-surface-raised);
+  transform: translateY(-50%) scale(0.65);
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    transform var(--beilu-motion-fast) var(--beilu-ease-enter);
+}
+
+[data-beilu-enhanced="acid"]
+  :is(.activity-item, .preset-item):is(.active, [aria-current="true"], [aria-selected="true"])::after {
+  border-color: var(--beilu-feedback-selected-edge);
+  background: var(--beilu-theme-accent);
+  transform: translateY(-50%) scale(1);
+}
+
+/* Lemonade Pro: opaque paper slices, green actions, yellow only as a block/edge. */
+[data-beilu-enhanced="lemonade"] {
+  --beilu-radius-control: 2px 10px 3px 8px;
+  --beilu-radius-panel: 3px 16px 5px 12px;
+  --beilu-border-width: 1px;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-raised) 86%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-press-border: var(--beilu-theme-accent);
+  --beilu-feedback-press-shadow: inset 0 3px 0
+    var(--beilu-theme-accent-aux);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-panel) 88%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-theme-accent);
+  --beilu-panel-shadow:
+    0 8px 18px color-mix(in srgb, var(--beilu-fg-primary) 10%, transparent),
+    3px 3px 0 color-mix(in srgb, var(--beilu-theme-accent-aux) 30%, transparent);
+  --beilu-panel-texture: repeating-linear-gradient(
+    0deg,
+    transparent 0 27px,
+    color-mix(in srgb, var(--beilu-theme-accent) 9%, transparent) 27px 28px
+  );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      ellipse at 15% 20%,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 16%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      ellipse at 85% 75%,
+      color-mix(in srgb, var(--beilu-theme-accent) 12%, transparent),
+      transparent 38%
+    );
+}
+
+[data-beilu-enhanced="lemonade"] :is(.left-panel, #right-panel) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: 3px solid var(--beilu-identity-edge-aux);
+}
+
+[data-beilu-enhanced="lemonade"] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  border-bottom: var(--beilu-border-width) solid var(--beilu-identity-edge);
+  box-shadow: inset 2.5rem 0 0 var(--beilu-identity-edge-aux);
+}
+
+[data-beilu-enhanced="lemonade"] :is(.panel-title, .section-label) {
+  border-bottom: var(--beilu-border-width) dashed var(--beilu-border-default);
+  text-decoration-color: var(--beilu-identity-edge);
+  text-underline-offset: 0.24em;
+}
+
+[data-beilu-enhanced="lemonade"] .top-tab {
+  position: relative;
+  border-radius: var(--beilu-radius-control);
+}
+
+[data-beilu-enhanced="lemonade"] .top-tab::before {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  width: 0.5rem;
+  height: 0.75rem;
+  border-radius: 100% 0 100% 0;
+  background: var(--beilu-identity-edge-aux);
+  transform: scale(0);
+  transform-origin: bottom left;
+  transition: transform var(--beilu-motion-fast) var(--beilu-ease-enter);
+}
+
+[data-beilu-enhanced="lemonade"]
+  .top-tab:is(.active, .top-tab-active, [data-active="true"], [aria-selected="true"])::before {
+  transform: scale(1);
+}
+
+/* Aqua Pro: rectangular data boards, depth ticks, cyan waterline and gold confirm. */
+[data-beilu-enhanced="aqua"] {
+  --beilu-radius-control: 2px;
+  --beilu-radius-panel: 2px;
+  --beilu-border-width: 1px;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-raised) 82%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-press-border: var(--beilu-theme-accent);
+  --beilu-feedback-press-shadow: inset 0 -2px 0
+    var(--beilu-theme-accent-aux);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-surface-panel) 82%,
+    var(--beilu-theme-accent)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-theme-accent);
+  --beilu-panel-shadow:
+    0 14px 28px color-mix(in srgb, var(--beilu-backdrop) 78%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--beilu-theme-accent) 14%, transparent);
+  --beilu-panel-texture: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--beilu-theme-accent) 18%, transparent) 0 1px,
+    transparent 1px 16px,
+    color-mix(in srgb, var(--beilu-theme-accent) 8%, transparent) 16px 17px,
+    transparent 17px 64px
+  );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      circle at 78% 25%,
+      transparent 0 12%,
+      color-mix(in srgb, var(--beilu-theme-accent) 14%, transparent) 12% 12.4%,
+      transparent 12.4% 20%,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 10%, transparent) 20% 20.3%,
+      transparent 20.3%
+    );
+}
+
+[data-beilu-enhanced="aqua"] :is(.left-panel, #right-panel) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  background-position: right top;
+  background-repeat: repeat-y;
+  background-size: 8px 64px;
+  border-radius: var(--beilu-radius-panel);
+  border-inline-end: 2px solid var(--beilu-identity-edge);
+}
+
+[data-beilu-enhanced="aqua"] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  border-block: var(--beilu-border-width) solid var(--beilu-border-default);
+  box-shadow:
+    inset 0 -2px 0 var(--beilu-identity-edge),
+    inset 0 -3px 0 var(--beilu-identity-edge-aux);
+}
+
+[data-beilu-enhanced="aqua"] :is(.activity-item, .preset-item, .top-tab) {
+  position: relative;
+  border-radius: var(--beilu-radius-control);
+  overflow: clip;
+}
+
+[data-beilu-enhanced="aqua"] :is(.activity-item, .preset-item, .top-tab)::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--beilu-feedback-selected-edge);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--beilu-motion-fast) var(--beilu-ease-enter);
+}
+
+[data-beilu-enhanced="aqua"]
+  :is(.activity-item, .preset-item, .top-tab):is(
+    .active,
+    .top-tab-active,
+    [data-active="true"],
+    [aria-current="true"],
+    [aria-selected="true"]
+  )::before {
+  transform: scaleX(1);
+}
+
+/* Theme-specific selectors above only decorate opaque core surfaces. */
+@media (prefers-reduced-motion: reduce) {
+  :is(
+      [data-beilu-enhanced="synthwave"],
+      [data-beilu-enhanced="acid"],
+      [data-beilu-enhanced="lemonade"],
+      [data-beilu-enhanced="aqua"]
+    )
+    :is(.top-tab, .activity-item, .preset-item)::before,
+  [data-beilu-enhanced="synthwave"] .top-tab::after,
+  [data-beilu-enhanced="acid"] :is(.activity-item, .preset-item)::after {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :is(
+    [data-beilu-enhanced="synthwave"],
+    [data-beilu-enhanced="acid"],
+    [data-beilu-enhanced="lemonade"],
+    [data-beilu-enhanced="aqua"]
+  ) {
+    --beilu-panel-texture: none;
+    --beilu-backdrop-effect: none;
+  }
+}

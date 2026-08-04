@@ -4,7 +4,9 @@
 # GPU/CPU 自动切换: 有 CUDA → GPU(4.6ms/call), 无 → CPU(~20ms/call)
 # 端口: 13151(env P1_TOK_PORT)
 
+import asyncio
 import io, sys, os, json, re, time
+from runtime_contract import service_health
 
 # ── 把 torch/lib 加进 PATH(onnxruntime CUDA 需要 cublasLt), 不 import torch 避免 500MB 开销 ──
 import importlib.util as _ilu
@@ -20,10 +22,8 @@ import jieba
 import jieba.posseg as pseg
 jieba.initialize()
 
-_DERIVED = os.environ.get("P1V2_DERIVED") or (
-    os.path.join(os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived")
-    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived"))
-    else r"<local-dev-path>")
+_RES_ROOT = os.path.abspath(os.environ.get("P1_RESOURCE_DIR") or os.path.join(os.path.dirname(__file__), "..", "resources"))
+_DERIVED = os.environ.get("P1V2_DERIVED") or os.path.join(_RES_ROOT, "p1v2_derived")
 _UD_INFO = []
 for _name, _cond in (
     ("userdict_main.txt", True),
@@ -40,14 +40,24 @@ FREQ = jieba.dt.FREQ
 
 # ── CoreNatureDictionary ──
 _CND = {}
-_CND_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'p1_res', 'CoreNatureDictionary.txt')
-if not os.path.exists(_CND_PATH):
-    _CND_PATH = r'<local-dev-path>'
+_CND_PATH = os.path.join(_RES_ROOT, 'CoreNatureDictionary.txt')
 if os.path.exists(_CND_PATH):
     for _line in open(_CND_PATH, encoding='utf-8', errors='replace'):
-        _parts = _line.strip().split('\t')
-        if len(_parts) >= 2:
-            _CND[_parts[0]] = _parts[1]
+        _parts = _line.rstrip('\r\n').split('\t')
+        if len(_parts) < 3:
+            continue
+        _best_pos = None
+        _best_freq = -1
+        for _i in range(1, len(_parts) - 1, 2):
+            try:
+                _freq = int(_parts[_i + 1])
+            except (TypeError, ValueError):
+                continue
+            if _parts[_i] and _freq > _best_freq:
+                _best_pos = _parts[_i].lower()
+                _best_freq = _freq
+        if _best_pos:
+            _CND[_parts[0]] = _best_pos
 
 # ── ONNX POS 模型(替代 torch+HanLP, 内存 2GB→~200MB) ──
 # 懒加载: 首次 /tokenize 请求才加载 ONNX+transformers, 不用不占内存
@@ -107,6 +117,16 @@ def _ensure_onnx():
         return False
 
 
+class _BackendFailure(RuntimeError):
+    """A selected POS backend failed and the batch must not be consumed."""
+
+    def __init__(self, code, message, *, status_code=503, details=None):
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
+        self.details = details or {}
+
+
 class _TokenizersWrap:
     """tokenizers 库统一接口"""
     def __init__(self, tok): self._tok = tok
@@ -128,13 +148,44 @@ class _EncResult:
 
 def _onnx_pos_batch(all_toks):
     """ONNX POS: jieba 分好的词 → ELECTRA tokenize → ONNX 推理 → CTB 标签 → ICTCLAS 映射"""
+    # CoreNature 是 provenance 与模型成功后个别无标签 token 的辅助，不能把整个
+    # ONNX 批次失败伪装成可消费的 POS 结果。
+    for toks in all_toks:
+        for t in toks:
+            segmenter_pos = t.get("pos")
+            core_pos = _CND.get(t["w"])
+            t["segmenterPos"] = segmenter_pos
+            t["modelPos"] = None
+            t["modelTag"] = None
+            t["corePos"] = core_pos
+            t["posSource"] = "segmenter"
+
     if not _ensure_onnx():
-        return f"onnx_unavailable: {_ORT_ERR or 'not loaded'}"
+        raise _BackendFailure(
+            "P1_ONNX_LOAD_FAILED",
+            f"ONNX POS backend unavailable: {_ORT_ERR or 'not loaded'}",
+            details={
+                "backend": "onnx_ctb9",
+                "phase": "load",
+                "device": _ORT_DEVICE,
+                "error": _ORT_ERR or "not loaded",
+                "model": _ONNX_MODEL,
+                "tokenizer": _TOKENIZER_DIR,
+            },
+        )
     sents = [[t["w"] for t in toks] for toks in all_toks if toks]
     if not sents:
-        return f"onnx_{_ORT_DEVICE}"
+        return {
+            "backend": "onnx_ctb9", "available": True,
+            "label": f"onnx_ctb9_{_ORT_DEVICE}", "sentences": 0,
+            "modelTagged": 0, "modelTaggedHan": 0, "gaps": 0,
+        }
 
     try:
+        model_tagged = 0
+        han_tokens = 0
+        model_tagged_han = 0
+        gaps = 0
         for sent_words, toks in zip(sents, [t for t in all_toks if t]):
             text = "".join(sent_words)
             enc = _ELECTRA_TOK.encode(text)
@@ -147,7 +198,7 @@ def _onnx_pos_batch(all_toks):
                 if start == end:
                     continue  # [CLS]/[SEP]
                 tag_idx = str(pred_ids[i])
-                ctb_tag = _TAG_VOCAB.get(tag_idx, "NN")
+                ctb_tag = _TAG_VOCAB.get(tag_idx)
                 for c in range(start, min(end, len(text))):
                     char_tags[c] = ctb_tag
 
@@ -155,29 +206,76 @@ def _onnx_pos_batch(all_toks):
             pos = 0
             for t in toks:
                 w = t["w"]
+                is_han = bool(re.search(r"[\u4e00-\u9fff]", w))
+                if is_han:
+                    han_tokens += 1
+                ctb = None
+                mapped = None
                 if pos < len(char_tags) and char_tags[pos]:
                     ctb = char_tags[pos]
-                    mapped = _CTB2ICT.get(ctb)
-                    if mapped:
-                        t["pos"] = mapped
-                        t["pos_ctb"] = ctb
+                    mapped = _CTB2ICT.get(ctb) if ctb else None
+                if mapped:
+                    t["pos"] = mapped
+                    t["modelPos"] = mapped
+                    t["modelTag"] = ctb
+                    t["posSource"] = "onnx_ctb9"
+                    model_tagged += 1
+                    if is_han:
+                        model_tagged_han += 1
+                else:
+                    gaps += 1
+                    if t["corePos"]:
+                        t["pos"] = t["corePos"]
+                        t["posSource"] = "coreNature_model_gap"
                 pos += len(w)
 
-        # CoreNatureDictionary 兜底
-        for toks in all_toks:
-            for t in toks:
-                if 'pos_ctb' not in t and t['w'] in _CND:
-                    cnd_pos = _CND[t['w']]
-                    if t['pos'] and t['pos'][0] != cnd_pos[0]:
-                        t['pos'] = cnd_pos
-                        t['pos_cnd'] = True
+        if han_tokens and not model_tagged_han:
+            raise _BackendFailure(
+                "P1_ONNX_INFERENCE_CONTRACT_FAILED",
+                "ONNX POS inference returned no usable labels for Chinese tokens",
+                status_code=500,
+                details={
+                    "backend": "onnx_ctb9",
+                    "phase": "inference_contract",
+                    "device": _ORT_DEVICE,
+                    "sentences": len(sents),
+                    "hanTokens": han_tokens,
+                    "modelTaggedHan": model_tagged_han,
+                    "gaps": gaps,
+                },
+            )
 
-        return f"onnx_ctb9_{_ORT_DEVICE}"
+        return {
+            "backend": "onnx_ctb9",
+            "available": True,
+            "label": f"onnx_ctb9_{_ORT_DEVICE}",
+            "sentences": len(sents),
+            "modelTagged": model_tagged,
+            "modelTaggedHan": model_tagged_han,
+            "gaps": gaps,
+        }
+    except _BackendFailure:
+        raise
     except Exception as e:
-        return f"onnx_fail: {str(e)[:100]}"
+        message = str(e)[:300]
+        raise _BackendFailure(
+            "P1_ONNX_INFERENCE_FAILED",
+            f"ONNX POS inference failed: {message}",
+            status_code=500,
+            details={
+                "backend": "onnx_ctb9",
+                "phase": "inference",
+                "device": _ORT_DEVICE,
+                "error": message,
+                "sentences": len(sents),
+            },
+        ) from e
 
 
-# ── Stanza 英文(懒加载: 首次遇到英文文本才 import, 避免 torch 500MB 启动开销) ──
+# ── Stanza 英文（显式可选重后端）──
+# 默认英文 POS 由 vector_service 的 WordNet 词法后端统一承担。Stanza 会连带加载
+# PyTorch，在 2GB 运行预算下不能因为单个英文标识符自动启用；只有调用方明确传
+# englishPosBackend=stanza 时才加载。
 _STANZA = None
 _STANZA_ERR = None
 _STANZA_LOADED = False
@@ -206,7 +304,8 @@ def _cut_zh(seg, toks):
     for w, pos in pseg.cut(seg):
         w = w.strip()
         if w:
-            toks.append({"w": w, "pos": pos, "oov": w not in FREQ or FREQ.get(w, 0) == 0})
+            toks.append({"w": w, "pos": pos, "segmenterPos": pos,
+                         "oov": w not in FREQ or FREQ.get(w, 0) == 0})
 
 
 def cut_with_pos(text):
@@ -215,7 +314,8 @@ def cut_with_pos(text):
     for m in _EN_SEG.finditer(text):
         _cut_zh(text[cursor:m.start()], toks)
         w = m.group()
-        toks.append({"w": w, "pos": "eng", "oov": w.lower() not in FREQ, "enSeg": True})
+        toks.append({"w": w, "pos": "eng", "segmenterPos": "eng",
+                     "oov": w.lower() not in FREQ, "enSeg": True})
         cursor = m.end()
     _cut_zh(text[cursor:], toks)
     return toks
@@ -231,44 +331,221 @@ def apply_stanza(all_toks):
     if not seqs:
         return "none_needed"
     if not _ensure_stanza():
-        return f"unavailable: {_STANZA_ERR}"
+        raise _BackendFailure(
+            "P1_STANZA_LOAD_FAILED",
+            f"Stanza POS backend unavailable: {_STANZA_ERR or 'not loaded'}",
+            details={
+                "backend": "stanza",
+                "phase": "load",
+                "error": _STANZA_ERR or "not loaded",
+                "sentences": len(seqs),
+            },
+        )
     try:
         doc = _STANZA(seqs)
+        if len(doc.sentences) != len(refs):
+            raise RuntimeError(f"sentence count mismatch: expected {len(refs)}, got {len(doc.sentences)}")
         for sent, en in zip(doc.sentences, refs):
+            if len(sent.words) != len(en):
+                raise RuntimeError(f"token count mismatch: expected {len(en)}, got {len(sent.words)}")
             for word, t in zip(sent.words, en):
+                if not word.upos:
+                    raise RuntimeError(f"missing UPOS label for token: {t['w']}")
                 t["upos"] = word.upos
         return "stanza_en"
     except Exception as e:
-        return f"failed: {str(e)[:150]}"
+        message = str(e)[:300]
+        raise _BackendFailure(
+            "P1_STANZA_INFERENCE_FAILED",
+            f"Stanza POS inference failed: {message}",
+            status_code=500,
+            details={
+                "backend": "stanza",
+                "phase": "inference",
+                "error": message,
+                "sentences": len(seqs),
+            },
+        ) from e
 
 
 # ── HTTP 服务 ──
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 import uvicorn
 
 app = FastAPI()
 _started = time.time()
+_uvicorn_server = None
+
+
+async def _stop_after_response():
+    await asyncio.sleep(0.1)
+    if _uvicorn_server is not None:
+        _uvicorn_server.should_exit = True
+
+
+@app.post("/lifecycle/stop")
+async def lifecycle_stop():
+    asyncio.create_task(_stop_after_response())
+    return {"success": True, "stopping": True}
 
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "tokenize", "gpu": _gpu_name, "device": _ORT_DEVICE,
+    return {**service_health("tokenize"), "gpu": _gpu_name, "device": _ORT_DEVICE,
             "onnx": _ORT_SESSION is not None, "uptime": round(time.time() - _started, 1)}
+
+
+@app.post("/warmup")
+async def warmup():
+    """仅加载分词服务的召回资源；不构造文本，也不执行分词或 POS 推理。"""
+    started = time.perf_counter()
+    ready = _ensure_onnx()
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+    active_providers = _ORT_SESSION.get_providers() if _ORT_SESSION is not None else []
+    resources = {
+        "segmenter": {
+            "ready": True,
+            "provider": "jieba_precise",
+            "dictionaryEntries": len(FREQ),
+            "userdict": _UD_INFO or ["none"],
+        },
+        "posModel": {
+            "ready": ready,
+            "provider": "onnx_ctb9",
+            "ms": elapsed_ms,
+            "device": _ORT_DEVICE,
+            "runtime": _gpu_name,
+            "activeProviders": active_providers,
+            "model": _ONNX_MODEL,
+            "modelExists": os.path.isfile(_ONNX_MODEL),
+            "tokenizer": _TOKENIZER_DIR,
+            "tokenizerExists": os.path.isdir(_TOKENIZER_DIR),
+            "tagVocab": _TAG_VOCAB_FILE,
+            "tagVocabExists": os.path.isfile(_TAG_VOCAB_FILE),
+            "tagCount": len(_TAG_VOCAB),
+            "error": _ORT_ERR,
+        },
+        "coreNature": {
+            "ready": bool(_CND),
+            "entries": len(_CND),
+            "path": _CND_PATH,
+            "role": "provenance_and_model_gap_assist_only",
+        },
+    }
+    if not ready:
+        error = _ORT_ERR or "ONNX POS resources did not load"
+        return JSONResponse(status_code=503, content={
+            "success": False,
+            "action": "warmup",
+            "readyForRecall": False,
+            "ready": False,
+            "ms": elapsed_ms,
+            "code": "P1_TOKENIZE_WARMUP_FAILED",
+            "error": error,
+            "details": {"phase": "load", "resources": resources},
+            "resources": resources,
+        })
+    return {
+        "success": True,
+        "action": "warmup",
+        "readyForRecall": True,
+        "ready": True,
+        "ms": elapsed_ms,
+        "provider": {
+            "segmenter": "jieba_precise",
+            "pos": f"onnx_ctb9_{_ORT_DEVICE}",
+            "device": _ORT_DEVICE,
+            "activeProviders": active_providers,
+        },
+        "resources": resources,
+    }
 
 
 @app.post("/tokenize")
 async def tokenize(req: Request):
-    body = await req.json()
-    texts = body.get("texts", [])
-    results = [cut_with_pos(t) for t in texts]
-    pos_prov = _onnx_pos_batch(results)
-    en_prov = apply_stanza(results)
-    return {
-        "provider": {
+    try:
+        body = await req.json()
+    except Exception as e:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "code": "P1_TOKENIZE_BAD_REQUEST",
+            "error": f"invalid JSON body: {str(e)[:200]}",
+            "details": {"phase": "request"},
+        })
+
+    texts = body.get("texts", []) if isinstance(body, dict) else None
+    en_backend = str(body.get("englishPosBackend") or "none").lower() if isinstance(body, dict) else "none"
+    if not isinstance(texts, list) or any(not isinstance(text, str) for text in texts):
+        return JSONResponse(status_code=422, content={
+            "success": False,
+            "code": "P1_TOKENIZE_BAD_REQUEST",
+            "error": "texts must be an array of strings",
+            "details": {"phase": "request", "receivedType": type(texts).__name__},
+        })
+    if en_backend not in ("none", "stanza"):
+        return JSONResponse(status_code=422, content={
+            "success": False,
+            "code": "P1_TOKENIZE_BAD_REQUEST",
+            "error": f"unsupported englishPosBackend: {en_backend}",
+            "details": {"phase": "request", "allowed": ["none", "stanza"]},
+        })
+
+    pos_status = None
+    en_prov = "disabled"
+    try:
+        results = [cut_with_pos(text) for text in texts]
+        pos_status = _onnx_pos_batch(results)
+        en_prov = apply_stanza(results) if en_backend == "stanza" else "disabled"
+    except _BackendFailure as e:
+        provider = {
             "segmenter": "jieba_precise",
-            "pos": pos_prov,
+            "pos": pos_status["label"] if pos_status else "unavailable",
+            "posStatus": pos_status,
             "hanlp": f"onnx_{_ORT_DEVICE}" if _ORT_SESSION else f"unavailable: {_ORT_ERR}",
             "stanza": en_prov,
+            "englishPosBackend": "stanza" if en_backend == "stanza" else "external",
+            "coreNature": {
+                "available": bool(_CND),
+                "entries": len(_CND),
+                "path": _CND_PATH,
+                "role": "provenance_and_model_gap_assist_only",
+            },
+            "userdict": _UD_INFO or ["none"],
+            "gpu": _gpu_name,
+            "device": _ORT_DEVICE,
+        }
+        return JSONResponse(status_code=e.status_code, content={
+            "success": False,
+            "code": e.code,
+            "error": str(e),
+            "details": e.details,
+            "provider": provider,
+        })
+    except Exception as e:
+        message = str(e)[:300]
+        return JSONResponse(status_code=500, content={
+            "success": False,
+            "code": "P1_TOKENIZE_INTERNAL_ERROR",
+            "error": f"tokenize service failed: {message}",
+            "details": {"phase": "tokenize", "error": message},
+        })
+
+    return {
+        "success": True,
+        "provider": {
+            "segmenter": "jieba_precise",
+            "pos": pos_status["label"],
+            "posStatus": pos_status,
+            "hanlp": f"onnx_{_ORT_DEVICE}",
+            "stanza": en_prov,
+            "englishPosBackend": "stanza" if en_backend == "stanza" else "external",
+            "coreNature": {
+                "available": bool(_CND),
+                "entries": len(_CND),
+                "path": _CND_PATH,
+                "role": "provenance_and_model_gap_assist_only",
+            },
             "userdict": _UD_INFO or ["none"],
             "gpu": _gpu_name,
             "device": _ORT_DEVICE,
@@ -283,4 +560,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=int(os.environ.get("P1_TOK_PORT", "13151")))
     args = parser.parse_args()
     print(f"[tokenize-service] ONNX port={args.port} device={_ORT_DEVICE} gpu={_gpu_name}", flush=True)
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning")
+    _uvicorn_server = uvicorn.Server(config)
+    _uvicorn_server.run()

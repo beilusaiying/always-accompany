@@ -16,6 +16,7 @@ import { wbT, wbD } from "../../../../server/wbStub.mjs" // T3a·3.10: 新位 4 
  */
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { nicerWriteFileSync } from "../../../../scripts/nicerWriteFile.mjs" // T3a·3.10: 新位 4 级; // 0716 收口：原子写单源（原 renameSyncWithRetry+内联 tmp）
 import { diag, ensureMemoryDir } from "../memory/storage_mod/storage.mjs"; // T8·回切：改组内引用（T3a·3.10 暂指旧位壳的欠账，T3e memory 已入住）
 
@@ -30,10 +31,11 @@ const MAX_SNAPSHOTS = 50;
 
 /**
  * @typedef {Object} TableSnapshotEntry
- * @property {string} id - 快照ID（时间戳）
+ * @property {string} id - 快照ID（新快照为 UUID；旧时间戳 ID 继续兼容读取）
  * @property {string} timestamp - ISO时间戳
  * @property {string} chatId - 关联的聊天ID
  * @property {number} messageIndex - 关联的消息索引（该消息触发了tableEdit）
+ * @property {string} [messageId] - 关联的稳定消息 ID（旧快照可缺省）
  * @property {string} reason - 快照原因
  * @property {string} [mode] - 快照桶归属 chat/code/work（20260716 修2 断链A：无 mode 快照不知自己属哪个桶，
  *   恢复端只能按会话 active_mode 乱写=跨模式表污染；旧条目缺省 ""=legacy，恢复端按查看桶处理）
@@ -59,6 +61,51 @@ function getCacheKey(username, charName) {
   return `${username}/${charName}`;
 }
 
+function snapshotUnavailableError(filePath, username, charName, cause) {
+  const detail = cause?.message || String(cause);
+  const error = new Error(`表格快照文件不可用: ${detail}`);
+  error.code = "E_TABLE_SNAPSHOT_UNAVAILABLE";
+  error.filePath = filePath;
+  error.username = username;
+  error.charName = charName;
+  error.cause = cause;
+  return error;
+}
+
+function validateSnapshotEntries(value) {
+  if (!Array.isArray(value)) {
+    throw new TypeError("顶层必须是快照数组或包含 snapshots 数组的对象");
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new TypeError(`snapshots[${index}] 必须是对象`);
+    }
+    if (typeof entry.id !== "string" || !entry.id) {
+      throw new TypeError(`snapshots[${index}].id 必须是非空字符串`);
+    }
+    if (typeof entry.chatId !== "string") {
+      throw new TypeError(`snapshots[${index}].chatId 必须是字符串`);
+    }
+    if (typeof entry.timestamp !== "string" || !Number.isFinite(Date.parse(entry.timestamp))) {
+      throw new TypeError(`snapshots[${index}].timestamp 必须是有效时间戳`);
+    }
+    if (!Number.isInteger(entry.messageIndex)) {
+      throw new TypeError(`snapshots[${index}].messageIndex 必须是整数`);
+    }
+    if (entry.messageId !== undefined && typeof entry.messageId !== "string") {
+      throw new TypeError(`snapshots[${index}].messageId 必须是字符串`);
+    }
+    if (!Array.isArray(entry.tables)) {
+      throw new TypeError(`snapshots[${index}].tables 必须是数组`);
+    }
+    if (entry.mode !== undefined && entry.mode !== "" && entry.mode !== "chat" && entry.mode !== "code" && entry.mode !== "work") {
+      throw new TypeError(`snapshots[${index}].mode 不是受支持的表格桶`);
+    }
+  }
+  return value;
+}
+
 /**
  * 从文件加载快照列表（如果缓存未命中）
  */
@@ -68,22 +115,26 @@ function loadSnapshots(username, charName) {
     return snapshotCache.get(key);
   }
 
-  const filePath = getSnapshotFilePath(username, charName);
+  let filePath = null;
   let snapshots = [];
   try {
+    filePath = getSnapshotFilePath(username, charName);
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, "utf-8");
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        snapshots = parsed;
+        snapshots = validateSnapshotEntries(parsed);
       } else if (parsed?.snapshots && Array.isArray(parsed.snapshots)) {
-        snapshots = parsed.snapshots;
+        snapshots = validateSnapshotEntries(parsed.snapshots);
+      } else {
+        throw new TypeError("顶层必须是快照数组或包含 snapshots 数组的对象");
       }
     }
   } catch (e) {
-    wbD(null, "table", "tableSnapshot:load_fail", false, "快照文件加载/解析失败，回退空数组(回档快照丢失)", { path: filePath, username, charName, err: e.message });
-    diag.warn(`tableSnapshot: 加载快照文件失败: ${e.message}`);
-    snapshots = [];
+    const unavailable = snapshotUnavailableError(filePath, username, charName, e);
+    wbD(null, "table", "tableSnapshot:load_fail", false, "快照文件存在但无法读取/解析/校验，拒绝把未知态当作无快照", { path: filePath, username, charName, code: unavailable.code, err: e.message });
+    diag.error(`tableSnapshot: 加载快照文件失败，已拒绝回退空数组: ${e.message}`);
+    throw unavailable;
   }
 
   snapshotCache.set(key, snapshots);
@@ -110,6 +161,7 @@ function saveSnapshots(username, charName) {
   } catch (e) {
     wbD(null, "table", "tableSnapshot:save_fail", false, "快照文件写盘失败(回档点未持久化)", { path: filePath, username, charName, count: snapshots.length, err: e.message });
     diag.error(`tableSnapshot: 保存快照文件失败: ${e.message}`);
+    throw e;
   }
 }
 
@@ -123,6 +175,7 @@ function saveSnapshots(username, charName) {
  * @param {number} [messageIndex] - 触发快照的消息索引（可选，-1表示未知）
  * @param {string} [reason] - 快照原因
  * @param {string} [mode] - 桶归属 chat/code/work（tables 来自哪个模式桶；非法值落 ""=legacy 语义）
+ * @param {string} [messageId] - 触发快照的稳定消息 ID
  * @returns {{ success: boolean, snapshotId: string }}
  */
 export function createTableSnapshot(
@@ -133,11 +186,14 @@ export function createTableSnapshot(
   messageIndex = -1,
   reason = "tableEdit前自动快照",
   mode = "",
+  messageId = "",
 ) {
-  wbT(chatId || null, "table", "createTableSnapshot:enter", { username, charName, chatId, messageIndex, mode, tableCount: Array.isArray(tables) ? tables.length : 0 });
+  wbT(chatId || null, "table", "createTableSnapshot:enter", { username, charName, chatId, messageIndex, messageId: messageId || null, mode, tableCount: Array.isArray(tables) ? tables.length : 0 });
+  const key = getCacheKey(username, charName);
   const snapshots = loadSnapshots(username, charName);
+  const previousSnapshots = snapshots.slice();
   const timestamp = new Date().toISOString();
-  const id = timestamp.replace(/[:.]/g, "-");
+  const id = randomUUID();
 
   /** @type {TableSnapshotEntry} */
   const entry = {
@@ -145,6 +201,7 @@ export function createTableSnapshot(
     timestamp,
     chatId: chatId || "",
     messageIndex,
+    ...(typeof messageId === "string" && messageId ? { messageId } : {}),
     reason,
     mode: (mode === "chat" || mode === "code" || mode === "work") ? mode : "",
     tables: structuredClone(tables),
@@ -157,7 +214,12 @@ export function createTableSnapshot(
     snapshots.shift();
   }
 
-  saveSnapshots(username, charName);
+  try {
+    saveSnapshots(username, charName);
+  } catch (error) {
+    snapshotCache.set(key, previousSnapshots);
+    throw error;
+  }
 
   diag.debug(
     `tableSnapshot: 已创建快照 ${id} (chatId=${chatId}, msgIdx=${messageIndex}, reason=${reason}, tables=${tables.length}个表格)`,
@@ -183,6 +245,7 @@ export function listTableSnapshots(username, charName) {
     timestamp: s.timestamp,
     chatId: s.chatId,
     messageIndex: s.messageIndex,
+    messageId: s.messageId || "",
     reason: s.reason,
     mode: s.mode || "",
     tableCount: s.tables?.length || 0,
@@ -205,13 +268,13 @@ export function getTableSnapshot(username, charName, snapshotId) {
 /**
  * 查找最适合回档的快照（基于 chatId + messageIndex）
  *
- * 逻辑：找到 chatId 匹配且 messageIndex <= targetIndex 的最新快照
- * 如果没有精准匹配，回退到该 chatId 的最新快照
+ * 语义：“回档到并保留目标消息”必须恢复目标之后第一次表格编辑前的快照，
+ * 即 chatId 匹配且 messageIndex > targetIndex 的最早快照。没有后续表格改动就不恢复。
  *
  * @param {string} username
  * @param {string} charName
  * @param {string} chatId
- * @param {number} targetIndex - 目标消息索引（回档到此消息，恢复此消息之前的表格状态）
+ * @param {number} targetIndex - 目标消息索引（回档到此消息并保留它）
  * @returns {TableSnapshotEntry|null}
  */
 export function findSnapshotForRollback(
@@ -232,24 +295,23 @@ export function findSnapshotForRollback(
     return null;
   }
 
-  // 2. 找 messageIndex <= targetIndex 的最新快照
-  //    （即：在目标消息之前或等于目标消息时创建的快照）
+  // 2. 找 messageIndex > targetIndex 的第一份编辑前快照。
+  //    同一 messageIndex 可有多种表格操作，必须取最先创建的那份，
+  //    才是该条消息所有表格改动开始前的状态。
   const candidates = chatSnapshots.filter(
-    (s) => s.messageIndex !== -1 && s.messageIndex <= targetIndex,
+    (s) => Number.isInteger(s.messageIndex) && s.messageIndex > targetIndex,
   );
 
   if (candidates.length > 0) {
-    // 取最新的（最接近 targetIndex 的）
-    candidates.sort((a, b) => b.messageIndex - a.messageIndex);
+    candidates.sort((a, b) =>
+      a.messageIndex - b.messageIndex ||
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
     return candidates[0];
   }
 
-  // 3. 没有精准匹配，回退到该 chatId 最早的快照
-  //    （理由：最早的快照代表最原始的状态）
-  diag.warn(
-    `tableSnapshot: 无精准匹配 (targetIndex=${targetIndex})，回退到最早快照`,
-  );
-  return chatSnapshots[0];
+  // 3. 目标之后没有表格编辑：表格层不应产生任何恢复副作用。
+  return null;
 }
 
 /**
@@ -261,17 +323,71 @@ export function findSnapshotForRollback(
  * @param {string} username
  * @param {string} charName
  * @param {string} snapshotId
- * @returns {{ success: boolean, tables?: object[], error?: string }}
+ * @param {{chatId:string, messageIndex?:number, messageId?:string}} expectedScope
+ * @returns {{ success: boolean, tables?: object[], error?: string, code?: string }}
  */
-export function restoreTableSnapshot(username, charName, snapshotId) {
-  const snapshot = getTableSnapshot(username, charName, snapshotId);
-  if (!snapshot) {
-    return { success: false, error: `快照不存在: ${snapshotId}` };
+export function restoreTableSnapshot(username, charName, snapshotId, expectedScope = {}) {
+  if (typeof snapshotId !== "string" || !snapshotId) {
+    return { success: false, code: "E_INVALID_TABLE_SNAPSHOT_ID", error: "snapshotId 必须是非空字符串" };
   }
+  if (!expectedScope || typeof expectedScope !== "object" || Array.isArray(expectedScope)
+    || typeof expectedScope.chatId !== "string" || !expectedScope.chatId) {
+    return {
+      success: false,
+      code: "E_TABLE_SNAPSHOT_SCOPE_REQUIRED",
+      error: "恢复表格快照必须提供非空 chatId 作用域",
+    };
+  }
+  if (expectedScope.messageIndex !== undefined && !Number.isInteger(expectedScope.messageIndex)) {
+    return { success: false, code: "E_INVALID_TABLE_SNAPSHOT_SCOPE", error: "messageIndex 作用域必须是整数" };
+  }
+  if (expectedScope.messageId !== undefined && (typeof expectedScope.messageId !== "string" || !expectedScope.messageId)) {
+    return { success: false, code: "E_INVALID_TABLE_SNAPSHOT_SCOPE", error: "messageId 作用域必须是非空字符串" };
+  }
+
+  const snapshots = loadSnapshots(username, charName);
+  const idMatches = snapshots.filter((entry) => entry.id === snapshotId);
+  if (idMatches.length === 0) {
+    return { success: false, code: "E_TABLE_SNAPSHOT_NOT_FOUND", error: `快照不存在: ${snapshotId}` };
+  }
+  const scopedMatches = idMatches.filter((entry) =>
+    entry.chatId === expectedScope.chatId
+    && (expectedScope.messageIndex === undefined || entry.messageIndex === expectedScope.messageIndex)
+    && (expectedScope.messageId === undefined || entry.messageId === expectedScope.messageId)
+  );
+  if (scopedMatches.length === 0) {
+    return {
+      success: false,
+      code: "E_TABLE_SNAPSHOT_SCOPE_MISMATCH",
+      drift: "tableSnapshotScope",
+      error: `快照 ${snapshotId} 不属于预期对话/消息作用域`,
+      expectedScope: {
+        chatId: expectedScope.chatId,
+        ...(expectedScope.messageIndex !== undefined ? { messageIndex: expectedScope.messageIndex } : {}),
+        ...(expectedScope.messageId !== undefined ? { messageId: expectedScope.messageId } : {}),
+      },
+      actualScopes: idMatches.map((entry) => ({
+        chatId: entry.chatId,
+        messageIndex: entry.messageIndex,
+        ...(entry.messageId ? { messageId: entry.messageId } : {}),
+      })),
+    };
+  }
+  if (scopedMatches.length > 1) {
+    return {
+      success: false,
+      code: "E_TABLE_SNAPSHOT_AMBIGUOUS",
+      drift: "tableSnapshotScope",
+      error: `快照 ${snapshotId} 在预期作用域内不唯一，拒绝猜测恢复目标`,
+      expectedScope,
+      matchCount: scopedMatches.length,
+    };
+  }
+  const snapshot = scopedMatches[0];
 
   if (!snapshot.tables || !Array.isArray(snapshot.tables)) {
     wbD(null, "table", "restoreTableSnapshot:corrupt", false, "回档快照数据损坏(tables 非数组)，恢复失败", { snapshotId, username, charName });
-    return { success: false, error: `快照数据损坏: tables 不是数组` };
+    return { success: false, code: "E_TABLE_SNAPSHOT_CORRUPT", error: `快照数据损坏: tables 不是数组` };
   }
 
   console.log(
@@ -310,7 +426,12 @@ export function pruneSnapshotsAfter(username, charName, chatId, targetIndex) {
   const pruned = before - filtered.length;
   if (pruned > 0) {
     snapshotCache.set(key, filtered);
-    saveSnapshots(username, charName);
+    try {
+      saveSnapshots(username, charName);
+    } catch (error) {
+      snapshotCache.set(key, snapshots);
+      throw error;
+    }
     diag.debug(
       `tableSnapshot: 清理了 ${pruned} 个过期快照 (chatId=${chatId}, after msgIdx=${targetIndex})`,
     );

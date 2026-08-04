@@ -807,7 +807,20 @@ async function _doSwitchModeInner(targetMode, opts = {}) {
   let _chatid = window._beiluGetChatId?.() || "";
   if (opts.tab) {
     const _tgtKey = getModeChatIdKey(targetMode, storage.get(KEYS.BEILU_LAST_CHAR) || "");
-    const _tgtCid = _tgtKey ? storage.get(_tgtKey) : null;
+    let _tgtCid = _tgtKey ? storage.get(_tgtKey) : null;
+    // [0804 反方补修·本地键空窗口] charsel 收口后四线由服务端建，本地模式键不再有前端写点
+    //   （原 classifyNewChat 三写已删）——切卡后未拉过列表时键空，直接回退当前 hash 会把
+    //   【chat 线】的线级 active_modes_map 写成目标模式（写点落错线，0711 注释记载的旧病形状），
+    //   要等 layout._restoreModeChatId 的 fetchChatList 校准才收敛。修法与 layout.mjs:287 同源：
+    //   键空先 fetchChatList（内含 _syncModePointerCache 服务端 mode_active_chats→本地键单向校准）
+    //   再重读；仍空才回退当前 hash（该角色确无目标模式线=当前会话被带进新模式，原语义保留）。
+    if (!_tgtCid && _tgtKey) {
+      try {
+        const { fetchChatList } = await import("../../shared/chat-core/conversationManager.mjs");
+        await fetchChatList();
+        _tgtCid = storage.get(_tgtKey);
+      } catch { /* 拉取失败=保持原回退行为，不阻断切模式 */ }
+    }
     if (_tgtCid && isValidChatId(_tgtCid)) _chatid = _tgtCid;
   }
   const _tab = opts.tab || undefined;
@@ -819,18 +832,41 @@ async function _doSwitchModeInner(targetMode, opts = {}) {
   }
 
   try {
-    const result = await sendAction({ // T6b：HTTP !ok 抛错走 catch（原 else console.error 语义并入门面报错）
-      verb: "switchMode", target: "plugins:beilu-memory", source: "web",
-      payload: {
-        mode: targetMode,
-        charName,
-        // [N8] 后端单入口扇出至 beilu-files 所需字段
-        tab: _tab,
-        chatid: _chatid,
-        currentMessageCount: _currentMessageCount,
-      },
-      scope: { chatId: _chatid },
-    });
+    // [0804 根因修·死循环自愈] chatId 只是同模式多窗口的作业线身份，不是硬识别：目标模式记住的
+    //   chatid 可能指向已删除/他人对话（外部删文件、换用户残留 localStorage）。原实现把它直接盖进
+    //   scope → 桥 owner 闸拒绝（E_SCOPE_CHAT_OWNER）→ 本函数 catch 只回滚 → 下次仍读同一个死
+    //   chatid = 永久业务状态循环，且该窗口永远够不到唯一重建入口 ensureModeChatsForChar。
+    //   修法=闸拒绝时经认证 REST 公用机制（POST /ensure-mode-chats，不携带 stale scope）在服务端
+    //   重建/读回该角色四模式坐标 → 更新本地模式键 → 用新 chatid 重试一次。owner 闸本身不放宽：
+    //   仍存在但属他人的 chatid 在 repair 后依然拒绝（ensure 只在认证用户自己的域内建线）。
+    let result;
+    for (let _attempt = 0; ; _attempt++) {
+      try {
+        result = await sendAction({ // T6b：HTTP !ok 抛错走 catch（原 else console.error 语义并入门面报错）
+          verb: "switchMode", target: "plugins:beilu-memory", source: "web",
+          payload: {
+            mode: targetMode,
+            charName,
+            // [N8] 后端单入口扇出至 beilu-files 所需字段
+            tab: _tab,
+            chatid: _chatid,
+            currentMessageCount: _currentMessageCount,
+          },
+          scope: { chatId: _chatid },
+        });
+        break;
+      } catch (swErr) {
+        const _staleScope = /E_SCOPE_CHAT_OWNER|会话不存在/.test(swErr?.message || "");
+        if (_attempt > 0 || !_staleScope || !charName) throw swErr;
+        console.warn(`[featureControls] ${targetMode} 模式坐标失效（${swErr.message}），走 ensureModeChats 修复后重试`);
+        const _rep = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: charName } });
+        const _newCid = _rep?.modeChats?.[targetMode];
+        if (!_newCid || _newCid === _chatid) throw swErr; // 修复未产出新坐标 → 原错误可见，不静默循环
+        const _repKey = getModeChatIdKey(targetMode, charName);
+        if (_repKey) storage.set(_repKey, _newCid); // 清死指针：本地模式键指向服务端权威新线
+        _chatid = _newCid;
+      }
+    }
 
     {
       if (result?.success) {

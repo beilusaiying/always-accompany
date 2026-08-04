@@ -1,189 +1,152 @@
-# 插件
+# 插件手册
 
-在[插件管理](beilu:settings/plugins)面板查看和配置所有插件。always-accompany 内置 22 个插件，按功能分组如下。
+插件不是为了让功能列表看起来更长。它们的作用是把记忆、工具、感知、渲染和外部程序接进同一条消息与权限链，再按你的目标组合。
 
-## 插件列表
+如果你首先想知道“它能替代我现在的什么”，从[按任务组合插件](combinations.md)开始，而不是逐个背插件名。
 
-<div class="wiki-group">
-<div class="wiki-group-title">核心插件 <span class="wiki-badge-red">核心</span></div>
-<div class="wiki-grid wiki-grid-3">
-<div class="wiki-card" style="border-left-color: var(--wiki-red, #ef4444);">
-<div class="wiki-card-title">beilu-memory</div>
-<div class="wiki-card-desc">记忆系统（表格/热层/归档/召回）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-red, #ef4444);">
-<div class="wiki-card-title">beilu-preset</div>
-<div class="wiki-card-desc">预设引擎（提示词组装）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-red, #ef4444);">
-<div class="wiki-card-title">beilu-worldbook</div>
-<div class="wiki-card-desc">世界书（关键词触发的背景注入）</div>
-</div>
-</div>
-</div>
+当前源码包含 **23 个内置插件目录**。新用户模板的 defaultParts 列出 14 个插件；其他插件可能由特定功能入口加载、自注册，或在需要时启用。
 
-<div class="wiki-group">
-<div class="wiki-group-title">工具插件 <span class="wiki-badge-green">工具</span></div>
-<div class="wiki-grid wiki-grid-3">
-<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
-<div class="wiki-card-title">beilu-files</div>
-<div class="wiki-card-desc">沙箱化文件读写删执行</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
-<div class="wiki-card-title">beilu-web</div>
-<div class="wiki-card-desc">联网搜索与网页浏览</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
-<div class="wiki-card-title">beilu-ppt</div>
-<div class="wiki-card-desc">PPT 生成（大纲/生成/迭代，产出 pptx）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
-<div class="wiki-card-title">beilu-browser</div>
-<div class="wiki-card-desc">浏览器自动化（AI 操控真实 Chrome）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-green, #22c55e);">
-<div class="wiki-card-title">beilu-reach</div>
-<div class="wiki-card-desc">平台触达（主流平台专用适配器）</div>
-</div>
-</div>
-</div>
+> **三个状态不要混淆：**“源码中存在”不等于“当前用户已加载”，“已加载”也不等于“插件里的高成本或高风险功能已开启”。例如 beilu-vectordb 在默认清单中，但向量语义检索本身默认关闭。
 
-<div class="wiki-group">
-<div class="wiki-group-title">感知插件 <span class="wiki-badge-blue">感知</span></div>
-<div class="wiki-grid wiki-grid-3">
-<div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
-<div class="wiki-card-title">beilu-eye</div>
-<div class="wiki-card-desc">桌面截图感知 + Electron 桌宠</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
-<div class="wiki-card-title">beilu-stt</div>
-<div class="wiki-card-desc">语音转录（本地模型，说话代替打字）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-blue, #3b82f6);">
-<div class="wiki-card-title">beilu-live</div>
-<div class="wiki-card-desc">直播弹幕接入（初筛后注入对话）</div>
-</div>
-</div>
-</div>
+## 先按目标选，不要按名称全开
 
-<div class="wiki-group">
-<div class="wiki-group-title">增强插件 <span class="wiki-badge">增强</span></div>
-<div class="wiki-grid wiki-grid-3">
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-regex</div>
-<div class="wiki-card-desc">正则脚本引擎（AI 回复后处理）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-mvu</div>
-<div class="wiki-card-desc">变量系统（局部/全局变量读写）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-ejs</div>
-<div class="wiki-card-desc">EJS 模板渲染</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-toggle</div>
-<div class="wiki-card-desc">条目动态开关（预设/世界书条目）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-vectordb</div>
-<div class="wiki-card-desc">向量数据库（语义检索）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-amber, #f59e0b);">
-<div class="wiki-card-title">beilu-airp</div>
-<div class="wiki-card-desc">AIRP 渲染（DSL 标签渲染为彩色符号画）</div>
-</div>
-</div>
-</div>
+| 你的目标 | 建议组合 | 你需要特别确认 |
+|---|---|---|
+| 长期聊天与角色陪伴 | memory + preset + worldbook + P1 | P1 路由、资源占用、记忆写入和召回结果 |
+| 语音、桌面与直播感知 | STT + eye + live | 本地模型、截图范围、外部平台输入 |
+| 本地编程助手 | files + memory + CLI 或 YonBan + web | 工作区根、写入审批、命令执行权限 |
+| 网页研究与实际操作 | web + browser + files | 搜索服务、Chrome 调试端口、下载与写入边界 |
+| 生成工作交付物 | Work + files + PPT + web/browser | Python/Office 依赖、输出目录、审批 |
+| 角色状态与互动叙事 | worldbook + MVU + regex/EJS + AIRP | 状态真相源、脚本权限、渲染回退 |
+| 连接自己的本地程序 | plugin-host | 子进程权限、localhost token、注入 TTL |
+| 语义记忆检索 | vectordb + memory | embedding 数据去向、模型维度、索引重建 |
 
-<div class="wiki-group">
-<div class="wiki-group-title">基础与开发 <span class="wiki-badge-blue">基础/开发</span></div>
-<div class="wiki-grid wiki-grid-3">
-<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
-<div class="wiki-card-title">beilu-sysinfo</div>
-<div class="wiki-card-desc">系统监控（CPU/内存/网络）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
-<div class="wiki-card-title">beilu-logger</div>
-<div class="wiki-card-desc">日志记录</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
-<div class="wiki-card-title">beilu-plugin-host</div>
-<div class="wiki-card-desc">用户插件宿主</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
-<div class="wiki-card-title">beilu-tutorial</div>
-<div class="wiki-card-desc">应用内教程 / wiki（本帮助页由它渲染）</div>
-</div>
-<div class="wiki-card" style="border-left-color: var(--wiki-purple, #8b5cf6);">
-<div class="wiki-card-title">beilu-cli</div>
-<div class="wiki-card-desc">CLI 工具后端（无需 IDE 的工具执行）</div>
-</div>
-</div>
-</div>
+## 23 个内置插件如何分工
 
-## 插件配置
+### 记忆与提示词
 
-每个插件有独立的配置面板（在[插件管理](beilu:settings/plugins)中点击对应插件即可打开）。安全敏感的配置写入（如 beilu-files 的 allowExec、beilu-ejs 的 sandboxOptOut）需要实例 owner 权限。详见 [安全中心](../security/overview.md)（[前往安全中心](beilu:settings/security)）。
+| 插件 | 用户价值 | 默认 / 入口 | 深入阅读 |
+|---|---|---|---|
+| beilu-memory | 表格、热层、归档、召回、模式记忆与任务数据 | 新用户默认清单 | [记忆系统](../memory/overview.md) |
+| beilu-preset | 组装和切换提示词、模型参数与子模式 | 新用户默认清单 | [预设系统](../presets/overview.md) |
+| beilu-worldbook | 按关键词和规则注入背景、设定与知识 | 新用户默认清单 | [世界书](../memory/worldbook-overview.md) |
+| beilu-p1-selfdriven | 本地自驱动 P1 服务与资源生命周期 | 受 P1 总闸和模式路由管理 | [P1 当前运行架构](../p1-recall/ch7-current-runtime.md) |
+| beilu-vectordb | 全文、向量与混合语义检索 | 插件在默认清单；向量功能默认关闭 | [语义检索](vectordb.md) |
 
-## 用户插件
+### 工具与执行
 
-通过 beilu-plugin-host，可以编写和加载自定义插件。用户插件与内置插件享有相同的接口能力。详见 [插件开发](../developer/plugin-dev.md)。
+| 插件 | 用户价值 | 默认 / 入口 | 深入阅读 |
+|---|---|---|---|
+| beilu-files | 沙箱化文件读写、移动、删除与命令执行 | 新用户默认清单 | [文件操作](files.md) |
+| beilu-web | 联网搜索与网页内容获取 | 新用户默认清单；具体服务需配置 | [联网搜索](web.md) |
+| beilu-browser | 控制真实 Chrome 完成页面操作 | 按需启用 | [浏览器自动化](browser.md) |
+| beilu-cli | 没有 IDE 时提供工具执行后端 | 默认随本体启动；可关闭或与 YonBan 互斥 | [CLI 工具后端](cli.md) |
+| beilu-ppt | 从大纲到 pptx 的生成与迭代 | Work 按需使用 | [AI 做 PPT](ppt.md) |
+| beilu-reach | 连接外部平台适配器 | 按平台配置 | [平台触达](reach.md) |
 
-## 深入了解：插件接口
+### 感知与输入
 
-每个插件通过标准接口与核心系统交互：
+| 插件 | 用户价值 | 默认 / 入口 | 深入阅读 |
+|---|---|---|---|
+| beilu-eye | 桌面截图感知与桌宠相关输入 | 新用户默认清单；具体感知需启用 | [屏幕感知](eye.md) |
+| beilu-stt | 本地语音转文字 | 按需下载模型并启用 | [语音转文字](stt.md) |
+| beilu-live | 直播弹幕初筛与对话注入 | 总开关默认关闭，按平台和场景启用 | [直播接入](live.md) |
 
-### 数据接口
+### 状态、规则与渲染
 
-| 接口 | 方向 | 说明 |
-|------|------|------|
-| GetData | 核心 -> 插件 | 读取插件配置和状态 |
-| SetData | 核心 -> 插件 | 写入插件配置或触发动作 |
+| 插件 | 用户价值 | 默认 / 入口 | 深入阅读 |
+|---|---|---|---|
+| beilu-mvu | 跨轮变量和状态更新 | 新用户默认清单 | [变量系统](mvu.md) |
+| beilu-regex | AI 回复后的规则替换与显示处理 | 新用户默认清单 | [正则增强](regex.md) |
+| beilu-ejs | 在预设与角色内容中使用条件、循环和模板逻辑 | 新用户默认清单 | [脚本引擎](scripts.md) |
+| beilu-toggle | 动态开关预设和世界书条目 | 新用户默认清单 | [预设系统](../presets/overview.md) |
+| beilu-airp | 把场景 DSL 渲染为符号画、颜色与动态效果 | Load 后按用户自注册；可关闭 | [AIRP 渲染](airp.md) |
 
-### 消息管线接口
+### 扩展与运行支撑
 
-| 接口 | 调用时机 | 说明 |
-|------|---------|------|
-| GetPrompt | 消息发送前 | 返回插件要注入到提示词中的内容 |
-| TweakPrompt | GetPrompt 之后 | 修改/调整已组装的提示词结构（三轮执行） |
-| ReplyHandler | AI 回复后 | 解析 AI 回复中的标签/指令并执行 |
-| GetReply | 生成调用时 | 拦截或修改 AI 调用请求 |
+| 插件 | 用户价值 | 默认 / 入口 | 深入阅读 |
+|---|---|---|---|
+| beilu-plugin-host | 扫描用户目录，启动 Python/Node/可执行插件并接收数据注入 | 新用户默认清单；server 子进程默认禁止 | [用户插件宿主](plugin-host.md) |
+| beilu-sysinfo | 提供可配置的时间和运行环境信息 | 插件能力可用；实际 INJ 默认关闭 | [系统信息](sysinfo.md) |
+| beilu-logger | 保留最近的服务端错误与警告 | 新用户默认清单；内存环形缓冲 | [日志与排错](logger.md) |
+| beilu-tutorial | 交互教程、UI 引导与视觉小说序列 | 由教程 / 帮助入口使用 | [教程与视觉小说](tutorial.md) |
 
-### 插件调用顺序
+## 一篇合格的插件手册应该回答什么
 
-在一次完整的消息收发周期中，插件按以下顺序参与：
+后续插件页统一按以下顺序说明，避免只抄内部函数名：
 
-<div class="wiki-flow">
-<div class="wiki-box wiki-box-green wiki-box-full"><b>用户发消息</b><small>触发消息管线</small></div>
-<div class="wiki-arrow">↓</div>
-<div class="wiki-box wiki-box-amber wiki-box-full"><b>1. GetPrompt</b><small>并行收集各插件的提示词片段</small></div>
-<div class="wiki-arrow">↓</div>
-<div class="wiki-box wiki-box-blue wiki-box-full"><b>2. TweakPrompt x 3 轮</b><small>Round 1 (dl=2): 收集清空 | Round 2 (dl=1): 重建消息序列 | Round 3 (dl=0): 快照</small></div>
-<div class="wiki-arrow">↓</div>
-<div class="wiki-box wiki-box-purple wiki-box-full"><b>3. StructCall</b><small>调用 AI API（由 provider/生成器执行）</small></div>
-<div class="wiki-arrow">↓</div>
-<div class="wiki-box wiki-box-red wiki-box-full"><b>4. ReplyHandler</b><small>解析 AI 回复中的操作标签</small></div>
-<div class="wiki-arrow">↓</div>
-<div class="wiki-box wiki-box-green wiki-box-full"><b>存储 + 广播</b><small>持久化消息并通知前端</small></div>
-</div>
+1. **它替你省掉什么**：用户任务，而不是技术名词；
+2. **什么时候不该用**：与更轻方案的边界；
+3. **默认状态**：源码存在、加载、功能启用分别是什么；
+4. **配置入口**：在哪个面板或文件修改；
+5. **完整链路**：输入 → 插件 → 执行 / 存储 → 返回；
+6. **数据去向**：哪些内容留在本地，哪些会发给 API 或外部程序；
+7. **权限与危险操作**：谁能开、是否需要审批、server 模式差异；
+8. **适合组合的模式 / 插件**：它怎样参与整体体验；
+9. **已知限制与排错**：失败时看什么，不把错误写成“0 条结果”。
 
-### 插件的加载
+## 配置与权限的共同规律
 
-**默认插件**：always-accompany 启动时自动加载 `defaultParts.plugins` 中列出的插件。核心插件（memory / preset / worldbook 等）始终参与每次对话。
+### 插件管理
 
-**对话级插件**：创建对话时，系统会将默认插件合并到对话的 timeSlice 中。后续添加到默认列表的插件也会自动加入。
+在[插件管理](beilu:settings/plugins)查看当前插件及配置。插件自己的 GetData / SetData 负责读取状态、保存配置或执行命令。
+
+### 消息管线
+
+常见插件钩子：
+
+| 钩子 | 何时运行 | 常见用途 |
+|---|---|---|
+| GetPrompt | 请求 AI 前 | 注入记忆、工具说明或插件数据 |
+| TweakPrompt | 提示词组装期间 | 调整消息结构与优先级 |
+| GetReply | 生成调用阶段 | 拦截或改变生成路线 |
+| ReplyHandler | AI 回复后 | 解析操作标签、更新状态、处理显示 |
+| GetData | 面板读取 | 返回配置、状态与字段描述 |
+| SetData | 面板写入 / 动作 | 保存配置或触发索引、启动、停止等操作 |
+
+具体插件不一定实现全部钩子。不要因为接口存在于框架就假设某个插件已经接入。
+
+### 安全敏感配置
+
+文件执行、脚本逃逸、用户插件子进程等敏感能力需要额外门控。server 多用户模式采用更保守的默认值；异常判定应 fail-safe，而不是静默放行。
+
+详见[安全中心](../security/overview.md)与[权限和鉴权](../security/auth.md)。
+
+## 插件组合的两个边界
+
+### 共享能力不等于共享所有状态
+
+插件可以在多个模式复用，但工具结果、任务、窗口和 chatId 仍要回到正确归属。跨模式共享记忆时，也不能把 Code/Work 的活动任务当作全局聊天状态。
+
+### 可编辑不等于默认安全
+
+用户可以修改提示词、脚本、规则和权限，这是项目的价值，也是责任。尤其要确认：
+
+- beilu-files 的 workspaceRoot 与 allowExec；
+- beilu-browser 控制的浏览器实例和已登录页面；
+- beilu-vectordb 的 embedding 端点会收到哪些文本；
+- beilu-plugin-host 是否被允许启动外部进程；
+- EJS、正则和用户插件是否来自可信来源。
 
 ## 快速导航
 
-- [文件操作 (beilu-files)](files.md) — AI 文件读写
-- [屏幕感知与桌宠 (beilu-eye)](eye.md) — 桌面截图与桌宠
-- [语音转录 (beilu-stt)](stt.md) — 本地语音转文字
-- [联网搜索 (beilu-web)](web.md) — 搜索与网页浏览
-- [浏览器自动化 (beilu-browser)](browser.md) — AI 操控真实浏览器
-- [平台触达 (beilu-reach)](reach.md) — 主流平台专用适配器
-- [PPT 生成 (beilu-ppt)](ppt.md) — 从需求到 pptx
-- [正则增强 (beilu-regex)](regex.md) — AI 回复后处理
-- [变量系统 (beilu-mvu)](mvu.md) — 状态追踪
-- [脚本引擎](scripts.md) — EJS 模板与脚本
-- [插件开发](../developer/plugin-dev.md) — 编写自定义插件
+- [按任务组合插件](combinations.md)
+- [文件操作](files.md)
+- [联网搜索](web.md)
+- [浏览器自动化](browser.md)
+- [屏幕感知](eye.md)
+- [语音转文字](stt.md)
+- [平台触达](reach.md)
+- [AI 做 PPT](ppt.md)
+- [变量系统](mvu.md)
+- [正则增强](regex.md)
+- [EJS 与用户脚本](scripts.md)
+- [语义检索](vectordb.md)
+- [AIRP 渲染](airp.md)
+- [用户插件宿主](plugin-host.md)
+- [直播接入](live.md)
+- [CLI 工具后端](cli.md)
+- [系统信息](sysinfo.md)
+- [日志与排错](logger.md)
+- [教程与视觉小说](tutorial.md)
+- [插件开发接口](../developer/plugin-dev.md)

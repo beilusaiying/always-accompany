@@ -32,8 +32,8 @@
 
 | 参数 | 说明 |
 |------|------|
-| extended_thinking | 是否启用扩展思考（部分模型支持，如 Claude / Qwen 思考模式）。开关见[AI服务源](beilu:settings/api)面板 |
-| thinking_budget | 思考预算（token 数，最小 1024）。extended_thinking 开启后可用 |
+| 思考模式（三态） | 关闭 / 标准 / 最大（off / standard / max），在[AI服务源](beilu:settings/api)面板选择。按渠道自动映射：Claude 走 adaptive+effort、DeepSeek/Kimi 走 thinking.type、Qwen 走 enable_thinking、其余走 reasoning_effort。范围限定：三态收口在 proxy 生成器，claude-api / gemini 原生生成器的思考面板未并入 |
+| thinking_budget | 思考预算（token 数，最小 1024）。思考模式开启后可用 |
 
 ### 其他参数
 

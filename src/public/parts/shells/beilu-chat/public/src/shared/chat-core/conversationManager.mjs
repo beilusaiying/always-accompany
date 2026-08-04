@@ -951,18 +951,11 @@ async function branchConversation(chatid) {
   if (!await beiluConfirm("分叉此对话？\n\n将创建一个包含所有消息的对话分支副本，原对话不受影响。")) return;
   wbTrace("conv", "branch", { chatid: chatid.substring(0, 8) });
   try {
-    // 获取对话长度以确定分叉点（最后一条消息 = 完整克隆）
-    // T6b批7：GET /:chatId/log/length → sendAction shells:chat#getLogLength（scope.chatId 进 URL）。
-    //   原 !listResp.ok 时 messageIndex 保持 0（不阻断分叉），故独立 try 吞错保留该语义。
-    let messageIndex = 0;
-    try {
-      const len = await sendAction({ verb: "getLogLength", target: "shells:chat", source: "web", scope: { chatId: chatid } }); // 返回纯数字
-      messageIndex = Math.max(0, (Number(len) || 1) - 1);
-    } catch (e) { console.warn("[convMgr] branch 取长度失败，退化为从头克隆:", e?.message || e); /* T021 留痕：有意降级保留，补日志 */ }
-
+    // 完整克隆是明确意图，不再由前端先 GET 长度再把“最后一条”换算成易漂移的 index。
+    // 后端在同一次源 JSON 读取中选择末条，读长度失败也不会退化成克隆 index 0。
     // T6b批7：POST /branch → sendAction shells:chat#branch。原 !resp.ok||!result.chatid → toast+return；
     //   门面 !ok 抛错走外层 catch（toast 分叉失败），成功但无 chatid 仍走下方 !result.chatid 判定。
-    const result = await sendAction({ verb: "branch", target: "shells:chat", source: "web", payload: { chatid, messageIndex } });
+    const result = await sendAction({ verb: "branch", target: "shells:chat", source: "web", payload: { chatid, wholeChat: true } });
     if (!result.chatid) {
       showToast?.("error", "分叉失败: " + (result.error || "未知错误"));
       return;

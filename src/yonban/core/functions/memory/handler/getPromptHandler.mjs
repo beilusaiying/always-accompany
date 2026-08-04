@@ -80,8 +80,10 @@ import {
   loadMemoryPresets,
   presetSwitchCooldown,
   readContextSummary,
+  beginContextSummaryWrite,
+  commitContextSummaryWrite,
+  computeContextSummarySourceRevision,
   resolveActiveSubModeId,
-  extractSubModeMaxContext,
   writeActiveSubModeId,
   saveJsonFile,
   setActiveMode,
@@ -100,7 +102,10 @@ import {
 } from "../storage_mod/storage.mjs";
 // inj 识别系统 2026-07-13：识别（模式链路）+门控+互斥+值域收口到注入系统单一权威
 // （getDataHandler 显示链、setDataActions 写入校验同源消费）
-import { resolveInjectionContext, resolveEffectiveInjections, isDataDrivenEntry, isDataEntry } from "../storage_mod/injectionSystem.mjs";
+import { resolveInjectionContext, resolveEffectiveInjections, resolveInjectionContentForLocales, isDataDrivenEntry, isDataEntry } from "../storage_mod/injectionSystem.mjs"; // [D3 0804] +locale 内容解析（INJ 正文按 user.locales 选 hash 匹配的等义覆盖）
+import { resolveRequestProfile } from "../storage_mod/subModeActivation.mjs"; // D3 0804 读点收口：B18 内联 ?? 链的全系统唯一实现（嵌套优先+驼峰别名+扁平回退+冲突可见）
+import { inspectInjectionCachePrefix } from "./volatileMacros.mjs";
+import { resolveEffectiveP1RouteConfig } from "../p1Route.mjs";
 // [0728 top-k] 召回频率写点：AI P1 真注入时记本轮读过的记忆文件（预览/P2-P8/无结果不记；
 //   另一写点=replyHandler 主AI <memorySearch>）；applyLayerTopkOrder=向量初筛候选层级+热度重排
 import { recordRecall, applyLayerTopkOrder } from "../storage_mod/recallStats.mjs";
@@ -134,6 +139,7 @@ import {
   isIdeToolResultMsg,
   isIdeToolCallMsg,
   collectNoiseToHide,
+  renderStaticIdeToolSignatures,
 } from "../../../transport/ideClient.mjs";
 import { getMcpRuntimeSnapshot } from "../../mcp/runtimeRegistry.mjs";
 
@@ -181,10 +187,270 @@ function _stripConsumedTagsFromInjection(text) {
 // 连续 urgent 轮会并发起多个 P7 压缩调用（重复花钱 + last-writer-wins 互相覆盖）。落盘/失败后释放。
 const _t09InFlight = new Set();
 
-// P1 自驱动 in-flight 防重入（per-chat，0730 修复并发重复触发）：多窗口/快速连发时
-// 多个 handleGetPrompt 同时到达 Phase3 → 同时 await runP1() → 多个 P1 并行跑。
-// 同范式：has → 跳过，add → finally delete。
-const _p1InFlight = new Set();
+async function _readCurrentT09SourceRevision(arg, chatId) {
+  if (typeof arg?.Update === "function") {
+    const refreshed = await arg.Update();
+    if (!Array.isArray(refreshed?.chat_log)) {
+      throw Object.assign(new Error("refreshed chat request has no chat_log"), { code: "E_T09_SOURCE_REVISION_UNAVAILABLE" });
+    }
+    return computeContextSummarySourceRevision(refreshed.chat_log);
+  }
+  const chatOpsPath = path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs");
+  const chatOps = await import(pathToFileURL(chatOpsPath).href);
+  const length = await chatOps.GetChatLogLength(chatId);
+  const current = length > 0 ? await chatOps.GetChatLog(chatId, 0, length) : [];
+  return computeContextSummarySourceRevision(current.filter((entry) => entry?._hidden !== true && entry?._deleted !== true));
+}
+
+// P1 自驱动 in-flight 单飞：只能复用完全相同的“宿主四维 scope + 当前输入 + 历史归属/内容”。
+// Map 保存的是纯 local P1 Promise，不保存或复用整轮 prompt；不同输入/历史即使同一窗口也各跑各的。
+const _p1InFlight = new Map();
+
+function _p1ScopeIdentity(username, charName, chatId, mode) {
+  return [username, charName, chatId, mode].map((value) => String(value ?? "")).join("\0");
+}
+
+function _p1LocalRunKey(username, charName, chatId, mode, inputText, historyChatId, chatHistory) {
+  return JSON.stringify({
+    scope: [username, charName, chatId, mode].map((value) => String(value ?? "")),
+    inputText: String(inputText ?? ""),
+    historyChatId: String(historyChatId ?? ""),
+    history: (Array.isArray(chatHistory) ? chatHistory : []).map((message) => ({
+      role: String(message?.role ?? ""),
+      content: String(message?.content ?? ""),
+    })),
+  });
+}
+
+function _p1FiniteMeta(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function _p1DisplayTime(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  if (Number.isFinite(number) && number > 10000000000) {
+    const date = new Date(number);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+  }
+  return String(value);
+}
+
+/**
+ * P1 record 的宿主消费契约。服务端已返回事件时间、文件时间/创建时间和记录级 TOP，宿主必须
+ * 原样交给主 AI 注入与 AIP1 preContext；timestamp 仅保留给旧引擎兼容，不能再作为唯一时间源。
+ */
+function _p1RecordMetadata(record) {
+  return {
+    recordId: record?.recordId ?? record?.id ?? null,
+    layer: record?.layer ?? null,
+    sourceRel: record?.sourceRel ?? null,
+    sourceType: record?.sourceType ?? null,
+    eventTime: record?.eventTime ?? null,
+    eventTimeSource: record?.eventTimeSource ?? null,
+    fileTime: record?.fileTime ?? null,
+    fileCreatedTime: record?.fileCreatedTime ?? null,
+    legacyTimestamp: record?.timestamp ?? null,
+    pinned: record?.pinned === true,
+    top: record?.top === true,
+    importance: _p1FiniteMeta(record?.importance),
+    weight: _p1FiniteMeta(record?.weight),
+  };
+}
+
+function _formatP1RecordMeta(record) {
+  const meta = _p1RecordMetadata(record);
+  const parts = [meta.layer];
+  if (meta.eventTime !== null) {
+    parts.push(`事件时间=${_p1DisplayTime(meta.eventTime)}${meta.eventTimeSource ? `(${meta.eventTimeSource})` : ""}`);
+  }
+  if (meta.fileTime !== null) parts.push(`文件时间=${_p1DisplayTime(meta.fileTime)}`);
+  if (meta.fileCreatedTime !== null) parts.push(`创建时间=${_p1DisplayTime(meta.fileCreatedTime)}`);
+  if (meta.eventTime === null && meta.fileTime === null && meta.fileCreatedTime === null && meta.legacyTimestamp !== null) {
+    parts.push(`时间=${_p1DisplayTime(meta.legacyTimestamp)}`);
+  }
+  if (meta.pinned || meta.top) parts.push(meta.pinned ? "pinned/TOP" : "TOP");
+  if (meta.importance !== null) parts.push(`importance=${meta.importance}`);
+  if (meta.weight !== null) parts.push(`weight=${meta.weight}`);
+  return parts.filter(Boolean);
+}
+
+function _p1TraceSummary(result) {
+  const trace = result?.trace && typeof result.trace === "object" ? result.trace : {};
+  const request = trace.request && typeof trace.request === "object" ? trace.request : {};
+  const node1 = trace.node1 && typeof trace.node1 === "object" ? trace.node1 : {};
+  const recall = trace.recall && typeof trace.recall === "object" ? trace.recall : {};
+  const failure = trace.failure && typeof trace.failure === "object" ? trace.failure : null;
+  const node1Units = Array.isArray(node1.units) ? node1.units : [];
+  const node1TokenCount = node1Units.reduce((sum, unit) => sum + (Array.isArray(unit?.tokens) ? unit.tokens.length : 0), 0);
+  return {
+    request: {
+      inputChars: request.inputChars ?? trace.transport?.inputTextChars ?? null,
+      historyCount: request.historyCount ?? null,
+      mode: request.mode ?? null,
+      chatId: request.chatId ?? null,
+      historyChatId: request.historyChatId ?? trace.transport?.historyChatId ?? null,
+      historyOwnership: request.historyOwnership ?? trace.transport?.historyOwnership ?? null,
+      source: request.source ?? null,
+      node0UnitCount: Array.isArray(request.node0Units) ? request.node0Units.length : 0,
+      queueWaitMs: request.queue?.waitMs ?? null,
+      transport: trace.transport ? {
+        protocol: trace.transport.protocol ?? null,
+        contentType: trace.transport.contentType ?? null,
+        jsonDecoded: trace.transport.jsonDecoded ?? null,
+        inputTextChars: trace.transport.inputTextChars ?? null,
+      } : null,
+    },
+    node: {
+      provider: node1.provider ?? null,
+      resourceStatus: node1.resources ?? null,
+      unitCount: node1Units.length,
+      tokenCount: node1TokenCount,
+    },
+    pipeline: trace.pipelineTimings ?? null,
+    service: trace.serviceTimings ?? null,
+    failure: failure ? {
+      stage: failure.stage ?? null,
+      code: failure.code ?? result?.code ?? null,
+      error: failure.error ?? result?.error ?? null,
+      details: failure.details ?? null,
+    } : (result?.success === false ? {
+      stage: null,
+      code: result?.code ?? null,
+      error: result?.error ?? null,
+      details: null,
+    } : null),
+    recall: {
+      totalTokens: recall.totalTokens ?? null,
+      currentInputWords: Array.isArray(recall.currentInputWords) ? recall.currentInputWords.slice(0, 16) : [],
+      filteredCount: recall.filteredCount ?? null,
+      rawPoolCount: recall.rawPoolCount ?? null,
+      scoredCount: recall.scoredCount ?? null,
+      rankedCount: recall.rankedCount ?? null,
+      mechanisms: Array.isArray(recall.mechanisms) ? recall.mechanisms.slice(0, 12) : [],
+      node2: {
+        status: recall.node2?.status ?? null,
+        errors: Array.isArray(recall.node2?.errors)
+          ? recall.node2.errors.slice(0, 12).map((error) => ({
+            code: error?.code ?? null,
+            mechanism: error?.mechanism ?? null,
+          }))
+          : [],
+      },
+      anchors: Array.isArray(recall.anchors) ? recall.anchors.slice(0, 8) : [],
+      storageDiagnostics: Array.isArray(recall.storageDiagnostics) ? recall.storageDiagnostics.slice(0, 8) : [],
+      recordIds: Array.isArray(result?.recalledRecords)
+        ? result.recalledRecords.map((record) => record?.recordId ?? record?.id).filter(Boolean).slice(0, 10)
+        : [],
+    },
+    runLog: result?.runLog ?? null,
+  };
+}
+
+/**
+ * P1 主结果成功时，runLog 的主写与后续清理可能独立失败。这里只映射公开 issue，
+ * 不改写 result.success/outcome/召回数据，也不读取可能含绝对路径的 path 字段。
+ */
+export function getP1RunLogIssues(result) {
+  const runLog = result?.runLog;
+  if (runLog?.enabled !== true) return [];
+  const issues = [];
+  const seen = new Set();
+  const addIssue = ({ severity, kind, written, stage, code, message, file }) => {
+    const normalizedSeverity = severity === "warning" ? "warning" : severity === "error" ? "error" : "";
+    const normalizedCode = String(code ?? "").trim();
+    if (!normalizedSeverity || !normalizedCode) return;
+    const normalizedMessage = String(message ?? "").trim() || "P1 run log operation failed";
+    const normalizedFile = String(file ?? "").trim() || null;
+    const key = `${normalizedSeverity}\0${normalizedCode}\0${normalizedMessage}\0${normalizedFile || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    issues.push({
+      component: "runLog",
+      severity: normalizedSeverity,
+      kind,
+      written,
+      stage: stage || null,
+      code: normalizedCode,
+      message: normalizedMessage,
+      file: normalizedFile,
+    });
+  };
+  if (runLog.written === false && String(runLog.code).startsWith("E_")) {
+    addIssue({
+      severity: "error",
+      kind: "write",
+      written: false,
+      stage: "write",
+      code: runLog.code,
+      message: String(runLog.error ?? "").trim() || "P1 run log write failed",
+      file: runLog.file,
+    });
+  }
+  for (const [severity, bucket] of [
+    ["error", runLog?.diagnostics?.errors],
+    ["warning", runLog?.diagnostics?.warnings],
+  ]) {
+    for (const diagnostic of Array.isArray(bucket) ? bucket : []) {
+      const stage = String(diagnostic?.stage ?? "diagnostic").trim() || "diagnostic";
+      const exception = String(diagnostic?.exception ?? "").trim();
+      addIssue({
+        severity,
+        kind: "diagnostic",
+        written: runLog.written === true,
+        stage,
+        code: diagnostic?.code,
+        message: String(diagnostic?.message ?? diagnostic?.error ?? "").trim()
+          || `${exception ? `${exception}: ` : ""}P1 run log ${stage} failed`,
+        file: diagnostic?.file ?? runLog.file,
+      });
+    }
+  }
+  return issues;
+}
+
+function _reportP1RunLogIssue(chatId, mode, issue) {
+  const detail = {
+    component: "runLog",
+    mode,
+    chatId: chatId || null,
+    severity: issue.severity,
+    kind: issue.kind,
+    written: issue.written,
+    stage: issue.stage,
+    code: issue.code,
+    message: issue.message,
+    file: issue.file,
+  };
+  wbD(chatId, "runLog", `p1:${detail.severity}`, false, detail.message, detail);
+  // server monitor 捕获分级 console 记录；runLog 旁路 issue 不抛错、不改变召回成功结果。
+  if (detail.severity === "warning") {
+    console.warn(`[P1-runLog] warning: ${detail.code}: ${detail.message}`, detail);
+  } else {
+    console.error(`[P1-runLog] error: ${detail.code}: ${detail.message}`, detail);
+  }
+}
+
+function _reportLocalP1Failure(chatId, mode, scopeKey, failure, traceSummary) {
+  const detail = {
+    mode,
+    chatId: chatId || null,
+    code: failure?.code || traceSummary?.failure?.code || "E_P1_LOCAL_FAILURE",
+    error: failure?.error || traceSummary?.failure?.error || "local P1 failed",
+    scope: scopeKey,
+    continuation: "none",
+    trace: traceSummary,
+  };
+  wbD(chatId, "getprompt", "p1:localFailure", false, detail.error, detail);
+  // server monitor 已拦截 console.error 并计入错误缓冲；这里不抛错、不走 broadcastBotError，
+  // 自驱动与 AI P1 互斥；本地失败不会暗中切到另一条路，用户能在既有监控面板发现故障。
+  console.error(
+    `[P1-selfDriven] local P1 failed; continuing without a P1 result: ${detail.code}: ${detail.error}`,
+    detail,
+  );
+}
 
 /**
  * 每轮对话前的记忆/数据注入主函数（21步管线）。
@@ -256,6 +522,9 @@ export async function handleGetPrompt(arg) {
     // 子模式数据读取
     let _subModeLabel = "";
     let _subModeDesc = "";
+    // 当前身份的专用契约+硬权限只作为运行数据注入 depth:0；统一行为规则留在历史前 INJ-2-code。
+    // JSON 是数据而不是代码内嵌提示词，且与 replyHandler 的 undefined=允许 / false=拒绝语义完全一致。
+    let _subModeToolPermissionsJson = ""; // [0804] 原 _subModeContractJson：contract 字段全链删除，仅保留硬权限镜像
     let _subModeModel = "";
     let _subModeApiSource = "";
     let _subModeClaudePrefill = "";
@@ -274,57 +543,65 @@ export async function handleGetPrompt(arg) {
     //   （对齐 sub_mode_temperature 的 !== undefined 判定，非 truthy），使编辑活跃子模式的 prefill 当轮生效
     //   （不再仅切换时经 subModePanel:333 推 runtime 才生效）。
     let _subModePrefillEnabled = undefined;
+    // D3 0804：fallbackPolicy/fallbackSource 随 profile 下发（消费方 char-template submode_source_override
+    //   失败分支：fail_closed=可见未发送错误 / explicit_fallback=先试 fallbackSource 再默认源）。
+    let _subModeFallbackPolicy = "";
+    let _subModeFallbackSource = "";
     // thinking 子模式/流程组覆盖口已删（2026-08-01 凛倾「把子模式的思考模式删除」）：
     //   思维链控制收口到 AI 源面板 per-源单点（settingsSlots→config→httpFetch），本链不再提取/下发。
     try {
       const _smConfigPath = getYonbanConfigPath(username);
       const _smConfig = loadJsonFileIfExists(_smConfigPath, { sub_modes: [], active_sub_mode: "前置任务专家" });
-      const _activeSubModeId = resolveActiveSubModeId(_smConfig, _activeMode, _cid);
+      // [D3 0804 批2·冻结消费] requestBuilder 备料时刻已冻结本请求子模式快照
+      //   （extension.activation.sub_mode：subModeId/revision/requestProfile，与 mode/preset_name 同一激活语义）。
+      //   优先消费冻结值：①激活线选择用冻结 subModeId——切换期在飞请求不随磁盘中途漂移（D3 极端链路
+      //   「并发两窗切换期在飞请求用冻结快照」）；②request profile 用冻结副本——参数中途保存不撕裂本轮组装。
+      //   门槛=modeGroup 与 chatId 双匹配（快照跨请求错用防御）；不经 requestBuilder 咽喉的入口（bot 壳等）
+      //   无快照=回退每轮磁盘解析（与 runtime_params_snapshot 同款多入口诚实回退，非吞错）。
+      //   label/desc/权限 JSON 仍读 live 定义（冻结的是「哪个子模式生效+参数」，不是定义正文）。
+      const _frozenAct = arg?.extension?.activation?.sub_mode;
+      const _useFrozen = !!(_frozenAct && _frozenAct.modeGroup === _activeMode
+        && String(_frozenAct.chatId || "") === String(_cid || ""));
+      const _activeSubModeId = _useFrozen ? _frozenAct.subModeId : resolveActiveSubModeId(_smConfig, _activeMode, _cid);
       let _activeSM = null;
       if (_activeSubModeId && Array.isArray(_smConfig.sub_modes)) {
         _activeSM = _smConfig.sub_modes.find(m => m.id === _activeSubModeId);
         if (_activeSM) {
           _subModeLabel = _activeSM.label || _activeSubModeId;
           _subModeDesc = _activeSM.desc || "";
-          // B18（选 b）：per-submode model_params 完整副本为权威。
-          //   该子模式带 model_params 对象 → 整套副本生效（每轮 per-chatId 解析，离开该子模式后
-          //   下一轮解析到的子模式无此副本则自然不覆盖→回退到 runtime/preset 基线，等同"还原切换前快照"）。
-          //   无 model_params 字段的子模式 → 走旧的扁平字段路径，扁平字段也空则零覆盖（零影响）。
-          // 键名对齐下游 main.mjs 覆盖层与 runtime-params：model/api_source/max_context/max_tokens/
-          //   temperature/prompt_post_processing/claude_prefill_mode（同时容忍驼峰别名）。
-          const _mp = (_activeSM.model_params && typeof _activeSM.model_params === "object") ? _activeSM.model_params : null;
-          if (_mp) {
-            _subModeModel = _mp.model ?? _mp.modelName ?? _activeSM.modelName ?? "";
-            _subModeApiSource = _mp.api_source ?? _mp.apiSource ?? _activeSM.apiSource ?? "";
-            _subModeClaudePrefill = _mp.claude_prefill_mode ?? _mp.claudePrefillMode ?? _activeSM.claudePrefillMode ?? "";
-            _subModeMaxContext = extractSubModeMaxContext(_activeSM); // 根病1后期检查:消内联重复,收口 storage 单源
-            _subModeMaxTokens = _mp.max_tokens ?? _mp.maxTokens ?? _activeSM.maxTokens ?? _activeSM.max_tokens ?? 0;
-            _subModeTemperature = (_mp.temperature !== undefined && _mp.temperature !== null)
-              ? _mp.temperature
-              : (_activeSM.temperature !== undefined ? _activeSM.temperature : -1);
-            _subModeTopP = (_mp.top_p !== undefined && _mp.top_p !== null)
-              ? _mp.top_p
-              : (_activeSM.top_p !== undefined ? _activeSM.top_p : -1); // T001：同 temperature 双路径
-            _subModeTopK = (_mp.top_k !== undefined && _mp.top_k !== null)
-              ? _mp.top_k
-              : (_activeSM.top_k !== undefined ? _activeSM.top_k : -1); // 链路2扩展：同 top_p 双路径
-            _subModeMinP = (_mp.min_p !== undefined && _mp.min_p !== null)
-              ? _mp.min_p
-              : (_activeSM.min_p !== undefined ? _activeSM.min_p : -1); // 链路2扩展：同 top_p 双路径
-            _subModePostProcess = _mp.prompt_post_processing ?? _mp.promptPostProcessing ?? _activeSM.promptPostProcessing ?? "";
-            _subModePrefillEnabled = _mp.prefill_enabled ?? _mp.prefillEnabled ?? _activeSM.prefillEnabled; // 确诊-B：boolean 直取，undefined=无覆盖
-          } else {
-            _subModeModel = _activeSM.modelName || "";
-            _subModeApiSource = _activeSM.apiSource || "";
-            _subModeClaudePrefill = _activeSM.claudePrefillMode || "";
-            _subModeMaxContext = extractSubModeMaxContext(_activeSM); // 根病1后期检查:消内联重复,收口 storage 单源
-            _subModeMaxTokens = _activeSM.maxTokens || _activeSM.max_tokens || 0;
-            _subModeTemperature = _activeSM.temperature !== undefined ? _activeSM.temperature : -1;
-            _subModeTopP = _activeSM.top_p !== undefined ? _activeSM.top_p : -1; // T001：扁平路径同步
-            _subModeTopK = _activeSM.top_k !== undefined ? _activeSM.top_k : -1; // 链路2扩展：扁平路径同步
-            _subModeMinP = _activeSM.min_p !== undefined ? _activeSM.min_p : -1; // 链路2扩展：扁平路径同步
-            _subModePostProcess = _activeSM.promptPostProcessing || "";
-            _subModePrefillEnabled = _activeSM.prefillEnabled; // 确诊-B：扁平路径同取（undefined=无覆盖）
+          // [0804 契约字段删除] 原 sub_mode_contract_json 同时承载 contract（第二描述通道，删）与
+          //   toolPermissions（后端硬门 replyHandler 的模型可见镜像，保留）。现只产权限 JSON：
+          //   与 replyHandler 实际工具过滤同三字段同语义（false=拒绝，undefined/true=允许）。
+          _subModeToolPermissionsJson = JSON.stringify({
+            id: _activeSM.id,
+            label: _subModeLabel,
+            toolPermissions: {
+              codeEdit: _activeSM.allowCodeEdit !== false,
+              runCommand: _activeSM.allowRunCommand !== false,
+              delete: _activeSM.allowDelete !== false,
+            },
+          });
+          // B18 读点收口（D3 0804）：原内联 ?? 链（嵌套 model_params 副本权威+驼峰别名容忍+扁平回退+
+          //   哨兵 -1/0/undefined）整块迁入 storage_mod/subModeActivation.resolveRequestProfile——
+          //   全系统唯一实现，语义逐字段等价（写门 normalizeSubModeForSave 同表 _PROFILE_FIELD_PAIRS 单源）。
+          //   此处只映射回既有 _subMode* 变量：下游（跨组原子清零 N36 / flowGroup 快照回退 / extension 下发）零改动。
+          const _smProfile = (_useFrozen && _frozenAct.requestProfile) ? _frozenAct.requestProfile : resolveRequestProfile(_activeSM);
+          _subModeModel = _smProfile.modelName;
+          _subModeApiSource = _smProfile.apiSourceName;
+          _subModeClaudePrefill = _smProfile.claudeMode;
+          _subModeMaxContext = _smProfile.sampling.maxContext;
+          _subModeMaxTokens = _smProfile.sampling.maxTokens;
+          _subModeTemperature = _smProfile.sampling.temperature;
+          _subModeTopP = _smProfile.sampling.topP;
+          _subModeTopK = _smProfile.sampling.topK;
+          _subModeMinP = _smProfile.sampling.minP;
+          _subModePostProcess = _smProfile.promptPostProcessing;
+          _subModePrefillEnabled = _smProfile.prefillEnabled;
+          _subModeFallbackPolicy = _smProfile.fallbackPolicy;
+          _subModeFallbackSource = _smProfile.fallbackSourceName;
+          if (_smProfile.conflicts.length > 0) {
+            // 迁移契约：flat/nested 真冲突不静默挑选——读侧维持嵌套优先（与改前行为一致）+ 可见留痕
+            wbD(_cid, "memory", "getPrompt:subModeProfileConflict", false, `子模式 ${_activeSM.id} flat/nested 参数冲突（读侧嵌套优先）: ${_smProfile.conflicts.join(", ")}`, { conflicts: _smProfile.conflicts });
           }
         }
       }
@@ -349,6 +626,8 @@ export async function handleGetPrompt(arg) {
         _subModeMinP = -1; // 链路2扩展：跨组原子清零同组
         _subModePostProcess = "";
         _subModePrefillEnabled = undefined; // 确诊-B：跨组原子清零（undefined=无覆盖，回退 runtime/预设基线）
+        _subModeFallbackPolicy = ""; // D3：fallback 是源覆盖的附属策略，源覆盖清零则同清（原子单元同 N36）
+        _subModeFallbackSource = "";
       }
       // 注意：此处禁止按"绑定值撞子模式源名"做任何 SetData 自愈——用户合法绑定与历史残留
       // 同名无法区分，曾导致绑定被洗空后随机换真实计费源（2026-06-12 洗源 bug，N19 删除）。
@@ -482,23 +761,10 @@ export async function handleGetPrompt(arg) {
     // 不再用「切换模式表达进度」。≥3 步任务才建清单（参照 KILO TodoWrite 门槛）。
     // 单一权威 = work_ctx/tasks.json（不进表格 / 不进 chat log），任务卡前端常驻显示「剩余 N 项」。
     if (modeFeature(_activeMode, "teaching").config.taskPlanHowto === true) { // 0716 接线：任务打勾教学跟声明
-      tableDataText += [
-        "",
-        "[任务清单系统（进度打勾）]",
-        "进度表达方式 = 制定任务清单后逐项打勾，**不要靠切换子模式来表达进度**（子模式只表角色位置）。",
-        "门槛：仅当任务 ≥3 步、非平凡时才建清单；单步/查询类任务无需建。",
-        "制定/全量更新清单（每次给出完整清单，会整体替换旧清单）：",
-        "<taskPlan>",
-        "[ ] 第一步要做的事",
-        "[~] 正在做的这一步",
-        "[x] 已完成的步骤",
-        "</taskPlan>",
-        "（也可用 JSON：<taskPlan>[{\"content\":\"...\",\"status\":\"pending|in_progress|completed\",\"priority\":\"high|normal|low\"}]</taskPlan>）",
-        "完成某一项时勾掉它（按内容整句或 id）：",
-        "<taskCheck>已完成那一项的整句内容</taskCheck>",
-        "或 <taskCheck id=\"任务id\"/>",
-        "规则：每完成一步就 taskCheck 一项；计划有增删/重排时重发 taskPlan 全量替换；清单与子模式流转是两条正交的轴。",
-      ].join("\n");
+      const _taskPlanHowto = data.config?.system_texts?.task_plan_howto;
+      tableDataText += typeof _taskPlanHowto === "string"
+        ? _taskPlanHowto
+        : DEFAULT_SYSTEM_TEXTS.task_plan_howto;
       // B9 回读（§五.2 默认=用户全量可改+AI 下轮感知）：把当前清单状态注回 AI——
       // 用户在任务卡上勾/改/删后，AI 下一轮从这里看到最新状态，不再按自己旧记忆走。
       try {
@@ -554,7 +820,7 @@ export async function handleGetPrompt(arg) {
           // 文案单源=DEFAULT_SYSTEM_TEXTS.daily_greeting（config.system_texts 可覆盖）；XML 包裹=注入结构留代码
           const _greetText = data.config?.system_texts?.daily_greeting || DEFAULT_SYSTEM_TEXTS.daily_greeting;
           depthInjections.push({
-            id: "DAILY_GREETING", role: "system",
+            id: "DAILY_GREETING", role: "user",
             content: `<daily_greeting streak="${_streak}">${_greetText}</daily_greeting>`,
             depth: 0, order: 0,
           });
@@ -585,6 +851,43 @@ export async function handleGetPrompt(arg) {
     wbT(_cid, "getprompt", "macro:loopEnter", { injCount: injectionPrompts.length, mode: _activeMode, ideConnected: _ideConnected });
     const _injGate = resolveEffectiveInjections(injectionPrompts, _injCtx);
 
+    // 历史前缓存区的宏契约由 volatileMacros.mjs 的稳定 allowlist 统一裁决。
+    // 写入口会拒绝新违规；这里是对直接改 JSON、旧数据、导入和旁路写入的最终运行时保护。
+    // 不静默删除条目，也不让动态值污染缓存前缀：保留正文，但把有效位置约束到 depth:0/user。
+    // user 角色是必要契约：Claude 适配器会把任何 system 角色抽回顶层 system，逻辑上的 below 会失真。
+    // 调整会写入 extension.cache_safety_adjustments + 白盒诊断，保留原位置/角色和命中表达式。
+    const _cacheSafetyAdjustments = [];
+    const _cacheSafePlacementByEntry = new WeakMap();
+    const _effectiveCacheSafePlacement = (entry) => {
+      if (_cacheSafePlacementByEntry.has(entry)) return _cacheSafePlacementByEntry.get(entry);
+      // 能走到这里的条目本轮一定会注入；一次性注入允许 enabled=false 条目临时生效，
+      // 因此运行时检查显式按 enabled=true 计算，不能被持久化开关绕过。
+      const placement = inspectInjectionCachePrefix({ ...entry, enabled: true });
+      _cacheSafePlacementByEntry.set(entry, placement);
+      const { requestedDepth, effectiveDepth, requestedRole, effectiveRole, unsafeMacros } = placement;
+      if (effectiveDepth !== requestedDepth || effectiveRole !== requestedRole) {
+        const adjustment = {
+          id: String(entry?.id || ""),
+          requestedDepth,
+          effectiveDepth,
+          requestedRole,
+          effectiveRole,
+          unsafeMacros,
+        };
+        _cacheSafetyAdjustments.push(adjustment);
+        wbD(
+          _cid,
+          "getprompt",
+          "cachePrefix:unsafeMacroDemoted",
+          false,
+          `动态 INJ 的有效位置/角色已按缓存契约约束: ${adjustment.id}`,
+          adjustment,
+        );
+        diag.error(`缓存安全约束: ${adjustment.id} depth ${requestedDepth}->${effectiveDepth}, role ${requestedRole}->${effectiveRole}; macros=${unsafeMacros.join(",")}`);
+      }
+      return placement;
+    };
+
     // {{tool_runtime_json}} 每轮只求值一次（跨条目共享）：forPrompt 快照带单次投递副作用
     // （终态 job 标记已投递，listForPrompt），同轮第二次求值会拿到已被第一次消费掉的空反馈。
     let _toolRuntimeJsonMemo = null;
@@ -605,7 +908,11 @@ export async function handleGetPrompt(arg) {
       //   判据单源=injectionSystem.isDataDrivenEntry（0722 审计 J1-B：四机制判据收口，勿在此内联字段判断）。
       if (isDataDrivenEntry(inj)) continue;
 
-      let content = inj.content;
+      // [D3 0804 locale] 条目正文按用户语言解析（injectionSystem 单源）：zh 用户零 IO 快路径原文直返；
+      //   外语用户仅当差量文件 zh_sha256 与条目当前 content 精确匹配才覆盖（用户改写/翻译过期=退原文，
+      //   「翻译=删减」通道被 hash 闸死）。宏替换在解析结果上照跑（翻译文本保留 {{宏}} 占位，等义门禁
+      //   由 inj_locale_check.mjs 写入侧把关）。传导链：user.locales → requestBuilder:68 → arg.locales。
+      let content = resolveInjectionContentForLocales(inj, arg?.locales);
       let lastUserMsg = "";
       if (arg?.chat_log && Array.isArray(arg.chat_log)) {
         for (let i = arg.chat_log.length - 1; i >= 0; i--) {
@@ -650,6 +957,11 @@ export async function handleGetPrompt(arg) {
         .replace(/\{\{current_mode\}\}/g, _activeMode)
         .replace(/\{\{sub_mode\}\}/g, _subModeLabel)
         .replace(/\{\{sub_mode_desc\}\}/g, _subModeDesc)
+        .replace(/\{\{sub_mode_tool_permissions_json\}\}/g, _subModeToolPermissionsJson)
+        // [0804 兼容读] 旧宏名保留替换：存量/用户自定义条目仍写 {{sub_mode_contract_json}} 时
+        //   注入权限 JSON（contract 字段已不产出），不让裸宏字面量漏进 prompt；条目文案迁移由
+        //   storage v4 条件迁移完成后此别名自然无消费。
+        .replace(/\{\{sub_mode_contract_json\}\}/g, _subModeToolPermissionsJson)
         .replace(/\{\{active_project\}\}/g, _activeProject)
         .replace(/\{\{code_active_files\}\}/g, _codeActiveFiles)
         .replace(/\{\{env_info\}\}/g, _envInfo)
@@ -705,11 +1017,9 @@ export async function handleGetPrompt(arg) {
         //   提示词内容唯一权威=INJ 条目正文本身。替空串防存量条目字面漏出（同 ide_tools 范式）。
         .replace(/\{\{skill:([^}]+)\}\}/g, "")
         .replace(/\{\{skills_list\}\}/g, "")
-        // 退役宏占位清理（0722 凛倾「工具宏需要删除,放到inj」）：{{ide_tools}} 原走
-        // generateIdeToolsPromptText 在代码里拼工具清单/未连接引导文本=硬编码提示词进对话
-        // （铁律：代码禁产生进对话的文本）。工具指令唯一权威=INJ 可编辑条目（INJ-2-code 手册
-        // /INJ-2 含 CLI 段），连接态切换由 INJ-2↔INJ-2-code 互斥承担。替空防存量条目字面漏出。
-        .replace(/\{\{ide_tools\}\}/g, "")
+        // {{ide_tools}} 只展开 canonical IDE_TOOLS 的稳定签名：无连接态/用户/工作区/运行值，允许
+        // 放在 depth>=1 历史前缓存区。执行规则仍由 INJ-2-code 可编辑，运行态只走 depth:0。
+        .replace(/\{\{ide_tools\}\}/g, renderStaticIdeToolSignatures())
         .replace(/\{\{ide_dual_inject\}\}/g, "")
         // 退役宏占位清理（0716 MCP 链路走查判定：刻意不接）：原 W61 实现双断——扫代码库插件目录
         // （MCP 插件实际装在用户 data/users/<u>/plugins/，永扫不到）+读 data.json 不存在的 tools 字段。
@@ -1063,11 +1373,12 @@ export async function handleGetPrompt(arg) {
         });
 
       diag.debug(`${inj.id}: 宏替换后 ${content.length}字符`);
+      const _placement = _effectiveCacheSafePlacement(inj);
       depthInjections.push({
         id: inj.id,
-        role: inj.role || "system",
+        role: _placement.effectiveRole,
         content,
-        depth: inj.depth ?? 0,
+        depth: _placement.effectiveDepth,
         order: inj.order ?? 0,
         // BUG-3: 仅作者编写的 INJ 模板需预设引擎再求一次宏(如 {{workspace_tree}}/{{workspace_root}} 由 env 注入,
         // getPromptHandler 不持有不解析)。其余 push 站点是运行期纯数据(热层md/摘要/检索结果等),不可二次求宏。
@@ -1083,6 +1394,16 @@ export async function handleGetPrompt(arg) {
     // !!!禁止放入提示词!!! 任何进 messages 的文本（引导句/包装标签/占位符）必须写在 injection_prompts
     //   配置条目的 content 模板里（前端 INJ 面板可改），代码只允许向 _pushDataInj 供数据宏值。
     //   直接 depthInjections.push 硬编码文本 = 会被本函数返回前的白名单拦截并 wbD 可见告警。
+    //
+    // [P0-D 2026-08-03] 代码直推注入的【集中框架例外声明】（任务 MD P0-D 要求6：明确、集中且可配置）：
+    //   以下 4 个 id 由本文件代码直推 depthInjections、不经 injection_prompts 注册表条目，豁免依据=
+    //   全部是 depth:0/user 的历史后运行数据（不进缓存前缀），且进入 messages 的文字均有可配置单源
+    //   （config.system_texts 覆盖 DEFAULT_SYSTEM_TEXTS / token_reminder 配置），XML 包裹=注入结构留代码：
+    //   - DAILY_GREETING（daily_greeting 文本可配）
+    //   - context_summary（summary_prefix 文本可配）
+    //   - TOKEN_WARNING（token_reminder 配置驱动，cleanup_hint 可配）
+    //   - OUTPUT_FILTER_WARNING（output_filter 文本可配）
+    //   此表就是全部例外；新增直推点禁止扩表——先建注册表条目（_pushDataInj 数据宏范式）。
     // [0722 硬编码注入收口] 数据类注入统一入口：按 id 查配置条目取模板/位置/开关，展开数据宏后入队。
     //   条目缺失（用户副本未播种/被删）→ wbD 可见告警不静默；enabled=false → 用户关闭，跳过。
     //   空标签行清理是机制不是文本：模板可选字段"标签: "在数据为空时整行剔除。
@@ -1098,7 +1419,8 @@ export async function handleGetPrompt(arg) {
       //   仅本轮：下轮 extension 不携带即自然失效，零清理。enabled=true 时 once 无感（本来就注入）。
       //   域边界（凛倾0726）：P1 条目不进注入坞候选列表，排队入口在 P1 面板自己的域（p1panel queueOnceInject）。
       if (_entry.enabled === false && !_injCtx.onceIds?.has(injId)) return false;
-      let _text = String(_entry.content || "");
+      // [D3 0804 locale] 数据类直推条目同走 locale 解析（与主循环 :911 同一单源，数据宏在解析结果上展开）
+      let _text = resolveInjectionContentForLocales(_entry, arg?.locales);
       for (const [_k, _v] of Object.entries(dataMap || {})) {
         _text = _text.replaceAll(`{{${_k}}}`, String(_v ?? ""));
       }
@@ -1112,11 +1434,12 @@ export async function handleGetPrompt(arg) {
       }
       _text = _text.trim();
       if (!_text) return false;
+      const _placement = _effectiveCacheSafePlacement(_entry);
       depthInjections.push({
         id: idSuffix ? `${injId}${idSuffix}` : injId,
-        role: _entry.role || "system",
+        role: _placement.effectiveRole,
         content: _text,
-        depth: _entry.depth ?? 0,
+        depth: _placement.effectiveDepth,
         order: _entry.order ?? 0,
       });
       if (pushText) textEntries.push({ content: _text, important });
@@ -1130,7 +1453,7 @@ export async function handleGetPrompt(arg) {
       const summaryInjContent = `${_sumPrefix}\n\n${contextSummaryText}`;
       depthInjections.push({
         id: "context_summary",
-        role: "system",
+        role: "user",
         content: summaryInjContent,
         depth: 0,
         order: 85,
@@ -1151,6 +1474,26 @@ export async function handleGetPrompt(arg) {
       if (_dueText) {
         // !!!禁止放入提示词!!! 包装文本在 INJ-scheduler-due-data 模板（前端可改），此处只供数据。
         _pushDataInj("INJ-scheduler-due-data", { scheduler_due: _dueText }, { important: 9 });
+      }
+    }
+
+    // [P0-D 2026-08-03] Smart 待确认提案运行数据（历史后 data 条目；P0-A 配套）：
+    //   权威=confirmationStore（per-owner 持久化 pending 记录），注入让 AI 看到"提案待用户确认"
+    //   事实——防重复提案/误报已启动。chat/smart 模式 + 有会话坐标才查；无 pending 零注入。
+    //   !!!禁止放入提示词!!! 包装文本在 INJ-smart-confirm-data 模板（前端可改），此处只供数据宏值。
+    if ((_activeMode === "chat" || _activeMode === "smart") && _cid) {
+      try {
+        const _confStorePath = path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "confirmationStore.mjs");
+        const _confStore = await import(pathToFileURL(_confStorePath).href);
+        const _pendingConfs = _confStore.listConfirmations(username, _cid).filter((c) => c && c.status === "pending");
+        if (_pendingConfs.length > 0) {
+          const _confLines = _pendingConfs
+            .map((c) => `- ${c.confirmationId} → ${c.targetMode}「${(c.taskTitle || "").slice(0, 80) || "(无标题)"}」`)
+            .join("\n");
+          _pushDataInj("INJ-smart-confirm-data", { smart_pending_confirmations: _confLines }, { important: 8 });
+        }
+      } catch (_confErr) {
+        wbD(_cid, "getprompt", "smartConfirmData:fail", false, _confErr?.message || String(_confErr), {});
       }
     }
 
@@ -1325,9 +1668,9 @@ export async function handleGetPrompt(arg) {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Phase 3 (S13): P1 检索 — 两级降级：自驱动管线(500-700ms) → AI P1(多轮) → 无结果不注入
+    // Phase 3 (S13): P1 检索 — 自驱动管线或 AI P1，最多启用一条
     // 触发条件：retrievalConfig.auto_trigger && 非 fakeSend && 最后消息是用户输入
-    // （0716 注释校准：原「自驱动不走 code 模式」的实门已随 _selfDrivenSufficient 恒 false 改造消亡，AI P1 为唯一路径）
+    // 合法合同是 10/01/00；只禁止 11。历史 11→10，由 p1Route.mjs 单源收敛。
     // 产出：depthInjection id="SELF_DRIVEN_P1" 或 "P1_RETRIEVAL"，depth=0
     // ═══════════════════════════════════════════════════════════════
     {
@@ -1337,7 +1680,7 @@ export async function handleGetPrompt(arg) {
       // T06修复: 所有模式下非用户输入都跳过P1（凛倾原话：AI读取/联网→直接进入AI，不走P1）
       const _skipP1ForAutoReply = !_isUserInput;
       // [0724→0729 P1触发接线] ModeDef features.p1 声明门（零硬编码模式名，同 L354 flowGroup 接线范式）：
-      //   enabled=false 整段跳过；selfDriven 只门自驱动管线；aiP1 只门检索AI降级路。
+      //   enabled=false 整段跳过；selfDriven 只门本地自驱动管线；aiP1 只门后续可选深查层。
       // [0724 背景] 自驱动管线曾无条件直接 import p1_pipeline → 119MB 词库 JSON 解析成数百MB
       //   模块级缓存进程永驻（0723 内存2GB案主因）→ 全模式声明 selfDriven:false 封存。
       // [0729 002拍板插件化解封] 内存由 beilu-p1-selfdriven 插件生命周期管理（Load零资源 + idle卸载
@@ -1346,69 +1689,172 @@ export async function handleGetPrompt(arg) {
       //   双门职责：selfDriven=mode级路由（该mode要不要自驱动）；插件 enabled=用户级开关（资源就绪否）。
       //   禁绕门直接 import p1_pipeline（0724内存案教训不变，插件化是解法不是豁免）。
       const _p1Feat = modeFeature(_activeMode || "chat", "p1");
-      // [0731 T2 per-mode 开关前端化] 用户覆盖层：yonban_config.mode_feature_overrides（写口
-      //   setDataActions saveModeFeatureOverride，前端=P1 运行面板 per-mode 行）。只覆盖 config 子键
-      //   （selfDriven/aiP1），enabled 仍是 mode 声明门；无字段=沿用 modes json 声明值。
+      // 用户覆盖层：yonban_config.mode_feature_overrides（写口=setDataActions
+      //   saveModeFeatureOverride，前端=P1 运行面板 per-mode 互斥开关）。enabled 仍是 mode 声明门；
+      //   无字段=沿用 modes json 声明值。
       //   每次 GetPrompt 同步读盘（同 :284 _smConfig 开销量级），下一轮生效无需重启；
       //   覆盖文件损坏→诚实降级回代码声明值，不阻断主链。
+      let _mfOv = null;
       try {
-        const _mfOv = loadJsonFileIfExists(getYonbanConfigPath(username), {})
-          ?.mode_feature_overrides?.[_activeMode || "chat"]?.p1;
-        if (_mfOv && typeof _mfOv === "object") _p1Feat.config = { ..._p1Feat.config, ..._mfOv };
+        _mfOv = loadJsonFileIfExists(getYonbanConfigPath(username), {})
+          ?.mode_feature_overrides?.[_activeMode || "chat"]?.p1 || null;
       } catch { /* 覆盖层读取失败=用代码声明值 */ }
-      if (retrievalConfig.auto_trigger && _p1Feat.enabled && !arg.isFakeSend && !_skipP1ForAutoReply) {
+      _p1Feat.config = resolveEffectiveP1RouteConfig(_p1Feat.config || {}, _mfOv);
+      const _selfDrivenUserEnabled = _p1Feat.config.selfDriven === true;
+      const _aiP1UserEnabled = _p1Feat.config.aiP1 === true;
+      // 10/01 由本轮自动 P1 owner 决定注入，尾段不得用旧缓存改写结果；00 不接管，
+      // 手动 P1 缓存仍可在尾段按旧合同一次性消费。
+      let _p1CurrentRequestHandled = false;
+      if (retrievalConfig.auto_trigger
+        && _p1Feat.enabled
+        && !arg.isFakeSend
+        && !_skipP1ForAutoReply
+        && (_selfDrivenUserEnabled || _aiP1UserEnabled)) {
+        _p1CurrentRequestHandled = true;
 
-        // ★ 自驱动P1快速通道：已按凛倾指令移除（2026-07-02"自驱动p1召回和发散直接移除...因为这个还没有开发好"）。
-        //   代码归档：`beilu的工作日志和项目日志/yonban迁移执行_20260702/归档_自驱动P1_未开发完成件/`（原 :1379-1474）。
-        //   组件库未动（继续开发用）：p1/p1_pipeline.mjs、storage_mod/memoryRecall.mjs、nlp/*。
-        //   _selfDrivenSufficient 保留恒 false → AI P1 恒跑（原降级路径成为唯一路径，AI P1 块零改动）。
-        let _selfDrivenSufficient = false;
+        // ★ 10 路由走 p1Bridge/service 本地低时延召回并直注；01 路由只走原 AI P1。
+        const _p1Mode = _activeMode || "chat";
+        const _p1ScopeKey = _p1ScopeIdentity(username, charName, _cid, _p1Mode);
+        let _hasConcreteLocalRecall = false;
+        const _localP1 = {
+          mode: _p1Mode,
+          status: "not-run",
+          outcome: null,
+          directionWords: [],
+          recalledRecords: [],
+          legacyActCount: 0,
+          legacyActs: [],
+          insufficiencyReason: "self_driven_disabled",
+          failure: null,
+          traceSummary: null,
+        };
         // ★ P1自驱动管线接回（2026-07-20 beilu → 2026-07-29 插件化改造）
         // why: P1在后台产出方向词注入主AI上下文，让主AI能想到自己想不到的跨域方向。
         // 关联链: ← p1Bridge.mjs → beilu-p1-selfdriven 插件 → p1_pipeline.mjs (runPipeline)
         //         → depthInjections (depth:1, order:100) → beilu-preset TweakPrompt Round2
-        // 影响范围: 成功时_selfDrivenSufficient=true跳过AI P1; 失败/null保持false走AI P1降级=零回归
-        // 回滚: 删除本代码块，_selfDrivenSufficient恒false即恢复原状
+        // 本地有 recalledRecords、方向词或旧 p1_act 时直接注入并结束本轮 P1。
         // 铁律: P1_SELF_LEARN在live中保持默认(on)，由管线内部根据userCtx决定是否写盘
         // [0729 插件化] selfDriven 声明门+插件enabled双门：
-        //   selfDriven=false（如code模式）→ 整段跳过零开销；
-        //   selfDriven=true+插件enabled=false → runP1返回null → AI P1降级（词库不加载）；
+        //   selfDriven=false → 整段跳过零开销，由互斥的 AI P1 路由独立处理；
+        //   selfDriven=true+插件enabled=false → runP1返回null并显式记录失败，不暗中切 AI P1；
         //   selfDriven=true+插件enabled=true → 经p1Bridge调用插件内runPipeline（词库由插件生命周期管理）。
         //   禁绕门直接 import p1_pipeline（0724内存案教训，0729插件化解法）。
-        if (_p1Feat.config.selfDriven === true && !_p1InFlight.has(_cid))
+        if (_selfDrivenUserEnabled) {
+        const _p1History = (arg?.chat_log || []).slice(0, -1).map(m => ({
+          role: m.role || "user", content: String(m.content ?? m.mes ?? "")
+        }));
+        const _p1InputText = _lastMsg?.content || _lastMsg?.mes || "";
+        const _historyChatId = String(_cid ?? "");
+        const _p1RunKey = _p1LocalRunKey(
+          username, charName, _cid, _p1Mode, _p1InputText, _historyChatId, _p1History,
+        );
+        let _p1RunPromise = _p1InFlight.get(_p1RunKey);
+        const _p1RunReused = !!_p1RunPromise;
         try {
-          _p1InFlight.add(_cid);
-          const _p1History = (arg?.chat_log || []).slice(-5).map(m => ({
-            role: m.role || "user", content: String(m.content || "")
-          }));
+          _localP1.status = _p1RunReused ? "waiting-shared-local-run" : "running";
+          _localP1.insufficiencyReason = null;
+          // P1 输入契约：currentUserText 单独传；chatHistory 只传当前输入之前的历史。
+          // 不在调用层硬截“最后5条总消息”：Node0 按 contextMessages 选择最近 N 条 user，
+          // code/work 还需最近 assistant，且无记忆文档时更早 user 可作为动态检索库。
           wbT(_cid, "getprompt", "p1:selfDrivenStart", {
-            mode: _activeMode || "chat",
+            mode: _p1Mode,
+            historyChatId: _historyChatId,
             historyCount: _p1History.length,
+            historyUserCount: _p1History.filter(m => m.role === "user").length,
+            historyIncludesCurrent: false,
+            sharedLocalRun: _p1RunReused,
           });
-          const _p1Res = await runP1(
-            _lastMsg?.content || _lastMsg?.mes || "",
-            _p1History,
-            _activeMode || "chat",
-            { username, charName, chatId: _cid }
-          );
+          if (!_p1RunPromise) {
+            _p1RunPromise = runP1(
+              _p1InputText,
+              _p1History,
+              _p1Mode,
+              { username, charName, chatId: _cid, historyChatId: _historyChatId }
+            );
+            _p1InFlight.set(_p1RunKey, _p1RunPromise);
+          }
+          const _p1Res = await _p1RunPromise;
+          const _structuredTrace = _p1TraceSummary(_p1Res);
+          _localP1.traceSummary = _structuredTrace;
+          // production 不请求 whitebox=true 的完整文本；消费服务已经返回的结构化 trace，压成现有
+          // wbT/wbD 可承载的有界摘要，避免把 Node0→4 全量数组复制进生成链并破坏 <1s 目标。
+          wbT(_cid, "getprompt", "p1:structuredTrace", _structuredTrace);
+          _localP1.outcome = _p1Res?.outcome || null;
+          _localP1.legacyActCount = Array.isArray(_p1Res?.p1_act) ? _p1Res.p1_act.length : 0;
+          _localP1.legacyActs = Array.isArray(_p1Res?.p1_act)
+            ? _p1Res.p1_act.map((value) => String(value || "").trim()).filter(Boolean).slice(0, 5)
+            : [];
           wbT(_cid, "getprompt", "p1:selfDrivenResult", {
-            success: !!_p1Res,
-            directionCount: _p1Res?.p1_act?.length || 0,
+            success: _p1Res?.success === true,
+            outcome: _p1Res?.outcome || "unknown",
+            status: _p1Res?.status || null,
+            code: _p1Res?.code || null,
+            error: _p1Res?.error || null,
+            directionCount: _p1Res?.directionWords?.length || 0,
+            legacyActCount: _p1Res?.p1_act?.length || 0,
             recordCount: _p1Res?.recalledRecords?.length || 0,
+            sharedLocalRun: _p1RunReused,
+            runLog: _p1Res?.runLog || null,
           });
+          const _runLogIssues = getP1RunLogIssues(_p1Res);
+          // 同一 in-flight 结果可能被多个 GetPrompt 等待者复用；只由创建该结果的调用报告一次。
+          if (_p1Res?.success === true && _runLogIssues.length > 0 && !_p1RunReused) {
+            for (const _runLogIssue of _runLogIssues) {
+              _reportP1RunLogIssue(_cid, _p1Mode, _runLogIssue);
+            }
+          }
+          const _selfDrivenDirections = Array.isArray(_p1Res?.directionWords)
+            ? [...new Set(_p1Res.directionWords.map((word) => String(word || "").trim()).filter(Boolean))]
+            : [];
           const _selfDrivenRecords = Array.isArray(_p1Res?.recalledRecords)
             ? _p1Res.recalledRecords.filter((record) => String(record?.content || "").trim())
             : [];
-          if (_p1Res?.p1_act?.length > 0 || _selfDrivenRecords.length > 0) {
-            _selfDrivenSufficient = true;
+          _localP1.directionWords = _selfDrivenDirections;
+          _localP1.recalledRecords = _selfDrivenRecords;
+          if (_p1Res?.success !== true) {
+            _localP1.status = "failure";
+            _localP1.failure = {
+              code: _p1Res?.code || null,
+              error: _p1Res?.error || "local P1 returned unsuccessful result",
+            };
+            _localP1.insufficiencyReason = `local_failure:${_localP1.failure.code || "unknown"}`;
+          } else if (_selfDrivenRecords.length > 0) {
+            _hasConcreteLocalRecall = true;
+            _localP1.status = "concrete-recall";
+            _localP1.insufficiencyReason = null;
+          } else {
+            _localP1.status = _selfDrivenDirections.length > 0 || _localP1.legacyActCount > 0 ? "partial" : "empty";
+            _localP1.insufficiencyReason = "no_concrete_recalled_records";
+          }
+          wbT(_cid, "getprompt", "p1:localOutput", {
+            mode: _p1Mode,
+            status: _localP1.status,
+            outcome: _localP1.outcome,
+            directionCount: _localP1.directionWords.length,
+            recordCount: _localP1.recalledRecords.length,
+            legacyActCount: _localP1.legacyActCount,
+            hasConcreteRecall: _hasConcreteLocalRecall,
+            insufficiencyReason: _localP1.insufficiencyReason,
+          });
+          const _injectSelfDrivenDirectly = _selfDrivenUserEnabled;
+          if (_injectSelfDrivenDirectly
+            && (_selfDrivenDirections.length > 0 || _p1Res?.p1_act?.length > 0 || _selfDrivenRecords.length > 0)) {
             const _p1Parts = [];
+            if (_selfDrivenDirections.length > 0) {
+              const _directionText = _selfDrivenDirections.join(" / ");
+              // 方向词沿用既有 INJ-p1-act-data 模板；这是自驱动联想的生产消费端，
+              // 与 recalledRecords 的结构化记忆注入是两种不同信息，不互相替代。
+              _pushDataInj("INJ-p1-act-data", { p1_act: _directionText }, { important: 6, pushText: false });
+              _p1Parts.push(_directionText);
+              wbT(_cid, "getprompt", "p1:selfDrivenDirectionInject", {
+                directionCount: _selfDrivenDirections.length,
+                directions: _selfDrivenDirections,
+              });
+            }
             if (_selfDrivenRecords.length > 0) {
               const _recordBody = _stripConsumedTagsFromInjection(
                 _selfDrivenRecords.map((record, index) => {
-                  const _meta = [
-                    record.layer,
-                    record.timestamp || null,
-                  ].filter(Boolean).join(" · ");
+                  const _meta = _formatP1RecordMeta(record).join(" · ");
                   return `${index + 1}. ${_meta ? `[${_meta}] ` : ""}${String(record.content).trim()}`;
                 }).join("\n\n")
               );
@@ -1424,9 +1870,9 @@ export async function handleGetPrompt(arg) {
               });
             }
             // [0801 双写修复] recalledRecords 已注入 INJ-p1-retrieval-data（结构化带层/编号/内容）;
-            // p1_act 通道只在 recalledRecords 无数据时才兜底（旧链兼容: 旧链 p1_act=方向词≠records,两路不同源;
-            // 新管线 p1_act=records.map(content) 同源,重复注入=主AI上下文里两遍同内容）。
-            if (_p1Res?.p1_act?.length > 0 && _selfDrivenRecords.length === 0) {
+            // p1_act 只兼容没有 directionWords、也没有 recalledRecords 的旧链；新管线
+            // p1_act=records.map(content)，若继续注入会在主 AI 上下文里复制同一记忆。
+            if (_p1Res?.p1_act?.length > 0 && _selfDrivenDirections.length === 0 && _selfDrivenRecords.length === 0) {
               const _p1ActStr = _p1Res.p1_act.join(" / ");
               _pushDataInj("INJ-p1-act-data", { p1_act: _p1ActStr }, { important: 6, pushText: false });
               _p1Parts.push(_p1ActStr);
@@ -1434,18 +1880,52 @@ export async function handleGetPrompt(arg) {
             _p1ResultText = _p1Parts.join("\n\n");
           }
         } catch (_p1Err) {
-          // P1失败→_selfDrivenSufficient保持false→走AI P1降级路径（零回归）
-          console.warn("[P1-selfDriven] runP1 failed:", _p1Err?.message || _p1Err);
+          _localP1.status = "failure";
+          _localP1.failure = { code: _p1Err?.code || null, error: _p1Err?.message || String(_p1Err) };
+          _localP1.insufficiencyReason = `local_exception:${_localP1.failure.code || "unknown"}`;
+          const _structuredTrace = _p1TraceSummary({ success: false, code: _p1Err?.code, error: _localP1.failure.error });
+          _localP1.traceSummary = _structuredTrace;
         } finally {
-          _p1InFlight.delete(_cid);
+          if (!_p1RunReused && _p1InFlight.get(_p1RunKey) === _p1RunPromise) {
+            _p1InFlight.delete(_p1RunKey);
+          }
+        }
+        } else {
+          wbT(_cid, "getprompt", "p1:localOutput", {
+            mode: _p1Mode,
+            status: _localP1.status,
+            hasConcreteRecall: false,
+            insufficiencyReason: _localP1.insufficiencyReason,
+          });
         }
 
-
-        // ★ AI P1（只在自驱动不够时才跑，现有代码一行不改）
-        // [0724 P1触发接线] aiP1 声明门（现四模式均 true=行为不变，声明可改即生效）
-        if (!_selfDrivenSufficient && _p1Feat.config.aiP1 !== false) {
         const p1Preset = presetsData.presets.find((p) => p.id === "P1");
-        if (p1Preset && p1Preset.enabled) {
+        // 01 路由只运行 AI P1；它不消费自驱动输出，也不在失败时偷取自驱动/旧缓存结果。
+        const _aiP1Eligible = _aiP1UserEnabled && !!p1Preset?.enabled;
+        const _aiP1WillRun = _aiP1Eligible;
+        if (_localP1.failure) {
+          _reportLocalP1Failure(
+            _cid,
+            _p1Mode,
+            _p1ScopeKey,
+            _localP1.failure,
+            _localP1.traceSummary,
+          );
+        }
+        wbT(_cid, "getprompt", "p1:aiEligibility", {
+          mode: _p1Mode,
+          userEnabled: _aiP1UserEnabled,
+          presetEnabled: p1Preset?.enabled === true,
+          eligible: _aiP1Eligible,
+          willRun: _aiP1WillRun,
+          localStatus: _localP1.status,
+          localRecordCount: _localP1.recalledRecords.length,
+          localFailure: _localP1.failure?.code || null,
+          insufficiencyReason: _localP1.insufficiencyReason,
+        });
+
+        // AIP1 是否调用只由互斥的 aiP1 用户路由与 P1 preset 门裁决。
+        if (_aiP1WillRun) {
           let chatHistory = "";
           const chatHistoryCount = retrievalConfig[`chat_history_count_${_activeMode}`] || retrievalConfig.chat_history_count || 5;
           if (arg?.chat_log && Array.isArray(arg.chat_log)) {
@@ -1482,12 +1962,30 @@ export async function handleGetPrompt(arg) {
             console.warn("[beilu-memory] P1 向量初筛失败（P1 走原链）:", _vecErr?.message || _vecErr);
           }
 
+          wbT(_cid, "getprompt", "p1:aiContext", {
+            mode: _p1Mode,
+            vectorContextChars: _vecExtraCtx.length,
+          });
+
           try {
             const result = await runMemoryPresetAI(
-              username, charName, p1Preset, data, displayCharName, userName, chatHistory, { chatId: _cid, ...(_vecExtraCtx ? { extraContext: _vecExtraCtx } : {}) }, // T4靶点④ + 0722 向量初筛
+              username, charName, p1Preset, data, displayCharName, userName, chatHistory,
+              {
+                chatId: _cid,
+                mode: _p1Mode,
+                activeMode: _p1Mode,
+                extraContext: _vecExtraCtx,
+              }, // 宿主本轮 mode 显式交接，AIP1 不再从 active_modes 二次解析；其余调用方仍走兼容回退
             );
             const replyText = (result.reply || "").trim();
             wbT(_cid, "getprompt", "p1:aiDone", { ms: result.totalTimeMs, rounds: result.totalRounds, replyLen: replyText.length });
+            wbT(_cid, "getprompt", "p1:aiResult", {
+              success: true,
+              mode: _p1Mode,
+              ms: result.totalTimeMs,
+              rounds: result.totalRounds,
+              replyLen: replyText.length,
+            });
 
             const {
               presetName: switchTarget,
@@ -1547,6 +2045,11 @@ export async function handleGetPrompt(arg) {
             });
           } catch (e) {
             wbD(_cid, "getprompt", "p1:aiFail", false, e?.message || String(e), {});
+            wbT(_cid, "getprompt", "p1:aiResult", {
+              success: false,
+              mode: _p1Mode,
+              error: e?.message || String(e),
+            });
             console.error(`[beilu-memory] P1 检索失败:`, e?.message || String(e));
             pushMemoryAIOutput({
               presetId: "P1", presetName: "检索AI",
@@ -1555,7 +2058,6 @@ export async function handleGetPrompt(arg) {
             });
           }
         }
-        } // ★ 闭合 if (!_selfDrivenSufficient)
       }
       // 冷却递减
       if (!_presetSwitchExecuted && presetSwitchCooldown.has(_cooldownKey)) {
@@ -1567,9 +2069,10 @@ export async function handleGetPrompt(arg) {
       // 旧缓存结果注入（兼容）— 使用按角色隔离的consumeLastP1Result
       // 跳过已在本轮同步注入过P1的情况（防止double injection）
       const _p1AlreadyInjected = depthInjections.some(d => d.id === "INJ-p1-retrieval-data");
-      if (!_p1AlreadyInjected) {
+      const _skipLegacyP1Consume = _p1CurrentRequestHandled;
+      if (!_p1AlreadyInjected && !_skipLegacyP1Consume && !arg.isFakeSend) {
         const _p1Cached = consumeLastP1Result(username, charName, _cid); // T4靶点④：本窗槽优先，miss 回退 "_" 槽（面板手动流兼容）
-        if (_p1Cached && !arg.isFakeSend) {
+        if (_p1Cached) {
           // !!!禁止放入提示词!!! 包装模板在 INJ-p1-retrieval-data（前端可改），此处只供数据（含时间戳后缀）。
           _pushDataInj("INJ-p1-retrieval-data", {
             p1_retrieval: _stripConsumedTagsFromInjection(_p1Cached.reply),
@@ -2076,9 +2579,10 @@ export async function handleGetPrompt(arg) {
 
           depthInjections.push({
             id: "TOKEN_WARNING",
-            role: "system",
+            role: "user",
             content: _reminderContent,
-            depth: _tokenReminder.injection_depth ?? 0,
+            // 每轮 token 用量属于历史后运行数据；禁止旧配置/API/直接改盘把它送到缓存前缀。
+            depth: 0,
             order: 999,
           });
           textEntries.push({ content: _reminderContent, important: 9 });
@@ -2120,11 +2624,36 @@ export async function handleGetPrompt(arg) {
           // ★ P7 停用守卫（0802）：前端"停用"=p7Preset.enabled:false，T09 必须尊重——否则停用按钮形同虚设
           const _p7ForT09 = presetsData.presets?.find((p) => p.id === "P7");
           if (!contextSummaryText && !_t09InFlight.has(_cid || "_") && _p7ForT09?.enabled !== false) {
-            _t09InFlight.add(_cid || "_");
-            (async () => {
+            const _t09Key = _cid || "_";
+            const _chatLog = Array.isArray(arg?.chat_log) ? arg.chat_log.slice() : [];
+            if (_chatLog.length >= 10) {
+              const _sourceRevision = computeContextSummarySourceRevision(_chatLog);
+              _t09InFlight.add(_t09Key);
+              let _summaryWriteToken = null;
               try {
-                const _chatLog = arg?.chat_log || [];
-                if (_chatLog.length < 10) return;
+                // 必须在 handleGetPrompt 的主 await 路径内取得持久 CAS token，然后才启动
+                // detached AI 任务。begin 内部还会校验“调用时观测基线”，锁等待期
+                // 若回档推进 epoch/revision，旧请求不能在恢复后把新基线当成自己的 token。
+                _summaryWriteToken = _cid
+                  ? await beginContextSummaryWrite(username, charName, _cid, { sourceRevision: _sourceRevision })
+                  : null;
+              } catch (_beginError) {
+                _t09InFlight.delete(_t09Key);
+                wbD(_cid, "getprompt", "t09:summaryBeginFail", false, _beginError.message, { code: _beginError.code || null });
+                diag.warn(`T09 摘要令牌获取失败: ${_beginError.message}`);
+              }
+              if (_summaryWriteToken && _summaryWriteToken.ok !== true) {
+                _t09InFlight.delete(_t09Key);
+                wbD(_cid, "getprompt", "t09:summaryBusy", false, _summaryWriteToken.code || "context summary rewrite busy", {
+                  leaseId: _summaryWriteToken.leaseId || null,
+                  leaseExpiresAt: _summaryWriteToken.leaseExpiresAt || null,
+                  superseded: _summaryWriteToken.superseded === true,
+                  expected: _summaryWriteToken.expected || null,
+                  actual: _summaryWriteToken.actual || null,
+                });
+              } else if (!_cid || _summaryWriteToken?.ok === true) {
+                (async () => {
+                  try {
                 const _keepStart = Math.floor(_chatLog.length * 0.3);
                 const _firstMsg = _chatLog[0]
                   ? `[消息#0] ${_chatLog[0].role}: ${(_chatLog[0].content || "").substring(0, 500)}`
@@ -2206,14 +2735,40 @@ export async function handleGetPrompt(arg) {
                   `[早期对话压缩摘要 / ${_method}]:\n${_summaryText}`,
                   ..._recentMsgs,
                 ].join("\n\n");
-                writeContextSummary(username, charName, {
+                const _summaryData = {
                   summary: _finalSummary,
                   keep_indices: [],
                   timestamp: new Date().toISOString(),
                   originalMsgCount: _chatLog.length,
                   keptMsgCount: _chatLog.length - _keepStart + 1,
                   method: _method,
-                }, _cid);
+                };
+                // AI 完成后重读权威对话请求并重算条目序列锚点。回档/删除/新消息
+                // 只要改变了生成来源，即使摘要 epoch 未被其他写者推进也拒绝旧结果。
+                const _currentSourceRevision = _cid
+                  ? await _readCurrentT09SourceRevision(arg, _cid)
+                  : null;
+                const _summaryCommit = _cid
+                  ? await commitContextSummaryWrite(
+                    username,
+                    charName,
+                    _cid,
+                    _summaryWriteToken,
+                    _summaryData,
+                    { currentSourceRevision: _currentSourceRevision },
+                  )
+                  : (writeContextSummary(username, charName, _summaryData), { committed: true, legacy: true });
+                if (_summaryCommit.committed !== true) {
+                  wbD(_cid, "getprompt", "t09:summarySuperseded", false, _summaryCommit.code || "context summary write superseded", {
+                    superseded: _summaryCommit.superseded === true,
+                    busy: _summaryCommit.busy === true,
+                    expected: _summaryCommit.expected || null,
+                    actual: _summaryCommit.actual || null,
+                    expectedSourceRevision: _summaryCommit.expectedSourceRevision || null,
+                    actualSourceRevision: _summaryCommit.actualSourceRevision || null,
+                  });
+                  return;
+                }
                 diag.log(`T09 ${_method}: ${_chatLog.length}条→压缩${_compactRange.length}条+保留近${_chatLog.length - _keepStart}条`);
               } catch (_e) {
                 wbD(_cid, "getprompt", "t09:autoCompactFail", false, _e.message, {});
@@ -2222,6 +2777,8 @@ export async function handleGetPrompt(arg) {
                 _t09InFlight.delete(_cid || "_");
               }
             })();
+          }
+          }
           }
           }
         }
@@ -2240,7 +2797,7 @@ export async function handleGetPrompt(arg) {
           const _warnContent = `<output_filter_warning>\n${_ofText}\n</output_filter_warning>`;
           depthInjections.push({
             id: "OUTPUT_FILTER_WARNING",
-            role: "system",
+            role: "user",
             content: _warnContent,
             depth: 0,
             order: 998,
@@ -2309,6 +2866,7 @@ export async function handleGetPrompt(arg) {
       additional_chat_log: [],
       extension: {
         memory_depth_injections: depthInjections,
+        cache_safety_adjustments: _cacheSafetyAdjustments,
         // [0717 串联收口] preset_switch_to 字段已删：P1 切换在解析点直走 switchPresetViaAPI 权威口，
         //   生成链不再携带预设写信号（0708「生成不碰预设状态」定案对齐；TweakPrompt 消费块同批镜像删除）
         // ★ 当前子模式的模型覆盖（每轮都传，不依赖runtime-params）
@@ -2326,6 +2884,10 @@ export async function handleGetPrompt(arg) {
         // 确诊-B：boolean 直传（false 为有效意图，禁用 || undefined 否则 false 被吞成"无覆盖"）；
         //   undefined=无覆盖，消费方 preset/main.mjs mergeRuntimeParams 以 !== undefined 判定是否覆盖 prefill_enabled。
         sub_mode_prefill_enabled: _subModePrefillEnabled,
+        // D3 0804：override 源加载失败的策略下发（消费方 char-template submode_source_override 分支：
+        //   fail_closed=可见未发送错误不静默回退角色源；explicit_fallback=先试 fallback 源再默认源+trace）
+        sub_mode_fallback_policy: _subModeFallbackPolicy || undefined,
+        sub_mode_fallback_source: _subModeFallbackSource || undefined,
         // thinking 下发键已删（2026-08-01 收口到 AI 源面板 per-源单点）
         active_mode: _activeMode,
         active_project: _activeProject,

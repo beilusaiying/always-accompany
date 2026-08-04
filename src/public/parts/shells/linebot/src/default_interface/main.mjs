@@ -1,5 +1,5 @@
 import { localhostLocales } from "../../../../../../scripts/i18n.mjs";
-import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
+import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, buildBotSourceMeta, pickBotSourceMeta, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
 import { createDiag } from "../../../../../../server/diagLogger.mjs";
 // BR2: runtime 错误外显——GetReply 失败时广播到前端红点
 import { broadcastBotError } from "../../../botErrorBroadcast.mjs";
@@ -194,7 +194,7 @@ export async function createSimpleLineInterface(
 			files,
 			// C6: bot 来源标记 + 独立权限等级（供下游消费端按 L0-L3 裁决；接入能力裁决属 K7 未接）
 			_sourceType: "bot",
-			_permissionLevel: resolveBotPermissionLevel(_config, userId, !!isOwner),
+			...buildBotSourceMeta(_config, userId, !!isOwner),
 			extension: {
 				line_session_id: sessionId,
 				line_user_id: userId,
@@ -267,7 +267,7 @@ export async function createSimpleLineInterface(
 			await appendBotChatEntry(await resolveBotChatId(ownerUsername, botCharname, "line"), {
 				role: entry.role, name: entry.name, content: entry.content,
 				files: entry.files, extension: entry.extension,
-				_sourceType: entry._sourceType, _permissionLevel: entry._permissionLevel,
+				...pickBotSourceMeta(entry),
 			});
 		} catch (e) { diag.warn(`bot 对话文件用户消息落盘失败（本轮回退壳内存）: ${e?.message || e}`); }
 		SessionChatLogs[sessionId].push(entry);

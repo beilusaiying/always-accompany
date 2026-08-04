@@ -10,7 +10,7 @@
 // 所有参数集中在 PARAMS,禁止魔法数字散落;可调项走 env,来源见各行注释。
 //
 // 出口数据形状(下游 node1 tokenizeUnits 消费):
-//   {units: [{type: user_current|user_context|ai_output|data, raw, excluded, excludeReason, sentences[]}], params}
+//   {units: [{type: user_current|user_context|data, raw, excluded, excludeReason, sentences[]}], params}
 //   excluded 单元 sentences=[] 不进分词,但 raw 保留可追溯(误杀兜底同思路)
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -20,20 +20,20 @@ const envInt = (name, dflt) => {
 };
 
 export const PARAMS = {
-  // 上下文窗口: 用户内容 + 最近3条用户对话 + data最近2条(设计原话,旧值5有 -2.5% 教训)
-  CONTEXT_COUNT: clamp(envInt('P1_RECALL_CONTEXT_COUNT', 3), 0, 20),
+  // 上下文窗口: 当前输入单列 + 最近5条用户对话 + data。
+  // assistant 只可作为复制检测参照，不得成为召回单元（凛倾 2026-08-03 合同）。
+  CONTEXT_COUNT: clamp(envInt('P1_RECALL_CONTEXT_COUNT', 5), 0, 5),
   DATA_COUNT: clamp(envInt('P1_RECALL_DATA_COUNT', 2), 0, 20),
   // 短句(<10字)先并入邻句再算 [待实验定]
   SHORT_SENT_MIN: clamp(envInt('P1_RECALL_SHORT_SENT_MIN', 10), 2, 50),
-  // 复制文本排除: 字符bigram Jaccard > 0.7 → 排除 [待实验定,经验值]
-  COPY_JACCARD: 0.7,
+  // 复制文本排除: 字符 bigram Jaccard 超过此阈值即排除；0.7 是实验前默认值，
+  // 每次请求可由服务配置 copyJaccardThreshold 经 config_map 覆盖。
+  COPY_JACCARD_THRESHOLD: 0.7,
   // 截断: 超过80词取头尾,用户可调 P1_RECALL_MAX_WORDS clamp [20,500] (162号MD)
   MAX_WORDS: clamp(envInt('P1_RECALL_MAX_WORDS', 80), 20, 500),
   // 头段预算占比: 设计=0.5(head40+tail40);历史0731定档0.3有A/B数据(字口径进池41.7%→52.8%),
   // 词口径下的取值待白盒读校,env 可调
   TRUNC_HEAD_RATIO: Math.min(0.9, Math.max(0.1, parseFloat(process.env.P1_TRUNC_HEAD_RATIO) || 0.5)),
-  // AI 输出触发条数(code/work 检测 AI 最近输出;config 键 aiOutputCount)
-  AI_OUTPUT_COUNT: clamp(envInt('P1_AI_OUTPUT_COUNT', 1), 0, 5),
 };
 
 // 对AI指令检测: 设计给定前缀正则 + 常见指令模板(可扩展,均为"对AI说话"而非内容本身)
@@ -62,14 +62,20 @@ export function jaccardBigram(a, b) {
 // ---- 排除判定(只作用于上下文用户消息,当前输入是召回触发源永不排除) ----
 export function classifyExclusion(userText, prevAssistantText) {
   const t = String(userText).trim();
+  const threshold = PARAMS.COPY_JACCARD_THRESHOLD;
+  const similarity = prevAssistantText ? jaccardBigram(t, prevAssistantText) : null;
+  const copyDiagnostics = {
+    jaccard: similarity === null ? null : +similarity.toFixed(3),
+    threshold,
+    copyMatched: similarity !== null && similarity > threshold,
+  };
   for (const re of AI_CMD_PATTERNS) {
-    if (re.test(t)) return { excluded: true, reason: 'ai_command' };
+    if (re.test(t)) return { excluded: true, reason: 'ai_command', ...copyDiagnostics };
   }
-  if (prevAssistantText) {
-    const j = jaccardBigram(t, prevAssistantText);
-    if (j > PARAMS.COPY_JACCARD) return { excluded: true, reason: 'copy', jaccard: +j.toFixed(3) };
+  if (copyDiagnostics.copyMatched) {
+    return { excluded: true, reason: 'copy', ...copyDiagnostics };
   }
-  return { excluded: false };
+  return { excluded: false, ...copyDiagnostics };
 }
 
 // ---- 分句 + 短句合并 ----
@@ -117,8 +123,16 @@ export function truncateTokens(tokens, maxWords = PARAMS.MAX_WORDS) {
 // messages: 完整聊天历史 [{role, content}](不含当前输入,当前输入单独传)
 // dataRecords: data 记录数组,取尾部 DATA_COUNT 条,文本字段兼容 text/content/字符串
 // 返回 units: 每条一个召回单元,排除的保留占位(filtered不丢弃,与"误杀兜底"同思路)
-export function recallSelect({ currentUserText, messages = [], dataRecords = [], mode = 'chat' } = {}) {
+export function recallSelect({
+  currentUserText,
+  messages = [],
+  dataRecords = [],
+  contextCount = PARAMS.CONTEXT_COUNT,
+  dataCount = PARAMS.DATA_COUNT,
+} = {}) {
   const units = [];
+  const effectiveContextCount = clamp(Number.isFinite(Number(contextCount)) ? Math.trunc(Number(contextCount)) : PARAMS.CONTEXT_COUNT, 0, 5);
+  const effectiveDataCount = clamp(Number.isFinite(Number(dataCount)) ? Math.trunc(Number(dataCount)) : PARAMS.DATA_COUNT, 0, 20);
 
   // 1. 当前用户内容
   units.push(makeUnit('user_current', currentUserText, { excluded: false }));
@@ -128,7 +142,8 @@ export function recallSelect({ currentUserText, messages = [], dataRecords = [],
   for (let i = 0; i < messages.length; i++) {
     if (messages[i]?.role === 'user') userIdx.push(i);
   }
-  const picked = userIdx.slice(-PARAMS.CONTEXT_COUNT);
+  // 0 是合法的“关闭上下文”，不可让 slice(-0) 反转成全量历史。
+  const picked = effectiveContextCount > 0 ? userIdx.slice(-effectiveContextCount) : [];
   for (const i of picked) {
     // "前面的复制文本"判定基准: 该条 user 之前最近的一条 assistant 回复(设计 §排除检测)
     let prevAssistant = null;
@@ -139,24 +154,22 @@ export function recallSelect({ currentUserText, messages = [], dataRecords = [],
     units.push(makeUnit('user_context', messages[i].content, ex));
   }
 
-  // 2.5 AI 输出触发(凛倾0801): code/work 模式检测 AI 最近输出,专门为 AI 召回(不做名词/问句限定,
-  //     词性白名单在 node1 对 ai_output 单元放行——AI 输出里的技术词/代码词全保留)
-  if (mode === 'code' || mode === 'work') {
-    const aiCount = PARAMS.AI_OUTPUT_COUNT;
-    const aiMsgs = messages.filter(m => m?.role === 'assistant' && m.content).slice(-aiCount);
-    for (const m of aiMsgs) {
-      units.push(makeUnit('ai_output', m.content, { excluded: false }));
-    }
-  }
-
   // 3. data 最近 M 条(data 是记忆记录,不做对AI指令/复制排除)
-  const dataPicked = dataRecords.slice(-PARAMS.DATA_COUNT);
+  const dataPicked = effectiveDataCount > 0 ? dataRecords.slice(-effectiveDataCount) : [];
   for (const r of dataPicked) {
     const text = typeof r === 'string' ? r : (r?.text ?? r?.content ?? '');
     units.push(makeUnit('data', text, { excluded: false }));
   }
 
-  return { units, params: { ...PARAMS } };
+  return {
+    units,
+    params: {
+      ...PARAMS,
+      CONTEXT_COUNT: effectiveContextCount,
+      DATA_COUNT: effectiveDataCount,
+      AI_OUTPUT_COUNT: 0,
+    },
+  };
 }
 
 function makeUnit(type, text, exclusion) {
@@ -167,6 +180,8 @@ function makeUnit(type, text, exclusion) {
     excluded: exclusion.excluded,
     excludeReason: exclusion.reason ?? null,
     ...(exclusion.jaccard !== undefined ? { jaccard: exclusion.jaccard } : {}),
+    ...(exclusion.threshold !== undefined ? { threshold: exclusion.threshold } : {}),
+    ...(exclusion.copyMatched !== undefined ? { copyMatched: exclusion.copyMatched } : {}),
     // 排除的单元不分句(不进分词),但原文保留可追溯
     sentences: exclusion.excluded ? [] : mergeShortSentences(splitSentences(raw)),
   };

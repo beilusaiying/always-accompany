@@ -67,6 +67,8 @@ import { resolveSubModeMaxContext, ensureMemoryDir, loadJsonFileIfExists, saveJs
 //   防崩溃在写一半截断 JSON → 读时兜底静默丢 active_preset_map 等全局键。
 import { nicerWriteFileSync, renameSyncWithRetry } from "../../../../../scripts/nicerWriteFile.mjs";
 import { readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // 0716 T019 差集收编：config.json 损坏备份后抛（防默认结构写回销毁预设映射）
+import { createHash } from "node:crypto"; // [D2 已知空壳迁移] 用户预设文件原始字节 sha256，与 D2 固定 hash 表精确比对
+import { SHELL_MIGRATION_MARKER, SHELL_CONFLICT_SUBDIR, isKnownShell, knownShellNames } from "./knownShellMigration.mjs"; // [D2 §精确已知空壳迁移] 21 空壳 hash 表 + 三条件判定（无 prompt 正文），执行编排=下方 migrateKnownShellPresets
 // A2-3：HTTP 端点鉴权中间件（未认证→401），与全站 router.get/post(path, authenticate, handler) 同型
 import { authenticate } from "../../security/auth.mjs";
 // 降噪#74：TweakPrompt 内 per-turn 历史 [DIAG] 残留改走项目 gated diag 框架（默认静默，
@@ -497,11 +499,18 @@ function scanAndSyncRegistry(username) {
     const knownNames = Object.values(reg.presets).map((e) => e.file);
     if (!knownNames.includes(file)) {
       try {
-        const data = JSON.parse(fs.readFileSync(join(dir, file), "utf-8"));
+        const _buf = fs.readFileSync(join(dir, file));
+        const data = JSON.parse(_buf.toString("utf-8"));
         const name = data._meta?.name || file.replace(".json", "");
+        // [D2 Owner] 不信文件自报 _meta.source（空壳曾自报 builtin/beilu-memory 混入=D2 事故通道；
+        //   分身证实无「用户手动放文件」工作流，本分支真实用途=savePresetFile 两步写崩溃的 user preset
+        //   半态恢复）：按 builtin manifest hash 权威判定——字节==发布 builtin→builtin，否则→user（半态
+        //   恢复保留但来源权威化，未知文件绝不冒充 builtin/beilu-memory）。
+        let _authSource = "user";
+        try { const _sha = createHash("sha256").update(_buf).digest("hex").toLowerCase(); if (_builtinSeedManifest().some((m) => m.file === file && m.sha256 && m.sha256.toLowerCase() === _sha)) _authSource = "builtin"; } catch { /* 降级 user */ }
         reg.presets[name] = {
           file,
-          source: data._meta?.source || "user",
+          source: _authSource,
           description: data._meta?.description || "",
           tags: [],
           created_at: data._meta?.created_at || new Date().toISOString(),
@@ -541,7 +550,13 @@ function _builtinSeedManifest() {
       // 只播 source=builtin 且未被凛倾标记删除的（个人预设(017)=source=user → 天然排除；且已在 deleted_builtins）
       if (e?.source !== "builtin" || !e?.file) continue;
       if (gDeleted.has && gDeleted.has(name)) continue;
-      if (fs.existsSync(join(DEFAULTS_DIR, e.file))) manifest.push({ name, file: e.file });
+      if (fs.existsSync(join(DEFAULTS_DIR, e.file))) {
+        // [D2 Owner] manifest 结构化 {name,file,sha256}：sha256=发布文件字节指纹，供 ensureBuiltinForUser
+        //   reconcile 判定「文件 hash==发布 hash 才登记；不同=用户改写过的 builtin→conflict 不覆盖」。
+        let sha256 = "";
+        try { sha256 = createHash("sha256").update(fs.readFileSync(join(DEFAULTS_DIR, e.file))).digest("hex"); } catch { /* hash 失败仍播种，reconcile 降级为存在性判定 */ }
+        manifest.push({ name, file: e.file, sha256 });
+      }
     }
   } catch (err) {
     console.warn("[beilu-preset] 构建 builtin 播种名单失败（全局 registry 不可读）:", err?.message);
@@ -596,6 +611,193 @@ function seedBuiltinsForUser(username) {
     console.log(`[beilu-preset] 用户 "${username}" 首访播种 ${seeded} 个 builtin 预设（已过滤个人存量）`);
   }
   return seeded;
+}
+
+// [D2 Owner] 跨进程文件锁：`withFileLock` 只护进程内 Map；跨进程（多 node 争同一 user preset 目录）需 OS 级锁。
+//   `open(...,"wx")` 独占创建 `.owner/.owner.lock`（含 pid/label/时间）；遗留锁按 mtime TTL(30s) 判死后夺取；
+//   在 acquireTimeout 内轮询获取，超时抛 `E_PRESET_OWNER_LOCKED`（不直接忽略/覆盖，D2 §事务锁）。
+//   用法：`await _withOwnerLock(username, label, () => withFileLock(regPath, () => {...}))` —— 先跨进程再进程内。
+const _OWNER_LOCK_TTL_MS = 30000;
+async function _withOwnerLock(username, label, fn, { acquireTimeoutMs = 15000, pollMs = 120 } = {}) {
+  const ownerDir = join(presetsDirOf(username), ".owner");
+  if (!fs.existsSync(ownerDir)) fs.mkdirSync(ownerDir, { recursive: true });
+  const lockPath = join(ownerDir, ".owner.lock");
+  const _tryAcquire = () => {
+    let fd;
+    try { fd = fs.openSync(lockPath, "wx"); }
+    catch (e) {
+      if (e.code !== "EEXIST") throw e;
+      // 遗留锁 TTL 判死：mtime 超 TTL 视为死锁夺取（进程崩溃留锁不永久卡死）
+      try { const st = fs.statSync(lockPath); if (Date.now() - st.mtimeMs > _OWNER_LOCK_TTL_MS) fs.unlinkSync(lockPath); } catch { /* 锁刚被别人删=下轮 open 成功 */ }
+      return false;
+    }
+    try { fs.writeSync(fd, JSON.stringify({ pid: process.pid, label, at: new Date().toISOString() })); } finally { fs.closeSync(fd); }
+    return true;
+  };
+  const _deadline = Date.now() + acquireTimeoutMs;
+  while (!_tryAcquire()) {
+    if (Date.now() > _deadline) { const _e = new Error(`preset owner 锁获取超时 (user="${username}", label="${label}")`); _e.code = "E_PRESET_OWNER_LOCKED"; throw _e; }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  try { return await fn(); } finally { try { fs.unlinkSync(lockPath); } catch { /* 已释放/被 TTL 夺取 */ } }
+}
+
+/**
+ * [D2 §精确已知空壳迁移] 一次性把命中 21 个已知空壳 hash 的用户预设，用官方发布文件（DEFAULTS_DIR）覆盖修复。
+ *
+ * 【根因】新用户/存量用户的 21 个默认预设曾被 memory 侧 `_ensureSubModePresetsFor` 造的 11-entry 空壳
+ *   （source=beilu-memory）抢占，随后官方 builtin 播种因「文件已存在」跳过（seedBuiltinsForUser:579）
+ *   → 官方运行池被顶掉（交接实证 243,297 正文字符损失 / 319 identifier 缺失）。
+ * 【判定契约·三条件 AND（isKnownShell）】① 文件原始字节 sha256 精确命中 D2 表 ② registry.source==="beilu-memory"
+ *   ③ 名在表。任一不满足即不动该文件——保护用户自改预设 / 正常 builtin（source=builtin，hash 不在表）/ 已被编辑的文件（hash 已变）。
+ * 【安全边界】仅此显式入口执行，**不挂 loadConfigFromDisk 等读路径**（D2：普通 getSubModes/读取不得触发；
+ *   且 loadConfigFromDisk 是 sync、本函数 async 走 withFileLock，挂读路径会破坏 sync 契约）。
+ *   marker（presets/.owner/known-shell-migration-v1.done）守卫一次性；原空壳先备份到
+ *   _conflicts/20260804-known-shell/<name>.<sha8>.json（不可静默丢弃）再覆盖。
+ * 【owner 事务】全程 withFileLock(registry.json)（与 seed/save/delete 同键）：判定→备份→原子覆盖→
+ *   registry source(beilu-memory→builtin) 一并提交，末尾写 marker。
+ * 【执行前置】需先完整物理备份 E（凛倾「别覆盖 E」）——本函数只在命中精确 hash 时动文件，但真机执行仍以 E 备份为前提。
+ * @param {string} username
+ * @returns {Promise<{migrated:number, skipped?:string, outcomes:Array<object>}>}
+ */
+export async function migrateKnownShellPresets(username) {
+  const dir = presetsDirOf(username);
+  if (!fs.existsSync(dir)) return { migrated: 0, skipped: "no-presets-dir", outcomes: [] };
+  const ownerDir = join(dir, ".owner");
+  const markerPath = join(ownerDir, SHELL_MIGRATION_MARKER);
+  if (fs.existsSync(markerPath)) return { migrated: 0, skipped: "already-migrated", outcomes: [] };
+
+  const regPath = registryFileOf(username);
+  const outcomes = [];
+  try {
+    await _withOwnerLock(username, "known-shell-migration", () => withFileLock(regPath, () => {
+    const reg = loadRegistry(username);
+    const backupDir = join(dir, "_conflicts", SHELL_CONFLICT_SUBDIR);
+    for (const name of knownShellNames()) {
+      const entry = reg.presets?.[name];
+      if (!entry?.file) { outcomes.push({ name, status: "absent" }); continue; }
+      const filePath = join(dir, entry.file);
+      if (!fs.existsSync(filePath)) { outcomes.push({ name, status: "file-missing" }); continue; }
+      let sha;
+      try { sha = createHash("sha256").update(fs.readFileSync(filePath)).digest("hex"); }
+      catch (e) { outcomes.push({ name, status: "unreadable", err: e.message }); continue; }
+      // 三条件判定：不命中一律不动（保护用户自改 / 正常 builtin / 已编辑文件）
+      if (!isKnownShell(name, sha, entry.source)) {
+        outcomes.push({ name, status: "not-shell", source: entry.source, sha8: sha.slice(0, 8) });
+        continue;
+      }
+      const defPath = join(DEFAULTS_DIR, entry.file);
+      if (!fs.existsSync(defPath)) { outcomes.push({ name, status: "no-official-defaults", file: entry.file }); continue; }
+      try {
+        // ① 原空壳备份到 _conflicts（原字节 copyFileSync，不可静默丢弃）
+        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+        const backupPath = join(backupDir, `${sanitizeFilename(name)}.${sha.slice(0, 8)}.json`);
+        if (!fs.existsSync(backupPath)) fs.copyFileSync(filePath, backupPath);
+        // ② 官方发布文件原子覆盖（nicerWriteFileSync=tmp+rename，与 savePresetFile/restore_preset 同标准）
+        nicerWriteFileSync(filePath, fs.readFileSync(defPath, "utf-8"), "utf-8");
+        // ③ registry source 空壳(beilu-memory)→builtin，同一事务提交
+        entry.source = "builtin";
+        entry.modified_at = new Date().toISOString();
+        outcomes.push({ name, status: "migrated", oldSha8: sha.slice(0, 8), backup: backupPath });
+      } catch (e) {
+        outcomes.push({ name, status: "error", err: e.message });
+      }
+    }
+    saveRegistry(username, reg);
+    // marker：记录本次 outcomes 并守卫一次性（同 storage.mjs INJ v4 marker 范式）
+    try {
+      if (!fs.existsSync(ownerDir)) fs.mkdirSync(ownerDir, { recursive: true });
+      nicerWriteFileSync(markerPath, JSON.stringify({ at: new Date().toISOString(), outcomes }, null, 2), "utf-8");
+    } catch (e) {
+      console.warn(`[beilu-preset] known-shell 迁移 marker 写入失败(下次仍会重跑):`, e.message);
+    }
+    }));
+  } catch (e) {
+    if (e.code === "E_PRESET_OWNER_LOCKED") return { migrated: 0, skipped: "owner-locked", outcomes };
+    throw e;
+  }
+  const migrated = outcomes.filter((o) => o.status === "migrated").length;
+  if (migrated > 0) {
+    invalidateEngineCaches(username); // 覆盖了预设内容 → 失效该 user 的 per-preset 引擎缓存
+    console.log(`[beilu-preset] 用户 "${username}" 已知空壳迁移: ${migrated}/${knownShellNames().length} 迁移（其余保留不动）`);
+  }
+  return { migrated, outcomes };
+}
+
+/**
+ * [D2 Owner API] 确保**单个** builtin 预设已为该用户播种（官方内容单源），返回结构化 outcome。
+ * 【why】D3(C 窗口)子模式激活只读消费：引用 builtin 预设时先经此 ensure 触发官方播种复查，
+ *   替代 memory 侧「造 11-entry 骨架」的第二内容生产者。任意加载顺序下 builtin 引用都走 Owner。
+ * 【判定】文件不存在→复制 DEFAULTS + registry(source=builtin)=seeded；文件存在但 registry 缺项→登记=reconciled；
+ *   两者都在→exists；deleted_builtins 命中→skipped-deleted；不在 builtin manifest→not-builtin（调用方据此走 rejected）。
+ * 【事务】withFileLock(registry.json)（与 seed/save/delete/迁移同键）；原子写复用 nicerWriteFileSync/saveRegistry。
+ * @param {string} username
+ * @param {{name?:string}} opts
+ * @returns {Promise<{status:string, name?:string, namespace?:string, file?:string, reason?:string}>}
+ */
+export async function ensureBuiltinForUser(username, { name } = {}) {
+  const manifest = _builtinSeedManifest();
+  const item = manifest.find((m) => m.name === name);
+  if (!item) return { status: "not-builtin", name };
+  const dir = presetsDirOf(username);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const gc = loadGlobalConfig(username);
+  if ((gc.deleted_builtins || []).includes(name)) return { status: "skipped-deleted", name };
+  const regPath = registryFileOf(username);
+  let outcome = { status: "exists", name, namespace: "builtin", file: item.file };
+  try {
+    await _withOwnerLock(username, `ensureBuiltin:${name}`, () => withFileLock(regPath, () => {
+    const reg = loadRegistry(username);
+    const targetPath = join(dir, item.file);
+    const hadFile = fs.existsSync(targetPath);
+    const hadReg = !!reg.presets?.[name];
+    // [D2 Owner] hash 安全：文件存在但字节 != 发布 hash = 用户改写过的 builtin，绝不覆盖/reconcile
+    //   （D2「同名不同 hash→conflict」）。有 reg=exists-modified（用户在用其改动版），无 reg=conflict 待显式处置。
+    if (hadFile && item.sha256) {
+      let curSha = "";
+      try { curSha = createHash("sha256").update(fs.readFileSync(targetPath)).digest("hex"); } catch { /* 读失败降级为存在性判定 */ }
+      if (curSha && curSha.toLowerCase() !== item.sha256.toLowerCase()) {
+        outcome = { status: hadReg ? "exists-modified" : "conflict", name, namespace: "builtin", file: item.file, reason: "user-modified-hash-mismatch" };
+        return;
+      }
+    }
+    if (hadFile && hadReg) { outcome = { status: "exists", name, namespace: "builtin", file: item.file }; return; }
+    if (!hadFile) {
+      try { nicerWriteFileSync(targetPath, fs.readFileSync(join(DEFAULTS_DIR, item.file), "utf-8"), "utf-8"); }
+      catch (e) { outcome = { status: "error", name, reason: e.message }; return; }
+    }
+    if (!reg.presets) reg.presets = {};
+    const now = new Date().toISOString();
+    reg.presets[name] = { ...(reg.presets[name] || { description: "", tags: [], created_at: now }), file: item.file, source: "builtin", modified_at: now };
+    saveRegistry(username, reg);
+    outcome = { status: hadFile ? "reconciled" : "seeded", name, namespace: "builtin", file: item.file };
+    }));
+  } catch (e) {
+    if (e.code === "E_PRESET_OWNER_LOCKED") return { status: "locked", name, reason: e.message };
+    throw e;
+  }
+  if (outcome.status === "seeded" || outcome.status === "reconciled") invalidateEngineCaches(username);
+  return outcome;
+}
+
+/**
+ * [D2 Owner API] 子模式/流程组引用某预设时的**只读 resolve**（不造骨架）。
+ * 【why】D2 §「禁止静默创建」：getSubModes/saveSubModes 只验证/引用，缺失的非 builtin 引用返回
+ *   E_PRESET_REFERENCE_MISSING，不再生成 11-entry 空壳（memory 不再是预设内容第二生产者）。
+ * - builtin 名 → ensureBuiltinForUser（seeded/reconciled/exists/skipped-deleted）
+ * - 非 builtin 名且已存在 → exists（用户自定义 namespace=user）
+ * - 非 builtin 名且缺失 → rejected（E_PRESET_REFERENCE_MISSING）
+ * @param {string} username
+ * @param {{name?:string, reference?:string}} opts - reference: "submode" | "flow"（仅审计）
+ */
+export async function ensurePresetReference(username, { name, reference } = {}) {
+  if (!name || typeof name !== "string") return { status: "rejected", reason: "E_PRESET_NAME_EMPTY", reference };
+  if (_builtinSeedManifest().some((m) => m.name === name)) {
+    return { ...(await ensureBuiltinForUser(username, { name })), reference };
+  }
+  const reg = loadRegistry(username);
+  if (reg.presets?.[name]) return { status: "exists", name, namespace: "user", reference };
+  return { status: "rejected", name, reason: "E_PRESET_REFERENCE_MISSING", reference };
 }
 
 // ---- 兼容旧接口的包装 ----
@@ -1778,6 +1980,8 @@ const pluginExport = {
         const username = _normUser(args?.username || data?.username);
         const st = getStore(username);
         const { engine, macroMemory, configData } = st;
+        let _restoreResult = null;
+        let _switchPresetResult = null;
 
         // 导出预设为 SillyTavern 格式（走 exportSTPreset 校正，往返一致）
         // 只读操作：不改 configData、不落盘，早返回校正后的 ST JSON 字符串
@@ -1806,6 +2010,20 @@ const pluginExport = {
           } catch (err) {
             console.error("[beilu-preset] export_st_preset error:", err);
             return { success: false, error: err.message };
+          }
+        }
+
+        // [D2 §精确已知空壳迁移] 显式 repair 动作：一次性把命中 21 空壳 hash 的预设用官方发布文件覆盖。
+        //   独立早返回（不走下方预设编辑链）；三条件命中才动、marker 守卫一次性、原空壳备份 _conflicts。
+        //   触发方=显式 SetData({migrate_known_shells:true})（repair 命令），绝不在读路径（getSubModes/GetData）触发。
+        if (data.migrate_known_shells) {
+          try {
+            const _mig = await migrateKnownShellPresets(username);
+            console.log(`[beilu-preset] migrate_known_shells(user="${username}"): 迁移 ${_mig.migrated} 项${_mig.skipped ? `（skipped=${_mig.skipped}）` : ""}`);
+            return { success: true, ..._mig };
+          } catch (err) {
+            console.error("[beilu-preset] migrate_known_shells error:", err);
+            return { success: false, error: `已知空壳迁移失败: ${err?.message || err}` };
           }
         }
 
@@ -1892,6 +2110,15 @@ const pluginExport = {
             // [隔离架构 2026-07-24] 经漏斗清键（精确键+裸键，原语义）；原「手拼 delete + saveConfigToDisk
             //   整份覆盖落盘」散写收口。真清了才广播（原先 map 对象存在即广播）。
             const _clr = await actClearLine(username, chatid, mode || null);
+            _switchPresetResult = {
+              success: true,
+              switch_preset_applied: true,
+              operation: "clear",
+              changed: _clr.changed === true,
+              removed: Number(_clr.removed) || 0,
+              chatid,
+              mode: mode || null,
+            };
             if (_clr.changed) {
               console.log(`[beilu-preset] 已清除 per-chat 预设覆盖: ${mode ? chatid + ":" + mode : chatid}`);
               // [多窗口审计 2026-07-11 A4] 载荷补 cid/mode：消费侧(websocket preset_changed)可按窗口坐标过滤
@@ -1899,6 +2126,7 @@ const pluginExport = {
             }
           } else if (!name) {
             console.warn(`[beilu-preset] switch_preset: name 为空，跳过`);
+            _switchPresetResult = { success: false, switch_preset_applied: false, error: "预设名为空" };
           } else if (chatid) {
             // per-chatId-per-mode：code 和 work 共享 chatId，用 chatid:mode 做 key 互不覆盖
             // [预设隔离 2026-07-11] 有 mode 时不再同步盖裸键 [chatid]——裸键是跨模式共享槽，
@@ -1908,6 +2136,7 @@ const pluginExport = {
             const mapKey = mode ? (chatid + ":" + mode) : chatid;
             if ((configData.active_preset_map || {})[mapKey] === name) {
               console.debug(`[beilu-preset] switch_preset(per-chat): ${mapKey} 已是 "${name}"，跳过`);
+              _switchPresetResult = { success: true, switch_preset_applied: true, unchanged: true, name, chatid, mode: mode || null };
             } else if (configData.presets[name]?.preset_json) {
               // [隔离架构 2026-07-24] 经漏斗写线级键（锁内盘 RMW+内存镜像+缓存失效，写后读侧即见）。
               //   2026-07-08 落盘修语义保留且更强：漏斗即时落盘，不再整份覆盖（原 saveConfigToDisk
@@ -1918,13 +2147,16 @@ const pluginExport = {
               await _resyncPresetRegex(name, configData.presets[name].preset_json, username);
               // [多窗口审计 2026-07-11 A4] 载荷补 cid/mode：消费侧可按窗口坐标过滤（原只 {preset} 无坐标）
               await actBroadcastLine(chatid, mode || null, name);
+              _switchPresetResult = { success: true, switch_preset_applied: true, changed: true, name, chatid, mode: mode || null };
             } else {
               console.warn(`[beilu-preset] switch_preset(per-chat): 预设 "${name}" 不存在`);
+              _switchPresetResult = { success: false, switch_preset_applied: false, error: `预设不存在: ${name}`, name, chatid, mode: mode || null };
             }
           } else {
             // [0725 凛倾「没有全局,马上删除」] 无坐标全局切换语义整体废除——没有全局槽可切。
             //   可见拒绝留痕不静默;残余无坐标调用方(bot 无线分支)迁移见 task#4。
             console.warn(`[beilu-preset] switch_preset("${name}") 无窗口坐标,全局语义已废除(没有全局),跳过`);
+            _switchPresetResult = { success: false, switch_preset_applied: false, error: "缺少对话坐标，不能切换线级预设", name };
           }
         }
 
@@ -2181,33 +2413,84 @@ const pluginExport = {
           if (!_r?.ok) console.warn("[beilu-preset] preset_list_changed broadcast failed:", _r?.error?.msg);
         }
 
-        // ★ 恢复内置默认预设（从 defaults/ 复制到 presets/）
+        // ★ 恢复内置默认预设（defaults 只读种子 → savePresetFile 权威写路）
         if (data.restore_preset) {
           const { name } = data.restore_preset;
-          const reg = loadRegistry(username);
-          const entry = reg.presets[name];
-          if (entry?.file && fs.existsSync(join(DEFAULTS_DIR, entry.file))) {
-            fs.copyFileSync(join(DEFAULTS_DIR, entry.file), join(presetsDirOf(username), entry.file));
-            // 重新加载到内存
-            const freshData = loadPresetFile(username, name);
-            if (freshData) {
-              configData.presets[name] = {
-                preset_json: freshData.preset_json || {},
-                model_params: freshData.model_params || {},
-                macro_variables: freshData.macro_variables || {},
-                description: freshData._meta?.description || "",
-              };
-              // 如果恢复的是当前激活预设，重新加载引擎
-              if (name === configData.active_preset) {
-                engine.load(freshData.preset_json, name);
-                if (freshData.model_params) engine.updateModelParams(freshData.model_params);
-                macroMemory.variables = { ...(freshData.macro_variables || {}) };
-              }
-              console.log(`[beilu-preset] 预设已恢复默认: "${name}"`);
-            }
-          } else {
-            console.warn(`[beilu-preset] restore_preset: 未找到内置默认 "${name}"`);
+          if (typeof name !== "string" || !name.trim()) {
+            return { success: false, error: "restore_preset 缺少有效的预设名称" };
           }
+
+          const reg = loadRegistry(username);
+          const entry = reg?.presets?.[name];
+          if (!entry) {
+            return { success: false, error: `预设 "${name}" 不在 registry 中` };
+          }
+          if (entry.source !== "builtin") {
+            return { success: false, error: `预设 "${name}" 不是内置预设，不能恢复内置默认` };
+          }
+          if (typeof entry.file !== "string" || !entry.file) {
+            return { success: false, error: `内置预设 "${name}" 的 registry 文件记录无效` };
+          }
+
+          const defaultsPath = join(DEFAULTS_DIR, entry.file);
+          if (!fs.existsSync(defaultsPath)) {
+            return { success: false, error: `内置预设 "${name}" 的默认文件不存在: ${entry.file}` };
+          }
+
+          let defaultsData;
+          try {
+            defaultsData = JSON.parse(fs.readFileSync(defaultsPath, "utf-8"));
+          } catch (err) {
+            return { success: false, error: `内置预设 "${name}" 的默认文件无法解析: ${err?.message || err}` };
+          }
+          if (!defaultsData || typeof defaultsData !== "object" || Array.isArray(defaultsData)) {
+            return { success: false, error: `内置预设 "${name}" 的默认 JSON 必须是对象` };
+          }
+
+          const restoredFileData = {
+            ...defaultsData,
+            _meta: { ...(defaultsData._meta || {}), name, source: "builtin" },
+          };
+          let saved = false;
+          try {
+            saved = await savePresetFile(username, name, restoredFileData);
+          } catch (err) {
+            return { success: false, error: `恢复内置预设 "${name}" 写盘失败: ${err?.message || err}` };
+          }
+          if (!saved) {
+            return { success: false, error: `恢复内置预设 "${name}" 写盘失败` };
+          }
+
+          const restoredPreset = {
+            preset_json: restoredFileData.preset_json || {},
+            model_params: restoredFileData.model_params || {},
+            macro_variables: restoredFileData.macro_variables || {},
+            description: restoredFileData._meta?.description || entry.description || "",
+            _file_path: join(presetsDirOf(username), entry.file),
+            _file_mtime: 0,
+          };
+          try { restoredPreset._file_mtime = fs.statSync(restoredPreset._file_path).mtimeMs || 0; }
+          catch { /* 非致命：engine 文件指纹下次读取时会自动重建 */ }
+          configData.presets[name] = restoredPreset;
+
+          // 活动引擎的真实绑定是 presetName；active_preset 已退役，不再用其判定是否刷新。
+          if (engine.presetName === name) {
+            engine.load(restoredPreset.preset_json, name);
+            if (Object.keys(restoredPreset.model_params).length > 0) {
+              engine.updateModelParams(restoredPreset.model_params);
+            }
+            macroMemory.variables = { ...restoredPreset.macro_variables };
+          }
+
+          // 该 preset 内嵌的 regex_scripts 与恢复后内容同步；空数组也会按既有规则清除旧副本。
+          await _resyncPresetRegex(name, restoredPreset.preset_json, username);
+          _restoreResult = {
+            success: true,
+            restored: true,
+            name,
+            message: `预设 "${name}" 已恢复内置默认`,
+          };
+          console.log(`[beilu-preset] 预设已恢复默认: "${name}"`);
         }
 
         // _target_preset: 前端指定操作目标预设（浏览非激活预设时读写一致）
@@ -2345,7 +2628,7 @@ const pluginExport = {
 
         // 持久化到磁盘（该 user 的 presets/config）
         await saveConfigToDisk(username);
-        return { success: true };
+        return _restoreResult || _switchPresetResult || { success: true };
       },
     },
 

@@ -1,196 +1,267 @@
 <p align="center">
-  <img src="imgs/icon.jpg" alt="always accompany" width="200">
+  <img src="imgs/icon.jpg" alt="always-accompany" width="180">
 </p>
 
-<h1 align="center">always accompany</h1>
+<h1 align="center">always-accompany</h1>
+
+<p align="center"><strong>A multi-purpose AI + Agent project focused on context and attention mechanisms</strong></p>
+
+<p align="center">Companionship, chat, coding, and work share one memory and context framework — the kind of AI you see in science fiction: it keeps you company, and it gets things done with you.</p>
+
+<p align="center"><strong>Dynamic attention · Fixed injection · Project isolation · Specialized modes</strong></p>
 
 <p align="center">
-  <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
   &nbsp;
-  <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Star%20⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/beilusaiying/always-accompany"><img src="https://img.shields.io/badge/GitHub-Give_a_Star_⭐-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
 </p>
 
-<p align="center">English | <a href="README_CN.md">中文</a> | <a href="README_TW.md">繁體中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_DE.md">Deutsch</a> | <a href="README_ES.md">Español</a></p>
-
-> This entire project — design, architecture, and development — was completed independently by a recent university graduate, leveraging AI-assisted programming with skills spanning algorithm design, biomimicry principles, framework architecture, and logical thinking.
+<p align="center">English · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_ES.md">Español</a> · <a href="README_FR.md">Français</a> · <a href="README_PT.md">Português</a></p>
 
 ---
+
+## What can it do right now?
+
+- Hold long-term chat and roleplay, with direct import of SillyTavern community formats such as character cards, presets, and worldbooks;
+- Read and modify project files and run commands like a local Agent workbench;
+- Extend beyond the browser through a Live2D / image desktop companion, screen awareness, game companionship, voice input, and a Bot system covering nine platforms;
+- Keep long-term material in local files, automatically find the excerpts relevant to the current question on each turn, and let old context that is no longer needed exit;
+- Edit characters, prompt content and order, injection role and position, conditional trigger rules, memory-recall routes, permissions, and plugins — reshaping it into your own AI.
+
+**What do we have?** Behind these interfaces is a single system, and the real differences come down to four things:
+
+- **A distinctive memory and context framework** — Data plus `hot / warm / cold` layers store long-term material, and a context-gathering, memory-retrieval tool (P1) recalls the currently relevant excerpts before each reply; context cleanup works at file-read granularity and is reversible, and the AI can also drop already-read files it no longer needs on its own (~70–80% cache-hit efficiency measured in the author's environment by billing metrics — not a guarantee);
+- **Everything is editable** — characters, prompts, injections, memory, recall routes, permissions, and plugins are not black boxes; whichever layer you want to change has an entry point;
+- **A highly extensible framework** — core features are organized as plugins and routed through an intermediate relay station, while the frontend only renders and operates; user plugins can be written in JS, Python, or as standalone programs;
+- **The full feature set an agent needs** — files, commands, browser, MCP, multiple windows, approvals, and recovery are all present, and they share one memory and context framework; it is built to finish large projects, and at its core it is about spending limited attention where it matters most.
+
+---
+
+## Quick start
+
+You only need two things:
+
+- A working AI API;
+- The ability to write simple prompts.
+
+With those two, you can jump in and try it right away. One thing to say up front: the AIRP and Chat prompts are still being refined — for now the focus is on productivity, and the companionship-oriented polish will be filled in over time.
+
+If you just want to start chatting, that is the entire cost. The self-driven P1 local retrieval service (currently measured peak memory on the order of ~2 GiB) can be switched off entirely; P1 parameters, prompt injection positions, Code, Work, and plugins are all configuration you go deeper into as needed, not a prerequisite course for first use.
 
 ```bash
 git clone https://github.com/beilusaiying/always-accompany.git
 cd always-accompany
 run.bat          # Windows
-# or chmod +x run.sh && ./run.sh   # Linux/macOS
+# or chmod +x run.sh && ./run.sh   # Linux / macOS
 ```
 
-Open your browser to `http://localhost:1314` → set up an AI service source → import a character card → start chatting. The Deno runtime downloads itself automatically on first launch, no manual install needed. You'll need at least one AI API key. The app ships with a full built-in wiki walkthrough.
+The launcher downloads the Deno runtime automatically when it is missing and completes installation when dependencies are incomplete. Your browser normally opens when the interface is ready; you can also visit `http://localhost:1314` manually.
 
-> **Note:** The first launch takes longer than usual — the runtime needs to download dependencies and initialize the database. Please wait for the page to fully load before interacting. Subsequent launches will be much faster.
+| 1. Choose the interface language | 2. Bind an AI service source |
+|---|---|
+| ![Choose language](imgs/screenshots/onboarding-language.png) | ![Bind an API](imgs/screenshots/onboarding-api.png) |
+
+Enter the service URL, API key, and model, save, then select or import a character card to start chatting. At least one working AI API is required; model capability and cost depend on the service you bind. A [full Wiki](site/wiki/getting-started/overview.md) is built into the app, with an [online version](https://beilusaiying.github.io/always-accompany/) also available.
+
+> First launch usually takes longer: the runtime downloads dependencies and initializes local data. Wait until the full page appears before interacting; later launches are faster. Optional features such as voice and the desktop companion may have their own first-use downloads or environment requirements.
 
 ---
 
-A three-layer recursive memory (day → month → year archiving, pure JSON, 260-year capacity) + a self-driven recall engine (pure algorithm pipeline, zero LLM, zero network, millisecond-level: BLQ quality scoring + NB300 vector verification + WordNet cross-validation + BM25 hybrid ranking + recency decay, three-layer filtering auto-eliminates noise) + tiered context cleanup (clearing something just stops it from being sent again; the original text stays put and can always be restored). These three pieces mesh together so the AI keeps remembering every word you've ever said, no longer bound by the context window. On top of that, we've built chat/roleplay, IDE coding mode, work mode (including AI-made slide decks), a Live2D desktop pet (screen awareness + game companion), voice input, a Discord Bot, and MCP external tool integration — every entry point shares the same memory, so switching windows doesn't make the AI forget you.
-
----
-
-## Feature Overview
+## Feature overview
 
 <table>
 <tr>
 <td width="33%">
 
 **💬 Chat / Roleplay**
-![Chat Interface](imgs/screenshots/chat-interface-mode.png)
+![Chat interface](imgs/screenshots/chat-interface-mode.png)
 
 </td>
 <td width="33%">
 
 **🖥️ IDE Coding Mode**
-![IDE Coding](imgs/screenshots/ide-coding.png)
+![IDE coding](imgs/screenshots/ide-coding.png)
 
 </td>
 <td width="33%">
 
-**📊 Work Mode (AI-made slide decks)**
-![Work Mode PPT](imgs/screenshots/work-ppt-mode.png)
+**📊 Work Mode and PPT**
+![Work mode PPT](imgs/screenshots/work-ppt-mode.png)
 
 </td>
 </tr>
 <tr>
 <td width="33%">
 
-**🐾 Live2D Desktop Pet + Screen Awareness**
-![Desktop Pet](imgs/screenshots/live2d-pet-mode.png)
+**🐾 Live2D Companion + Screen Awareness**
+![Desktop companion](imgs/screenshots/live2d-pet-mode.png)
 
 </td>
 <td width="33%">
 
-**🔒 L0–L5 Six-Tier Permission Gate**
-![Permission Settings](imgs/screenshots/ai-permissions.png)
+**🔒 Six Permission Templates + Per-Tool Rules**
+![Permission settings](imgs/screenshots/ai-permissions.png)
 
 </td>
 <td width="33%">
 
 **🗜️ Tiered Compression × Line-by-Line Control**
-![Compression Mechanism](imgs/screenshots/compression-detail.png)
+![Compression mechanism](imgs/screenshots/compression-detail.png)
 
 </td>
 </tr>
 </table>
 
-- **🧠 Three-layer memory**: hot (injected every turn) / warm (retrieved on demand) / cold (deep archive), pure JSON + purely prompt-driven, zero database
-- **🎯 P1 front-loaded retrieval**: a dedicated small AI hunts for memories first and hands them off to the reply AI, BM25 + regex dual engine, retrieval can run on a free model
-- **🗜️ Compression system**: three levels (one-click / by type / line-by-line) × four granularities (chat messages / file reads / system injections / process content) + AI-autonomous `<contextClean>` cleanup, everything is reversible
-- **📊 10 memory tables**: structured storage, auto-maintained by the AI via `<tableEdit>`, achieving information isolation (if the character wouldn't know something, it's simply not in the table)
-- **👑 Prompt engine**: 5-segment message structure + TweakPrompt three-round takeover, macro variables + world book dynamic injection (always-on / regex / dynamic modes)
-- **💻 IDE-level workflow**: VSCode-style three-panel layout, AI reads and writes files directly, command execution approved line by line
-- **🔌 MCP external tools**: paste a JSON snippet to connect; command-type servers are blocked by default until the owner approves, with an env-variable allowlist to prevent leaks
-- **🐾 Desktop pet + game companion**: Live2D / image-pack pet, three privacy tiers, auto-screenshotting + chiming in on its own + adaptive frequency
-- **🎙️ Voice input**: local model transcription, speaker separation + timeline, audio never leaves the machine
-- **🤖 Cross-platform Bot**: Discord deployment, visual management + real-time message log
-- **🧩 22 feature plugins** + user-level plugin host + ecosystem compatibility (import character cards/presets/world books in multiple formats)
-- **🛡️ All data stays local**: deletions go to a recycle bin and can be recovered, multi-layer auto-backup + git rollback
-- **🌐 Multi-language** (Chinese/English/Japanese/Traditional Chinese) · **🔬 Full-stack diagnostics** (12-module logs + one-click packaging) · **🎨 Multiple CSS themes**
+- **🧭 Four main modes + auxiliary views**: Smart (fully autonomous), Chat (chat / roleplay), Code (coding), and Work each have their own memory tables and P1 routes; there are also auxiliary views for Bot management, game companionship, memory management, ST adaptation, and more;
+- **🧠 Data (editable structured memory tables) + three memory layers**: Data and ordinary `hot / warm / cold` JSON / Markdown files hold current facts, recent material, and archives respectively; everything can be viewed and edited;
+- **🎯 P1 (front-loaded memory recall)**: before the main AI answers, it searches the long-term material the current character and mode are allowed to read for relevant excerpts. Chat / Code / Work currently default to a local algorithmic route; Smart / Bot modes retain a separate AI retrieval route; the two routes are mutually exclusive and can also be disabled;
+- **🗜️ Context management**: inspect usage by message, file read, tool result, and system injection; normal cleanup merely hides content and stops sending it to the AI, while the record stays on disk and can be restored;
+- **📊 Mode-specific memory tables**: Chat uses tables #0–#9, while Code and Work use their own tables and private directories instead of piling every scenario into one table;
+- **👑 Every prompt is editable**: content, order, enablement, system / user / assistant role, injection position, and conditions can all be adjusted;
+- **💻 IDE-level workflow**: three-panel layout, file reads and edits, command execution, task lists, multiple windows, and a VS Code extension bridge;
+- **🔌 MCP (protocol for connecting external tools)**: paste JSON to connect external tools; command-type servers must pass owner, environment-variable allowlist, and other security gates;
+- **🐾 Desktop and game companionship**: Live2D / image packs, three screen-awareness modes, proactive comments, a separate game-companionship loop, and adaptive frequency;
+- **🎙️ Local voice input**: local MOSS-Transcribe-Diarize transcription with speaker separation and timestamps; it currently only converts speech to text and does not include AI voice playback;
+- **🤖 Bots for nine platforms**: the current source tree includes shells for Discord, Telegram, Slack, LINE, Lark / Feishu, DingTalk, WeChat, WeCom, and X; each platform still requires its own token, webhook, or third-party bridge setup;
+- **🔎 Optional semantic vector search**: built-in beilu-vectordb (based on Orama, supporting full-text / vector / hybrid search), off by default and enabled only after you configure your own embedding endpoint; complementary to self-driven P1 rather than an either-or choice;
+- **🧩 Plugin system**: the current source tree contains 23 built-in plugin directories, while the new-user template lists 14 by default; user plugins can also be written in Python, Node, or as standalone programs;
+- **🛡️ Local data and recovery**: application data is stored on your machine, with hidden restore, recycle, and backup chains; content sent to a remote AI or remote embedding service is still governed by the data policy of the service you chose;
+- **🌐 Languages · 🔬 white-box diagnostics · 🎨 multiple themes**: beyond the core Chinese / English / Japanese / Traditional Chinese interfaces, additional community translations are provided and may be incomplete for lower-resource languages.
 
 ---
 
-## Detailed Mechanisms
+## What are we actually trying to solve?
+
+Saving memory is not mysterious in itself. Data is a writable table, and `hot / warm / cold` are, put plainly, three folders you organize by "time + event" and jot Markdown notes into; INJ (editable prompt-injection entries) and presets likewise carry forward the prompt-composition approaches long explored by roleplay frontends such as SillyTavern.
+
+But combine them, and add P1 (a tool that gathers context and retrieves memory), and you get a natural ecosystem of "vectors + dynamic injection + memory that follows the current task" — a high-attention, high-information-density memory store; pair that with the file-level compression we built, and the whole chain is complete.
+
+In fact, at first we planned to build P1 as a small AI deployed on its own. But the real problem starts after storage: as memory keeps piling up, if every turn has to spin up a second AI to dig through it, can the speed and cost still hold up? Can a small AI really find everything? Does it have to be a paid AI? Does remembering more mean responding more slowly?
+
+In everyday use, it comes down to a few familiar moments: on a large project, you have the AI read the call chain, the framework, and the Markdown notes before you hand it a task — but halfway through, the token budget is nearly full, and one compaction means rereading everything; when several agents run together, context becomes an outright disaster; in a long task the AI keeps rereading the same file that only changed a few lines, context piles up until it bursts, yet you can't delete it; sometimes you meant to start a new project, but the AI anchors straight onto the memory of the old one.
+
+These are not conjured out of thin air:
+
+- [Issue #6](https://github.com/beilusaiying/always-accompany/issues/6)
+- [Codex #35226](https://github.com/openai/codex/issues/35226) · [Claude Code #34556](https://github.com/anthropics/claude-code/issues/34556);
+- [community discussion](https://www.reddit.com/r/SillyTavernAI/comments/1q7p33c/how_longterm_memory_works_in_sillytavernai/);
+- Users of web chat products are also raising project-memory transparency and cross-project leakage concerns: [retrieval transparency request](https://community.openai.com/t/feature-request-make-project-memory-transparent-searchable-and-user-controlled/1385159) · [project-specific memory request](https://community.openai.com/t/project-specific-memory-in-chatgpt/1140856).
+
+### After storage, how does it reach the AI?
+
+Through the project's own **P1 front-loaded memory recall**: it first expands retrieval cues around the user's current conversation, then finds the relevant source text in the long-term material the current character and mode are allowed to read, and hands it to the main AI. You can think of it as a dynamic attention mechanism running outside the model — the current question decides what to look for, the long-term material supplies the candidates, and only the excerpts selected this turn enter the reply.
+
+In practice this means: you do not have to repeat the original sentence — a related but not identical remark can also bring an old matter back; and after recall, the interface shows which memories were actually used this turn — what you verify is the record itself, not the AI saying "I remember."
+
+---
+
+## How it works in detail
 
 <details>
-<summary><strong>🧠 Three-Layer Recursive Memory — Why Layer It At All</strong></summary>
+<summary><strong>🧠 Data and Three-Layer Recursive Memory — Why Keep Layers at All?</strong></summary>
 
-Dumping the entire history into one big pool makes lookups slow — and the experimental data backs this up ([Lost in the Middle](https://arxiv.org/abs/2307.03172) / [RULER](https://arxiv.org/abs/2404.06654) / [NoLiMa](https://arxiv.org/abs/2502.05167)): even if it's in there, the model may not actually see it. Modeled on how the hippocampus forms memories and on the Ebbinghaus forgetting curve, we split information into three layers by time distance:
+`hot / warm / cold` are first of all readable, writable lifecycle directories, not a mysterious database:
 
+```text
+🔥 hot  — recent, frequent, currently active material
+🌤️ warm — phase-level organization and archive material
+❄️ cold — deeper long-term history
+📊 Data — editable, verifiable structured facts for the current mode
 ```
-🔥 Hot layer — auto-injected every turn: user profile / permanent memories / pending tasks / recent memories
-🌤️ Warm layer — retrieved on demand (last month): daily summaries / temporary archives / monthly index
-❄️ Cold layer — deep retrieval (older than a month): monthly summaries / historical daily summaries / yearly index
+
+Layers give fixed injection, on-demand recall, and deep archives different costs and purposes. Source material stays in ordinary JSON / Markdown files where users can inspect and correct it directly; P1 then decides which layers should contribute excerpts this turn.
+
+Long-context research has observed position bias and reduced utilization as tasks grow more complex: [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) · [RULER](https://arxiv.org/abs/2404.06654) · [Found in the Middle](https://aclanthology.org/2024.findings-acl.890/). These papers show that "fits in the window" and "reliably used" are not the same thing, but they do not directly prove this project's approach is better.
+
+</details>
+
+<details>
+<summary><strong>🗜️ Context Management — From Whole-Thread Compression to File-Read-Level Cleanup</strong></summary>
+
+Running real tasks generates a lot of process content: repeatedly read files, old tool results, already-consumed command tags, and stale messages. always-accompany provides automatic compression, cleanup by type, and line-by-line selection at the same time; default cleanup uses a `_hidden` marker so the record stays on disk but is no longer sent to the AI.
+
+The AI can also emit `<contextClean>` to request cleanup; the system protects the user's original words and can enforce a minimum token threshold to avoid repeatedly breaking the prompt cache while the context is still small. Permanent or high-risk actions should not be mixed up with normal hiding.
+
+| Tiered compression and granularity | File-read-level cleanup |
+|---|---|
+| ![Tiered compression panel](imgs/screenshots/compression-multi.png) | ![File-read-level cleanup](imgs/screenshots/context-file-cleanup.png) |
+
+Most users only need to select the file reads or messages they no longer need; when you want deeper control, inspect the token bill, type, age, and source.
+
+</details>
+
+<details>
+<summary><strong>🔬 Self-Driven P1 — An External Dynamic Memory-Attention Chain</strong></summary>
+
+The current production chain is Node0–4, not the 21-node description in older documents:
+
+```text
+Node0  current input + recent user messages + current-mode Data
+  ↓
+Node1  tokenization, POS, time, proper-noun, and phrase anchors
+  ↓
+Node2  association expansion from SWOW / ConceptNet / Cilin / ATOMIC / domain terms
+  ↓
+Node3  multi-evidence signal filtering with BLQ (in-house algorithm) / NB300 / WordNet and more
+  ↓
+Node4  return to Data, hot / warm / cold, and mode records; rank with BM25, time, layer, Top, importance, and other signals
+  ↓
+recalledRecords + directionWords + trace
 ```
 
-The hot layer costs only ~7,000–11,000 tokens per turn (5–9% of a 128K window). Memory decay borrows from the Ebbinghaus forgetting curve: `score = weight × (1 / (1 + days × 0.1))`. Purely prompt-driven — change the archival strategy, table meanings, or retrieval style just by editing the prompt, no code changes needed.
+Associated words are not memory facts; candidates must return to the real-record layer before they can become final recall results. The white-box panel shows input units, per-node candidates and removal reasons, index state, final sources, and errors, making it possible to tell whether "nothing was recalled" means no match, degraded resources, or a broken chain.
+
+![Self-driven P1 white-box test](imgs/screenshots/p1-self-driven-diagnostics.png)
+
+The white-box panel proves that every node and real source can be inspected; recall quality still needs to be evaluated on the same corpus, the same tasks, and gold-labeled data. See the [current P1 production contract](site/wiki/p1-recall/ch7-current-runtime.md) for the full runtime boundary.
 
 </details>
 
 <details>
-<summary><strong>🎯 P1 Front-Loaded Retrieval AI — Why Split Into Two AIs</strong></summary>
+<summary><strong>👑 Every Prompt Is Editable — Usable by Default, Reshapeable into Your Own AI</strong></summary>
 
-If the reply AI has to pick the relevant bits out of hundreds of history entries itself, it's both hunting and replying at once, and its attention gets diluted between the two jobs. So we split "finding memories" out into a dedicated small AI:
+Prompt entries such as character definitions, system rules, mode instructions, memory data slots, and tool guidance can all be edited in the interface. For each entry you can adjust:
 
-```
-User sends a message → P1 retrieval AI (<5K tokens, focused purely on recall) → selected memories + current chat → reply AI (focused purely on replying)
-```
-
-BM25 coarse filtering + regex exact matching, hits the target in at most 3 rounds. Retrieval runs fine on a free lightweight model, so the actual per-conversation cost is essentially just one reply-AI call. P1 also handles automatic preset switching (with a 5-turn cooldown to prevent oscillation).
-
-</details>
-
-<details>
-<summary><strong>🗜️ Context Management — Compression Granularity × Levels × AI-Autonomous Cleanup</strong></summary>
-
-While the AI works, process content keeps piling up (re-reading the same file, stale search results, old tool outputs). Our cleanup only ever hides things — everything can be restored at any time.
-
-**AI-autonomous cleanup**: the system feeds the AI signals about its own context usage (50% suggested / 70% warning / 85% urgent), and the AI uses `<contextClean>` commands to trim itself autonomously. It writes things down before clearing, so a bad call is still reversible.
-
-**Fine-grained user control**: three levels (one-click full cleanup / by type / hand-picking line by line) × four granularities (chat messages / per-item file-read token billing / five checkable categories of system injections / auto-trimmed process content).
-
-Measured cache hit rate (Opus + DeepSeek, including AI persona switching + autonomous compression): **75%–80%**.
-
-![Compression Panel](imgs/screenshots/compression-multi.png)
+- the actual text;
+- ordering;
+- whether it is enabled;
+- whether it is sent as system, user, or assistant;
+- where it is inserted in chat history;
+- whether it applies only to Chat, Code, Work, Bot, or under specified conditions.
 
 </details>
 
 <details>
-<summary><strong>🔬 Self-Driven P1 — Zero-LLM Recall Engine (Live)</strong></summary>
+<summary><strong>🔒 The AI Can Act, but Each Action Has Its Own Boundary</strong></summary>
 
-The P1 AI used to fire off an API request every turn — latency, cost, no offline use. We built a fully algorithmic recall pipeline (5-node independent service architecture, ~12,000 lines) that's now live in production: millisecond-level, zero network, three-layer filtering auto-eliminates noise.
+File writes resolve to `deny / ask / allow` by tool, path, and three-state rules; commands additionally pass blacklist, graylist, and remote allowlist checks; sensitive configuration and subprocess capabilities in server deployments must be enabled by the owner.
 
-**Data foundation**: the [SWOW Chinese association network](https://smallworldofwords.org/) / [ConceptNet Numberbatch 300-dimensional word vectors](https://github.com/commonsense/conceptnet-numberbatch) (~300,000 words) / ConceptNet's Chinese relation graph / THUOCL and other multi-source dictionaries. The lexicon was assembled via AI web search + 2 days of self-review, at close to zero build cost.
+L0–L5 are a set of quick templates from strict control to full allow, and users can keep refining down to individual tools and paths. L5 skips approvals and is an explicit high-risk choice; workspace confinement, deployment mode, and each plugin's own security gates should still be understood separately.
 
-**Pipeline**: tokenization → SWOW associative divergence (synonym diffusion is banned — enabling it measurably drops quality by 55–76%) → six-axis parallel scoring (psychological / informational / social / logical / linguistic / cognitive) → 47 sub-direction localization → multi-resource cross-confirmation → spatial-voting ranking (additive IDW, not multiplicative) → secondary divergence (5 independent paths) → BLQ scoring (referencing CombSUM additive fusion, with self-researched dimension weights) → direction-word selection → context injection. All 21 nodes are pure algorithm, zero LLM.
-
-**Experiments**: 27 version iterations; the divergence score went from 2.01 to 4.05 between v9 and v26 (+101%, out of 5, judged word-by-word by hand); recall hit rate ~90%; overall average score ~3.5. The generic/catch-all rate dropped from 74% to 4%.
-
-**Real output** (raw records from a 200-case batch run):
-
-| User Input | System's Divergent Direction | Discipline Crossed Into |
-| --- | --- | --- |
-| "I can barely hold on anymore, why is being alive so hard?" | Present-moment awareness / interoceptive awareness / **what is the nature of the real** | Psychology → **existentialist philosophy** |
-| "Prepping for a unicorn-company interview, how do I come up with questions with real depth?" | Root cause analysis / **zone of proximal development** | Management → **educational psychology** |
-| "Win back churned users in owned-traffic operations on a limited budget" | **Default mode network activation** / **BDNF (brain-derived neurotrophic factor)** | Marketing → **cognitive neuroscience** |
-| "Database queries are painfully slow, how do I optimize them" | Immutability and state updates / **SRP (Single Responsibility Principle)** | Ops → **software engineering methodology** |
-| "A story about a swordsman meeting an enemy on a snowy mountain" | **Chekhov's gun** / Jungian archetypes | Fiction → **narratology + analytical psychology** |
-| A user's original poem, "I died before the light arrived" | **Possible worlds and parallel universes** | Poetry → **many-worlds interpretation in physics** |
-
-Lexicon admission standard: **any word the primary model could already infer just by reading the raw input is a wasted word** — P1's value lies in giving the model directions it wouldn't come up with on its own.
+![Fine-grained AI edit permissions](imgs/screenshots/ai-permission-rules.png)
 
 </details>
 
 <details>
-<summary><strong>👑 Prompt Engine + World Book Dynamic Injection</strong></summary>
+<summary><strong>🏗️ Architecture and Isolation Boundaries</strong></summary>
 
-**TweakPrompt's three rounds** take over every module's output in a unified way: Round 1 collects → Round 2 rebuilds the 5-segment message structure (beforeChat / injectionAbove / chatHistory / injectionBelow / afterChat) + macro substitution → Round 3 snapshots.
+always-accompany runs on a Deno backend and a vanilla Web frontend, organizing its capabilities through Shells, Plugins, Service Generators, and the yonban function layer. UI calls, mode routing, file / tool execution, persistence, and asynchronous results each have a clear entry point.
 
-**World book has 3 activation modes**: always-on (injected every turn) / regex (keyword-triggered) / dynamic (triggered by reading numeric conditions from memory tables — e.g. affection > 80 unlocks a special dialogue, or quest progress reaching chapter 3 swaps in a different worldview description).
-
-**Macro system**: `{{char}}` / `{{user}}` / `{{tableData}}` / `{{hotMemory}}` / `{{current_date}}` / `{{time}}` / `{{idle_duration}}` + custom macros.
-
-</details>
-
-<details>
-<summary><strong>🏗️ System Architecture</strong></summary>
-
-Three layers: **function layer** (memory / compression / recall / presets / world book / networking / file operations… a single global copy) → **transport layer** (each window pulls its own line, isolated by id, naturally async and non-blocking) → **interface layer** (web / Bot / desktop pet / VSCode extension — swap the interface without losing any capability).
-
-Data isolation: user-level (AI sources / global settings) / character-card-level (memory / chat / world book / regex) / conversation-level (chat history / mode / sub-mode).
-
-22 plugins all grow under one unified spec, MCP connects external tools, and the user-level plugin host mounts Python/Node programs — extensions never touch the core codebase.
+| Boundary | Current role |
+|---|---|
+| User | Persistent root boundary for multi-user / server scenarios |
+| Character card | Different characters, relationships, clients, or projects use different memory roots, definitions, and conversations |
+| Mode | Chat / Code / Work use distinct tables, private directories, preset records, and P1 routes; generic long-term material of the same character card may still be shared |
+| Window | Scopes the current turn's input, P1 candidates and results, workspace, and async delivery |
 
 </details>
 
 <details>
-<summary><strong>🔭 On the Era of Giant Context Windows</strong></summary>
+<summary><strong>🔭 On 1M, 2M, and Larger Context Windows</strong></summary>
 
-Even if context windows expand to 10M+ tokens, we still keep layered memory: ① there's solid experimental evidence that context utilization decays as length grows; ② ~10K tokens of curated memory carries the information of 100K+ tokens of raw history, at an order-of-magnitude lower cost; ③ structured tables are easier for an AI to read and write accurately than information scattered across a conversation.
+Larger windows are highly valuable, but capacity, attention, cost, and task state are not the same thing. always-accompany does layering and recall mainly to improve attention and optimize how things are stored within the context, especially for today's large code projects and long-term chats.
+
+Perhaps you have run into this: the longer you chat and the more memory accumulates, the more the AI takes in, yet its responses and memory start to blur and slow down; with coding it's this — even given a 1M context, a large project can hit the ceiling right away.
 
 </details>
 
@@ -198,52 +269,59 @@ Even if context windows expand to 10M+ tokens, we still keep layered memory: ①
 
 ## Roadmap
 
-**Completed**: three-layer memory · compression system · P1 retrieval · prompt engine · automatic preset switching · memory tables · world book dynamic injection · Live2D desktop pet · game companion · voice input · AI-made slide decks · MCP · multi-window parallelism · VSCode extension bridge · Discord Bot · 22 plugins · recycle bin & backup rollback · full-stack diagnostics · multi-language support
+**Entries and implementations already present in the current repository**: Data + three-layer memory · context management · self-driven P1 / AI P1 · full prompt editing and preset switching · mode-specific memory tables · conditional knowledge dynamic injection · Live2D / image desktop companion · screen awareness and game companionship · local voice input · PPT generation · MCP · multiple windows · VS Code extension bridge · Bots for nine platforms · 23 built-in plugin directories · user plugin host · recycle / backup chains · white-box diagnostics · languages and themes.
 
-**Near-term plans**: more Bot platforms · plugin ecosystem · TTS / text-to-image · AI game engine (in the "era" game lineage — deterministic code for numeric state + LLM narrative + symbolic rendering) · live-streaming mode
+**Near-term directions**: more Bot platforms · plugin ecosystem and examples · TTS / text-to-image · an AI game engine (deterministic numeric state + LLM narrative + symbolic rendering)
 
 ---
 
-## Tech Stack
+## Tech stack
 
-Runtime fount (Deno) · Backend Node.js compatibility layer + Express-style routing · Frontend vanilla JS (ESM) · Smart retrieval BM25 + regex (pure JS, zero dependencies) · Desktop pet Electron · Voice local transcription model · Cross-platform discord.js v14 · Storage pure JSON
+Deno runtime (Node.js compatible) · Express-style routing · vanilla JavaScript / ESM frontend · WebSocket · local JSON / Markdown storage · Electron desktop companion · optional Python services (P1 resources, STT, PPT) · discord.js v14 · VS Code extension bridge.
+
+See [System Architecture](site/wiki/developer/architecture.md) for the architecture, and [YonBan Tools](site/wiki/yonban/tools.md) plus the [Approval System](site/wiki/yonban/approval.md) for the message, tool, and permission chains.
 
 ---
 
 ## Community
 
-<a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join%20Now-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+<a href="https://discord.gg/agHeDq9bqU"><img src="https://img.shields.io/badge/Discord-Join_Now-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
 
-Share character cards · Publish presets · Contribute world books · Report bugs · Suggest features · Contribute code — all welcome!
+Share character cards · Publish presets and conditional knowledge · Contribute plugins · Report bugs · Bring real use cases · Join benchmark work · Contribute code.
 
 ---
 
-## Technologies & Resources Used
+## Technologies and resources used
 
-- **Voice transcription**: [MOSS-Transcribe-Diarize](https://huggingface.co/ICTNLP/MOSS-Transcribe-Diarize) (local deployment with speaker diarization; the model, ~1.8GB, downloads automatically on first use)
+- **Voice transcription**: [MOSS-Transcribe-Diarize](https://huggingface.co/ICTNLP/MOSS-Transcribe-Diarize) (local deployment; the roughly 1.8 GB model is downloaded separately on first use)
 - **Word vectors**: [ConceptNet Numberbatch](https://github.com/commonsense/conceptnet-numberbatch) (Speer & Lowry-Duda, 2017)
-- **Association data**: the [SWOW (Small World of Words)](https://smallworldofwords.org/) Chinese association dataset
-- **Tokenization & dictionaries**: THUOCL / CoreNatureDictionary / Chinese-Synonyms and other public resources
-- **Search engine bridge**: [ddgs](https://pypi.org/project/ddgs/) (a Python TLS-fingerprint layer that solves the problem of raw fetch requests getting downgraded by search engines)
+- **Association data**: [SWOW (Small World of Words)](https://smallworldofwords.org/) Chinese association data
+- **Tokenization and dictionaries**: THUOCL, CoreNatureDictionary, Chinese-Synonyms, and other public resources
+- **Search engine bridge**: [ddgs](https://pypi.org/project/ddgs/) (for search requests and result retrieval)
 
 ## Acknowledgments
 
-- **[fount](https://github.com/steve02081504/fount)** — the initial reference framework in this project's early days, providing core infrastructure such as AI message handling, service source management, and module loading. The project has since evolved into a fully independent architecture, but fount saved us a lot of low-level development time early on and gave us many valuable ideas to draw from — sincere thanks for that
-- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — the pioneering project in AI roleplay; its preset format, character card spec, and world book system have become community standards, and this project is fully compatible with its ecosystem
-- **SillyTavern plugin community** — thanks to every open-source plugin author for their exploration and sharing around rendering engines, feature extensions, and more
+- **[fount](https://github.com/steve02081504/fount)** — an early reference framework for this project, whose ideas on AI message handling, service-source management, and module loading saved substantial low-level development time;
+- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)** — a major pioneer of AI roleplay and prompt ecosystems. always-accompany supports importing its community formats including character cards, presets, and worldbooks;
+- **The SillyTavern plugin community and every open-source resource author** — thank you for the exploration and sharing on rendering, characters, extensions, retrieval, and toolchains.
+
+## Why this project exists
+
+> The design, architecture, and development of this project were done single-handedly by a job-hunting shut-in (allegedly), with AI-assisted programming, combining algorithm design, biomimicry-inspired ideas, framework architecture, and logical reasoning.
+
+always-accompany was not built to cram trendy features into one menu — at first the author just wanted to use it :). That said, it does come with a complete plugin and framework system, and it supports multiple languages.
 
 ---
 
 <details>
-<summary><strong>📸 More Feature Screenshots (click to expand)</strong></summary>
+<summary><strong>📸 More feature screenshots (click to expand)</strong></summary>
 
 | | | |
 |---|---|---|
-| ![PPT Detail](imgs/screenshots/ppt-detail.png) **Full PPT Workflow** | ![Security Settings](imgs/screenshots/security-settings.png) **Security & Task Flow** | ![Security Center](imgs/screenshots/security-center.png) **Security Center** |
-| ![Multi-language](imgs/screenshots/i18n-support.png) **Multi-language Support** | ![CSS Themes](imgs/screenshots/css-themes.png) **Multiple Themes** | ![Wiki](imgs/screenshots/wiki-guide.png) **Built-in Wiki** |
-| ![Sub-mode](imgs/screenshots/sub-mode-agent.png) **Sub-mode Workflow** | ![Menu](imgs/screenshots/hamburger-menu.png) **Context at a Glance** | ![Loop](imgs/screenshots/auto-loop.png) **Auto/Scheduled Loop** |
-| ![Tool Detection](imgs/screenshots/tool-detection.png) **Environment Detection** | ![Memory Layers](imgs/screenshots/memory-data-layers.png) **Memory File Structure** | ![Extensions](imgs/screenshots/browser-automation.png) **Browser Automation** |
-| ![External Interface](imgs/screenshots/external-interface.png) **External Interface** | ![Bot](imgs/screenshots/discord-bot-mode.png) **Discord Bot** | |
+| ![PPT detail](imgs/screenshots/ppt-detail.png) **Full PPT Workflow** | ![Security settings](imgs/screenshots/security-settings.png) **Security & Task Flow** | ![Security center](imgs/screenshots/security-center.png) **Security Center** |
+| ![Multi-language](imgs/screenshots/i18n-support.png) **Multi-language Support** | ![CSS themes](imgs/screenshots/css-themes.png) **Multiple Themes** | ![Wiki](imgs/screenshots/wiki-guide.png) **Built-in Wiki** |
+| ![Sub-mode](imgs/screenshots/sub-mode-agent.png) **Sub-mode Workflow** | ![Menu](imgs/screenshots/hamburger-menu.png) **Context at a Glance** | ![Loop](imgs/screenshots/auto-loop.png) **Automatic / Scheduled Loop** |
+| ![Tool detection](imgs/screenshots/tool-detection.png) **Environment Detection** | ![Memory layers](imgs/screenshots/memory-data-layers.png) **Memory File Structure** | ![Extensions](imgs/screenshots/browser-automation.png) **Browser Automation** |
+| ![External interface](imgs/screenshots/external-interface.png) **External Interface** | | |
 
 </details>
-

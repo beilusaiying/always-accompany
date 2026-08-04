@@ -18,8 +18,8 @@
 | Key | 文本输入，API 密钥（加密存储） |
 | 模型 | 文本输入，模型名称标识符 |
 | 获取模型列表 | 按钮，从 API 拉取可用模型列表供选择 |
-| Extended Thinking | 开关，启用扩展思考能力（部分模型支持） |
-| Budget 滑块 | 思考预算控制（Extended Thinking 开启后可用） |
+| 思考模式 | 三态选择：关闭 / 标准 / 最大（off / standard / max），按渠道自动映射为对应参数（Claude 走 adaptive+effort、DeepSeek/Kimi 走 thinking.type、Qwen 走 enable_thinking、其余走 reasoning_effort）。范围限定：三态收口在 proxy 生成器；claude-api / gemini 原生生成器的思考配置面板保持各自独立，未并入三态 |
+| Budget 滑块 | 思考预算控制（思考模式开启后可用） |
 | 保存按钮 | 保存当前配置 |
 | 思维链折叠设置 | 配置思维链内容的显示标签和折叠行为 |
 
@@ -70,7 +70,7 @@ API 端点地址。不同服务商和生成器使用不同的端点格式。
 
 ### provider（渠道）
 
-告诉 always-accompany 这是哪家服务商的 API，决定 OpenAI 兼容格式下的消息适配细节。**渠道只属于 proxy 生成器**——Ollama、Gemini 原生等走各自独立生成器的源没有这个字段。渠道共 10 个值（claude / openrouter-claude / openrouter / gemini / deepseek-r1 / deepseek / qwen / openai-reasoning / openai / generic），详见 [支持的 AI 服务商](providers.md)。
+告诉 always-accompany 这是哪家服务商的 API，决定 OpenAI 兼容格式下的消息适配细节。**渠道只属于 proxy 生成器**——Ollama、Gemini 原生等走各自独立生成器的源没有这个字段。渠道共 11 个值（claude / openrouter-claude / openrouter / gemini / deepseek-r1 / deepseek / qwen / kimi / openai-reasoning / openai / generic），详见 [支持的 AI 服务商](providers.md)。
 
 强烈建议手动选择渠道而非依赖自动检测。自动检测（留空或选"自动检测"）会根据 URL 和模型名猜测，可能误判导致 API 调用失败。
 
@@ -100,6 +100,10 @@ JSON 对象，额外的 HTTP 请求头。通常用于：
 ### ignoreFiles（忽略附件）
 
 布尔值，是否忽略对话中附带的文件内容。某些模型不支持文件/图片输入时，开启此项可以避免 API 错误。
+
+## AI 并发上限
+
+设置面板 API 区提供**用户级 AI 并发闸**（`ai_max_concurrent`）：数字输入，0 或留空 = 不限制，即存即生效。超过上限时本体请求优先、分身请求排队（每个分身占 1 槽）——防止多分身并发把同一 API 源打爆。
 
 ## 多服务源管理
 

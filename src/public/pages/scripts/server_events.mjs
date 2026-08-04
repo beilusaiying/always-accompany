@@ -57,37 +57,103 @@ if ('serviceWorker' in navigator)
 // 修复：页面直接连同一服务端路由 /ws/notify（server/web_server/endpoints.mjs:122 → registerNotifier
 // → userConnections，sendEventToUser 的投递目标），把消息喂回 dispatchMessage。单点复活整条通道，
 // 且不重新引入 SW 缓存（缓存是 SW 的 Cache Storage 行为，与本事件传输正交）。
-// ★ SW 守卫：若哪天 SW 被重新启用并控制页面，则由 SW 走 postMessage→dispatchMessage，
-//   本页面直连跳过，避免两路都喂 dispatchMessage 造成 onServerEvent 双触发。
+// 当前 service_worker.mjs 是注销墓碑，不承载 /ws/notify。不能仅因旧 SW controller 尚在
+// 就跳过页面连接，否则会出现两边都没有通知通道；未来若恢复 SW，应由它显式声明通知能力，
+// 再建立互斥所有权，而不是用 controller 存在与否猜测。
 if (
 	typeof WebSocket !== 'undefined' &&
 	typeof location !== 'undefined' &&
-	/^https?:$/.test(location.protocol) &&
-	!(navigator.serviceWorker && navigator.serviceWorker.controller)
+	/^https?:$/.test(location.protocol)
 ) {
 	let _notifyWs = null
-	// 重连指数退避：未登录页(登录页/会话过期)每次连接都被 401→426 拒绝，固定 3s 重连会让服务端
-	// 控制台被"接受到请求+连接被拒"两行/次无限刷屏(2026-07-19 VM 实测)。3s 起步×2 封顶 60s；
-	// 连接真正建立(onopen)即重置回 3s——已登录用户断线仍快速恢复。登录成功走页面跳转=新页面
-	// 新起 3s 链，无需感知登录事件。
+	let _notifyReconnectTimer = null
+	let _notifyConnecting = false
+	let _notifyStoppedForAuth = false
+	// 认证不是网络断线：未登录页面或已失效会话不能建立受保护的 /ws/notify。WS upgrade
+	// 不能接收 Set-Cookie，因此每次连接前都由普通 HTTP 做会话确认/续签；401/403 是终止态，
+	// 不进入指数重连。登录页成功后会整页跳转，新的已认证页面再启动该模块。
 	let _notifyDelay = 3000
 	const _NOTIFY_DELAY_MAX = 60000
+	const _clearNotifyReconnect = () => {
+		if (_notifyReconnectTimer !== null) {
+			clearTimeout(_notifyReconnectTimer)
+			_notifyReconnectTimer = null
+		}
+	}
+	const _stopNotifyForAuth = () => {
+		_notifyStoppedForAuth = true
+		_clearNotifyReconnect()
+		const ws = _notifyWs
+		_notifyWs = null
+		try { ws?.close() } catch { /* 已关闭 */ }
+	}
 	const _scheduleReconnect = () => {
-		setTimeout(_connectNotify, _notifyDelay)
+		if (_notifyStoppedForAuth || _notifyReconnectTimer !== null) return
+		_notifyReconnectTimer = setTimeout(() => {
+			_notifyReconnectTimer = null
+			_connectNotify()
+		}, _notifyDelay)
 		_notifyDelay = Math.min(_notifyDelay * 2, _NOTIFY_DELAY_MAX)
 	}
-	const _connectNotify = () => {
+	const _checkNotifySession = async () => {
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
+		const timeout = controller ? setTimeout(() => controller.abort(), 10000) : null
 		try {
+			const response = await fetch('/api/authenticate', {
+				method: 'POST',
+				credentials: 'same-origin',
+				cache: 'no-store',
+				signal: controller?.signal,
+			})
+			if (response.ok) return 'authenticated'
+			if (response.status === 401 || response.status === 403) return 'unauthenticated'
+			return 'unavailable'
+		} catch {
+			return 'unavailable'
+		} finally {
+			if (timeout !== null) clearTimeout(timeout)
+		}
+	}
+	const _connectNotify = async () => {
+		if (_notifyStoppedForAuth || _notifyConnecting || _notifyWs) return
+		_notifyConnecting = true
+		try {
+			const sessionState = await _checkNotifySession()
+			if (_notifyStoppedForAuth) return
+			if (sessionState === 'unauthenticated') {
+				_stopNotifyForAuth()
+				return
+			}
+			if (sessionState !== 'authenticated') {
+				_scheduleReconnect()
+				return
+			}
 			const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-			_notifyWs = new WebSocket(`${proto}//${location.host}/ws/notify`)
-			_notifyWs.onopen = () => { _notifyDelay = 3000 }
+			const ws = new WebSocket(`${proto}//${location.host}/ws/notify`)
+			_notifyWs = ws
+			ws.onopen = () => { _notifyDelay = 3000 }
 			// 服务端 sendMessageToConnections 发的是 JSON.stringify({ type, data })
-			_notifyWs.onmessage = ev => {
+			ws.onmessage = ev => {
 				try { dispatchMessage(JSON.parse(ev.data)) } catch { /* 非 JSON / 无 type：忽略 */ }
 			}
-			_notifyWs.onclose = () => { _notifyWs = null; _scheduleReconnect() }
-			_notifyWs.onerror = () => { try { _notifyWs?.close() } catch { /* 已关 */ } }
-		} catch { _scheduleReconnect() }
+			ws.onclose = () => {
+				if (_notifyWs !== ws) return
+				_notifyWs = null
+				_scheduleReconnect()
+			}
+			ws.onerror = () => {
+				try { ws.close() } catch {
+					if (_notifyWs === ws) {
+						_notifyWs = null
+						_scheduleReconnect()
+					}
+				}
+			}
+		} catch {
+			_scheduleReconnect()
+		} finally {
+			_notifyConnecting = false
+		}
 	}
 	_connectNotify()
 }

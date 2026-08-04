@@ -512,7 +512,8 @@ function parseAttributes(attrStr) {
 // （命令安全域原 2286-2824 行已整块迁 src/yonban/core/functions/security/commandGate.mjs——T3a·3.6）
 
 // W61: 大白话操作描述 + emoji严重程度（W13/W36设计）
-// 映射键 = 本文件 IDE_TOOLS / YonBan ToolExecutor _handlers 的真实工具集（20 个 AI 工具）。
+// 映射键覆盖 canonical IDE_TOOLS 的人类可读说明；AI 工具总数由 ideClient 注册表决定（当前 31），
+// 提示词签名也从该注册表生成，不在本注释或 INJ 手写计数。
 // 新增/删工具时同步此表；未命中走末尾 fallthrough（不再有 create_file/git_* 等幽灵键）。
 export function generateHumanReadableDescription(toolName, args) {
   const descriptions = {

@@ -2,7 +2,7 @@
  * chatStorage — 聊天持久化与缓存层。管聊天文件的读写、路径解析、摘要缓存、列表查询。
  * 不管消息 CRUD（那是 chatOps.mjs 的事）、不管 AI 生成（那是 generation.mjs 的事）。
  *
- * 链路：chatOps → saveChat（落盘）→ updateChatSummary → chat_summaries_cache / sendEventToUser(跨客户端同步)
+ * 链路：chatOps → mutateChat（候选提交）→ updateChatSummary → chat_summaries_cache / sendEventToUser(跨客户端同步)
  *       chatOps / requestBuilder / generation → loadChat（加载+缓存+跨 isolate 校验）
  *       endpoints → getChatList / deleteChat / branchChat / renameChat
  *
@@ -10,7 +10,7 @@
  *       写 chat_summaries_cache（shellData）、chat_names（shellData）
  *       sendEventToUser 跨客户端推 chat-list-changed（通道B: /ws/notify → onServerEvent）
  *       deleteChat 时清理 per-chatid 残留状态：7 个子系统（fileEditRegistry/ideClient/beilu-files/
- *       _saveLocks/broadcast/generation/groupWorkerManager）+ 角色卡级 active_modes_map/_work_config +
+ *       transaction owner/broadcast/generation/groupWorkerManager）+ 角色卡级 active_modes_map/_work_config +
  *       preset/submode 映射 + 5 个 shellData 存储（chat_names/chat_modes/chat_flags/
  *       mode_active_chats/bot_chat_bindings），防单调泄漏
  *
@@ -19,7 +19,7 @@
  *       → event_dispatcher.sendEventToUser（跨客户端列表同步）
  *
  * 关键机制：
- *   Save Coalescing — 快速连续 saveChat 不并发写盘，后请求等前请求写完后 resave（用最新内存态）
+ *   Per-chat Transaction — 每个 chatid 的候选修改、主文件提交和发布严格串行
  *   跨 isolate 缓存校验 — loadChat 按磁盘 mtime 比较，盘比缓存基线新则重载（worker 常驻复用场景）
  *   P0 路径自修复 — tryRepairChatPath 在预期路径找不到时探测旧路径/其他角色目录并回写 metadata
  *   _integrity — 每次写盘生成新 UUID，重载时校验磁盘 integrity 防外部改动冲突（冲突时备份 .conflict_）
@@ -213,9 +213,9 @@ function _migrateModePointerData(username) {
 //   （「点击对话要等很久」链上节点之一）。5s 节流：启动首扫必跑；正常链路新建对话由
 //   createNewChat 直接入表不走 miss；罕见的外部手放文件场景最多延迟 5s 可见。
 let _lastFullScanTs = 0;
-export function initializeChatMetadatas() {
+export function initializeChatMetadatas({ force = false } = {}) {
   const now = Date.now();
-  if (now - _lastFullScanTs < 5000) return;
+  if (!force && now - _lastFullScanTs < 5000) return;
   _lastFullScanTs = now;
   const users = getAllUserNames();
   for (const user of users) {
@@ -312,114 +312,411 @@ export function initializeChatMetadatas() {
 }
 
 // ============================================================
-// Save Coalescing — 防止快速连续操作导致的写回竞态
+// 单一 per-chat transaction owner
 // ============================================================
-const _saveLocks = new Map(); // chatid → { saving: boolean, pendingResave: boolean, promise: Promise|null }
+const _chatTransactionQueues = new Map(); // chatid → Promise
+const _deletedChatIds = new Set(); // isolate 内删除墓碑：删除后禁止旧引用重新创建同一 chatid
+// 文件删除已发生、但备用路径尚未全部确认清除时保留的同进程重试状态。
+const _partialChatDeletions = new Map(); // chatid → { username, primaryCharName, mainPath, pendingPaths, applied }
+// 严格账户删除前置事务：持有每个 chat 的生成静默 lease 与本轮墓碑归属，按 deletionId 防串单。
+const _userDeletionContexts = new Map(); // username → { deletionId, prepared[] }
+// 账户删除发布用户级门后等待已经进入的新建/分叉临界区退出，防目录移动后被迟到创建重新建回。
+const _userCreationActivity = new Map(); // username → { count, waiters[] }
+// deleteChat 与账户删除可能重叠；generation 的底层 lease 是 Set 语义，这里做引用计数，
+// 防任一调用方提前 release 解除另一条删除事务仍需要的静默点。
+const _historyRewriteLeaseRefs = new Map(); // chatid → { refs, promise, lease }
 
-/**
- * 将对话内存态落盘（带 Save Coalescing 防竞态）。所有 chatOps 写操作的统一落盘出口。
- *
- * 链路：chatOps.addChatLogEntry/deleteMessage/editMessage/... → 本函数
- * 影响：写 JSON 文件 → 更新 _integrity + _loadedMtimeMs → throttledChatBackup → updateChatSummary
- *
- * Save Coalescing 机制：
- *   若已有保存正在进行（lock.saving=true），标记 lock.pendingResave=true 并等待当前保存完成。
- *   当前保存完成后检查 pendingResave，若 true 则用最新内存状态重新保存。
- *   这保证了快速连续操作（如批量删除）不会并发写盘导致数据丢失或损坏。
- *
- * @param {string} chatid
- */
-export async function saveChat(chatid) {
-  const chatData = chatMetadatas.get(chatid);
-  if (!chatData || !chatData.chatMetadata) return;
+function _chatCommitError(error, status = "precommit_failed") {
+  const wrapped = error instanceof Error ? error : new Error(String(error));
+  wrapped.chatCommitted = false;
+  wrapped.status = status;
+  return wrapped;
+}
 
-  // 获取或创建该 chatid 的锁状态
-  if (!_saveLocks.has(chatid)) {
-    _saveLocks.set(chatid, {
-      saving: false,
-      pendingResave: false,
-      promise: null,
-    });
+function _assertExpectedUsername(chatid, chatData, chatMetadata, expectedUsername) {
+  if (expectedUsername == null) return;
+  if (chatData?.username !== expectedUsername || chatMetadata?.username !== expectedUsername) {
+    const error = new Error(`Chat ${chatid} does not belong to expected user`);
+    error.code = "E_CHAT_OWNER_MISMATCH";
+    error.statusCode = 403;
+    throw _chatCommitError(error);
   }
-  const lock = _saveLocks.get(chatid);
+}
 
-  if (lock.saving) {
-    // 已有保存正在进行，标记需要重新保存（使用最新内存状态）
-    lock.pendingResave = true;
-    // 等待当前保存周期（含可能的 resave）完成
-    if (lock.promise) await lock.promise;
-    return;
+function _assertChatNotDeleted(chatid) {
+  if (!_deletedChatIds.has(chatid)) return;
+  const error = new Error(`Chat ${chatid} has been deleted`);
+  error.code = "E_CHAT_DELETED";
+  error.statusCode = 410;
+  throw _chatCommitError(error, "deleted");
+}
+
+function _assertChatIndexOwner(chatid, chatData, expectedUsername) {
+  if (!chatData) {
+    const error = new Error(`Chat ${chatid} not found`);
+    error.code = "E_CHAT_NOT_FOUND";
+    error.statusCode = 404;
+    throw _chatCommitError(error, "not_found");
   }
+  if (chatData.username !== expectedUsername) {
+    const error = new Error(`Chat ${chatid} does not belong to expected user`);
+    error.code = "E_CHAT_OWNER_MISMATCH";
+    error.statusCode = 403;
+    throw _chatCommitError(error);
+  }
+}
 
-  lock.saving = true;
-  lock.pendingResave = false;
+function _assertUserNotDeleting(username) {
+  if (!_userDeletionContexts.has(username)) return;
+  const error = new Error(`User account deletion is in progress: ${username}`);
+  error.code = "E_USER_DELETION_IN_PROGRESS";
+  error.statusCode = 409;
+  throw error;
+}
 
-  const doSave = async () => {
-    // 每次保存都从 chatMetadatas 取最新数据（而非闭包捕获的旧快照）
-    const freshData = chatMetadatas.get(chatid);
-    if (!freshData || !freshData.chatMetadata) {
-      lock.saving = false;
-      return;
+function _beginUserCreation(username) {
+  _assertUserNotDeleting(username);
+  const state = _userCreationActivity.get(username) || { count: 0, waiters: [] };
+  state.count += 1;
+  _userCreationActivity.set(username, state);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    state.count -= 1;
+    if (state.count > 0) return;
+    _userCreationActivity.delete(username);
+    for (const resolve of state.waiters.splice(0)) resolve();
+  };
+}
+
+async function _waitForUserCreations(username) {
+  const state = _userCreationActivity.get(username);
+  if (!state || state.count === 0) return;
+  await new Promise((resolve) => state.waiters.push(resolve));
+}
+
+async function _acquireHistoryRewriteLease(chatid) {
+  let state = _historyRewriteLeaseRefs.get(chatid);
+  if (!state) {
+    state = { refs: 0, promise: null, lease: null };
+    state.promise = import("./generation.mjs")
+      .then((generation) => generation.quiesceGenerationForHistoryRewrite(chatid))
+      .then((lease) => (state.lease = lease));
+    _historyRewriteLeaseRefs.set(chatid, state);
+  }
+  state.refs += 1;
+  try {
+    await state.promise;
+  } catch (error) {
+    state.refs -= 1;
+    if (state.refs === 0 && _historyRewriteLeaseRefs.get(chatid) === state) {
+      _historyRewriteLeaseRefs.delete(chatid);
     }
-    const { username, primaryCharName, chatMetadata } = freshData;
-    const chatDir = getChatStorageDir(username, primaryCharName);
-    fs.mkdirSync(chatDir, { recursive: true });
-    const _chatPath = chatDir + "/" + chatid + ".json";
-    const _wbSave = wbSpan(chatid, "chatStorage", "saveChat:write", { chatLogLen: chatMetadata.chatLog?.length || 0 });
-    const _chatDataForSave = await chatMetadata.toData();
+    throw error;
+  }
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      state.refs -= 1;
+      if (state.refs > 0 || _historyRewriteLeaseRefs.get(chatid) !== state) return;
+      _historyRewriteLeaseRefs.delete(chatid);
+      state.lease?.release?.();
+    },
+  };
+}
+
+async function _serializeChatTransaction(chatid, operation) {
+  const previous = _chatTransactionQueues.get(chatid) ?? Promise.resolve();
+  const run = previous.catch(() => {}).then(operation);
+  _chatTransactionQueues.set(chatid, run);
+  try {
+    return await run;
+  } finally {
+    if (_chatTransactionQueues.get(chatid) === run) _chatTransactionQueues.delete(chatid);
+  }
+}
+
+async function _runDerivedCommitStages(chatid, chatMetadata, chatDataForSave) {
+  const failures = [];
+  try {
+    throttledChatBackup(chatid, chatDataForSave);
+  } catch (error) {
+    failures.push({ stage: "backup", error: error?.message || String(error) });
+    console.warn("[chatStorage] 对话节流备份失败（主对话已提交）:", error?.message || error);
+  }
+  try {
+    await updateChatSummary(chatid, chatMetadata);
+  } catch (error) {
+    failures.push({ stage: "summary", error: error?.message || String(error) });
+    console.warn("[chatStorage] 对话摘要更新失败（主对话已提交）:", error?.message || error);
+  }
+  return failures.length === 0
+    ? { status: "ok", failures: [] }
+    : { status: "failed", failures };
+}
+
+async function _copyAuthoritativeMetadata(authoritative) {
+  const candidate = await authoritative.copy();
+  // chatMetadata_t.toJSON/fromJSON 覆盖 username/chatLog/timeLines/timeLineIndex，但 LastTimeSlice
+  // 是运行期权威字段且未进入 toJSON。保留它的完整值；若它指向 chatLog 某条的 timeSlice，
+  // 在候选内恢复同一别名，避免 LastTimeSlice 与尾条时间片分叉。
+  const lastSliceIndex = authoritative.chatLog.findIndex(
+    (entry) => entry?.timeSlice === authoritative.LastTimeSlice,
+  );
+  candidate.LastTimeSlice = lastSliceIndex >= 0
+    ? candidate.chatLog[lastSliceIndex].timeSlice
+    : authoritative.LastTimeSlice.copy();
+  return candidate;
+}
+
+async function _commitCandidateNoLock(chatid, candidate, chatData, mutationResult) {
+  _assertChatNotDeleted(chatid);
+  const { username, primaryCharName } = chatData;
+  const chatDir = getChatStorageDir(username, primaryCharName);
+  fs.mkdirSync(chatDir, { recursive: true });
+  const chatPath = chatDir + "/" + chatid + ".json";
+  const endSaveSpan = wbSpan(chatid, "chatStorage", "saveChat:write", { chatLogLen: candidate.chatLog?.length || 0 });
+  try {
+    const chatDataForSave = await candidate.toData();
     // [2026-08-01 空消息累计案·断链2] "错误条目不持久化"契约的序列化单点兜底：
     //   generation.mjs finalizeEntry(isError) 打 _transient_error 标记的条目留在内存，
     //   任何落盘路径（本函数是唯一序列化点）一律剥除——旧实现只在 finalizeEntry 本次跳过
     //   saveChat，下一次任意写盘就把错误消息整份带上盘（自驱动2 案 idx2/idx4 实证）。
-    if (Array.isArray(_chatDataForSave.chatLog)) _chatDataForSave.chatLog = _chatDataForSave.chatLog.filter(e => !e?._transient_error);
-    if (Array.isArray(_chatDataForSave.timeLines)) _chatDataForSave.timeLines = _chatDataForSave.timeLines.filter(e => !e?._transient_error);
-    if (fs.existsSync(_chatPath) && freshData._integrity) {
+    if (Array.isArray(chatDataForSave.chatLog)) chatDataForSave.chatLog = chatDataForSave.chatLog.filter(e => !e?._transient_error);
+    if (Array.isArray(chatDataForSave.timeLines)) chatDataForSave.timeLines = chatDataForSave.timeLines.filter(e => !e?._transient_error);
+    if (fs.existsSync(chatPath)) {
       try {
-        const _diskRaw = JSON.parse(fs.readFileSync(_chatPath, "utf8"));
-        if (_diskRaw._integrity && _diskRaw._integrity !== freshData._integrity) {
-          console.warn(`[chat] integrity 冲突: chatid=${chatid}, 内存=${freshData._integrity}, 磁盘=${_diskRaw._integrity}（外部改动，仍保存）`);
-          const _conflictPath = _chatPath + ".conflict_" + Date.now();
-          // [2026-08-01 批⑤危险#2] 冲突备份失败不再静默吞——旧 catch{} 空体=备份失败后照常覆盖
-          //   → 外部改动的聊天记录永久丢失且无备份无痕迹。现：失败留痕（wbDetect + warn 带路径）；
-          //   仍继续覆盖（当前架构下不覆盖=本次生成结果丢失，两害相权取可诊断的那个）。
-          try { fs.copyFileSync(_chatPath, _conflictPath); } catch (cpErr) {
-            wbDetect(chatid, "chatStorage", "saveChat:conflict_backup_failed", false, `冲突备份失败(外部改动可能丢失): ${cpErr?.message}`, { conflictPath: _conflictPath });
-            console.warn(`[chat] ⚠️ integrity 冲突备份失败: ${_conflictPath} — ${cpErr?.message}（仍将覆盖，外部改动可能丢失）`);
+        const diskRaw = JSON.parse(fs.readFileSync(chatPath, "utf8"));
+        const expectedIntegrity = chatData._integrity ?? null;
+        const actualIntegrity = diskRaw._integrity ?? null;
+        const diskMtimeMs = fs.statSync(chatPath).mtimeMs;
+        const unversionedMtimeDrift = expectedIntegrity === null
+          && actualIntegrity === null
+          && chatData._loadedMtimeMs != null
+          && diskMtimeMs > chatData._loadedMtimeMs;
+        if (actualIntegrity !== expectedIntegrity || unversionedMtimeDrift) {
+          console.warn(`[chat] revision 冲突: chatid=${chatid}, 内存=${expectedIntegrity ?? "<missing>"}, 磁盘=${actualIntegrity ?? "<missing>"}（拒绝覆盖）`);
+          const conflictPath = chatPath + ".conflict_" + Date.now();
+          let backupPath = null;
+          try { fs.copyFileSync(chatPath, conflictPath); } catch (cpErr) {
+            wbDetect(chatid, "chatStorage", "saveChat:conflict_backup_failed", false, `冲突备份失败(外部改动可能丢失): ${cpErr?.message}`, { conflictPath });
+            console.warn(`[chat] ⚠️ revision 冲突备份失败: ${conflictPath} — ${cpErr?.message}（主写仍拒绝）`);
           }
+          if (fs.existsSync(conflictPath)) backupPath = conflictPath;
+          const conflict = new Error("Chat revision changed on disk; refusing to overwrite a newer revision");
+          conflict.code = "E_CHAT_REVISION_CONFLICT";
+          conflict.statusCode = 409;
+          conflict.expectedIntegrity = expectedIntegrity;
+          conflict.actualIntegrity = actualIntegrity;
+          conflict.conflictBackupPath = backupPath;
+          throw conflict;
         }
       } catch (intErr) {
-      // 读盘校验失败不阻断保存，但留痕（原空 catch 零痕迹）
-      console.warn(`[chat] integrity 校验读盘失败(沿用内存版覆盖): ${intErr?.message}`);
+        if (intErr?.code === "E_CHAT_REVISION_CONFLICT") throw intErr;
+        const readFailure = new Error(`Chat revision verification failed; refusing to overwrite: ${intErr?.message || intErr}`);
+        readFailure.code = "E_CHAT_REVISION_READ_FAILED";
+        readFailure.statusCode = 409;
+        readFailure.cause = intErr;
+        throw readFailure;
+      }
     }
-    }
-    const _newIntegrity = crypto.randomUUID();
-    _chatDataForSave._integrity = _newIntegrity;
-    freshData._integrity = _newIntegrity;
-    saveJsonFile(_chatPath, _chatDataForSave);
+    _assertChatNotDeleted(chatid);
+    const revision = crypto.randomUUID();
+    chatDataForSave._integrity = revision;
+    saveJsonFile(chatPath, chatDataForSave);
+    const published = { ...chatData, chatMetadata: candidate, _integrity: revision, _filepath: chatPath };
     // 推进本 isolate 的缓存基线（债-B）：写盘方把自己的 mtime 基线对齐磁盘，
     //   使 loadChat 的跨 isolate 校验对「本进程自己的写」永不 spurious 重载（防丢未存内存改动）。
-    try { freshData._loadedMtimeMs = fs.statSync(_chatPath).mtimeMs; freshData._filepath = _chatPath; } catch (e) { console.warn("[chatStorage] mtime 基线推进失败（仅退化为可能 spurious 重载）:", e?.message || e); /* T021 留痕 */ }
-    _wbSave();
-    try { throttledChatBackup(chatid, _chatDataForSave); } catch (e) { console.warn("[chatStorage] 对话节流备份失败（保存本身已成功）:", e?.message || e); /* T021 留痕 */ }
-    await updateChatSummary(chatid, chatMetadata);
-
-    // 检查保存期间是否有新的保存请求
-    if (lock.pendingResave) {
-      lock.pendingResave = false;
-      await doSave(); // 使用最新内存状态重新保存
-    } else {
-      lock.saving = false;
+    try { published._loadedMtimeMs = fs.statSync(chatPath).mtimeMs; } catch (error) {
+      published._loadedMtimeMs = chatData._loadedMtimeMs;
+      console.warn("[chatStorage] mtime 基线推进失败（仅退化为可能 spurious 重载）:", error?.message || error);
     }
-  };
+    chatMetadatas.set(chatid, published);
+    try { endSaveSpan(); } catch (error) {
+      console.warn("[chatStorage] 保存白盒收尾失败（主对话已提交）:", error?.message || error);
+    }
+    const derived = await _runDerivedCommitStages(chatid, candidate, chatDataForSave);
+    return {
+      chatCommitted: true,
+      status: derived.status === "ok" ? "committed" : "committed_derived_failed",
+      revision,
+      integrity: revision,
+      derived,
+      value: mutationResult,
+    };
+  } catch (error) {
+    console.error(`[chat] chat transaction precommit error for ${chatid}:`, error);
+    wbDetect(chatid, "chatStorage", "chatTransaction:precommit:catch", false, error?.message || String(error), null);
+    throw _chatCommitError(error);
+  }
+}
 
-  lock.promise = doSave().catch((err) => {
-    console.error(`[chat] saveChat coalescing error for ${chatid}:`, err);
-    wbDetect(chatid, "chatStorage", "saveChat:coalescing:catch", false, err?.message || String(err), null);
-    lock.saving = false;
-    lock.pendingResave = false;
-  });
+/** 跨存储协调的 owner 入口；组合方必须使用注入的 no-lock capability，禁止公开入口重入。 */
+export async function withChatTransactionOwner(chatid, operation, { expectedUsername } = {}) {
+  if (typeof operation !== "function") throw new TypeError("operation must be a function");
+  for (;;) {
+    let authoritative;
+    try { authoritative = await loadChat(chatid); } catch (error) { throw _chatCommitError(error); }
+    if (!authoritative) throw _chatCommitError(new Error("Chat not found"), "not_found");
+    let candidate;
+    try { candidate = await _copyAuthoritativeMetadata(authoritative); } catch (error) {
+      throw _chatCommitError(error);
+    }
+    const attempt = await _serializeChatTransaction(chatid, async () => {
+      const chatData = chatMetadatas.get(chatid);
+      if (!chatData?.chatMetadata) throw _chatCommitError(new Error("Chat not found"), "not_found");
+      if (chatData.chatMetadata !== authoritative) return { retry: true };
+      _assertExpectedUsername(chatid, chatData, authoritative, expectedUsername);
+      let committed = false;
+      const value = await operation({
+        candidate,
+        chatData,
+        commitCandidate: async (mutationResult) => {
+          if (committed) throw _chatCommitError(new Error("chat candidate already committed"), "duplicate_commit");
+          _assertExpectedUsername(chatid, chatData, candidate, expectedUsername);
+          committed = true;
+          return _commitCandidateNoLock(chatid, candidate, chatData, mutationResult);
+        },
+      });
+      return { retry: false, value };
+    });
+    if (!attempt.retry) return attempt.value;
+  }
+}
 
-  await lock.promise;
+/** 候选在排队前 copy，避免 fromJSON 的 part/file provider await 占用 per-chat owner。 */
+export async function mutateChat(chatid, mutation, { expectedUsername, prepare, shouldCommit, afterCommit } = {}) {
+  if (typeof mutation !== "function") throw new TypeError("mutation must be a function");
+  if (prepare != null && typeof prepare !== "function") throw new TypeError("prepare must be a function");
+  if (shouldCommit != null && typeof shouldCommit !== "function") throw new TypeError("shouldCommit must be a function");
+  if (afterCommit != null && typeof afterCommit !== "function") throw new TypeError("afterCommit must be a function");
+  for (;;) {
+    let authoritative;
+    try { authoritative = await loadChat(chatid); } catch (error) { throw _chatCommitError(error); }
+    const baseData = chatMetadatas.get(chatid);
+    if (!authoritative || !baseData) throw _chatCommitError(new Error("Chat not found"), "not_found");
+    // copy/prepare 都可能触发 part、file 或 message provider；必须在 owner 外完成。若排队期间
+    // 权威引用变化，整个准备阶段丢弃并基于新权威重做，绝不把旧快照发布。
+    let candidate;
+    let prepared;
+    try {
+      [candidate, prepared] = await Promise.all([
+        _copyAuthoritativeMetadata(authoritative),
+        prepare ? prepare(authoritative) : undefined,
+      ]);
+    } catch (error) {
+      throw _chatCommitError(error);
+    }
+    const attempt = await _serializeChatTransaction(chatid, async () => {
+      const currentData = chatMetadatas.get(chatid);
+      if (!currentData?.chatMetadata) throw _chatCommitError(new Error("Chat not found"), "not_found");
+      if (currentData.chatMetadata !== authoritative) return { retry: true };
+      _assertExpectedUsername(chatid, currentData, authoritative, expectedUsername);
+      let value;
+      try {
+        value = mutation(candidate, prepared);
+      } catch (error) {
+        throw _chatCommitError(error);
+      }
+      if (value && typeof value.then === "function") {
+        const error = new TypeError("chat mutation must be synchronous; await providers before entering the transaction");
+        error.code = "E_ASYNC_CHAT_MUTATION";
+        throw _chatCommitError(error);
+      }
+      let commitRequired = true;
+      try {
+        if (shouldCommit) commitRequired = !!shouldCommit(value);
+      } catch (error) {
+        throw _chatCommitError(error);
+      }
+      if (!commitRequired) {
+        return {
+          retry: false,
+          result: {
+            chatCommitted: false,
+            status: "not_modified",
+            revision: currentData._integrity ?? null,
+            integrity: currentData._integrity ?? null,
+            derived: null,
+            value,
+          },
+        };
+      }
+      _assertExpectedUsername(chatid, currentData, candidate, expectedUsername);
+      let result = await _commitCandidateNoLock(chatid, candidate, currentData, value);
+      if (afterCommit) {
+        try {
+          const hookResult = afterCommit(value, result);
+          if (hookResult && typeof hookResult.then === "function") {
+            throw new TypeError("afterCommit must be synchronous");
+          }
+        } catch (error) {
+          result = {
+            ...result,
+            status: "committed_derived_failed",
+            derived: {
+              status: "failed",
+              failures: [
+                ...(result.derived?.failures || []),
+                { stage: "after_commit", error: error?.message || String(error) },
+              ],
+            },
+          };
+        }
+      }
+      return { retry: false, result };
+    });
+    if (!attempt.retry) return attempt.result;
+  }
+}
+
+/** 旧直接写者兼容入口；与 mutateChat 共用 owner，新写者应直接 mutateChat。 */
+export async function saveChat(chatid, { expectedUsername } = {}) {
+  const existing = chatMetadatas.get(chatid);
+  const liveMetadata = existing?.chatMetadata;
+  if (!existing || !liveMetadata) {
+    return { chatCommitted: false, status: "not_found", revision: null, integrity: null, derived: null };
+  }
+  // legacy 写者在调用本函数前已经原地修改 liveMetadata；必须从“调用瞬间这条引用”复制待提交
+  // 候选，不能先 loadChat(mtime reload)，否则另一 isolate 的盘上提交会替换 Map 并让本地修改
+  // 静默消失、随后还错误返回 committed。
+  let candidate;
+  try { candidate = await _copyAuthoritativeMetadata(liveMetadata); } catch (error) {
+    throw _chatCommitError(error);
+  }
+  try {
+    return await _serializeChatTransaction(chatid, async () => {
+      const currentData = chatMetadatas.get(chatid);
+      if (!currentData?.chatMetadata) throw _chatCommitError(new Error("Chat not found"), "not_found");
+      if (currentData.chatMetadata !== liveMetadata) {
+        const conflict = new Error("Chat authority changed before legacy save could commit; refusing to drop local mutations");
+        conflict.code = "E_CHAT_LOCAL_REVISION_CONFLICT";
+        conflict.statusCode = 409;
+        throw _chatCommitError(conflict);
+      }
+      _assertExpectedUsername(chatid, currentData, liveMetadata, expectedUsername);
+      _assertExpectedUsername(chatid, currentData, candidate, expectedUsername);
+      try {
+        return await _commitCandidateNoLock(chatid, candidate, currentData, undefined);
+      } catch (error) {
+        if (chatMetadatas.get(chatid)?.chatMetadata === liveMetadata) {
+          chatMetadatas.set(chatid, { ...currentData, chatMetadata: null });
+        }
+        throw error;
+      }
+    });
+  } catch (error) {
+    // 只有本次失败淘汰了 Map 时才重载；若 ref 已被另一条本地事务更新，保留那条新权威。
+    if (!chatMetadatas.get(chatid)?.chatMetadata) {
+      try { await loadChat(chatid); } catch (reloadError) {
+        error.cacheReloadError = reloadError?.message || String(reloadError);
+      }
+    }
+    throw error;
+  }
 }
 
 /**
@@ -441,6 +738,7 @@ export async function saveChat(chatid) {
  * @returns {Promise<chatMetadata_t|undefined>}
  */
 export async function loadChat(chatid) {
+  if (_deletedChatIds.has(chatid)) return undefined;
   let chatData = chatMetadatas.get(chatid);
   if (!chatData) {
     // 自愈：内存表未命中 → 触发一次扫盘补全（幂等，只补未有项）再取。
@@ -741,7 +1039,7 @@ export async function getChatList(username) {
  * 链路：endpoints DELETE /delete → 本函数
  * 影响：safeUnlink 磁盘文件 → chatMetadatas.delete → 清理 7 个子系统 per-chatid 态：
  *   ① fileEditRegistry（编辑者注册表）② ideClient（编译熔断会话态）
- *   ③ beilu-files（activeModes/pendingOpResults/fileModeSessions）④ _saveLocks（写锁）
+ *   ③ beilu-files（activeModes/pendingOpResults/fileModeSessions）④ transaction owner（写锁）
  *   ⑤ broadcast typingStatus ⑥ generation 续轮/计数/排队态 ⑦ groupWorkerManager（worker isolate）
  *   → 角色卡级 active_modes_map[chatid] + _work_config per-chat 键（跨所有角色卡目录遍历清理）
  *   → preset active_preset_map + yonban_config active_sub_modes_map 映射清理
@@ -754,43 +1052,129 @@ export async function getChatList(username) {
  * @returns {Promise<Array<{ chatid, success, message, error? }>>}
  */
 export async function deleteChat(chatids, username) {
+  if (!Array.isArray(chatids)) throw new TypeError("chatids must be an array");
+  if (typeof username !== "string" || !username.trim()) throw new TypeError("username must be a non-empty string");
+  if (chatids.some((chatid) => typeof chatid !== "string" || !chatid.trim())) {
+    throw new TypeError("chatids must contain only non-empty strings");
+  }
+  _assertUserNotDeleting(username);
+  const targetChatids = [...new Set(chatids.map((chatid) => chatid.trim()))];
   const summariesCache = loadShellData(
     username,
     "chat",
     "chat_summaries_cache",
   );
-  const deletePromises = chatids.map(async (chatid) => {
+  const deletePromises = targetChatids.map(async (chatid) => {
+    let deletionLease = null;
     try {
-      const chatData = chatMetadatas.get(chatid);
-      const primaryCharName = chatData?.primaryCharName || "";
+      deletionLease = await _acquireHistoryRewriteLease(chatid);
+      return await _serializeChatTransaction(chatid, async () => {
+        let deletionState = _partialChatDeletions.get(chatid) || null;
+        initializeChatMetadatas();
+        let chatData = chatMetadatas.get(chatid);
+        _assertChatIndexOwner(chatid, chatData, username);
 
-      // P0 修复：删除时也走路径自修复，确保删到真实文件
-      const filepath = tryRepairChatPath(username, chatid, primaryCharName);
-      if (filepath) await safeUnlink(filepath, "deleteChat");
-
-      // 额外清理：检查另一条路径是否有残留幽灵文件
-      const userDir = getUserDictionary(username);
-      const chatFileName = chatid + ".json";
-      const oldPath = userDir + "/shells/chat/chats/" + chatFileName;
-      const newPath = primaryCharName
-        ? userDir + "/chars/" + primaryCharName + "/chats/" + chatFileName
-        : null;
-      for (const altPath of [oldPath, newPath]) {
-        if (altPath && altPath !== filepath && fs.existsSync(altPath)) {
-          try {
-            await safeUnlink(altPath, "deleteChat_幽灵文件");
-          } catch (_) {
-            /* 忽略 */
+        if (deletionState) {
+          if (deletionState.username !== username) {
+            const error = new Error(`Partial deletion for ${chatid} belongs to another user`);
+            error.code = "E_CHAT_OWNER_MISMATCH";
+            error.statusCode = 403;
+            throw _chatCommitError(error);
           }
+        } else {
+          _assertChatNotDeleted(chatid);
+          let primaryCharName = chatData.primaryCharName || "";
+          const filepath = tryRepairChatPath(username, chatid, primaryCharName);
+          if (filepath) {
+            const authoritative = await loadChat(chatid);
+            chatData = chatMetadatas.get(chatid);
+            if (!authoritative) {
+              const error = new Error(`Chat ${chatid} could not be loaded for owner verification`);
+              error.code = "E_CHAT_OWNER_UNVERIFIED";
+              error.statusCode = 409;
+              throw _chatCommitError(error);
+            }
+            _assertExpectedUsername(chatid, chatData, authoritative, username);
+            primaryCharName = chatData.primaryCharName || primaryCharName;
+          }
+
+          const userDir = getUserDictionary(username);
+          const chatFileName = chatid + ".json";
+          const oldPath = userDir + "/shells/chat/chats/" + chatFileName;
+          const newPath = primaryCharName
+            ? userDir + "/chars/" + primaryCharName + "/chats/" + chatFileName
+            : null;
+          const mainPath = filepath || newPath || oldPath;
+          deletionState = {
+            username,
+            primaryCharName,
+            mainPath,
+            pendingPaths: [...new Set([mainPath, oldPath, newPath].filter(Boolean))],
+            applied: false,
+          };
+          _partialChatDeletions.set(chatid, deletionState);
         }
-      }
+
+        // 墓碑先于任何文件删除发布。partial 重试允许重新进入此 owner，但其它读写仍由
+        // _assertChatNotDeleted/loadChat 拒绝，不能用旧引用复活已部分删除的会话。
+        _deletedChatIds.add(chatid);
+        for (const targetPath of [...deletionState.pendingPaths]) {
+          const existedBefore = fs.existsSync(targetPath);
+          let unlinkResult;
+          try {
+            unlinkResult = await safeUnlink(
+              targetPath,
+              targetPath === deletionState.mainPath ? "deleteChat" : "deleteChat_幽灵文件",
+            );
+          } catch (error) {
+            unlinkResult = { success: false, error: error?.message || String(error) };
+          }
+          const stillExists = fs.existsSync(targetPath);
+          if (unlinkResult?.success !== true || stillExists) {
+            const errorMessage = stillExists
+              ? `Deletion was not confirmed for ${targetPath}`
+              : unlinkResult?.error || `safeUnlink failed for ${targetPath}`;
+            if (!deletionState.applied) {
+              _partialChatDeletions.delete(chatid);
+              _deletedChatIds.delete(chatid);
+              return {
+                chatid,
+                success: false,
+                applied: false,
+                partial: false,
+                message: "Chat file deletion failed before any deletion was applied",
+                error: errorMessage,
+                code: "E_CHAT_DELETE_NOT_APPLIED",
+                failedPath: targetPath,
+              };
+            }
+            _partialChatDeletions.set(chatid, deletionState);
+            return {
+              chatid,
+              success: false,
+              applied: true,
+              partial: true,
+              message: "Chat deletion is partially applied and can be retried",
+              error: errorMessage,
+              code: "E_CHAT_DELETE_PARTIAL",
+              failedPath: targetPath,
+              pendingPaths: [...deletionState.pendingPaths],
+            };
+          }
+          if (existedBefore) deletionState.applied = true;
+          deletionState.pendingPaths = deletionState.pendingPaths.filter((item) => item !== targetPath);
+          _partialChatDeletions.set(chatid, deletionState);
+        }
+
+        // 所有主/备用路径均已由 safeUnlink + existsSync 双重确认后，才允许发布元数据删除。
+        _partialChatDeletions.delete(chatid);
 
       chatMetadatas.delete(chatid);
       delete summariesCache[chatid];
       // 会话删除清理链（per-chatid 态防单调泄漏，发现1 同类批）：
       //   ① fileEditRegistry（81 文件编辑者注册表）② ideClient（_diagRepeat/_lastDiagSig 编译熔断会话态）
       //   ③ beilu-files（activeModes/pendingOpResults/fileModeSessions，经 SetData seam 不旁路）
-      //   ④ 本模块 _saveLocks ⑤ broadcast typingStatus —— #85 同域漏网的 2 个同类，本轮补齐。
+      //   ④ 本模块 transaction owner ⑤ broadcast typingStatus —— #85 同域漏网的 2 个同类，本轮补齐。
       //   ⑥ generation 续轮/计数/排队态（_autoContinueTimers/Counters/_fuzzyFailCounters/_pendingUserInput）——loop④ 审查补。
       try {
         const _fer = await import("../../../../../../scripts/fileEditRegistry.mjs");
@@ -805,8 +1189,6 @@ export async function deleteChat(chatids, username) {
         const _filesSetData = _filesMod?.default?.interfaces?.config?.SetData;
         if (typeof _filesSetData === "function") await _filesSetData({ _action: "forgetChatState", chatid });
       } catch { /* beilu-files 不可用不影响删除 */ }
-      // ④ 本模块 _saveLocks（saveChat coalescing 锁，只置 saving=false 从不 delete）——直删本会话键。
-      _saveLocks.delete(chatid);
       try {
         // ⑤ broadcast typingStatus 外层 chatid 键（内层自清、外层空 Map 永留）——经导出清理函数。
         const _bc = await import("./broadcast.mjs");
@@ -819,9 +1201,11 @@ export async function deleteChat(chatids, username) {
       } catch { /* generation 不可用不影响删除 */ }
       try {
         // ⑦ 一窗一线：未绑组的 per-线 worker isolate 以 chatid 为键，删会话时终止防 isolate 泄漏。
-        //   绑组的 worker 键=groupId（删组时终止），按 chatid 终止对其为 no-op，互不影响。
+        //   绑组的 worker 键=groupId，必须先经 groupRegistry 反查实际 key；不能按 chatid 假终止。
+        const _registry = await import("./groupRegistry.mjs");
         const _gwm = await import("./groupWorkerManager.mjs");
-        _gwm.terminateGroupWorker?.(chatid);
+        const _workerKey = _registry.getGroupIdByChatId?.(username, chatid) || chatid;
+        _gwm.terminateGroupWorker?.(_workerKey);
       } catch { /* worker 网关不可用不影响删除 */ }
       try {
         // ⑧ 【20260726 删】原此处删 {code,work}_ctx/<chatId>/ —— 那是「删对话＝删该对话的记忆」，
@@ -862,20 +1246,30 @@ export async function deleteChat(chatids, username) {
         const { removeChatSubModeMapping } = await import("../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs");
         await removeChatSubModeMapping(username, chatid); // T4：now async（走 updateYonbanConfig 串行锁），await 保留错误被本 try/catch 捕获
       } catch { /* 映射清理失败不影响删除主流程 */ }
-      return { chatid, success: true, message: "Chat deleted successfully" };
+      return { chatid, success: true, applied: true, partial: false, message: "Chat deleted successfully" };
+      });
     } catch (error) {
       console.error(`Error deleting chat ${chatid}:`, error);
       return {
         chatid,
         success: false,
+        applied: false,
+        partial: false,
         message: "Error deleting chat",
         error: error.message,
+        code: error.code || null,
+        statusCode: error.statusCode || null,
       };
+    } finally {
+      try { deletionLease?.release?.(); } catch (error) {
+        console.error(`[chat] Failed to release deletion quiesce lease for ${chatid}:`, error);
+      }
     }
   });
 
   const results = await Promise.all(deletePromises);
-  saveShellData(username, "chat", "chat_summaries_cache");
+  const deletedChatids = results.filter((result) => result.success).map((result) => result.chatid);
+  if (deletedChatids.length > 0) saveShellData(username, "chat", "chat_summaries_cache");
   // per-chatid 附属 store 卫生清理（0715 散点合并：原 5 段同构手抄块收成数据驱动两形状——
   //   keyed=chatid 作键的映射（chat_names/chat_modes/chat_flags 按键删）、
   //   valued=chatid 作值的指针表（mode_active_chats/bot_chat_bindings 值域反查删）。
@@ -892,18 +1286,20 @@ export async function deleteChat(chatids, username) {
     const _map = loadShellData(username, "chat", store);
     let _dirty = false;
     if (by === "key") {
-      for (const chatid of chatids) {
+      for (const chatid of deletedChatids) {
         if (_map[chatid] !== undefined) { delete _map[chatid]; _dirty = true; }
       }
     } else {
       for (const [_k, _v] of Object.entries(_map || {})) {
-        if (chatids.includes(_v)) { delete _map[_k]; _dirty = true; }
+        if (deletedChatids.includes(_v)) { delete _map[_k]; _dirty = true; }
       }
     }
     if (_dirty) saveShellData(username, "chat", store);
   }
   // 跨客户端列表同步：删除后通知该用户所有端(本体+YonBan)重渲染列表，移除已删项。
-  try { sendEventToUser(username, "chat-list-changed", { deleted: chatids }); } catch (e) { console.warn("[同步广播] chat-list-changed(deleted) 推送失败(不阻塞删除):", e?.message); }
+  if (deletedChatids.length > 0) {
+    try { sendEventToUser(username, "chat-list-changed", { deleted: deletedChatids }); } catch (e) { console.warn("[同步广播] chat-list-changed(deleted) 推送失败(不阻塞删除):", e?.message); }
+  }
   return results;
 }
 
@@ -1069,11 +1465,50 @@ export function getChatIdsByCharName(username, charName) {
   return ids;
 }
 
+/**
+ * [D1 §4 删除契约] 删除预览分类：把某角色的聊天分成受管理模式线 / 额外自有。
+ * 【why】delete-char 原三路无差别删（方式1 deleteChat + 方式2/3 safeUnlink 绕 owner 校验）；契约要求
+ *   先预览分类 + policy 决定删哪些——默认只删四条受管理线，额外线/旧路径候选保留（不以 timeSlice.chars
+ *   弱归属当足够证据）。本函数只用内存索引（chatMetadatas + mode_active_chats 指针）产权威分类；
+ *   旧路径 legacyCandidates（shells/chat/chats 弱归属）由 endpoints 层扫盘补充，不在内存索引内。
+ * - managedModeChats：shellData mode_active_chats[`${mode}:${charName}`] 四模式指针指向的现存 chatid。
+ * - extraOwnedChats：getChatIdsByCharName（owner+primaryCharName 匹配）减去 managed，即同角色额外历史会话。
+ * @param {string} username
+ * @param {string} charName
+ * @returns {{managedModeChats: Array<{mode:string, chatId:string}>, extraOwnedChats: string[], managedChatIds: string[]}}
+ */
+export function classifyCharChatsForDeletion(username, charName) {
+  const modeMap = loadShellData(username, "chat", "mode_active_chats") || {};
+  const managedModeChats = [];
+  const managedSet = new Set();
+  for (const mode of ["chat", "smart", "code", "work"]) {
+    const chatId = modeMap[`${mode}:${charName}`];
+    if (chatId && typeof chatId === "string" && chatMetadatas.has(chatId)) {
+      managedModeChats.push({ mode, chatId });
+      managedSet.add(chatId);
+    }
+  }
+  const extraOwnedChats = getChatIdsByCharName(username, charName).filter((id) => !managedSet.has(id));
+  return { managedModeChats, extraOwnedChats, managedChatIds: [...managedSet] };
+}
+
+/**
+ * [D1 §4] chatid 是否在内存索引（chatMetadatas）内。delete-char 方式2 的 safeUnlink 判据：
+ *   只有【完全无索引】的磁盘文件才是可 safeUnlink 的真孤儿——无 per-chat 态残留（typing/generation/P1
+ *   均按 chatid，未索引=无态），且 chars/<char>/chats 路径隔离已保证 owner。内存索引存在的文件
+ *   （可能 primaryCharName 已漂移到别角色）不由「删该角色」动作 safeUnlink，防绕 owner/事务误删别角色会话。
+ */
+export function isIndexedChat(chatid) {
+  return chatMetadatas.has(chatid);
+}
+
 // ============================================================
 // 新建聊天 CRUD（保留在此层）
 // ============================================================
 
 export async function newMetadata(chatid, username) {
+  _assertUserNotDeleting(username);
+  _assertChatNotDeleted(chatid);
   chatMetadatas.set(chatid, {
     username,
     primaryCharName: "",
@@ -1084,19 +1519,24 @@ export async function newMetadata(chatid, username) {
 export function findEmptyChatid() {
   while (true) {
     const uuid = Math.random().toString(36).substring(2, 15);
-    if (!chatMetadatas.has(uuid)) return uuid;
+    if (!chatMetadatas.has(uuid) && !_deletedChatIds.has(uuid)) return uuid;
   }
 }
 
 export async function newChat(username, mode) {
-  const chatid = findEmptyChatid();
-  await newMetadata(chatid, username);
-  await saveChat(chatid);
-  // [0730] YonBan 等非本体前端创建对话时可指定模式，后端自动 setChatMode（原只有前端 classifyNewChat 写标签=非本体入口恒缺标签）。
-  if (mode && _VALID_CHAT_MODES.has(mode)) {
-    await setChatMode(chatid, username, mode);
+  const releaseCreation = _beginUserCreation(username);
+  try {
+    const chatid = findEmptyChatid();
+    await newMetadata(chatid, username);
+    await saveChat(chatid);
+    // [0730] YonBan 等非本体前端创建对话时可指定模式，后端自动 setChatMode（原只有前端 classifyNewChat 写标签=非本体入口恒缺标签）。
+    if (mode && _VALID_CHAT_MODES.has(mode)) {
+      await setChatMode(chatid, username, mode);
+    }
+    return chatid;
+  } finally {
+    releaseCreation();
   }
-  return chatid;
 }
 
 /**
@@ -1105,11 +1545,20 @@ export async function newChat(username, mode) {
  * 跳过 fromJSON 反序列化（避免 loadPart 开销）。
  *
  * @param {string} sourceChatid - 源对话 ID
- * @param {number} branchPointIndex - 分叉点（保留 chatLog[0..branchPointIndex]，含此条）
+ * @param {{messageId?:string,indexHint?:number,wholeChat?:boolean}} selector - 稳定消息 ID 或显式完整克隆意图；indexHint 仅提示
  * @param {string} username - 当前用户名（用于鉴权 + 存储路径）
  * @returns {Promise<string>} 新对话的 chatid
  */
-export async function branchChat(sourceChatid, branchPointIndex, username) {
+export async function branchChat(sourceChatid, selector, username) {
+  const releaseCreation = _beginUserCreation(username);
+  try {
+    return await _branchChatWithCreationPermit(sourceChatid, selector, username);
+  } finally {
+    releaseCreation();
+  }
+}
+
+async function _branchChatWithCreationPermit(sourceChatid, selector, username) {
   // 1. 查源对话元信息
   const sourceData = chatMetadatas.get(sourceChatid);
   if (!sourceData) throw new Error("源对话不存在");
@@ -1125,10 +1574,31 @@ export async function branchChat(sourceChatid, branchPointIndex, username) {
   // 3. 读源 JSON（纯 JSON 对象，不走 fromJSON 反序列化）
   const rawJson = loadJsonFile(sourceFilepath);
   if (!Array.isArray(rawJson.chatLog) || rawJson.chatLog.length === 0) {
-    throw new Error("源对话为空，无法分叉");
+    throw _branchError("源对话为空，无法分叉", "E_BRANCH_SOURCE_EMPTY", 409);
   }
-  if (branchPointIndex < 0 || branchPointIndex >= rawJson.chatLog.length) {
-    throw new Error(`分叉点越界: ${branchPointIndex}，有效范围 0-${rawJson.chatLog.length - 1}`);
+  const messageId = typeof selector?.messageId === "string" ? selector.messageId.trim() : "";
+  const wholeChat = selector?.wholeChat === true;
+  if ((messageId && wholeChat) || (!messageId && !wholeChat)) {
+    throw _branchError(
+      messageId ? "messageId 与 wholeChat=true 只能选择一种分叉意图" : "必须提供非空 messageId 或显式 wholeChat=true",
+      messageId ? "E_BRANCH_SELECTOR_AMBIGUOUS" : "E_BRANCH_SELECTOR_REQUIRED",
+    );
+  }
+  if (selector?.indexHint != null && (!Number.isSafeInteger(selector.indexHint) || selector.indexHint < 0)) {
+    throw _branchError("indexHint 必须是非负安全整数", "E_BRANCH_INDEX_HINT_INVALID");
+  }
+
+  let branchPointIndex;
+  if (wholeChat) {
+    branchPointIndex = rawJson.chatLog.length - 1;
+  } else {
+    const hintedEntry = Number.isSafeInteger(selector.indexHint) ? rawJson.chatLog[selector.indexHint] : null;
+    branchPointIndex = hintedEntry?.id === messageId
+      ? selector.indexHint
+      : rawJson.chatLog.findIndex((entry) => entry?.id === messageId);
+    if (branchPointIndex < 0) {
+      throw _branchError("指定的分叉消息已不存在，未创建分支", "E_BRANCH_MESSAGE_NOT_FOUND", 404);
+    }
   }
 
   rawJson.chatLog = filterVisibleToUser(rawJson.chatLog.slice(0, branchPointIndex + 1));
@@ -1182,35 +1652,133 @@ export async function branchChat(sourceChatid, branchPointIndex, username) {
   return newChatid;
 }
 
+function _branchError(message, code, statusCode = 400) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
 // ============================================================
 // 事件处理器（用户删除 / 改名）
 // 注：events 需在 chat.mjs facade 中引入后调用这些处理器
 // ============================================================
 
-export async function handleAfterUserDeleted({ username }) {
-  const chatIdsToDelete = [];
-  for (const [chatId, data] of chatMetadatas.entries())
-    if (data.username === username) chatIdsToDelete.push(chatId);
+function _releaseUserDeletionContext(username, deletionId, { keepTombstones }) {
+  const context = _userDeletionContexts.get(username);
+  if (!context || context.deletionId !== deletionId) return false;
+  for (const prepared of [...context.prepared].reverse()) {
+    if (!keepTombstones && prepared.tombstoneAdded) _deletedChatIds.delete(prepared.chatId);
+    try { prepared.lease?.release?.(); } catch (error) {
+      console.error(`[chat] Failed to release account deletion lease for ${prepared.chatId}:`, error);
+    }
+  }
+  _userDeletionContexts.delete(username);
+  return true;
+}
 
-  for (const chatId of chatIdsToDelete) {
-    // 系统级会话终结（D-删号卡死根修，20260706）：删除用户=系统事件，在状态清理前主动向该用户
-    //   所有在场窗口推 account_deleted 并关闭 WS——前端 websocket.mjs handleBroadcastEvent 既有
-    //   同名分支（清 beilu-* 存储+回登录页）即刻活化。按用户/系统推送踢出，不依赖各浏览器
-    //   请求自行撞 401（notify 通道的 event_dispatcher AfterUserDeleted 只覆盖 pages 层，壳在此补齐）。
-    try {
-      const m = await import("./broadcast.mjs");
-      m.broadcastChatEvent?.(chatId, { type: "account_deleted" });
-      for (const ws of (m.chatUiSockets?.get(chatId) || [])) { try { ws.close(1000, "account deleted"); } catch { /* */ } }
-      m.chatUiSockets?.delete(chatId);
-    } catch { /* */ }
-    chatMetadatas.delete(chatId);
-    _saveLocks.delete(chatId);
-    try { const m = await import("../../../../../../scripts/fileEditRegistry.mjs"); m.unregisterChat?.(chatId); } catch { /* */ }
-    try { const { ideClient } = await import("../../../../../../yonban/core/transport/ideClient.mjs"); ideClient?.forgetChat?.(chatId); } catch { /* */ }
-    try { const m = await import("../../../../plugins/beilu-files/main.mjs"); const sd = m?.default?.interfaces?.config?.SetData; if (typeof sd === "function") await sd({ _action: "forgetChatState", chatid: chatId }); } catch { /* */ }
-    try { const m = await import("./broadcast.mjs"); m.forgetChatTyping?.(chatId); } catch { /* */ }
-    try { const m = await import("./generation.mjs"); m.forgetChatGenState?.(chatId); } catch { /* */ }
-    try { const m = await import("./groupWorkerManager.mjs"); m.terminateGroupWorker?.(chatId); } catch { /* */ }
+/**
+ * 账户删除严格前置门：先阻止新建/分叉，等待已进入的创建临界区退出，再逐 chat 静默生成、
+ * 排空 transaction owner、发布墓碑并终止真实 worker key。任一失败会撤本轮墓碑并释放全部 lease。
+ */
+export async function handleBeforeUserDeleted({ username, deletionId }) {
+  if (typeof username !== "string" || !username.trim() || typeof deletionId !== "string" || !deletionId.trim()) {
+    const error = new Error("BeforeUserDeleted requires username and deletionId");
+    error.code = "E_USER_DELETE_CONTEXT_INVALID";
+    throw error;
+  }
+  if (_userDeletionContexts.has(username)) {
+    const error = new Error(`User deletion is already in progress: ${username}`);
+    error.code = "E_USER_DELETION_IN_PROGRESS";
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const context = { username, deletionId, prepared: [] };
+  _userDeletionContexts.set(username, context);
+  try {
+    await _waitForUserCreations(username);
+    initializeChatMetadatas({ force: true });
+    const chatIds = [...chatMetadatas.entries()]
+      .filter(([, data]) => data.username === username)
+      .map(([chatId]) => chatId)
+      .sort();
+    const [groupRegistry, groupWorkerManager] = await Promise.all([
+      import("./groupRegistry.mjs"),
+      import("./groupWorkerManager.mjs"),
+    ]);
+
+    for (const chatId of chatIds) {
+      let lease = null;
+      let tombstoneAdded = false;
+      try {
+        lease = await _acquireHistoryRewriteLease(chatId);
+        await _serializeChatTransaction(chatId, async () => {
+          const chatData = chatMetadatas.get(chatId);
+          _assertChatIndexOwner(chatId, chatData, username);
+          if (chatData.chatMetadata) {
+            _assertExpectedUsername(chatId, chatData, chatData.chatMetadata, username);
+          }
+          tombstoneAdded = !_deletedChatIds.has(chatId);
+          _deletedChatIds.add(chatId);
+        });
+        const workerKey = groupRegistry.getGroupIdByChatId(username, chatId) || chatId;
+        context.prepared.push({ chatId, workerKey, tombstoneAdded, lease });
+      } catch (error) {
+        if (tombstoneAdded) _deletedChatIds.delete(chatId);
+        try { lease?.release?.(); } catch { /* release is idempotent */ }
+        throw error;
+      }
+    }
+
+    for (const workerKey of new Set(context.prepared.map((item) => item.workerKey))) {
+      groupWorkerManager.terminateGroupWorker(workerKey);
+    }
+    return { preparedChats: context.prepared.length };
+  } catch (error) {
+    _releaseUserDeletionContext(username, deletionId, { keepTombstones: false });
+    throw error;
+  }
+}
+
+/** 账户目录移动或其它前置失败的补偿：只撤本 deletionId 新增的墓碑，并释放静默 lease。 */
+export function handleUserDeletionAborted({ username, deletionId }) {
+  _releaseUserDeletionContext(username, deletionId, { keepTombstones: false });
+}
+
+/**
+ * 账户目录已经确认移走后的派生清理。这里只清缓存、WS 与外围运行态；不删除 transaction queue，
+ * 因为 BeforeUserDeleted 已等待同一 owner 排空。lease 最后释放，聊天墓碑永久保留。
+ */
+export async function handleAfterUserDeleted({ username, deletionId }) {
+  const context = _userDeletionContexts.get(username);
+  if (!context || context.deletionId !== deletionId) {
+    const error = new Error(`User deletion was not prepared in this isolate: ${username}`);
+    error.code = "E_USER_DELETE_NOT_PREPARED";
+    throw error;
+  }
+
+  try {
+    for (const { chatId, workerKey } of context.prepared) {
+      // 系统级会话终结：先向在场窗口推 account_deleted 并关闭 WS，再撤运行期引用。
+      try {
+        const m = await import("./broadcast.mjs");
+        m.broadcastChatEvent?.(chatId, { type: "account_deleted" });
+        for (const ws of (m.chatUiSockets?.get(chatId) || [])) { try { ws.close(1000, "account deleted"); } catch { /* */ } }
+        m.chatUiSockets?.delete(chatId);
+      } catch { /* After 是已提交后的派生清理，失败由 events.emit 记录 */ }
+      chatMetadatas.delete(chatId);
+      _partialChatDeletions.delete(chatId);
+      try { const m = await import("../../../../../../scripts/fileEditRegistry.mjs"); m.unregisterChat?.(chatId); } catch { /* */ }
+      try { const { ideClient } = await import("../../../../../../yonban/core/transport/ideClient.mjs"); ideClient?.forgetChat?.(chatId); } catch { /* */ }
+      // forgetChatState 只删 beilu-files 的三张运行期 Map，不落盘；账户目录移走后调用不会重建用户数据。
+      try { const m = await import("../../../../plugins/beilu-files/main.mjs"); const sd = m?.default?.interfaces?.config?.SetData; if (typeof sd === "function") await sd({ _action: "forgetChatState", chatid: chatId }); } catch { /* */ }
+      try { const m = await import("./broadcast.mjs"); m.forgetChatTyping?.(chatId); } catch { /* */ }
+      try { const m = await import("./generation.mjs"); m.forgetChatGenState?.(chatId); } catch { /* */ }
+      try { const m = await import("./groupWorkerManager.mjs"); m.terminateGroupWorker?.(workerKey); } catch { /* */ }
+    }
+  } finally {
+    _releaseUserDeletionContext(username, deletionId, { keepTombstones: true });
   }
 }
 

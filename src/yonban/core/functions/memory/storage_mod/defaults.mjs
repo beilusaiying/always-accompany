@@ -680,6 +680,46 @@ export const DEFAULT_MEMORY_PRESETS = [
       },
     ],
   },
+  {
+    id: "P9",
+    name: "P9 词库维护与微调",
+    description: "手动运行：根据用户反馈、P1白盒与真实记忆证据，谨慎维护用户插拔词库或提出可回退的后期微调建议",
+    enabled: true,
+    builtin: true,
+    deletable: false,
+    trigger: "manual",
+    api_config: {
+      use_custom: false,
+      source: "",
+      model: DEFAULT_MEMORY_MODEL,
+      temperature: 0.2,
+      max_tokens: 6000,
+    },
+    prompts: [
+      {
+        role: "system",
+        content: [
+          "你是 P9，由用户手动运行的 P1 词库维护与后期微调助手。",
+          "先用用户反馈、p1_feedback_v1 白盒和真实记忆证据分流：核心链路问题只报告，不得输出 vocab_edit；只有输入合同正确、目标记忆已扫描且证明确为词库缺口时，才提出最小词库预览。",
+          "候选已出现但多次稳定偏低时，只建议配置键、当前值到建议值、证据、影响和回退值，不自行改配置。证据不足时索要证据，不猜测召回率。",
+          "只维护用户插拔词库，AT 主词库只读。首次 vocab_edit 不带 confirm:true；只有用户明确确认后才可用完全相同内容加 confirm:true 重发。",
+          "先输出 [P9诊断]：用户反馈、白盒证据、归因(A/B/C/D)、建议；只有词库缺口(B)才追加操作预览。",
+        ].join("\n"),
+        identifier: "P9_prompts_0",
+        enabled: true,
+        builtin: false,
+        deletable: true,
+      },
+      {
+        role: "user",
+        content: "{{chat_history}}",
+        identifier: "P9_prompts_feedback",
+        enabled: true,
+        builtin: true,
+        deletable: false,
+      },
+    ],
+  },
 ];
 
 // ============================================================
@@ -696,6 +736,23 @@ export const DEFAULT_SYSTEM_TEXTS = {
   daily_greeting: "今日首次对话，请自然问候并续接上次话题（勿打卡、勿报数）。",
   summary_prefix: "[上下文摘要 - 以下是之前对话的压缩摘要，请将其视为已发生的对话背景]",
   delegation_report: '\n完成后请使用 <report status="completed">报告内容</report> 标签汇报结果。如果遇到阻碍，使用 <report status="blocked">阻碍说明</report>。',
+  task_plan_howto: [
+    "",
+    "[任务清单系统（进度打勾）]",
+    "进度表达方式 = 制定任务清单后逐项打勾，**不要靠切换子模式来表达进度**（子模式只表角色位置）。",
+    "门槛：仅当任务 ≥3 步、非平凡时才建清单；单步/查询类任务无需建。",
+    "制定/全量更新清单（每次给出完整清单，会整体替换旧清单）：",
+    "<taskPlan>",
+    "[ ] 第一步要做的事",
+    "[~] 正在做的这一步",
+    "[x] 已完成的步骤",
+    "</taskPlan>",
+    "（也可用 JSON：<taskPlan>[{\"content\":\"...\",\"status\":\"pending|in_progress|completed\",\"priority\":\"high|normal|low\"}]</taskPlan>）",
+    "完成某一项时勾掉它（按内容整句或 id）：",
+    "<taskCheck>已完成那一项的整句内容</taskCheck>",
+    "或 <taskCheck id=\"任务id\"/>",
+    "规则：每完成一步就 taskCheck 一项；计划有增删/重排时重发 taskPlan 全量替换；清单与子模式流转是两条正交的轴。",
+  ].join("\n"),
   // ---- agent/分身循环引导（占位符由消费点填充；<searchResult>/<searchQuery>/<memorySearch> 等
   //      标签名是协议契约——解析器按标签收内容，改文案须保留标签说明，否则循环链自断）----
   // aiRunner 记忆/搜索循环
@@ -877,33 +934,42 @@ export const DEFAULT_INJECTION_PROMPTS = [
 
 // 子模式定义唯一源=后端（本种子播入 smConfig.sub_modes，经 getSubModes 下发）；
 // 前端 DEFAULT_SUB_MODES 副本已删（T010），前端只持运行时镜像 _subModes。
+// 这些是「新播种/新建」的产品默认值，不迁移或覆盖已经由用户保存的子模式配置。
+const DEFAULT_SUB_MODE_EXECUTION = Object.freeze({
+  promptPostProcessing: "strict",
+  prefillEnabled: false,
+  claudePrefillMode: "",
+  maxContext: 1000000,
+  maxTokens: 30000,
+});
 export const DEFAULT_CODE_SUB_MODES = [
-  { id: "前置任务专家",   label: "前置任务专家",   icon: "🎯", desc: "需求理解+现状调查+设计出案，一体化前置（确认师+设计师合并）", presetName: "前置任务专家", modeGroup: "code" },
-  { id: "框架审查员",     label: "框架审查员",     icon: "🔎", desc: "原话对齐审计：独立理解-承接四态-完备抽查-范围对齐",             presetName: "框架审查员", modeGroup: "code" },
-  { id: "算法与推演专家", label: "算法与推演专家", icon: "🔬", desc: "可衡量化+严谨推导+算法白盒实验，数值支撑后交代码专家",         presetName: "算法与推演专家", modeGroup: "code" },
-  { id: "代码专家",       label: "代码专家",       icon: "💻", desc: "外科手术式改代码，流水线唯一改代码角色",                       presetName: "代码专家", modeGroup: "code" },
-  { id: "链路审计专家",   label: "链路审计专家",   icon: "🛡️", desc: "传导链走查+AI结构病扫+白盒布点+实测收讫（错误生产+测试合并）", presetName: "链路审计专家", modeGroup: "code" },
-  { id: "纠错专家",       label: "纠错专家",       icon: "🔧", desc: "三不继承+假设验证循环+无差别调查，根因层修复",                 presetName: "纠错专家", modeGroup: "code" },
-  { id: "任务交接员",     label: "任务交接员",     icon: "📋", desc: "SBAR/ADR/Postmortem归档交接，完成度写实",                       presetName: "任务交接员", modeGroup: "code" },
-  { id: "大项目协调",     label: "大项目协调",     icon: "🏗️", desc: "大项目协调中枢：scope锁定+依赖链排序+增量合并+多分身编排+完整输出", presetName: "大项目协调", modeGroup: "code" },
-  { id: "前端美化",       label: "前端美化",       icon: "🎨", desc: "双战场分流：产品UI优先序铁律+营销页anti-slop全流程",           presetName: "前端美化专家", modeGroup: "code" },
+  // flowGroups 同样属于身份注册信息：默认流程从这里筛选，不在 buildDefaultSkillGroups 再手写身份名。
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "前置任务专家",   label: "前置任务专家",   icon: "🎯", desc: "需求理解+现状调查+设计出案，一体化前置（确认师+设计师合并）", presetName: "前置任务专家", modeGroup: "code", flowGroups: ["large", "small"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "框架审查员",     label: "框架审查员",     icon: "🔎", desc: "原话对齐审计：独立理解-承接四态-完备抽查-范围对齐",             presetName: "框架审查员", modeGroup: "code", flowGroups: ["large"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "算法与推演专家", label: "算法与推演专家", icon: "🔬", desc: "可衡量化+严谨推导+算法白盒实验，数值支撑后交代码专家",         presetName: "算法与推演专家", modeGroup: "code", flowGroups: ["large"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "代码专家",       label: "代码专家",       icon: "💻", desc: "外科手术式改代码，流水线唯一改代码角色",                       presetName: "代码专家", modeGroup: "code", flowGroups: ["large", "small"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "链路审计专家",   label: "链路审计专家",   icon: "🛡️", desc: "传导链走查+AI结构病扫+白盒布点+实测收讫（错误生产+测试合并）", presetName: "链路审计专家", modeGroup: "code", flowGroups: ["large", "small"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "纠错专家",       label: "纠错专家",       icon: "🔧", desc: "三不继承+假设验证循环+无差别调查，根因层修复",                 presetName: "纠错专家", modeGroup: "code", flowGroups: ["large"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "任务交接员",     label: "任务交接员",     icon: "📋", desc: "SBAR/ADR/Postmortem归档交接，完成度写实",                       presetName: "任务交接员", modeGroup: "code", flowGroups: ["large", "small"] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "大项目协调",     label: "大项目协调",     icon: "🏗️", desc: "大项目协调中枢：scope锁定+依赖链排序+增量合并+多分身编排+完整输出", presetName: "大项目协调", modeGroup: "code", flowGroups: [] },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "前端美化",       label: "前端美化",       icon: "🎨", desc: "双战场分流：产品UI优先序铁律+营销页anti-slop全流程",           presetName: "前端美化专家", modeGroup: "code", flowGroups: [] },
 ];
 
 // 工作模式子模式统一用 work- 前缀避免与编程模式ID冲突
 export const DEFAULT_WORK_SUB_MODES = [
-  { id: "work-task-confirm",   label: "任务确认师",     icon: "🎯", desc: "理解需求，核对理解，记录原话到#0，建active/xx.md",         presetName: "任务确认",  modeGroup: "work" },
-  { id: "work-task-design",    label: "任务设计",       icon: "📝", desc: "读取任务MD，通过最终效果反推设计执行流程",                  presetName: "任务设计",   modeGroup: "work" },
-  { id: "work-flow-optimize",  label: "流程优化",       icon: "⚡", desc: "优化设计好的流程，减少token消耗，精简步骤",                 presetName: "流程优化", modeGroup: "work" },
-  { id: "work-frame-review",   label: "框架审查",       icon: "🔍", desc: "审查流程设计是否有错误，联想可能的问题，只优化不打回",      presetName: "框架审查",   modeGroup: "work" },
-  { id: "work-prompt-design",  label: "提示词设计",     icon: "✏️", desc: "为任务设计所需的提示词，参考提示词指南",                    presetName: "提示词设计",   modeGroup: "work" },
-  { id: "work-preset-design",  label: "提示词+预设设计", icon: "📐", desc: "设计beilu提示词与预设本身(提示词工程作者)，内含教程+017示例+方法论", presetName: "预设设计",   modeGroup: "work" },
-  { id: "work-skill-script",   label: "Skill/脚本制作", icon: "🔧", desc: "制作任务所需的脚本、skill、MCP接入",                       presetName: "脚本制作",    modeGroup: "work" },
-  { id: "work-flow-assemble",  label: "流程组装",       icon: "🧩", desc: "将提示词+skill+脚本组装为可执行的流程组",                   presetName: "流程组装", modeGroup: "work" },
-  { id: "work-flow-execute",   label: "执行流程组",     icon: "▶️", desc: "运行组装好的流程组，按顺序执行各步骤，记录执行日志",        presetName: "执行流程组",  modeGroup: "work" },
-  { id: "work-verify",         label: "验证",           icon: "✅", desc: "用户验证或自动验证执行结果",                                presetName: "验证",   modeGroup: "work" },
-  { id: "work-wrapup",         label: "收尾归档",       icon: "📦", desc: "归档任务MD到archive/，更新表格索引，记录经验，生成完成报告", presetName: "收尾归档",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-task-confirm",   label: "任务确认师",     icon: "🎯", desc: "理解需求，核对理解，记录原话到#0，建active/xx.md",         presetName: "任务确认",  modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-task-design",    label: "任务设计",       icon: "📝", desc: "读取任务MD，通过最终效果反推设计执行流程",                  presetName: "任务设计",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-flow-optimize",  label: "流程优化",       icon: "⚡", desc: "优化设计好的流程，减少token消耗，精简步骤",                 presetName: "流程优化", modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-frame-review",   label: "框架审查",       icon: "🔍", desc: "审查流程设计是否有错误，联想可能的问题，只优化不打回",      presetName: "框架审查",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-prompt-design",  label: "提示词设计",     icon: "✏️", desc: "为任务设计所需的提示词，参考提示词指南",                    presetName: "提示词设计",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-preset-design",  label: "提示词+预设设计", icon: "📐", desc: "设计beilu提示词与预设本身(提示词工程作者)，内含教程+017示例+方法论", presetName: "预设设计",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-skill-script",   label: "Skill/脚本制作", icon: "🔧", desc: "制作任务所需的脚本、skill、MCP接入",                       presetName: "脚本制作",    modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-flow-assemble",  label: "流程组装",       icon: "🧩", desc: "将提示词+skill+脚本组装为可执行的流程组",                   presetName: "流程组装", modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-flow-execute",   label: "执行流程组",     icon: "▶️", desc: "运行组装好的流程组，按顺序执行各步骤，记录执行日志",        presetName: "执行流程组",  modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-verify",         label: "验证",           icon: "✅", desc: "用户验证或自动验证执行结果",                                presetName: "验证",   modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-wrapup",         label: "收尾归档",       icon: "📦", desc: "归档任务MD到archive/，更新表格索引，记录经验，生成完成报告", presetName: "收尾归档",   modeGroup: "work" },
   // 尾部追加安全：流水线 steps 按 map/索引引用本数组，禁在中间插入（:955/:967）
-  { id: "work-ppt",            label: "PPT制作",        icon: "📊", desc: "类型判定→主张句骨架→草稿给用户审查→美化生成→字符画核对", presetName: "PPT制作", modeGroup: "work" },
+  { ...DEFAULT_SUB_MODE_EXECUTION, id: "work-ppt",            label: "PPT制作",        icon: "📊", desc: "类型判定→主张句骨架→草稿给用户审查→美化生成→字符画核对", presetName: "PPT制作", modeGroup: "work" },
 ];
 
 // ============================================================
@@ -924,29 +990,31 @@ export const PERM_LEVEL_META = [
 
 // ============================================================
 // skill 组（= flowGroup）：多个子模式 = 一套完整工作流程。
-// 蓝图：skill 组=多子模式=一套工作流；大型项目=8 角色流水线，小型=确认+代码+测试+汇报。
+// 蓝图：skill 组=多子模式=一套工作流；code 流程归属由每个身份的 flowGroups 注册字段生成。
 // steps 引用 DEFAULT_CODE_SUB_MODES（单一权威源，子模式定义改动自动同步，不重复维护）。
 // 文件形态与 createFlowGroup 落盘一致：{name,description,steps:[{mode,preset_name,label,...}],auto_advance,approval_before}。
 // startFlowGroup 据 steps[].mode 切 active_sub_mode，auto_advance 逐级流转。
 // ============================================================
 export function buildDefaultSkillGroups() {
   const _step = (m) => ({ mode: m.id, preset_name: m.presetName, label: m.label, icon: m.icon, desc: m.desc, modeGroup: m.modeGroup });
-  // [0724 schema4] code组skill组按凛倾拍板收为2个（大项目/小项目）；steps 改按 id 查表——
-  //   此前索引硬编码（slice(0,9)/[0,4,6,8]）在子模式表重组时会静默错位甚至越界，id 引用表变动即报错不带病运行。
-  const _codeById = (id) => {
-    const m = DEFAULT_CODE_SUB_MODES.find((x) => x.id === id);
-    if (!m) throw new Error(`buildDefaultSkillGroups: code子模式id不存在: ${id}`);
-    return _step(m);
-  };
+  const _codeFlow = (flowId) => DEFAULT_CODE_SUB_MODES
+    .filter((mode) => Array.isArray(mode.flowGroups) && mode.flowGroups.includes(flowId))
+    .map(_step);
+  const _largeCodeSteps = _codeFlow("large");
+  const _smallCodeSteps = _codeFlow("small");
+  if (_largeCodeSteps.length === 0 || _smallCodeSteps.length === 0) {
+    throw new Error("buildDefaultSkillGroups: code flowGroups 注册为空");
+  }
+  const _flowDescription = (prefix, steps) => `${prefix}：${steps.map((step) => step.label).join("→")}`;
   return [
     {
       name: "大项目",
       filename: "大项目.json",
-      description: "大型任务全流程：前置任务→框架审查→算法推演→代码→链路审计→纠错→交接",
+      description: _flowDescription("大型任务全流程", _largeCodeSteps),
       skill_group: true,
       builtin: true,
       modeGroup: "code",
-      steps: ["前置任务专家", "框架审查员", "算法与推演专家", "代码专家", "链路审计专家", "纠错专家", "任务交接员"].map(_codeById),
+      steps: _largeCodeSteps,
       auto_advance: true,
       approval_before: [],
       created_by: "default",
@@ -954,11 +1022,11 @@ export function buildDefaultSkillGroups() {
     {
       name: "小项目",
       filename: "小项目.json",
-      description: "快速任务：前置任务→代码→链路审计→交接",
+      description: _flowDescription("快速任务", _smallCodeSteps),
       skill_group: true,
       builtin: true,
       modeGroup: "code",
-      steps: ["前置任务专家", "代码专家", "链路审计专家", "任务交接员"].map(_codeById),
+      steps: _smallCodeSteps,
       auto_advance: true,
       approval_before: [],
       created_by: "default",

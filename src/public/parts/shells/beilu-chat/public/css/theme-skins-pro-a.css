@@ -1,0 +1,490 @@
+/*
+ * Beilu enhanced theme skins: Pro A
+ *
+ * This candidate file owns only the visual identity of Cyberpunk, Night,
+ * Valentine and Bumblebee. Palette, interaction timing and pressed-state
+ * behaviour are produced by design-tokens.css, theme-palettes.css and
+ * theme-skins-pro-core.css. Do not load this file without those producers.
+ */
+
+/* --------------------------------------------------------------------------
+   Shared selected-state identity hook
+   -------------------------------------------------------------------------- */
+
+/* The state registry stays in the core; Pro A supplies only its identity cue. */
+html:is(
+  [data-beilu-enhanced="cyberpunk"],
+  [data-beilu-enhanced="night"],
+  [data-beilu-enhanced="valentine"],
+  [data-beilu-enhanced="bumblebee"]
+) :where(
+  .top-tab.top-tab-active,
+  .file-tree-item.active,
+  [role="tab"][aria-selected="true"],
+  [role="option"][aria-selected="true"],
+  [role="treeitem"][aria-selected="true"]
+) {
+  animation: var(--beilu-pro-a-selected-animation);
+}
+
+/* --------------------------------------------------------------------------
+   Cyberpunk Pro | neutral terminal, cyan data, red structure
+   -------------------------------------------------------------------------- */
+
+html[data-beilu-enhanced="cyberpunk"] {
+  color-scheme: dark;
+  --beilu-radius-control: 0;
+  --beilu-radius-panel: 0;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent) 18%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-press-border: var(--beilu-identity-edge);
+  --beilu-feedback-press-shadow:
+    inset calc(var(--beilu-border-width) + var(--beilu-border-width)) 0 var(--beilu-identity-edge-aux),
+    inset calc(0px - var(--beilu-border-width) - var(--beilu-border-width)) 0 var(--beilu-identity-edge);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent) 14%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-identity-active-edge);
+  --beilu-pro-a-selected-animation: beilu-pro-a-cyber-signal var(--beilu-motion-fast) var(--beilu-ease-enter);
+  --beilu-panel-shadow: none;
+  --beilu-panel-texture: linear-gradient(
+    135deg,
+    var(--beilu-identity-edge-aux) 0 calc(var(--beilu-border-width) + var(--beilu-border-width)),
+    var(--beilu-surface-panel) calc(var(--beilu-border-width) + var(--beilu-border-width))
+  );
+  --beilu-backdrop-effect: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    color-mix(in srgb, var(--beilu-theme-accent) 9%, transparent) 3px 4px
+  );
+}
+
+html[data-beilu-enhanced="cyberpunk"] :where(.left-panel, #right-panel) {
+  border-radius: var(--beilu-radius-panel);
+  border-inline-start-width: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width));
+  border-inline-start-color: var(--beilu-identity-edge-aux);
+}
+
+html[data-beilu-enhanced="cyberpunk"] #right-panel {
+  border-inline-start-width: var(--beilu-border-width);
+  border-inline-end-width: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width));
+  border-inline-end-color: var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="cyberpunk"] :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .floating-window,
+  .ide-menu-dropdown,
+  .model-selector-dropdown
+) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+  border-inline-end: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge-aux);
+}
+
+html[data-beilu-enhanced="cyberpunk"] :where(
+  .btn,
+  #message-input,
+  .fp-path-input
+) {
+  border-radius: var(--beilu-radius-control);
+}
+
+html[data-beilu-enhanced="cyberpunk"] :where(.panel-title, .section-label) {
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-display);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+html[data-beilu-enhanced="cyberpunk"] :where(
+  .alert-warning,
+  [role="alert"][data-severity="warning"]
+) {
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-state-warning) 16%,
+    var(--beilu-surface-raised)
+  );
+  border-inline-start: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-state-warning);
+  color: var(--beilu-fg-primary);
+}
+
+@keyframes beilu-pro-a-cyber-signal {
+  0% {
+    box-shadow:
+      inset calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) 0 var(--beilu-identity-edge-aux),
+      inset calc(0px - var(--beilu-border-width)) 0 var(--beilu-identity-edge);
+  }
+  52% {
+    box-shadow:
+      inset var(--beilu-border-width) 0 var(--beilu-identity-edge-aux),
+      inset calc(0px - var(--beilu-border-width) - var(--beilu-border-width) - var(--beilu-border-width)) 0 var(--beilu-identity-edge);
+  }
+  100% {
+    box-shadow: inset calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) 0 var(--beilu-feedback-selected-edge);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Night Pro | star-route archive, gold hierarchy, blue interaction
+   -------------------------------------------------------------------------- */
+
+html[data-beilu-enhanced="night"] {
+  color-scheme: dark;
+  --beilu-radius-control: 0.375rem;
+  --beilu-radius-panel: 0.875rem 0.25rem;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent-aux);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent-aux) 16%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-press-border: var(--beilu-identity-active-edge);
+  --beilu-feedback-press-shadow: inset 0 calc(0px - var(--beilu-border-width) - var(--beilu-border-width)) var(--beilu-identity-edge);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent-aux) 13%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-identity-active-edge);
+  --beilu-pro-a-selected-animation: beilu-pro-a-night-orbit var(--beilu-motion-panel) var(--beilu-ease-enter);
+  --beilu-panel-texture: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--beilu-surface-raised) 34%, var(--beilu-surface-panel)),
+    var(--beilu-surface-panel) 52%
+  );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      circle at 18% 24%,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 16%, transparent) 0 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 78% 68%,
+      color-mix(in srgb, var(--beilu-theme-accent) 14%, transparent) 0 1px,
+      transparent 2px
+    );
+}
+
+html[data-beilu-enhanced="night"] :where(.left-panel, #right-panel) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="night"] #right-panel {
+  border-block-start-color: var(--beilu-identity-edge-aux);
+  border-block-end: var(--beilu-border-width) solid var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="night"] :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .floating-window,
+  .ide-menu-dropdown,
+  .model-selector-dropdown
+) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="night"] :where(.btn, #message-input, .fp-path-input) {
+  border-radius: var(--beilu-radius-control);
+}
+
+html[data-beilu-enhanced="night"] :where(.panel-title, .section-label) {
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-display);
+  font-weight: 600;
+  letter-spacing: 0.045em;
+}
+
+@keyframes beilu-pro-a-night-orbit {
+  0% {
+    box-shadow: inset 0 0 0 0 var(--beilu-identity-edge-aux);
+  }
+  55% {
+    box-shadow: inset 0 0 0 calc(var(--beilu-border-width) + var(--beilu-border-width)) var(--beilu-identity-edge-aux);
+  }
+  100% {
+    box-shadow: inset 0 calc(0px - var(--beilu-border-width) - var(--beilu-border-width)) var(--beilu-feedback-selected-edge);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Valentine Pro | warm paper, bookmark chapters, stable reading band
+   -------------------------------------------------------------------------- */
+
+html[data-beilu-enhanced="valentine"] {
+  color-scheme: light;
+  --beilu-radius-control: 0.375rem;
+  --beilu-radius-panel: 0.75rem 0.25rem;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent) 14%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-press-border: var(--beilu-identity-edge);
+  --beilu-feedback-press-shadow: inset 0 calc(0px - var(--beilu-border-width) - var(--beilu-border-width)) var(--beilu-identity-edge);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent-aux) 11%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-identity-edge);
+  --beilu-pro-a-selected-animation: beilu-pro-a-valentine-write var(--beilu-motion-fast) var(--beilu-ease-enter);
+  --beilu-panel-texture: linear-gradient(
+    180deg,
+    var(--beilu-surface-raised),
+    var(--beilu-surface-panel) 30%,
+    var(--beilu-surface-workspace)
+  );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      ellipse at 12% 16%,
+      color-mix(in srgb, var(--beilu-theme-accent) 13%, transparent) 0 0.32rem,
+      transparent 0.36rem
+    ),
+    radial-gradient(
+      ellipse at 88% 74%,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 10%, transparent) 0 0.24rem,
+      transparent 0.28rem
+    );
+}
+
+html[data-beilu-enhanced="valentine"] :where(#chat-container, #chat-messages) {
+  background-image: var(--beilu-panel-texture);
+  box-shadow: inset 0 calc(0px - var(--beilu-border-width) - var(--beilu-border-width) - var(--beilu-border-width) - var(--beilu-border-width)) var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="valentine"] :where(.left-panel, #right-panel) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-end: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="valentine"] :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .floating-window,
+  .ide-menu-dropdown,
+  .model-selector-dropdown
+) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge-aux);
+}
+
+html[data-beilu-enhanced="valentine"] :where(.btn, #message-input, .fp-path-input) {
+  border-radius: var(--beilu-radius-control);
+}
+
+html[data-beilu-enhanced="valentine"] :where(.top-tab) {
+  border-radius: 0;
+}
+
+html[data-beilu-enhanced="valentine"] :where(.panel-title, .section-label) {
+  border-inline-start: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-display);
+  font-weight: 650;
+  letter-spacing: 0.035em;
+}
+
+html[data-beilu-enhanced="valentine"] :where(
+  .top-tab.top-tab-active,
+  .file-tree-item.active,
+  [role="tab"][aria-selected="true"],
+  [role="option"][aria-selected="true"],
+  [role="treeitem"][aria-selected="true"]
+) {
+  background-image: linear-gradient(var(--beilu-feedback-selected-edge), var(--beilu-feedback-selected-edge));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% calc(var(--beilu-border-width) + var(--beilu-border-width));
+}
+
+@keyframes beilu-pro-a-valentine-write {
+  from {
+    background-size: 0 calc(var(--beilu-border-width) + var(--beilu-border-width));
+  }
+  to {
+    background-size: 100% calc(var(--beilu-border-width) + var(--beilu-border-width));
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Bumblebee Pro | charcoal grid, light command cards, cyan operation
+   -------------------------------------------------------------------------- */
+
+html[data-beilu-enhanced="bumblebee"] {
+  color-scheme: dark;
+  --beilu-radius-control: 0.125rem;
+  --beilu-radius-panel: 0.25rem 0;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-theme-accent-aux);
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent-aux) 17%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-press-border: var(--beilu-identity-active-edge);
+  --beilu-feedback-press-shadow: inset calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) 0 var(--beilu-identity-edge-aux);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-theme-accent-aux) 14%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-identity-active-edge);
+  --beilu-pro-a-selected-animation: beilu-pro-a-bumblebee-track var(--beilu-motion-panel) var(--beilu-ease-enter);
+  --beilu-panel-texture: linear-gradient(
+    90deg,
+    var(--beilu-identity-edge-aux) 0 calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)),
+    var(--beilu-surface-panel) calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width))
+  );
+  --beilu-backdrop-effect:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--beilu-theme-accent) 9%, transparent) 0 var(--beilu-border-width),
+      transparent var(--beilu-border-width) 1.5rem
+    ),
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--beilu-theme-accent-aux) 7%, transparent) 0 var(--beilu-border-width),
+      transparent var(--beilu-border-width) 1.5rem
+    );
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(.left-panel, #right-panel) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(
+  .left-panel .collapse,
+  #right-panel .collapse,
+  .left-panel .card,
+  #right-panel .card
+) {
+  background-color: var(--beilu-surface-inverse);
+  background-image: none;
+  border: var(--beilu-border-width) solid var(--beilu-border-strong);
+  border-radius: var(--beilu-radius-control);
+  color: var(--beilu-fg-inverse);
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .floating-window,
+  .ide-menu-dropdown,
+  .model-selector-dropdown
+) {
+  border-radius: var(--beilu-radius-panel);
+  border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
+  border-inline-end: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge-aux);
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(.btn, #message-input, .fp-path-input) {
+  border-radius: var(--beilu-radius-control);
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(.panel-title, .section-label) {
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-display);
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(
+  .top-tab.top-tab-active,
+  .file-tree-item.active,
+  [role="tab"][aria-selected="true"],
+  [role="option"][aria-selected="true"],
+  [role="treeitem"][aria-selected="true"]
+) {
+  background-image: linear-gradient(var(--beilu-feedback-selected-edge), var(--beilu-feedback-selected-edge));
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  background-size: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) 100%;
+}
+
+html[data-beilu-enhanced="bumblebee"] :where(
+  .alert-warning,
+  [role="alert"][data-severity="warning"]
+) {
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-state-warning) 18%,
+    var(--beilu-surface-raised)
+  );
+  border-inline-start: calc(var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-state-warning);
+  color: var(--beilu-fg-primary);
+}
+
+@keyframes beilu-pro-a-bumblebee-track {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility exits: identity remains through shape, surface and edge.
+   Core owns the common press/focus fallback; this block stops Pro A identity
+   motion and removes backdrop decoration without changing component state.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html:is(
+    [data-beilu-enhanced="cyberpunk"],
+    [data-beilu-enhanced="night"],
+    [data-beilu-enhanced="valentine"],
+    [data-beilu-enhanced="bumblebee"]
+  ) :where(
+    .top-tab.top-tab-active,
+    .file-tree-item.active,
+    [role="tab"][aria-selected="true"],
+    [role="option"][aria-selected="true"],
+    [role="treeitem"][aria-selected="true"]
+  ) {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html:is(
+    [data-beilu-enhanced="cyberpunk"],
+    [data-beilu-enhanced="night"],
+    [data-beilu-enhanced="valentine"],
+    [data-beilu-enhanced="bumblebee"]
+  ) {
+    --beilu-backdrop-effect: none;
+    --beilu-panel-texture: none;
+  }
+}

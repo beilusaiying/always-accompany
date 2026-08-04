@@ -5,21 +5,49 @@
 import * as fs from "node:fs";
 import { resolveWorkspacePath, getIdeOperationLog } from "../infra.mjs";
 
+function requireNonEmptyString(value, name) {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`缺少或无效 ${name} 参数`);
+  return value.trim();
+}
+
+function requireNonNegativeInteger(value, name) {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    throw new Error(`缺少或无效 ${name} 参数（必须是有限非负整数）`);
+  }
+  return value;
+}
+
+function optionalStringArray(value, name) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !id)) {
+    throw new Error(`无效 ${name} 参数（必须是非空字符串数组）`);
+  }
+  if (new Set(value).size !== value.length) {
+    throw new Error(`无效 ${name} 参数（不能包含重复项）`);
+  }
+  return [...value];
+}
+
 export async function checkpointStart(params, checkpoint) {
   const id = params.id;
   if (!id) throw new Error("缺少 id 参数");
-  const chatId = typeof params.chatId === "string" ? params.chatId : "";
-  const messageIndex = typeof params.messageIndex === "number" ? params.messageIndex : 0;
+  const chatId = requireNonEmptyString(params.chatId, "chatId");
+  const messageIndex = requireNonNegativeInteger(params.messageIndex, "messageIndex");
+  const messageId = params.messageId === undefined ? undefined : requireNonEmptyString(params.messageId, "messageId");
   const deferred = params.deferred === true;
-  checkpoint.start(id, chatId, messageIndex, deferred);
+  checkpoint.start(id, chatId, messageIndex, deferred, messageId);
   return { success: true, id, message: `检查点已${deferred ? "登记(deferred)" : "开始"}` };
 }
 
 export async function checkpointCommit(params, checkpoint) {
   const id = params.id;
   if (!id) throw new Error("缺少 id 参数");
-  checkpoint.commit(id);
-  return { success: true, id, message: "检查点已提交" };
+  const result = await checkpoint.commit(id);
+  return {
+    id,
+    ...result,
+    ...(result?.success ? { message: "检查点已提交" } : {}),
+  };
 }
 
 export async function checkpointRevert(params, checkpoint) {
@@ -29,15 +57,17 @@ export async function checkpointRevert(params, checkpoint) {
 }
 
 export async function checkpointRevertToMessage(params, checkpoint) {
-  const chatId = typeof params.chatId === "string" ? params.chatId : "";
-  const targetIndex = typeof params.targetIndex === "number" ? params.targetIndex : 0;
-  return checkpoint.revertToMessage(chatId, targetIndex);
+  const chatId = requireNonEmptyString(params.chatId, "chatId");
+  const targetIndex = requireNonNegativeInteger(params.targetIndex, "targetIndex");
+  const expectedCheckpointIds = optionalStringArray(params.expectedCheckpointIds, "expectedCheckpointIds");
+  return checkpoint.revertToMessage(chatId, targetIndex, expectedCheckpointIds);
 }
 
 export async function checkpointRevertDiff(params, checkpoint) {
-  const chatId = typeof params.chatId === "string" ? params.chatId : "";
-  const targetIndex = typeof params.targetIndex === "number" ? params.targetIndex : 0;
-  return checkpoint.getRevertToMessageDiff(chatId, targetIndex);
+  const chatId = requireNonEmptyString(params.chatId, "chatId");
+  const targetIndex = requireNonNegativeInteger(params.targetIndex, "targetIndex");
+  const expectedCheckpointIds = optionalStringArray(params.expectedCheckpointIds, "expectedCheckpointIds");
+  return checkpoint.getRevertToMessageDiff(chatId, targetIndex, expectedCheckpointIds);
 }
 
 export async function checkpointList(checkpoint) {

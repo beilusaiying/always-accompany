@@ -37,6 +37,7 @@ import { escapeHtml } from "../state/utils.mjs";
 import { MODE_BADGE } from "../state/modeTabMap.mjs"; // D2 收口：模式徽章单源（原内联 modeMap 漏 smart）
 import { sendAction } from "../transport/sendAction.mjs"; // T6b：出向统一门面（verb=真动作）
 import { storage, KEYS } from "../state/storage.mjs"; // T041b: key 单源；P2: 读写经门面
+import { classifyPartLoadStatus, resolvePartLoadOccurrence } from "../state/partLoadStatus.mjs";
 
 // ---- 常量 ----
 const MAX_LOG_ENTRIES = 200;
@@ -328,8 +329,45 @@ function renderErrors() {
 // 把 server 核心的 part load 失败（parts_loader reportPluginStatus → /api/v1/monitor/plugins，
 // 纯内存 pull、原本与本面板不互通）映射到「运行时日志/错误」面板。
 // 根因背景：chat shell 那次 404 雪崩就是 part load-time SyntaxError 被静默降级成 404，前端零信号。
-const _seenPartErrors = new Map(); // name -> "status@lastUpdate"（去重，仅推送新失败/状态变化一次）
-const _PART_ERROR_STATUSES = new Set(["load-error", "shallow-load-error", "unload-error"]);
+const _seenPartErrors = new Map(); // occurrence/fingerprint -> seen timestamp
+const MAX_SEEN_PART_ERRORS = 500;
+
+function partLoadDetailText(detail) {
+  if (typeof detail === "string") return detail;
+  if (detail == null) return "";
+  try { return JSON.stringify(detail); } catch { return String(detail); }
+}
+
+/** 即时 event 与 poll 共用的唯一消费口：同 occurrence 只进日志/错误面板一次。 */
+function consumePartLoadStatus(partpath, info, source) {
+  const payload = { ...(info || {}), partpath: info?.partpath || partpath || "?" };
+  const status = payload.status || "load-error";
+  const kind = classifyPartLoadStatus(status);
+  if (kind !== "failure") {
+    // part-load-error 事件却传入非失败/未知状态时仍外显协议异常。
+    if (source === "event") pushLog("warn", `[parts] ⚠ ${payload.partpath} ${status}`);
+    return false;
+  }
+
+  const occurrence = resolvePartLoadOccurrence(payload, partpath);
+  if (_seenPartErrors.has(occurrence.key)) return false;
+  _seenPartErrors.set(occurrence.key, Date.now());
+  while (_seenPartErrors.size > MAX_SEEN_PART_ERRORS) {
+    _seenPartErrors.delete(_seenPartErrors.keys().next().value);
+  }
+
+  if (occurrence.legacyFingerprint) {
+    const warning = `[parts] ${payload.partpath} ${status} 缺少 occurrenceId，仅以显式 legacy fingerprint 兼容去重 (${source})`;
+    _origWarn(warning);
+    pushLog("warn", warning);
+  }
+
+  const detail = partLoadDetailText(payload.detail);
+  const msg = `[parts] ⚠ ${payload.partpath} ${status}${detail ? ": " + detail : ""}`;
+  pushLog("error", msg);
+  pushError(msg);
+  return true;
+}
 
 async function pollPartLoadErrors() {
   try {
@@ -340,16 +378,8 @@ async function pollPartLoadErrors() {
     for (const k of _seenPartErrors.keys()) { if (k.startsWith("_poll_fail_")) _seenPartErrors.delete(k); }
     const plugins = data?.plugins || {};
     for (const [name, info] of Object.entries(plugins)) {
-      if (!info || !_PART_ERROR_STATUSES.has(info.status)) continue;
-      const key = `${info.status}@${info.lastUpdate}`;
-      if (_seenPartErrors.get(name) === key) continue; // 同一条已推送过，不重复刷屏
-      _seenPartErrors.set(name, key);
-      const detail = typeof info.detail === "string"
-        ? info.detail
-        : info.detail ? JSON.stringify(info.detail) : "";
-      const msg = `[parts] ⚠ ${name} ${info.status}${detail ? ": " + detail : ""}`;
-      pushLog("error", msg);
-      pushError(msg);
+      if (!info) continue;
+      consumePartLoadStatus(name, info, "poll");
     }
   } catch { /* 轮询失败静默，不影响面板 */ }
 }
@@ -542,9 +572,7 @@ function bindEvents() {
   // 不再依赖 5s 轮询延迟，前端即时收到并推送到日志/错误面板
   window.addEventListener("beilu:part-load-error", (e) => {
     const d = e.detail || {};
-    const msg = `[parts] ⚠ ${d.partpath || "?"} ${d.status || "load-error"}${d.detail ? ": " + d.detail : ""}`;
-    pushLog("error", msg);
-    pushError(msg);
+    consumePartLoadStatus(d.partpath || "?", d, "event");
   });
 
   // 设置面板"后台插件轮询"开关（settingsSlots.mjs 发 beilu:monitor-poll-toggle 事件）

@@ -1,6 +1,6 @@
 import { getPartList, setDefaultPart } from '../../../../../server/parts_loader.mjs'
 
-import { addServiceSourceFile, deleteServiceSourceFile, getServiceSourceFile, saveServiceSourceFile } from './manager.mjs'
+import { addServiceSourceFile, deleteServiceSourceFile, getConfigTemplate, getServiceSourceFile, saveServiceSourceFile } from './manager.mjs'
 
 /**
  * 根据类型自动推断服务源路径。
@@ -38,13 +38,12 @@ export const actions = {
 	create: async ({ user, sourceName, type = 'AI', generator }) => {
 		if (!sourceName) throw new Error('Service source name is required for create action.')
 		const serviceSourcePath = inferServiceSourcePath(type)
-		await addServiceSourceFile(user, sourceName, serviceSourcePath)
 		if (generator) {
-			// 如果提供了生成器，自动设置配置
-			const data = await getServiceSourceFile(user, sourceName, serviceSourcePath)
-			data.generator = generator
-			await saveServiceSourceFile(user, sourceName, data, serviceSourcePath)
+			// 完整创建必须一次提交 generator + 模板，禁止先加载空 generator 再补配置。
+			const config = await getConfigTemplate(user, generator, serviceSourcePath)
+			await saveServiceSourceFile(user, sourceName, { generator, config }, serviceSourcePath)
 		}
+		else await addServiceSourceFile(user, sourceName, serviceSourcePath)
 		return `Service source '${sourceName}' created${generator ? ` with generator '${generator}'` : ''}.`
 	},
 	/**

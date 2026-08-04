@@ -158,6 +158,29 @@ let _lastSentBlocks = null
 let _captureSequence = 0
 let _lastSentAt = null
 
+// 本地截图插件 → 主服务注入边界。HTTP 收到 JSON 不等于注入成功；必须同时满足 2xx 与
+// success:true。失败时 autoCaptureAndSend 返回 sent:false，带 requestId 的陪伴截图不会被轮询器
+// 标记完成，下一轮仍会重试同一个请求，避免一次部件接线抖动永久丢图。
+function _postEyeInjection(ctx, body) {
+	return new Promise((resolve, reject) => {
+		const req = http.request(
+			{ host: ctx.host, port: ctx.port, path: '/api/eye/inject', method: 'POST', timeout: 10000, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'x-pet-token': ctx.token } },
+			(res) => {
+				let raw = ''
+				res.on('data', (c) => { raw += c })
+				res.on('end', () => {
+					let payload = null
+					try { payload = JSON.parse(raw) } catch { /* 非 JSON 也是失败响应 */ }
+					resolve({ statusCode: Number(res.statusCode) || 0, payload })
+				})
+			},
+		)
+		req.on('error', reject)
+		req.on('timeout', () => req.destroy(new Error('timeout')))
+		req.write(body); req.end()
+	})
+}
+
 // ── 截屏(desktopCapturer 缩略图即成图;targetWindow 配置时按窗口名匹配截该窗,匹配不到回退全屏) ──
 async function _capture(targetW) {
 	const primary = screen.getPrimaryDisplay()
@@ -179,7 +202,7 @@ async function _capture(targetW) {
 
 // ── 主流程(消息/元数据字段与 beilu_eye.py auto_capture_and_send 逐字对齐) ──
 let _running = false
-async function autoCaptureAndSend(ctx) {
+async function autoCaptureAndSend(ctx, options = {}) {
 	if (_running) return { sent: false, skipped: true, reason: 'busy' }
 	_running = true
 	try {
@@ -198,7 +221,9 @@ async function autoCaptureAndSend(ctx) {
 		}
 		const changeScore = Math.round(changeRatio * 10000) / 10000
 
-		if (_lastSentDhash !== null && dist < fcfg.threshold) {
+		// 明确的陪伴轮 requestId 代表“给这句话取当下画面”，即使画面与上一张相似也必须回传；
+		// 普通自动感知仍走 dHash 去重节省 token。
+		if (!options.force && _lastSentDhash !== null && dist < fcfg.threshold) {
 			console.log(`[autoCapture] 自动截图相似(汉明距离=${dist}<${fcfg.threshold}),跳过不发`)
 			return { sent: false, skipped: true, change_score: changeScore, hamming: dist, reason: 'similar' }
 		}
@@ -212,34 +237,30 @@ async function autoCaptureAndSend(ctx) {
 		if (fcfg.ts) { meta.timestamp = tsStr; meta.elapsed_since_last = elapsed; meta.sequence = seq }
 		if (fcfg.l3) { meta.change_score = changeScore; meta.changed_blocks = changedIdxs.length }
 
-		const msgParts = [`[自动截图] 用户正在: ${windowTitle}`]
+		const deliveryMode = options.mode === 'active' ? 'active' : 'passive'
+		const captureLabel = deliveryMode === 'active' ? '[快速截图]' : '[自动截图]'
+		const msgParts = [`${captureLabel} 用户正在: ${windowTitle}`]
 		if (fcfg.ts) msgParts.push(`${tsStr} 第${seq}张` + (elapsed !== null ? `(距上张${elapsed}秒)` : '(首张)'))
 		if (fcfg.l3) msgParts.push(`变化${Math.round(changeScore * 100)}%`)
 
 		const body = JSON.stringify({
 			image: img.toJPEG(_getJpegQuality()).toString('base64'),
 			message: msgParts.join(' | '),
-			mode: 'passive',
+			mode: deliveryMode,
 			window_title: windowTitle,
 			capture_meta: meta,
+			request_id: typeof options.requestId === 'string' ? options.requestId : '',
 		})
-		const result = await new Promise((resolve, reject) => {
-			const req = http.request(
-				{ host: ctx.host, port: ctx.port, path: '/api/eye/inject', method: 'POST', timeout: 10000, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'x-pet-token': ctx.token } },
-				(res) => {
-					let b = ''
-					res.on('data', (c) => { b += c })
-					res.on('end', () => { try { resolve(JSON.parse(b)) } catch { resolve({}) } })
-				},
-			)
-			req.on('error', reject)
-			req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
-			req.write(body); req.end()
-		})
+		const injection = await _postEyeInjection(ctx, body)
+		const result = injection.payload
 		if (result && result.blocked) {
 			// 被安全门拦截:不更新基准/序号(这张没真正"已发送"给 AI)
 			console.log('[autoCapture] 自动截图被黑名单阻止:', result.reason || '')
 			return { sent: false, skipped: false, blocked: true, change_score: changeScore, reason: 'blocked' }
+		}
+		if (injection.statusCode < 200 || injection.statusCode >= 300 || result?.success !== true) {
+			const detail = result?.error || result?.message || `HTTP ${injection.statusCode || 'invalid_response'}`
+			throw new Error(`截图注入未确认成功: ${detail}`)
 		}
 		_lastSentDhash = curDhash
 		_lastSentBlocks = curBlocks
@@ -265,6 +286,7 @@ function _getPollMs() {
 	return 5000
 }
 let _pollTimer = null
+let _lastCompletedRequestId = ''
 function startGcPolling(ctx) {
 	if (_pollTimer) return
 	_pollTimer = setInterval(() => {
@@ -278,8 +300,12 @@ function startGcPolling(ctx) {
 						const data = JSON.parse(b)
 						if (typeof data.username === 'string' && data.username) _configUsername = data.username // T5#10:配置寻址按本用户
 						if (data.captureRequested) {
-							console.log('[autoCapture] 收到截图请求(captureRequested),自动截图...')
-							autoCaptureAndSend(ctx)
+							const requestId = typeof data.captureRequestId === 'string' ? data.captureRequestId : ''
+							if (requestId && requestId === _lastCompletedRequestId) return
+							console.log('[autoCapture] 收到截图请求(captureRequested),自动截图...', requestId || '(legacy)')
+							autoCaptureAndSend(ctx, { requestId, force: !!requestId }).then((r) => {
+								if (requestId && (r?.sent || r?.blocked)) _lastCompletedRequestId = requestId
+							}).catch(() => {})
 						}
 					} catch { /* 静默:响应异常下轮再试 */ }
 				})

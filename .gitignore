@@ -9,6 +9,7 @@
 # IDE / 编辑器
 /.idea
 /.vscode
+/.playwright-cli
 *.suo
 *.user
 
@@ -24,15 +25,19 @@
 # 用户数据
 /data
 /src/data
+/storage
 /desktop-eye/user-images
 
 # beilu 运行时目录（含 _ws_token 连接凭证与操作日志，禁入库）
 **/.beilu/
 
 # P1 资源大文件（>100MB，仓库里放 zip 压缩包，启动时自动解压）
-src/yonban/core/functions/memory/p1_res/p1v2_derived/nb_vec_int8.npy
-src/yonban/core/functions/memory/p1_res/p1v2_derived/userdict_domain_full.txt
-src/yonban/core/functions/memory/p1_res/p1v2_derived/conceptnet_en.json
+src/yonban/core/functions/memory/p1/resources/p1v2_derived/nb_vec_int8.npy
+src/yonban/core/functions/memory/p1/resources/p1v2_derived/userdict_domain_full.txt
+src/yonban/core/functions/memory/p1/resources/p1v2_derived/conceptnet_en.json
+src/yonban/core/functions/memory/p1/resources/numberbatch_en.bin
+src/yonban/core/functions/memory/p1/resources/numberbatch_zh.bin
+**/__pycache__/
 
 # 插件运行时数据（不应被git覆盖）
 src/public/parts/plugins/beilu-regex/config_data.json
@@ -51,6 +56,10 @@ src/public/parts/plugins/beilu-worldbook/config_data.json
 
 # 构建产物 / 锁文件
 /desktop-eye/package-lock.json
+/output
+
+# 本机截图原稿（README 使用的已整理副本在 imgs/screenshots）
+/图库
 
 # 插件运行时数据（不被 git clean 删除）
 **/config_data.json
@@ -68,9 +77,7 @@ Thumbs.db
 /browsers
 
 # 词向量大文件(662/395/337MB,超GitHub单文件100MB硬限,本地资源不入库)
-src/yonban/core/functions/memory/numberbatch_zh.txt
-src/yonban/core/functions/memory/numberbatch_en.bin
-src/yonban/core/functions/memory/numberbatch_zh.bin
+src/yonban/core/functions/memory/p1/resources/numberbatch_zh.txt
 
 # STT 模型目录(约1.8GB,不进 git;插件面板内联网下载,支持直链与镜像)
 /moxin

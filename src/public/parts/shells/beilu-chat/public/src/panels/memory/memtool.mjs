@@ -797,6 +797,14 @@ let _pseriesPromptSel = null;
 let _pseriesAISourceNames = null; // getAISources 结果缓存（面板生命周期内一次）
 let _pseriesModelReqId = 0; // 模型列表拉取竞态票据（同 subModePanel _modelSelectReqId）
 let _pseriesEnumSchema = null; // getSubModes 下发 enum_schema 缓存（权威=后端 paramSchema.mjs ENUM_SCHEMA）
+let _pseriesActivationBusy = false;
+let _pseriesPresetsChangedBound = false;
+const _pseriesCreateButtonHtml = () => `
+  <div class="sticky top-0 z-10 p-2 border-b border-base-300/40 bg-base-100/95 backdrop-blur-sm">
+    <button id="pseries-create-new" type="button" class="btn btn-xs btn-outline btn-success w-full">
+      <i data-ic="plus"></i> 新建预设
+    </button>
+  </div>`;
 // 0715 V3 收口：离线退化副本（原 _PSERIES_ENUM_FALLBACK，与 subModePanel 三表等值双写）
 // 并入 shared/state/enumFallback.mjs 单源，此处改 import 消费（值/文案一字未改）。
 const _pseriesEnumOpts = (key) => {
@@ -808,12 +816,17 @@ async function _loadMemToolPseries(container) {
   container._loaded = true;
   container.innerHTML = `<div class="h-full flex text-xs">
     <div class="w-44 shrink-0 border-r border-base-300/40 overflow-y-auto" id="pseries-list">
+      ${_pseriesCreateButtonHtml()}
       <div class="p-2 opacity-50">加载中...</div>
     </div>
     <div class="flex-1 overflow-y-auto p-3" id="pseries-detail">
       <div class="text-center text-base-content/40 py-8">未选择预设。从左侧列表选择后在此处查看/编辑</div>
     </div>
   </div>`;
+  if (!_pseriesPresetsChangedBound) {
+    window.addEventListener("beilu:memory-presets-changed", _handlePseriesPresetsChanged);
+    _pseriesPresetsChangedBound = true;
+  }
   try {
     await _refreshPseriesList();
   } catch (e) {
@@ -823,10 +836,11 @@ async function _loadMemToolPseries(container) {
   }
 }
 
-async function _refreshPseriesList() {
+async function _refreshPseriesList({ restoreSelection = true } = {}) {
   const listEl = document.getElementById("pseries-list");
-  if (!listEl) return;
-  listEl.innerHTML = '<div class="p-2 opacity-50">加载中...</div>';
+  if (!listEl) return false;
+  listEl.innerHTML = `${_pseriesCreateButtonHtml()}<div class="p-2 opacity-50">加载中...</div>`;
+  listEl.querySelector("#pseries-create-new")?.addEventListener("click", _renderPseriesCreateForm);
   try {
     // 后端 getMemoryPresets action 未返回数据(case 只 break),改走 getdata 拿 memory_presets 数组。
     // 原 raw GET getdata → 复用 memory#getData（桥路由，unwrap 还原裸 config；空 payload→args={}，到达同一 handleGetData）
@@ -848,40 +862,241 @@ async function _refreshPseriesList() {
     }
     const ids = Object.keys(_pseriesData);
     if (ids.length === 0) {
-      listEl.innerHTML = '<div class="p-2 opacity-50">无预设</div>';
-      return;
+      listEl.innerHTML = `${_pseriesCreateButtonHtml()}<div class="p-2 opacity-50">无预设</div>`;
+      listEl.querySelector("#pseries-create-new")?.addEventListener("click", _renderPseriesCreateForm);
+      return true;
     }
-    listEl.innerHTML = ids.map(id => {
+    listEl.innerHTML = _pseriesCreateButtonHtml() + ids.map(id => {
       const p = _pseriesData[id] || {};
       const enabled = p.enabled !== false;
       const active = _pseriesSelected === id;
-      return `<div class="pseries-item ${active ? 'bg-warning/20' : ''}" data-pname="${_escapeHtml(id)}" style="padding:8px;border-bottom:1px solid var(--beilu-amber-8);cursor:pointer;">
+      return `<button type="button" class="pseries-item ${active ? 'bg-warning/20' : ''}" data-pname="${_escapeHtml(id)}" aria-current="${active ? 'true' : 'false'}" style="display:block;width:100%;padding:8px;border:0;border-bottom:1px solid var(--beilu-amber-8);cursor:pointer;text-align:left;color:inherit;background:${active ? 'var(--beilu-amber-8)' : 'transparent'};">
         <div style="display:flex;align-items:center;gap:6px;">
           <span style="color:${enabled ? 'var(--beilu-success)' : 'var(--beilu-muted, #6b7280)'};">${enabled ? '✓' : '○'}</span>
           <span class="font-mono text-[11px]">${_escapeHtml(id)}</span>
         </div>
         <div class="text-[10px] opacity-50 truncate">${_escapeHtml(p.description || '')}</div>
-      </div>`;
+      </button>`;
     }).join("");
+    listEl.querySelector("#pseries-create-new")?.addEventListener("click", _renderPseriesCreateForm);
     listEl.querySelectorAll("[data-pname]").forEach(el => {
-      el.addEventListener("click", () => _selectPseries(el.dataset.pname, { persist: true })); // 用户点击=改绑（凛倾0706）
+      el.addEventListener("click", () => _activatePseries(el.dataset.pname));
     });
-    if (_pseriesSelected && _pseriesData[_pseriesSelected]) _selectPseries(_pseriesSelected); // 恢复不 persist
+    if (restoreSelection && _pseriesSelected && _pseriesData[_pseriesSelected]) _selectPseries(_pseriesSelected); // 恢复不 persist
+    return true;
   } catch (e) {
-    listEl.innerHTML = `<div class="p-2 text-error">加载失败: ${_escapeHtml(e.message)}</div>`;
+    listEl.innerHTML = `${_pseriesCreateButtonHtml()}<div class="p-2 text-error">加载失败: ${_escapeHtml(e.message)}</div>`;
+    listEl.querySelector("#pseries-create-new")?.addEventListener("click", _renderPseriesCreateForm);
+    return false;
   }
 }
 
-function _selectPseries(name, opts = {}) {
-  _pseriesSelected = name;
-  // p系列持久激活位（凛倾0706「切换=改绑」）：仅用户点击 persist 写后端（恢复/重渲染不写，防覆盖）；
-  //   fire-and-forget 失败不阻断详情渲染。与 memoryPresetChat selectPreset persist 同语义同 verb。
-  if (opts.persist) {
-    sendAction({ verb: "setActiveMemoryPreset", target: "plugins:beilu-memory", source: "web", payload: { presetId: name } })
-      .catch((e) => console.warn("[memtool] 持久化激活预设失败:", e?.message || e));
+function _renderPseriesCreateForm() {
+  const detail = document.getElementById("pseries-detail");
+  if (!detail) return;
+  detail.innerHTML = `
+    <form id="pseries-create-form" class="max-w-3xl space-y-3 text-xs" novalidate>
+      <div>
+        <div class="text-sm font-bold"><i data-ic="plus"></i> 新建 P 系列预设</div>
+        <div class="mt-1 text-[10px] opacity-55">创建空预设，或仅填写一条初始提示词。不会自动生成提示词正文。</div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <label class="block">
+          <span class="block opacity-60 mb-1">唯一 presetId <span class="text-error">*</span></span>
+          <input id="pseries-create-id" type="text" class="input input-sm input-bordered w-full font-mono" autocomplete="off" placeholder="例如 P9-custom" />
+        </label>
+        <label class="block">
+          <span class="block opacity-60 mb-1">名称</span>
+          <input id="pseries-create-name" type="text" class="input input-sm input-bordered w-full" autocomplete="off" placeholder="留空时使用 presetId" />
+        </label>
+      </div>
+      <label class="block">
+        <span class="block opacity-60 mb-1">描述</span>
+        <input id="pseries-create-description" type="text" class="input input-sm input-bordered w-full" autocomplete="off" />
+      </label>
+      <label class="flex items-center gap-2">
+        <input id="pseries-create-enabled" type="checkbox" class="toggle toggle-sm toggle-success" checked />
+        <span>创建后启用</span>
+      </label>
+      <fieldset class="border border-base-300/40 rounded p-3 space-y-2">
+        <legend class="px-1 opacity-70">首条提示词（可选）</legend>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label class="block">
+            <span class="block opacity-60 mb-1">名称</span>
+            <input id="pseries-create-prompt-name" type="text" class="input input-sm input-bordered w-full" autocomplete="off" />
+          </label>
+          <label class="block">
+            <span class="block opacity-60 mb-1">角色</span>
+            <select id="pseries-create-prompt-role" class="select select-sm select-bordered w-full">
+              <option value="system">system</option>
+              <option value="user">user</option>
+              <option value="assistant">assistant</option>
+            </select>
+          </label>
+        </div>
+        <label class="block">
+          <span class="block opacity-60 mb-1">内容</span>
+          <div class="relative expandable-container">
+            <textarea id="pseries-create-prompt-content" class="textarea textarea-bordered w-full text-xs font-mono" rows="8" data-expandable data-expand-title="新建预设 · 首条提示词"></textarea>
+            <button type="button" class="expand-btn" title="放大编辑"><i data-ic="fullscreen"></i></button>
+          </div>
+        </label>
+      </fieldset>
+      <div id="pseries-create-status" class="min-h-5 text-xs opacity-75" role="status" aria-live="polite"></div>
+      <div class="flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-sm btn-outline btn-success" data-create-action="create">仅创建</button>
+        <button type="button" class="btn btn-sm btn-success" data-create-action="activate">创建并设为当前</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-create-action="cancel">取消</button>
+      </div>
+    </form>`;
+
+  const form = detail.querySelector("#pseries-create-form");
+  const statusEl = detail.querySelector("#pseries-create-status");
+  const setStatus = (message, level = "info") => {
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.classList.toggle("text-error", level === "error");
+    statusEl.classList.toggle("text-success", level === "success");
+  };
+  const setBusy = (busy) => {
+    form?.querySelectorAll("button[data-create-action]").forEach((button) => { button.disabled = busy; });
+  };
+  const dispatchChanged = (presetId, activated) => {
+    window.dispatchEvent(new CustomEvent("beilu:memory-presets-changed", { detail: { presetId, activated, source: "pseries" } }));
+  };
+  const createPreset = async (activate) => {
+    const presetId = detail.querySelector("#pseries-create-id")?.value?.trim() || "";
+    const name = detail.querySelector("#pseries-create-name")?.value?.trim() || presetId;
+    const description = detail.querySelector("#pseries-create-description")?.value || "";
+    const promptName = detail.querySelector("#pseries-create-prompt-name")?.value?.trim() || "";
+    const promptRole = detail.querySelector("#pseries-create-prompt-role")?.value || "system";
+    const promptContent = detail.querySelector("#pseries-create-prompt-content")?.value || "";
+    if (!presetId) {
+      setStatus("presetId 不能为空。", "error");
+      detail.querySelector("#pseries-create-id")?.focus();
+      return;
+    }
+    if (_pseriesData?.[presetId]) {
+      setStatus(`presetId「${presetId}」已存在，请换一个唯一 ID。`, "error");
+      detail.querySelector("#pseries-create-id")?.focus();
+      return;
+    }
+
+    const prompts = promptName || promptContent
+      ? [{ name: promptName || undefined, role: promptRole, content: promptContent, enabled: true }]
+      : [];
+    let created = false;
+    let eventDispatched = false;
+    setBusy(true);
+    setStatus("正在创建预设...");
+    try {
+      const result = await sendAction({ verb: "createMemoryPreset", target: "plugins:beilu-memory", source: "web", payload: {
+        presetId,
+        name,
+        description,
+        enabled: !!detail.querySelector("#pseries-create-enabled")?.checked,
+        prompts,
+      } });
+      if (!result?.success) throw new Error(result?.error || "后端未确认创建成功");
+      created = true;
+
+      setStatus("创建成功，正在回读列表确认...");
+      const refreshed = await _refreshPseriesList({ restoreSelection: false });
+      if (!refreshed || !_pseriesData?.[presetId]) throw new Error("预设已创建，但列表回读未确认到新 presetId，请刷新后检查");
+
+      if (activate) {
+        setStatus("预设已创建，正在设为当前...");
+        const activeResult = await sendAction({ verb: "setActiveMemoryPreset", target: "plugins:beilu-memory", source: "web", payload: { presetId } });
+        if (!activeResult?.success || activeResult?.active_preset_id !== presetId) {
+          throw new Error(`预设已创建，但设为当前失败：${activeResult?.error || "后端未回读到目标 presetId"}`);
+        }
+        _pseriesSelected = presetId;
+        dispatchChanged(presetId, true);
+        eventDispatched = true;
+        _selectPseries(presetId);
+        const output = document.getElementById("pseries-output");
+        if (output) {
+          output.textContent = `✅ 已创建并设为当前：${presetId}`;
+          output.classList.remove("hidden");
+        }
+        window._beiluToast?.(`已创建并设为当前：${presetId}`, "success");
+      } else {
+        dispatchChanged(presetId, false);
+        eventDispatched = true;
+        setStatus(`已创建「${presetId}」，当前激活预设未改变。`, "success");
+        window._beiluToast?.(`已创建预设：${presetId}`, "success");
+      }
+    } catch (e) {
+      if (created && !eventDispatched) dispatchChanged(presetId, false);
+      setStatus(e?.message || String(e), "error");
+      console.error("[memtool] 创建记忆预设失败:", e);
+      window._reportError?.(`[memtool] 创建记忆预设失败: ${e?.message || e}`);
+    } finally {
+      if (form?.isConnected) setBusy(false);
+    }
+  };
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createPreset(false);
+  });
+  form?.addEventListener("input", () => setStatus(""));
+  form?.querySelector('[data-create-action="activate"]')?.addEventListener("click", () => createPreset(true));
+  form?.querySelector('[data-create-action="cancel"]')?.addEventListener("click", () => {
+    if (_pseriesSelected && _pseriesData?.[_pseriesSelected]) _selectPseries(_pseriesSelected);
+    else detail.innerHTML = '<div class="text-center text-base-content/40 py-8">未选择预设。从左侧列表选择后在此处查看/编辑</div>';
+  });
+  detail.querySelector("#pseries-create-id")?.focus();
+}
+
+async function _handlePseriesPresetsChanged(event) {
+  const { presetId = "", activated = false, source = "" } = event?.detail || {};
+  if (source === "pseries") return;
+  const refreshed = await _refreshPseriesList({ restoreSelection: false });
+  if (!refreshed) return;
+  if (activated && presetId && _pseriesData?.[presetId]) {
+    _pseriesSelected = presetId;
+    _selectPseries(presetId);
+    return;
   }
+  if (_pseriesSelected && _pseriesData?.[_pseriesSelected]) _selectPseries(_pseriesSelected);
+}
+
+async function _activatePseries(name) {
+  if (_pseriesActivationBusy || !_pseriesData?.[name]) return;
+  const listEl = document.getElementById("pseries-list");
+  const buttons = [...(listEl?.querySelectorAll("button[data-pname]") || [])];
+  const target = buttons.find((button) => button.dataset.pname === name);
+  _pseriesActivationBusy = true;
+  buttons.forEach((button) => { button.disabled = true; });
+  target?.setAttribute("aria-busy", "true");
+  try {
+    const result = await sendAction({ verb: "setActiveMemoryPreset", target: "plugins:beilu-memory", source: "web", payload: { presetId: name } });
+    if (!result?.success || result?.active_preset_id !== name) {
+      const error = new Error(result?.error || "后端未回读到目标 presetId");
+      error.isBusinessFailure = true;
+      throw error;
+    }
+    _pseriesSelected = name;
+    _selectPseries(name);
+    window.dispatchEvent(new CustomEvent("beilu:memory-presets-changed", { detail: { presetId: name, activated: true, source: "pseries" } }));
+  } catch (error) {
+    console.warn("[memtool] 激活记忆预设失败:", error);
+    if (error?.isBusinessFailure) window._beiluToast?.(`切换预设失败：${error.message}`, "error");
+  } finally {
+    _pseriesActivationBusy = false;
+    buttons.forEach((button) => { if (button.isConnected) button.disabled = false; });
+    target?.removeAttribute("aria-busy");
+  }
+}
+
+function _selectPseries(name) {
+  _pseriesSelected = name;
   document.querySelectorAll("#pseries-list [data-pname]").forEach(el => {
-    el.classList.toggle("bg-warning/20", el.dataset.pname === name);
+    const active = el.dataset.pname === name;
+    el.classList.toggle("bg-warning/20", active);
+    el.style.background = active ? "var(--beilu-amber-8)" : "transparent";
+    el.setAttribute("aria-current", active ? "true" : "false");
   });
   const detail = document.getElementById("pseries-detail");
   if (!detail) return;

@@ -4,117 +4,240 @@
  * 【功能链】
  *   getPromptHandler Phase3 → runP1(inputText, chatHistory, mode, userCtx)
  *     → HTTP POST http://127.0.0.1:<P1_SERVICE_PORT>/runP1（P1 独立 Python 服务，
- *       shells/p1/service/p1_server.py，002 2026-07-31 拍板：单独/可插拔/可独立运行）
- *     → 返回 {p1_act, recalledRecords, v5, directionWords, ...} 或 null
+ *       memory/p1/service/p1_server.py，002 2026-07-31 拍板：单独/可插拔/可独立运行）
+ *     → 返回带 outcome 的结构化结果；空召回、服务失败、传输失败保持可区分
  *
  * 【why · HTTP 而非进程内插件（2026-07-31 改造）】
  *   旧版动态 import Deno 插件=P1 与本体同进程：本体启动/内存背 119MB+词库，测试必须带宿主（高耦合，
  *   002 拍板拆分）。现 P1 全部功能住独立 Python 进程，本桥只做传导：服务不可达/未启用/失败
- *   一律返 null → 调用方走 AI P1 降级 = 插拔语义（拔掉服务任何链路不炸）。
+ *   返回结构化 failure → 调用方按本次请求策略裁决后续，同时白盒可见真实失败层。
  *   启用门也归服务自答（config 自持在服务侧），本体不再知道 P1 配置在哪。
  *
  * 【影响范围】
  *   getPromptHandler.mjs Phase3 与 aiRunner vocab_edit 消费本模块（签名不变，消费方零改动）。
- *   本模块零 import 依赖（fetch 为运行时标准 API），无回环。
+ *   本模块只依赖 shells:p1 的公共 serviceRuntime；生命周期与请求入口同源，无回环。
  *
  * 【并发契约】
- *   多请求可交错：每次调用独立 HTTP 请求，服务端无请求级共享可变状态（配置盘为真相 mtime 热载）。
+ *   HTTP 请求可并发到达；serviceRuntime 只对冷启动单飞。Node 管线的配置、usage 与缓存
+ *   是模块级资源，因此 stdio 会对完整 runP1/clearCaches 生命周期执行 FIFO 隔离。
  */
 
-const _P1_PORT = Number(globalThis.Deno?.env?.get?.("P1_SERVICE_PORT")) || 13150;
-const _P1_BASE = `http://127.0.0.1:${_P1_PORT}`;
-// P1_RUN_TIMEOUT_MS/P1_IO_TIMEOUT_MS 同款 env 通道可覆盖（本模块零 import 依赖，不接 p1_config，env 是既有通道）
+import { getUserDictionary } from "../../security/auth.mjs";
+import { requestP1Service } from "../p1/serviceRuntime.mjs";
+import { getWorkerBridgeChatId, isWorkerIsolate, requestFromWorker } from "../../../transport/isolateBridge.mjs";
+
+// P1_RUN_TIMEOUT_MS/P1_IO_TIMEOUT_MS 同款 env 通道可覆盖（不接 p1_config，env 是既有通道）
 const _RUN_TIMEOUT_MS = Number(globalThis.Deno?.env?.get?.("P1_RUN_TIMEOUT_MS")) || 30000;   // 召回管线含冷启动词库加载，首跑可能秒级
 const _IO_TIMEOUT_MS = Number(globalThis.Deno?.env?.get?.("P1_IO_TIMEOUT_MS")) || 10000;    // 词库纯文件读写
 
-async function _post(action, body, timeoutMs) {
-  const res = await fetch(`${_P1_BASE}/${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-    signal: AbortSignal.timeout(timeoutMs),
+async function _post(action, body, timeoutMs, username = "", chatId = null) {
+  if (isWorkerIsolate) {
+    let bridgeChatId = typeof chatId === "string" ? chatId.trim() : "";
+    if (!bridgeChatId) bridgeChatId = String(getWorkerBridgeChatId() || "").trim();
+    if (!bridgeChatId) {
+      const { getAmbientChatId } = await import("../../../../../server/whitebox.mjs");
+      bridgeChatId = String(getAmbientChatId?.() || "").trim();
+    }
+    if (!bridgeChatId) {
+      return {
+        transportOk: false, ok: false, status: 503,
+        code: "E_P1_BRIDGE_CHAT_ID_REQUIRED",
+        error: "P1 worker bridge 缺少当前 parent chatId",
+        data: null, text: "",
+      };
+    }
+    const trustedBody = body && typeof body === "object" && !Array.isArray(body) ? { ...body } : {};
+    for (const identityField of ["username", "memoryRoot", "chatId", "chatid", "historyChatId"]) {
+      delete trustedBody[identityField];
+    }
+    try {
+      return await requestFromWorker("p1_service", bridgeChatId, {
+        action,
+        body: trustedBody,
+        timeoutMs,
+      });
+    } catch (error) {
+      return {
+        transportOk: false, ok: false, status: 503,
+        code: error?.code || "E_P1_BRIDGE_REQUEST_FAILED",
+        error: error?.message || String(error),
+        bridge: {
+          phase: error?.phase,
+          executionStarted: error?.executionStarted,
+          sideEffectsPossible: error?.sideEffectsPossible,
+          indeterminate: error?.indeterminate,
+        },
+        data: null, text: "",
+      };
+    }
+  }
+  return await requestP1Service(action, {
+    body: body ?? {}, timeoutMs, username,
+    memoryRoot: getUserDictionary(username || ""),
   });
-  return await res.json();
+}
+
+function _failureFromRequest(requestResult) {
+  const serviceData = requestResult?.data && typeof requestResult.data === "object"
+    ? requestResult.data
+    : null;
+  if (!requestResult?.transportOk) {
+    return {
+      success: false,
+      outcome: "transport-failure",
+      status: requestResult?.status || 503,
+      code: requestResult?.code || "E_P1_TRANSPORT",
+      error: requestResult?.error || "P1 服务不可达",
+    };
+  }
+  return {
+    success: false,
+    outcome: "service-failure",
+    status: requestResult.status,
+    code: serviceData?.code || requestResult.code || (requestResult.ok ? "E_P1_SERVICE_FAILURE" : `E_P1_HTTP_${requestResult.status}`),
+    error: serviceData?.error || requestResult.error || `P1 服务请求失败（HTTP ${requestResult.status}）`,
+    trace: serviceData?.trace || null,
+    whitebox: serviceData?.whitebox || null,
+    runLog: serviceData?.runLog || null,
+  };
 }
 
 // ---- 对外接口：runP1 ----
 /**
  * 运行 P1 自驱动召回管线（独立服务）。
  * @param {string} inputText - 用户最近消息文本
- * @param {Array} chatHistory - 最近 N 条对话 [{role, content}]
- * @param {string} mode - 当前模式（chat/code/work/airp/ide）
- * @param {object} userCtx - {username, charName}
- * @returns {Promise<object|null>} {p1_act, recalledRecords, v5, directionWords, pyramid, trace, whitebox} 或 null
- *   null = 服务不可达 / 未启用 / 管线失败 → 调用方走 AI P1 降级（零回归）
+ * @param {Array} chatHistory - 当前输入之前的对话历史 [{role, content}]；不得重复包含 inputText
+ * @param {string} mode - 本体已裁决的窗口层（chat/code/work/airp/ide）；P1 不自行回退
+ * @param {object} userCtx - {username, charName, chatId, historyChatId}; historyChatId 是 chatHistory 的宿主窗口归属
+ * @returns {Promise<object>} {success, outcome, p1_act, recalledRecords, ...}
+ *   outcome=recall|empty|service-failure|transport-failure；非 recall 的后续行为由调用方裁决。
  */
 export async function runP1(inputText, chatHistory, mode, userCtx) {
-  try {
-    const res = await _post("runP1", {
-      inputText: inputText || "",
-      chatHistory: chatHistory || [],
-      mode: mode || "chat",
-      username: userCtx?.username || "",
-      charName: userCtx?.charName || "",
-      chatId: userCtx?.chatId || "",
-    }, _RUN_TIMEOUT_MS);
-    // 方向词或记忆记录任一路有结果都必须透传；不能让非空 record recall 被 p1_act 空值吞掉。
-    const recalledRecords = Array.isArray(res?.recalledRecords) ? res.recalledRecords : [];
-    if (!res?.success || (!res?.p1_act?.length && recalledRecords.length === 0)) {
-      console.warn("[p1Bridge] P1 returned no usable recall result:", {
-        success: !!res?.success,
-        error: res?.error || null,
-        directionCount: res?.p1_act?.length || 0,
-        recordCount: recalledRecords.length,
-        dataReason: res?.trace?.recall?.dataRecall?.reason || null,
-      });
-      return null;
-    }
-    return {
-      p1_act: res.p1_act || [],
-      recalledRecords,
-      v5: res.v5 || null,
-      directionWords: res.directionWords || [],
-      pyramid: res.pyramid || null,
-      trace: res.trace || null,
-      whitebox: res.whitebox || null,
-    };
-  } catch (e) {
-    // 服务不在（拔掉状态）走这里：ECONNREFUSED/timeout → 降级，响亮一行不刷屏
-    console.warn(`[p1Bridge] P1 服务不可达或失败（走 AI P1 降级，独立启动: python src/public/parts/shells/p1/service/p1_server.py）:`, e?.message || e);
-    return null;
+  const requestResult = await _post("runP1", {
+    inputText: inputText || "",
+    chatHistory: chatHistory || [],
+    mode: mode || "",
+    activeMode: mode || "",
+    username: userCtx?.username || "",
+    charName: userCtx?.charName || "",
+    chatId: userCtx?.chatId || "",
+    historyChatId: userCtx?.historyChatId || "",
+    source: "production-bridge",
+  }, _RUN_TIMEOUT_MS, userCtx?.username || "", userCtx?.chatId || "");
+  const res = requestResult?.data;
+  if (!requestResult?.transportOk || !requestResult.ok || !res || res.success !== true) {
+    const failure = _failureFromRequest(requestResult);
+    console.warn("[p1Bridge] P1 request failed:", {
+      outcome: failure.outcome,
+      status: failure.status,
+      code: failure.code,
+      error: failure.error,
+    });
+    return failure;
   }
+
+  // 方向词或记忆记录任一路有结果都必须透传；success:true 的真实空结果也保持为 empty。
+  const p1Act = Array.isArray(res.p1_act) ? res.p1_act : [];
+  const recalledRecords = Array.isArray(res.recalledRecords) ? res.recalledRecords : [];
+  const directionWords = Array.isArray(res.directionWords) ? res.directionWords : [];
+  const hasRecall = directionWords.length > 0 || p1Act.length > 0 || recalledRecords.length > 0;
+  return {
+    success: true,
+    outcome: hasRecall ? "recall" : "empty",
+    status: requestResult.status,
+    p1_act: p1Act,
+    recalledRecords,
+    v5: res.v5 || null,
+    directionWords,
+    pyramid: res.pyramid || null,
+    trace: res.trace || null,
+    whitebox: res.whitebox || null,
+    runLog: res.runLog || null,
+  };
 }
 
 // ---- 对外接口：用户插拔词库读写（P9 词库维护 vocab_edit 工具消费，2026-07-31） ----
 // 【why 收口在此】本模块是 yonban 核心触碰 P1 服务的唯一收口点；
 //   格式校验收口在服务 saveUserVocab（原子写 + _meta.enabled 必填校验），本函数只透传。
 
-/** 读用户插拔词库文件（供 P9 diff 用；不存在返回 null，非异常） */
-export async function getUserVocabFile(file) {
+/**
+ * 读用户插拔词库文件（供 P9 diff 用）。
+ *
+ * 返回 tagged union，禁止把“明确不存在”以外的失败压成 null：
+ *   - {kind:"found", content, status}
+ *   - {kind:"not_found", code, status, error}
+ *   - {kind:"error", code, status, error}
+ * 只有服务明确给出 E_P1_VOCAB_NOT_FOUND 才是 not_found；HTTP、传输、解析和
+ * 其他 success:false 都保留为 error，交由写侧 fail-closed。
+ */
+export async function getUserVocabFile(file, username = "") {
   try {
-    const res = await _post("getUserVocab", { file }, _IO_TIMEOUT_MS);
-    return res?.success ? res.content : null;
+    const result = await _post("getUserVocab", { file }, _IO_TIMEOUT_MS, username);
+    const res = result?.data;
+    if (result?.transportOk && result.ok && res?.success === true) {
+      if (!res.content || typeof res.content !== "object" || Array.isArray(res.content)) {
+        return {
+          kind: "error",
+          code: "E_P1_VOCAB_RESPONSE_INVALID",
+          status: result.status,
+          error: "P1 用户词库读取响应缺少有效 content 对象",
+        };
+      }
+      return { kind: "found", content: res.content, status: result.status };
+    }
+    if (result?.transportOk && result.ok && res?.code === "E_P1_VOCAB_NOT_FOUND") {
+      return {
+        kind: "not_found",
+        code: res.code,
+        status: result.status,
+        error: res.error || "用户词库不存在",
+      };
+    }
+    const failure = _failureFromRequest(result);
+    return {
+      kind: "error",
+      code: failure.code,
+      status: failure.status,
+      error: failure.error,
+    };
   } catch (e) {
-    console.warn("[p1Bridge] getUserVocabFile 失败:", e?.message || e);
-    return null;
+    return {
+      kind: "error",
+      code: e?.code || "E_P1_VOCAB_READ_EXCEPTION",
+      status: Number(e?.status) || 503,
+      error: e?.message || String(e),
+    };
   }
 }
 
 /** 写用户插拔词库文件（校验/原子写在服务侧） */
-export async function saveUserVocabFile(file, content) {
+export async function saveUserVocabFile(file, content, username = "") {
   try {
-    return await _post("saveUserVocab", { file, content }, _IO_TIMEOUT_MS);
+    const result = await _post("saveUserVocab", { file, content }, _IO_TIMEOUT_MS, username);
+    const res = result?.data;
+    if (!result?.transportOk || !result.ok || !res || res.success !== true) {
+      return _failureFromRequest(result);
+    }
+    return { ...res, status: result.status };
   } catch (e) {
-    return { success: false, error: e?.message || String(e) };
+    return {
+      success: false,
+      outcome: "transport-failure",
+      status: Number(e?.status) || 503,
+      code: e?.code || "E_P1_VOCAB_WRITE_EXCEPTION",
+      error: e?.message || String(e),
+    };
   }
 }
 
 /** 读 P1 服务配置（vocabEditExec 拉熔断上限等；服务不在返 null=调用方用兜底默认） */
-export async function getP1Config() {
+export async function getP1Config(username = "") {
   try {
-    const res = await _post("getConfig", {}, _IO_TIMEOUT_MS);
+    const result = await _post("getConfig", {}, _IO_TIMEOUT_MS, username);
+    const res = result?.data;
     return res?.success ? res.config : null;
-  } catch {
+  } catch (error) {
+    console.warn("[p1Bridge] getP1Config failed:", error?.message || error);
     return null;
   }
 }

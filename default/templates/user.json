@@ -1,5 +1,8 @@
 {
 	"defaultParts": {
+		"chars": [
+			"新的开始"
+		],
 		"shells": [
 			"beilu-chat"
 		],

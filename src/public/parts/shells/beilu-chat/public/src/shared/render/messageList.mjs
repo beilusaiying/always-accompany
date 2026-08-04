@@ -4,15 +4,15 @@
  * 链路：virtualQueue.renderItem() → renderMessage() → DOM 元素
  *       websocket.mjs message_replaced → virtualQueue.replaceItem → renderMessage()
  * 影响：写 DOM（innerHTML 注入 .message-content）、挂 touch 监听器（swipe）、发出向请求——
- *       删除/编辑/切时间线经 endpoints.mjs（deleteMessage/deleteMessagesRange/editMessage/
+ *       删除/编辑/切时间线经 endpoints.mjs（deleteMessage/editMessage/
  *       modifyTimeLine），隐藏/取消隐藏/回档/render-entries 经 sendAction（不直接调 apiFetch）
  * 相交：← virtualQueue.mjs（renderItem 回调）  ← websocket.mjs（message_replaced 触发 replaceItem）
  *       → displayRegex.mjs（applyDisplayRules / applyBuiltinProcessors / detectContentType）
  *       → iframeRenderer.mjs（renderAsIframe: full-html/mixed 分支）
  *       → StreamRenderer.mjs（流式期间由 virtualQueue 管理，本模块不直接调用）
- *       → endpoints.mjs（deleteMessage / deleteMessagesRange / editMessage / modifyTimeLine）
+ *       → endpoints.mjs（deleteMessage / editMessage / modifyTimeLine）
  *       → sendAction.mjs（hideMessages / getRenderEntries / getRollbackPreview / 回档 / branch，
- *         target 覆盖 shells:chat 与 plugins:beilu-memory）
+ *         target 统一为 shells:chat）
  *
  * 渲染管线（renderMessage 内部）：
  *   消息对象 → resolveMessageSource（取最完整字段源）→ 思维链剥离 → StatusPlaceHolder 提取
@@ -52,8 +52,9 @@ import {
   getRenderMode,
   restorePlaceholders,
 } from "./displayRegex.mjs";
-import { deleteMessage, deleteMessagesRange, currentChatId, editMessage, modifyTimeLine, getChatLogLength } from "../transport/endpoints.mjs";
-import { sendAction } from "../transport/sendAction.mjs"; // T6b批7：出向统一门面（verb=真动作），render/entries + messages/hide + beilu-memory 回档 + branch 收口
+import { deleteMessage, editMessage, modifyTimeLine } from "../transport/endpoints.mjs";
+import { sendAction } from "../transport/sendAction.mjs"; // 出向统一门面：render/entries + messages/hide + chat 原子回档 + branch
+import { normalizeStructuredApiResult } from "../transport/api-client.mjs";
 import {
   handleFilesSelect,
   renderAttachmentPreview,
@@ -80,21 +81,136 @@ import { toolSets } from "../state/toolSets.mjs"; // 0715 硬编码收口(D1)：
 import { renderAsIframe } from "./iframeRenderer.mjs";
 import { getPluginEnabled } from "../../stCompat/pluginManager.mjs";
 import {
+  applyAuthoritativeEdit,
   addDeletionListener,
+  beginAuthoritativeEdit,
+  consumePendingAuthoritativeEdit,
+  endAuthoritativeEdit,
   getChatLogIndexByQueueIndex,
   getMessageElementByQueueIndex,
   getQueue,
   getQueueIndex,
   notifyDeletionListeners,
+  rerenderMessageForChat,
   replaceMessageInQueue,
 } from "./virtualQueue.mjs";
 import { wbTrace, wbDetect } from "../widgets/whitebox.mjs";
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
+import { isValidChatId } from "../state/sharedState.mjs";
 import { beiluConfirm } from "../widgets/beiluDialog.mjs";
 
 // 用于存储滑动事件监听器的 Map
 const swipeListenersMap = new WeakMap();
 const deletionQueue = [];
+
+function readMemoryArchiveCoverage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (value.status !== "not_covered"
+    || value.coveredByLedger !== false
+    || value.affectedOperations !== null
+    || value.restoredOperations !== 0
+    || typeof value.reason !== "string"
+    || !value.reason.trim()) return null;
+  return value;
+}
+
+const ROLLBACK_LAYER_LABELS = Object.freeze({
+  table: "记忆表格",
+  ide_files: "IDE 文件",
+  context_summary: "上下文摘要",
+  chat: "对话",
+});
+
+function rollbackText(value) {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  try { return JSON.stringify(value); } catch { return String(value); }
+}
+
+function rollbackFlag(value) {
+  return value === true ? "是" : value === false ? "否" : "未声明";
+}
+
+function describeRollbackNode(label, value, fields) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return `${label}[未返回]`;
+  const details = [];
+  if (typeof value.status === "string" && value.status) details.push(`status=${value.status}`);
+  for (const field of fields) {
+    if (typeof value[field] === "boolean") details.push(`${field}=${rollbackFlag(value[field])}`);
+    else if (value[field] != null && Number.isFinite(Number(value[field]))) details.push(`${field}=${Number(value[field])}`);
+  }
+  const reason = value.error || value.warning || value.reason || value.safetyRollbackError;
+  if (reason) details.push(`原因=${rollbackText(reason)}`);
+  return `${label}[${details.length ? details.join(", ") : "已返回，无状态字段"}]`;
+}
+
+function describeFailedRollbackFile(value) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return rollbackText(value) || "(未知文件)";
+  const file = value.relativePath || value.path || value.file || value.name || "(未知文件)";
+  const reason = value.error || value.reason || value.message;
+  return reason ? `${file} (${rollbackText(reason)})` : String(file);
+}
+
+/** 409 抛错与 2xx result 共用的回档结果摘要，不把部分写入伪装成成功。 */
+function formatRollbackOutcome(value) {
+  const result = normalizeStructuredApiResult(value);
+  const completed = Array.isArray(result.completed) && result.completed.length
+    ? result.completed.map(layer => ROLLBACK_LAYER_LABELS[layer] || String(layer)).join("、")
+    : "无/未声明";
+  const failedFileEntries = Array.isArray(result.failedFiles)
+    ? result.failedFiles
+    : Array.isArray(result.memory?.failedFiles)
+      ? result.memory.failedFiles
+      : Array.isArray(result.memory?.fileRollback?.failedFiles)
+        ? result.memory.fileRollback.failedFiles
+        : [];
+  const failedFiles = failedFileEntries.length
+    ? failedFileEntries.map(describeFailedRollbackFile).join("、")
+    : "无/未声明";
+  const memory = describeRollbackNode("记忆", result.memory, [
+    "success", "applied", "partial", "tableRestored", "contextSummaryInvalidated", "pending", "indeterminate",
+  ]);
+  const memoryFiles = describeRollbackNode("记忆文件层", result.memory?.fileRollback, [
+    "success", "applied", "partial", "attempted", "reverted", "checkpointsReverted", "totalRestored", "totalDeleted", "pending", "indeterminate",
+  ]);
+  const chat = describeRollbackNode("对话", result.chat, [
+    "success", "applied", "partial", "committed", "chatCommitted", "deletedCount", "newLength",
+  ]);
+  const safetyRollbackError = result.safetyRollbackError || result.memory?.safetyRollbackError;
+  const safety = safetyRollbackError
+    ? rollbackText(safetyRollbackError)
+    : "无/未声明";
+  return {
+    result,
+    reason: rollbackText(result.error || result.warning || result.fileError || result.reason || result.message)
+      || "后端未提供详细原因",
+    detail: `applied=${rollbackFlag(result.applied)}，partial=${rollbackFlag(result.partial)}，confirmed=${rollbackFlag(result.confirmed)}` +
+      `；已完成层=${completed}；failedFiles=${failedFiles}；safetyRollbackError=${safety}；${memory}；${memoryFiles}；${chat}`,
+  };
+}
+
+function reportRollbackFailure(value, { fallbackHttpStatus, messageId, node = "rollback.failure" } = {}) {
+  const outcome = formatRollbackOutcome(value);
+  const httpStatus = Number.isInteger(outcome.result.httpStatus)
+    ? outcome.result.httpStatus
+    : Number.isInteger(fallbackHttpStatus) ? fallbackHttpStatus : null;
+  const title = httpStatus ? `回档失败（HTTP ${httpStatus}）` : "回档未确认成功";
+  console.error(`[messageList] ${title}:`, outcome.result);
+  wbDetect("messageList", node, false, outcome.reason, {
+    id: messageId,
+    httpStatus,
+    applied: outcome.result.applied,
+    partial: outcome.result.partial,
+    confirmed: outcome.result.confirmed,
+    completed: outcome.result.completed,
+  });
+  showToast(
+    "error",
+    `${title}：${outcome.reason}；${outcome.detail}。请立即刷新对话，并人工核对对话消息、记忆表格、上下文摘要与 IDE 文件。`,
+  );
+  return outcome.result;
+}
 
 // 全局 Shift 键状态（单例，避免每条消息注册独立 keydown/keyup）
 let _globalShiftPressed = false;
@@ -125,7 +241,7 @@ function _renderChatLogFingerprint() {
 async function fetchRenderEntries(charId, charName, chatId) {
   const charKey = charId || charName || "";
   if (!charKey) return [];
-  // chatId 缺失（理论上渲染期 currentChatId 恒有值）→ 无法取 chat_log，且新端点需要 chatid，返回空
+  // chatId 缺失 → 无法取 chat_log，且新端点需要 chatid；禁止从当前可见窗口猜 owner。
   if (!chatId) return [];
   const fp = _renderChatLogFingerprint();
   const prefix = chatId + "|" + charKey + "|";
@@ -641,8 +757,8 @@ function splitMixedContent(text) {
 
 /**
  * 按顺序处理删除队列。
- * 架构：发起方 HTTP 成功后直接隐藏自身 DOM，不等 WS 广播回来。
- * WS 广播 message_deleted 仍然存在，用于通知其他客户端；本客户端收到时元素已隐藏，handleMessageDeleted 幂等。
+ * 契约：队列项在点击时冻结 chatId + messageId，索引只作后端定位提示。
+ * 只有后端明确返回 applied:true（已保存并广播）才能隐藏 DOM，拒绝“HTTP 200 但实际未删除”的假成功。
  */
 let _deletionProcessing = false;
 async function processDeletionQueue() {
@@ -650,21 +766,37 @@ async function processDeletionQueue() {
   _deletionProcessing = true;
   try {
     while (deletionQueue.length > 0) {
-      const messageElement = deletionQueue.shift();
+      const request = deletionQueue.shift();
+      const messageElement = request?.messageElement;
       if (!messageElement) continue;
       try {
-        const queueIndex = getQueueIndex(messageElement);
-        if (queueIndex === -1) continue;
         if (messageElement.dataset.isGenerating === "true" || messageElement.classList.contains("is-streaming")) continue;
-        const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-        if (chatLogIndex < 0) continue;
-        await deleteMessage(chatLogIndex);
+        const result = await deleteMessage(
+          request.chatId,
+          request.indexHint,
+          request.messageId,
+        );
+        if (result?.applied !== true) {
+          const detail = result?.reason ? `（${result.reason}）` : "";
+          showToast("warning", `消息状态已变化，未执行删除；请刷新后重试。${detail}`);
+          messageElement.querySelectorAll(".delete-button").forEach(btn => { btn.disabled = false; });
+          continue;
+        }
         messageElement.style.display = "none";
         notifyDeletionListeners();
+        if (result?.status === "committed_derived_failed") {
+          console.warn("[messageList] 消息删除已提交，但派生阶段失败:", result);
+          wbDetect("messageList", "delete.committedDerivedFailed", false, "committed_derived_failed", {
+            messageId: request.messageId,
+            derived: result?.derived,
+          });
+          showToast("warning", "消息已删除，但删除后的备份、摘要或同步等至少一项处理失败；恢复/同步能力可能受损，请刷新核对。");
+        }
       } catch (error) {
         console.error("Error processing deletion:", error);
         wbDetect("messageList", "enqueueDeletion", false, error?.message, { stack: error?.stack });
         showToast("error", error.stack || error.message || error);
+        messageElement.querySelectorAll(".delete-button").forEach(btn => { btn.disabled = false; });
       }
     }
   } finally {
@@ -675,9 +807,20 @@ async function processDeletionQueue() {
 /**
  * 将消息元素添加到删除队列。
  * @param {HTMLElement} messageElement - 要删除的消息元素。
+ * @param {Readonly<{chatId:string,messageId:string,indexHint:number}>} actionIdentity - 渲染时冻结的消息身份。
  */
-function enqueueDeletion(messageElement) {
-  deletionQueue.push(messageElement);
+function enqueueDeletion(messageElement, actionIdentity) {
+  const { chatId, messageId, indexHint } = actionIdentity || {};
+  if (!isValidChatId(chatId) || typeof messageId !== "string" || !messageId || !Number.isInteger(indexHint) || indexHint < 0) {
+    showToast("error", "消息缺少稳定对话/ID/索引身份，未执行删除。请刷新后重试。");
+    return;
+  }
+  deletionQueue.push({
+    chatId,
+    indexHint,
+    messageId,
+    messageElement,
+  });
   processDeletionQueue();
 }
 
@@ -790,7 +933,7 @@ function _deriveHiddenReason(message) {
 
 // T3：给已隐藏消息挂折叠灰条。展开切换 bhm-collapsed；「取消隐藏」走 messages/hide 端点(hide:false)恢复进 AI 上下文。
 // 索引坐标系=chatLogIndex（GetChatLog 全序=原始序，与后端 hideMessages 一致），复用既有 getQueueIndex/getChatLogIndexByQueueIndex。
-function _attachHiddenBar(messageElement, message) {
+function _attachHiddenBar(messageElement, message, actionIdentity) {
   try {
     if (messageElement.querySelector(":scope > .beilu-hidden-bar")) return;
     const rawText = resolveRawMessageContent(message) || message.content || "";
@@ -815,13 +958,14 @@ function _attachHiddenBar(messageElement, message) {
     bar.querySelector(".bhb-unhide").addEventListener("click", async (e) => {
       e.stopPropagation();
       try {
-        const queueIndex = getQueueIndex(messageElement);
-        if (queueIndex === -1) return;
-        const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-        if (chatLogIndex === -1) return;
+        const { chatId, messageId, indexHint } = actionIdentity || {};
+        if (!isValidChatId(chatId) || typeof messageId !== "string" || !messageId || !Number.isInteger(indexHint) || indexHint < 0) {
+          showToast("error", "消息缺少稳定对话/ID/索引身份，未执行取消隐藏。请刷新后重试。");
+          return;
+        }
         // T6b批7：POST /messages/hide → sendAction shells:chat#hideMessages（chatId 进 URL，body {indices,hide}）。
         //   !ok 门面抛错走 catch；成功返回 body r，仍按 r.success!==false 业务校验。
-        const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId: currentChatId }, payload: { indices: [chatLogIndex], hide: false } });
+        const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId }, payload: { indices: [indexHint], messageIds: [messageId], hide: false } });
         if (r.success !== false) {
           if (!message.extension) message.extension = {};
           message.extension._hidden = false;
@@ -844,6 +988,7 @@ function _attachHiddenBar(messageElement, message) {
     messageElement.dataset.bhmChars = String(charN);
     messageElement.dataset.bhmReason = reason;
     messageElement._bhmMessage = message;
+    messageElement._bhmActionIdentity = actionIdentity;
     _scheduleHiddenBarRegroup();
   } catch (err) {
     wbDetect("messageList", "attachHiddenBar", false, err?.message, { id: message?.id });
@@ -918,18 +1063,30 @@ function _buildHiddenGroupBar(run) {
   bar.querySelector(".bhb-unhide").addEventListener("click", async (e) => {
     e.stopPropagation();
     try {
+      let groupChatId = "";
       const indices = [];
+      const messageIds = [];
       const members = [];
       for (const el of run) {
-        const queueIndex = getQueueIndex(el);
-        if (queueIndex === -1) continue;
-        const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-        if (chatLogIndex === -1) continue;
-        indices.push(chatLogIndex);
+        const identity = el._bhmActionIdentity;
+        const { chatId, messageId, indexHint } = identity || {};
+        const valid = isValidChatId(chatId) &&
+          typeof messageId === "string" && !!messageId &&
+          Number.isInteger(indexHint) && indexHint >= 0;
+        if (!valid || (groupChatId && groupChatId !== chatId)) {
+          showToast("error", "隐藏消息组缺少同一对话的稳定身份，未执行批量取消隐藏。请刷新后重试。");
+          return;
+        }
+        groupChatId = chatId;
+        indices.push(indexHint);
+        messageIds.push(messageId);
         members.push(el);
       }
-      if (!indices.length) return;
-      const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId: currentChatId }, payload: { indices, hide: false } });
+      if (!groupChatId || !indices.length || indices.length !== run.length) {
+        showToast("error", "隐藏消息组身份不完整，未执行批量取消隐藏。请刷新后重试。");
+        return;
+      }
+      const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId: groupChatId }, payload: { indices, messageIds, hide: false } });
       if (r.success !== false) {
         members.forEach((el) => {
           const m = el._bhmMessage;
@@ -1004,9 +1161,15 @@ function clearExistingRenderArtifacts(messageElement) {
  * @param {object} [renderContext] - 渲染上下文（由 virtualList 的 renderItem 回调传入）
  * @param {number} [renderContext.itemIndex] - 消息在总数据集中的绝对索引
  * @param {number} [renderContext.totalCount] - 总消息数量
+ * @param {string} [renderContext.chatId] - 显式渲染窗口 ID（有则优先）
  * @returns {Promise<HTMLElement>} - 渲染好的消息 DOM 元素。
  */
 export async function renderMessage(message, renderContext) {
+  // 消息 DOM 可在多窗口后台继续存活；删除/回档闭包只接受渲染队列显式传入的 owner chatId。
+  // 缺失时保持空值，后续破坏性入口 fail-closed；禁止从当前可见窗口/全局对话猜身份。
+  const renderedChatId = isValidChatId(renderContext?.chatId)
+    ? renderContext.chatId
+    : "";
   wbTrace("messageList", "renderMessage", { id: message?.id, role: message?.role, contentLen: message?.content?.length });
   // 渲染入口记录（debug级别，不在生产中输出）
   diag.debug("renderMessage entry", {
@@ -1025,6 +1188,16 @@ export async function renderMessage(message, renderContext) {
     div.textContent = "[渲染错误：无效消息对象]";
     return div;
   }
+
+  // DOM 发起的破坏性操作必须绑定渲染时的稳定身份，不能在点击/确认/await 后再读取当前窗口。
+  // indexHint 只作为后端定位提示；messageId 是跨并发变更仍稳定的消息身份。
+  const renderedActionIdentity = Object.freeze({
+    chatId: renderedChatId,
+    messageId: typeof message.id === "string" ? message.id : "",
+    indexHint: Number.isInteger(renderContext?.itemIndex) && renderContext.itemIndex >= 0
+      ? renderContext.itemIndex
+      : -1,
+  });
 
   // _deleted 条目不渲染（rollback 产物）——必须在 ide_tool_result 特判之前，
   // 否则已删的工具结果条走特判分支直接渲染可见折叠卡，跳过隐藏逻辑。
@@ -1285,7 +1458,7 @@ export async function renderMessage(message, renderContext) {
     try {
       const _renderCharId = message.timeSlice?.charname || "";
       const _renderCharName = message.name || message.timeSlice?.charname || "";
-      const renderBlocks = await fetchRenderEntries(_renderCharId, _renderCharName, currentChatId);
+      const renderBlocks = await fetchRenderEntries(_renderCharId, _renderCharName, renderedChatId);
       if (renderBlocks.length) {
         contentForProcessing =
           contentForProcessing + "\n\n" + renderBlocks.join("\n\n");
@@ -1538,6 +1711,7 @@ export async function renderMessage(message, renderContext) {
     "message_view",
     preprocessedMessage,
   );
+  messageElement._beiluActionIdentity = renderedActionIdentity;
   // ★ 任务H: 视觉差异化 — 设置 data-mode 属性（编程模式消息蓝色指示线）
   messageElement.setAttribute("data-mode", message.extension?._mode || "chat");
   // ★ W73: 子模式角色标签（code/work模式下在消息头部显示当前角色名）
@@ -1568,7 +1742,7 @@ export async function renderMessage(message, renderContext) {
   if (message.extension?._hidden) {
     messageElement.classList.add("beilu-hidden-msg", "bhm-collapsed");
     messageElement.setAttribute("data-hidden", "true");
-    _attachHiddenBar(messageElement, message);
+    _attachHiddenBar(messageElement, message, renderedActionIdentity);
   }
   const messageContentElement =
     messageElement.querySelector(".message-content");
@@ -1696,7 +1870,7 @@ export async function renderMessage(message, renderContext) {
         confirmI18n("chat.messageList.confirmDeleteMessage")
       ) {
         deleteButtons.forEach((btn) => (btn.disabled = true));
-        enqueueDeletion(messageElement);
+        enqueueDeletion(messageElement, renderedActionIdentity);
       }
     });
   });
@@ -1760,13 +1934,14 @@ export async function renderMessage(message, renderContext) {
         dropdownMenu.hidePopover();
         const _next = !message.extension?._hidden;
         try {
-          const queueIndex = getQueueIndex(messageElement);
-          if (queueIndex === -1) return;
-          const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-          if (chatLogIndex === -1) return;
+          const { chatId, messageId, indexHint } = renderedActionIdentity;
+          if (!isValidChatId(chatId) || !messageId || indexHint < 0) {
+            showToast("error", "消息缺少稳定对话/ID/索引身份，未执行隐藏操作。请刷新后重试。");
+            return;
+          }
           // T6b批7：POST /messages/hide → sendAction shells:chat#hideMessages（chatId 进 URL，body {indices,hide}）。
           //   !ok 门面抛错走 catch；成功返回 body r，仍按 r.success!==false 业务校验。
-          const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId: currentChatId }, payload: { indices: [chatLogIndex], hide: _next } });
+          const r = await sendAction({ verb: "hideMessages", target: "shells:chat", source: "web", scope: { chatId }, payload: { indices: [indexHint], messageIds: [messageId], hide: _next } });
           if (r.success !== false) {
             if (!message.extension) message.extension = {};
             message.extension._hidden = _next;
@@ -1876,6 +2051,12 @@ export async function renderMessage(message, renderContext) {
     rollbackButton.addEventListener("click", async () => {
       try {
         dropdownMenu.hidePopover();
+        const rollbackChatId = renderedChatId;
+        const rollbackAnchorMessageId = message?.id;
+        if (!rollbackChatId || typeof rollbackAnchorMessageId !== "string" || !rollbackAnchorMessageId) {
+          showToast("error", "消息缺少稳定对话/ID 身份，未执行回档。请刷新后重试。");
+          return;
+        }
         const queueIndex = getQueueIndex(messageElement);
         if (queueIndex === -1) return;
         const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
@@ -1892,80 +2073,167 @@ export async function renderMessage(message, renderContext) {
           return;
         }
 
-        let _rollbackPreviewDetail = "";
+        let rollbackPreview;
         try {
-          // T6b批7：setdata {_action:getRollbackPreview} → sendAction beilu-memory#*（通配组装）。!ok 门面抛错走本 try catch（预览失败非阻断）。
-          const _prev = await sendAction({ verb: "getRollbackPreview", target: "plugins:beilu-memory", source: "web", payload: { chatId: currentChatId, targetIndex: chatLogIndex } });
-          if (_prev?.success && _prev.ideConnected) {
-            const _rCnt = (_prev.filesToRestore || []).length;
-            const _dCnt = (_prev.filesToDelete || []).length;
-            const _cpCnt = _prev.checkpointsToRevert || 0;
-            if (_rCnt || _dCnt || _cpCnt) {
-              const _fp = [];
-              if (_rCnt) _fp.push("还原 " + _rCnt + " 个文件");
-              if (_dCnt) _fp.push("删除 " + _dCnt + " 个 AI 新建文件");
-              if (_cpCnt) _fp.push("回退 " + _cpCnt + " 个检查点");
-              _rollbackPreviewDetail = "\n\n文件影响: " + _fp.join("、");
-              const _allFiles = [...(_prev.filesToRestore || []).map(f => "  ↩ " + (f.relativePath || f.path || f)), ...(_prev.filesToDelete || []).map(f => "  🗑 " + (f.relativePath || f.path || f))];
-              if (_allFiles.length <= 10) _rollbackPreviewDetail += "\n" + _allFiles.join("\n");
-              else _rollbackPreviewDetail += "\n" + _allFiles.slice(0, 8).join("\n") + "\n  … 等共 " + _allFiles.length + " 个文件";
-            }
+          rollbackPreview = await sendAction({
+            verb: "getRollbackPreview",
+            target: "shells:chat",
+            source: "web",
+            scope: { chatId: rollbackChatId },
+            payload: {
+              anchorMessageId: rollbackAnchorMessageId,
+              targetIndex: chatLogIndex,
+            },
+          });
+        } catch (previewError) {
+          console.error("[messageList] 回档预览请求失败:", previewError);
+          wbDetect("messageList", "rollback.preview", false, previewError?.message, { id: message?.id });
+          if (previewError?.status === 409) {
+            reportRollbackFailure(previewError, {
+              fallbackHttpStatus: 409,
+              messageId: message?.id,
+              node: "rollback.previewConflict",
+            });
+            return;
           }
-        } catch (_prevErr) { /* 预览失败不阻断回档（尽力而为） */ }
+          showToast("error", "回档预览失败，未发起回档: " + (previewError?.message || "网络错误"));
+          return;
+        }
+        if (rollbackPreview?.success !== true) {
+          const previewError = rollbackPreview?.error || rollbackPreview?.warning || "后端未返回成功预览";
+          showToast("error", "回档预览未通过，未发起回档: " + previewError);
+          return;
+        }
+        if (!readMemoryArchiveCoverage(rollbackPreview.memoryArchive)) {
+          showToast("warning", "回档预览缺少归档记忆覆盖声明，已停止执行；当前结果范围不确定。");
+          return;
+        }
+
+        let rollbackPreviewDetail = "\n\n限制：归档记忆文件尚未纳入本次回档。";
+        const restoreCount = Array.isArray(rollbackPreview.filesToRestore)
+          ? rollbackPreview.filesToRestore.length
+          : 0;
+        const deleteCount = Array.isArray(rollbackPreview.filesToDelete)
+          ? rollbackPreview.filesToDelete.length
+          : 0;
+        const checkpointCount = Array.isArray(rollbackPreview.checkpointIds)
+          ? rollbackPreview.checkpointIds.length
+          : 0;
+        if (restoreCount || deleteCount || checkpointCount) {
+          const effects = [];
+          if (restoreCount) effects.push("还原 " + restoreCount + " 个文件");
+          if (deleteCount) effects.push("删除 " + deleteCount + " 个 AI 新建文件");
+          if (checkpointCount) effects.push("回退 " + checkpointCount + " 个检查点");
+          rollbackPreviewDetail += "\n\n文件影响: " + effects.join("、");
+          const files = [
+            ...(rollbackPreview.filesToRestore || []).map(f => "  ↩ " + (f.relativePath || f.path || f)),
+            ...(rollbackPreview.filesToDelete || []).map(f => "  🗑 " + (f.relativePath || f.path || f)),
+          ];
+          if (files.length <= 10) rollbackPreviewDetail += "\n" + files.join("\n");
+          else {
+            rollbackPreviewDetail += "\n" + files.slice(0, 8).join("\n") +
+              "\n  … 等共 " + files.length + " 个文件";
+          }
+        }
 
         if (
           !await beiluConfirm(
             "回档到这条消息？\n将删除之后的 " +
               afterCount +
-              " 条消息，此操作不可撤销。" + _rollbackPreviewDetail,
+              " 条消息，此操作不可撤销。" + rollbackPreviewDetail,
           )
         )
           return;
 
         try {
-          // ★ P0-3 倒序+去谎报：先回档(记忆/表格/文件)，仅当后端 success 才删对话消息；
-          // 任一层失败则完全不动(不删消息)，如实报告——避免"消息删了但文件没还原却报已回档"。
-          let memResult = null;
-          try {
-            // T6b批7：setdata {_action:rollbackMemoryToMessage} → sendAction beilu-memory#*（通配组装）。
-            //   业务失败后端以 HTTP 200 + {success:false,...} 表达 → 门面返回该 body，下方 memResult.success===false 分支照常处理；
-            //   仅网络/HTTP 错误由门面抛错走 memErr catch（同为"保持原状+return"，failedFiles 细节仅在 HTTP 错误时不可得，业务失败仍完整）。
-            memResult = await sendAction({
-              verb: "rollbackMemoryToMessage",
-              target: "plugins:beilu-memory",
-              source: "web",
-              payload: { chatId: currentChatId, targetIndex: chatLogIndex },
+          // 单一 rollbackToMessage 由后端编排对话/记忆/文件；执行必须带回预览快照，
+          // 防止确认期间 IDE 连接或检查点集合变化后仍按旧预览执行。
+          const result = await sendAction({
+            verb: "rollbackToMessage",
+            target: "shells:chat",
+            source: "web",
+            scope: { chatId: rollbackChatId },
+            payload: {
+              anchorMessageId: rollbackAnchorMessageId,
+              targetIndex: chatLogIndex,
+              anchor: rollbackPreview.anchor,
+              checkpointIds: rollbackPreview.checkpointIds,
+              tableSnapshotId: rollbackPreview.tableSnapshotId,
+              expectedIdeConnected: rollbackPreview.expectedIdeConnected,
+              expectedIdeRoute: rollbackPreview.expectedIdeRoute,
+              expectedCharacterScope: rollbackPreview.expectedCharacterScope,
+              characterScopeToken: rollbackPreview.characterScopeToken,
+            },
+          });
+          const rollbackOutcome = formatRollbackOutcome(result);
+          const normalizedResult = rollbackOutcome.result;
+          // no-op 走独立的服务端确认契约：普通 confirmed 必须保持 false，且任一漂移/未知态
+          // 都不能把“没有写入”包装成“已经在目标状态”。
+          if (normalizedResult.success === true && normalizedResult.applied === false && normalizedResult.noOp === true) {
+            const noOpUnsafe = normalizedResult.noOpConfirmed !== true
+              || normalizedResult.partial === true
+              || !(normalizedResult.pending === undefined || normalizedResult.pending === false)
+              || !(normalizedResult.indeterminate === undefined || normalizedResult.indeterminate === false)
+              || !!normalizedResult.drift
+              || !!normalizedResult.safetyRollbackError;
+            if (noOpUnsafe) {
+              reportRollbackFailure({
+                ...normalizedResult,
+                error: normalizedResult.error || "后端未闭合确认 no-op，不能判定当前已经处于目标状态",
+              }, { messageId: message?.id, node: "rollback.noOpUnconfirmed" });
+              return;
+            }
+            if (!readMemoryArchiveCoverage(normalizedResult.memoryArchive)) {
+              console.warn("[messageList] 回档 no-op 结果缺少归档记忆覆盖声明:", normalizedResult);
+              wbDetect("messageList", "rollback.noOpMemoryArchiveUnknown", false, "memoryArchive coverage missing", { id: message?.id });
+              showToast("warning", "当前已经处于目标状态，无需回档；但后端未声明归档记忆覆盖范围，请刷新并人工核对。");
+              return;
+            }
+            showToast("info", "当前已经处于目标状态，无需回档；归档记忆仍未覆盖。");
+            return;
+          }
+          // confirmed 是服务端对已写入最终状态的明确确认；HTTP 2xx/success/applied 均不能代替。
+          if (normalizedResult.confirmed !== true) {
+            reportRollbackFailure({
+              ...normalizedResult,
+              error: normalizedResult.error || "后端未返回 confirmed=true，不能确认回档最终状态",
+            }, { messageId: message?.id, node: "rollback.unconfirmed" });
+            return;
+          }
+          if (normalizedResult.partial === true || normalizedResult.safetyRollbackError) {
+            reportRollbackFailure(normalizedResult, { messageId: message?.id, node: "rollback.partial" });
+            return;
+          }
+          if (normalizedResult.success !== true || normalizedResult.applied !== true) {
+            reportRollbackFailure(normalizedResult, { messageId: message?.id, node: "rollback.notApplied" });
+            return;
+          }
+          if (!readMemoryArchiveCoverage(normalizedResult.memoryArchive)) {
+            console.warn("[messageList] 回档结果缺少归档记忆覆盖声明:", normalizedResult);
+            wbDetect("messageList", "rollback.memoryArchiveUnknown", false, "memoryArchive coverage missing", { id: message?.id });
+            showToast("warning", "对话回档已应用，但后端未声明归档记忆覆盖范围；结果不确定，请刷新并人工核对。");
+            return;
+          }
+          const deletedCount = Number.isInteger(normalizedResult.chat?.deletedCount)
+            ? `（对话删除 ${normalizedResult.chat.deletedCount} 条）`
+            : "";
+          if (normalizedResult.chat?.status === "committed_derived_failed") {
+            console.warn("[messageList] 回档主提交已应用，但对话派生阶段失败:", normalizedResult);
+            wbDetect("messageList", "rollback.chatCommittedDerivedFailed", false, "committed_derived_failed", {
+              id: message?.id,
+              derived: normalizedResult.chat?.derived,
             });
-          } catch (memErr) {
-            console.error("[messageList] 记忆/文件回档请求失败:", memErr);
-            wbDetect("messageList", "rollback.memReq", false, memErr?.message, { id: message?.id });
-            showToast("error", "回档失败，已保持原状（未删对话/未改文件/未动数据）: " + (memErr.message || "网络错误"));
+            showToast("warning", "回档主提交已应用，归档记忆仍未覆盖" + deletedCount + "；但回档后的备份、摘要或同步等至少一项处理失败，恢复/同步能力可能受损，请刷新核对。");
             return;
           }
-          // 后端去谎报：success===false = 文件层或表格层失败 → 完全不动
-          if (memResult && memResult.success === false) {
-            // A2：透传 failedFiles 真实失败文件名，让用户看到具体哪些文件未还原（避免只见笼统"回档失败"）
-            const _ff = Array.isArray(memResult.failedFiles) && memResult.failedFiles.length
-              ? "（失败文件: " + memResult.failedFiles.join("、") + "）"
-              : "";
-            console.error("[messageList] 记忆/文件回档失败:", memResult.fileError || memResult.error, memResult.failedFiles || "");
-            showToast("error", "回档失败，已保持原状（未删对话/未改文件/未动数据）: " + (memResult.warning || memResult.fileError || memResult.error || "未知错误") + _ff);
-            return;
-          }
-          // 回档成功（含"无快照=纯对话回档"）→ 才删对话消息
-          const result = await deleteMessagesRange(
-            currentChatId,
-            chatLogIndex + 1,
-          );
-          // 如实反馈真实计数
-          const _parts = ["对话−" + (result?.deleted || afterCount)];
-          if (memResult?.fileRollback) _parts.push("文件还原" + (memResult.fileRollback.totalRestored || 0));
-          if (memResult?.tableCount) _parts.push("表格回滚" + memResult.tableCount);
-          showToast("success", "已回档到这条消息 — " + _parts.join("、"));
+          showToast("success", "已回档对话及已支持的数据层；归档记忆文件未回档" + deletedCount);
         } catch (err) {
-          console.error("[messageList] rollback failed:", err);
-          wbDetect("messageList", "rollback.deleteRange", false, err?.message, { id: message?.id });
-          showToast("error", "回档失败: " + (err.message || "未知错误"));
+          // 409 保持失败语义，但 apiFetch Error.payload 中的部分应用证据必须完整展示。
+          reportRollbackFailure(err, {
+            fallbackHttpStatus: Number.isInteger(err?.status) ? err.status : null,
+            messageId: message?.id,
+            node: "rollback.execute",
+          });
         }
       } catch (err) {
         console.error('[messageList] rollback action failed:', err);
@@ -1981,17 +2249,18 @@ export async function renderMessage(message, renderContext) {
     branchButton.addEventListener("click", async () => {
       try {
         dropdownMenu.hidePopover();
-        const queueIndex = getQueueIndex(messageElement);
-        if (queueIndex === -1) return;
-        const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-        if (chatLogIndex === -1) return;
+        const { chatId: branchChatId, messageId: branchMessageId, indexHint: chatLogIndex } = renderedActionIdentity;
+        if (!isValidChatId(branchChatId) || !branchMessageId || chatLogIndex < 0) {
+          showToast("error", "消息缺少稳定对话/ID/索引身份，未执行分叉。请刷新后重试。");
+          return;
+        }
 
         if (!await beiluConfirm(
           "从此分叉\n\n将从这条消息创建一个新的对话分支，包含此消息及之前的所有消息。\n原对话不受影响。"
         )) return;
 
         // T6b批7：POST /branch → sendAction shells:chat#branch。!ok 门面抛错走 catch（分叉失败 toast）；成功但无 chatid 仍走 !result.chatid 判定。
-        const result = await sendAction({ verb: "branch", target: "shells:chat", source: "web", payload: { chatid: currentChatId, messageIndex: chatLogIndex } });
+        const result = await sendAction({ verb: "branch", target: "shells:chat", source: "web", payload: { chatid: branchChatId, messageId: branchMessageId, messageIndex: chatLogIndex } });
         if (!result.chatid) {
           showToast("error", "分叉失败: " + (result.error || "未知错误"));
           return;
@@ -2012,11 +2281,9 @@ export async function renderMessage(message, renderContext) {
   const editButton = messageElement.querySelector(".edit-button");
   editButton.addEventListener("click", async () => {
     try {
-      const queueIndex = getQueueIndex(messageElement);
+      const queueIndex = getQueueIndex(messageElement, renderedChatId);
       if (queueIndex === -1) return;
-      const chatLogIndex = getChatLogIndexByQueueIndex(queueIndex);
-      if (chatLogIndex === -1) return;
-      await editMessageStart(message, queueIndex, chatLogIndex); // 显示编辑界面
+      await editMessageStart(message, queueIndex, renderedActionIdentity); // 显示编辑界面
     } catch (err) {
       console.error('[messageList] edit action failed:', err);
       wbDetect("messageList", "editAction", false, err?.message, { id: message?.id });
@@ -2143,7 +2410,7 @@ export async function renderMessage(message, renderContext) {
     handleRecalledMemory(messageElement, message.extension);
     _appendIdeToolCallCards(messageElement, message.extension);
     // O16: AI 文件投递卡片
-    _appendFileDeliveryCard(messageElement, message.extension);
+    _appendFileDeliveryCard(messageElement, message.extension, renderedChatId);
     // O18: AI 任务计划卡片
     _appendTaskPlanCard(messageElement, message.extension);
     // O18: 分身执行结果卡片
@@ -2176,7 +2443,7 @@ function _appendIdeToolCallCards(messageElement, extension) {
 
 // O16: AI 文件投递卡片 — extension._fileDelivery 存在时，在消息底部追加可下载文件卡片。
 // 样式复用 ide-tool-result-card 的视觉范式（紫色边框折叠卡），下载链接指向后端 file-delivery 端点。
-function _appendFileDeliveryCard(messageElement, extension) {
+function _appendFileDeliveryCard(messageElement, extension, renderedChatId) {
   const fd = extension?._fileDelivery;
   if (!fd?.path) return;
   // 防重复：同一 messageElement 不重复追加
@@ -2184,8 +2451,8 @@ function _appendFileDeliveryCard(messageElement, extension) {
 
   const name = fd.name || fd.path.split(/[/\\]/).pop() || "文件";
   const desc = fd.description || "";
-  const chatid = currentChatId;
-  const downloadUrl = `/api/parts/shells:chat/file-delivery/${encodeURIComponent(chatid)}?path=${encodeURIComponent(fd.path)}&name=${encodeURIComponent(name)}`;
+  if (!isValidChatId(renderedChatId)) return;
+  const downloadUrl = `/api/parts/shells:chat/file-delivery/${encodeURIComponent(renderedChatId)}?path=${encodeURIComponent(fd.path)}&name=${encodeURIComponent(name)}`;
 
   const card = document.createElement("div");
   card.className = "file-delivery-card";
@@ -2569,10 +2836,16 @@ function _closeAvatarPreview() {
  * 开始编辑指定消息。
  * @param {object} message - 原始消息。
  * @param {number} queueIndex - 在队列中的索引。
- * @param {number} chatLogIndex - 在聊天记录中的绝对索引。
+ * @param {Readonly<{chatId:string,messageId:string,indexHint:number}>} actionIdentity - 渲染时冻结的消息身份。
  */
-export async function editMessageStart(message, queueIndex, chatLogIndex) {
-  const selectedFiles = [...(message.files || [])]; // 文件副本
+export async function editMessageStart(message, queueIndex, actionIdentity) {
+  const { chatId, messageId, indexHint } = actionIdentity || {};
+  if (!isValidChatId(chatId) || typeof messageId !== "string" || !messageId
+    || !Number.isInteger(indexHint) || indexHint < 0 || messageId !== message?.id) {
+    throw new Error("消息缺少稳定对话/ID/索引身份，未进入编辑；请刷新后重试。");
+  }
+  const originalFiles = Array.isArray(message.files) ? message.files : [];
+  const selectedFiles = [...originalFiles]; // 文件副本；未改时请求省略 files 以保留后端真值
   const editRawContent = resolveEditMessageContent(message);
   const editRenderedMessage = {
     ...message,
@@ -2581,8 +2854,19 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
     content_for_edit: "", // 通过 DOM 注入 textarea.value，避免模板引擎二次解析原文
   };
 
-  const messageElement = await getMessageElementByQueueIndex(queueIndex);
+  const messageElement = getMessageElementByQueueIndex(queueIndex, chatId);
   if (!messageElement) return;
+  if (!beginAuthoritativeEdit(chatId, messageId)) {
+    throw new Error("原窗口中已找不到要编辑的消息，请刷新后重试。");
+  }
+  if (typeof globalThis.crypto?.randomUUID !== "function") {
+    await endAuthoritativeEdit(chatId, messageId, { applyPending: true });
+    throw new Error("当前浏览器不支持安全的编辑操作标识，请升级浏览器后重试。");
+  }
+  // 同一编辑框生命周期始终复用同一 operationId。未知网络结果后再次点击不会变成第二次编辑；
+  // 若用户改了正文，服务端会在旧操作已提交时用 payload 指纹拒绝漂移。
+  const editOperationId = globalThis.crypto.randomUUID();
+  let editSessionOpen = true;
 
   // 平滑过渡：淡出
   messageElement.style.transition = `opacity ${TRANSITION_DURATION / 1000}s ease-in-out`;
@@ -2645,28 +2929,85 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
     confirmButton.disabled = true;
     try {
       const editedContent = editInput.value;
-      const newMessage = {
-        ...message,
+      const editPatch = {
         content: editedContent,
-        // ★ 关键修复：编辑时必须同步更新 content_for_show 和 content_for_edit
-        // 否则 resolveRawMessageContent() 优先读旧的 content_for_show，导致编辑"不生效"
+        // 编辑正文后旧渲染产物不能沿用。空串是有效权威显示值，不用 || 改写其语义。
         content_for_show: editedContent,
         content_for_edit: editedContent,
-        files: selectedFiles,
       };
-      await editMessage(chatLogIndex, newMessage); // 后端编辑
-      // T050·U07：编辑成功后本地立即乐观切回展示态，不依赖 WS message_replaced 往返。
-      // why：原实现成功后无切回代码，界面 100% 靠后端 WS 广播 message_replaced(websocket.mjs)
-      // 重渲才切回；WS 慢/断时编辑框卡在原地且 confirmButton 已 disabled，用户以为卡死。
-      // 用 cancelButton 同款 replaceMessageInQueue 机制（virtualQueue.replaceItem 重渲该 index）
-      // 切回展示态，传 newMessage 显示新内容。与 T049 U02 发送乐观气泡同族："本地先落定"。
-      // 去重：稍后 WS message_replaced 到达会用后端权威内容再渲同一 queueIndex（幂等覆盖，
-      // 非追加气泡），显示最终收敛到后端真值，不产生重复。
-      await replaceMessageInQueue(queueIndex, newMessage);
+      // 附件未动：省略 files，由后端保留 oldEntry.files；删到空：显式发 []。
+      // 只用对象身份判定即可：旧附件只会从副本数组删除，新附件则是新对象。
+      const attachmentsChanged = selectedFiles.length !== originalFiles.length
+        || selectedFiles.some((file, index) => file !== originalFiles[index]);
+      if (attachmentsChanged) editPatch.files = selectedFiles;
+      const result = await editMessage(
+        chatId,
+        indexHint,
+        messageId,
+        editPatch,
+        editOperationId,
+      );
+      if (result?.applied !== true || result?.chatCommitted !== true) {
+        const detail = result?.reason || result?.error || "后端未提交编辑";
+        throw new Error(detail);
+      }
+      if (!result.entry || result.entry.id !== messageId) {
+        // 主提交已发生，不能把它当失败重新开放保存（会诱发重复编辑）；也不能用本地输入冒充真值。
+        const pendingResult = await endAuthoritativeEdit(chatId, messageId, { applyPending: true });
+        editSessionOpen = false;
+        if (pendingResult?.applied !== true) await rerenderMessageForChat(chatId, messageId);
+        showToast("warning", result.warning || "消息已编辑，但后端未返回匹配的权威条目；请刷新对话核对。");
+        return;
+      }
+      // HTTP ack 与编辑期 WS 回显共用同一个 chatId+messageId+版本门；
+      // 两者乱序时先应用较新版本，旧 ack/回声不得覆盖。
+      try {
+        const ackApply = await applyAuthoritativeEdit(chatId, result.entry, {
+          deferWhileEditing: false,
+          source: "http_ack",
+          editOperationId: result.editOperationId || editOperationId,
+          payloadFingerprint: result.payloadFingerprint,
+        });
+        const pendingApply = await endAuthoritativeEdit(chatId, messageId, { applyPending: true });
+        editSessionOpen = false;
+        if (ackApply.applied !== true && ackApply.stale !== true
+          && pendingApply?.applied !== true) {
+          showToast("warning", "消息已编辑，但原窗口未能应用权威版本；请刷新该对话核对。");
+        }
+      } catch (applyError) {
+        // 此时后端主提交已成功，渲染/队列回填失败不得重新开放保存造成二次编辑。
+        try { await endAuthoritativeEdit(chatId, messageId, { applyPending: true }); } catch { /* 下方明示要求刷新 */ }
+        editSessionOpen = false;
+        console.error("[messageList] 编辑已提交但权威回填失败:", applyError);
+        showToast("warning", "消息已编辑，但界面回填失败；请刷新原对话核对。");
+        return;
+      }
+      if (result.status === "committed_derived_failed") {
+        console.warn("[messageList] 消息编辑已提交，但派生阶段失败:", result);
+        wbDetect("messageList", "edit.committedDerivedFailed", false, "committed_derived_failed", {
+          messageId,
+          derived: result?.derived,
+        });
+        showToast("warning", result.warning || "消息已编辑，但同步或广播至少一项失败；请刷新核对。");
+      }
     } catch (err) {
+      try {
+        const wsReceipt = await consumePendingAuthoritativeEdit(
+          chatId,
+          messageId,
+          editOperationId,
+        );
+        if (wsReceipt?.applied === true) {
+          editSessionOpen = false;
+          showToast("warning", "HTTP 回执丢失，但已通过同一编辑操作的权威同步确认提交。");
+          return;
+        }
+      } catch (wsReceiptError) {
+        console.warn("[messageList] 编辑失败后消费权威 WS 回执失败:", wsReceiptError);
+      }
       console.error("[messageList] editMessage failed:", err);
-      wbDetect("messageList", "confirmEdit", false, err?.message, { chatLogIndex });
-      showToast("error", err.message || "编辑失败，请重试");
+      wbDetect("messageList", "confirmEdit", false, err?.message, { messageId, indexHint });
+      showToast("error", err.error || err.reason || err.message || "编辑失败，请重试");
       confirmButton.disabled = false;
     }
   });
@@ -2674,7 +3015,9 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
   // --- 取消编辑 ---
   cancelButton.addEventListener("click", async () => {
     try {
-      await replaceMessageInQueue(queueIndex, message); // 恢复原始消息视图
+      const pendingResult = await endAuthoritativeEdit(chatId, messageId, { applyPending: true });
+      editSessionOpen = false;
+      if (pendingResult?.applied !== true) await rerenderMessageForChat(chatId, messageId);
     } catch (err) {
       console.error('[messageList] cancel edit failed:', err);
       wbDetect("messageList", "cancelEdit", false, err?.message, { queueIndex });
@@ -2710,7 +3053,11 @@ export async function editMessageStart(message, queueIndex, chatLogIndex) {
 
   } catch (err) {
     // 恢复原消息视图(重渲该 queueIndex);重渲自身失败则至少还原透明度(401 案:innerHTML 未被替换,原内容还在)
-    try { await replaceMessageInQueue(queueIndex, message); } catch { /* 重渲失败走透明度兜底 */ }
+    try {
+      if (editSessionOpen) await endAuthoritativeEdit(chatId, messageId, { applyPending: true });
+      editSessionOpen = false;
+      await rerenderMessageForChat(chatId, messageId);
+    } catch { /* 重渲失败走透明度兜底 */ }
     messageElement.style.opacity = "1";
     showToast("error", `进入编辑失败: ${err?.message || err}`);
     throw err; // 继续抛给调用方,走既有 wbDetect/_reportError 上报链

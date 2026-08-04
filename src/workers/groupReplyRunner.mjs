@@ -36,37 +36,69 @@ async function ensureBeiluBoot(dataPath) {
   return _bootPromise;
 }
 
-// 只回传可 structured-clone 的子集（GetReply 的 result 带闭包/复杂引用，不能整体 postMessage）
-function _serializableReply(r) {
-  if (!r || typeof r !== "object") return { content: String(r ?? "") };
-  return {
-    content: r.content ?? "",
-    files: Array.isArray(r.files)
-      // beilu 全链用 mime_type（endpoints/imageProcessing/requestBuilder）；原写 mimeType→下游读不到丢类型
-      ? r.files.map((f) => ({ name: f?.name, mime_type: f?.mime_type ?? f?.mimeType, buffer: f?.buffer }))
-      : [],
-    extension: (() => { try { return JSON.parse(JSON.stringify(r.extension ?? {})); } catch { return {}; } })(),
+// GetReply 的完整持久化契约。只选择主进程 BuildChatLogEntryFromCharReply 的消费字段，
+// 但对每个已存在字段保持原值（包括空串/undefined）和“字段缺失”的差异；files 不做重组，
+// 因此图片/SVG/附件协议不会在 worker 边界被改写。
+const SERIALIZABLE_REPLY_FIELDS = Object.freeze([
+  "name",
+  "avatar",
+  "content",
+  "content_for_show",
+  "content_for_edit",
+  "files",
+  "extension",
+  "logContextBefore",
+  "logContextAfter",
+]);
+
+function _replySerializationError(field, cause) {
+  const error = new Error(`worker reply field is not structured-cloneable: ${field}`);
+  error.code = "E_GROUP_REPLY_FIELD_SERIALIZATION";
+  error.phase = "result_serialize";
+  error.executionStarted = true;
+  error.sideEffectsPossible = true;
+  error.indeterminate = true;
+  error.details = {
+    field,
+    cause: cause?.message || String(cause || "structured clone failed"),
   };
+  return error;
+}
+
+export function serializeReplyForWorker(r) {
+  if (!r || typeof r !== "object") return { content: String(r ?? "") };
+  if (typeof globalThis.structuredClone !== "function") {
+    throw _replySerializationError("(serializer)", new Error("structuredClone is unavailable"));
+  }
+  const reply = {};
+  for (const field of SERIALIZABLE_REPLY_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(r, field)) continue;
+    try {
+      reply[field] = globalThis.structuredClone(r[field]);
+    } catch (cause) {
+      throw _replySerializationError(field, cause);
+    }
+  }
+  return reply;
 }
 
 /**
  * groupWorker.mjs 的 _runner(payload, ctx)。
  * @param {{data_path:string, chatid:string, charname?:string}} payload
- * @param {{groupId:string, workerId:string, signal:AbortSignal, emit:(chunk:any)=>void, emitEvent:(event:any)=>boolean}} ctx
+ * @param {{groupId:string, workerId:string, signal:AbortSignal, emit:(chunk:any)=>void, emitEvent:(event:any)=>boolean,setExecutionPhase?:(phase:string)=>void}} ctx
  */
 export async function run(payload, ctx) {
+  ctx?.setExecutionPhase?.("runner_boot");
   wbT(payload?.chatid ?? null, "groupReplyRunner", "run:enter", { chatid: payload?.chatid, charname: payload?.charname, groupId: ctx?.groupId });
   await ensureBeiluBoot(payload.data_path);
   // 跨 isolate 桥（isolateBridge 收口）：绑定上行 emitter——本轮插件链内的审批入队/广播
   // 经 ctx.emit 骑 stream 通道到主进程（GetReply 的 finally 解绑）；并把主进程权威态快照
   // （写审批开关/主工作区根）灌入本 isolate 的 ideClient（主写 worker 读不到的内存单例收口）。
-  let _bridge = null;
-  try {
-    _bridge = await import("../yonban/core/transport/isolateBridge.mjs");
-    _bridge.bindWorkerEmitter(payload.chatid, ctx.emit);
-    // 工具 lifecycle 使用 worker 常驻控制通道，不随本次 GetReply 的 stream emitter 解绑。
-    _bridge.bindWorkerLifecycleEmitter(ctx.emitEvent);
-  } catch (_ibErr) { wbD(payload?.chatid ?? null, "group", "run:bridgeBindFail", false, _ibErr?.message || String(_ibErr), {}); /* 桥不可用→退回收口前行为，不阻断生成 */ }
+  ctx?.setExecutionPhase?.("bridge_bind");
+  const _bridge = await import("../yonban/core/transport/isolateBridge.mjs");
+  const _streamBindingToken = _bridge.bindWorkerEmitter(payload.chatid, ctx.emit);
+  // 工具 lifecycle 使用 worker 常驻控制通道，不随本次 GetReply 的 stream emitter 解绑。
+  _bridge.bindWorkerLifecycleEmitter(ctx.emitEvent);
   try {
     const { ideClient: _ic } = await import("../yonban/core/transport/ideClient.mjs");
     const _ownerRegistered = _ic.registerChatOwner?.(payload.chatid, payload.username);
@@ -102,6 +134,7 @@ export async function run(payload, ctx) {
     } catch (_amErr) { wbD(payload?.chatid ?? null, "group", "run:setActiveModeFail", false, _amErr?.message || String(_amErr), { activeMode: payload.activeMode }); /* 设不了模式→worker 退回默认 chat */ }
   }
 
+  ctx?.setExecutionPhase?.("request_build");
   wbT(payload?.chatid ?? null, "groupReplyRunner", "getChatRequest:before", { chatid: payload?.chatid, charname: payload?.charname });
   const { getChatRequest } = await import(
     "../public/parts/shells/beilu-chat/src/lib/requestBuilder.mjs"
@@ -139,16 +172,18 @@ export async function run(payload, ctx) {
     wbD(payload?.chatid ?? null, "groupReplyRunner", "GetReply:missing", false, "char 无 GetReply 接口", { charname: payload?.charname });
     throw new Error(`char 无 GetReply 接口 (char=${payload.charname})`);
   }
+  ctx?.setExecutionPhase?.("get_reply");
   wbT(payload?.chatid ?? null, "groupReplyRunner", "GetReply:before", { chatid: payload?.chatid, charname: payload?.charname });
   let result;
   try {
     result = await request.char.interfaces.chat.GetReply(request);
   } finally {
-    // 上行 emitter 解绑（成功/抛错都解，防死 emitter 被 fallback 选中吞事件）
-    try { _bridge?.unbindWorkerEmitter(payload.chatid); } catch { /* 解绑失败无害 */ }
+    // 上行 emitter 按 token 精确解绑；同 chat 并发 parent 不互相撤销。
+    try { _bridge.unbindWorkerEmitter(payload.chatid, _streamBindingToken); } catch { /* request binding finally 仍会兜底关闭 */ }
   }
+  ctx?.setExecutionPhase?.("result_serialize");
   wbT(payload?.chatid ?? null, "groupReplyRunner", "GetReply:done", { chatid: payload?.chatid });
-  const reply = _serializableReply(result);
+  const reply = serializeReplyForWorker(result);
   wbT(payload?.chatid ?? null, "groupReplyRunner", "run:serialized", { chatid: payload?.chatid, hasContent: !!reply?.content });
   // pendingResults 跨界（v4 §3.3/§3.5）：本 isolate 的 ideClient 累积了 worker 内 ReplyHandler 的工具调用结果，
   // 但 auto-continue 续轮注入在主进程读主 ideClient → 把本 worker 的结果回传，主进程灌入主 ideClient。

@@ -46,7 +46,10 @@
 import { escapeHtml, downloadUrl } from "../../shared/state/utils.mjs"; // 0716 下载基元收口
 import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b批7：出向统一门面（verb=真动作），beilu-memory setdata 文件树/归档收口（失败可见由门面 _report 承担，原 wbDetect 读写上报去除）
 import { beiluConfirm, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs";
-import { getUsername } from "../../shared/state/sharedState.mjs"; // [合并批 0714] username 读点单源
+import { getUsername } from "../../shared/state/sharedState.mjs"; // [合并批 0714] username 读点单源（非 authority，仅本地重绑去重键）
+// [D6 §1 2026-08-04] 会话身份代际：所有异步树/文件结果写 UI 前过 epoch 守卫（同 origin 换用户时
+//   旧用户在飞响应不渲染进新用户界面，白盒动线 B）；身份权威=服务端 /api/whoami，前端零 username 生产。
+import { ensureSessionIdentity, getSessionEpoch, isEpochCurrent } from "../../shared/state/sessionIdentity.mjs";
 
 // ===== 状态 =====
 let _username = "";
@@ -55,6 +58,21 @@ let _treeContainer = null;
 let _viewerContainer = null;
 let _expandedPaths = new Set();
 let _selectedFilePath = "";
+
+// [D6 §1] 换用户即清 user-scoped 易失 UI 态（树/选中/展开），不清设备级偏好。
+//   首次建立身份（previousUsername===null 且非失效）不清——那是同一用户的初始化，清了会打断首屏渲染。
+window.addEventListener("beilu:session-epoch-changed", (e) => {
+  const d = e?.detail || {};
+  if (d.previousUsername == null && d.username != null) return; // 首次建立，非换用户
+  _charId = "";
+  _username = "";
+  _selectedFilePath = "";
+  _expandedPaths.clear();
+  if (_treeContainer) {
+    _treeContainer.innerHTML = '<div class="mb-empty-dir" style="padding:1rem;">等待角色卡绑定...</div>';
+  }
+  if (_viewerContainer) _viewerContainer.innerHTML = "";
+});
 
 // ===== 图标映射 =====
 // getFileIcon 三处消费(721/822/974)均 innerHTML → 可放 <i>；语义色用 class 保住原 emoji 颜色暗示
@@ -162,7 +180,7 @@ async function listFiles(subPath = "") {
     verb: "listMemoryFiles",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, subPath },
+    payload: { charName: _charId, subPath },
   });
 }
 
@@ -171,7 +189,7 @@ async function readFile(filePath) {
     verb: "readMemoryFile",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, filePath },
+    payload: { charName: _charId, filePath },
   });
 }
 
@@ -180,7 +198,7 @@ async function writeFile(filePath, content) {
     verb: "writeMemoryFile",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, filePath, content },
+    payload: { charName: _charId, filePath, content },
   });
 }
 
@@ -194,7 +212,7 @@ async function callArchiveAction(action, extra = {}) {
     verb: action,
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, ...extra },
+    payload: { charName: _charId, ...extra },
   });
 }
 
@@ -209,7 +227,7 @@ async function codeSearch(query, useRegex = false) {
     verb: "searchCodeFiles",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, query, useRegex },
+    payload: { charName: _charId, query, useRegex },
   });
 }
 
@@ -219,7 +237,7 @@ async function codeDelete(filePath) {
     verb: "deleteCodeFile",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, filePath },
+    payload: { charName: _charId, filePath },
   });
 }
 
@@ -229,7 +247,7 @@ async function codeMove(sourceFile, targetFolder) {
     verb: "moveCodeFile",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, sourceFile, targetFolder },
+    payload: { charName: _charId, sourceFile, targetFolder },
   });
 }
 
@@ -239,7 +257,7 @@ async function codeMkdir(folderName) {
     verb: "createCodeFolder",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, folderName },
+    payload: { charName: _charId, folderName },
   });
 }
 
@@ -249,7 +267,7 @@ async function codeExport() {
     verb: "exportCodeMemory",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId },
+    payload: { charName: _charId },
   });
 }
 
@@ -259,7 +277,7 @@ async function codeImport(zipBase64) {
     verb: "importCodeMemory",
     target: "plugins:beilu-memory",
     source: "web",
-    payload: { username: _username, charName: _charId, zipBase64 },
+    payload: { charName: _charId, zipBase64 },
   });
 }
 
@@ -618,7 +636,11 @@ async function renderFileTree() {
 	`;
 
   try {
+    // [D6 §1] 先确立会话身份代际再发树请求；await 回来后 epoch 不匹配=期间换过用户，
+    //   本次结果整体丢弃（listener 已清树，不能再往新用户界面里画旧用户的目录）。
+    const _epoch = (await ensureSessionIdentity()).epoch;
     const data = await listFiles("");
+    if (!isEpochCurrent(_epoch)) return;
     if (!data.success) throw new Error(data.error || "加载失败");
 
     _treeContainer.innerHTML = "";
@@ -730,7 +752,9 @@ async function createDirNode(name, dirPath) {
       if (childrenEl.children.length === 0) {
         childrenEl.innerHTML = '<div class="mb-loading-sm">加载中...</div>';
         try {
+          const _epoch = getSessionEpoch(); // [D6 §1] 在飞结果 epoch 守卫
           const data = await listFiles(dirPath);
+          if (!isEpochCurrent(_epoch)) return;
           childrenEl.innerHTML = "";
 
           // T053：code 层展开时先挂 code 专用操作栏（搜索/建夹/导入/导出），即使 code 下暂空也可导入/建夹。
@@ -772,7 +796,9 @@ async function createDirNode(name, dirPath) {
   // 如果已展开，立即加载内容
   if (isExpanded) {
     try {
+      const _epoch = getSessionEpoch(); // [D6 §1] 在飞结果 epoch 守卫
       const data = await listFiles(dirPath);
+      if (!isEpochCurrent(_epoch)) return el;
       // T053：code 层默认展开时同样先挂 code 专用操作栏（与懒加载分支一致）。
       if (dirPath === "code") {
         childrenEl.appendChild(createCodeToolbar(renderFileTree));
@@ -918,7 +944,9 @@ async function selectFile(filePath, treeEl) {
 	`;
 
   try {
+    const _epoch = getSessionEpoch(); // [D6 §1] 在飞结果 epoch 守卫
     const data = await readFile(filePath);
+    if (!isEpochCurrent(_epoch)) return;
     if (!data.success) throw new Error(data.error || "读取失败");
 
     renderFileViewer(filePath, data);
@@ -1040,7 +1068,9 @@ function renderFileViewer(filePath, data) {
         }
       }
 
+      const _epoch = getSessionEpoch(); // [D6 §1] 写回执 epoch 守卫（写已到后端，只拦 UI 回渲染）
       const result = await writeFile(filePath, content);
+      if (!isEpochCurrent(_epoch)) return;
       if (!result.success) throw new Error(result.error);
 
       // 重新加载文件内容
@@ -1080,8 +1110,11 @@ export async function initMemoryBrowser(
 
   if (options.charId) {
     _charId = options.charId;
-    // ★ B24修复：移除硬编码用户名
-    _username = options.username || "_default";
+    // [0804 身份单源] 原 `options.username || "_default"`：前端无 username 生产者（getUsername 的
+    //   meta/window 源不存在）→ 恒冻结 "_default" 进 payload → 后端 E_IDENTITY_MISMATCH 确定性拒绝
+    //   （E 现场「payload username 与认证身份不一致」实证）。现 payload 已零身份字段（10 处删除），
+    //   服务端一律用认证 context.user；本地 _username 只作重绑去重键，空即空不再兜底伪身份。
+    _username = options.username || "";
     await renderFileTree();
   } else {
     treeContainer.innerHTML =
@@ -1101,7 +1134,7 @@ export async function initMemoryBrowser(
  */
 export async function bindMemoryBrowserToChar(charId, username) {
   if (!_treeContainer) return;
-  const resolvedUser = username || getUsername() || "_default"; // [合并批 0714] 内联读法删除 → sharedState.getUsername 单源（"_default" 兜底语义保留）
+  const resolvedUser = username || getUsername() || ""; // [0804 身份单源] "_default" 兜底删除（伪身份源）；此值仅作本地重绑去重键，不进 payload——服务端一律用认证身份
   if (charId === _charId && resolvedUser === _username) return;
 
   try {

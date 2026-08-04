@@ -159,35 +159,23 @@ function _initCharSelectorDropdown() {
                   console.log(`[charSelector] 角色「${charName}」最近聊天: ${targetChatId}`);
                 }
               }
-              // 2. 没找到则创建新聊天并添加角色（4模式各建一条，切模式tab不空白）
+              // 2. 没找到则由服务端公用机制建四模式对话。
+              // [0804 根因修] 原前端 ALL_MODES 循环（new→bindCharToChat→classifyNewChat）是与服务端
+              //   ensureModeChatsForChar 并存的重复生产者：create/import 路径 0731 已收口，唯独本路径漏删。
+              //   循环第一轮 bindCharToChat 命中 POST /char 的 username 断点即中止 → 角色只剩 1 条对话，
+              //   且 reload 被 resolveChatIdForChar 规则2 短路永不补齐（E 现场 2026-08-03 实证）。
+              //   收口为与 create/import/规则3 同一服务端单点：幂等、建线+绑卡+「在用」指针一体，
+              //   chat_modes 徽标由服务端 newChat(mode) 写，前端 classifyNewChat 双写随循环一并删除。
               if (!targetChatId) {
-                console.log(`[charSelector] 角色「${charName}」无已有聊天，创建4模式对话`);
-                const ALL_MODES = ["chat", "smart", "code", "work"];
-                let chatModeId = null;
+                console.log(`[charSelector] 角色「${charName}」无已有聊天，走服务端 ensureModeChats 建四模式对话`);
                 try {
-                  const { classifyNewChat } = await import("../../shared/chat-core/conversationManager.mjs");
-                  for (const mode of ALL_MODES) {
-                    let newData;
-                    try {
-                      newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-                    } catch (newErr) {
-                      if (mode === "chat") {
-                        window._beiluToast?.(`切换角色失败：新建聊天接口异常 (${newErr.message})。chat shell 可能未正常加载。`, "error");
-                        console.error(`[charSelector] new 失败 — 中止切换`, newErr);
-                        return;
-                      }
-                      console.warn(`[charSelector] ${mode} 模式对话创建失败，跳过`, newErr);
-                      continue;
-                    }
-                    const cid = newData.chatid;
-                    await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: cid }, payload: { charname: charName } });
-                    try { classifyNewChat(cid, charName, mode); } catch {}
-                    if (mode === "chat") chatModeId = cid;
-                  }
-                } catch (outerErr) {
-                  console.error(`[charSelector] 4模式创建异常`, outerErr);
+                  const resp = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: charName } });
+                  targetChatId = resp?.modeChats?.chat || null;
+                } catch (ensureErr) {
+                  // 不回退成前端单条绑定：那会重新引入四模式共用同一聊天的根因。失败可见，保留空态。
+                  console.error(`[charSelector] 四模式对话补齐失败`, ensureErr);
+                  window._beiluToast?.(`角色「${charName}」的模式对话未建全: ${ensureErr.message}`, "error");
                 }
-                targetChatId = chatModeId;
               }
               // 3. 跳转到目标聊天（切回chat Tab，避免停留在工作/IDE Tab）
               layoutState.activeTab = "chat";

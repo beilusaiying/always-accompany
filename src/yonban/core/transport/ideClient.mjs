@@ -29,7 +29,7 @@ import { wbT, wbD } from "../../../server/wbStub.mjs";
  *   前端可通过 GetData 拉取 ide_approvals（待审批队列）和 read_cache（文件读取缓存清单）。
  *
  * 【关联链】
- *   ← replyHandler.mjs（读写分流后调 callToolAndStore / addPendingApproval）
+ *   ← replyHandler.mjs（读写分流后调 callToolAndStore / await submitPendingApproval）
  *   ← generation.mjs（consumePendingResults 取结果注入 + countPendingResults 判 auto-continue）
  *   ← setDataActions.mjs（approvePendingApproval / revertToMessage 回档）
  *   → IdeWsServer.ts（WS tool_call 消息出站到 YonBan）
@@ -83,7 +83,13 @@ import * as fileEditRegistry from "../../../scripts/fileEditRegistry.mjs";
 // R5 路径单源：canonical 工作区根文件（beilu-files-settings.json）的 node 侧路径 + 项目根锚点
 //   统一由 storage 供给，删除本文件旧的 fileURLToPath 上溯 4 级本地推导，消除三头巧合对齐。
 //   storage 不回引本文件（无环）；ideClient→commandGate→storage 与 ideClient→storage 均单向到 storage。
-import { getFilesSettingsPath, __projectRoot as _IDE_PROJECT_ROOT } from "../functions/memory/storage_mod/storage.mjs";
+import { __projectRoot as _IDE_PROJECT_ROOT } from "../functions/memory/storage_mod/storage.mjs";
+// [D6 §4 2026-08-04] settings 读路收口：本文件对 beilu-files-settings.json 的两处直读
+//   （readFilesPermission / _readCanonicalWorkspace）改经单写者 store 只读视图；
+//   无 owner 的 status→SetData 反向直写根（_reconcileWorkspaceToCanonical）已删除——
+//   IDE 宣称的根只作候选（conn.ideInfo.status.workspaceFolders 经 getIdeInstances 暴露），
+//   确认写入走 beilu-files confirmIdeWorkspaceRoot（owner+chatId+instanceId+connectionId 匹配）。
+import { getFilesPermissionView, getOwnerWorkspaceRoot } from "../functions/security/filesSettingsStore.mjs";
 import {
   ToolJobRegistry,
   buildToolIoRuntimePolicy,
@@ -91,55 +97,42 @@ import {
   resolveToolResponseTimeout,
 } from "./toolRuntime.mjs";
 // 跨 isolate 收口（isolateBridge，零依赖无环）：审批队列单一权威在主进程——worker isolate 的
-// addPendingApproval 改走桥上行（主进程审批面板读得到、批准后主进程执行）；写审批开关/主进程
-// 工作区根经 bridgeState 下行（applyBridgeState）。isolate 判定内化在本系统内部，调用方零改动。
+// worker 的 submitPendingApproval 走有确认的桥请求（主进程审批面板读得到、批准后主进程执行）；
+// 同步 addPendingApproval 只允许主进程 owner。写审批开关/主进程工作区根经 bridgeState 下行（applyBridgeState）。
 import {
   isWorkerIsolate,
-  publishFromWorker,
   publishWorkerLifecycle,
-  registerBridgeHandler,
+  registerBridgeRequestHandler,
+  requestFromWorker,
 } from "./isolateBridge.mjs";
 
-// PJ-1 dir bug：canonical「有效工作区根」由 beilu-files 持久化到 <项目根>/data/beilu-files-settings.json。
-// beilu-memory 与 beilu-files 是不同插件、读不到对方 pluginData，故 AI 侧直接读该文件取 canonical 根。
-// R5：路径由 storage.getFilesSettingsPath() 供给；_IDE_PROJECT_ROOT 复用 storage.__projectRoot
-//   （相对 workspaceRoot 的 resolve 锚点仍用它，与旧本地推导等价=仓库根；仅函数体内访问，安全）。
-// [0722 排雷] 禁止模块顶层调用 getFilesSettingsPath() / 顶层读 _IDE_PROJECT_ROOT（原顶层
-//   `const _FILES_SETTINGS_PATH = ...` 立即求值=押注 storage 先初始化，storage 获得任何传递到
-//   本文件的 import 边即 TDZ 崩全部插件，0722 事故同款）。一律函数内取值（endpoints.mjs 同范式）。
+// PJ-1 dir bug → [D6 §4 2026-08-04] canonical「有效工作区根」持久化在 beilu-files-settings.json，
+// 但本文件不再自行读该 JSON（插件间读不到对方 pluginData 的问题改由 filesSettingsStore 只读视图解决）；
+// _IDE_PROJECT_ROOT 复用 storage.__projectRoot（相对根 resolve 锚点，与旧本地推导等价=仓库根）。
+// [0722 排雷] 禁止模块顶层读 _IDE_PROJECT_ROOT / 顶层触发 storage 路径求值（TDZ 崩全部插件，
+//   0722 事故同款）。一律函数体内访问（filesSettingsStore 内同守此约）。
 
 /**
- * 跨插件读 beilu-files 权限键（与 _readCanonicalWorkspace 同源读 beilu-files-settings.json，
- * 插件间读不到对方 pluginData 的既有范式）。per-user 布局 {<username>:{permissions:{...}}}，
- * 兼容旧全局单层格式（顶层直接 permissions）。缺失/读失败 → def（beilu-files 各键默认值由调用方给）。
+ * 跨插件读 beilu-files 权限键——[D6 §4 2026-08-04] 改经 filesSettingsStore 只读 snapshot
+ * （插件间读不到对方 pluginData 的既有范式保持；本文件不再自行 parse 该 JSON）。
+ * per-user 布局 {<username>:{permissions:{...}}}；缺失 → def；
+ * 设置文件损坏/不可读 → 恒 false（fail-closed，宽默认不救场，store 视图单源裁决）。
  * @param {string} username
  * @param {string} key - permissions 下的键（如 "questions"）
  * @param {boolean} def
  */
 export function readFilesPermission(username, key, def = true) {
-  try {
-    const raw = fs.readFileSync(getFilesSettingsPath(), "utf-8");
-    const j = JSON.parse(raw);
-    const v = j?.[username]?.permissions?.[key] ?? j?._default?.permissions?.[key] ?? j?.permissions?.[key];
-    return typeof v === "boolean" ? v : def;
-  } catch {
-    return def;
-  }
+  return getFilesPermissionView(username, key, def);
 }
 
-// 读 beilu-files canonical 本体工作区根（不存在/解析失败/占位 → ""，调用方回退）。
-function _readCanonicalWorkspace() {
+// 读某 owner 的 canonical 工作区根（[D6 §2 2026-08-04] owner 分区版）。
+// 原 _readCanonicalWorkspace 读旧全局 _global.workspaceRoot——该无主根已迁 legacyUnassigned
+// 且运行时不自动授予（D6 §2.3）；现必须带 owner（chat 归属用户）才解析得到根，
+// 无 owner 上下文 → ""（审批门"区内/区外"轴诚实关闭，不猜别人的根）。
+function _readCanonicalWorkspace(owner = "", chatid = null) {
   try {
-    const raw = fs.readFileSync(getFilesSettingsPath(), "utf-8");
-    const j = JSON.parse(raw);
-    const root = typeof j._global?.workspaceRoot === "string" ? j._global.workspaceRoot
-      : typeof j.workspaceRoot === "string" ? j.workspaceRoot : "";
-    // "." = 旧时代"没设过"的无效默认，仍视为占位回退。
-    // "ai玩耍空间" 不再当占位过滤（任务A 2026-07-09：它是启动即 mkdir 的合法默认工作区，
-    //   过滤它=审批门根回退 null，与 beilu-files 沙箱真实根分叉——前后端默认分叉审计项）。
+    const root = getOwnerWorkspaceRoot(owner || "", chatid || null);
     if (!root || root === ".") return "";
-    // 相对持久化值统一 resolve 锚项目根（=后端进程 CWD，与 beilu-files path.resolve 同锚），
-    // 门校验拿到绝对 canonical，不特判具体目录名。
     return path.isAbsolute(root) ? root : path.resolve(_IDE_PROJECT_ROOT, root);
   } catch {
     return "";
@@ -160,6 +153,93 @@ function _stableStringify(v) {
 function _approvalFingerprint(tool, params) {
   const canon = _stableStringify({ tool, params: params ?? {} });
   return crypto.createHash("sha256").update(canon).digest("hex");
+}
+
+function _approvalSubmissionFingerprint(toolCall, checkpointId) {
+  const canon = _stableStringify({
+    tool: toolCall?.tool,
+    params: toolCall?.params ?? {},
+    forceApproval: !!toolCall?._forceApproval,
+    checkpointId: checkpointId || null,
+  });
+  return crypto.createHash("sha256").update(canon).digest("hex");
+}
+
+function _approvalSubmissionError(code, message, state = {}) {
+  const error = new Error(message || code || "approval submission failed");
+  error.code = code || "E_APPROVAL_SUBMISSION_FAILED";
+  error.phase = state.phase || "approval_submission";
+  error.executionStarted = state.executionStarted === true;
+  error.sideEffectsPossible = state.sideEffectsPossible === true;
+  error.indeterminate = state.indeterminate === true;
+  if (state.details !== undefined) error.details = state.details;
+  return error;
+}
+
+function _normalizeApprovalOperationId(operationId) {
+  const normalized = typeof operationId === "string" ? operationId.trim() : "";
+  if (!normalized || normalized.length > 256) {
+    throw _approvalSubmissionError(
+      "E_APPROVAL_OPERATION_ID_INVALID",
+      "approval operationId must be a non-empty string of at most 256 characters",
+      { phase: "approval_preflight" },
+    );
+  }
+  return normalized;
+}
+
+// 回档预览/执行之间的 IDE 路由令牌。令牌只描述 _connFor 实际选中的连接代次，
+// 不包含工作区推断或可变显示信息；connectionId 防止同端口重连后被误认为同一路由。
+const _CONNECTED_IDE_ROUTE_KEYS = Object.freeze([
+  "connected",
+  "backendKind",
+  "port",
+  "instanceId",
+  "connectionId",
+]);
+
+function _snapshotIdeRouteFromConn(conn) {
+  if (!conn) return { connected: false };
+  const appName = typeof conn.ideInfo?.appName === "string" ? conn.ideInfo.appName : "";
+  const backendKind = appName
+    ? (appName === "beilu-cli" ? "cli" : "yonban")
+    : ((conn.kind === "cli" || conn.kind === "yonban") ? conn.kind : null);
+  return {
+    connected: true,
+    backendKind,
+    port: conn.port,
+    instanceId: typeof conn.instanceId === "string" && conn.instanceId ? conn.instanceId : null,
+    connectionId: conn.connectionId,
+  };
+}
+
+/** 严格校验可跨 HTTP/WS 序列化的 IDE 路由令牌形状。 */
+export function isValidIdeRouteSnapshot(route) {
+  if (!route || typeof route !== "object" || Array.isArray(route)) return false;
+  const keys = Object.keys(route);
+  if (route.connected === false) {
+    return keys.length === 1 && keys[0] === "connected";
+  }
+  if (route.connected !== true
+    || keys.length !== _CONNECTED_IDE_ROUTE_KEYS.length
+    || !_CONNECTED_IDE_ROUTE_KEYS.every((key) => Object.prototype.hasOwnProperty.call(route, key))) {
+    return false;
+  }
+  return (route.backendKind === null || route.backendKind === "yonban" || route.backendKind === "cli")
+    && Number.isSafeInteger(route.port) && route.port > 0 && route.port <= 65535
+    && (route.instanceId === null || (typeof route.instanceId === "string" && !!route.instanceId))
+    && typeof route.connectionId === "string" && !!route.connectionId;
+}
+
+/** 精确比较连接代次；不以“都在线”、端口或实例名的任一子集替代完整令牌。 */
+export function ideRouteSnapshotsEqual(expected, actual) {
+  if (!isValidIdeRouteSnapshot(expected) || !isValidIdeRouteSnapshot(actual)) return false;
+  if (expected.connected !== actual.connected) return false;
+  if (!expected.connected) return true;
+  return expected.backendKind === actual.backendKind
+    && expected.port === actual.port
+    && expected.instanceId === actual.instanceId
+    && expected.connectionId === actual.connectionId;
 }
 
 // （_isPathOutsideWorkspace 已迁 security/commandGate.mjs，经顶部 import 使用）
@@ -377,6 +457,25 @@ const IDE_TOOLS = [
   { name: "git_merge", description: "合并分支到当前分支", params: { branch: { type: "string", required: true, description: "要合并的分支名" }, noFf: { type: "boolean", required: false }, message: { type: "string", required: false }, cwd: { type: "string", required: false, description: "仓库目录（缺省=工作区根）" } } },
 ];
 
+// 提示词里的工具 schema 只能来自上方 canonical registry。这里只生成无连接态、无工作区、无用户
+// 配置、无运行值的稳定签名；可编辑的使用规则仍住 INJ-2-code，动态状态仍住 depth:0 data INJ。
+// 模块加载时求值一次，保证同一代码版本下逐轮返回字节完全一致，不让运行期对象变化破坏缓存前缀。
+const STATIC_IDE_TOOL_SIGNATURES = IDE_TOOLS.map((tool) => {
+  const params = Object.entries(tool.params || {}).map(([name, spec]) => {
+    const type = typeof spec?.type === "string" && spec.type ? spec.type : "any";
+    return `${name}:${type}${spec?.required === true ? "!" : "?"}`;
+  });
+  return `- ${tool.name}(${params.join(", ")})`;
+}).join("\n");
+
+/**
+ * 返回可放在历史前缓存区的 IDE 工具静态签名。
+ * `!`=required，`?`=optional；自然语言规则由可编辑 INJ 负责。
+ */
+export function renderStaticIdeToolSignatures() {
+  return STATIC_IDE_TOOL_SIGNATURES;
+}
+
 // ---- WS token 单一权威（B16）----
 
 /**
@@ -550,6 +649,8 @@ class IdeClient {
     // ---- 写操作审批队列 ----
     /** @type {Array<{ id: string, tool: string, params: object, status: 'pending'|'approved'|'rejected', timestamp: string, checkpointId?: string }>} */
     this._pendingApprovals = [];
+    /** 主进程审批提交幂等收据。键=username/chatid/generationId/operationId；生命周期随 chat/user 清理。 */
+    this._approvalSubmissionReceipts = new Map();
     /** 写操作是否需要审批（用户可在管理面板切换） */
     this._requireWriteApproval = new Map(); // SEC 破口C(红方round2 隔离): per-user 写审批开关 key=username，缺省 true(fail-safe)
     /** 自动批准读操作 */
@@ -651,7 +752,7 @@ class IdeClient {
         const wantId = this._bindingIds.get(chatid) || null;
         const c = this._conns.get(port);
         // ① 端口上有活连接：编号一致才认（编号不符=端口被后起实例复用，绝不能当成原窗口）
-        if (this._isConnLive(c) && (!wantId || !c.instanceId || c.instanceId === wantId)) {
+        if (this._isConnLive(c) && (!wantId || c.instanceId === wantId)) {
           if (!wantId && c.instanceId) { this._bindingIds.set(chatid, c.instanceId); this._persistBindings(); } // 补记编号（绑定发生在 hello 之前时）
           const _r = c.ideInfo?.status?.workspaceFolders?.[0];
           if (_r && this._bindingRoots.get(chatid) !== _r) { this._bindingRoots.set(chatid, _r); this._persistBindings(); }
@@ -673,14 +774,23 @@ class IdeClient {
           const _stable = (id) => { const p = String(id || "").split("_"); return p.length >= 3 && p[1] !== "anon" ? p[1] : ""; };
           const _wantStable = _stable(wantId);
           if (_wantStable) {
-            for (const cc of this._conns.values()) {
-              if (this._isConnLive(cc) && _stable(cc.instanceId) === _wantStable) {
-                this._chatBindings.set(chatid, cc.port);
-                this._bindingIds.set(chatid, cc.instanceId);
-                this._persistBindings();
-                wbT(chatid, "ideClient", "bind:reattachByWorkspace", { from: port, to: cc.port, was: wantId, now: cc.instanceId });
-                return cc;
-              }
+            const stableCandidates = [...this._conns.values()].filter(
+              (cc) => this._isConnLive(cc) && _stable(cc.instanceId) === _wantStable,
+            );
+            if (stableCandidates.length === 1) {
+              const cc = stableCandidates[0];
+              this._chatBindings.set(chatid, cc.port);
+              this._bindingIds.set(chatid, cc.instanceId);
+              this._persistBindings();
+              wbT(chatid, "ideClient", "bind:reattachByWorkspace", { from: port, to: cc.port, was: wantId, now: cc.instanceId });
+              return cc;
+            }
+            if (stableCandidates.length > 1) {
+              wbD(chatid, "ideClient", "bind:reattachByWorkspaceAmbiguous", false,
+                "同一 workspace stable 身份存在多个活连接，拒绝猜测回迁", {
+                  wantedInstanceId: wantId,
+                  candidatePorts: stableCandidates.map((cc) => cc.port),
+                });
             }
           }
         }
@@ -700,6 +810,14 @@ class IdeClient {
 
   isConnectedFor(chatid = null) {
     return this._connFor(chatid || null) != null;
+  }
+
+  /**
+   * 返回该会话此刻由 _connFor 实际选中的精确连接代次。
+   * 未连接只返回 {connected:false}；连接态字段均来自选中的 conn，不做默认端口/实例猜测。
+   */
+  getRouteSnapshot(chatid = null) {
+    return _snapshotIdeRouteFromConn(this._connFor(chatid || null));
   }
 
   /**
@@ -779,7 +897,8 @@ class IdeClient {
     const c = this._connFor(chatid || null);
     if (c) return c.ideInfo?.status?.workspaceFolders?.[0] || null;
     if (this._mainWorkspaceRoot) return this._mainWorkspaceRoot;
-    return _readCanonicalWorkspace() || null;
+    // [D6 §2] 盘上回退按会话 owner 分区解析（无 owner=null，诚实关闭区外轴，不读无主旧全局根）
+    return _readCanonicalWorkspace(this._chatOwners.get(chatid || "") || "", chatid || null) || null;
   }
 
   get clientEnv() {
@@ -927,6 +1046,136 @@ class IdeClient {
   }
 
   /**
+   * 可等待的审批提交入口。main 直接写权威队列；worker 必须经 request/response 桥拿到主进程 ack。
+   * 不内置重试：timeout/indeterminate 时复用同 operationId 的裁决只能由显式调用方发起。
+   */
+  async submitPendingApproval(toolCall, checkpointId, chatid = null, {
+    operationId,
+    username = "",
+    generationId = "",
+  } = {}) {
+    const stableOperationId = _normalizeApprovalOperationId(operationId);
+    if (isWorkerIsolate) {
+      const ack = await requestFromWorker("approval_add", chatid, {
+        operationId: stableOperationId,
+        toolCall: {
+          tool: toolCall?.tool,
+          params: toolCall?.params,
+          _forceApproval: !!toolCall?._forceApproval,
+        },
+        checkpointId: checkpointId || null,
+      });
+      if (
+        ack?.accepted !== true
+        || typeof ack?.approvalId !== "string"
+        || !ack.approvalId
+        || ack?.operationId !== stableOperationId
+      ) {
+        throw _approvalSubmissionError(
+          "E_APPROVAL_ACK_INVALID",
+          "main process returned an invalid approval acknowledgement",
+          {
+            phase: "approval_ack",
+            executionStarted: true,
+            sideEffectsPossible: true,
+            indeterminate: true,
+            details: { operationId: stableOperationId },
+          },
+        );
+      }
+      return ack;
+    }
+    return this._submitPendingApprovalInMain(toolCall, checkpointId, chatid, {
+      operationId: stableOperationId,
+      username,
+      generationId,
+    });
+  }
+
+  _submitPendingApprovalInMain(toolCall, checkpointId, chatid, {
+    operationId,
+    username,
+    generationId,
+  } = {}) {
+    if (isWorkerIsolate) {
+      throw _approvalSubmissionError(
+        "E_APPROVAL_MAIN_ONLY",
+        "authoritative approval submission is only available in the main process",
+        { phase: "approval_preflight" },
+      );
+    }
+    const stableOperationId = _normalizeApprovalOperationId(operationId);
+    const owner = typeof username === "string" ? username.trim() : "";
+    const generation = typeof generationId === "string" ? generationId.trim() : "";
+    if (
+      !owner
+      || !chatid
+      || !generation
+      || typeof toolCall?.tool !== "string"
+      || !toolCall.tool
+      || !toolCall.params
+      || typeof toolCall.params !== "object"
+      || Array.isArray(toolCall.params)
+    ) {
+      throw _approvalSubmissionError(
+        "E_APPROVAL_CONTEXT_INVALID",
+        "approval submission requires trusted username, chatid, generationId and tool",
+        { phase: "approval_preflight" },
+      );
+    }
+    if (this._chatOwners.get(chatid) !== owner) {
+      throw _approvalSubmissionError(
+        "E_APPROVAL_OWNER_MISMATCH",
+        "approval submission owner does not match the registered chat owner",
+        { phase: "approval_preflight" },
+      );
+    }
+    const key = JSON.stringify([owner, chatid, generation, stableOperationId]);
+    let fingerprint;
+    try {
+      fingerprint = _approvalSubmissionFingerprint(toolCall, checkpointId);
+    } catch (cause) {
+      throw _approvalSubmissionError(
+        "E_APPROVAL_PAYLOAD_FINGERPRINT",
+        "approval payload cannot be fingerprinted",
+        { phase: "approval_preflight", details: { cause: cause?.message || String(cause) } },
+      );
+    }
+    const existing = this._approvalSubmissionReceipts.get(key);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw _approvalSubmissionError(
+          "E_APPROVAL_OPERATION_PAYLOAD_DRIFT",
+          "approval operationId was reused with a different payload",
+          {
+            phase: "approval_idempotency",
+            details: { operationId: stableOperationId },
+          },
+        );
+      }
+      return existing.receipt;
+    }
+    const entry = this.addPendingApproval(toolCall, checkpointId, chatid, {
+      operationId: stableOperationId,
+      generationId: generation,
+    });
+    const receipt = Object.freeze({
+      accepted: true,
+      approvalId: entry.id,
+      operationId: stableOperationId,
+    });
+    this._approvalSubmissionReceipts.set(key, {
+      username: owner,
+      chatid,
+      generationId: generation,
+      operationId: stableOperationId,
+      fingerprint,
+      receipt,
+    });
+    return receipt;
+  }
+
+  /**
    * 写操作入审批队列（Hop 2i）。replyHandler 审批门判定 needApproval=true 后调用。
    *
    * 链路：replyHandler evaluateWriteApprovalGate → 本函数 → _pendingApprovals 队列 → 前端审批 UI → approveOperation
@@ -940,22 +1189,18 @@ class IdeClient {
    * @param {string|null} chatid - 会话 ID（B2 corrId 隔离，审批结果回流时据此归位）
    * @returns {{ id: string, tool: string, params: object, status: string, ... }} 入队的审批条目
    */
-  addPendingApproval(toolCall, checkpointId, chatid = null) {
-    // 跨 isolate 收口：worker isolate 的本地队列主进程读不到（审批面板 getApprovals /
-    // approveOperation 全在主进程跑）——上行交主进程权威队列。主进程侧重建 entry：
-    // absPath/区外标记按主进程权威根重新解析、id 由主进程生成（唯一调用方 replyHandler
-    // 不消费返回值，id 漂移无影响）。上行失败（无在飞 emitter）→ 诚实降级回本地入队并留痕。
+  addPendingApproval(toolCall, checkpointId, chatid = null, {
+    operationId = null,
+    generationId = null,
+  } = {}) {
+    // 同步入口只保留给主进程 owner。worker 必须 await submitPendingApproval，禁止 fire-and-forget
+    // 假 ack，也禁止写入主进程看不到的 isolate 本地队列。
     if (isWorkerIsolate) {
-      const _sent = publishFromWorker("approval_add", chatid, {
-        toolCall: { tool: toolCall.tool, params: toolCall.params, _forceApproval: !!toolCall._forceApproval },
-        checkpointId: checkpointId || null,
-        chatid: chatid || null,
-      });
-      if (_sent) {
-        wbT(chatid, "ideClient", "approval:uplink", { tool: toolCall.tool });
-        return { id: null, tool: toolCall.tool, params: toolCall.params, status: "pending", uplinked: true };
-      }
-      wbD(chatid, "ideClient", "approval:uplinkFail", false, "桥无在飞 emitter，降级本地入队（主进程面板不可见）", { tool: toolCall.tool });
+      throw _approvalSubmissionError(
+        "E_APPROVAL_SYNC_IN_WORKER",
+        "worker must await submitPendingApproval instead of addPendingApproval",
+        { phase: "approval_preflight" },
+      );
     }
     const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     // ★ F6 内联审批卡：入队时解析绝对路径 + 区外标记，供前端卡片直接渲染（KILO approval-box 规范：
@@ -978,6 +1223,8 @@ class IdeClient {
       timestamp: new Date().toISOString(),
       checkpointId: checkpointId || null,
       chatid: chatid || null,   // ★ B2 corrId隔离: 审批结果回流时按此归位
+      operationId: operationId || null,
+      generationId: generationId || null,
       // ★ T2 S4：透传系统强制档标记，供前端 attention 弹窗精确区分「高敏操作」与普通写。
       _forceApproval: !!toolCall._forceApproval,
       // ★ F6：绝对路径 + 区外标记（前端卡片显示用；run_command 无 path → 均为 null/false）
@@ -1013,6 +1260,29 @@ class IdeClient {
    *   （即使换了端口）能按编号认回；绑定的物理删除由 unbindChat/forgetChat 收口，不在此处散写。
    * 广播范式同 _broadcastApprovalCount：懒 import dispatcher 防层级环，fire-and-forget。
    */
+  /**
+   * [P1 2026-08-03] 活连接实例清单（只读快照）。
+   * 消费方：setDataActions launchEditor 的 per-target readiness（ready=目标 workspace 实例已接入，
+   * 不再拿"全局任意连接"冒充目标窗口就绪，Fable 审查阻断5）；未来 capability registry 的
+   * readiness 事实源同此单点。身份=YonBan 自报 instanceId（20260803 框架补正：不靠端口猜）。
+   * @returns {Array<{instanceId:string|null, port:number, kind:string, workspace:string|null}>}
+   */
+  listLiveInstances() {
+    const out = [];
+    try {
+      for (const c of this._conns.values()) {
+        if (!this._isConnLive(c)) continue;
+        out.push({
+          instanceId: c.instanceId || null,
+          port: c.port,
+          kind: c.kind === "cli" ? "cli" : "yonban",
+          workspace: c.ideInfo?.status?.workspaceFolders?.[0] || null,
+        });
+      }
+    } catch { /* 快照失败返回已收集部分 */ }
+    return out;
+  }
+
   _notifyBoundLinesGone(conn) {
     const _cids = [];
     for (const [cid, port] of this._chatBindings) if (port === conn.port) _cids.push(cid);
@@ -1774,9 +2044,24 @@ class IdeClient {
    * 绑定即确保该端口在连接池内（窗口刚启动、周期重扫未到时也立即接入）。
    * @param {string} chatid
    * @param {number} port
+   * @param {"auto"|"manual"} source
+   * @param {string|null} expectedInstanceId - 调用方所在 IDE 窗口的权威实例 ID，可在连接就绪前持久化
    */
-  bindChat(chatid, port, source = "auto") {
+  bindChat(chatid, port, source = "auto", expectedInstanceId = null) {
     if (!chatid || typeof port !== "number" || !Number.isFinite(port)) return { success: false, error: "chatid/port 无效" };
+    const expectedId = typeof expectedInstanceId === "string" && expectedInstanceId.trim()
+      ? expectedInstanceId.trim()
+      : null;
+    const liveAtPort = this._conns.get(port);
+    if (expectedId && this._isConnLive(liveAtPort) && liveAtPort.instanceId !== expectedId) {
+      wbD(chatid, "ideClient", "bind:instanceConflict", false,
+        "目标端口活连接的实例身份与上报不一致，拒绝绑定", {
+          port,
+          expectedInstanceId: expectedId,
+          actualInstanceId: liveAtPort.instanceId || null,
+        });
+      return { success: false, error: "IDE 实例身份冲突，已拒绝绑定", port, expectedInstanceId: expectedId, actualInstanceId: liveAtPort.instanceId || null };
+    }
     // [绑定来源优先级 0726] 用户在 ＋号 里指定的执行端是显式意图（manual，粘性）；YonBan 打开对话时的
     //   自动上报（auto）是弱意图。原先两者同权、最后写入者赢 → 只要该对话在任一 YonBan 窗口被打开过，
     //   用户指定的执行端就被静默改掉。规则：auto 不覆盖仍然在线的 manual 绑定；manual 覆盖一切；
@@ -1795,8 +2080,9 @@ class IdeClient {
     this._bindingIds.delete(chatid);
     this._bindingRoots.delete(chatid);
     const _bc = this._conns.get(port);
+    if (expectedId) this._bindingIds.set(chatid, expectedId);
     if (this._isConnLive(_bc)) {
-      if (_bc.instanceId) this._bindingIds.set(chatid, _bc.instanceId);
+      if (!expectedId && _bc.instanceId) this._bindingIds.set(chatid, _bc.instanceId);
       const _br = _bc.ideInfo?.status?.workspaceFolders?.[0];
       if (_br) this._bindingRoots.set(chatid, _br);
     }
@@ -1806,8 +2092,8 @@ class IdeClient {
         || (IdeClient.discoverActivePorts().find((entry) => entry?.port === port)?.type === "beilu-cli" ? "cli" : "yonban");
       this._ensureConn(port, resolveTokenForPort(port), _knownKind);
     }
-    wbT(chatid, "ideClient", "bind:set", { port });
-    return { success: true, port };
+    wbT(chatid, "ideClient", "bind:set", { port, instanceId: this._bindingIds.get(chatid) || null });
+    return { success: true, port, instanceId: this._bindingIds.get(chatid) || null };
   }
 
   /** [窗口id 0726 容错] 绑定表从盘上恢复（仅主 isolate 构造时调一次）。 */
@@ -2262,6 +2548,32 @@ class IdeClient {
     // ★ 多开路由：按会话绑定选连接（绑定死→同根回退主连接/异根诚实降级；无绑定→主连接），本轮工具全程走该连接
     const _routeInfo = {};
     const _conn = this._connFor(gateCtx.chatid || null, _routeInfo);
+    const _actualIdeRoute = _snapshotIdeRouteFromConn(_conn);
+    if (Object.prototype.hasOwnProperty.call(gateCtx, "expectedIdeRoute")) {
+      const _expectedIdeRoute = gateCtx.expectedIdeRoute;
+      if (!isValidIdeRouteSnapshot(_expectedIdeRoute)) {
+        return {
+          success: false,
+          applied: false,
+          drift: "ideRoute",
+          errorCode: "invalid_ide_route_expectation",
+          error: "expectedIdeRoute 形状无效，已拒绝发送工具调用",
+          expectedIdeRoute: _expectedIdeRoute,
+          actualIdeRoute: _actualIdeRoute,
+        };
+      }
+      if (!ideRouteSnapshotsEqual(_expectedIdeRoute, _actualIdeRoute)) {
+        return {
+          success: false,
+          applied: false,
+          drift: "ideRoute",
+          errorCode: "ide_route_drift",
+          error: "回档令牌已漂移：IDE 路由连接代次变化",
+          expectedIdeRoute: _expectedIdeRoute,
+          actualIdeRoute: _actualIdeRoute,
+        };
+      }
+    }
     if (!_conn) {
       if (_routeInfo.degraded) {
         // [窗口id 0726] 绑定窗口不可用且无法按工作区身份自愈——拒绝跨窗执行（宁可失败，不在别人的工作区里写）
@@ -2894,6 +3206,12 @@ class IdeClient {
     });
     const pendingResultsRemoved = pendingResultsBefore - this._pendingResults.length;
     const operationHistoryRemoved = this.clearOperationHistory({ ownerUsername, chatid });
+    let approvalSubmissionReceiptsRemoved = 0;
+    for (const [key, submission] of this._approvalSubmissionReceipts || []) {
+      if (submission?.chatid !== chatid) continue;
+      this._approvalSubmissionReceipts.delete(key);
+      approvalSubmissionReceiptsRemoved++;
+    }
     this._diagRepeat?.delete(chatid);
     this._lastDiagSig?.delete(chatid);
     this._externalChanges?.delete(chatid);
@@ -2912,8 +3230,9 @@ class IdeClient {
       pendingRequestsDetached,
       pendingResultsRemoved,
       operationHistoryRemoved,
+      approvalSubmissionReceiptsRemoved,
     });
-    return { pendingRequestsDetached, pendingResultsRemoved, operationHistoryRemoved };
+    return { pendingRequestsDetached, pendingResultsRemoved, operationHistoryRemoved, approvalSubmissionReceiptsRemoved };
   }
 
   /**
@@ -3063,10 +3382,10 @@ class IdeClient {
    * @param {boolean} deferred - true=审批路径（不抢占全局 _activeId），false=即时路径
    * @returns {Promise<{ success: boolean, id: string }>}
    */
-  async startCheckpoint(chatId, messageIndex, deferred = false) {
+  async startCheckpoint(chatId, messageIndex, deferred = false, messageId = "") {
     const id = `cp_${chatId}_${messageIndex}_${Date.now()}`;
     // gateCtx.chatid：检查点必须建在该会话所绑窗口（与后续写同一连接），多开下不落错实例
-    const result = await this.callTool("_checkpoint_start", { id, chatId, messageIndex, deferred }, undefined, undefined, { chatid: chatId });
+    const result = await this.callTool("_checkpoint_start", { id, chatId, messageIndex, deferred, ...(messageId ? { messageId } : {}) }, undefined, undefined, { chatid: chatId });
     if (result?.success) console.log(`[ideClient] 检查点已开始: ${id} (deferred=${deferred})`);
     return { success: !!result?.success, id };
   }
@@ -3077,16 +3396,45 @@ class IdeClient {
     const stillPending = this._pendingApprovals.some((o) => o.checkpointId === checkpointId);
     if (stillPending) return;
     try {
-      await this.commitCheckpoint(checkpointId, chatid);
+      const commitResult = await this.commitCheckpoint(checkpointId, chatid);
+      if (!commitResult.success) {
+        wbD(chatid, "ideClient", "checkpoint:commitFailed", false,
+          commitResult.error || "审批检查点提交未成功", {
+            checkpointId,
+            persisted: commitResult.persisted,
+            warning: commitResult.warning || null,
+          });
+        console.warn(`[ideClient] 审批检查点提交失败: ${commitResult.error || "未知错误"}`);
+      }
+      return commitResult;
     } catch (e) {
       console.warn(`[ideClient] 审批检查点提交失败: ${e.message}`);
+      wbD(chatid, "ideClient", "checkpoint:commitException", false,
+        e?.message || String(e), { checkpointId });
+      return { success: false, persisted: false, error: e?.message || String(e) };
     }
   }
 
   async commitCheckpoint(id, chatid = null) {
     const result = await this.callTool("_checkpoint_commit", { id }, undefined, undefined, chatid ? { chatid } : {});
-    if (result?.success) console.log(`[ideClient] 检查点已提交: ${id}`);
-    return { success: !!result?.success };
+    const inner = (result?.result && typeof result.result === "object") ? result.result : {};
+    const outerOk = result?.success === true;
+    const innerOk = inner.success !== false;
+    const success = outerOk && innerOk;
+    const persisted = success && inner.persisted === true;
+    const warning = inner.warning
+      || (success && !persisted ? "检查点已提交，但后端未确认已持久化到磁盘" : undefined);
+    const error = success
+      ? undefined
+      : (inner.error || result?.error || "检查点提交未成功");
+    if (success && persisted) {
+      console.log(`[ideClient] 检查点已提交并持久化: ${id}`);
+    } else if (success) {
+      console.warn(`[ideClient] 检查点已提交但未确认持久化: ${id}${warning ? ` (${warning})` : ""}`);
+    } else {
+      console.warn(`[ideClient] 检查点提交失败: ${id} (${error})`);
+    }
+    return { success, persisted, ...(warning ? { warning } : {}), ...(error ? { error } : {}) };
   }
 
   /**
@@ -3116,9 +3464,16 @@ class IdeClient {
    * @param {number} targetIndex - 回档目标消息索引（之后的检查点全部 revert）
    * @returns {Promise<object>}
    */
-  async revertToMessage(chatId, targetIndex) {
+  async revertToMessage(chatId, targetIndex, expectedCheckpointIds = undefined, expectedIdeRoute = undefined) {
     console.log(`[ideClient] 请求文件回档: chatId=${chatId}, targetIndex=${targetIndex}`);
-    const result = await this.callTool("_checkpoint_revert_to_message", { chatId, targetIndex }, undefined, undefined, { chatid: chatId });
+    const result = await this.callTool("_checkpoint_revert_to_message", {
+      chatId,
+      targetIndex,
+      ...(expectedCheckpointIds !== undefined ? { expectedCheckpointIds } : {}),
+    }, undefined, undefined, {
+      chatid: chatId,
+      ...(expectedIdeRoute !== undefined ? { expectedIdeRoute } : {}),
+    });
     if (result?.success) {
       const r = result.result || {};
       console.log(
@@ -3135,9 +3490,16 @@ class IdeClient {
    * 只读预览：若回档到 targetIndex，文件层会还原/删除哪些文件。绝不改状态。
    * @returns {Promise<{success:boolean, result?:{checkpointsToRevert,filesToRestore,filesToDelete}, error?:string}>}
    */
-  async getCheckpointDiff(chatId, targetIndex) {
+  async getCheckpointDiff(chatId, targetIndex, expectedCheckpointIds = undefined, expectedIdeRoute = undefined) {
     console.log(`[ideClient] 请求回档预览(只读): chatId=${chatId}, targetIndex=${targetIndex}`);
-    const result = await this.callTool("_checkpoint_revert_diff", { chatId, targetIndex }, undefined, undefined, { chatid: chatId });
+    const result = await this.callTool("_checkpoint_revert_diff", {
+      chatId,
+      targetIndex,
+      ...(expectedCheckpointIds !== undefined ? { expectedCheckpointIds } : {}),
+    }, undefined, undefined, {
+      chatid: chatId,
+      ...(expectedIdeRoute !== undefined ? { expectedIdeRoute } : {}),
+    });
     if (result?.success) {
       const r = result.result || {};
       console.log(
@@ -3239,22 +3601,13 @@ class IdeClient {
 
   // ---- 内部方法 ----
 
-  // 反向桥（v4 §5 簇① ③）：把 YonBan 的工作区根回写本体 beilu-files canonical，
-  // 让两边工作区根一致（消除"一边一种"）。仅在根真变化时写（status 频繁，避免每条都落盘）。
-  // beilu-files SetData(setWorkspaceRoot) 会落盘 beilu-files-settings.json + 清树缓存 → 下次树读重建。
-  _reconcileWorkspaceToCanonical() {
-    try {
-      // 2026-07-09 收口审计：只读 status 嵌套单一真值位（status case 已改并入嵌套，顶层形状不再产生）；
-      //   workspace 单数悬空键已删（YonBan 只产 workspaceFolders 复数）。
-      const yonbanRoot = this.ideInfo?.status?.workspaceFolders?.[0] || ""; // getter=主连接快照（多开：canonical 只跟主连接）
-      if (!yonbanRoot || yonbanRoot === this._lastReconciledRoot) return;
-      this._lastReconciledRoot = yonbanRoot;
-      import("../../../public/parts/plugins/beilu-files/main.mjs")
-        .then((m) => m?.default?.interfaces?.config?.SetData?.({ _action: "setWorkspaceRoot", rootPath: yonbanRoot, _fromIDE: true }))
-        .then(() => console.log(`[ideClient] 反向桥：YonBan 工作区根回写本体 canonical → ${yonbanRoot}`))
-        .catch((e) => console.warn(`[ideClient] 反向桥回写工作区根失败: ${e.message}`));
-    } catch { /* 反向桥失败不阻断消息处理 */ }
-  }
+  // [D6 §2.4 2026-08-04] 原"反向桥"_reconcileWorkspaceToCanonical 已删除：
+  //   它在 hello/status 时对 beilu-files 发无 owner 的 SetData({setWorkspaceRoot,_fromIDE})——
+  //   IDE 宣称的根被直接写进持久 canonical（无 owner/chat 授权面，D6 事实表确证的直写点）。
+  //   现 IDE status/hello 只【记录候选】（conn.ideInfo.status.workspaceFolders，
+  //   经 getIdeInstances/listLiveInstances 暴露给 UI 显示"IDE 候选根"）；持久化确认必须走
+  //   beilu-files 的 confirmIdeWorkspaceRoot 动作：认证 owner + chatId + instanceId +
+  //   connectionId 与 getRouteSnapshot(chatId) 精确匹配才允许一次 ide-bound 根写入。
 
   _handleMessage(msg, conn) {
     switch (msg.type) {
@@ -3271,8 +3624,7 @@ class IdeClient {
         console.log(
           `[ideClient] IDE 握手: version=${conn.ideInfo.extensionVersion || "?"}, port=${conn.ideInfo.port || conn.port}, 后端=${(conn.ideInfo.appName === "beilu-cli" || conn.kind === "cli") ? "CLI(beilu-cli)" : "YonBan IDE"}`,
         );
-        // 多开：canonical 根回写只跟主连接走（多窗口互相覆盖 beilu-files 根=抖动源）
-        if (conn.port === this._primaryPort) this._reconcileWorkspaceToCanonical();
+        // [D6 §2.4] hello 携带的工作区根只作候选记录（conn.ideInfo），不再反向直写 canonical。
         break;
 
       case "tool_started": {
@@ -3495,7 +3847,7 @@ class IdeClient {
         //   原 spread 到顶层：嵌套 status 停在 hello 快照不更新，而 workspaceRoot getter/reconcile 嵌套
         //   优先读 → status 广播新工作区后仍读到旧根、反向桥回写旧值。
         if (msg.payload) conn.ideInfo = { ...conn.ideInfo, status: { ...(conn.ideInfo?.status || {}), ...msg.payload } };
-        if (conn.port === this._primaryPort) this._reconcileWorkspaceToCanonical();
+        // [D6 §2.4] status 更新只刷新候选快照，不再反向直写 canonical 根。
         break;
 
       // ★ 文件变更通知：VSCode检测到文件被外部修改
@@ -3681,16 +4033,38 @@ try {
   const { events } = await import("../../../server/events.mjs");
   events.on("AfterUserDeleted", ({ username }) => {
     ideClient._requireWriteApproval?.delete?.(username);
+    for (const [key, submission] of ideClient._approvalSubmissionReceipts || []) {
+      if (submission?.username === username) ideClient._approvalSubmissionReceipts.delete(key);
+    }
   });
 } catch {}
 
-// 跨 isolate 桥回放（审批域自注册，主 isolate 专属）：worker 上行的审批入队在此落到
-// 主进程权威队列——addPendingApproval 在主 isolate 重建 entry（id/指纹/absPath/区外标记
-// 按主进程权威态解析）并广播角标。回放跑在主 isolate，不会再次改道，无递归。
+// 跨 isolate 审批 request/ack（主 isolate 专属）：只有主进程认证 parent context 的
+// username/chatid/generationId 可参与幂等键；payload 只承载操作内容与 operationId。
 if (!isWorkerIsolate) {
-  registerBridgeHandler("approval_add", (p) => {
-    if (!p?.toolCall?.tool) return;
-    ideClient.addPendingApproval(p.toolCall, p.checkpointId || null, p.chatid || null);
+  registerBridgeRequestHandler("approval_add", (p, trustedContext) => {
+    const username = typeof trustedContext?.username === "string" ? trustedContext.username.trim() : "";
+    const chatid = typeof trustedContext?.chatid === "string" ? trustedContext.chatid.trim() : "";
+    const generationId = typeof trustedContext?.generationId === "string"
+      ? trustedContext.generationId.trim()
+      : "";
+    if (!username || !chatid || !generationId) {
+      throw _approvalSubmissionError(
+        "E_APPROVAL_TRUSTED_CONTEXT_INVALID",
+        "approval bridge request is missing trusted username, chatid or generationId",
+        { phase: "approval_preflight" },
+      );
+    }
+    return ideClient._submitPendingApprovalInMain(
+      p?.toolCall,
+      p?.checkpointId || null,
+      chatid,
+      {
+        operationId: p?.operationId,
+        username,
+        generationId,
+      },
+    );
   });
 }
 
@@ -3702,9 +4076,9 @@ export function getClientEnvString() {
   return ideClient.clientEnv;
 }
 
-// generateIdeToolsPromptText 已删除（0722 凛倾「工具宏需要删除,放到inj」）：原在代码里拼
-// 工具清单/未连接引导文本注入提示词=硬编码提示词进对话（铁律违点）。工具指令唯一权威=
-// INJ 可编辑条目（INJ-2-code 手册 / INJ-2 含 CLI 段），{{ide_tools}} 在 getPromptHandler 转退役宏替空。
+// generateIdeToolsPromptText 已删除（0722 凛倾「工具规则放到 INJ」）：代码不再生成自然语言
+// 教学/未连接引导。工具使用规则唯一权威=可编辑 INJ；{{ide_tools}} 只从 IDE_TOOLS 生成
+// 无运行态的静态名称/参数签名，避免注册表与 INJ 手写清单漂移，同时保持历史前缀可缓存。
 
 // ============================================================
 // 标签解析/消息判定/格式化 -- 提取到 ideTagParser.mjs（纯函数，零副作用）

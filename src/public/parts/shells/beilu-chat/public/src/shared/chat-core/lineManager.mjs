@@ -108,25 +108,25 @@ window._beiluGetLineChatIds = () => [..._lines.keys()];
  *  producer：conversationManager.deleteConversation（本窗删对话的唯一出口）。
  *  用 window 桥而非 import：conversationManager 已被本模块 import，反向静态引会成环。 */
 window._beiluDropLine = (chatid) => {
-  if (!chatid || !_lines.has(chatid)) return;
-  // 删的正好是眼前这个窗口 → 先把落脚点挪回 a，否则摘掉容器后页面上没有可见消息区
-  //   （对话是被别处删掉的，用户没做"关窗口"这个动作，不能让他对着空白）。
-  if (chatid === _curWinId) {
-    const homeId = [..._lines.entries()].find(([cid, l]) => l && l.home && cid !== chatid)?.[0] || "";
-    if (homeId) void _showWin(homeId);
-  }
-  _lines.delete(chatid);
-  // 配对清理：关窗口就把它的 DOM + 渲染上下文一并丢弃
-  //   （凡建 per-窗口资源必配删链，否则页面堆死节点、渲染上下文里的 timer 也会泄漏）
-  try { _winEls.get(chatid)?.remove(); } catch { /* 已不在 DOM */ }
-  _winEls.delete(chatid);
-  _winTouch.delete(chatid);
-  _winDirty.delete(chatid);
-  void import("../render/virtualQueue.mjs")
-    .then((m) => m.dropWindowCtx?.(chatid))
-    .catch(() => { /* 渲染层未加载 */ });
-  _saveLines();
-  _renderLineTabs();
+  void (async () => {
+    if (!chatid || !_lines.has(chatid)) return;
+    // 删的正好是眼前这个窗口 → 必须先完成回 home 的统一提交，再摘当前 DOM。
+    // 动态依赖尚未准备好时旧窗口继续留在眼前，不能先删后等，制造无可见消息区的中间态。
+    if (chatid === _curWinId) {
+      const homeId = [..._lines.entries()].find(([cid, l]) => l && l.home && cid !== chatid)?.[0] || "";
+      if (!homeId) throw new Error(`删除当前窗口 ${chatid} 前找不到主窗口落脚点`);
+      const switched = await _showWin(homeId);
+      // 若等待期间用户已切到第三个窗口，当前目标已经不再可见，也可以安全清理；
+      // 若仍停在待删窗口，则统一提交没有成功，保留旧状态并明确失败。
+      if (!switched && _curWinId === chatid) throw new Error(`删除当前窗口 ${chatid} 前切回主窗口失败`);
+    }
+    // 后端删对话链已经 forgetChat/清 IDE 绑定；这里只走同一个前端资源回收入口，
+    // 避免复制一套漏掉 pooled WS 的 `_lines.delete + DOM.remove`。
+    await _removeLineCore(chatid, { unbind: false });
+  })().catch((e) => {
+    console.error("[lineManager] 删除对话后的窗口清理失败:", e);
+    showToast?.("error", `删除对话后的窗口清理失败：${e?.message || e}`, 6000);
+  });
 };
 
 /** 活动栏线图标容器（＋号之前）：每条线一个对话图标，点=本窗切过去，右键/×=关闭。 */
@@ -338,6 +338,51 @@ window._beiluMarkWinDirty = (chatid) => {
 const _winEls = new Map();
 /** 当前正在显示的窗口 chatid */
 let _curWinId = "";
+/**
+ * 当前可见窗口的完整只读绑定包。
+ *
+ * code 模式已进入 lineManager 的多窗口隔离域：chatId / charName / mode 必须
+ * 同时来自 `_curWinId -> _lines` 这一条登记，禁止拿可见 chatId 再拼全局角色/模式。
+ * 其他模式没有多窗口绑定语义，直接返回本体当前对话/角色/模式。
+ *
+ * 每次返回新的 frozen 对象：消费方只能读完整包，不能改写 lineManager 内部登记。
+ * code 初始化未完成/登记不完整时原样暴露空轴，交给消费方 fail-closed；
+ * 不用 hash 或全局角色猜一份“看似完整”的跨窗包。
+ */
+window._beiluCurWinBinding = () => {
+  let currentMode = "";
+  try { currentMode = String(getCurrentMode() || "").trim(); } catch { /* 由消费方校验空轴 */ }
+  if (currentMode === "code") {
+    const line = _curWinId ? _lines.get(_curWinId) : null;
+    return Object.freeze({
+      chatId: line ? String(_curWinId || "").trim() : "",
+      charName: line ? String(line.char || "").trim() : "",
+      mode: line ? String(line.mode || "").trim() : "",
+      multiWindow: true,
+    });
+  }
+  let chatId = "";
+  let charName = "";
+  try { chatId = String(window._beiluGetChatId?.() || "").trim(); } catch { /* 由消费方校验空轴 */ }
+  try { charName = String(window._beiluGetCharName?.() || "").trim(); } catch { /* 由消费方校验空轴 */ }
+  return Object.freeze({ chatId, charName, mode: currentMode, multiWindow: false });
+};
+/**
+ * 按 chatId 查询已登记窗口的完整绑定。异步弹窗/自动保存可在用户切窗后
+ * 仍找回动作发起窗口的角色与模式，不得用当前全局角色拼接。
+ */
+window._beiluWinBindingForChat = (chatId) => {
+  const id = String(chatId || "").trim();
+  const line = id ? _lines.get(id) : null;
+  if (!line) return null;
+  return Object.freeze({
+    chatId: id,
+    charName: String(line.char || "").trim(),
+    mode: String(line.mode || "").trim(),
+    home: !!line.home,
+    multiWindow: true,
+  });
+};
 /** 窗口容器的挂载点（#chat-container 的父节点） */
 let _winHost = null;
 /** 活跃 DOM 上限（凛倾 0727「最多可以承担 100 个窗口」）：
@@ -346,6 +391,25 @@ let _winHost = null;
 const WIN_DOM_MAX = 8;
 /** chatid → 上次显示时刻（LRU：决定摘哪个 DOM） */
 const _winTouch = new Map();
+/** 可见窗口提交序号：每次切换先占一个 epoch；旧异步准备/拉取晚到时只能退出，不能覆盖新窗口。 */
+let _winSwitchEpoch = 0;
+/** 窗口切换的三项框架依赖只准备一次；失败时清掉 Promise，下一次允许真实重试。 */
+let _winSwitchDepsPromise = null;
+
+function _prepareWinSwitchDeps() {
+  if (!_winSwitchDepsPromise) {
+    _winSwitchDepsPromise = Promise.all([
+      import("../transport/endpoints.mjs"),
+      import("../transport/websocket.mjs"),
+      import("../render/virtualQueue.mjs"),
+    ]).then(([endpoints, websocket, virtualQueue]) => ({ endpoints, websocket, virtualQueue }))
+      .catch((e) => {
+        _winSwitchDepsPromise = null;
+        throw e;
+      });
+  }
+  return _winSwitchDepsPromise;
+}
 
 /**
  * id 后缀开关：**显示的窗口用标准 id，隐藏的窗口 id 加后缀**。
@@ -392,53 +456,76 @@ function _wbWinInvariant(node, chatid) {
   } catch { /* 断言不得影响功能 */ }
 }
 
-/** 显示某个已存在的窗口，隐藏其余（照 ide.mjs:40-44 侧栏面板互斥那套） */
-async function _showWin(chatid) {
-  // 离开前把当前窗口的草稿收起来（输入区共用，内容按窗口存）
-  const _inp = document.getElementById("message-input");
-  if (_inp && _curWinId) _setDraft(_curWinId, _inp.value);
+/**
+ * 显示某个已存在的窗口，隐藏其余（所有可见窗口切换的唯一提交入口）。
+ *
+ * 提交边界：动态依赖先准备；epoch 与目标存活检查通过后，路由 chatId / WS 活跃指针 /
+ * 渲染 owner 在同一个无 await 区间完成；然后才交换 DOM、写 _curWinId、派发外部事件。
+ * 因而任何消费者看到 beilu:window-switched 时，发送链已经指向同一个目标。
+ */
+async function _showWin(chatid, { loadContent = false } = {}) {
+  const target = String(chatid || "");
+  const epoch = ++_winSwitchEpoch;
+  if (!target) throw new Error("窗口切换目标 chatid 为空");
 
+  // 准备阶段不改路由、不改 DOM、不改 _curWinId：依赖慢/失败时用户仍停在原窗口和原绑定。
+  const deps = await _prepareWinSwitchDeps();
+  if (epoch !== _winSwitchEpoch) return false;
+  const targetEl = _winEls.get(target);
+  if (!_lines.has(target) || !targetEl?.isConnected) {
+    throw new Error(`窗口切换目标不可用: ${target}`);
+  }
+
+  const previousWinId = _curWinId;
+  const previousTransportId = deps.endpoints.currentChatId;
+  try {
+    // 三项均为同步调用；此处至外部事件派发之间禁止 await。
+    deps.virtualQueue.setActiveWindow?.(target);
+    deps.endpoints.setCurrentChatId(target);
+    deps.websocket.reconnectWebSocket();
+  } catch (e) {
+    // 同步提交失败就恢复原绑定与渲染 owner；可见 DOM 尚未动过。
+    try { deps.virtualQueue.setActiveWindow?.(previousWinId); } catch { /* 原错误优先 */ }
+    try {
+      deps.endpoints.setCurrentChatId(previousTransportId);
+      deps.websocket.reconnectWebSocket();
+    } catch (restoreErr) {
+      console.error("[lineManager] 窗口路由回滚失败:", restoreErr);
+    }
+    throw new Error(`窗口传输绑定提交失败: ${e?.message || e}`, { cause: e });
+  }
+
+  // 数据请求在外部事件前同步创建，callApi 会在这一刻冻结目标 URL；后续窗口切换不会改写该请求。
+  const needsContent = loadContent || _winDirty.has(target);
+  const initialDataPromise = needsContent ? deps.endpoints.getInitialData() : null;
+
+  // 离开前把当前窗口的草稿收起来（输入区共用，内容按窗口存）
+  const input = document.getElementById("message-input");
+  if (input && previousWinId) _setDraft(previousWinId, input.value);
   for (const [cid, el] of _winEls) {
-    const isTarget = cid === chatid;
-    _maskIds(el, cid, !isTarget);          // 先改 id：显示的恢复标准名，其余加后缀
+    const isTarget = cid === target;
+    _maskIds(el, cid, !isTarget);
     el.classList.toggle("hidden", !isTarget);
   }
-  _curWinId = chatid;
-  _winTouch.set(chatid, Date.now());
+  _curWinId = target;
+  _winTouch.set(target, Date.now());
+  if (input) input.value = _getDraft(target);
 
-  // 告诉渲染层「现在显示的是哪个窗口」——virtualQueue 已按窗口 id 各存一份渲染上下文
-  //   （virtualList / 流式态 / 容器 / 计数各一份），它据此取对应的那一份。
-  //   不再是"把全局引用指过去"：那是用全局状态模拟并行，两条消息同时到就交错。
-  try {
-    const { setActiveWindow } = await import("../render/virtualQueue.mjs");
-    setActiveWindow?.(chatid);
-  } catch (e) { console.warn("[lineManager] 渲染窗口切换失败:", e?.message); }
+  // 外部只在完整提交后看到切换事实；不写角色卡、模式槽或 hash。
+  const line = _lines.get(target);
+  window.dispatchEvent(new CustomEvent("beilu:window-switched", {
+    detail: { chatid: target, char: line?.char || "", label: line?.label || "", home: !!line?.home },
+  }));
 
-  // 恢复这个窗口的草稿
-  if (_inp) _inp.value = _getDraft(chatid);
-
-  // 共享 chrome 的纯显示交换（凛倾 0727「切窗口时这一整套都要跟着换成那个窗口自己的」）：
-  //   只派发"当前显示的窗口变了"这一个事实事件，消费方各自从**缓存**重绘——
-  //   顶栏卡名(layout.mjs) / 子模式条(subModePanel，其"当前对话"读点已窗口化) / 模型标签(extendMenuW28)。
-  //   零请求、零通道借用（原先借 subModesConfigChanged=切一次窗全量重拉，T1 已删）、零全局身份写
-  //   （不 commitCurrentChar、不写模式槽、不写 hash——那些是"切换机制"，凛倾明示不存在）。
-  {
-    const _l = _lines.get(chatid);
-    window.dispatchEvent(new CustomEvent("beilu:window-switched", {
-      detail: { chatid, char: _l?.char || "", label: _l?.label || "", home: !!_l?.home },
-    }));
+  if (needsContent) {
+    if (_winDirty.has(target)) wbTrace("window", "show:refetchDirty", { chatid: target });
+    await _loadWinContent(target, deps, epoch, initialDataPromise);
   }
-
-  // 隐藏期间来过新消息 → 补拉这一次（websocket 非活跃分支按设计跳过后台 DOM 渲染，
-  //   不补的话切回来会缺那段）。没脏就完全不动，切窗口仍是零请求零渲染。
-  if (_winDirty.has(chatid)) {
-    _winDirty.delete(chatid);
-    wbTrace("window", "show:refetchDirty", { chatid }); // DOM 曾被回收 → 这次要补拉
-    await _loadWinContent(chatid);
+  if (epoch === _winSwitchEpoch && _curWinId === target) {
+    _evictWinDom();
+    _wbWinInvariant("show", target);
   }
-
-  _evictWinDom();
-  _wbWinInvariant("show", chatid);
+  return epoch === _winSwitchEpoch && _curWinId === target;
 }
 
 /** 超出活跃 DOM 上限时，摘掉最久没看的那个窗口的 DOM（登记与图标保留）。
@@ -499,11 +586,12 @@ async function _createWin(chatid) {
   clone.classList.add("hidden");
   _winHost.insertBefore(clone, cur.nextSibling); // 紧挨着原消息区，保持在输入区之上
   _winEls.set(chatid, clone);
+  // 新容器在 initializeVirtualQueue 成功前都算脏；并发第二次点击会接管加载，不能把空壳当成已就绪窗口。
+  _winDirty.add(chatid);
   wbTrace("window", "create:cloned", { chatid, wins: _winEls.size });
-  await _showWin(chatid);            // 切成显示态（id 恢复标准名 + 渲染容器重绑）
-  await _loadWinContent(chatid);
-  _wbWinInvariant("create", chatid);
-  return true;
+  const shown = await _showWin(chatid, { loadContent: true });
+  if (shown) _wbWinInvariant("create", chatid);
+  return shown;
 }
 
 /**
@@ -513,32 +601,46 @@ async function _createWin(chatid) {
  *   「不是替换角色卡、替换主窗口，是开两个窗口」）。这里只做「让这个窗口显示这条对话」：
  *   指当前 chatid → 连它的 WS（_wsPool 本就每 chatid 一条并存）→ 拉数据 → 渲染。
  */
-async function _loadWinContent(chatid) {
-  const [{ setCurrentChatId, getInitialData }, { reconnectWebSocket }, { initializeVirtualQueue }] =
-    await Promise.all([
-      import("../transport/endpoints.mjs"),
-      import("../transport/websocket.mjs"),
-      import("../render/virtualQueue.mjs"),
-    ]);
-  setCurrentChatId(chatid);
-  try { reconnectWebSocket(); } catch (e) { console.warn("[lineManager] 窗口 WS 连接失败:", e?.message); }
+async function _loadWinContent(chatid, deps, epoch, initialDataPromise) {
   let data = null;
-  try { data = await getInitialData(); }
+  try { data = await initialDataPromise; }
   catch (e) {
     console.error("[lineManager] 窗口内容加载失败:", e);
     showToast?.("error", `这个窗口的对话数据没取到：${e?.message || e}`, 6000);
-    return;
+    if (_lines.has(chatid)) _winDirty.add(chatid);
+    return false;
   }
-  try { await initializeVirtualQueue(data); }
+  // 旧窗口的请求晚到时不调用全局渲染入口；保留脏标，下一次真正显示它时重拉。
+  if (epoch !== _winSwitchEpoch || _curWinId !== chatid || !_winEls.get(chatid)?.isConnected) {
+    if (_lines.has(chatid)) _winDirty.add(chatid);
+    wbTrace("window", "load:staleSkipped", { chatid, epoch, currentEpoch: _winSwitchEpoch, current: _curWinId });
+    return false;
+  }
+  try { await deps.virtualQueue.initializeVirtualQueue(data); }
   catch (e) {
     console.error("[lineManager] 窗口渲染失败:", e);
     showToast?.("error", `这个窗口的消息渲染失败：${e?.message || e}`, 6000);
+    if (_lines.has(chatid)) _winDirty.add(chatid);
+    return false;
   }
+  // initializeVirtualQueue 在入口已冻结 ownerChatId=chatid；期间若发生更新切换，它仍只完成旧窗口
+  // 自己的队列，不会解析到新窗口。完成后再次检查 epoch，禁止旧调用继续声称自己仍是当前提交。
+  const stillCurrent = epoch === _winSwitchEpoch && _curWinId === chatid;
+  _winDirty.delete(chatid);
+  if (!stillCurrent) {
+    wbTrace("window", "load:completedAfterSwitch", {
+      owner: chatid,
+      epoch,
+      currentEpoch: _winSwitchEpoch,
+      current: _curWinId,
+    });
+  }
+  return stillCurrent;
 }
 
 /** 点线图标 = **显示那个窗口**（凛倾 0727「切窗口 = 显示这个、隐藏那个。仅此而已」）。
- *  两条分支，都不写任何全局指针：
- *    · 窗口已在页面上（_winEls 有）→ _showWin 只切显隐 + setCurrentChatId（发送路由要知道是哪条）
+ *  两条分支都经同一提交入口，不写角色卡/模式/hash 等全局身份指针：
+ *    · 窗口已在页面上（_winEls 有）→ _showWin 同步对齐显隐 + HTTP 路由 + WS 指针 + 渲染 owner
  *    · 第一次打开 → _createWin 复制一份消息区容器 + 用现成链路加载它的对话
  *  【why 不用 switchToChat / switchCharacterScope】（本注释 0727 校准：早先这里确实调的是
  *    switchToChat，那是错的）——那两个是「把**当前这个**窗口切到另一条对话」的替换语义，
@@ -571,32 +673,32 @@ async function _switchToLine(chatid) {
       document.querySelector('#ide-activity-bar [data-ide-panel="ai-chat"]')?.click();
       _t("①.5 聊天面板已带到前台（原前台面板不是 ai-chat）");
     }
-    // ══ 切窗口 = 显示这个、隐藏那个（凛倾 0727）══
-    //   已经在这个窗口 → 什么都不用做（窗口就在眼前）。
-    if (chatid === _curWinId) { _t("② 已在该窗口，无需切换"); _renderLineTabs(); return; }
+    // ══ 切窗口 = 统一提交显示、HTTP 路由、WS 活跃指针和渲染 owner ══
+    // 已在眼前也过同一入口：它能修复历史残留的路由/WS 指针漂移，并重试上次失败的脏加载。
+    if (chatid === _curWinId) {
+      _t("② 已在该窗口，重新对齐传输绑定");
+      const shown = await _showWin(chatid);
+      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return; }
+      _lineBusy.delete(chatid);
+      _renderLineTabs();
+      return;
+    }
     if (_winEls.has(chatid)) {
       // 这个窗口已经在页面上：只是被 hidden 了 → 显示它、隐藏其余。
       //   **不拉数据、不重渲染、不写任何全局角色卡指针** —— 消息/滚动/输入框里的字原封不动。
       _t("② 显示该窗口（其余隐藏，不重新加载）");
-      await _showWin(chatid);
-      // 发送/工具路由需要知道现在是哪条对话，只指这一个（不碰角色卡指针）
-      const { setCurrentChatId } = await import("../transport/endpoints.mjs");
-      setCurrentChatId(chatid);
-      // 指令编码的第二条通道（凛倾 0727「窗口发送指令需要给编码，防止混乱」）：
-      //   发消息走 HTTP，chatid 由上面这个 currentChatId 决定；而 sendAction 优先走 WS
-      //   （dispatchViaWs 用模块级单值 ws＝"当前活跃连接"）——只切 currentChatId 不切 ws，
-      //   切过来之后的工具调用/动作请求会从**上一个窗口的连接**发出去，正是"混乱"。
-      //   reconnectWebSocket 内部 connect() 见 websocket.mjs:631：池里已有活跃连接就只把
-      //   ws 指针指过去、不新建、不关旧连接（:1309），所以这一步零代价。
-      //   必须在 setCurrentChatId 之后：connect 靠 `cid === currentChatId` 决定要不要改指针。
-      const { reconnectWebSocket } = await import("../transport/websocket.mjs");
-      reconnectWebSocket();
+      const shown = await _showWin(chatid);
+      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return; }
       _t("③ 已显示");
     } else {
       // 第一次打开这条线：复制一份界面，用现成链路把它的对话加载进去
       _t("② 新建窗口（复制界面 + 加载该对话）");
       const ok = await _createWin(chatid);
-      if (!ok) { showToast?.("error", "窗口创建失败（找不到界面容器）"); return; }
+      if (!ok) {
+        if (!_winEls.has(chatid)) showToast?.("error", "窗口创建失败（找不到界面容器）");
+        else _t("② 新窗口请求已被更新的窗口请求取代");
+        return;
+      }
       _t("③ 新窗口已就绪");
     }
     // 绿点兜底自愈：切过去 = 当前线，生成状态由消息区直接呈现，图标绿点对它没有意义，清掉。
@@ -640,13 +742,15 @@ async function _closeLine(chatid) {
  *  两个调用方：_closeLine（用户手动，先过 home/当前窗守卫 + beiluConfirm）、
  *  beilu:ide-instance-gone 自动关窗（T5 凛倾 0727「关闭vscode就要关闭绑定的窗口」——
  *  实例没了无需确认，窗口随实例走）。 */
-async function _removeLineCore(chatid) {
+async function _removeLineCore(chatid, { unbind = true } = {}) {
   // 配对解绑（凛倾 0726「停止 yonban 停止多窗口」的线侧一半）：关线即释放它对执行端的占用，
   // 否则后端绑定表留死键，该对话下次在别处打开还会被路由到这个已关的窗口。
-  try {
-    await sendAction({ verb: "unbindIdeInstance", target: "plugins:beilu-memory", source: "web", payload: { chatid } });
-  } catch (e) {
-    console.warn("[lineManager] 解绑执行端失败（后端绑定表留有死键）:", e?.message);
+  if (unbind) {
+    try {
+      await sendAction({ verb: "unbindIdeInstance", target: "plugins:beilu-memory", source: "web", payload: { chatid } });
+    } catch (e) {
+      console.warn("[lineManager] 解绑执行端失败（后端绑定表留有死键）:", e?.message);
+    }
   }
   _lines.delete(chatid);
   // 配对清理：关窗口就把它的 DOM + 渲染上下文一并丢弃
@@ -655,9 +759,17 @@ async function _removeLineCore(chatid) {
   _winEls.delete(chatid);
   _winTouch.delete(chatid);
   _winDirty.delete(chatid); // 配对补全：脏标也随窗口走（_closeLine 原漏此键，_beiluDropLine 有）
-  void import("../render/virtualQueue.mjs")
-    .then((m) => m.dropWindowCtx?.(chatid))
-    .catch(() => { /* 渲染层未加载 */ });
+  try {
+    const [virtualQueue, websocket] = await Promise.all([
+      import("../render/virtualQueue.mjs"),
+      import("../transport/websocket.mjs"),
+    ]);
+    virtualQueue.dropWindowCtx?.(chatid);
+    websocket.closeParallelWs?.(chatid);
+  } catch (err) {
+    // 登记/DOM 已经摘除，资源清理失败必须可见，不能留下无日志的孤儿 WS/渲染上下文。
+    console.warn(`[lineManager] 窗口 ${chatid} 的渲染/连接资源清理失败:`, err?.message || err);
+  }
   _saveLines();
   _renderLineTabs();
 }
@@ -768,6 +880,7 @@ export async function openLinePicker() {
       const o = document.createElement("option");
       o.value = inst.instanceId || String(inst.port);
       o.dataset.port = String(inst.port);
+      o.dataset.instanceId = typeof inst.instanceId === "string" ? inst.instanceId : "";
       o.textContent = _ideLabel(inst) + (inst.primary ? " · 默认" : "");
       ideSel.appendChild(o);
     }
@@ -775,6 +888,7 @@ export async function openLinePicker() {
     const o = document.createElement("option");
     o.value = cliInstance.instanceId || String(cliInstance.port);
     o.dataset.port = String(cliInstance.port);
+    o.dataset.instanceId = typeof cliInstance.instanceId === "string" ? cliInstance.instanceId : "";
     o.textContent = `${_ideLabel(cliInstance)} · 多条线共用`;
     ideSel.appendChild(o);
     ideSel.disabled = true; // 唯一执行端：显示但不可选（没有第二个可选，给下拉是假选择）
@@ -880,6 +994,7 @@ export async function openLinePicker() {
     const ch = charSel.value;
     const _opt = ideSel.options[ideSel.selectedIndex];
     const _idePort = _opt && _opt.dataset.port ? Number(_opt.dataset.port) : null;
+    const _ideInstanceId = _opt?.dataset?.instanceId || null;
     openBtn.disabled = true;
     try {
       // 执行端在「打开弹层 → 用户挑选」这段时间里可能已经掉线（关了那个 VSCode 窗口）。
@@ -925,7 +1040,17 @@ export async function openLinePicker() {
       if (_idePort != null) {
         try {
           // source:"manual"=用户显式指定，粘性：不被 YonBan 打开该对话时的自动上报覆盖（后端 bindChat 规则）
-          await sendAction({ verb: "bindIdeInstance", target: "plugins:beilu-memory", source: "web", payload: { chatid, port: _idePort, source: "manual" } });
+          await sendAction({
+            verb: "bindIdeInstance",
+            target: "plugins:beilu-memory",
+            source: "web",
+            payload: {
+              chatid,
+              port: _idePort,
+              ...(_ideInstanceId ? { instanceId: _ideInstanceId } : {}),
+              source: "manual",
+            },
+          });
         } catch (err) {
           showToast?.("error", `绑定执行端失败（这条线的工具调用会没有归属）: ${err.message}`);
         }
@@ -1114,7 +1239,20 @@ export function initLineManager(activityBar) {
         _curWinId = cid;
       }
     }
-    if (_lines.has(cid)) { _setHomeUnique(cid); return; }
+    if (_lines.has(cid)) {
+      // home 的 chatId 可以不变，但角色/模式会在原生切卡或模式切换时变化。
+      // 仅做 home 登记的同步，不动副窗口的已绑包；否则 producer 虽从 _lines 读，
+      // 读到的却是旧 char/mode，仍会组成错误四维作用域。
+      const line = _lines.get(cid);
+      const charName = (() => { try { return String(window._beiluGetCharName?.() || "").trim(); } catch { return ""; } })();
+      const mode = (() => { try { return String(getCurrentMode() || "").trim(); } catch { return ""; } })();
+      let bindingChanged = false;
+      if (charName && line.char !== charName) { line.char = charName; bindingChanged = true; }
+      if (mode && line.mode !== mode) { line.mode = mode; bindingChanged = true; }
+      if (bindingChanged) _saveLines();
+      _setHomeUnique(cid);
+      return;
+    }
     // [0727 幽灵窗口根修] 主对话换了 chatid 而搬家没跑到（hashchange 时序漏网/历史残留）：
     //   先把旧 home 补搬到当前 cid——新建+降级会把旧 chatid 的登记留在活动栏，
     //   就是"没多开却出现第二个窗口"的来源。搬成了只剩唯一化，搬不成（无旧 home）才新建。
@@ -1131,6 +1269,8 @@ export function initLineManager(activityBar) {
   };
   _registerHomeWindow();
   window.addEventListener("beilu:chatInitDone", _registerHomeWindow);
+  // chatId 不变的角色切换也要刷新 home 绑定；副窗口本来就被锁定，不会走这条变更。
+  window.addEventListener("beilu:char-changed", _registerHomeWindow);
 
   // 草稿落盘的第二个时机：切窗口时存不住"打完字不切窗口就刷新"这一种。
   //   pagehide 覆盖刷新/关页/前后台切走（beforeunload 在移动端与 bfcache 下不可靠）。
@@ -1152,25 +1292,35 @@ export function initLineManager(activityBar) {
   //   仍在按 chatid 接 WS 消息渲染 —— code 的窗口在 work 模式下继续活着，隔离就只做了视觉一层。
   //   登记（_lines）保留：切回该模式图标就回来，点一下按懒加载重建。
   window.addEventListener("beilu:mode-switched", () => {
-    const now = (() => { try { return getCurrentMode() || ""; } catch { return ""; } })();
-    if (!now) return;
-    // 先把落脚点挪回 a：若此刻显示的是别的模式的窗口，收掉它之后页面上就没有可见消息区了。
-    //   （a 的 chatid 随后由 hashchange 那条链更新——此刻 _restoreModeChatId 还没换 hash。）
-    const homeId = [..._lines.entries()].find(([, l]) => l && l.home)?.[0] || "";
-    if (homeId && _curWinId && _curWinId !== homeId) void _showWin(homeId);
-    for (const [cid, l] of _lines) {
-      if (!l || l.home || !l.mode || l.mode === now) continue;
-      if (!_winEls.has(cid)) continue;
-      try { _winEls.get(cid)?.remove(); } catch { /* 已不在 DOM */ }
-      _winEls.delete(cid);
-      _winTouch.delete(cid);
-      _winDirty.delete(cid);
-      void import("../render/virtualQueue.mjs")
-        .then((m) => m.dropWindowCtx?.(cid))
-        .catch(() => { /* 渲染层未加载 */ });
-      console.log(`[lineManager] 窗口 ${cid}（${l.mode} 模式）已随模式切换收起，切回 ${l.mode} 可重新打开`);
-    }
-    _renderLineTabs();
+    void (async () => {
+      // 模式权威已在事件派发前更新；先把 home 登记的 mode 同步为新值，
+      // 使 code 窗口绑定 producer 不会在切换边沿读到旧模式。
+      _registerHomeWindow();
+      const now = (() => { try { return getCurrentMode() || ""; } catch { return ""; } })();
+      if (!now) return;
+      // 先通过统一入口完成回 home 的传输+可见提交；提交完成前不摘任何旧 DOM。
+      const homeId = [..._lines.entries()].find(([, l]) => l && l.home)?.[0] || "";
+      if (homeId && _curWinId && _curWinId !== homeId) {
+        const switched = await _showWin(homeId);
+        if (!switched && _curWinId !== homeId) return;
+      }
+      for (const [cid, l] of _lines) {
+        if (!l || l.home || !l.mode || l.mode === now || cid === _curWinId) continue;
+        if (!_winEls.has(cid)) continue;
+        try { _winEls.get(cid)?.remove(); } catch { /* 已不在 DOM */ }
+        _winEls.delete(cid);
+        _winTouch.delete(cid);
+        _winDirty.delete(cid);
+        void import("../render/virtualQueue.mjs")
+          .then((m) => m.dropWindowCtx?.(cid))
+          .catch(() => { /* 渲染层未加载 */ });
+        console.log(`[lineManager] 窗口 ${cid}（${l.mode} 模式）已随模式切换收起，切回 ${l.mode} 可重新打开`);
+      }
+      _renderLineTabs();
+    })().catch((e) => {
+      console.error("[lineManager] 模式切换后的窗口收口失败:", e);
+      showToast?.("error", `模式切换后的窗口收口失败：${e?.message || e}`, 6000);
+    });
   });
 
   // a（home 窗口）的 chatid 会被**原生切换**改掉：切模式时各模式记着各自的对话
@@ -1206,14 +1356,23 @@ export function initLineManager(activityBar) {
   window.addEventListener("beilu:ide-mode-changed", (e) => {
     const d = e?.detail || {};
     if (d.from !== "cli" || d.to !== "yonban") { _refreshBindHint(btn); return; }
-    const _cur = (() => { try { return window._beiluGetChatId?.() || ""; } catch { return ""; } })();
-    const _extra = [..._lines.keys()].filter((cid) => cid !== _cur);
-    if (!_extra.length) { _refreshBindHint(btn); return; }
-    for (const cid of _extra) _lines.delete(cid);
-    _saveLines();
-    _renderLineTabs();
-    showToast?.("warning", `已切换到 VSCode/YonBan 模式（窗口=VSCode 窗口），本体的 ${_extra.length} 条额外对话线已收起；在 VSCode 里开新窗口即可多开。`, 6000);
-    _refreshBindHint(btn);
+    void (async () => {
+      // CLI→YonBan 的收口对象是所有非 home 线。旧实现拿 hash 伪装“当前窗”并直接
+      // `_lines.delete`，会遗留 DOM、virtualQueue 与 WS；若当时正在看副窗还会把可见 DOM 删成孤儿。
+      const homeId = [..._lines.entries()].find(([, line]) => line?.home)?.[0] || "";
+      if (!homeId) throw new Error("切换 YonBan 前找不到主窗口落脚点");
+      const extra = [..._lines.entries()].filter(([, line]) => line && !line.home).map(([cid]) => cid);
+      if (!extra.length) return;
+      if (_curWinId !== homeId) {
+        const switched = await _showWin(homeId);
+        if (!switched && _curWinId !== homeId) throw new Error("无法返回主窗口，已取消额外窗口清理");
+      }
+      for (const cid of extra) await _removeLineCore(cid);
+      showToast?.("warning", `已切换到 VSCode/YonBan 模式（窗口=VSCode 窗口），本体的 ${extra.length} 条额外对话线已收起；在 VSCode 里开新窗口即可多开。`, 6000);
+    })().catch((err) => {
+      console.error("[lineManager] CLI→YonBan 窗口收口失败:", err);
+      showToast?.("error", `CLI→YonBan 窗口收口失败：${err?.message || err}`, 6000);
+    }).finally(() => _refreshBindHint(btn));
   });
 
   // 绑定状态：初始化查一次 + 执行端离线推送时转红 + 切对话后重查（三个来源同一收口）
@@ -1223,29 +1382,37 @@ export function initLineManager(activityBar) {
   //   不做的话：并行链路里线B 的 VSCode 被关掉，用户正看着线A，屏幕上什么都不会发生，
   //   而线B 从此刻起每次工具调用都被 degraded 拒绝（＋号只在切回线B 时才转红）。
   window.addEventListener("beilu:ide-instance-gone", (e) => {
-    const d = e?.detail || {};
-    const l = d.chatid ? _lines.get(d.chatid) : null;
-    // [T5 凛倾 0727「关闭vscode,那么就要关闭绑定的窗口,除了主窗口.cli的话用户手动关闭」]
-    //   yonban：窗口维度=VSCode 实例（一窗口一实例，resolveIdeMode 分类），实例没了这个窗口
-    //   就没有存在意义 → 自动关（无需确认，窗口随实例走；对话文件不删，随时可重新拉起）。
-    //   home 除外：主窗口是页面本体，不绑定即默认走主连接（后端无归属路由），不随执行端生死。
-    //   cli：一进程多线（line 维度），进程停了线还在——重启 CLI 按实例编号认回，去留用户手动定 → 只提示。
-    if (l && !l.home && d.kind !== "cli") {
-      if (d.chatid === _curWinId) {
-        // 正看着的窗口要被收走：落脚点先挪回 a，不能让用户对着空白（同 _beiluDropLine 范式）
-        const homeId = [..._lines.entries()].find(([cid, x]) => x && x.home && cid !== d.chatid)?.[0] || "";
-        if (homeId) void _showWin(homeId);
+    void (async () => {
+      const d = e?.detail || {};
+      const l = d.chatid ? _lines.get(d.chatid) : null;
+      // [T5 凛倾 0727「关闭vscode,那么就要关闭绑定的窗口,除了主窗口.cli的话用户手动关闭」]
+      //   yonban：窗口维度=VSCode 实例（一窗口一实例，resolveIdeMode 分类），实例没了这个窗口
+      //   就没有存在意义 → 自动关（无需确认，窗口随实例走；对话文件不删，随时可重新拉起）。
+      //   home 除外：主窗口是页面本体，不绑定即默认走主连接（后端无归属路由），不随执行端生死。
+      //   cli：一进程多线（line 维度），进程停了线还在——重启 CLI 按实例编号认回，去留用户手动定 → 只提示。
+      if (l && !l.home && d.kind !== "cli") {
+        if (d.chatid === _curWinId) {
+          // 正看着的窗口要被收走：统一提交回 home 成功后才能删除旧窗口。
+          const homeId = [..._lines.entries()].find(([cid, x]) => x && x.home && cid !== d.chatid)?.[0] || "";
+          if (!homeId) throw new Error(`关闭执行端窗口 ${d.chatid} 前找不到主窗口落脚点`);
+          const switched = await _showWin(homeId);
+          if (!switched && _curWinId === d.chatid) return;
+        }
+        await _removeLineCore(d.chatid);
+        showToast?.("warning", `VSCode 窗口已关闭，绑定它的对话线「${l.label}」已随之关闭（对话文件未删除，可随时重新拉起）。`, 6000);
+      } else if (l) {
+        // cli 线 / home：不自动关（cli=一进程多线可重启认回，home=页面本体），只播报事实。
+        //   [T5 0727 收口] 登记线的提示权全在这里（websocket.mjs 只兜底体系外 chatid）——
+        //   当前线与后台线同一措辞，线名单源 _lines，不再按可见性分家。
+        const _kind = d.kind === "cli" ? "本体 CLI" : "VSCode 窗口";
+        showToast?.("warning", `对话线「${l.label}」绑定的${_kind}已停止，该线的工具调用会被拒绝；改绑或重开该窗口后恢复。`, 6000);
       }
-      void _removeLineCore(d.chatid);
-      showToast?.("warning", `VSCode 窗口已关闭，绑定它的对话线「${l.label}」已随之关闭（对话文件未删除，可随时重新拉起）。`, 6000);
-    } else if (l) {
-      // cli 线 / home：不自动关（cli=一进程多线可重启认回，home=页面本体），只播报事实。
-      //   [T5 0727 收口] 登记线的提示权全在这里（websocket.mjs 只兜底体系外 chatid）——
-      //   当前线与后台线同一措辞，线名单源 _lines，不再按可见性分家。
-      const _kind = d.kind === "cli" ? "本体 CLI" : "VSCode 窗口";
-      showToast?.("warning", `对话线「${l.label}」绑定的${_kind}已停止，该线的工具调用会被拒绝；改绑或重开该窗口后恢复。`, 6000);
-    }
-    _refreshBindHint(btn);
+      _refreshBindHint(btn);
+    })().catch((err) => {
+      console.error("[lineManager] 执行端离线后的窗口清理失败:", err);
+      showToast?.("error", `执行端离线后的窗口清理失败：${err?.message || err}`, 6000);
+      _refreshBindHint(btn);
+    });
   });
   window.addEventListener("beilu:chatInitDone", () => { _refreshBindHint(btn); _renderLineTabs(); }); // 切对话完成 → 高亮跟着走
   btn.addEventListener("click", (e) => {

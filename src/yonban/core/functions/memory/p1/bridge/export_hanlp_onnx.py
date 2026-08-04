@@ -1,10 +1,10 @@
 # export_hanlp_onnx.py — HanLP CTB9 POS 模型导出 ONNX（一次性，导出后桥用 onnxruntime 推理）
 # 跑法: python export_hanlp_onnx.py
-# 产出: p1_res/p1v2_derived/hanlp_pos_ctb9.onnx + hanlp_pos_ctb9_labels.json + hanlp_pos_ctb9_vocab.json
+# 产出: resources/p1v2_derived/hanlp_pos_ctb9.onnx + hanlp_pos_ctb9_labels.json + hanlp_pos_ctb9_vocab.json
 import io, sys, os, json
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-OUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'p1_res', 'p1v2_derived')
+OUT_DIR = os.path.join(os.environ.get('P1_RESOURCE_DIR') or os.path.join(os.path.dirname(__file__), '..', 'resources'), 'p1v2_derived')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 print("1. 加载 HanLP CTB9 POS 模型...")

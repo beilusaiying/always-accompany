@@ -51,9 +51,13 @@ export class FileCheckpoint {
     return path.join(this._getWorkspaceRoot(), relPath);
   }
 
-  start(id, chatId, messageIndex, deferred = false) {
+  start(id, chatId, messageIndex, deferred = false, messageId = undefined) {
     if (!deferred && this._activeId && this._activeId !== id) {
-      this.commit(this._activeId);
+      const previousActiveId = this._activeId;
+      const commitResult = this.commit(previousActiveId);
+      if (!commitResult.success) {
+        throw new Error(`无法开始检查点 ${id}：旧检查点 ${previousActiveId} 提交失败：${commitResult.error || "未知错误"}`);
+      }
     }
     if (!this._checkpoints.has(id)) {
       this._checkpoints.set(id, {
@@ -61,6 +65,7 @@ export class FileCheckpoint {
         timestamp: new Date().toISOString(),
         chatId,
         messageIndex,
+        messageId,
         snapshots: [],
         operations: [],
         committed: false,
@@ -94,12 +99,15 @@ export class FileCheckpoint {
     let existed = false;
     let originalContent = null;
     try {
-      if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+      if (fs.existsSync(absPath)) {
+        const stat = fs.statSync(absPath);
+        if (!stat.isFile()) throw new Error("目标已存在但不是普通文件");
         existed = true;
         originalContent = fs.readFileSync(absPath).toString("base64");
       }
     } catch (err) {
-      console.warn(`[FileCheckpoint] 快照读取失败: ${absPath}`, err?.message || String(err));
+      const reason = err?.message || String(err);
+      throw new Error(`无法为写操作创建安全快照: ${absPath}: ${reason}`);
     }
 
     checkpoint.snapshots.push({ absPath, existed, originalContent, encoding: "base64" });
@@ -115,10 +123,18 @@ export class FileCheckpoint {
 
   commit(id) {
     const checkpoint = this._checkpoints.get(id);
-    if (!checkpoint) return;
+    if (!checkpoint) return { success: false, persisted: false, error: `检查点不存在: ${id}` };
+    const previousCommitted = checkpoint.committed;
+    const wasActive = this._activeId === id;
     checkpoint.committed = true;
-    if (this._activeId === id) this._activeId = null;
-    this._saveToDisk(checkpoint);
+    const persistence = this._saveToDisk(checkpoint);
+    if (!persistence.success) {
+      checkpoint.committed = previousCommitted;
+      if (wasActive) this._activeId = id;
+      return persistence;
+    }
+    if (wasActive) this._activeId = null;
+    return persistence;
   }
 
   revert(id) {
@@ -134,7 +150,10 @@ export class FileCheckpoint {
 
     for (const snapshot of checkpoint.snapshots) {
       try {
-        if (snapshot.existed && snapshot.originalContent !== null) {
+        if (snapshot.existed) {
+          if (typeof snapshot.originalContent !== "string") {
+            throw new Error("检查点损坏：原文件存在但快照内容缺失");
+          }
           const dir = path.dirname(snapshot.absPath);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
           if (snapshot.encoding === "base64") {
@@ -156,10 +175,15 @@ export class FileCheckpoint {
       }
     }
 
-    this._deleteFromDisk(id);
-    this._checkpoints.delete(id);
-    if (this._activeId === id) this._activeId = null;
-    if (this._pinnedId === id) this._pinnedId = null;
+    if (errors.length === 0) {
+      const deleteError = this._deleteFromDisk(id);
+      if (deleteError) errors.push(deleteError);
+    }
+    if (errors.length === 0) {
+      this._checkpoints.delete(id);
+      if (this._activeId === id) this._activeId = null;
+      if (this._pinnedId === id) this._pinnedId = null;
+    }
     return { success: errors.length === 0, restored, deleted, errors, failedFiles };
   }
 
@@ -183,37 +207,110 @@ export class FileCheckpoint {
     }
   }
 
-  revertToMessage(chatId, targetIndex) {
-    const toRevert = [];
-    for (const cp of this._checkpoints.values()) {
-      if (cp.chatId === chatId && cp.messageIndex > targetIndex) toRevert.push(cp);
+  _selectRollbackCheckpoints(chatId, targetIndex) {
+    const selected = Array.from(this._checkpoints.values()).filter(
+      (cp) => cp.chatId === chatId && cp.messageIndex > targetIndex,
+    );
+    selected.sort(
+      (a, b) =>
+        b.messageIndex - a.messageIndex ||
+        b.seq - a.seq ||
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() ||
+        (a.id === b.id ? 0 : a.id < b.id ? 1 : -1),
+    );
+    return selected;
+  }
+
+  static _sameCheckpointIds(actual, expected) {
+    return actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+  }
+
+  revertToMessage(chatId, targetIndex, expectedCheckpointIds = undefined) {
+    const toRevert = this._selectRollbackCheckpoints(chatId, targetIndex);
+    const checkpointIds = toRevert.map((cp) => cp.id);
+    if (expectedCheckpointIds && !FileCheckpoint._sameCheckpointIds(checkpointIds, expectedCheckpointIds)) {
+      return {
+        success: false,
+        partial: false,
+        checkpointSetDrift: true,
+        attempted: 0,
+        reverted: 0,
+        checkpointsReverted: 0,
+        totalRestored: 0,
+        totalDeleted: 0,
+        errors: ["检查点集合已漂移；请重新预览后再回档"],
+        failedFiles: [],
+        checkpointIds,
+        remainingCheckpointIds: checkpointIds,
+      };
     }
-    toRevert.sort((a, b) => b.messageIndex - a.messageIndex || b.seq - a.seq || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     let totalRestored = 0, totalDeleted = 0;
+    let attempted = 0, reverted = 0;
     const allErrors = [], allFailedFiles = [];
     for (const cp of toRevert) {
+      attempted++;
       const result = this.revert(cp.id);
       totalRestored += result.restored;
       totalDeleted += result.deleted;
       allErrors.push(...result.errors);
       allFailedFiles.push(...result.failedFiles);
+      if (!result.success) break;
+      reverted++;
     }
     if (this._activeId && !this._checkpoints.has(this._activeId)) this._activeId = null;
     if (this._pinnedId && !this._checkpoints.has(this._pinnedId)) this._pinnedId = null;
-    return { success: allErrors.length === 0, checkpointsReverted: toRevert.length, totalRestored, totalDeleted, errors: allErrors, failedFiles: allFailedFiles };
+    const remainingCheckpointIds = this._selectRollbackCheckpoints(chatId, targetIndex).map((cp) => cp.id);
+    const success = allErrors.length === 0 && reverted === toRevert.length;
+    return {
+      success,
+      partial: !success && (reverted > 0 || totalRestored > 0 || totalDeleted > 0),
+      checkpointSetDrift: false,
+      attempted,
+      reverted,
+      checkpointsReverted: reverted,
+      totalRestored,
+      totalDeleted,
+      errors: allErrors,
+      failedFiles: allFailedFiles,
+      checkpointIds,
+      remainingCheckpointIds,
+    };
   }
 
-  getRevertToMessageDiff(chatId, targetIndex) {
-    const toRevert = [];
-    for (const cp of this._checkpoints.values()) {
-      if (cp.chatId === chatId && cp.messageIndex > targetIndex) toRevert.push(cp);
+  getRevertToMessageDiff(chatId, targetIndex, expectedCheckpointIds = undefined) {
+    const toRevert = this._selectRollbackCheckpoints(chatId, targetIndex);
+    const checkpointIds = toRevert.map((cp) => cp.id);
+    if (expectedCheckpointIds && !FileCheckpoint._sameCheckpointIds(checkpointIds, expectedCheckpointIds)) {
+      return {
+        success: false,
+        checkpointSetDrift: true,
+        error: "检查点集合已漂移；请重新预览",
+        checkpointsToRevert: toRevert.length,
+        checkpointIds,
+        filesToRestore: [],
+        filesToDelete: [],
+      };
     }
-    toRevert.sort((a, b) => b.messageIndex - a.messageIndex || b.seq - a.seq || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const corruptSnapshots = toRevert
+      .flatMap((cp) => cp.snapshots)
+      .filter((snapshot) => snapshot.existed && typeof snapshot.originalContent !== "string");
+    if (corruptSnapshots.length > 0) {
+      return {
+        success: false,
+        checkpointSetDrift: false,
+        error: `检查点损坏：${corruptSnapshots.length} 个原文件缺少快照内容，请勿执行回档`,
+        checkpointsToRevert: toRevert.length,
+        checkpointIds,
+        filesToRestore: [],
+        filesToDelete: [],
+      };
+    }
+
     const verdict = new Map();
     for (const cp of toRevert) {
       for (const snapshot of cp.snapshots) {
-        verdict.set(snapshot.absPath, (snapshot.existed && snapshot.originalContent !== null) ? "restore" : "delete");
+        verdict.set(snapshot.absPath, snapshot.existed ? "restore" : "delete");
       }
     }
     const filesToRestore = [], filesToDelete = [];
@@ -221,7 +318,14 @@ export class FileCheckpoint {
       if (v === "restore") filesToRestore.push(absPath);
       else filesToDelete.push(absPath);
     }
-    return { checkpointsToRevert: toRevert.length, filesToRestore, filesToDelete };
+    return {
+      success: true,
+      checkpointSetDrift: false,
+      checkpointsToRevert: toRevert.length,
+      checkpointIds,
+      filesToRestore,
+      filesToDelete,
+    };
   }
 
   getOperations(id) {
@@ -245,7 +349,10 @@ export class FileCheckpoint {
     const result = [];
     for (const snapshot of checkpoint.snapshots) {
       const rel = path.relative(this._getWorkspaceRoot(), snapshot.absPath).replace(/\\/g, "/");
-      const oldBuf = snapshot.existed && snapshot.originalContent !== null ? decode(snapshot.originalContent, snapshot.encoding) : Buffer.alloc(0);
+      if (snapshot.existed && typeof snapshot.originalContent !== "string") {
+        throw new Error(`检查点损坏：原文件存在但快照内容缺失: ${snapshot.absPath}`);
+      }
+      const oldBuf = snapshot.existed ? decode(snapshot.originalContent, snapshot.encoding) : Buffer.alloc(0);
       let newBuf = Buffer.alloc(0);
       let deletedNow = false;
       try {
@@ -299,6 +406,7 @@ export class FileCheckpoint {
   list() {
     return Array.from(this._checkpoints.values()).map((cp) => ({
       id: cp.id, timestamp: cp.timestamp, chatId: cp.chatId, messageIndex: cp.messageIndex,
+      messageId: cp.messageId,
       fileCount: cp.snapshots.length, opCount: cp.operations.length, committed: cp.committed,
     }));
   }
@@ -329,13 +437,16 @@ export class FileCheckpoint {
   }
 
   _saveToDisk(checkpoint) {
-    if (!this._persistDir) return;
+    if (!this._persistDir) {
+      return { success: true, persisted: false, warning: "当前为纯内存检查点模式，未持久化到磁盘" };
+    }
     try {
       const safeId = checkpoint.id.replace(/[<>:"/\\|?*]/g, "_");
       const filePath = path.join(this._persistDir, `${safeId}.json`);
       const data = {
         id: checkpoint.id, timestamp: checkpoint.timestamp, chatId: checkpoint.chatId,
-        messageIndex: checkpoint.messageIndex, committed: checkpoint.committed, seq: checkpoint.seq,
+        messageIndex: checkpoint.messageIndex, messageId: checkpoint.messageId,
+        committed: checkpoint.committed, seq: checkpoint.seq,
         operations: checkpoint.operations,
         snapshots: checkpoint.snapshots.map((s) => ({
           absPath: s.absPath, existed: s.existed,
@@ -346,16 +457,26 @@ export class FileCheckpoint {
       const tmpPath = `${filePath}.tmp_${process.pid}`;
       fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
       fs.renameSync(tmpPath, filePath);
-    } catch (e) { console.warn(`[FileCheckpoint] 持久化写入失败: ${e}`); }
+      return { success: true, persisted: true };
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      console.warn(`[FileCheckpoint] 持久化写入失败: ${error}`);
+      return { success: false, persisted: false, error: `检查点持久化失败: ${error}` };
+    }
   }
 
   _deleteFromDisk(id) {
-    if (!this._persistDir) return;
+    if (!this._persistDir) return null;
     try {
       const safeId = id.replace(/[<>:"/\\|?*]/g, "_");
       const filePath = path.join(this._persistDir, `${safeId}.json`);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch { /* ignore */ }
+      return null;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn(`[FileCheckpoint] 删除持久化检查点失败: ${id}: ${message}`);
+      return `删除持久化检查点失败: ${id}: ${message}`;
+    }
   }
 
   _loadFromDisk() {
@@ -370,6 +491,7 @@ export class FileCheckpoint {
           this._checkpoints.set(data.id, {
             id: data.id, timestamp: data.timestamp, chatId: data.chatId || "",
             messageIndex: data.messageIndex ?? -1, committed: data.committed ?? true,
+            messageId: typeof data.messageId === "string" ? data.messageId : undefined,
             seq: typeof data.seq === "number" ? data.seq : 0,
             operations: data.operations || [],
             snapshots: (data.snapshots || []).map((s) => ({

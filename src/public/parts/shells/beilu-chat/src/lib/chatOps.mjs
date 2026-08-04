@@ -3,13 +3,13 @@
  * 不管 AI 生成（那是 generation.mjs 的事）、不管存储路径解析（那是 chatStorage.mjs 的事）、
  * 不管消息构建（那是 messageBuilder.mjs 的事）。
  *
- * 链路：endpoints.mjs → 本模块（写操作）→ chatStorage.saveChat / broadcast.broadcastChatEvent
+ * 链路：endpoints.mjs → 本模块（写操作）→ chatStorage.mutateChat / broadcast.broadcastChatEvent
  *       generation.mjs → 本模块（addChatLogEntry 注入工具结果 system 条）
  *       requestBuilder.mjs → 本模块（getVisibleChatLog 构建 AI 可见上下文 + addChatLogEntry 供插件
  *         request.AddChatLogEntry 回调写入）
  *
- * 影响：每个写操作都遵循 RT-4 契约（先 await saveChat 落盘，再 broadcastChatEvent 推送前端）；
- *       chatLog 就地 push/splice（内存态变更）；广播 WS 事件（message_added/deleted/edited/hidden 等）
+ * 影响：已迁移写操作遵循候选修改 → 主 JSON 原子提交 → Map 发布 → 广播；
+ *       未迁移 legacy 写者仍经 saveChat 兼容入口串行（见交付边界）。
  *
  * 相交：← endpoints.mjs（HTTP 路由入口） / generation.mjs（自动续轮注入工具结果）
  *       → chatStorage.saveChat（落盘） / broadcast.broadcastChatEvent（WS 推送）
@@ -29,10 +29,13 @@ import {
   chatMetadatas,
   getChatStorageDir,
   loadChat,
+  mutateChat,
   saveChat,
+  withChatTransactionOwner,
   newChat,
   renameChat,
   setModeActiveChat,
+  deleteChat, // [0804] ensureModeChatsForChar 单线绑卡失败时回滚刚建的空对话（不留孤儿）
   BOT_CHAT_SYMBOL,
 } from "./chatStorage.mjs";
 import { loadShellData, saveShellData } from "../../../../../../server/setting_loader.mjs"; // bot 对话指针 bot_chat_bindings
@@ -47,6 +50,153 @@ import { getChatRequest } from "./requestBuilder.mjs";
 import { wbTrace, wbSpan, wbDetect } from "../../../../../../server/whitebox.mjs";
 
 const diag = createDiag("chat");
+const _preMutationSnapshot = Symbol("preMutationSnapshot");
+
+function _captureChatLogSnapshot(chatLog) {
+  return JSON.parse(JSON.stringify(chatLog));
+}
+
+function _writeCommittedSnapshot(chatid, value, reason) {
+  const snapshot = value?.[_preMutationSnapshot];
+  if (!snapshot) return;
+  if (!chatLogSnapshot(chatid, snapshot, reason)) {
+    throw new Error(`Committed chat snapshot failed: ${reason}`);
+  }
+}
+
+function _runCommittedDeletionSideEffects(chatid, value, reason) {
+  const failures = [];
+  const messageIds = Array.isArray(value?.messageIds)
+    ? value.messageIds
+    : (typeof value?.messageId === "string" ? [value.messageId] : []);
+  for (const messageId of messageIds) {
+    try {
+      StreamManager.abortByMessageId(messageId);
+    } catch (error) {
+      failures.push(`abort stream ${messageId}: ${error?.message || error}`);
+    }
+  }
+  try {
+    _writeCommittedSnapshot(chatid, value, reason);
+  } catch (error) {
+    failures.push(`snapshot: ${error?.message || error}`);
+  }
+  if (failures.length > 0) {
+    throw new Error(`Committed deletion side effects failed: ${failures.join("; ")}`);
+  }
+}
+
+function _withDerivedFailure(transaction, stage, error) {
+  return {
+    ...transaction,
+    status: "committed_derived_failed",
+    derived: {
+      status: "failed",
+      failures: [
+        ...(transaction?.derived?.failures || []),
+        { stage, error: error?.message || String(error) },
+      ],
+    },
+  };
+}
+
+function _decorateCommittedEntry(entry, transaction) {
+  if (!entry || typeof entry !== "object") return entry;
+  try {
+    Object.defineProperties(entry, {
+      chatCommitted: { configurable: true, value: transaction.chatCommitted },
+      status: { configurable: true, value: transaction.status },
+      revision: { configurable: true, value: transaction.revision },
+      integrity: { configurable: true, value: transaction.integrity },
+      derived: { configurable: true, value: transaction.derived },
+    });
+  } catch (error) {
+    console.warn("[chatOps] 已提交 entry 无法附加事务诊断字段:", error?.message || error);
+  }
+  return entry;
+}
+
+function _mergeCommitResult(value, transaction) {
+  return {
+    ...(value || {}),
+    chatCommitted: transaction.chatCommitted,
+    status: transaction.status,
+    revision: transaction.revision,
+    integrity: transaction.integrity,
+    derived: transaction.derived,
+  };
+}
+
+/**
+ * 跨存储历史改写复用 chatStorage 的唯一 per-chat owner。operation 只能通过注入的
+ * deleteMessagesRange capability 提交候选，禁止 public→public 重取同一锁。
+ */
+export async function withChatHistoryMutation(chatid, operation, { expectedUsername } = {}) {
+  if (typeof operation !== "function") {
+    throw _messageAnchorError("operation must be a function", "E_INVALID_CHAT_MUTATION");
+  }
+  return withChatTransactionOwner(chatid, async ({ candidate, commitCandidate }) => {
+    let committedResult = null;
+    const result = await operation({
+      deleteMessagesRange: async (startIndex, endIndex, options) => {
+        committedResult = await _deleteMessagesRangeOnCandidate(
+          chatid, candidate, startIndex, endIndex, options, commitCandidate,
+        );
+        return committedResult;
+      },
+    });
+    if (!committedResult?.chatCommitted || !result || typeof result !== "object") return result;
+    return {
+      ...result,
+      chatCommitted: committedResult.chatCommitted,
+      chatStatus: committedResult.status,
+      chatRevision: committedResult.revision,
+      chatIntegrity: committedResult.integrity,
+      chatDerived: committedResult.derived,
+    };
+  }, { expectedUsername });
+}
+
+function _messageAnchorError(message, code, statusCode = 400) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function _resolveMessageAnchorInLog(chatLog, anchorMessageId, indexHint) {
+  const hinted = indexHint !== undefined && chatLog[indexHint]?.id === anchorMessageId
+    ? indexHint
+    : -1;
+  const index = hinted >= 0
+    ? hinted
+    : chatLog.findIndex((entry) => entry?.id === anchorMessageId);
+  return index < 0
+    ? { found: false, index: -1, messageId: anchorMessageId, reason: "anchor_not_found" }
+    : { found: true, index, messageId: anchorMessageId };
+}
+
+/**
+ * 以持久化消息 ID 解析当前权威 chatLog 下标。indexHint 只用于快速命中/兼容校验，
+ * 永远不能在 ID 不匹配时替代 ID 选中另一条消息。
+ *
+ * @param {string} chatid
+ * @param {string} anchorMessageId
+ * @param {number} [indexHint]
+ * @returns {Promise<{found:true,index:number,messageId:string}|{found:false,index:-1,messageId:string,reason:"anchor_not_found"}>}
+ */
+export async function resolveMessageAnchor(chatid, anchorMessageId, indexHint) {
+  if (typeof anchorMessageId !== "string" || !anchorMessageId.trim()) {
+    throw _messageAnchorError("anchorMessageId must be a non-empty string", "E_INVALID_MESSAGE_ANCHOR");
+  }
+  if (indexHint !== undefined && (!Number.isInteger(indexHint) || indexHint < 0)) {
+    throw _messageAnchorError("indexHint must be a non-negative integer", "E_INVALID_MESSAGE_INDEX");
+  }
+  const messageId = anchorMessageId.trim();
+  const chatMetadata = await loadChat(chatid);
+  if (!chatMetadata) throw _messageAnchorError("Chat not found", "E_CHAT_NOT_FOUND", 404);
+  return _resolveMessageAnchorInLog(chatMetadata.chatLog, messageId, indexHint);
+}
 
 // ============================================================
 // bot 对话文件（凛倾 07-09「对话文件的专门符号+一个平台一个」）
@@ -114,6 +264,29 @@ export async function ensureBotChat(username, charName, platform, opts = {}) {
   }
 }
 
+/**
+ * 保证 bot 绑定返回的对话真实挂载了它声明的角色。
+ *
+ * bot_chat_bindings 的值不是“只要文件存在就有效”的弱指针；后续 addUserReply 会复制该对话的
+ * LastTimeSlice，而 triggerCharReply 在未显式传角色时也只从这里解析。允许空 chars 的对话进入
+ * 绑定表，会把空角色状态持续传播成 no_character。这里因此承担 bot 线的角色不变量：缺失时先
+ * 通过 addchar 正常挂载，挂载后再读回验证；不能证明成立就抛错，禁止继续写入/复用坏指针。
+ */
+async function _ensureBotChatCharacter(chatid, username, charName) {
+  let metadata = await loadChat(chatid);
+  if (!metadata) throw new Error(`Bot 对话不存在: ${chatid}`);
+  if (metadata.username !== username) throw new Error(`Bot 对话不属于当前用户: ${chatid}`);
+  if (!metadata.LastTimeSlice?.chars?.[charName]) {
+    await addchar(chatid, charName);
+    metadata = await loadChat(chatid);
+  }
+  if (!metadata?.LastTimeSlice?.chars?.[charName]) {
+    const error = new Error(`Bot 对话角色挂载失败: ${chatid}/${charName}`);
+    error.code = "E_BOT_CHAT_CHARACTER_MISSING";
+    throw error;
+  }
+}
+
 async function _ensureBotChatImpl(username, charName, platform, { fresh = false, chatid = "", peek = false } = {}) {
   const key = `${platform}|${charName}`;
   const bindings = loadShellData(username, "chat", "bot_chat_bindings");
@@ -122,6 +295,7 @@ async function _ensureBotChatImpl(username, charName, platform, { fresh = false,
   if (chatid) {
     if (chatMetadatas.get(chatid)?.username !== username)
       throw new Error(`对话 ${chatid} 不存在或不属于当前用户`);
+    await _ensureBotChatCharacter(chatid, username, charName);
     bindings[key] = chatid;
     saveShellData(username, "chat", "bot_chat_bindings");
     return { chatid, name: names[chatid] || "", created: false };
@@ -130,6 +304,9 @@ async function _ensureBotChatImpl(username, charName, platform, { fresh = false,
     const bound = bindings[key];
     // 指针有效性：对话仍存在且属主匹配（被删除的脏指针视同无，落新建重绑）
     if (bound && chatMetadatas.get(bound)?.username === username) {
+      // peek 是纯读预览；真正消费 bot 线时必须修复/验证角色不变量。这样历史空壳绑定会在
+      // 下一次启动或收消息时原地自愈，而不是继续把空 LastTimeSlice 传给主生成器。
+      if (!peek) await _ensureBotChatCharacter(bound, username, charName);
       return { chatid: bound, name: names[bound] || `${BOT_CHAT_SYMBOL}[${platform}] ${charName}`, created: false };
     }
     // peek：只查不建（面板回显当前绑定用）
@@ -138,12 +315,9 @@ async function _ensureBotChatImpl(username, charName, platform, { fresh = false,
   const name = `${BOT_CHAT_SYMBOL}[${platform}] ${charName}`;
   const newId = await newChat(username);
   await renameChat(newId, username, name);
-  try {
-    await addchar(newId, charName);
-  } catch (e) {
-    // 角色挂载失败不阻塞（对话已建；角色卡可能瞬时不可加载），留痕供排查
-    diag.warn(`ensureBotChat: 角色"${charName}"挂载失败: ${e?.message || e}`);
-  }
+  // 角色挂载是 bot 对话成立的前置契约，不是可忽略装饰。先挂载并读回验证，成功后才写绑定；
+  // 失败时保留原绑定不被坏指针覆盖，并把真实错误交给启动/消息入口显示。
+  await _ensureBotChatCharacter(newId, username, charName);
   bindings[key] = newId;
   saveShellData(username, "chat", "bot_chat_bindings");
   return { chatid: newId, name, created: true };
@@ -165,39 +339,53 @@ async function _ensureBotChatImpl(username, charName, platform, { fresh = false,
  *   外部用户消息传其显示名即可（无角色卡头像=优雅降级）。
  * @returns {Promise<object>} 追加的 entry。
  */
-export async function appendBotChatEntry(chatid, msg) {
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
-  const new_timeSlice = chatMetadata.LastTimeSlice.copy();
-  let entry;
-  if (msg.role === "char") {
-    entry = await BuildChatLogEntryFromCharReply(
-      { name: msg.name, content: msg.content, content_for_show: msg.content_for_show, files: msg.files || [], extension: msg.extension || {} },
-      new_timeSlice,
-      null,
-      msg.charName || msg.name,
-      chatMetadata.username,
-    );
-  } else {
-    entry = await BuildChatLogEntryFromUserMessage(
-      { name: msg.name, content: msg.content, files: msg.files || [], extension: msg.extension || {} },
-      new_timeSlice,
-      new_timeSlice.player,
-      new_timeSlice.player_id,
-      chatMetadata.username,
-    );
+export async function appendBotChatEntry(chatid, msg, { expectedUsername } = {}) {
+  const transaction = await mutateChat(chatid, (candidate, entry) => {
+    // [0726 上下文换源] N42 档位字段透传：`_sourceType`/`_permissionLevel` 由各壳挂在条目上，
+    //   消费方 resolveRequestBotPermission(chat_log) 取**尾条**判本轮触发者档位（file_op/delegate/
+    //   ideToolCall/modeSwitch 据此裁决）。原先 chat_log 来自壳内存，字段天然在；换成从对话文件读之后，
+    //   若此处不透传，尾条就没有这两个字段 → resolveRequestBotPermission 返回 null → 档位门整体失效
+    //   （静默降级成"非 bot 来源"，等于所有平台用户拿满权限）。
+    //   可行性：entry.toData() 是全量 `{ ...this }` 展开、fromJSON 是 `Object.assign(new, {...json})`，
+    //   非白名单，故自定义字段能完整过盘往返。
+    if (msg._sourceType) entry._sourceType = msg._sourceType;
+    if (Number.isFinite(msg._permissionLevel)) entry._permissionLevel = msg._permissionLevel;
+    // [P0-B 2026-08-03] sender 身份/策略快照透传（buildBotSourceMeta 产出，pickBotSourceMeta 转发）：
+    //   _senderId/_isOwner=审计与 host_control 裁决依据；_hostControl=触发时刻策略快照（owner-only，
+    //   默认 false）；_policyRev=权限策略修订对账。缺失（旧壳/旧条目）时消费端按非 owner/无宿主能力
+    //   fail-closed 解析——不在此补默认值，缺字段本身就是"不可证明"的诚实信号。
+    if (msg._senderId !== undefined) entry._senderId = String(msg._senderId);
+    if (msg._isOwner !== undefined) entry._isOwner = msg._isOwner === true;
+    if (msg._hostControl !== undefined) entry._hostControl = msg._hostControl === true;
+    if (Number.isFinite(msg._policyRev)) entry._policyRev = msg._policyRev;
+    candidate.LastTimeSlice = entry.timeSlice;
+    candidate.chatLog.push(entry);
+    return entry;
+  }, {
+    expectedUsername,
+    prepare: async (authoritative) => {
+      const newTimeSlice = authoritative.LastTimeSlice.copy();
+      return msg.role === "char"
+        ? BuildChatLogEntryFromCharReply(
+          { name: msg.name, content: msg.content, content_for_show: msg.content_for_show, files: msg.files || [], extension: msg.extension || {} },
+          newTimeSlice, null, msg.charName || msg.name, authoritative.username,
+        )
+        : BuildChatLogEntryFromUserMessage(
+          { name: msg.name, content: msg.content, files: msg.files || [], extension: msg.extension || {} },
+          newTimeSlice, newTimeSlice.player, newTimeSlice.player_id, authoritative.username,
+        );
+    },
+  });
+  let finalTransaction = transaction;
+  try {
+    broadcastChatEvent(chatid, {
+      type: "message_added",
+      payload: await transaction.value.toData(expectedUsername ?? chatMetadatas.get(chatid)?.username),
+    });
+  } catch (error) {
+    finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
   }
-  // [0726 上下文换源] N42 档位字段透传：`_sourceType`/`_permissionLevel` 由各壳挂在条目上，
-  //   消费方 resolveRequestBotPermission(chat_log) 取**尾条**判本轮触发者档位（file_op/delegate/
-  //   ideToolCall/modeSwitch 据此裁决）。原先 chat_log 来自壳内存，字段天然在；换成从对话文件读之后，
-  //   若此处不透传，尾条就没有这两个字段 → resolveRequestBotPermission 返回 null → 档位门整体失效
-  //   （静默降级成"非 bot 来源"，等于所有平台用户拿满权限）。
-  //   可行性：entry.toData() 是全量 `{ ...this }` 展开、fromJSON 是 `Object.assign(new, {...json})`，
-  //   非白名单，故自定义字段能完整过盘往返。
-  if (msg._sourceType) entry._sourceType = msg._sourceType;
-  if (Number.isFinite(msg._permissionLevel)) entry._permissionLevel = msg._permissionLevel;
-  chatMetadata.LastTimeSlice = entry.timeSlice;
-  return addChatLogEntry(chatid, entry);
+  return _decorateCommittedEntry(transaction.value, finalTransaction);
 }
 
 // ============================================================
@@ -216,22 +404,22 @@ export async function appendBotChatEntry(chatid, msg) {
  * @param {chatLogEntry_t} entry - 已构建好的消息条目（由 messageBuilder 构建）
  * @returns {Promise<chatLogEntry_t>} 同一 entry 引用
  */
-export async function addChatLogEntry(chatid, entry) {
+export async function addChatLogEntry(chatid, entry, { expectedUsername } = {}) {
   wbTrace(chatid, "chatOps", "addChatLogEntry:enter", { role: entry?.role, contentLen: entry?.content?.length || 0 });
-  const chatMetadata = await loadChat(chatid);
-
-  chatMetadata.chatLog.push(entry);
-
-  // 始终保存
-  // ★ RT-4 修：先 await 落盘再 broadcast，避免前端收到 message_added 后 refetch 读到未落盘的旧 chatLog
-  wbTrace(chatid, "chatOps", "addChatLogEntry:saveChat_awaited", { chatLogLen: chatMetadata.chatLog.length });
-  await saveChat(chatid);
-  broadcastChatEvent(chatid, {
-    type: "message_added",
-    payload: await entry.toData(chatMetadata.username),
-  });
-
-  return entry;
+  const transaction = await mutateChat(chatid, (candidate) => {
+    candidate.chatLog.push(entry);
+    return entry;
+  }, { expectedUsername });
+  let finalTransaction = transaction;
+  try {
+    broadcastChatEvent(chatid, {
+      type: "message_added",
+      payload: await entry.toData(expectedUsername ?? chatMetadatas.get(chatid)?.username),
+    });
+  } catch (error) {
+    finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
+  }
+  return _decorateCommittedEntry(entry, finalTransaction);
 }
 
 // ============================================================
@@ -278,34 +466,51 @@ function _registerClientMsgId(chatid, clientMsgId, entry) {
  *   client_msg_id=幂等键，见上方幂等窗注释，写入后登记并从 object 剥离不进 entry 构建）
  * @returns {Promise<chatLogEntry_t>}
  */
-export async function addUserReply(chatid, object) {
+export async function addUserReply(chatid, object, { expectedUsername } = {}) {
   wbTrace(chatid, "chatOps", "addUserReply:enter", { contentLen: (object?.content || "").length, files: object?.files?.length || 0 });
   const _cmid = typeof object?.client_msg_id === "string" && object.client_msg_id ? object.client_msg_id : null;
   if (_cmid) {
     delete object.client_msg_id;
-    const _dupEntry = getRecentUserReply(chatid, _cmid);
-    if (_dupEntry) {
+  }
+  const transaction = await mutateChat(chatid, (candidate, entry) => {
+    const duplicateEntry = _cmid ? getRecentUserReply(chatid, _cmid) : null;
+    if (duplicateEntry) {
       wbTrace(chatid, "chatOps", "addUserReply:idempotent_hit", { client_msg_id: _cmid });
       console.log(`[chatOps] addUserReply 幂等命中（重放不重写）: ${chatid.substring(0, 8)}… id=${_cmid}`);
-      return _dupEntry;
+      return { entry: duplicateEntry, duplicate: true };
+    }
+    candidate.timeLines = [entry];
+    candidate.timeLineIndex = 0;
+    candidate.LastTimeSlice = entry.timeSlice;
+    candidate.chatLog.push(entry);
+    return { entry, duplicate: false };
+  }, {
+    expectedUsername,
+    shouldCommit: (value) => !value.duplicate,
+    afterCommit: (value) => {
+      if (_cmid) _registerClientMsgId(chatid, _cmid, value.entry);
+    },
+    prepare: async (authoritative) => {
+      const timeSlice = authoritative.LastTimeSlice;
+      const newTimeSlice = timeSlice.copy();
+      return BuildChatLogEntryFromUserMessage(
+        object, newTimeSlice, timeSlice.player, newTimeSlice.player_id, authoritative.username,
+      );
+    },
+  });
+  if (transaction.value.duplicate) return transaction.value.entry;
+  let finalTransaction = transaction;
+  if (transaction.chatCommitted) {
+    try {
+      broadcastChatEvent(chatid, {
+        type: "message_added",
+        payload: await transaction.value.entry.toData(expectedUsername ?? chatMetadatas.get(chatid)?.username),
+      });
+    } catch (error) {
+      finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
     }
   }
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
-
-  const timeSlice = chatMetadata.LastTimeSlice;
-  const new_timeSlice = timeSlice.copy();
-  const user = timeSlice.player;
-
-  const entry = await BuildChatLogEntryFromUserMessage(
-    object, new_timeSlice, user, new_timeSlice.player_id, chatMetadata.username,
-  );
-  chatMetadata.timeLines = [entry];
-  chatMetadata.timeLineIndex = 0;
-  chatMetadata.LastTimeSlice = entry.timeSlice;
-  const _added = await addChatLogEntry(chatid, entry);
-  if (_cmid) _registerClientMsgId(chatid, _cmid, _added);
-  return _added;
+  return _decorateCommittedEntry(transaction.value.entry, finalTransaction);
 }
 
 const _lastActiveEntry = findLastActive;
@@ -314,29 +519,44 @@ const _lastActiveEntry = findLastActive;
 // 删除消息
 // ============================================================
 
-export async function deleteMessage(chatid, index) {
-  wbTrace(chatid, "chatOps", "deleteMessage:enter", { index });
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
-  // 参数校验：非法值（null/NaN/负数）硬抛；越界或已删除则幂等返回——
-  // 回档物理截断后前端可能持有旧索引，越界不应报错（消息已不在）。
-  if (index == null || !Number.isFinite(index) || index < 0) throw new Error("Invalid index");
-  if (!chatMetadata.chatLog[index] || isDeleted(chatMetadata.chatLog[index])) return;
-
-  const entry = chatMetadata.chatLog[index];
-  if (entry) StreamManager.abortByMessageId(entry.id);
-
-  chatLogSnapshot(chatid, chatMetadata.chatLog, "deleteMessage");
-
-  markDeleted(entry, "user");
-
-  const last = _lastActiveEntry(chatMetadata.chatLog);
-  chatMetadata.timeLines = last ? [last] : [];
-  chatMetadata.timeLineIndex = 0;
-  chatMetadata.LastTimeSlice = last ? last.timeSlice : new timeSlice_t();
-
-  await saveChat(chatid);
-  broadcastChatEvent(chatid, { type: "message_deleted", payload: { index } });
+export async function deleteMessage(chatid, index, { messageId, expectedUsername } = {}) {
+  wbTrace(chatid, "chatOps", "deleteMessage:enter", { index, messageId });
+  if (!Number.isInteger(index) || index < 0) throw new Error("Invalid index");
+  const hasStableMessageId = typeof messageId === "string" && messageId.length > 0;
+  const transaction = await mutateChat(chatid, (candidate) => {
+    const anchor = hasStableMessageId
+      ? _resolveMessageAnchorInLog(candidate.chatLog, messageId, index)
+      : null;
+    const resolvedIndex = anchor ? anchor.index : index;
+    const entry = candidate.chatLog[resolvedIndex];
+    if (!entry) return { applied: false, index: resolvedIndex, messageId: hasStableMessageId ? messageId : null, reason: "not_found" };
+    if (isDeleted(entry)) return { applied: false, index: resolvedIndex, messageId: entry.id, reason: "already_deleted" };
+    const snapshot = _captureChatLogSnapshot(candidate.chatLog);
+    markDeleted(entry, "user");
+    const last = _lastActiveEntry(candidate.chatLog);
+    candidate.timeLines = last ? [last] : [];
+    candidate.timeLineIndex = 0;
+    candidate.LastTimeSlice = last ? last.timeSlice : new timeSlice_t();
+    const value = { applied: true, index: resolvedIndex, messageId: entry.id, reason: "deleted" };
+    Object.defineProperty(value, _preMutationSnapshot, { value: snapshot });
+    return value;
+  }, {
+    expectedUsername,
+    shouldCommit: (value) => value.applied,
+    afterCommit: (value) => _runCommittedDeletionSideEffects(chatid, value, "deleteMessage"),
+  });
+  let finalTransaction = transaction;
+  if (transaction.chatCommitted) {
+    try {
+      broadcastChatEvent(chatid, {
+        type: "message_deleted",
+        payload: { index: transaction.value.index, messageId: transaction.value.messageId },
+      });
+    } catch (error) {
+      finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
+    }
+  }
+  return _mergeCommitResult(transaction.value, finalTransaction);
 }
 
 // ============================================================
@@ -353,25 +573,69 @@ export async function deleteMessage(chatid, index) {
  * @param {string} chatid
  * @param {number} startIndex - 原始数组起始下标（含）
  * @param {number} [endIndex] - 原始数组结束下标（不含），省略=删到末尾
- * @returns {Promise<{ deleted: number }>}
+ * @param {{anchorMessageId?: string}} [options] - 回档锚点；给出后 startIndex 只作兼容提示，实际从该 ID 后开始删。
+ * @returns {Promise<{ applied: boolean, deleted: number, startIndex: number, endIndex: number, messageIds: string[], reason?: string }>}
  */
-export async function deleteMessagesRange(chatid, startIndex, endIndex) {
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
+export async function deleteMessagesRange(chatid, startIndex, endIndex, { anchorMessageId, expectedUsername } = {}) {
+  const transaction = await mutateChat(
+    chatid,
+    (candidate) => _applyDeleteMessagesRange(chatid, candidate, startIndex, endIndex, { anchorMessageId }),
+    {
+      expectedUsername,
+      shouldCommit: (value) => value.applied,
+      afterCommit: (value) => _runCommittedDeletionSideEffects(chatid, value, "deleteRange"),
+    },
+  );
+  return _finishDeleteRange(chatid, transaction);
+}
+
+function _applyDeleteMessagesRange(chatid, chatMetadata, startIndex, endIndex, { anchorMessageId } = {}) {
+  if (!Number.isInteger(startIndex) || startIndex < 0) {
+    throw new Error("Invalid startIndex");
+  }
+  if (endIndex != null && (!Number.isInteger(endIndex) || endIndex < 0)) {
+    throw new Error("Invalid endIndex");
+  }
 
   // 入参为原始数组下标范围（GetChatLog 不再过滤 _hidden，前端/扫描序=原始序）。
   // endIndex 省略=删到末尾，夹在其间的隐藏消息一并删除（符合「删除此点之后全部」语义）。
   const len = chatMetadata.chatLog.length;
-  const start = Math.max(0, startIndex);
+  const hasAnchorMessageId = typeof anchorMessageId === "string" && anchorMessageId.length > 0;
+  const anchor = hasAnchorMessageId
+    ? _resolveMessageAnchorInLog(chatMetadata.chatLog, anchorMessageId, Math.max(0, startIndex - 1))
+    : null;
+  const anchorIndex = anchor ? anchor.index : -1;
+  if (hasAnchorMessageId && anchorIndex < 0) {
+    return {
+      applied: false,
+      deleted: 0,
+      startIndex: -1,
+      endIndex: -1,
+      messageIds: [],
+      reason: "anchor_not_found",
+    };
+  }
+  const start = hasAnchorMessageId
+    ? anchorIndex + 1
+    : Math.min(len, startIndex);
   const end = endIndex != null ? Math.min(len, endIndex) : len;
-  if (start >= end) return { deleted: 0 };
-
-  for (let i = start; i < end; i++) {
-    const entry = chatMetadata.chatLog[i];
-    if (entry) StreamManager.abortByMessageId(entry.id);
+  if (start >= end) {
+    return {
+      applied: false,
+      deleted: 0,
+      startIndex: start,
+      endIndex: end,
+      messageIds: [],
+      reason: "empty_range",
+    };
   }
 
-  chatLogSnapshot(chatid, chatMetadata.chatLog, "deleteRange");
+  const messageIds = chatMetadata.chatLog
+    .slice(start, end)
+    .map((entry) => entry?.id)
+    .filter((id) => typeof id === "string" && id.length > 0);
+
+  const snapshot = _captureChatLogSnapshot(chatMetadata.chatLog);
 
   const count = end - start;
   // [2026-08-01 凛倾拍板「回档=ctrl+z」] 删到末尾（回档即此形态）=物理截断：尾部截断不改变
@@ -393,13 +657,54 @@ export async function deleteMessagesRange(chatid, startIndex, endIndex) {
   chatMetadata.timeLineIndex = 0;
   chatMetadata.LastTimeSlice = last ? last.timeSlice : new timeSlice_t();
 
-  await saveChat(chatid);
-  broadcastChatEvent(chatid, {
-    type: "messages_range_deleted",
-    payload: { startIndex: start, count },
-  });
+  const value = {
+    applied: true,
+    deleted: count,
+    startIndex: start,
+    endIndex: end,
+    messageIds,
+  };
+  Object.defineProperty(value, _preMutationSnapshot, { value: snapshot });
+  return value;
+}
 
-  return { deleted: count };
+function _finishDeleteRange(chatid, transaction) {
+  let finalTransaction = transaction;
+  if (transaction.chatCommitted) {
+    try {
+      broadcastChatEvent(chatid, {
+        type: "messages_range_deleted",
+        payload: {
+          startIndex: transaction.value.startIndex,
+          count: transaction.value.deleted,
+          messageIds: transaction.value.messageIds,
+        },
+      });
+    } catch (error) {
+      finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
+    }
+  }
+  return _mergeCommitResult(transaction.value, finalTransaction);
+}
+
+async function _deleteMessagesRangeOnCandidate(chatid, candidate, startIndex, endIndex, options, commitCandidate) {
+  const value = _applyDeleteMessagesRange(chatid, candidate, startIndex, endIndex, options);
+  if (!value.applied) {
+    return _mergeCommitResult(value, {
+      chatCommitted: false,
+      status: "not_modified",
+      revision: chatMetadatas.get(chatid)?._integrity ?? null,
+      integrity: chatMetadatas.get(chatid)?._integrity ?? null,
+      derived: null,
+    });
+  }
+  let transaction = await commitCandidate(value);
+  try {
+    _runCommittedDeletionSideEffects(chatid, value, "deleteRange");
+  } catch (error) {
+    transaction = _withDerivedFailure(transaction, "after_commit", error);
+  }
+  return _finishDeleteRange(chatid, transaction);
 }
 
 // ============================================================
@@ -414,33 +719,89 @@ export async function deleteMessagesRange(chatid, startIndex, endIndex) {
  *       AI 上下文过滤：requestBuilder 的 isActiveEntry 按 _hidden 滤出 → AI 看不到
  *       前端渲染：GetChatLog 返回含隐藏的完整 chatLog，前端据 extension._hidden 灰显
  * 影响：修改 entry.extension._hidden + _hiddenMeta → saveChat → broadcast messages_hidden
- * 约束：T3 支持 opts.ids 按 entry.id 重定位下标，防 TOCTOU（并发增删导致下标漂移而隐藏错对象）
+ * 约束：整个 load → ID 定位 → 修改 → save → broadcast 位于 per-chat 写锁内。
+ *       T3 支持 opts.ids 按 entry.id 重定位下标；只要显式给了 ID，就绝不回退 indices。
+ *       部分 ID 消失时只处理仍存在的 ID 并返回 partial；全部消失时 fail-closed，不写盘。
  *       T4 _hiddenMeta 记 who/when/why（by: 'ai'|'auto'|'user'），_hidden 保持布尔不动热路径
  *
  * @param {string} chatid
  * @param {number[]} indices - 原始数组下标
  * @param {boolean} [hide=true]
- * @param {{ ids?: string[], meta?: { by: string, reason?: string } }} [opts]
- * @returns {Promise<{ hidden: number }>} 实际变更数量
+ * @param {{ ids?: string[], messageMeta?: { by: string, reason?: string }, meta?: { by: string, reason?: string } }} [opts]
+ * @returns {Promise<{success:boolean,applied:boolean,partial:boolean,hidden:number,requested:number,matched:number,indices:number[],messageIds?:string[],missingMessageIds?:string[],code?:string,error?:string}>}
  */
 export async function hideMessages(chatid, indices, hide = true, opts = {}) {
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
+  const transaction = await mutateChat(
+    chatid,
+    (candidate) => _hideMessagesImpl(candidate, indices, hide, opts),
+    { expectedUsername: opts.expectedUsername, shouldCommit: (value) => value.applied },
+  );
+  let finalTransaction = transaction;
+  if (transaction.chatCommitted) {
+    const messageMeta = opts.messageMeta ?? opts.meta;
+    try {
+      broadcastChatEvent(chatid, {
+        type: "messages_hidden",
+        payload: {
+          indices: [...transaction.value.indices],
+          ...(transaction.value.messageIds ? { messageIds: [...transaction.value.messageIds] } : {}),
+          hide,
+          ...(hide ? { meta: { by: messageMeta?.by || "auto", reason: messageMeta?.reason || messageMeta?.by || "auto" } } : {}),
+        },
+      });
+    } catch (error) {
+      finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
+    }
+  }
+  return _mergeCommitResult(transaction.value, finalTransaction);
+}
+
+function _hideMessagesImpl(chatMetadata, indices, hide = true, opts = {}) {
   const log = chatMetadata.chatLog;
 
   // 入参索引基于原始数组下标（GetChatLog 不再过滤 _hidden，前端/扫描序、AI 翻译后序=原始序）。
   // hide/unhide 统一按原始下标处理。
-  // T3 定位优先 id：opts.ids 给定则在刚 reload 的 log 里按稳定 entry.id(crypto.randomUUID) 重定位下标，
-  // 防 TOCTOU——调用方算下标↔本函数 await loadChat reload 之间并发增删消息致下标漂移而隐藏错对象。缺省回退入参下标。
-  let _indices = indices;
-  if (Array.isArray(opts.ids) && opts.ids.length) {
-    _indices = opts.ids.map((id) => log.findIndex((e) => e?.id === id)).filter((i) => i >= 0);
+  // T3 定位优先 id：opts.ids 给定则在锁内刚 reload 的 log 里按稳定 entry.id 重定位。
+  // 显式 ID 无论全失效还是部分失效都不回退入参下标；只有未提供 ids 的旧自动/范围调用保留 index 语义。
+  let _indices = Array.isArray(indices) ? indices : [];
+  let requestedMessageIds = null;
+  let resolvedMessageIds = null;
+  let missingMessageIds = [];
+  if (Object.prototype.hasOwnProperty.call(opts, "ids")) {
+    if (!Array.isArray(opts.ids) || opts.ids.length === 0 || opts.ids.some((id) => typeof id !== "string" || !id.trim())) {
+      throw _messageAnchorError("ids must be a non-empty string array", "E_HIDE_MESSAGE_IDS_INVALID");
+    }
+    requestedMessageIds = opts.ids.map((id) => id.trim());
+    if (new Set(requestedMessageIds).size !== requestedMessageIds.length) {
+      throw _messageAnchorError("ids must not contain duplicates", "E_HIDE_MESSAGE_IDS_DUPLICATED");
+    }
+    const resolved = requestedMessageIds.map((id) => ({ id, index: log.findIndex((entry) => entry?.id === id) }));
+    missingMessageIds = resolved.filter((item) => item.index < 0).map((item) => item.id);
+    const found = resolved.filter((item) => item.index >= 0);
+    _indices = found.map((item) => item.index);
+    resolvedMessageIds = found.map((item) => item.id);
+    if (found.length === 0) {
+      return {
+        success: false,
+        applied: false,
+        partial: false,
+        code: "E_HIDE_MESSAGE_IDS_NOT_FOUND",
+        error: "显式指定的消息 ID 均不存在，未修改任何消息",
+        hidden: 0,
+        requested: requestedMessageIds.length,
+        matched: 0,
+        indices: [],
+        messageIds: [],
+        missingMessageIds,
+      };
+    }
   }
 
   // T4 隐藏元数据：旁路字段 _hiddenMeta 记 who/when/why；_hidden 保持布尔不动 prompt 过滤热路径。
   // by: 'ai'(contextClean) | 'auto'(压缩/工具/read_file 刷新) | 'user'(手动端点)，缺省 auto。
+  const messageMeta = opts.messageMeta ?? opts.meta;
   const _meta = hide
-    ? { by: opts.meta?.by || "auto", at: Date.now(), reason: opts.meta?.reason || opts.meta?.by || "auto" }
+    ? { by: messageMeta?.by || "auto", at: Date.now(), reason: messageMeta?.reason || messageMeta?.by || "auto" }
     : null;
   let changed = 0;
   for (const index of _indices) {
@@ -456,71 +817,389 @@ export async function hideMessages(chatid, indices, hide = true, opts = {}) {
     }
   }
 
-  if (changed > 0) {
-    await saveChat(chatid); // RT-4 对齐：先 await 落盘再广播
-    broadcastChatEvent(chatid, {
-      type: "messages_hidden",
-      payload: { indices: [..._indices], hide, ...(_meta ? { meta: { by: _meta.by, reason: _meta.reason } } : {}) },
-    });
-  }
-
-  return { hidden: changed };
+  const partial = requestedMessageIds !== null && missingMessageIds.length > 0;
+  return {
+    success: !partial,
+    applied: changed > 0,
+    partial,
+    ...(partial ? {
+      code: "E_HIDE_MESSAGE_IDS_PARTIAL",
+      error: "部分显式消息 ID 不存在；仅处理了仍存在的消息，未按 index 回退",
+    } : {}),
+    hidden: changed,
+    requested: requestedMessageIds?.length ?? _indices.length,
+    matched: _indices.length,
+    indices: [..._indices],
+    ...(resolvedMessageIds ? { messageIds: [...resolvedMessageIds], missingMessageIds } : {}),
+  };
 }
 
 // ============================================================
 // 编辑消息
 // ============================================================
 
-export async function editMessage(chatid, index, new_content) {
-  wbTrace(chatid, "chatOps", "editMessage:enter", { index });
-  const chatMetadata = await loadChat(chatid);
-  if (!chatMetadata) throw new Error("Chat not found");
-  // index 为原始数组下标（GetChatLog 不再过滤 _hidden）
-  if (index == null || index < 0 || !chatMetadata.chatLog[index]) return { error: "index out of range", index };
-  if (isDeleted(chatMetadata.chatLog[index])) return { error: "message already deleted", index };
-  const rawIndex = index;
+const EDIT_OPERATION_RECEIPT_LIMIT = 128;
 
-  const _oldEntry = chatMetadata.chatLog[rawIndex];
-  if (_oldEntry) StreamManager.abortByMessageId(_oldEntry.id);
+function _normalizeEditOperationContract(editOperationId, payloadFingerprint, { required = false } = {}) {
+  const operationId = typeof editOperationId === "string" ? editOperationId.trim() : "";
+  const fingerprint = typeof payloadFingerprint === "string" ? payloadFingerprint.trim().toLowerCase() : "";
+  if (!operationId && !fingerprint && !required) return null;
+  if (!operationId) {
+    throw _messageAnchorError("editOperationId is required", "E_EDIT_OPERATION_ID_REQUIRED");
+  }
+  if (operationId.length > 128 || !/^[A-Za-z0-9._:-]+$/.test(operationId)) {
+    throw _messageAnchorError("editOperationId format is invalid", "E_EDIT_OPERATION_ID_INVALID");
+  }
+  if (!/^[a-f0-9]{64}$/.test(fingerprint)) {
+    throw _messageAnchorError("edit payload fingerprint is invalid", "E_EDIT_PAYLOAD_FINGERPRINT_INVALID");
+  }
+  return { operationId, payloadFingerprint: fingerprint };
+}
 
-  const timeSlice =
-    chatMetadata.chatLog[rawIndex].timeSlice ||
-    chatMetadata.LastTimeSlice ||
-    new timeSlice_t();
-  let entry;
-  if (timeSlice.charname) {
-    const char = timeSlice.chars?.[timeSlice.charname];
-    entry = await BuildChatLogEntryFromCharReply(
-      new_content,
-      timeSlice,
-      char,
-      timeSlice.charname,
-      chatMetadata.username,
-    );
-  } else {
-    entry = await BuildChatLogEntryFromUserMessage(
-      new_content,
-      timeSlice,
-      timeSlice.player,
-      timeSlice.player_id,
-      chatMetadata.username,
+function _findEditOperationReceipt(metadata, operationId) {
+  const receipts = Array.isArray(metadata?.editOperationReceipts)
+    ? metadata.editOperationReceipts
+    : [];
+  return receipts.find((receipt) => receipt?.operationId === operationId) || null;
+}
+
+function _assertEditReceiptMatches(receipt, messageId, payloadFingerprint) {
+  if (!receipt) return;
+  if (receipt.messageId !== messageId || receipt.payloadFingerprint !== payloadFingerprint) {
+    throw _messageAnchorError(
+      "editOperationId was already committed with a different message or payload",
+      "E_EDIT_OPERATION_PAYLOAD_MISMATCH",
+      409,
     );
   }
+}
 
-  // T009 P4：编辑版本号 +1（继承旧 entry 版本）——前端据版本比对丢过期/回声广播，替代 5s 时序锁
-  entry._editVersion = (_oldEntry?._editVersion || 0) + 1;
+async function _serializeEditReceiptResult(chatid, metadata, receipt, { expectedUsername } = {}) {
+  if (!metadata || (expectedUsername && metadata.username !== expectedUsername)) {
+    throw _messageAnchorError("Chat not found", "E_CHAT_NOT_FOUND", 404);
+  }
+  const anchor = _resolveMessageAnchorInLog(metadata.chatLog, receipt.messageId, receipt.index);
+  const entry = anchor.found ? metadata.chatLog[anchor.index] : null;
+  const entryData = entry && typeof entry.toData === "function"
+    ? await entry.toData(expectedUsername ?? metadata.username)
+    : null;
+  const chatData = chatMetadatas.get(chatid);
+  return {
+    applied: true,
+    deduped: true,
+    reason: "edit_operation_reused",
+    entry: entryData,
+    messageId: receipt.messageId,
+    index: anchor.found ? anchor.index : receipt.index,
+    indexHint: receipt.index,
+    editOperationId: receipt.operationId,
+    payloadFingerprint: receipt.payloadFingerprint,
+    receiptEditVersion: receipt.editVersion,
+    chatCommitted: true,
+    status: "committed",
+    revision: chatData?._integrity ?? null,
+    integrity: chatData?._integrity ?? null,
+    derived: null,
+  };
+}
 
-  chatMetadata.chatLog[rawIndex] = entry;
-  if (rawIndex == chatMetadata.chatLog.length - 1)
-    chatMetadata.timeLines[chatMetadata.timeLineIndex] = entry;
+/** 只读查询一次编辑意图是否已经提交；用于响应丢失后的对账，不触发重写或广播。 */
+export async function getEditOperationReceipt(
+  chatid,
+  messageId,
+  editOperationId,
+  payloadFingerprint,
+  { expectedUsername } = {},
+) {
+  const normalizedMessageId = typeof messageId === "string" ? messageId.trim() : "";
+  if (!normalizedMessageId) {
+    throw _messageAnchorError("messageId must be a non-empty string", "E_EDIT_MESSAGE_ID_REQUIRED");
+  }
+  const operation = _normalizeEditOperationContract(
+    editOperationId,
+    payloadFingerprint,
+    { required: true },
+  );
+  const metadata = await loadChat(chatid);
+  if (!metadata || (expectedUsername && metadata.username !== expectedUsername)) {
+    throw _messageAnchorError("Chat not found", "E_CHAT_NOT_FOUND", 404);
+  }
+  const receipt = _findEditOperationReceipt(metadata, operation.operationId);
+  if (!receipt) return null;
+  _assertEditReceiptMatches(receipt, normalizedMessageId, operation.payloadFingerprint);
+  return _serializeEditReceiptResult(chatid, metadata, receipt, { expectedUsername });
+}
 
-  await saveChat(chatid); // RT-4 对齐：先 await 落盘再广播
-  broadcastChatEvent(chatid, {
-    type: "message_edited",
-    payload: { index, entry: await entry.toData(chatMetadata.username) },
+export async function editMessage(
+  chatid,
+  messageId,
+  indexHint,
+  new_content,
+  { expectedUsername, editOperationId, payloadFingerprint } = {},
+) {
+  const normalizedMessageId = typeof messageId === "string" ? messageId.trim() : "";
+  if (!normalizedMessageId) {
+    throw _messageAnchorError("messageId must be a non-empty string", "E_EDIT_MESSAGE_ID_REQUIRED");
+  }
+  if (!Number.isSafeInteger(indexHint) || indexHint < 0) {
+    throw _messageAnchorError("indexHint must be a non-negative safe integer", "E_EDIT_INDEX_HINT_INVALID");
+  }
+  if (!new_content || typeof new_content !== "object" || Array.isArray(new_content)) {
+    throw _messageAnchorError("edit content must be an object", "E_EDIT_CONTENT_INVALID");
+  }
+  if (!Object.prototype.hasOwnProperty.call(new_content, "content")
+    || typeof new_content.content !== "string") {
+    throw _messageAnchorError("edit content.content must be a string", "E_EDIT_CONTENT_REQUIRED");
+  }
+  const operation = _normalizeEditOperationContract(editOperationId, payloadFingerprint);
+
+  wbTrace(chatid, "chatOps", "editMessage:enter", {
+    messageId: normalizedMessageId,
+    indexHint,
+  });
+  const transaction = await mutateChat(chatid, (candidate, prepared) => {
+    if (prepared?.receipt) {
+      _assertEditReceiptMatches(
+        prepared.receipt,
+        normalizedMessageId,
+        operation.payloadFingerprint,
+      );
+      const currentAnchor = _resolveMessageAnchorInLog(
+        candidate.chatLog,
+        normalizedMessageId,
+        prepared.receipt.index,
+      );
+      return {
+        applied: true,
+        deduped: true,
+        index: currentAnchor.found ? currentAnchor.index : prepared.receipt.index,
+        indexHint,
+        messageId: normalizedMessageId,
+        reason: "edit_operation_reused",
+        entry: currentAnchor.found ? candidate.chatLog[currentAnchor.index] : null,
+        receipt: prepared.receipt,
+      };
+    }
+    // messageId 是唯一身份；indexHint 只允许命中同一 ID 的快速路径。锁内必须重新定位，
+    // 不能在 prepare 后的排队窗口继续使用旧 index，更不能在 ID 消失时回退编辑另一条消息。
+    const anchor = _resolveMessageAnchorInLog(
+      candidate.chatLog,
+      normalizedMessageId,
+      indexHint,
+    );
+    if (!anchor.found) {
+      return {
+        applied: false,
+        index: -1,
+        indexHint,
+        messageId: normalizedMessageId,
+        reason: "message_id_not_found",
+        entry: null,
+      };
+    }
+    const { index } = anchor;
+    const oldEntry = candidate.chatLog[index];
+    if (isDeleted(oldEntry)) {
+      return {
+        applied: false,
+        index,
+        indexHint,
+        messageId: normalizedMessageId,
+        reason: "message_already_deleted",
+        entry: null,
+      };
+    }
+    if (!prepared?.entry || prepared.messageId !== normalizedMessageId) {
+      throw _messageAnchorError("Prepared edit entry is missing", "E_EDIT_PREPARE_MISSING", 409);
+    }
+
+    const entry = prepared.entry;
+    entry.id = normalizedMessageId;
+    entry._editVersion = (oldEntry._editVersion || 0) + 1;
+    const carriedLastTimeSlice = candidate.LastTimeSlice === oldEntry.timeSlice;
+    candidate.chatLog[index] = entry;
+    let timelineReferencesUpdated = 0;
+    candidate.timeLines = candidate.timeLines.map((timelineEntry) => {
+      if (timelineEntry?.id !== normalizedMessageId) return timelineEntry;
+      timelineReferencesUpdated += 1;
+      return entry;
+    });
+    if (carriedLastTimeSlice) {
+      candidate.LastTimeSlice = entry.timeSlice;
+    }
+    if (operation) {
+      const receipts = Array.isArray(candidate.editOperationReceipts)
+        ? candidate.editOperationReceipts
+        : [];
+      const existingReceipt = _findEditOperationReceipt(candidate, operation.operationId);
+      _assertEditReceiptMatches(existingReceipt, normalizedMessageId, operation.payloadFingerprint);
+      if (!existingReceipt) {
+        receipts.push({
+          operationId: operation.operationId,
+          payloadFingerprint: operation.payloadFingerprint,
+          messageId: normalizedMessageId,
+          index,
+          editVersion: entry._editVersion,
+          committedAt: new Date().toISOString(),
+        });
+      }
+      candidate.editOperationReceipts = receipts.slice(-EDIT_OPERATION_RECEIPT_LIMIT);
+    }
+    return {
+      applied: true,
+      index,
+      indexHint,
+      messageId: normalizedMessageId,
+      reason: "edited",
+      entry,
+      timelineReferencesUpdated,
+      lastTimeSliceUpdated: carriedLastTimeSlice,
+    };
+  }, {
+    expectedUsername,
+    shouldCommit: (value) => value.applied && value.deduped !== true,
+    afterCommit: (value) => {
+      if (value.applied && value.deduped !== true && value.messageId) {
+        StreamManager.abortByMessageId(value.messageId);
+      }
+    },
+    prepare: async (authoritative) => {
+      if (operation) {
+        const receipt = _findEditOperationReceipt(authoritative, operation.operationId);
+        if (receipt) {
+          _assertEditReceiptMatches(receipt, normalizedMessageId, operation.payloadFingerprint);
+          return { receipt, messageId: normalizedMessageId };
+        }
+      }
+      const anchor = _resolveMessageAnchorInLog(
+        authoritative.chatLog,
+        normalizedMessageId,
+        indexHint,
+      );
+      if (!anchor.found) return { entry: null, messageId: normalizedMessageId };
+      const oldEntry = authoritative.chatLog[anchor.index];
+      if (!oldEntry || isDeleted(oldEntry)) {
+        return { entry: null, messageId: normalizedMessageId };
+      }
+      const sourceTimeSlice = oldEntry.timeSlice || authoritative.LastTimeSlice || new timeSlice_t();
+      if (typeof sourceTimeSlice.copy !== "function") {
+        throw _messageAnchorError("Message time slice cannot be copied safely", "E_EDIT_TIMESLICE_INVALID", 409);
+      }
+      if (oldEntry.role !== "char" && oldEntry.role !== "user") {
+        throw _messageAnchorError(`Message role cannot be edited safely: ${oldEntry.role || "unknown"}`, "E_EDIT_ROLE_UNSUPPORTED", 409);
+      }
+      const editingCharName = oldEntry.role === "char" ? sourceTimeSlice.charname : null;
+      if (oldEntry.role === "char" && !editingCharName) {
+        throw _messageAnchorError("Character message is missing its authoritative charname", "E_EDIT_CHARNAME_MISSING", 409);
+      }
+      const editTimeSlice = sourceTimeSlice.copy();
+      // timeSlice.copy() 面向“下一条消息”会清除这三个瞬态字段；编辑是原条替换，必须恢复原时间点语义。
+      editTimeSlice.charname = sourceTimeSlice.charname;
+      editTimeSlice.playername = sourceTimeSlice.playername;
+      editTimeSlice.greeting_type = sourceTimeSlice.greeting_type;
+      const hasOwn = (key) => Object.prototype.hasOwnProperty.call(new_content, key);
+      if (hasOwn("content_for_show")
+        && new_content.content_for_show !== null
+        && new_content.content_for_show !== new_content.content) {
+        throw _messageAnchorError("content_for_show must be null or match the new content", "E_EDIT_DISPLAY_CONTENT_MISMATCH");
+      }
+      if (hasOwn("content_for_edit")
+        && new_content.content_for_edit !== new_content.content) {
+        throw _messageAnchorError("content_for_edit must match the new content", "E_EDIT_SOURCE_CONTENT_MISMATCH");
+      }
+      const editPayload = {
+        name: oldEntry.name,
+        avatar: oldEntry.avatar,
+        content: new_content.content,
+        // 旧 content_for_show 是旧正文的渲染产物，不能跨编辑沿用。客户端若未显式给出，
+        // 置 null 让消费者按新 content 的纯文本路径展示；编辑源始终与新正文一致。
+        content_for_show: hasOwn("content_for_show")
+          ? new_content.content_for_show
+          : null,
+        content_for_edit: new_content.content,
+        files: hasOwn("files") ? new_content.files : oldEntry.files,
+        extension: hasOwn("extension") ? new_content.extension : oldEntry.extension,
+        logContextBefore: hasOwn("logContextBefore")
+          ? new_content.logContextBefore
+          : oldEntry.logContextBefore,
+        logContextAfter: hasOwn("logContextAfter")
+          ? new_content.logContextAfter
+          : oldEntry.logContextAfter,
+      };
+      if (!Array.isArray(editPayload.files)) {
+        throw _messageAnchorError("edit files must be an array", "E_EDIT_FILES_INVALID");
+      }
+      if (!editPayload.extension || typeof editPayload.extension !== "object"
+        || Array.isArray(editPayload.extension)) {
+        throw _messageAnchorError("edit extension must be an object", "E_EDIT_EXTENSION_INVALID");
+      }
+      const entry = editingCharName
+        ? await BuildChatLogEntryFromCharReply(
+          editPayload,
+          editTimeSlice,
+          editTimeSlice.chars?.[editingCharName],
+          editingCharName,
+          authoritative.username,
+        )
+        : await BuildChatLogEntryFromUserMessage(
+          editPayload,
+          editTimeSlice,
+          editTimeSlice.player,
+          editTimeSlice.player_id,
+          authoritative.username,
+        );
+      entry.time_stamp = oldEntry.time_stamp;
+      return { entry, messageId: normalizedMessageId };
+    },
   });
 
-  return entry;
+  if (transaction.value?.deduped === true && operation) {
+    const metadata = await loadChat(chatid);
+    return _serializeEditReceiptResult(
+      chatid,
+      metadata,
+      transaction.value.receipt,
+      { expectedUsername },
+    );
+  }
+  if (!transaction.chatCommitted) return _mergeCommitResult(transaction.value, transaction);
+
+  let finalTransaction = transaction;
+  let entryData = null;
+  try {
+    entryData = await transaction.value.entry.toData(
+      expectedUsername ?? chatMetadatas.get(chatid)?.username,
+    );
+    broadcastChatEvent(chatid, {
+      type: "message_edited",
+      payload: {
+        index: transaction.value.index,
+        entry: entryData,
+        ...(operation
+          ? {
+            editOperationId: operation.operationId,
+            payloadFingerprint: operation.payloadFingerprint,
+          }
+          : {}),
+      },
+    });
+  } catch (error) {
+    finalTransaction = _withDerivedFailure(transaction, "broadcast", error);
+  }
+
+  return _mergeCommitResult({
+    ...transaction.value,
+    entry: entryData,
+    ...(operation
+      ? {
+        editOperationId: operation.operationId,
+        payloadFingerprint: operation.payloadFingerprint,
+      }
+      : {}),
+    ...(finalTransaction.status === "committed_derived_failed"
+      ? { warning: "消息编辑已提交，但广播、流终止或派生同步至少一项失败；请刷新核对。" }
+      : {}),
+  }, finalTransaction);
 }
 
 // ============================================================
@@ -583,7 +1262,8 @@ export async function trimEntryFiles(chatid, { keep, marker } = {}) {
  *   前端循环。收口为服务端单点：路由收尾调用，任何入口接入即得同一行为，前端复制循环镜像删除。
  *
  * 【幂等】按 mode_active_chats 指针逐模式判缺（指针在且对话实存 → 保留现值），只补缺失线——
- *   对已有角色重复调用不会新建对话。
+ *   对已有角色重复调用不会新建对话。同一 username+charName 的整个“查指针→建聊
+ *   →绑卡→写指针”事务必须串行；否则两个窗口会同时看见缺失并各建一条，较早的对话变孤儿。
  * 【每条缺失线】newChat(mode)（建对话+chat_modes 徽标）→ addchar（绑卡+文件迁移+开场白，
  *   与前端 bindCharToChat 路由同一实现）→ setModeActiveChat（「XX窗口在用」指针+跨端广播）。
  * 【失败面】单模式线绑卡失败只跳过该线不中断其余；调用方应 try/catch 使其对建卡主链非致命。
@@ -592,8 +1272,34 @@ export async function trimEntryFiles(chatid, { keep, marker } = {}) {
  * @param {string} charName - 角色目录名（与 primaryCharName 同域）
  * @returns {Promise<Record<string,string>>} mode → chatid 四键全量表（已有线返现值，新建线返新值）
  */
+const _ensureModeChatQueue = new Map();
+
 export async function ensureModeChatsForChar(username, charName) {
+  const queueKey = `${username}\u0000${charName}`;
+  const previous = _ensureModeChatQueue.get(queueKey) ?? Promise.resolve();
+  // 前次失败只解除时序栅栏，不能永久堵住用户随后重试。
+  const run = previous.catch(() => {}).then(() => _ensureModeChatsForCharImpl(username, charName));
+  _ensureModeChatQueue.set(queueKey, run);
+  try {
+    return await run;
+  } finally {
+    // 只有队尾自己完成时清理；后到调用已经挂在本 Promise 后时不能删掉它的栅栏。
+    if (_ensureModeChatQueue.get(queueKey) === run) _ensureModeChatQueue.delete(queueKey);
+  }
+}
+
+async function _ensureModeChatsForCharImpl(username, charName) {
   const WINDOW_MODES = ["chat", "smart", "code", "work"]; // 窗口模式徽标域（chatStorage._VALID_CHAT_MODES 同域，禁与生成模式域混淆）
+  // [0804 根因修] 先验角色后建线。原实现每线先 newChat 再 addchar 验角色：charName 是死值时
+  //   （换用户残留 localStorage 的 p1自驱动 案）四条线全走「建空对话→绑卡失败→continue」，
+  //   磁盘留下 4 个无主空对话（E 现场实证的孤儿来源）。角色不存在 → 零建线、结构化抛错，
+  //   调用方（POST /char / ensure-mode-chats / create-char / import-char）自行映射 404。
+  if (!(getPartList(username, "chars") || []).includes(charName)) {
+    const _e = new Error("Char not found");
+    _e.code = "CHAR_NOT_FOUND";
+    _e.charname = charName;
+    throw _e;
+  }
   const modeChats = {};
   for (const mode of WINDOW_MODES) {
     const key = `${mode}:${charName}`;
@@ -607,11 +1313,33 @@ export async function ensureModeChatsForChar(username, charName) {
     try {
       await addchar(chatid, charName);
     } catch (e) {
-      console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 线绑卡失败，跳过该线:`, e?.message);
+      console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 线绑卡失败，回滚该线:`, e?.message);
+      // [0804] 绑卡失败的空对话立即回滚：本事务刚建、未绑卡、无用户内容，删除无副作用；
+      //   不回滚就是磁盘孤儿（与本函数「只补缺失线」的幂等语义矛盾——下次进来又建一条新的）。
+      try {
+        await deleteChat([chatid], username);
+      } catch (delErr) {
+        console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 线孤儿回滚失败（遗留 ${chatid}）:`, delErr?.message);
+      }
       continue;
     }
     const r = await setModeActiveChat(chatid, username, mode);
-    if (!r?.success) console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 在用指针写入失败:`, r?.message);
+    // [0804 反方补修·指针写假成功] 原实现指针写失败只 warn 仍填 modeChats[mode]——调用方
+    //   getMissingModeChatModes 只做四键真值检查 → 返回 success:true 但持久指针没落盘；
+    //   下次 ensure 见 map 空又建新线，指针写持续失败时每次开卡净增一线（前一条沦为额外历史会话）。
+    //   修法=写后从持久层读回验证（setModeActiveChat 以 meta.primaryCharName 反查定键，读回同时
+    //   验证键域一致），写失败/读回不符 → 回滚本线新建对话、不填 modeChats → missingModes 如实
+    //   上报 409 E_MODE_CHAT_INCOMPLETE，重试收敛而不是假绿。
+    const _ptrBack = loadShellData(username, "chat", "mode_active_chats")[key];
+    if (!r?.success || _ptrBack !== chatid) {
+      console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 在用指针写入失败（写=${r?.success ? "ok" : r?.message}，读回=${_ptrBack ?? "空"}），回滚该线`);
+      try {
+        await deleteChat([chatid], username);
+      } catch (delErr) {
+        console.warn(`[chatOps] ensureModeChatsForChar: ${mode} 线指针失败回滚失败（遗留 ${chatid}）:`, delErr?.message);
+      }
+      continue;
+    }
     modeChats[mode] = chatid;
   }
   return modeChats;

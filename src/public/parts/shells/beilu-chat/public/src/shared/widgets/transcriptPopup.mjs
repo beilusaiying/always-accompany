@@ -652,7 +652,7 @@ export function showTranscriptPopup(segments, rawText, meta) {
 // 录音审查弹窗（转文本前的白盒审查步骤）
 // 功能链：messageInput onstop(STT开且自动转录关) → showRecordingReviewPopup
 //   → 用户试听回放 + 看白盒(格式/大小/时长/峰值/RMS/电平判定)
-//   → 转文本(_handleSttTranscription) / 作为附件(原附件路径) / 取消
+//   → 转文本(_handleSttTranscription) / 取消。主麦克风不承担音频附件语义。
 // ============================================================
 
 let _rrContainer = null;
@@ -681,7 +681,6 @@ function _rrEnsureDOM() {
     <div class="tp-whitebox" data-role="rr-whitebox"></div>
     <div class="tp-footer">
       <button class="tp-btn tp-btn-ghost" data-role="rr-cancel">取消</button>
-      <button class="tp-btn tp-btn-secondary" data-role="rr-attach">作为附件</button>
       <button class="tp-btn tp-btn-primary" data-role="rr-transcribe">转文本</button>
     </div>
   `;
@@ -707,17 +706,16 @@ function _rrEnsureDOM() {
   };
   _rrPopup.querySelector('[data-role="rr-close"]').addEventListener('click', () => done('cancel'));
   _rrPopup.querySelector('[data-role="rr-cancel"]').addEventListener('click', () => done('cancel'));
-  _rrPopup.querySelector('[data-role="rr-attach"]').addEventListener('click', () => done('attach'));
   _rrPopup.querySelector('[data-role="rr-transcribe"]').addEventListener('click', () => done('transcribe'));
   _rrContainer.addEventListener('click', (e) => { if (e.target === _rrContainer) done('cancel'); });
 }
 
 /**
- * 显示录音审查弹窗：回放试听 + 白盒诊断，用户决定转文本/作附件/取消。
+ * 显示录音审查弹窗：回放试听 + 白盒诊断，用户决定转文本或取消。
  *
  * @param {Blob} audioBlob - 录音 Blob
  * @param {{duration:number, peak:number, rms:number}|null} stats - 前端 decodeAudioData 体检结果（null=解码失败）
- * @returns {Promise<'transcribe'|'attach'|'cancel'>}
+ * @returns {Promise<'transcribe'|'cancel'>}
  */
 export function showRecordingReviewPopup(audioBlob, stats) {
   _rrEnsureDOM();

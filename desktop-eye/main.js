@@ -98,7 +98,10 @@ const INJECT_ENDPOINT = '/api/eye/inject'
 // orb per-user 鉴权令牌(beilu-eye/main.mjs 拉起时经 env 注入,绑定本桌宠拥有者 username)。
 // orb 请求(orb-consume)带 header x-pet-token → 端点反解 username,只取该 user 的 orb 槽。
 // 缺失(直跑/旧拉起)=空字符串,端点缺 token → 403(隔离生效);单用户经 beilu-eye 拉起恒有令牌。
-const PET_TOKEN = process.env.BEILU_PET_TOKEN || ''
+// 后端重启时旧 Electron 可以继续存活；新监督者通过 Electron 单例 second-instance
+// 把新令牌交给既有实例，因此令牌必须可原子替换，不能烙死为启动期 const。
+let PET_TOKEN = process.env.BEILU_PET_TOKEN || ''
+let _autoCaptureContext = null
 
 // ============================================================
 // 全局变量
@@ -310,7 +313,7 @@ function readModelNames() {
 // emotionTag 不入本地默认(凛倾"散写"纠偏):值只经 beilu 同步(PET_SYNC_KEYS),离线缺失时消费端 _extractEmotion 白检自回退 'emotion'。
 // orphanExitSec/hitPollMs/alphaHitThreshold(凛倾 2026-07-13"为什么要设置硬编码而不是用户可以自己关闭"):
 //   原 45000/90/10 写死;默认=原值零行为变化;权威默认单源=injection_state PET_SETTINGS_DEFAULT,此处为离线兜底。
-const PET_SETTINGS_DEFAULT = { bubbleOpacity: 0.95, bubbleDwellMs: 6000, bubbleColor: '', bubbleTextColor: '', bubbleRadius: -1, passthrough: false, idleExpression: '', modelName: '', dynamics: {}, charModels: {}, bannerEnabled: true, bannerMaxChars: 0, petCorner: 'br', notifySound: false, orphanExitSec: 45, hitPollMs: 90, alphaHitThreshold: 10, captureHotkey: 'Alt+Shift+S', orbPollSec: 3 }
+const PET_SETTINGS_DEFAULT = { bubbleOpacity: 0.95, bubbleDwellMs: 6000, bubbleColor: '', bubbleTextColor: '', bubbleRadius: -1, passthrough: false, idleExpression: '', modelName: '', dynamics: {}, charModels: {}, bannerEnabled: true, bannerMaxChars: 0, companionMaxChars: 0, petCorner: 'br', notifySound: false, orphanExitSec: 45, hitPollMs: 90, alphaHitThreshold: 10, captureHotkey: 'Alt+Shift+S', orbPollSec: 3, companionStreamPollMs: 200, voiceAlwaysOn: false, voiceQuickHotkey: 'Alt+Shift+V', voiceWakeWords: 'beilu,贝露', voiceCaptureWithQuestion: false, voiceActivationPeak: 0.02, voiceSilenceMs: 1000, voiceMinSpeechMs: 300, voiceMaxUtteranceSec: 20 }
 let petSettings = { ...PET_SETTINGS_DEFAULT }
 function _petSettingsPath() { return path.join(app.getPath('userData'), 'pet-settings.json') }
 function loadPetSettings() {
@@ -373,6 +376,8 @@ function setPetSetting(key, value) {
 		_postPetSettingsToBeilu({ [key]: value }).catch(() => {})
 		_lastBeiluSync = JSON.stringify(_displaySubset(petSettings))
 	}
+	if (key === 'voiceQuickHotkey') applyQuickVoiceHotkey()
+	if (key === 'voiceAlwaysOn' || key.startsWith('voice') || key === 'sttDevice' || key === 'sttDenoise') _reconcileAlwaysVoice()
 }
 
 // 桌宠渲染资源根目录（beilu-chat 前端 public 目录）。
@@ -393,12 +398,27 @@ const BEILU_PUBLIC_DIR = path.resolve(
 // 应用初始化
 // ============================================================
 
-const gotLock = app.requestSingleInstanceLock()
+const HANDOFF_EXIT_CODE = 73
+const gotLock = app.requestSingleInstanceLock({
+	beiluPort: BEILU_PORT,
+	petToken: PET_TOKEN,
+})
 if (!gotLock) {
-	console.log('[desktop-eye] 已有实例运行，退出')
-	app.quit()
-}
-app.whenReady().then(() => {
+	// app.quit() 只排队退出，旧实现仍继续进入 whenReady、创建窗口并注册快捷键，
+	// 于是每次自愈都会撞快捷键/cache 后才退出。显式 exit + bootstrap guard 保证零窗口。
+	console.log('[desktop-eye] 已有实例运行，新令牌已交接，当前进程退出')
+	app.exit(HANDOFF_EXIT_CODE)
+} else {
+	app.on('second-instance', (_event, _argv, _workingDirectory, additionalData) => {
+		const nextToken = typeof additionalData?.petToken === 'string' ? additionalData.petToken : ''
+		if (!nextToken) return
+		PET_TOKEN = nextToken
+		if (_autoCaptureContext) _autoCaptureContext.token = nextToken
+		_companionStreamSeq = 0
+		_beiluLastOkAt = Date.now()
+		console.log('[desktop-eye] 已接管新后端令牌，继续复用当前桌宠实例')
+	})
+	app.whenReady().then(() => {
 	if (app.dock) app.dock.hide()
 	loadPetSettings()
 	createTray()
@@ -411,15 +431,20 @@ app.whenReady().then(() => {
 	startOrbMessagePolling()
 	// 自截图(AI 自主/游戏陪伴):完整移植自 beilu_eye.py(凛倾 2026-07-12"直接替换beilueye"),
 	// 5s 轮询 captureRequested → 截屏+去重+元数据 → inject。python 眼摘除后本模块是唯一消费者。
-	try { require('./autoCapture.js').startGcPolling({ host: BEILU_HOST, port: BEILU_PORT, token: PET_TOKEN }) } catch (e) { console.warn('[desktop-eye] 自截图模块加载失败:', e.message) }
+	try {
+		_autoCaptureContext = { host: BEILU_HOST, port: BEILU_PORT, token: PET_TOKEN }
+		require('./autoCapture.js').startGcPolling(_autoCaptureContext)
+	} catch (e) { console.warn('[desktop-eye] 自截图模块加载失败:', e.message) }
 	console.log('[desktop-eye] 桌面截图客户端已启动(悬浮球已删除)，快捷键: Alt+Shift+S')
-})
+	})
+}
 
 // ============================================================
 // 悬浮球 AI 横幅 (orbMessage) polling
 // ============================================================
 
 let _orbPollTimer = null
+let _companionStreamTimer = null
 // 轮询秒数可配(C1 去硬编码 2026-07-13):petSettings.orbPollSec,clamp 1~30(=AI 消息上气泡最大延迟;
 // 改动经 applyOrbPollInterval 重建定时器即时生效)。默认 3s=原 ORB_POLL_INTERVAL 值。
 function _orbPollMs() {
@@ -471,6 +496,10 @@ function startOrbMessagePolling() {
 	_initPetSettingsFromBeilu()
 	_fetchPetCapabilities() // 任务⑥:选项/预设单源拉取(失败=离线兜底)
 	_orbPollTimer = setInterval(_orbPollTick, _orbPollMs())
+	if (!_companionStreamTimer) {
+		const ms = Math.max(100, Math.min(2000, Number(petSettings.companionStreamPollMs) || PET_SETTINGS_DEFAULT.companionStreamPollMs))
+		_companionStreamTimer = setInterval(() => _consumeCompanionStream().catch(() => {}), ms)
+	}
 }
 function _orbPollTick() {
 	_consumeOrbMessage().catch(() => { /* 静默 */ })
@@ -482,6 +511,7 @@ function _orbPollTick() {
 	const _oes = Number(petSettings.orphanExitSec)
 	if (_oes > 0 && Date.now() - _beiluLastOkAt > _oes * 1000) {
 		clearInterval(_orbPollTimer) // 防退场窗口内重复触发
+		if (_companionStreamTimer) clearInterval(_companionStreamTimer)
 		console.log('[desktop-eye] beilu 后端持续失联 ' + _oes + 's,桌宠随宿主退出')
 		try { if (Notification.isSupported()) new Notification({ title: '桌宠已退出', body: 'beilu 已关闭;重新启动 beilu 会自动回来', silent: true }).show() } catch {}
 		setTimeout(() => app.quit(), 1500)
@@ -567,16 +597,17 @@ function _initPetSettingsFromBeilu() {
 								if (k === 'petCorner') { delete petSettings.petPosCx; delete petSettings.petPosBottom }
 							}
 						}
-						if (changed) { savePetSettings(); sendBubbleConfig(); sendPetConfig(); applyPetPassthrough(!!petSettings.passthrough); applyPetPosition(); applyPetSizes(); applyHitPollInterval(); applyCaptureHotkey(); applyMenuHotkey(); applyOrbPollInterval() }
+						if (changed) { savePetSettings(); sendBubbleConfig(); sendPetConfig(); applyPetPassthrough(!!petSettings.passthrough); applyPetPosition(); applyPetSizes(); applyHitPollInterval(); applyCaptureHotkey(); applyMenuHotkey(); applyQuickVoiceHotkey(); applyOrbPollInterval() }
 					} catch { /* beilu 无 store/解析失败:用本地 */ }
 					// 只设基线不回写(基线口径=非 raw 轮询的 _displaySubset;写侧唯一入口=用户操作,见函数头注释)
 					_lastBeiluSync = JSON.stringify(_displaySubset(petSettings))
+					_reconcileAlwaysVoice()
 					resolve()
 				})
 			},
 		)
-		req.on('error', () => { _lastBeiluSync = JSON.stringify(_displaySubset(petSettings)); resolve() })
-		req.on('timeout', () => { req.destroy(); _lastBeiluSync = JSON.stringify(_displaySubset(petSettings)); resolve() })
+		req.on('error', () => { _lastBeiluSync = JSON.stringify(_displaySubset(petSettings)); _reconcileAlwaysVoice(); resolve() })
+		req.on('timeout', () => { req.destroy(); _lastBeiluSync = JSON.stringify(_displaySubset(petSettings)); _reconcileAlwaysVoice(); resolve() })
 		req.end()
 	})
 }
@@ -589,10 +620,24 @@ function _syncPetSettingsFromBeilu() {
 			(res) => {
 				let body = ''
 				res.on('data', (c) => { body += c })
-				res.on('end', () => {
-					try {
-						const data = JSON.parse(body)
-						const js = JSON.stringify(_displaySubset(data))
+			res.on('end', () => {
+				try {
+					const data = JSON.parse(body)
+					// 进程已被新后端接管时 petProcess 不再是当前 Deno 的 ChildProcess，
+					// 仍以同一权威源完成关闭，避免再次留下跨重启孤儿。
+					// [D5 结构版 2026-08-04] 退出判据升级为 effective desired（显式开关 || 互动租约）：
+					//   互动会话临时开启的桌宠 petEnabled 恒为 false，只看 petEnabled 会被本轮询自杀。
+					//   petEffectiveDesired 由后端 GET /api/eye/pet-settings 计算下发（非设置键，不进基线对账）；
+					//   旧后端无此字段时回退旧判据 petEnabled===false（混版兼容，不留孤儿）。
+					const _effOff = data.petEffectiveDesired === false ||
+						(data.petEffectiveDesired === undefined && data.petEnabled === false)
+					if (_effOff) {
+						console.log('[desktop-eye] 后端已撤回桌宠运行意愿(显式关闭且无互动租约)，当前实例退出')
+						app.quit()
+						resolve()
+						return
+					}
+					const js = JSON.stringify(_displaySubset(data))
 						if (_lastBeiluSync !== null && js !== _lastBeiluSync) {
 							_lastBeiluSync = js
 							_applyBeiluSettings(data)
@@ -629,7 +674,9 @@ function _applyBeiluSettings(data) {
 	applyHitPollInterval() // hitPollMs 随 web 设置即时生效(重建定时器)
 	applyCaptureHotkey() // captureHotkey 随 web 设置即时重注册
 	applyMenuHotkey() // menuHotkey 同步即时重注册(凛倾 0722 悬浮对话快捷键)
+	applyQuickVoiceHotkey() // voiceQuickHotkey 同步即时重注册
 	applyOrbPollInterval() // orbPollSec 随 web 设置即时重建轮询
+	_reconcileAlwaysVoice()
 	if (tray) createTray()
 	console.log('[desktop-eye] 已应用 web 设置中心改动(对话框/动态/模型/穿透/位置/尺寸)')
 }
@@ -688,12 +735,39 @@ function _consumeOrbMessage() {
 	})
 }
 
-function _showOrbBanner(text, emotionFromServer) {
+let _companionStreamSeq = 0
+function _consumeCompanionStream() {
+	return new Promise((resolve) => {
+		const req = http.request(
+			{ host: BEILU_HOST, port: BEILU_PORT, path: '/api/eye/companion-stream?since=' + _companionStreamSeq, method: 'GET', timeout: 2000, headers: { 'x-pet-token': PET_TOKEN } },
+			(res) => {
+				let body = ''
+				res.on('data', (chunk) => { body += chunk })
+				res.on('end', () => {
+					try {
+						const data = JSON.parse(body)
+						if (data.hasUpdate && Number(data.seq) > _companionStreamSeq) {
+							_companionStreamSeq = Number(data.seq)
+							if (data.charName && data.charName !== _activeChar) { _activeChar = data.charName; sendPetConfig() }
+							if (data.text) _showOrbBanner(data.text, '', { stream: data.phase !== 'final', companion: true })
+						}
+					} catch { /* 下轮重试 */ }
+					resolve()
+				})
+			},
+		)
+		req.on('error', () => resolve())
+		req.on('timeout', () => { req.destroy(); resolve() })
+		req.end()
+	})
+}
+
+function _showOrbBanner(text, emotionFromServer, options = {}) {
 	// 用户通知偏好(设计⚙通知,存 pet-settings,默认不改变行为):bannerEnabled=false 则不弹横幅/对话框;
-	// bannerMaxChars>0 则横幅文本超出截断加…(0=完整显示)。emotion 路由不受影响(表情仍同步)。
+	// 普通通知和陪伴正文分别使用 bannerMaxChars / companionMaxChars，避免短通知偏好截断完整回答。
 	if (petSettings.bannerEnabled === false) return
 	// AI 消息声音(设计⚙通知,默认关):开则系统提示音(shell.beep,OS 级可靠,无需音频资产/手势)。
-	if (petSettings.notifySound === true) { try { shell.beep() } catch {} }
+	if (petSettings.notifySound === true && options.stream !== true) { try { shell.beep() } catch {} }
 	// AI 对话【渲染】在桌宠角色下方的对话框窗(凛倾决策:不弹系统通知;悬浮球状态灯已随球删除)。
 	// 路由到桌宠：emotion 优先用后端结构化字段(replyHandler 抽好的枚举)，回退到从文本剥 <emotion> 标签
 	// (兼容 orbMessage 文本内嵌标签的旧形态)。clean=去标签纯文本。
@@ -701,7 +775,7 @@ function _showOrbBanner(text, emotionFromServer) {
 	const ext = _extractEmotion(text)
 	const emotion = emotionFromServer || ext.emotion
 	let clean = ext.clean
-	const _maxChars = Number(petSettings.bannerMaxChars) || 0
+	const _maxChars = Number(options.companion === true ? petSettings.companionMaxChars : petSettings.bannerMaxChars) || 0
 	if (_maxChars > 0 && clean.length > _maxChars) clean = clean.slice(0, _maxChars) + '…'
 	if (petWindow && !petWindow.isDestroyed()) {
 		try { petWindow.webContents.send('pet-drive', { emotion, text: clean }) } catch {}
@@ -1202,24 +1276,31 @@ ipcMain.on('pet-hit-say', (_event, text) => {
 // 触碰热区 send(触碰设计②):用户预设内容 → beilu /api/eye/pet-message(pet-token 反解 user)→ 陪伴触碰轮
 // → AI 回应经既有 orb-consume→气泡链回来。失败(陪伴未运行/beilu 不在)=reason 上气泡,诚实反馈不静默。
 // 悬浮菜单「对话」输入与触碰热区共用本函数(同一后端通道,不造第二条)。
-function _postPetMessage(t) {
-	const body = JSON.stringify({ text: t })
-	const req = http.request(
-		{ host: BEILU_HOST, port: BEILU_PORT, path: '/api/eye/pet-message', method: 'POST', timeout: 5000, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'x-pet-token': PET_TOKEN } },
-		(res) => {
-			let b = ''
-			res.on('data', (c) => { b += c })
-			res.on('end', () => {
-				try {
-					const j = JSON.parse(b)
-					if (!j.success) _showOrbBanner(j.reason || j.error || '发送失败')
-				} catch { /* 响应异常:静默(AI 回应本就异步经 orb 链) */ }
-			})
-		},
-	)
-	req.on('error', () => _showOrbBanner('发送失败:beilu 未运行'))
-	req.on('timeout', () => { req.destroy(); _showOrbBanner('发送超时') })
-	req.write(body); req.end()
+function _postPetMessage(t, options = {}) {
+	return new Promise((resolve) => {
+		const body = JSON.stringify({ text: t, captureNow: options.captureNow === true })
+		const req = http.request(
+			{ host: BEILU_HOST, port: BEILU_PORT, path: '/api/eye/pet-message', method: 'POST', timeout: 130000, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'x-pet-token': PET_TOKEN } },
+			(res) => {
+				let b = ''
+				res.on('data', (c) => { b += c })
+				res.on('end', () => {
+					try {
+						const j = JSON.parse(b)
+						if (!j.success) _showOrbBanner(j.reason || j.error || '发送失败')
+						resolve(j)
+					} catch {
+						const result = { success: false, error: '发送响应无法解析' }
+						_showOrbBanner(result.error)
+						resolve(result)
+					}
+				})
+			},
+		)
+		req.on('error', () => { const result = { success: false, error: '发送失败:beilu 未运行' }; _showOrbBanner(result.error); resolve(result) })
+		req.on('timeout', () => { req.destroy(); const result = { success: false, error: '发送超时' }; _showOrbBanner(result.error); resolve(result) })
+		req.write(body); req.end()
+	})
 }
 ipcMain.on('pet-hit-send', (_event, text) => {
 	const t = typeof text === 'string' ? text.trim() : ''
@@ -1266,6 +1347,8 @@ function sttEnsureViaBeilu(cb) {
 ipcMain.on('stt-record', (event, cmd) => {
 	const reply = (r) => { try { event.sender.send('stt-result', r) } catch {} }
 	const doStart = (retried, ensured) => {
+		if (_quickVoicePhase !== 'idle') return reply({ phase: 'error', error: '快速语音正在使用麦克风' })
+		if (_alwaysVoiceActive || _alwaysVoicePolling) return reply({ phase: 'error', error: '常开语音正在使用麦克风，请先关闭常开模式' })
 		// device:petSettings.sttDevice(网页设置中心可配)缺省=系统默认输入
 		sttRequest('POST', '/record/start', { device: (petSettings && petSettings.sttDevice) ?? null }, 5000, (err, code, j) => {
 			if (code === 409 && !retried) {
@@ -1297,6 +1380,217 @@ ipcMain.on('stt-record', (event, cmd) => {
 		})
 	}
 })
+
+// ── 常开语音：STT 服务拥有录音/VAD，Electron 只持 lifecycle、唤醒词和陪伴消息路由。 ──
+let _alwaysVoiceEpoch = 0
+let _alwaysVoicePollTimer = null
+let _alwaysVoiceRetryTimer = null
+let _alwaysVoiceActive = false
+let _alwaysVoiceErrorShown = ''
+
+function _sttPromise(method, pathname, body, timeout) {
+	return new Promise((resolve, reject) => sttRequest(method, pathname, body, timeout, (err, code, data) => {
+		if (err) return reject(err)
+		if (code < 200 || code >= 300) return reject(new Error((data && data.error) || ('HTTP ' + code)))
+		resolve(data || {})
+	}))
+}
+function _sttEnsurePromise() {
+	return new Promise((resolve, reject) => sttEnsureViaBeilu((err, code, data) => {
+		if (err) return reject(err)
+		if (code !== 200) return reject(new Error((data && data.error) || ('HTTP ' + code)))
+		resolve(data || {})
+	}))
+}
+function _wakeQuestion(text) {
+	const raw = String(text || '').trim()
+	const words = String(petSettings.voiceWakeWords || '').split(/[,，;；\n]/).map((x) => x.trim()).filter(Boolean)
+	const lower = raw.toLocaleLowerCase()
+	for (const word of words) {
+		const idx = lower.indexOf(word.toLocaleLowerCase())
+		// 唤醒词应出现在句首附近；避免普通对话中偶然提及名字也触发。
+		if (idx < 0 || idx > 8) continue
+		const question = raw.slice(idx + word.length).replace(/^[\s,，。.!！?？:：、]+/, '').trim()
+		if (question) return { wakeWord: word, question }
+	}
+	return null
+}
+function _clearAlwaysVoiceTimers() {
+	if (_alwaysVoicePollTimer) clearInterval(_alwaysVoicePollTimer)
+	if (_alwaysVoiceRetryTimer) clearTimeout(_alwaysVoiceRetryTimer)
+	_alwaysVoicePollTimer = null
+	_alwaysVoiceRetryTimer = null
+}
+function _scheduleAlwaysVoiceRetry(epoch) {
+	if (epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+	if (_alwaysVoiceRetryTimer) clearTimeout(_alwaysVoiceRetryTimer)
+	_alwaysVoiceRetryTimer = setTimeout(() => _startAlwaysVoiceCycle(epoch), 3000)
+}
+async function _startAlwaysVoiceCycle(epoch = _alwaysVoiceEpoch, ensured = false) {
+	if (epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+	_clearAlwaysVoiceTimers()
+	try {
+		await _sttPromise('POST', '/record/start', {
+			device: petSettings.sttDevice ?? null,
+			continuous: true,
+			peak_threshold: Number(petSettings.voiceActivationPeak) || PET_SETTINGS_DEFAULT.voiceActivationPeak,
+			silence_ms: Number(petSettings.voiceSilenceMs) || PET_SETTINGS_DEFAULT.voiceSilenceMs,
+			min_speech_ms: Number(petSettings.voiceMinSpeechMs) || PET_SETTINGS_DEFAULT.voiceMinSpeechMs,
+			max_utterance_s: Number(petSettings.voiceMaxUtteranceSec) || PET_SETTINGS_DEFAULT.voiceMaxUtteranceSec,
+			pre_roll_s: 0.5,
+		}, 5000)
+		if (epoch !== _alwaysVoiceEpoch) return
+		_alwaysVoiceActive = true
+		_alwaysVoiceErrorShown = ''
+		_alwaysVoicePollTimer = setInterval(() => _pollAlwaysVoice(epoch), 150)
+	} catch (e) {
+		if (!ensured && /ECONNREFUSED|connect/i.test(e.message || '')) {
+			try { await _sttEnsurePromise(); return _startAlwaysVoiceCycle(epoch, true) } catch (ensureErr) { e = ensureErr }
+		}
+		_alwaysVoiceActive = false
+		if (_alwaysVoiceErrorShown !== e.message) { _alwaysVoiceErrorShown = e.message; _showOrbBanner('常开语音暂不可用: ' + e.message) }
+		_scheduleAlwaysVoiceRetry(epoch)
+	}
+}
+let _alwaysVoicePolling = false
+async function _pollAlwaysVoice(epoch) {
+	if (_alwaysVoicePolling || epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+	_alwaysVoicePolling = true
+	let cycleEnded = false
+	try {
+		const status = await _sttPromise('GET', '/record/status', null, 2000)
+		if (epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+		if (!status.utterance_ready) return
+		cycleEnded = true
+		_clearAlwaysVoiceTimers()
+		_alwaysVoiceActive = false
+		await _sttPromise('POST', '/record/stop', {}, 8000)
+		if (epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+		const tr = await _sttPromise('POST', '/record/transcribe', {
+			language: petSettings.sttLanguage || 'auto',
+			hotwords: petSettings.voiceWakeWords || '',
+			denoise: petSettings.sttDenoise !== false,
+			max_new_tokens: 2048,
+		}, 120000)
+		if (epoch !== _alwaysVoiceEpoch || petSettings.voiceAlwaysOn !== true) return
+		const text = ((tr.segments || []).map((s) => s.text).join(' ').trim()) || String(tr.raw_text || '').replace(/\[[^\]]*\]/g, '').trim()
+		const hit = _wakeQuestion(text)
+		if (hit) _postPetMessage(hit.question, { captureNow: petSettings.voiceCaptureWithQuestion === true })
+	} catch (e) {
+		// 用户关闭常开模式或切到快速语音后，旧 epoch 不得再停掉新录音/发错误气泡。
+		if (epoch !== _alwaysVoiceEpoch) return
+		cycleEnded = true
+		_alwaysVoiceActive = false
+		try { await _sttPromise('POST', '/record/stop', {}, 3000) } catch {}
+		if (_alwaysVoiceErrorShown !== e.message) { _alwaysVoiceErrorShown = e.message; _showOrbBanner('常开语音处理失败: ' + e.message) }
+	} finally {
+		_alwaysVoicePolling = false
+		if (cycleEnded && epoch === _alwaysVoiceEpoch && petSettings.voiceAlwaysOn === true) _startAlwaysVoiceCycle(epoch)
+	}
+}
+function _reconcileAlwaysVoice() {
+	const enabled = petSettings.voiceAlwaysOn === true
+	if (!enabled) {
+		// 无论当前处于录音、轮询还是转写 await，都切 epoch；旧轮完成后不能再发送最后一条。
+		++_alwaysVoiceEpoch
+		_clearAlwaysVoiceTimers()
+		const wasUsingRecorder = _alwaysVoiceActive || _alwaysVoicePolling
+		_alwaysVoiceActive = false
+		if (wasUsingRecorder) _sttPromise('POST', '/record/stop', {}, 5000).catch(() => {})
+		return
+	}
+	// 快速语音临时独占 STT 单槽；完成后会再次 reconcile 恢复常开。
+	if (_quickVoicePhase !== 'idle') return
+	if (!_alwaysVoiceActive && !_alwaysVoicePollTimer && !_alwaysVoiceRetryTimer) {
+		const epoch = ++_alwaysVoiceEpoch
+		_startAlwaysVoiceCycle(epoch)
+	}
+}
+
+// ── 快速语音发送：按钮/全局快捷键共用一个状态机。按一次录音，再按一次停止→转写→自动发送。 ──
+let _quickVoicePhase = 'idle'
+let _quickVoiceTask = null
+function _emitQuickVoiceStatus(payload) {
+	try {
+		if (petMenuWindow && !petMenuWindow.isDestroyed()) petMenuWindow.webContents.send('quick-voice-status', { phase: _quickVoicePhase, ...payload })
+	} catch {}
+}
+async function _pauseAlwaysVoiceForQuick() {
+	const wasUsingRecorder = _alwaysVoiceActive || _alwaysVoicePolling
+	++_alwaysVoiceEpoch
+	_clearAlwaysVoiceTimers()
+	_alwaysVoiceActive = false
+	if (wasUsingRecorder) {
+		try { await _sttPromise('POST', '/record/stop', {}, 5000) } catch {}
+		// 让旧轮看到 epoch 已变化并退出，避免它随后 stop 掉快速录音。
+		for (let i = 0; i < 40 && _alwaysVoicePolling; i++) await new Promise((resolve) => setTimeout(resolve, 50))
+	}
+}
+async function _beginQuickVoice() {
+	_quickVoicePhase = 'starting'
+	_emitQuickVoiceStatus({ note: '正在连接语音服务…' })
+	await _pauseAlwaysVoiceForQuick()
+	const start = async () => _sttPromise('POST', '/record/start', { device: petSettings.sttDevice ?? null }, 5000)
+	let result
+	try {
+		result = await start()
+	} catch (e) {
+		if (!/ECONNREFUSED|connect/i.test(e.message || '')) throw e
+		_emitQuickVoiceStatus({ note: 'STT 服务启动中（首次约10~20秒）…' })
+		await _sttEnsurePromise()
+		result = await start()
+	}
+	_quickVoicePhase = 'recording'
+	_emitQuickVoiceStatus({ device: result.device_name || '默认设备' })
+	_showOrbBanner(_registeredQuickVoiceHotkey
+		? '快速语音：录音中，再按 ' + _registeredQuickVoiceHotkey + ' 结束并发送'
+		: '快速语音：录音中，再点麦克风按钮结束并发送')
+}
+async function _finishQuickVoice() {
+	_quickVoicePhase = 'transcribing'
+	_emitQuickVoiceStatus({ note: '正在转文字…' })
+	_showOrbBanner('快速语音：正在转文字…')
+	await _sttPromise('POST', '/record/stop', {}, 8000)
+	const tr = await _sttPromise('POST', '/record/transcribe', {
+		language: petSettings.sttLanguage || 'auto',
+		hotwords: petSettings.voiceWakeWords || '',
+		denoise: petSettings.sttDenoise !== false,
+		max_new_tokens: 2048,
+	}, 120000)
+	const text = ((tr.segments || []).map((s) => s.text).join(' ').trim()) || String(tr.raw_text || '').replace(/\[[^\]]*\]/g, '').trim()
+	if (!text) throw new Error('未识别到语音内容')
+	_quickVoicePhase = 'sending'
+	_emitQuickVoiceStatus({ text, note: '已转文字，正在发送…' })
+	const sent = await _postPetMessage(text, { captureNow: petSettings.voiceCaptureWithQuestion === true })
+	if (!sent?.success) throw new Error(sent?.error || sent?.reason || '发送失败')
+	_emitQuickVoiceStatus({ phase: 'sent', text, accepted: sent.accepted === true, queued: sent.queued === true })
+	_showOrbBanner(sent.queued ? '快速语音已排队' : '快速语音已发送，正在回复…')
+}
+function _toggleQuickVoice() {
+	if (_quickVoicePhase === 'starting' || _quickVoicePhase === 'transcribing' || _quickVoicePhase === 'sending') {
+		_showOrbBanner('快速语音正在' + (_quickVoicePhase === 'starting' ? '连接' : _quickVoicePhase === 'transcribing' ? '转文字' : '发送') + '，请稍候')
+		return
+	}
+	if (_quickVoiceTask) return
+	const work = _quickVoicePhase === 'recording' ? _finishQuickVoice : _beginQuickVoice
+	_quickVoiceTask = work().catch(async (e) => {
+		if (_quickVoicePhase === 'recording' || _quickVoicePhase === 'transcribing') {
+			try { await _sttPromise('POST', '/record/stop', {}, 3000) } catch {}
+		}
+		_emitQuickVoiceStatus({ phase: 'error', error: e.message || String(e) })
+		_showOrbBanner('快速语音失败: ' + (e.message || e))
+	}).finally(() => {
+		// 开始动作成功时必须停在 recording，等待第二次按键；其余动作回 idle。
+		if (_quickVoicePhase !== 'recording') {
+			_quickVoicePhase = 'idle'
+			_emitQuickVoiceStatus({})
+			// 快速录音期间用户也可能刚打开常开模式；结束后一律按当前权威设置对账，而非只看开始时快照。
+			if (petSettings.voiceAlwaysOn === true) _reconcileAlwaysVoice()
+		}
+		_quickVoiceTask = null
+	})
+}
+ipcMain.on('voice-quick-toggle', () => _toggleQuickVoice())
 let _petScaleSaveTimer = null
 ipcMain.on('pet-scale', (_event, dir) => {
 	// 滚轮缩放:固定角色底边(从脚下长高/缩矮)，对话框跟随。
@@ -1360,6 +1654,9 @@ function togglePetMenu() {
 				sayMaxChars: Number(_petCapsCache?.hitLimits?.sayMaxChars) > 0 ? Number(_petCapsCache.hitLimits.sayMaxChars) : 500,
 				hotkey: _hotkey(),
 				menuHotkey: _menuHotkey(),
+				quickVoiceHotkey: _registeredQuickVoiceHotkey,
+				quickVoiceConfiguredHotkey: _quickVoiceHotkey(),
+				quickVoicePhase: _quickVoicePhase,
 				// T8(凛倾 0722):设置页装下完整操作项——停留时间/待机表情/动态预设选项数据(与托盘同源)
 				menu: _menuOptionData(),
 			})
@@ -1411,7 +1708,9 @@ ipcMain.on('pet-menu-action', (_event, msg) => {
 	if (a === 'crop') { if (petMenuWindow && !petMenuWindow.isDestroyed()) petMenuWindow.close(); startCropCapture(); return }
 	if (a === 'autoshot') {
 		if (petMenuWindow && !petMenuWindow.isDestroyed()) petMenuWindow.close()
-		try { require('./autoCapture.js').autoCaptureAndSend({ host: BEILU_HOST, port: BEILU_PORT, token: PET_TOKEN }) } catch (e) { console.warn('[desktop-eye] 自截图触发失败:', e.message) }
+		// 用户显式点击“快速截图”=立即作为一条视觉消息送入当前 AI 对话；只有后台定时/陪伴
+		// requestId 截图保持 passive，由各自轮次精确消费。force 避免用户主动截图被静止帧去重吞掉。
+		try { require('./autoCapture.js').autoCaptureAndSend({ host: BEILU_HOST, port: BEILU_PORT, token: PET_TOKEN }, { mode: 'active', force: true }) } catch (e) { console.warn('[desktop-eye] 自截图触发失败:', e.message) }
 		return
 	}
 	if (a === 'hide') { if (petMenuWindow && !petMenuWindow.isDestroyed()) petMenuWindow.close(); togglePetWindow(); return }
@@ -1501,7 +1800,35 @@ function applyMenuHotkey() {
 		_showOrbBanner('悬浮对话快捷键「' + want + '」注册失败(格式非法或被占用),已回退 Alt+Shift+D')
 	}
 }
-function registerShortcuts() { applyCaptureHotkey(); applyMenuHotkey() }
+// 快速语音发送快捷键：第一次开始录音，第二次停止、转写并自动送入陪伴主链。
+let _registeredQuickVoiceHotkey = ''
+function _quickVoiceHotkey() {
+	const v = petSettings.voiceQuickHotkey
+	return typeof v === 'string' ? v.trim() : PET_SETTINGS_DEFAULT.voiceQuickHotkey
+}
+function applyQuickVoiceHotkey() {
+	const want = _quickVoiceHotkey()
+	if (want === _registeredQuickVoiceHotkey) return
+	if (!want) {
+		if (_registeredQuickVoiceHotkey) { try { globalShortcut.unregister(_registeredQuickVoiceHotkey) } catch {} }
+		_registeredQuickVoiceHotkey = ''
+		_showOrbBanner('快速语音全局快捷键已关闭；仍可点击对话台麦克风使用')
+		return
+	}
+	const previous = _registeredQuickVoiceHotkey
+	let ok = false
+	try { ok = globalShortcut.register(want, () => _toggleQuickVoice()) } catch { ok = false }
+	if (ok) {
+		if (previous) { try { globalShortcut.unregister(previous) } catch {} }
+		_registeredQuickVoiceHotkey = want
+		_showOrbBanner('快速语音快捷键已设为 ' + want)
+		return
+	}
+	console.error('[desktop-eye] 快速语音快捷键注册失败:', want)
+	_showOrbBanner('快速语音快捷键「' + want + '」注册失败（格式非法或已被占用）' +
+		(previous ? '；仍保留 ' + previous : '；当前没有全局快捷键'))
+}
+function registerShortcuts() { applyCaptureHotkey(); applyMenuHotkey(); applyQuickVoiceHotkey() }
 
 // ============================================================
 // 截图 + 框选
@@ -1601,12 +1928,10 @@ ipcMain.on('crop-cancel', () => {
 	}
 })
 
-ipcMain.on('send-screenshot', async (event, data) => {
-	if (dialogWindow) {
-		dialogWindow.close()
-		dialogWindow = null
-	}
-	await sendToBeilu(data.imageBase64, data.message, data.mode || 'active')
+ipcMain.handle('send-screenshot', async (_event, data) => {
+	// 由 renderer 等待真实后端回执；失败时保留窗口、截图和输入，用户可直接重试。
+	// 旧 on 通道先关窗再 await，插件接线一抖就把唯一草稿和截图一起丢失。
+	return await sendToBeilu(data?.imageBase64 || '', data?.message || '', data?.mode || 'active')
 })
 
 ipcMain.on('send-cancel', () => {
@@ -1689,7 +2014,10 @@ function sendToBeilu(imageBase64, message, mode) {
 			let responseData = ''
 			res.on('data', (chunk) => { responseData += chunk })
 			res.on('end', () => {
-				if (res.statusCode === 200) {
+				let payload = null
+				try { payload = JSON.parse(responseData) } catch { /* 非 JSON 不能证明注入成功 */ }
+				const statusOk = Number(res.statusCode) >= 200 && Number(res.statusCode) < 300
+				if (statusOk && payload?.success === true && payload?.blocked !== true) {
 					console.log('[desktop-eye] 截图已发送到 beilu，模式:', mode)
 					if (Notification.isSupported()) {
 						const notifyBody = mode === 'passive'
@@ -1701,37 +2029,26 @@ function sendToBeilu(imageBase64, message, mode) {
 							silent: true,
 						}).show()
 					}
-					resolve(responseData)
+					resolve(payload)
 				} else {
-					console.error('[desktop-eye] 发送失败:', res.statusCode, responseData)
-					showErrorNotification('发送失败: ' + res.statusCode)
-					reject(new Error('HTTP ' + res.statusCode + ': ' + responseData))
+					const detail = payload?.reason || payload?.error || payload?.message || responseData || ('HTTP ' + res.statusCode)
+					console.error('[desktop-eye] 发送失败:', res.statusCode, detail)
+					reject(new Error('截图注入未确认成功: ' + detail))
 				}
 			})
 		})
 
 		req.on('error', (err) => {
-			console.error('[desktop-eye] 连接 beilu 失败:', err.message)
-			showErrorNotification('连接失败，请确认 beilu 正在运行')
-			reject(err)
+			console.error('[desktop-eye] 截图未送达主服务:', err.message)
+			reject(new Error('截图未送达主服务: ' + err.message))
 		})
 
 		req.on('timeout', () => {
 			req.destroy()
-			showErrorNotification('连接超时')
-			reject(new Error('Timeout'))
+			reject(new Error('截图注入等待超时'))
 		})
 
 		req.write(body)
 		req.end()
 	})
-}
-
-function showErrorNotification(msg) {
-	if (Notification.isSupported()) {
-		new Notification({
-			title: '桌面截图 — 错误',
-			body: msg,
-		}).show()
-	}
 }

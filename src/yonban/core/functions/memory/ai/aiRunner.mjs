@@ -401,6 +401,15 @@ export function parsePresetSwitchTag(content) {
 // 核心：runMemoryPresetAI
 // ============================================================
 
+function _resolveMemoryAIMode(options, resolveCompatMode) {
+  const hostMode = [options?.mode, options?.activeMode]
+    .find((value) => typeof value === "string" && value.trim())?.trim() || "";
+  return {
+    activeMode: hostMode || resolveCompatMode(),
+    source: hostMode ? "host-request" : "active_modes-compat",
+  };
+}
+
 /**
  * 运行记忆预设AI（独立调用，支持多轮搜索循环）
  * @param {string} username
@@ -502,8 +511,21 @@ export async function runMemoryPresetAI(
       .replace(/\{\{user\}\}/g, displayUserName);
   }
 
-  // Phase 2: 根据当前模式选择提示词组（prompts / prompts_code / prompts_work）
-  const activeMode = getActiveMode(username, charName, options.chatId || null); // T4靶点④：有窗口上下文时按本窗模式选组（null=char级回退，行为同旧）
+  // Phase 2: 根据当前模式选择提示词组（prompts / prompts_code / prompts_work）。
+  // 宿主生成链已经裁决本轮 mode 时必须显式优先使用，避免 local P1 用本轮窗口层、AIP1 又从
+  // active_modes 读一次旧值而分叉。未传 mode/activeMode 的 P2/P7/P8/委派等既有调用者仍走
+  // getActiveMode(chatId) 回退，保持向后兼容。
+  const _modeResolution = _resolveMemoryAIMode(
+    options,
+    () => getActiveMode(username, charName, options.chatId || null),
+  );
+  const activeMode = _modeResolution.activeMode;
+  wbT(null, "aiRunner", "runMemoryPresetAI:modeResolved", {
+    presetId: preset.id,
+    activeMode,
+    source: _modeResolution.source,
+    chatId: options.chatId || null,
+  });
   // 子模式数据读取（供 {{sub_mode}} / {{sub_mode_desc}} 宏替换）
   let _macroSubModeLabel = "";
   let _macroSubModeDesc = "";
@@ -1238,7 +1260,7 @@ export async function runMemoryPresetAI(
     processedContent = afterVocabEdit;
     let vocabEditFeedback = "";
     if (vocabEditBlocks.length > 0) {
-      const vocabResults = await executeVocabEditOps(vocabEditBlocks);
+      const vocabResults = await executeVocabEditOps(vocabEditBlocks, { username });
       const writtenCount = vocabResults.filter((r) => r.status === "written").length;
       allExecutedOps.push({ type: "vocabEdit", results: vocabResults, count: writtenCount, round });
       vocabEditFeedback = `[词库改动结果]\n${vocabResults.map((r) => {
@@ -1511,17 +1533,22 @@ export function readPseriesRuns(username, charName, limit = 20) {
  * @param {string} username
  * @param {string} charName
  */
-export async function triggerP2Summary(username, charName, chatId) {
-  wbT(null, "aiRunner", "triggerP2Summary:enter", { username, charName, chatId });
+export async function triggerP2Summary(username, charName, chatId, opts = {}) {
+  wbT(null, "aiRunner", "triggerP2Summary:enter", { username, charName, chatId, manual: !!opts.manual });
   const presetsData = loadMemoryPresets(username, charName);
   const p2Preset = presetsData.presets.find((p) => p.id === "P2");
   if (!p2Preset || !p2Preset.enabled) {
-    console.log("[beilu-memory] P2 未启用，跳过自动总结");
+    console.log("[beilu-memory] P2 未启用，跳过总结");
     return;
   }
 
-  if (p2Preset.trigger === "manual_button") {
-    console.log("[beilu-memory] P2 触发方式为手动按钮，跳过自动触发");
+  // [0804 根因修·P2 手动按钮 no-op] 原守卫对所有调用方都 return——但默认 trigger 恰是
+  //   "manual_button"，于是用户显式点击手动按钮走的也是本函数、被同一个值挡掉 = 手动按钮永远
+  //   空转（前端却先回执"已异步触发"）。守卫的本意是挡【自动】路径（replyHandler autoCheckArchiveTriggers），
+  //   不该挡【用户显式手动调用】。opts.manual=true 时放行；auto 路径不带此标记，manual_button 配置下
+  //   仍正确不自动触发。
+  if (p2Preset.trigger === "manual_button" && !opts.manual) {
+    console.log("[beilu-memory] P2 触发方式为手动按钮，跳过自动触发（等待用户手动点击）");
     return;
   }
 

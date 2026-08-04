@@ -24,7 +24,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 import fs from "node:fs";
-import { findResource } from "../p1/p1_resdir.mjs";  // P0-2 统一资源定位(env P1_RESOURCE_DIR > memory/p1_res > 旧运行位)
+import { findResource } from "../p1/p1_resdir.mjs";  // P1 单一资源根
 import { swowDiverge } from "./wordCoords.mjs";
 import { runStep1Extract } from "./bccTokenize.mjs"; // P1 归档 2026-07-16:原 test/selfDrivenP1_utils.mjs 随 P1 迁出,分词函数抽至主线层(实现保形)
 import { expandWithAliases, synonymsOf } from "./aliasLib.mjs";

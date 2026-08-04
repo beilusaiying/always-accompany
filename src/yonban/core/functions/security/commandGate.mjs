@@ -24,20 +24,19 @@
  * 【影响范围】
  *   改本文件 = 改全部三通道的命令拦截行为（高危）；黑/灰名单默认清单调整需同步 YonBan 副本。
  */
-import fs from "node:fs";
 import path from "node:path";
 
-// R5 路径单源：beilu-files-settings.json 的 node 侧路径由 storage.getFilesSettingsPath() 统一供给，
-//   删除本文件旧的 fileURLToPath 上溯 5 级本地推导，消除三头巧合对齐。
-// [0722 排雷] 禁止在模块顶层调用 getFilesSettingsPath()（原 `const _FILES_SETTINGS_PATH = ...` 顶层
-//   立即求值）：它读 storage 的 `const __projectRoot`，顶层调用把「storage 已初始化完」变成承重
-//   不变量——storage 一旦获得任何传递到本文件的 import 边即 TDZ 崩全部插件（0722 事故实证，当时
-//   本注释写的"已核实无环"被 J1-B 新增边推翻）。一律函数内取值（endpoints.mjs 同范式）。
+// [D6 §4 2026-08-04] settings 读路收口：本文件不再自行 readFileSync/JSON.parse
+//   beilu-files-settings.json（原两处 catch→{} 把损坏折叠成"无配置"，健康状态不可见），
+//   改读 filesSettingsStore 只读 snapshot——损坏时 view.commandGate=null + health 可见，
+//   本文件按【最严默认裁决】（默认黑/灰名单 + failClosedUnknown=true + allowChannelBExec=false），
+//   即 fail-closed 语义与原 catch 分支等价但故障不再静默。
+// [0722 排雷] 路径求值仍全部在函数内（store 内同守此约），禁模块顶层触发 storage 初始化。
 import {
   getCommandConfigPath,
-  getFilesSettingsPath,
   loadJsonFileIfExists,
 } from "../memory/storage_mod/storage.mjs";
+import { getCommandGateView } from "./filesSettingsStore.mjs";
 
 // ★ 抽出适配：_isPathOutsideWorkspace 供本文件 B3 引擎与 ideClient（import 回去）共用，加 export。
 export const FILE_EDIT_TOOLS = new Set(["write_file", "replace_lines", "insert_at_line", "fuzzy_edit"]);
@@ -158,12 +157,9 @@ function _reFromEntry(e) {
   }
 }
 function _loadCommandRules() {
-  let g = {};
-  try {
-    const raw = fs.readFileSync(getFilesSettingsPath(), "utf-8");
-    const j = JSON.parse(raw);
-    g = (j && typeof j.commandGate === "object" && j.commandGate) ? j.commandGate : {};
-  } catch { g = {}; }
+  // [D6 §4] 经 store 只读 snapshot：损坏/不可读 → view.commandGate=null → g={} = 全默认清单
+  //   （最严默认裁决）；健康故障由 store.getSettingsHealth 对外可见，此处不再静默。
+  const g = getCommandGateView().commandGate || {};
   // 0715 开关化：条目归一为 { re, enabled, forced? }。
   //   enabled 缺省 true（单条开关，关=不参与匹配但保留在清单里）；
   //   graylist forced 缺省 true（存量条目无字段=保持"即使L4也确认"旧行为）。
@@ -363,17 +359,12 @@ const _COMMAND_EXEC_TOOLS = new Set(["run_command", "exec", "run_script"]);
  *    （多源分叉），已停止读取；B/C 仅在 ideClient 核验 chat owner 后读取同一个 per-user 文件。
  *  注：黑名单/强制灰名单始终优先于能力开关；未授权解释器、未知分类仍 fail-closed 入审批。 */
 function _loadCommandGateConfig() {
-  try {
-    const raw = fs.readFileSync(getFilesSettingsPath(), "utf-8");
-    const j = JSON.parse(raw);
-    const g = (j && typeof j.commandGate === "object" && j.commandGate) ? j.commandGate : {};
-    return {
-      failClosedUnknown: g.failClosedUnknown !== false,   // 默认 true（fail-closed）
-      allowChannelBExec: g.allowChannelBExec === true,    // 默认 false
-    };
-  } catch {
-    return { failClosedUnknown: true, allowChannelBExec: false };
-  }
+  // [D6 §4] 经 store 只读 snapshot；损坏 → commandGate=null → 安全默认（fail-closed），故障可见不静默。
+  const g = getCommandGateView().commandGate || {};
+  return {
+    failClosedUnknown: g.failClosedUnknown !== false,   // 默认 true（fail-closed）
+    allowChannelBExec: g.allowChannelBExec === true,    // 默认 false
+  };
 }
 
 /**

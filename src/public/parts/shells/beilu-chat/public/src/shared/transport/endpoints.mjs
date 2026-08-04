@@ -55,13 +55,13 @@ export function setCurrentChatId(id) {
 //   本身即「所有后端 API 封装层」= sendAction 的同层 peer）。走门面需为每端点注册 verb 或用通用透传，
 //   前者=一次架构级重写、后者=破坏门面 fail-loud 精确路由契约（双层传输）。故本核保留 apiFetch，
 //   仅收口本文件内两个「具名离散 REST 出向」createNewChat / deleteMessagesRange（与 conversationManager 同类）。
-async function callApi(endpoint, method = 'POST', body) {
-	if (!currentChatId) {
-		const err = new Error(`[callApi] currentChatId 为空，无法调用 ${method} ${endpoint}`)
+async function callChatApi(chatId, endpoint, method = 'POST', body) {
+	if (!chatId) {
+		const err = new Error(`[callChatApi] chatId 为空，无法调用 ${method} ${endpoint}`)
 		console.warn(err.message)
 		throw err
 	}
-	const url = `/api/parts/shells:chat/${currentChatId}/${endpoint}`
+	const url = `/api/parts/shells:chat/${chatId}/${endpoint}`
 	console.log(`[callApi] ${method} ${url}`, body ? '(有body)' : '')
 	wbTrace("endpoint", "callApi", { method, endpoint })
 
@@ -94,6 +94,10 @@ async function callApi(endpoint, method = 'POST', body) {
 		window._reportError?.(`[callApi] JSON parse failed: ${response.url}`, parseErr.stack);
 		return {};
 	}
+}
+
+async function callApi(endpoint, method = 'POST', body) {
+	return callChatApi(currentChatId, endpoint, method, body)
 }
 
 /**
@@ -204,21 +208,77 @@ export function addUserReply(reply, singleInject, onceInjectIds, windowMode) {
 
 /**
  * 删除消息。
- * @param {number} index - 消息索引。
+ * @param {string} chatId - 点击/批删启动时冻结的对话 ID；执行时不读 currentChatId。
+ * @param {number} indexHint - 消息索引提示；后端以 messageId 为准。
+ * @param {string} messageId - 消息稳定 ID。
  * @returns {Promise<any>} - 响应数据。
  */
-export function deleteMessage(index) {
-	return callApi(`message/${index}`, 'DELETE')
+export function deleteMessage(chatId, indexHint, messageId) {
+	if (!Number.isInteger(indexHint) || indexHint < 0) {
+		throw new TypeError("[deleteMessage] indexHint 必须是非负整数")
+	}
+	if (typeof messageId !== "string" || !messageId) {
+		throw new TypeError("[deleteMessage] messageId 必须是非空字符串")
+	}
+	return callChatApi(
+		chatId,
+		`message/${indexHint}?messageId=${encodeURIComponent(messageId)}`,
+		'DELETE',
+	)
 }
 
 /**
  * 编辑消息。
- * @param {number} index - 消息索引。
- * @param {string} content - 消息内容。
+ * @param {string} chatId - 渲染时冻结的对话 ID。
+ * @param {number} indexHint - 原始 chatLog 索引提示。
+ * @param {string} messageId - 消息稳定 ID，后端唯一身份。
+ * @param {object} content - 编辑补丁；未显式提供 files/extension 时后端保留旧值。
+ * @param {string} editOperationId - 一次编辑意图的稳定幂等键；网络未知结果重试必须复用。
  * @returns {Promise<any>} - 响应数据。
  */
-export function editMessage(index, content) {
-	return callApi(`message/${index}`, 'PUT', { content })
+export async function editMessage(chatId, indexHint, messageId, content, editOperationId) {
+	if (!Number.isInteger(indexHint) || indexHint < 0) {
+		throw new TypeError("[editMessage] indexHint 必须是非负整数")
+	}
+	if (typeof messageId !== "string" || !messageId.trim()) {
+		throw new TypeError("[editMessage] messageId 必须是非空字符串")
+	}
+	if (!content || typeof content !== "object" || Array.isArray(content)) {
+		throw new TypeError("[editMessage] content 必须是对象")
+	}
+	if (typeof editOperationId !== "string" || !editOperationId.trim()) {
+		throw new TypeError("[editMessage] editOperationId 必须是非空字符串")
+	}
+	const normalizedMessageId = messageId.trim()
+	const normalizedOperationId = editOperationId.trim()
+	const editBody = {
+		messageId: normalizedMessageId,
+		content,
+		editOperationId: normalizedOperationId,
+	}
+	try {
+		return await callChatApi(chatId, "message/" + indexHint, 'PUT', editBody)
+	} catch (error) {
+		const status = error?.response?.status
+		const unknownCommit = !error?.response || status >= 500 || error?.chatCommitted === true
+		if (!unknownCommit) throw error
+		try {
+			return await callChatApi(
+				chatId,
+				"message/" + indexHint + "/edit-operation/" + encodeURIComponent(normalizedOperationId) + "/reconcile",
+				'POST',
+				{ messageId: normalizedMessageId, content },
+			)
+		} catch (reconcileError) {
+			if (reconcileError?.response?.status !== 404) {
+				error.reconciliationError = reconcileError
+				throw error
+			}
+		}
+		// 对账明确未命中后只重放同一个 operationId；服务端 owner 串行化使并发首请求
+		// 即使稍后提交，也只会命中同一回执，不会形成第二次编辑。
+		return callChatApi(chatId, "message/" + indexHint, 'PUT', editBody)
+	}
 }
 
 /**
@@ -286,9 +346,12 @@ export function getInitialData() {
  * @param {string} chatid - 聊天 ID
  * @param {number} startIndex - 起始索引（含）
  * @param {number} [endIndex] - 结束索引（不含），默认到末尾
- * @returns {Promise<{success: boolean, deleted: number}>}
+ * @param {{anchorMessageId: string}} options - 稳定范围锚点；后端按 ID 重新定位起点。
+ * @returns {Promise<{success: boolean, applied: boolean, deleted: number}>}
  */
-export async function deleteMessagesRange(chatid, startIndex, endIndex) {
+export async function deleteMessagesRange(chatid, startIndex, endIndex, options = {}) {
+	const anchorMessageId = typeof options.anchorMessageId === "string" ? options.anchorMessageId.trim() : "";
+	if (!anchorMessageId) throw new Error("deleteMessagesRange requires anchorMessageId");
 	// T6b批7：POST /:chatId/messages/delete-range → sendAction shells:chat#deleteMessagesRange
 	//   （chatId 进 URL，{startIndex,endIndex} 进 body）。!ok 由门面统一抛错（原 `if(!response.ok) throw` 等价）。
 	return sendAction({
@@ -296,7 +359,11 @@ export async function deleteMessagesRange(chatid, startIndex, endIndex) {
 		target: "shells:chat",
 		source: "web",
 		scope: { chatId: chatid },
-		payload: { startIndex, endIndex },
+		payload: {
+			startIndex,
+			endIndex,
+			anchorMessageId,
+		},
 	})
 }
 

@@ -175,6 +175,13 @@ case "chatInitialData":
       case "messageEdited":
         YB.onMessageEdited(msg.payload);
         break;
+      case "editMessageResult":
+        if (YB.onEditMessageResult) YB.onEditMessageResult(msg.payload);
+        if (msg.payload && msg.payload.success !== true) {
+          YB.showToast("✗ 编辑消息失败: " + (msg.payload.error || msg.payload.reason || "后端未提交编辑"), 3000);
+          console.error("[YonBan] editMessageResult:", msg.payload);
+        }
+        break;
       case "streamStart":
         YB.onStreamStart(msg.payload);
         break;
@@ -316,6 +323,12 @@ case "chatInitialData":
             if (YB.abortSendAck) YB.abortSendAck();
             if (YB.setSendIdle) YB.setSendIdle(); // [0719 发送状态机] 失败=完成事件之一
           }
+        }
+        break;
+      case "operationWarning":
+        if (msg.payload && msg.payload.warning) {
+          YB.showToast("⚠ " + (msg.payload.action || "操作") + ": " + msg.payload.warning, 5000);
+          console.warn("[YonBan] operationWarning:", msg.payload);
         }
         break;
       case "sendMessageDone":

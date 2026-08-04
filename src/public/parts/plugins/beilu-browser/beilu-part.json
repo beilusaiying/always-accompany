@@ -1,4 +1,5 @@
 {
   "type": "plugins",
-  "dirname": "beilu-browser"
+  "dirname": "beilu-browser",
+  "configContract": "stored-state"
 }

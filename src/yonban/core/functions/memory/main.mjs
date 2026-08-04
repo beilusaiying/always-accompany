@@ -71,10 +71,12 @@ const pluginExport = {
         authenticate, // A2-3：补鉴权中间件——未认证请求在此被 401 拦截，杜绝匿名读记忆配置
         async (req, res) => {
           try {
+            // [P0-C 2026-08-03 fail-closed] 原实现 getUserByReq 失败后继续（落 _default 桶/采信
+            //   query username）——任务 MD P0-C 要求3：认证用户取不到必须失败关闭。
             let username;
-            if (_getUserByReq)
-              try { username = (await _getUserByReq(req)).username; } catch (e) { console.warn("[beilu-memory] getUserByReq 失败，回退无 username（将落 _default 桶，T045 串台面）:", e?.message || e); /* T021 留痕 */ }
-            const query = { ...(req.query || {}), ...(username ? { username } : {}) };
+            try { username = _getUserByReq ? (await _getUserByReq(req)).username : ""; } catch { username = ""; }
+            if (!username) return res.status(401).json({ error: "Not authenticated（身份不可证明，fail-closed）" });
+            const query = { ...(req.query || {}), username };
             const data = await pluginExport.interfaces.config.GetData(query);
             res.json(data);
           } catch (err) {
@@ -88,12 +90,13 @@ const pluginExport = {
         authenticate, // A2-3：补鉴权中间件——未认证请求在此被 401 拦截，杜绝匿名写记忆配置
         async (req, res) => {
           try {
+            // [P0-C 2026-08-03 fail-closed] 同 getdata：认证解析失败不得回退 body username / _default。
             let username;
-            if (_getUserByReq)
-              try { username = (await _getUserByReq(req)).username; } catch (e) { console.warn("[beilu-memory] getUserByReq 失败，回退无 username（将落 _default 桶，T045 串台面）:", e?.message || e); /* T021 留痕 */ }
+            try { username = _getUserByReq ? (await _getUserByReq(req)).username : ""; } catch { username = ""; }
+            if (!username) return res.status(401).json({ error: "Not authenticated（身份不可证明，fail-closed）" });
             const body = { ...req.body };
-            if (username) body.username = username;
-            const query = { ...(req.query || {}), ...(username ? { username } : {}) };
+            body.username = username;
+            const query = { ...(req.query || {}), username };
             const result = await pluginExport.interfaces.config.SetData(body, query);
             if (result?._subModeSwitch) {
               // [0716 T3对接首批] 原动态 import broadcast.mjs 散拼改经 bus:broadcast 出口（exits.mjs 薄包装）。
@@ -179,6 +182,8 @@ const pluginExport = {
 
   interfaces: {
     config: {
+      // 此 SetData 是 action RPC，不是持久配置恢复器；生命周期加载阶段永不自动调用。
+      loadPolicy: "never",
       GetData: (args) => handleGetData(args),
       SetData: (data, args) => handleSetData(data, args),
     },

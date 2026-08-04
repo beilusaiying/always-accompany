@@ -37,36 +37,36 @@ function loadAIsourceGenerator(username, AIsourcename) {
  * @returns {Promise<any>} 加载的服务源实例。
  */
 async function loadAIsourceFromConfigData(username, data, { SaveConfig }) {
-  const generatorName = (data?.generator && data.generator.trim()) || "proxy";
+  const generatorName = typeof data?.generator === "string"
+    ? data.generator.trim()
+    : "";
+  if (!generatorName) {
+    const err = new Error("AI 源配置不完整：缺少 generator。请在 API 设置中选择渠道后重新保存。");
+    err.code = "AI_SOURCE_GENERATOR_MISSING";
+    throw err;
+  }
+  if (!data?.config || typeof data.config !== "object" || Array.isArray(data.config)) {
+    const err = new Error("AI 源配置不完整：缺少 config 对象。请重新保存 API 配置。");
+    err.code = "AI_SOURCE_CONFIG_MISSING";
+    throw err;
+  }
   console.log(
     `[AI源诊断] loadAIsourceFromConfigData: generator="${generatorName}", data.generator="${data?.generator}", typeof="${typeof data?.generator}"`,
   );
-  let originalError = null;
-  let usedFallback = false;
-  const generator = await loadAIsourceGenerator(username, generatorName).catch(
-    (e) => {
-      originalError = e;
-      usedFallback = true;
-      console.error(
-        `[AI源诊断] generator "${generatorName}" 加载失败:`,
-        e?.message || String(e),
-      );
-      console.error(`[AI源诊断] 错误堆栈:`, e?.stack || "无堆栈");
-      return loadAIsourceGenerator(username, "empty");
-    },
-  );
-  console.log(
-    `[AI源诊断] generator 加载完成, usedFallback=${usedFallback}, hasGetSource=${!!generator?.interfaces?.serviceGenerator?.GetSource}`,
-  );
-
-  // 如果 fallback 到 empty，直接抛出包含原始失败原因的错误，而不是让 empty 的 GetSource 抛出通用错误
-  if (usedFallback && originalError) {
+  let generator;
+  try {
+    generator = await loadAIsourceGenerator(username, generatorName);
+  } catch (originalError) {
     const err = new Error(
       `AI 源加载失败: 生成器 "${generatorName}" 无法加载。原因: ${originalError?.message || String(originalError)}`,
     );
+    err.code = "AI_SOURCE_GENERATOR_LOAD_FAILED";
     err.originalError = originalError;
     throw err;
   }
+  console.log(
+    `[AI源诊断] generator 加载完成, hasGetSource=${!!generator?.interfaces?.serviceGenerator?.GetSource}`,
+  );
 
   const result = await generator.interfaces.serviceGenerator.GetSource(
     data?.config,

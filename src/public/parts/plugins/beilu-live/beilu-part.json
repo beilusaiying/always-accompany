@@ -1,4 +1,5 @@
 {
 	"type": "plugins",
-	"dirname": "beilu-live"
+	"dirname": "beilu-live",
+	"configContract": "stored-state"
 }

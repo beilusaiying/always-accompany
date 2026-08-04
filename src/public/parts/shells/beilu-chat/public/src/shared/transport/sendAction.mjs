@@ -10,9 +10,9 @@
  *
  * 功能链：用户点/开/切 → panels 面板构造 message{verb,target,source:'web',payload,scope:{chatId}}
  *   → sendAction(message) 单一出口 → scope.chatId 单点盖章（_beiluCurWinChatId 优先/hash 兜底）
- *   → 请求去重（inflight 共享 + 2s TTL 缓存，键=buildUrl+body）→ 查路由映射（精确 target#verb
+ *   → 只读请求去重（inflight 共享 + 2s TTL 缓存）→ 查路由映射（精确 target#verb
  *   优先，miss 回退通配 target#*）→ WS dispatch 优先（桥路由，走 websocket.mjs dispatchViaWs）
- *   失败/不适用则 HTTP 兜底（apiFetch）→ 失败统一弹报错（含 target+verb 定位，notify 分级
+ *   不确定是否已送达的写请求不切 HTTP 重放；只读/显式幂等动作才可兜底（apiFetch）→ 失败统一弹报错（含 target+verb 定位，notify 分级
  *   toast/report）→ 后端 dispatch → 节点 → WS 回向照旧（websocket.mjs 事件，不动）→ 渲染。
  *
  * 两类路由：直连 REST（buildUrl 指向各库 /api/parts/... 端点）/ 桥路由（registerBridgeAction，
@@ -26,32 +26,46 @@
  * 影响范围：本文件是全出向调用点的单一收口；改动 _routes 匹配/去重/WS-HTTP 切换逻辑影响全站请求。
  */
 import { apiFetch } from "./api-client.mjs";
+import {
+	PLUGIN_LINK_MAX_ATTEMPTS as _PLUGIN_LINK_MAX_ATTEMPTS,
+	isRetryablePluginLinkError,
+	pluginLinkRetryDelay as _pluginLinkRetryDelay,
+} from "./pluginLinkTolerance.mjs";
+export { isRetryablePluginLinkError } from "./pluginLinkTolerance.mjs";
 
 /** 路由映射：`${target}#${verb}` → { method, buildUrl(message), buildBody?(message) }（6b 逐库注册） */
 const _routes = new Map();
 
 // WS dispatch 动态 import（避免 sendAction↔websocket 静态循环依赖）。
-// null=未尝试, undefined=加载失败(不重试), function=可用。
+// null=未尝试, undefined=最近一次加载失败, function=可用。失败只短暂冷却，不能把一次模块链抖动
+// 固化成整个页面生命周期都绕开 WS。
 let _dispatchViaWs = null;
+let _dispatchViaWsLoadFailedAt = 0;
+const _WS_IMPORT_RETRY_COOLDOWN_MS = 1000;
 
-// 请求去重（统一出向层，凛倾 0718「为什么不做一个统一的」定案件）：
-// [0727 凛倾「出现重复的直接变成一条」] 从 GET-only 扩展到全方法：
-//   GET 键 = buildUrl 产物（天然含 chatId/查询参数）；POST/PUT/DELETE 键 = URL + body 序列化
-//   （不同 payload 的 mutation 天然分键，同 payload 的重复调用合并）。
-// inflight 阶段：同键后续调用共享同一 Promise。
-// TTL 阶段：成功响应缓存 _DEDUP_TTL ms，同键后续调用直接返回缓存（解轮询重叠）；失败不缓存。
+// 只重试后端明确证明“处理器尚未执行”的插件接线错误。普通超时/断连可能已经执行过，尤其是
+// POST 写动作，仍按原契约禁止重放。三次总尝试覆盖部件装载/注册的短暂竞态，同时保持失败有界可见。
+function _wait(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 请求去重只属于只读动作。曾把 POST/PUT/DELETE 也纳入 2 秒 TTL：合法的重复删除、
+// 保存或插件操作会被直接返回旧成功，用户动作根本未到后端。写操作若要安全去重，必须由
+// 服务端 idempotency key 定义语义，不能在这个传输门面猜测。
 // [0719 键修正] scope 盖章之后取键（原实现在盖章前取键=跨管线串数据）。
-const _dedup = new Map(); // dedup key → Promise (inflight pending 或 TTL 期间的 resolved)
+const _dedup = new Map(); // 仅 GET/HEAD：dedup key → Promise (inflight pending 或 TTL 期间的 resolved)
 const _DEDUP_TTL = 2000;
 
 async function _getWsDispatch() {
-	if (_dispatchViaWs === undefined) return null; // 已尝试加载但失败，不重试
+	if (_dispatchViaWs === undefined && Date.now() - _dispatchViaWsLoadFailedAt < _WS_IMPORT_RETRY_COOLDOWN_MS) return null;
 	if (_dispatchViaWs) return _dispatchViaWs;
+	if (_dispatchViaWs === undefined) _dispatchViaWs = null;
 	try {
 		const mod = await import("./websocket.mjs");
 		_dispatchViaWs = mod.dispatchViaWs || null;
 	} catch {
-		_dispatchViaWs = undefined; // 标记加载失败，不重试
+		_dispatchViaWs = undefined;
+		_dispatchViaWsLoadFailedAt = Date.now();
 	}
 	return _dispatchViaWs || null;
 }
@@ -60,7 +74,7 @@ async function _getWsDispatch() {
  * 注册一个出向路由（6b 各库收口时调用；同 key 覆盖）。
  * @param {string} target - 如 "plugins:beilu-memory"
  * @param {string} verb - 如 "switchMode"
- * @param {{method?:string, buildUrl:(m:object)=>string, buildBody?:(m:object)=>any, buildHeaders?:(m:object)=>object}} route
+ * @param {{method?:string, idempotent?:boolean, buildUrl:(m:object)=>string, buildBody?:(m:object)=>any, buildHeaders?:(m:object)=>object}} route
  */
 export function registerAction(target, verb, route) {
 	_routes.set(`${target}#${verb}`, route);
@@ -89,15 +103,12 @@ export async function sendAction(message) {
 		_report(msg, message);
 		throw new Error(msg);
 	}
-	// 请求去重（全方法，键含 body；见文件头 _dedup 注释）
+	// 请求去重只适用于读路；写动作必须逐次传到后端，不能因同 URL/body 被传输层吞掉。
 	let _dk = null;
-	try {
-		_dk = route.buildUrl(message);
-		if (route.method && route.method !== "GET") {
-			const _body = route.buildBody ? route.buildBody(message) : message.payload;
-			_dk += "\0" + JSON.stringify(_body);
-		}
-	} catch { _dk = null; }
+	const _method = (route.method ?? "POST").toUpperCase();
+	if (_method === "GET" || _method === "HEAD") {
+		try { _dk = route.buildUrl(message); } catch { _dk = null; }
+	}
 	if (_dk) {
 		const _existing = _dedup.get(_dk);
 		if (_existing) return _existing;
@@ -117,7 +128,10 @@ export async function sendAction(message) {
 }
 
 async function _sendActionInner(message, verb, target, route) {
-	try {
+	for (let attempt = 1; attempt <= _PLUGIN_LINK_MAX_ATTEMPTS; attempt++) {
+		try {
+		const _method = (route.method ?? "POST").toUpperCase();
+		const _canRetryAfterWsFailure = route.idempotent === true || _method === "GET" || _method === "HEAD";
 		// 1. WS 双向 dispatch 优先：中间层走 WS 不占 HTTP 连接槽（浏览器 HTTP/1.1 同源 6 连接限制）。
 		//    只对桥路由生效：buildBody 翻译前端 target（plugins:beilu-memory）→ 后端 target（functions:memory），
 		//    非桥路由的 buildBody 不产出 dispatch 格式（无 target/verb 字段）→ 直接走 HTTP。
@@ -127,12 +141,16 @@ async function _sendActionInner(message, verb, target, route) {
 			if (_wsBody && _wsBody.target && _wsBody.verb) {
 				const _wsP = _wsFn({ target: _wsBody.target, verb: _wsBody.verb, payload: _wsBody.payload, scope: _wsBody.scope }, route.timeout);
 				if (_wsP) {
+					let _wsRes;
 					try {
-						const _wsRes = await _wsP;
-						return route.unwrap ? route.unwrap(_wsRes) : _wsRes;
-					} catch {
-						// WS dispatch 失败（超时/断连）→ fall through 到 HTTP 兜底
+						_wsRes = await _wsP;
+					} catch (wsError) {
+						// WS 超时/断连不表示服务端未执行。只有读路或路由显式声明幂等，
+						// 才能安全走 HTTP；写路把不确定结果交给用户可见错误与用户重试。
+						if (!_canRetryAfterWsFailure) throw wsError;
 					}
+					// 回包已到达后，无论 unwrap 是成功还是业务错误，都不能再重放。
+					if (_wsRes !== undefined) return route.unwrap ? route.unwrap(_wsRes) : _wsRes;
 				}
 			}
 		}
@@ -145,13 +163,20 @@ async function _sendActionInner(message, verb, target, route) {
 		if (route.timeout != null) _opts.timeout = route.timeout;
 		const res = await apiFetch(route.buildUrl(message), _opts);
 		return route.unwrap ? route.unwrap(res) : res;
-	} catch (e) {
+		} catch (e) {
+			if (attempt < _PLUGIN_LINK_MAX_ATTEMPTS && isRetryablePluginLinkError(e, target)) {
+				const delayMs = _pluginLinkRetryDelay(e, attempt);
+				console.warn(`[sendAction] ${target}#${verb} 插件接线暂不可用，${delayMs}ms 后重试 (${attempt}/${_PLUGIN_LINK_MAX_ATTEMPTS})`, e?.code ?? e?.message ?? e);
+				await _wait(delayMs);
+				continue;
+			}
 		// 失败统一可见：含 target+verb 定位信息（诊断面职责——显示真实错误+定位，不装饰）
 		// notify 分级（凛倾拍板「读路失败降 toast 不降显示」）：route.notify==="report" 时失败仍可见
 		//   （console.error + window._reportError 进后端报错中心）但跳过 toast 弹窗——解「诊断面/后台轮询
 		//   读路失败递归弹 toast」而不完全静默。缺省="toast"=现行为（三路全走）。
 		_report(`[sendAction] ${target}#${verb} 失败: ${e?.message ?? e}`, message, route.notify);
 		throw e;
+		}
 	}
 }
 
@@ -247,7 +272,13 @@ function registerBridgeAction(frontTarget, verb, backendTarget, mapPayload, back
 			scope: m.scope,
 		}),
 		unwrap: (res) => {
-			if (res?.ok === false) throw new Error(`${res.error?.code ?? "E"}: ${res.error?.msg ?? "dispatch 失败"}`);
+			if (res?.ok === false) {
+				const error = new Error(`${res.error?.code ?? "E"}: ${res.error?.msg ?? "dispatch 失败"}`);
+				for (const field of ["code", "retryable", "retryAfterMs", "partpath"]) {
+					if (Object.prototype.hasOwnProperty.call(res.error ?? {}, field)) error[field] = res.error[field];
+				}
+				throw error;
+			}
 			return res?.data;
 		},
 	});
@@ -471,8 +502,31 @@ registerAction("shells:chat", "new", {
 //   单源=后端 ensureModeChatsForChar，幂等）。body {charname}，返回 {modeChats: {chat,smart,code,work}}。
 registerAction("shells:chat", "ensureModeChats", {
 	method: "POST",
+	// 后端以 username+charName 串行并按 mode_active_chats 判缺；超时后允许安全重试。
+	idempotent: true,
 	buildUrl: () => "/api/parts/shells:chat/ensure-mode-chats",
 	buildBody: (m) => m.payload ?? {},
+});
+
+// [P0-A 2026-08-03] Smart 提案确认协调（tempConversation 确认卡消费）：
+//   confirm=服务端单次 claim（confirmed 重放幂等返回既有结果，允许安全重试）；
+//   cancel=pending→cancelled（幂等）；status=按源对话重新投影（刷新/重连恢复确认卡）。
+registerAction("shells:chat", "smartConfirm", {
+	method: "POST",
+	idempotent: true,
+	buildUrl: () => "/api/parts/shells:chat/smart-confirmations/confirm",
+	buildBody: (m) => m.payload ?? {},
+});
+registerAction("shells:chat", "smartCancel", {
+	method: "POST",
+	idempotent: true,
+	buildUrl: () => "/api/parts/shells:chat/smart-confirmations/cancel",
+	buildBody: (m) => m.payload ?? {},
+});
+registerAction("shells:chat", "smartConfirmations", {
+	method: "GET",
+	buildUrl: (m) => `/api/parts/shells:chat/${m?.scope?.chatId}/smart-confirmations`,
+	buildBody: () => undefined,
 });
 
 // chat 壳：对话列表（T6b 批3：workPanel _loadHistoryList）
@@ -494,6 +548,16 @@ registerAction("shells:serviceSourceManage", "getAISources", {
 	method: "GET",
 	buildUrl: () => "/api/parts/shells:serviceSourceManage/AI",
 	buildBody: () => undefined,
+});
+registerAction("shells:serviceSourceManage", "getAISetupStatus", {
+	method: "GET",
+	buildUrl: () => "/api/parts/shells:serviceSourceManage/AI/setup-status",
+	buildBody: () => undefined,
+});
+registerAction("shells:serviceSourceManage", "repairAISetupDefault", {
+	method: "POST",
+	buildUrl: () => "/api/parts/shells:serviceSourceManage/AI/setup-repair",
+	buildBody: () => ({}),
 });
 
 // ============================================================
@@ -863,10 +927,22 @@ registerAction("shells:chat", "search", {
 	buildUrl: () => "/api/parts/shells:chat/search",
 	buildBody: (m) => m.payload ?? {},
 });
-// chat 壳：批量删除消息范围（POST /:chatId/messages/delete-range，body {startIndex,endIndex}；shared/transport/endpoints.deleteMessagesRange）。
+// chat 壳：批量删除消息范围（POST /:chatId/messages/delete-range，body 必含稳定 anchorMessageId；索引仅作提示）。
 registerAction("shells:chat", "deleteMessagesRange", {
 	method: "POST",
 	buildUrl: (m) => `/api/parts/shells:chat/${encodeURIComponent(m?.scope?.chatId ?? "")}/messages/delete-range`,
+	buildBody: (m) => m.payload ?? {},
+});
+// chat 壳：回档预览与原子执行。两次请求都由 scope.chatId 定位同一对话；
+// 执行体消费预览返回的安全性快照，后端负责对话/记忆/文件的单一事务编排。
+registerAction("shells:chat", "getRollbackPreview", {
+	method: "POST",
+	buildUrl: (m) => `/api/parts/shells:chat/${encodeURIComponent(m?.scope?.chatId ?? "")}/rollback/preview`,
+	buildBody: (m) => m.payload ?? {},
+});
+registerAction("shells:chat", "rollbackToMessage", {
+	method: "POST",
+	buildUrl: (m) => `/api/parts/shells:chat/${encodeURIComponent(m?.scope?.chatId ?? "")}/rollback`,
 	buildBody: (m) => m.payload ?? {},
 });
 // chat 壳：渲染条目（GET /:chatId/render/entries?charId&charName；shared/render/messageList.fetchRenderEntries 世界书渲染）。
@@ -1301,6 +1377,14 @@ registerAction("shells:chat", "deleteChar", {
 	method: "DELETE",
 	buildUrl: (m) => `/api/parts/shells:chat/delete-char/${encodeURIComponent(m?.payload?._key ?? "")}`,
 	buildBody: (m) => { const { _key, ...rest } = m?.payload ?? {}; return rest; },
+});
+// [D1 §4 删除契约] 删角色卡前的无副作用清理预览：GET /delete-char/:charId/cleanup-preview。
+//   返回 managedModeChats/extraOwnedChats/diskExtraChats/legacyCandidates/previewRevision，供 panels 删除
+//   确认展示分类；随后 deleteChar 带 previewRevision+deletePolicy（默认 all-owned 兼容旧裸路径）+可选 includeLegacyCandidates 提交。
+registerAction("shells:chat", "cleanupPreviewChar", {
+	method: "GET",
+	buildUrl: (m) => `/api/parts/shells:chat/delete-char/${encodeURIComponent(m?.payload?._key ?? "")}/cleanup-preview`,
+	buildBody: () => undefined,
 });
 // 导入角色卡（charsel 导入按钮）：POST /import-char，payload._form=FormData 直传。
 registerAction("shells:chat", "importChar", {

@@ -1,6 +1,8 @@
 # 外掛
 
-在[外掛管理](beilu:settings/plugins)面板查看和設定所有外掛。always-accompany 內建 18 個外掛，按功能分組如下。
+在[外掛管理](beilu:settings/plugins)面板查看和設定目前載入的外掛。2026-08-03 的原始碼包含 23 個內建外掛目錄，新使用者範本列出 14 個。「存在於原始碼」「已載入」「內部功能已啟用」是不同狀態。
+
+> 本繁中頁面的個別清單尚未擴充到完整 23 項。最新選擇方式、預設狀態、權限與資料去向請看 [Plugin Manual (English)](../../en/plugins/overview.md) 或[簡中版](../../../plugins/overview.md)。
 
 ## 外掛清單
 

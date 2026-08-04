@@ -56,7 +56,8 @@ const STT_KEYS = {
 };
 
 const STT_DEFAULTS = {
-  enabled:        "false",
+  // 主输入栏麦克风是“语音转文字”入口，不是录音附件入口；新用户默认启用。
+  enabled:        "true",
   pythonExe:      "python",
   modelPath:      "",
   port:           "7861",
@@ -445,7 +446,9 @@ function _renderSttGuide() {
         prog.style.display = ""; btnCancel.style.display = ""; btnDl.style.display = "none";
         const pct = j.totalBytes ? Math.floor(j.doneBytes / j.totalBytes * 100) : 0;
         prog.value = pct;
-        progText.textContent =
+        // [D5 §2.3] Job DTO 消费:phase 优先(cancelling=收束中;selecting=选源不阻断下载的诚实文案由后端 note 下发)
+        const _phasePrefix = j.phase === "cancelling" ? "正在取消（在途连接收束中）… · " : "";
+        progText.textContent = _phasePrefix +
           `${pct}% · ${_fmtGB(j.doneBytes)}/${_fmtGB(j.totalBytes)}` +
           (j.speedBps ? ` · ${_fmtSpeed(j.speedBps)}` : "") +
           (j.etaS != null ? ` · 剩余${_fmtEta(j.etaS)}` : "") +
@@ -456,7 +459,12 @@ function _renderSttGuide() {
         _pollTimer = setTimeout(pollProgress, 2000);
       } else {
         prog.style.display = "none"; btnCancel.style.display = "none"; btnDl.style.display = "";
-        progText.textContent = j.error ? `下载失败: ${j.error}（.part 已保留,再点下载即从断点续传）` : (j.finished ? "下载完成" : "");
+        // 终态按 phase 分项(D5 §2.3/§4):cancelled 不是失败——「已取消，已下载部分已保留，下次继续」;
+        //   failed 才显示错误(probe 明细已在后端 error/note 内);旧后端无 phase 时回退旧判据。
+        if (j.phase === "cancelled") progText.textContent = "已取消，已下载部分已保留，下次继续";
+        else if (j.phase === "completed" || j.finished) progText.textContent = "下载完成";
+        else if (j.error) progText.textContent = `下载失败: ${j.error}（.part 已保留,再点下载即从断点续传）`;
+        else progText.textContent = "";
         if (j.installed) refresh();
       }
     } catch {
@@ -587,7 +595,7 @@ function renderSttPlugin(container) {
   const toggleEn = _h("input", { type: "checkbox", className: "toggle toggle-sm toggle-warning" });
   toggleEn.checked = _sttGet("enabled") === "true";
   toggleEn.addEventListener("change", () => _sttSet("enabled", toggleEn.checked));
-  wrap.appendChild(_settingRow("启用语音转录", "开启后录音完成将自动调用 STT 服务转录", toggleEn));
+  wrap.appendChild(_settingRow("启用语音转录", "关闭时麦克风会停止使用，不会改成音频附件；开启后录音完成调用 STT 服务转文字", toggleEn));
 
   // 2. 自动转录
   const toggleAuto = _h("input", { type: "checkbox", className: "toggle toggle-sm toggle-warning" });

@@ -22,7 +22,8 @@
  *   requireOwner 中间件拦截安全策略突变端点，非 owner → 403。
  *   本地单用户：唯一用户即 owner，自然通过。
  *
- * 影响：写 config.json（密钥/用户数据/token 撤销表）；emit AfterUserDeleted/AfterUserRenamed/BeforeUserDeleted 事件
+ * 影响：写 config.json（密钥/用户数据/token 撤销表）；严格 emit BeforeUserDeleted，
+ *   失败时 emit UserDeletionAborted，提交后 emit AfterUserDeleted/AfterUserRenamed 事件
  * 相交：← server.mjs(initAuth) / middleware.mjs(authenticate) / parts_router.mjs(auth_request,getUserByReq,isOwner)
  *         / endpoints.mjs(login/register/logout/API key) / api_v1_router.mjs(authenticate,requireApiKeyScope)
  *       → events.mjs(emit) / path_confine.mjs(getDeployMode) / server.mjs(config,save_config)
@@ -1329,6 +1330,7 @@ async function moveToTrash(dirPath) {
 					`Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${escaped}', 'OnlyErrorDialogs', 'SendToRecycleBin')`,
 				], { timeout: 30000, windowsHide: true }, (err) => err ? reject(err) : resolve())
 			})
+			if (fs.existsSync(dirPath)) throw new Error('RecycleBin command returned but source directory still exists')
 			return { ok: true, dest: 'RecycleBin' }
 		} catch (e) {
 			console.warn('[moveToTrash] PowerShell RecycleBin failed, falling back to _deleted_users:', e.message)
@@ -1351,8 +1353,9 @@ async function moveToTrash(dirPath) {
  * 删除用户帐户及其数据，需要密码验证。
  *
  * 链路：endpoints.mjs DELETE /api/auth/user → deleteUserAccount
- * 影响：emit BeforeUserDeleted/AfterUserDeleted 事件 → parts_router 清路由 + parts_loader 卸载部件 + 清缓存；
- *   用户数据目录移入回收站（非永久删除）；写 config.json（删用户/撤 token/清 apiKeys）。
+ * 影响：emitStrict BeforeUserDeleted（生成静默+聊天墓碑）→ 用户数据目录移入回收站
+ *   → 写 config.json（删用户/撤 token/清 apiKeys）→ emit AfterUserDeleted 清缓存/连接；
+ *   前置或目录移动失败时 emitStrict UserDeletionAborted 释放静默 lease 并撤本轮墓碑。
  *
  * @param {string} username - 要删除的帐户的用户名。
  * @param {string} password - 用户密码。
@@ -1367,45 +1370,92 @@ export async function deleteUserAccount(username, password, options = {}) {
 	if (!skipPasswordCheck && !await verifyUserActionPassword(user, password))
 		return { success: false, message: 'Invalid password for deleting account.' }
 
-	await events.emit('BeforeUserDeleted', { username })
-
+	const deletionId = crypto.randomUUID()
+	const deletionContext = { username, deletionId }
+	const abortPreparedDeletion = async (reason) => {
+		try {
+			await events.emitStrict('UserDeletionAborted', { ...deletionContext, reason })
+		} catch (abortError) {
+			console.error('[auth] UserDeletionAborted listener failed:', abortError)
+		}
+	}
+	try {
+		await events.emitStrict('BeforeUserDeleted', deletionContext)
+	} catch (error) {
+		await abortPreparedDeletion('before_failed')
+		return {
+			success: false,
+			message: 'Could not safely prepare user account deletion.',
+			error: error?.message || String(error),
+			code: 'E_USER_DELETE_PREPARE_FAILED',
+		}
+	}
 	const userDirectoryPath = getUserDictionary(username)
-
-	// 撤销所有用户刷新令牌
-	user.auth.refreshTokens?.forEach(token => {
-		if (token.jti)
-			config.data.revokedTokens[token.jti] = {
-				expiry: token.expiry,
-				type: 'refresh-revoked-account-delete',
-				revokedAt: Date.now(),
-			}
-	})
-
-	// 清理全局 apiKeys 表中属于该用户的条目
-	for (const h of Object.keys(config.data.apiKeys))
-		if (config.data.apiKeys[h]?.username === username) delete config.data.apiKeys[h]
-
-	if (purgeConfig) {
-		// 完全清除：清掉该用户所有 revokedTokens 痕迹（包括本次撤销的和之前撤销的 apiKey/refresh）
-		const userJtis = new Set()
-		user.auth.refreshTokens?.forEach(t => { if (t.jti) userJtis.add(t.jti) })
-		user.auth.apiKeys?.forEach(k => { if (k.jti) userJtis.add(k.jti) })
-		for (const jti of Object.keys(config.data.revokedTokens))
-			if (userJtis.has(jti) || config.data.revokedTokens[jti]?.type === 'refresh-revoked-account-delete')
-				delete config.data.revokedTokens[jti]
+	const trashResult = await moveToTrash(userDirectoryPath)
+	if (trashResult?.ok !== true) {
+		await abortPreparedDeletion('trash_failed')
+		return {
+			success: false,
+			message: 'Could not move user data to trash; account was not deleted.',
+			error: trashResult?.error || 'Unknown trash failure',
+			code: 'E_USER_DATA_TRASH_FAILED',
+		}
 	}
 
-	delete config.data.users[username]
-	// owner 删自己时清掉 ownerUsername（20260706）：留 stale 值会废掉 register 的
-	// 「首个注册用户 && !config.ownerUsername → 授 owner」闸——全员删光后新首用户拿不到显式 owner，
-	// 只能靠 getOwnerUsername 惰性重选自愈；清掉让首用户闸恢复原语义。
-	if (config.ownerUsername === username) delete config.ownerUsername
-	save_config()
+	try {
+		// 只有目录移动确认成功后才改变内存配置并持久化，避免“数据没删、账号却消失”的假成功。
+		user.auth.refreshTokens?.forEach(token => {
+			if (token.jti)
+				config.data.revokedTokens[token.jti] = {
+					expiry: token.expiry,
+					type: 'refresh-revoked-account-delete',
+					revokedAt: Date.now(),
+				}
+		})
 
-	// 用户数据目录移入回收站（非永久删除）
-	const trashResult = await moveToTrash(userDirectoryPath)
+		for (const h of Object.keys(config.data.apiKeys))
+			if (config.data.apiKeys[h]?.username === username) delete config.data.apiKeys[h]
 
-	await events.emit('AfterUserDeleted', { username })
+		if (purgeConfig) {
+			const userJtis = new Set()
+			user.auth.refreshTokens?.forEach(t => { if (t.jti) userJtis.add(t.jti) })
+			user.auth.apiKeys?.forEach(k => { if (k.jti) userJtis.add(k.jti) })
+			for (const jti of Object.keys(config.data.revokedTokens))
+				if (userJtis.has(jti)) delete config.data.revokedTokens[jti]
+		}
+
+		delete config.data.users[username]
+		if (config.ownerUsername === username) delete config.ownerUsername
+		save_config()
+	} catch (error) {
+		// 用户目录已经被移动，不能谎称未应用或撤销静默点；按部分提交完成清理并返回显式失败。
+		let finalizeError
+		try { await events.emitStrict('AfterUserDeleted', { ...deletionContext, partial: true }) }
+		catch (cleanupError) { finalizeError = cleanupError }
+		return {
+			success: false,
+			applied: true,
+			partial: true,
+			message: 'User data was moved, but account configuration could not be committed.',
+			error: error?.message || String(error),
+			...(finalizeError ? { cleanupError: finalizeError?.message || String(finalizeError), manualRecoveryRequired: true } : {}),
+			code: 'E_USER_DELETE_CONFIG_COMMIT_FAILED',
+			trashDest: trashResult.dest,
+		}
+	}
+
+	try { await events.emitStrict('AfterUserDeleted', deletionContext) }
+	catch (error) {
+		return {
+			success: false,
+			applied: true,
+			partial: true,
+			message: 'User account was deleted, but runtime cleanup did not finish.',
+			error: error?.message || String(error),
+			code: 'E_USER_DELETE_FINALIZE_FAILED',
+			trashDest: trashResult.dest,
+		}
+	}
 	return { success: true, message: 'User account deleted successfully.', trashDest: trashResult.dest }
 }
 
@@ -1442,40 +1492,113 @@ export async function renameUser(currentUsername, newUsername, password, options
 	if (getUserByUsername(newUsername))
 		return { success: false, message: 'New username already exists.' }
 
-	await events.emit('BeforeUserRenamed', { oldUsername: currentUsername, newUsername })
+	const renameId = crypto.randomUUID()
+	const renameContext = { oldUsername: currentUsername, newUsername, renameId }
+	const abortPreparedRename = async (reason) => {
+		try { await events.emitStrict('UserRenameAborted', { ...renameContext, reason }) }
+		catch (abortError) { console.error('[auth] UserRenameAborted listener failed:', abortError) }
+	}
+	try {
+		await events.emitStrict('BeforeUserRenamed', renameContext)
+	} catch (error) {
+		await abortPreparedRename('before_failed')
+		return {
+			success: false,
+			message: 'Could not safely prepare user rename.',
+			error: error?.message || String(error),
+			code: 'E_USER_RENAME_PREPARE_FAILED',
+		}
+	}
 
 	const oldUserPath = getUserDictionary(currentUsername)
+	const newUserPath = path.join(path.dirname(oldUserPath), newUsername)
+	const shouldMoveDirectory = oldUserPath.toLowerCase() !== newUserPath.toLowerCase() && fse.existsSync(oldUserPath)
+	if (shouldMoveDirectory && fse.existsSync(newUserPath)) {
+		await abortPreparedRename('target_directory_exists')
+		return { success: false, message: 'Target user data directory already exists.', code: 'E_USER_RENAME_TARGET_EXISTS' }
+	}
+	let movedDirectory = false
+	try {
+		if (shouldMoveDirectory) {
+			fse.ensureDirSync(path.dirname(newUserPath))
+			fse.moveSync(oldUserPath, newUserPath, { overwrite: false })
+			movedDirectory = true
+		}
+	}
+	catch (error) {
+		await abortPreparedRename('move_failed')
+		console.error('Error moving user data directory:', error)
+		return { success: false, message: `Error moving user data: ${error.message}. Username change reverted.`, code: 'E_USER_RENAME_MOVE_FAILED' }
+	}
+
 	const newUserConfigEntry = JSON.parse(JSON.stringify(user))
 	newUserConfigEntry.username = newUsername
 	config.data.users[newUsername] = newUserConfigEntry
 	delete config.data.users[currentUsername]
-
-	const newUserPath = getUserDictionary(newUsername)
-
-	try {
-		if (fse.existsSync(oldUserPath) && oldUserPath.toLowerCase() !== newUserPath.toLowerCase()) {
-			fse.ensureDirSync(path.dirname(newUserPath))
-			fse.moveSync(oldUserPath, newUserPath, { overwrite: true })
+	const renamedApiKeyHashes = []
+	for (const h of Object.keys(config.data.apiKeys))
+		if (config.data.apiKeys[h]?.username === currentUsername) {
+			config.data.apiKeys[h].username = newUsername
+			renamedApiKeyHashes.push(h)
 		}
-	}
+
+	const ownerWasRenamed = config.ownerUsername === currentUsername
+	if (ownerWasRenamed) config.ownerUsername = newUsername
+
+	try { save_config() }
 	catch (error) {
-		// 失败时恢复配置更改
+		const compensationErrors = []
+		// 恢复内存身份与所有关联 owner，再尝试把目录和磁盘配置一并恢复；全部成功才允许解封旧名。
 		config.data.users[currentUsername] = user
 		delete config.data.users[newUsername]
-		console.error('Error moving user data directory:', error)
-		return { success: false, message: `Error moving user data: ${error.message}. Username change reverted.` }
+		for (const h of renamedApiKeyHashes)
+			if (config.data.apiKeys[h]) config.data.apiKeys[h].username = currentUsername
+		if (ownerWasRenamed) config.ownerUsername = currentUsername
+		if (movedDirectory) {
+			try {
+				if (fse.existsSync(oldUserPath)) throw new Error(`Rollback target already exists: ${oldUserPath}`)
+				fse.moveSync(newUserPath, oldUserPath, { overwrite: false })
+			}
+			catch (rollbackError) { compensationErrors.push(rollbackError) }
+		}
+		try { save_config() }
+		catch (rollbackError) { compensationErrors.push(rollbackError) }
+		if (!compensationErrors.length) {
+			try { await events.emitStrict('UserRenameAborted', { ...renameContext, reason: 'config_commit_failed_reverted' }) }
+			catch (rollbackError) { compensationErrors.push(rollbackError) }
+		}
+		if (compensationErrors.length) {
+			return {
+				success: false,
+				applied: false,
+				partial: true,
+				manualRecoveryRequired: true,
+				message: 'Username rename failed and compensation was incomplete.',
+				error: error?.message || String(error),
+				compensationErrors: compensationErrors.map(item => item?.message || String(item)),
+				code: 'E_USER_RENAME_ROLLBACK_FAILED',
+			}
+		}
+		return {
+			success: false,
+			applied: false,
+			message: 'Username rename could not be persisted and was fully reverted.',
+			error: error?.message || String(error),
+			code: 'E_USER_RENAME_CONFIG_COMMIT_FAILED_REVERTED',
+		}
 	}
-
-	// 同步全局 apiKeys 表的 username，否则改名后旧 key 因查不到用户被静默失效
-	for (const h of Object.keys(config.data.apiKeys))
-		if (config.data.apiKeys[h]?.username === currentUsername) config.data.apiKeys[h].username = newUsername
-
-	// owner 身份随改名迁移（20260706）：不迁则 getOwnerUsername 走 createdAt 惰性重选兜底——
-	// 老账户缺 createdAt(?? Infinity 排最后)时 owner 权限会漂移给别的用户（安全策略闸易主）。
-	if (config.ownerUsername === currentUsername) config.ownerUsername = newUsername
-
-	save_config()
-	await events.emit('AfterUserRenamed', { oldUsername: currentUsername, newUsername })
+	try { await events.emitStrict('AfterUserRenamed', renameContext) }
+	catch (error) {
+		return {
+			success: false,
+			applied: true,
+			partial: true,
+			manualRecoveryRequired: true,
+			message: 'Username was committed, but runtime rename cleanup did not finish.',
+			error: error?.message || String(error),
+			code: 'E_USER_RENAME_FINALIZE_FAILED',
+		}
+	}
 	return { success: true, message: 'Username renamed successfully.' }
 }
 

@@ -22,7 +22,7 @@
 import fs from "fs";
 import path from "path";
 
-// P0-2 起统一走 p1_resdir.mjs(env P1_RESOURCE_DIR > memory/p1_res > 旧运行位)。
+// P0-2 起统一走 p1_resdir.mjs；0803 收口为本次启动的唯一 P1_RESOURCE_DIR。
 // 原本地 RESOURCE_CANDIDATES 第二候选是 "<PROJECT_ROOT>" 字面量死路径, 从未命中过。
 import { findResource } from "../p1/p1_resdir.mjs";
 

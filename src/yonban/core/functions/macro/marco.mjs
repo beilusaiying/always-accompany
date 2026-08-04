@@ -234,6 +234,33 @@ function bannedWordsReplace(inText) {
 }
 
 /**
+ * 动态值 → 安全替换器（0803 函数式替换收口，凛倾拍板）。
+ * 根因：String.replace 的字符串形态第二参会解释 $&/$'/$`/$1 等替换模式——动态宏值
+ * （workspace_tree/plugin_* 大段内容、用户名等）偶含 $ 序列即被吃字变形。
+ * 函数替换器的返回值按字面使用、不解释模式（根修，非转义补丁）。
+ * 容错：值为函数则调用取值（旧行为=直接当 replacer 调用，返回值同样按字面用，等价）；
+ * null/undefined → ''（旧行为会把字面 "undefined" 写进正文）；取值抛错 → 保留宏原文
+ * 不炸整条宏链（可见可诊断，不静默吞）。
+ * @param {any} value 环境值（字符串/函数/任意）
+ * @returns {(match: string) => string}
+ */
+function _literalReplacer(value) {
+	return (match) => {
+		try {
+			const v = value instanceof Function ? value() : value
+			return v == null ? '' : String(v)
+		} catch {
+			return match
+		}
+	}
+}
+
+/** RegExp 元字符转义（env 键名进 new RegExp 前必转——键含 .()[] 等时旧代码误匹配或直接 throw）。 */
+function _reEscape(s) {
+	return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
  * 评估宏
  * @param {string} content 内容
  * @param {any} env 环境
@@ -246,9 +273,9 @@ export function evaluateMacros(content, env, memory = {}, chatLog = []) {
 	const rawContent = content
 
 	content = content
-		.replace(/<user>/gi, env.user instanceof Function ? env.user() : env.user)
-		.replace(/<bot>|<char>/gi, env.char instanceof Function ? env.char() : env.char)
-		.replace(/<charifnotgroup>|<group>/gi, env.group instanceof Function ? env.group() : env.group)
+		.replace(/<user>/gi, _literalReplacer(env.user))
+		.replace(/<bot>|<char>/gi, _literalReplacer(env.char))
+		.replace(/<charifnotgroup>|<group>/gi, _literalReplacer(env.group))
 
 	if (!content.includes('{{')) return content
 
@@ -262,7 +289,7 @@ export function evaluateMacros(content, env, memory = {}, chatLog = []) {
 
 	for (const varName in env)
 		if (Object.hasOwn(env, varName))
-			content = content.replace(new RegExp(`{{${varName}}}`, 'gi'), env[varName])
+			content = content.replace(new RegExp(`{{${_reEscape(varName)}}}`, 'gi'), _literalReplacer(env[varName]))
 
 	content = content.replace(/{{\/\/([\S\s]*?)}}/gm, '')
 	content = content.replace(/{{lasttime}}/gi, () => {

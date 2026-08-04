@@ -18,13 +18,49 @@ import { loadStopwordsCN, bccFreq, loadMeldSch } from './resources.mjs';
 import { bridgeTokenize, PARAMS as N1_PARAMS } from './node1_tokenize.mjs';
 import { httpCall } from './cluster.mjs';
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const __dir = dirname(fileURLToPath(import.meta.url));
+import { findResource } from './p1_resdir.mjs';
 
 const clampI = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const envI = (n, d) => { const v = parseInt(process.env[n], 10); return Number.isFinite(v) ? v : d; };
 const envF = (n, d) => { const v = parseFloat(process.env[n]); return Number.isFinite(v) ? v : d; };
+
+function mechanismDiagnostic(error, mechanism, fallbackCode = 'E_P1_MECHANISM_UNAVAILABLE') {
+  const code = error?.code ?? fallbackCode;
+  const rawMessage = error?.message ?? String(error ?? 'unknown mechanism failure');
+  const message = rawMessage.includes(`[${code}]`) ? rawMessage : `[${code}] ${rawMessage}`;
+  return {
+    code,
+    mechanism,
+    message,
+    ...(error?.resource ? { resource: error.resource } : {}),
+    ...(error?.details && typeof error.details === 'object' ? { details: error.details } : {}),
+  };
+}
+
+function optionalResourceDiagnostic(resource, result) {
+  const why = result?.why ?? 'resource unavailable without diagnostic';
+  return {
+    code: 'E_P1_OPTIONAL_RESOURCE_UNAVAILABLE',
+    resource,
+    message: `[E_P1_OPTIONAL_RESOURCE_UNAVAILABLE] ${resource}: ${why}`,
+  };
+}
+
+function resourceAwareResult(candidates, resources, extra = {}) {
+  const unavailable = resources.filter(([, result]) => !result?.available);
+  const errors = unavailable.map(([resource, result]) => optionalResourceDiagnostic(resource, result));
+  const resourceNote = errors.map(error => error.message).join('; ');
+  const note = [extra.note, resourceNote].filter(Boolean).join('; ') || null;
+  return {
+    candidates,
+    ...extra,
+    note,
+    status: unavailable.length
+      ? (resources.some(([, result]) => result?.available) ? 'degraded' : 'unavailable')
+      : 'available',
+    errors,
+  };
+}
 
 export const PARAMS = {
   // SWOW 每词取前 K 联想 [待实验定→白盒定];旧架构判"半死"是 fallback-only 路径,新管线直接进池是活参数
@@ -73,7 +109,8 @@ export const REL_WEIGHTS = {
 // ---- 机制A: SWOW 自由联想(中英两套独立网络) ----
 function swowDiverge(words, lang) {
   const res = lang === 'zh' ? loadSwowZh() : loadSwowEn();
-  if (!res.available) return { candidates: [], note: res.why };
+  const resource = lang === 'zh' ? 'swowZh' : 'swowEn';
+  if (!res.available) return resourceAwareResult([], [[resource, res]]);
   const swow = res.data;
   const minSupport = words.length > 1
     ? (lang === 'zh' ? PARAMS.SWOW_MIN_SUPPORT_ZH : PARAMS.SWOW_MIN_SUPPORT_EN)
@@ -102,17 +139,20 @@ function swowDiverge(words, lang) {
       via: [...h.support],
     });
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, [[resource, res]]);
 }
 
 // ---- 机制B: ConceptNet 关系发散 ----
 function conceptnetDiverge(words, lang) {
   const res = lang === 'zh' ? loadConceptnetZh() : loadConceptnetEn();
-  if (!res.available) return { candidates: [], note: res.why };
+  const resource = lang === 'zh' ? 'conceptnetZh' : 'conceptnetEn';
+  if (!res.available) return resourceAwareResult([], [[resource, res]]);
   const inv = res.data;
   const candidates = [];
   for (const w of words) {
-    const edges = inv[w] ?? inv[w.toLowerCase()];
+    const edges = typeof inv.get === 'function'
+      ? (inv.get(w) ?? inv.get(w.toLowerCase()))
+      : (inv[w] ?? inv[w.toLowerCase()]);
     if (!edges) continue;
     const perRel = new Map();
     for (const [relRaw, target, weight] of edges) {
@@ -133,13 +173,13 @@ function conceptnetDiverge(words, lang) {
       });
     }
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, [[resource, res]]);
 }
 
 // ---- 机制C: 词林同段同义扩展(仅 chat/airp 中文) ----
 function cilinDiverge(words) {
   const res = loadCilin();
-  if (!res.available) return { candidates: [], note: res.why };
+  if (!res.available) return resourceAwareResult([], [['cilin', res]]);
   const { wordToCodes, codeToWords, smallToWords, midToWords } = res.data;
   const candidates = [];
   for (const w of words) {
@@ -169,13 +209,13 @@ function cilinDiverge(words) {
       }
     }
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, [['cilin', res]]);
 }
 
 // ---- 机制D: ATOMIC 事件推理(仅英文 chat/airp) ----
 function atomicDiverge(enWords, enVerbs = []) {
   const res = loadAtomic();
-  if (!res.available) return { candidates: [], note: res.why };
+  if (!res.available) return resourceAwareResult([], [['atomic', res]]);
   const { index } = res.data;
   const candidates = [];
   // 事件模板(设计: 提取动词+名词→"PersonX [verb] [noun]"): 动词与名词命中同一 head = 模板匹配,tail 优先入池
@@ -202,7 +242,7 @@ function atomicDiverge(enWords, enVerbs = []) {
       }
     }
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, [['atomic', res]]);
 }
 
 // ---- code/work: 缩写展开 + 术语翻译 + 释义提名词(查表机制,产出也入池) ----
@@ -214,7 +254,11 @@ function termExpand(words, mode) {
   const translatedEn = [];
   const notes = [];
   const domainWords = mode === 'work' ? loadDomainWords() : { available: false };
-  for (const r of [abbr, seAbbr, comp, ai, glosNouns, glos, basic, ...(domainWords.available ? [domainWords] : [])]) if (!r.available) notes.push(r.why);
+  const requiredResources = [
+    ['abbrCode', abbr], ['seAbbr', seAbbr], ['computerese', comp], ['aiTerms', ai],
+    ['glossaryNouns', glosNouns], ['glossaries', glos], ['basicTech', basic],
+  ];
+  if (mode === 'work') requiredResources.push(['domainWords', domainWords]);
   for (const w of words) {
     const lw = w.toLowerCase();
     // 缩写 → 英文全称
@@ -248,7 +292,7 @@ function termExpand(words, mode) {
         }
       }
     }
-    // DomainWordsDict 领域词确认(work 模式): 输入词在 68 领域 916 万词表里 → 确认为领域术语
+    // DomainWordsDict 领域词确认(work 模式): 精确查询离线确定性 shard，不全量装 Set/扫描源目录
     if (domainWords.available && domainWords.data.has(w)) {
       candidates.push({ word: w, source: 'domain_confirm', strength: 0.3, via: [w] });
     }
@@ -263,14 +307,21 @@ function termExpand(words, mode) {
       }
     }
   }
-  return { candidates, translatedEn: [...new Set(translatedEn)], notes };
+  if (domainWords.available) {
+    const stats = domainWords.data.cacheStats();
+    notes.push(`domainWords shards=${stats.shards}/${stats.maxShards}; cachedEntries=${stats.cachedEntries}; hits=${stats.hits}; misses=${stats.misses}; evictions=${stats.evictions}; totalEntries=${stats.totalEntries}`);
+  }
+  return resourceAwareResult(candidates, requiredResources, {
+    translatedEn: [...new Set(translatedEn)],
+    note: notes.join('; ') || null,
+  });
 }
 
 // ---- 机制F: CFN 中文语义框架发散(仅 work 模式中文) ----
 // 设计§work: CFN=✓; 输入词查 CFN 框架元素 → 同框架的其他词入池(语义框架=同一场景的词群)
 function cfnDiverge(words) {
   const res = loadCfnLex();
-  if (!res.available) return { candidates: [], note: res.why };
+  if (!res.available) return resourceAwareResult([], [['cfnLex', res]]);
   const { wordToFrames, frameToWords } = res.data;
   const candidates = [];
   const seenFrames = new Set(); // 同一 frame 只展开一次(多个输入词命中同 frame 不重复)
@@ -290,7 +341,7 @@ function cfnDiverge(words) {
       }
     }
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, [['cfnLex', res]]);
 }
 
 // ---- 机制G: 域词表亲缘扩展(code/work 模式: THUOCL_IT + DomainWordsDict计算机业) ----
@@ -299,7 +350,8 @@ function cfnDiverge(words) {
 function domainItExpand(words) {
   const thuocl = loadThuoclIt();
   const domIt = loadDomainWordsIt();
-  if (!thuocl.available && !domIt.available) return { candidates: [], note: 'THUOCL_IT+计算机业 both missing' };
+  const resources = [['thuoclIt', thuocl], ['domainWordsIt', domIt]];
+  if (!thuocl.available && !domIt.available) return resourceAwareResult([], resources);
   const candidates = [];
   const itWords = thuocl.available ? thuocl.data : new Set();
   const csWords = domIt.available ? domIt.data : new Set();
@@ -323,7 +375,7 @@ function domainItExpand(words) {
       }
     }
   }
-  return { candidates, note: null };
+  return resourceAwareResult(candidates, resources);
 }
 
 // ---- 汇池: CombSUM 加性合并 + 共振标记 ----
@@ -340,6 +392,15 @@ function pool(allCandidates, inputSet) {
     p.strength += c.strength;             // CombSUM(run27 加性 +62%)
     (c.via ?? []).forEach(v => p.via.add(v));
     if (c.rel || c.relation) p.rels.push(c.rel ?? c.relation);
+    if (c.source === 'user_vocab' && c.matchType) {
+      (p.userVocabMatches ??= []).push({
+        type: c.matchType,
+        from: c.via?.[0] ?? null,
+        unit: c.matchUnit ?? null,
+        tokens: c.matchedTokens ?? [],
+        file: c.file ?? null,
+      });
+    }
   }
   // 池内 strength 归一(max=1): 各机制量纲不同,绝对值无意义,只保留池内相对强弱
   let maxS = 0;
@@ -350,6 +411,80 @@ function pool(allCandidates, inputSet) {
     p.strength = maxS > 0 ? +(p.strength / maxS).toFixed(3) : 0;
   }
   return poolMap;
+}
+
+// 用户词库短语匹配只在本请求的 Node1 token 流内完成，不向共享 jieba 注词，避免跨用户污染。
+// 规范化只去空白/标点/符号并做 Unicode+大小写归一；匹配仍要求由完整 token 边界连续组成，
+// 因而不会用任意字符串 contains 把 token 内部子片段误判为命中。
+const USER_VOCAB_SEPARATORS = /[\p{White_Space}\p{P}\p{S}]+/gu;
+function normalizeUserVocabPhrase(value) {
+  return String(value ?? '').normalize('NFKC').toLowerCase().replace(USER_VOCAB_SEPARATORS, '');
+}
+
+function buildUnitWordSequences(contextTokens) {
+  const units = new Map();
+  for (const token of Array.isArray(contextTokens) ? contextTokens : []) {
+    const normalized = normalizeUserVocabPhrase(token?.word);
+    if (!normalized) continue;
+    const unit = Number.isInteger(token?.unit) ? token.unit : 0;
+    if (!units.has(unit)) units.set(unit, []);
+    units.get(unit).push({ raw: String(token.word), normalized });
+  }
+  return units;
+}
+
+function findCompletePhraseMatch(normalizedFrom, unitSequences) {
+  if ([...normalizedFrom].length < 2) return null;
+  for (const [unit, tokens] of unitSequences) {
+    for (let start = 0; start < tokens.length; start++) {
+      let combined = '';
+      for (let end = start; end < tokens.length; end++) {
+        combined += tokens[end].normalized;
+        if (!normalizedFrom.startsWith(combined)) break;
+        if (combined === normalizedFrom && end > start) {
+          return { unit, tokens: tokens.slice(start, end + 1).map(token => token.raw) };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function userVocabDiverge(words, contextTokens, userVocab) {
+  const rows = Array.isArray(userVocab?.entries) ? userVocab.entries : [];
+  const exact = new Set(words.map(word => String(word)));
+  const folded = new Set(words.map(word => String(word).toLowerCase()));
+  const unitSequences = buildUnitWordSequences(contextTokens);
+  const candidates = [];
+  let exactTokenCount = 0;
+  let phraseHotplugCount = 0;
+  for (const row of rows) {
+    const from = String(row?.from ?? '').trim();
+    const to = String(row?.to ?? '').trim();
+    if (!from || !to) continue;
+    const exactToken = exact.has(from) || folded.has(from.toLowerCase());
+    const phraseMatch = exactToken
+      ? null
+      : findCompletePhraseMatch(normalizeUserVocabPhrase(from), unitSequences);
+    if (!exactToken && !phraseMatch) continue;
+    const matchType = exactToken ? 'exact-token' : 'phrase-hotplug';
+    if (exactToken) exactTokenCount++;
+    else phraseHotplugCount++;
+    candidates.push({
+      word: to,
+      source: 'user_vocab',
+      strength: 0.8,
+      via: [from],
+      file: row.file ?? null,
+      matchType,
+      matchUnit: phraseMatch?.unit ?? null,
+      matchedTokens: phraseMatch?.tokens ?? [from],
+    });
+  }
+  return {
+    candidates,
+    note: `files=${Number(userVocab?.files) || 0}; entries=${rows.length}; exact-token=${exactTokenCount}; phrase-hotplug=${phraseHotplugCount}`,
+  };
 }
 
 // ---- 发散后过滤(设计原文逐字:"经过swow的还需要再次删除动词,虚词和常见虚词类动词") ----
@@ -366,25 +501,32 @@ const NOISE_POS_HEAD = new Set(['r', 'u', 'p', 'c', 'e', 'y', 'o', 'd', 't', 'm'
 let _colloq = null;
 function colloqSet() {
   if (!_colloq) {
-    try { _colloq = new Set(Object.keys(JSON.parse(readFileSync(join(__dir, '..', 'p1_colloquial_noninfo.json'), 'utf8')))); }
+    try { _colloq = new Set(Object.keys(JSON.parse(readFileSync(findResource('p1_colloquial_noninfo.json'), 'utf8')))); }
     catch { _colloq = new Set(); }
   }
   return _colloq;
 }
 
-export function secondPassFilter(poolMap, { posLookup = new Map(), inputSet = new Set(), mode = 'chat' } = {}) {
+export function secondPassFilter(poolMap, {
+  posLookup = new Map(), inputSet = new Set(), mode = 'chat', mechanismDiagnostics = null,
+} = {}) {
   const stopSet = loadStopwordsCN();
   const meld = loadMeldSch();
   const removed = [];
   // moetype ACG 保护: ACG 专名词不被常规过滤干掉(角色名/作品名/ACG术语是有信息量的内容词)
   const moe = loadMoetypeAcg();
   const moetypeSet = moe.available ? moe.data : new Set();
+  let moetypeProtected = 0;
   // 域消歧(code/work): THUOCL_animal 内但不在 THUOCL_IT 内的候选 = 错域(bug→insect 消歧)
   const isCodeWork = mode === 'code' || mode === 'work';
   let animalSet = null, itSet = null;
+  let animalResource = null, itResource = null;
+  let domainAnimalFiltered = 0;
   if (isCodeWork) {
     const an = loadThuoclAnimal();
     const it = loadThuoclIt();
+    animalResource = an;
+    itResource = it;
     animalSet = an.available ? an.data : null;
     itSet = it.available ? it.data : null;
   }
@@ -394,10 +536,14 @@ export function secondPassFilter(poolMap, { posLookup = new Map(), inputSet = ne
     // 域消歧: code/work 模式下, 在动物域但不在 IT 域的候选词抑制
     if (isCodeWork && isZh && animalSet && itSet && animalSet.has(word) && !itSet.has(word) && !inputSet.has(word)) {
       reason = 'domain_animal';
+      domainAnimalFiltered++;
     } else if (isZh) {
       if (word.length === 1) reason = 'frag';
       else if (inputSet.has(word) || DEGREE_WORDS.has(word)) reason = null;
-      else if (moetypeSet.has(word)) reason = null; // moetype ACG 词保护: 不进后续过滤
+      else if (moetypeSet.has(word)) {
+        reason = null; // moetype ACG 词保护: 不进后续过滤
+        moetypeProtected++;
+      }
       else {
         const pos = posLookup.get(word);
         if (pos && (NOISE_POS_HEAD.has(pos[0]) || /^v/.test(pos))) reason = 'pos';
@@ -417,6 +563,33 @@ export function secondPassFilter(poolMap, { posLookup = new Map(), inputSet = ne
       poolMap.delete(word);
     }
   }
+  if (Array.isArray(mechanismDiagnostics)) {
+    const moeErrors = moe.available ? [] : [optionalResourceDiagnostic('moetypeAcg', moe)];
+    mechanismDiagnostics.push({
+      mechanism: 'moetype_filter',
+      kind: 'filter',
+      produced: moetypeProtected,
+      status: moe.available ? 'available' : 'unavailable',
+      note: moeErrors.map(error => error.message).join('; ') || null,
+      errors: moeErrors,
+    });
+    if (isCodeWork) {
+      const resources = [['thuoclAnimal', animalResource], ['thuoclIt', itResource]];
+      const domainErrors = resources
+        .filter(([, result]) => !result?.available)
+        .map(([resource, result]) => optionalResourceDiagnostic(resource, result));
+      mechanismDiagnostics.push({
+        mechanism: 'thuocl_domain_filter',
+        kind: 'filter',
+        produced: domainAnimalFiltered,
+        status: domainErrors.length
+          ? (resources.some(([, result]) => result?.available) ? 'degraded' : 'unavailable')
+          : 'available',
+        note: domainErrors.map(error => error.message).join('; ') || null,
+        errors: domainErrors,
+      });
+    }
+  }
   return removed;
 }
 
@@ -431,22 +604,60 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
   const enWordsRaw = [...new Set(anchored.filter(t => t.lang === 'en').map(t => t.word.toLowerCase()))];
   const inputSet = new Set([...zhWords, ...enWordsRaw]);
 
-  const runs = []; // 白盒: 每个机制的产出与 note
+  const runs = []; // 白盒: 每个机制的产出、状态与错误
+  const errors = [];
   const all = [];
   // 可插拔(凛倾0801框架): 每个发散机制=独立词库+独立函数,可按配置关停;
   // 关停的机制在白盒里如实显示 disabled,不静默消失
   const disabled = new Set(opts.mechanisms?.disable
     ?? (process.env.P1_MECH_DISABLE ?? '').split(',').map(s => s.trim()).filter(Boolean));
+  const recordMechanism = record => {
+    const mechanismErrors = (record.errors ?? []).map(error => ({
+      ...error,
+      mechanism: error.mechanism ?? record.mechanism,
+    }));
+    const normalized = {
+      kind: record.kind ?? 'expansion',
+      mechanism: record.mechanism,
+      produced: Number(record.produced) || 0,
+      status: record.status ?? (mechanismErrors.length ? 'degraded' : 'available'),
+      note: record.note ?? (mechanismErrors.map(error => error.message).join('; ') || null),
+      errors: mechanismErrors,
+    };
+    runs.push(normalized);
+    errors.push(...mechanismErrors);
+    return normalized;
+  };
   const runMech = (name, fn) => {
     const baseName = name.replace(/\(.*\)$/, ''); // term_expand(code) 类带模式后缀的机制名,禁用配置按基名匹配
     if (disabled.has(baseName)) {
-      runs.push({ mechanism: name, produced: 0, note: 'disabled(插拔关闭)' });
-      return { candidates: [] };
+      recordMechanism({ mechanism: name, produced: 0, status: 'disabled', note: 'disabled(插拔关闭)' });
+      return { candidates: [], translatedEn: [], status: 'disabled', errors: [] };
     }
-    const r = fn();
-    runs.push({ mechanism: name, produced: r.candidates.length, note: r.note ?? (r.notes?.join('; ') || null) });
-    all.push(...r.candidates);
-    return r;
+    let r;
+    try {
+      r = fn();
+    } catch (error) {
+      const diagnostic = mechanismDiagnostic(error, name);
+      recordMechanism({
+        mechanism: name,
+        produced: 0,
+        status: 'error',
+        note: diagnostic.message,
+        errors: [diagnostic],
+      });
+      return { candidates: [], translatedEn: [], status: 'error', errors: [diagnostic] };
+    }
+    const candidates = Array.isArray(r?.candidates) ? r.candidates : [];
+    recordMechanism({
+      mechanism: name,
+      produced: candidates.length,
+      status: r?.status ?? 'available',
+      note: r?.note ?? (r?.notes?.join('; ') || null),
+      errors: r?.errors ?? [],
+    });
+    all.push(...candidates);
+    return { ...r, candidates, translatedEn: r?.translatedEn ?? [], errors: r?.errors ?? [] };
   };
 
   let enWords = enWordsRaw;
@@ -477,6 +688,13 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
     }
   }
 
+  // 用户编辑的词库必须是真实发散机制，不是只写不读的 CRUD 孤链。
+  runMech('user_vocab', () => userVocabDiverge(
+    [...zhWords, ...enWords],
+    node1Result.contextTokens,
+    opts.userVocab,
+  ));
+
   const poolMap = pool(all, inputSet);
 
   // 英文域消歧(code/work): WordNet supersense 过滤动物域词(bug→insect 消歧)
@@ -487,7 +705,7 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
     if (enPoolWords.length) {
       try {
         const r = await httpCall('vector', 'wn_supersense', { words: enPoolWords });
-        if (r.available && r.results) {
+        if (r?.available === true && r.results && typeof r.results === 'object' && !Array.isArray(r.results)) {
           const ANIMAL_DOMAINS = new Set(['noun.animal', 'noun.plant']);
           const IT_DOMAINS = new Set(['noun.artifact', 'noun.communication', 'noun.cognition', 'noun.act', 'noun.attribute']);
           for (const w of enPoolWords) {
@@ -500,8 +718,54 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
               poolMap.delete(w);
             }
           }
+          recordMechanism({
+            mechanism: 'wn_supersense_filter',
+            kind: 'filter',
+            produced: wnDomainFiltered.length,
+            status: 'available',
+            note: `queried=${enPoolWords.length}; filtered=${wnDomainFiltered.length}`,
+          });
+        } else {
+          const cause = r?.error ?? r?.why ?? 'response missing available=true results object';
+          const diagnostic = mechanismDiagnostic({
+            code: r?._cluster_err
+              ? 'E_P1_WN_SUPERSENSE_QUERY_FAILED'
+              : 'E_P1_WN_SUPERSENSE_UNAVAILABLE',
+            message: cause,
+            details: {
+              available: r?.available ?? null,
+              clusterError: r?._cluster_err === true,
+              status: r?.status ?? null,
+            },
+          }, 'wn_supersense_filter');
+          recordMechanism({
+            mechanism: 'wn_supersense_filter',
+            kind: 'filter',
+            produced: 0,
+            status: 'unavailable',
+            note: diagnostic.message,
+            errors: [diagnostic],
+          });
         }
-      } catch { /* WN不可用=不过滤,白盒可见 */ }
+      } catch (error) {
+        const diagnostic = mechanismDiagnostic(error, 'wn_supersense_filter', 'E_P1_WN_SUPERSENSE_QUERY_FAILED');
+        recordMechanism({
+          mechanism: 'wn_supersense_filter',
+          kind: 'filter',
+          produced: 0,
+          status: 'error',
+          note: diagnostic.message,
+          errors: [diagnostic],
+        });
+      }
+    } else {
+      recordMechanism({
+        mechanism: 'wn_supersense_filter',
+        kind: 'filter',
+        produced: 0,
+        status: 'skipped',
+        note: 'no eligible English pool words',
+      });
     }
   }
 
@@ -509,15 +773,17 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
   const zhPoolWords = [...poolMap.keys()].filter(w => /\p{Script=Han}/u.test(w));
   const posLookup = new Map();
   if (zhPoolWords.length) {
-    try {
-      const br = await bridgeTokenize(zhPoolWords);
-      zhPoolWords.forEach((w, i) => {
-        const toks = br.results[i];
-        if (toks?.length === 1) posLookup.set(w, toks[0].pos); // 整词命中才可信,切碎的不判
-      });
-    } catch { /* 桥失败→posLookup空→动词层退化为不滤,白盒机制note可见 */ }
+    const br = await bridgeTokenize(zhPoolWords);
+    zhPoolWords.forEach((w, i) => {
+      const toks = br.results[i];
+      if (toks?.length === 1) posLookup.set(w, toks[0].pos); // 整词命中才可信,切碎的不判
+    });
   }
-  const removed = secondPassFilter(poolMap, { posLookup, inputSet, mode });
+  const filterDiagnostics = [];
+  const removed = secondPassFilter(poolMap, {
+    posLookup, inputSet, mode, mechanismDiagnostics: filterDiagnostics,
+  });
+  for (const diagnostic of filterDiagnostics) recordMechanism(diagnostic);
 
   return {
     mode,
@@ -526,6 +792,8 @@ export async function diverge(node1Result, mode = 'chat', opts = {}) {
     removedBySecondPass: removed,
     wnDomainFiltered,
     mechanisms: runs,
+    status: errors.length ? 'degraded' : 'ok',
+    errors,
     params: { ...PARAMS },
   };
 }

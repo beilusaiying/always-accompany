@@ -17,6 +17,7 @@
 import { sendAction } from "../../shared/transport/sendAction.mjs";
 import { escapeHtml } from "../../shared/state/utils.mjs";
 import { handleFilesSelect } from "../../shared/chat-core/fileHandling.mjs"; // 0725 对话台上传:与主输入条同一条附件链(校验/base64/预览渲染单源)
+import { ensureChatWebSocket } from "../../shared/transport/websocket.mjs";
 
 let _chatid = "";      // 面板当前承载对话
 let _selFiles = [];    // 待发附件({name,mime_type,buffer(base64),description},形状=fileHandling 产出;发送即清)
@@ -24,6 +25,12 @@ let _lastLen = -1;     // 已渲染日志长度(增量判据)
 let _lastGenerating = false; // 末条生成中=长度不变内容在变,下一轮强制重拉
 let _timer = null;
 let _loading = false;
+let _streamListenerBound = false;
+
+function _displayText(entry) {
+  // 新消息消费后端持久化的陪伴纯正文；旧历史至少优先使用既有 content_for_show，避免回退 raw 操作标签。
+  return String(entry?.extension?._companion_visible_text ?? entry?.content_for_show ?? entry?.content ?? "");
+}
 
 function _visible() {
   const tab = document.getElementById("center-tab-companion");
@@ -69,9 +76,11 @@ function _row(entry) {
   const el = document.createElement("div");
   el.className = "chat-message mb-3";
   el.setAttribute("data-role", role);
-  const body = entry.is_generating && !(entry.content || "").trim()
+  if (entry.id) el.setAttribute("data-companion-message-id", entry.id);
+  const visibleText = _displayText(entry);
+  const body = entry.is_generating && !visibleText.trim()
     ? '<span class="opacity-60 animate-pulse">正在输入…</span>'
-    : escapeHtml(String(entry.content || "")).replace(/\n/g, "<br>");
+    : escapeHtml(visibleText).replace(/\n/g, "<br>");
   // 附件标记:files 序列化后 buffer="file:hash"(models.mjs:225),本面板不渲图,给可见提示即可
   //   (0725 措辞泛化:对话台上传后 files 不只截图,也含用户附件)
   const fileTag = (Array.isArray(entry.files) && entry.files.length) ? `<span class="opacity-50">[附件×${entry.files.length}]</span>` : "";
@@ -93,7 +102,7 @@ function _renderEntries(entries) {
   // 必须滤掉;_hidden(仅对 AI 隐藏)在主聊天灰显,本小面板直接不显示。
   const shown = entries.filter((e) => e && e.role !== "system" && !(e.extension && (e.extension._hidden || e.extension._deleted)));
   if (!shown.length) {
-    log.innerHTML = '<p class="text-center opacity-50 text-xs py-4">这条对话还没有消息,启动陪伴或直接发一句</p>';
+    log.innerHTML = '<p class="text-center opacity-50 text-xs py-4">这条对话还没有消息,开始互动或直接发一句</p>';
   } else {
     for (const e of shown) log.appendChild(_row(e));
   }
@@ -104,8 +113,8 @@ function _renderEntries(entries) {
   if (pc) {
     const tail = shown.slice(-4);
     pc.innerHTML = tail.length
-      ? tail.map((e) => `<div class="flex gap-1 items-start py-0.5 text-[11px]"><span class="shrink-0 opacity-50">[${e.role === "user" ? "我" : escapeHtml(e.name || "AI")}]</span><span class="flex-1 truncate">${escapeHtml(String(e.content || "").slice(0, 60))}</span></div>`).join("")
-      : '<p class="text-center opacity-50 text-[10px] py-4">启动陪伴后显示</p>';
+      ? tail.map((e) => `<div class="flex gap-1 items-start py-0.5 text-[11px]"><span class="shrink-0 opacity-50">[${e.role === "user" ? "我" : escapeHtml(e.name || "AI")}]</span><span class="flex-1 truncate">${escapeHtml(_displayText(e).slice(0, 60))}</span></div>`).join("")
+      : '<p class="text-center opacity-50 text-[10px] py-4">开始互动后显示</p>';
   }
 }
 
@@ -120,11 +129,12 @@ async function _refresh(force) {
     if (cid !== _chatid) { _chatid = cid; _lastLen = -1; _lastGenerating = false; }
     if (!cid) {
       // 0722 框架决策后当前对话不参与路由,旧文案"先打开一个对话"=失效指引(0725 对齐)
-      log.innerHTML = '<p class="text-center opacity-50 text-xs py-4">暂无承载对话:启动陪伴后自动创建专门对话,或在启动绑定里锁定一条对话</p>';
+      log.innerHTML = '<p class="text-center opacity-50 text-xs py-4">暂无承载对话:开始互动后自动创建专门对话,或在启动绑定里锁定一条对话</p>';
       if (tgt) tgt.textContent = "";
       return;
     }
     if (tgt) tgt.textContent = "· 对话 " + cid.slice(0, 8);
+    ensureChatWebSocket(cid);
     const len = Number(await sendAction({ verb: "getLogLength", target: "shells:chat", source: "web", scope: { chatId: cid } })) || 0;
     if (!force && len === _lastLen && !_lastGenerating) return; // 无新消息且末条已定稿:零重绘
     const start = Math.max(0, len - 60); // 尾 60 条(过滤 system 后有余量;更早历史在主聊天看)
@@ -132,6 +142,31 @@ async function _refresh(force) {
     if (Array.isArray(entries)) { _renderEntries(entries); _lastLen = len; }
   } catch { /* 后端未起/离线:保持现状,下轮重试 */ }
   finally { _loading = false; }
+}
+
+function _applyCompanionStream(event) {
+  const d = event?.detail || {};
+  if (!d.chatid || d.chatid !== _chatid || !d.messageId) return;
+  const log = document.getElementById("comp-chat-log");
+  if (!log) return;
+  let row = log.querySelector(`[data-companion-message-id="${CSS.escape(d.messageId)}"]`);
+  if (!row) {
+    const empty = log.querySelector(".text-center.opacity-50");
+    if (empty) empty.remove();
+    row = _row({ id: d.messageId, role: "char", name: d.charName || "AI", content: "", is_generating: true, time_stamp: d.timestamp || Date.now() });
+    log.appendChild(row);
+  }
+  const body = row.querySelector(".message-content");
+  if (body) body.innerHTML = d.text ? escapeHtml(String(d.text)).replace(/\n/g, "<br>") : '<span class="opacity-60 animate-pulse">正在输入…</span>';
+  const generating = d.phase !== "final";
+  let badge = row.querySelector(".message-header .animate-pulse");
+  if (generating && !badge) {
+    badge = document.createElement("span"); badge.className = "animate-pulse"; badge.textContent = "生成中";
+    row.querySelector(".message-header")?.appendChild(badge);
+  } else if (!generating && badge) badge.remove();
+  log.scrollTop = log.scrollHeight;
+  _lastGenerating = generating;
+  if (!generating) setTimeout(() => _refresh(true), 100);
 }
 
 async function _send() {
@@ -257,6 +292,10 @@ async function _voiceToggle() {
 export function initCompanionChat() {
   document.getElementById("comp-say-send")?.addEventListener("click", _send);
   document.getElementById("comp-say-mic")?.addEventListener("click", _voiceToggle);
+  if (!_streamListenerBound) {
+    _streamListenerBound = true;
+    window.addEventListener("beilu:companion-stream", _applyCompanionStream);
+  }
   // 0725 对齐角色对话框工具条:上传(handleFilesSelect 单源链:校验/base64/预览渲染+删除,预览容器
   // comp-say-attach 复用 .chat-input-attachments 主题样式)+单次注入(点按展开/收起,发送即清)
   const _fileInp = document.getElementById("comp-say-file");

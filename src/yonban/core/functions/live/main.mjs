@@ -150,6 +150,37 @@ function getStore(username) {
 	return data
 }
 
+/**
+ * 解析直播轮的承载对话。直播显式绑定拥有最高优先级；未显式绑定时只读取正在运行的
+ * gameCompanion session.chatid，不把它复制进 live/config.json。这样陪伴的专门对话解析仍由
+ * gameCompanion 单独拥有，直播只是消费同一个运行期真值；浏览器当前 hash 不再成为第二默认源。
+ */
+export async function resolveLiveChatTarget(username, explicitChatid) {
+	const bound = String(explicitChatid || '').trim()
+	if (bound) return { chatid: bound, source: 'live_binding' }
+	try {
+		const { getGameCompanionStatus } = await import('../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs')
+		const status = getGameCompanionStatus(_normUser(username))
+		const companionChatid = String(status?.running ? (status.chatid || '') : '').trim()
+		if (companionChatid) return { chatid: companionChatid, source: 'companion_session' }
+	} catch (error) {
+		return { chatid: '', source: 'none', error: error?.message || String(error) }
+	}
+	return { chatid: '', source: 'none' }
+}
+
+/** 字段级递归合并 live 配置；数组/原子值按 patch 整体替换，对象保留未触及兄弟字段。 */
+export function mergeLiveConfigPatch(base, patch) {
+	const out = (base && typeof base === 'object' && !Array.isArray(base)) ? { ...base } : {}
+	if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return out
+	for (const [key, value] of Object.entries(patch)) {
+		out[key] = (value && typeof value === 'object' && !Array.isArray(value))
+			? mergeLiveConfigPatch(out[key], value)
+			: value
+	}
+	return out
+}
+
 // ============================================================
 // beilu-live 插件导出
 // ============================================================
@@ -215,11 +246,13 @@ const pluginExport = {
 					return res.json({ success: false, error: '直播接入未启用：请先在「直播接入」段打开总开关' })
 				}
 				const cfg = store.config || {}
+				const carrier = await resolveLiveChatTarget(_u, req.body?.chatid ?? cfg.chatid)
 				const result = await startLive(_u, {
 					// 平台/房间/承载对话：显式请求参数优先，缺省回落 per-user 配置
 					platform: req.body?.platform ?? cfg.platform,
 					roomId: req.body?.roomId ?? cfg.roomId,
-					chatid: req.body?.chatid ?? cfg.chatid,
+					chatid: carrier.chatid,
+					targetSource: carrier.source,
 					credentials: cfg.credentials || {},
 					// getConfig 注入：runtime 每轮对表最新配置，但不直接依赖 main 的 store（单向依赖）
 					getConfig: () => getStore(_u).config || {},
@@ -282,11 +315,13 @@ const pluginExport = {
 			 */
 			GetData: async (ctx) => {
 				const store = getStore(ctx?.username)
+				const carrier = await resolveLiveChatTarget(ctx?.username, store.config?.chatid)
 				// 惰性在函数体内读 __projectRoot 与磁盘覆盖层（模块顶层零调用，避 TDZ）
 				const capabilities = resolveEffectiveLive(__projectRoot, store.config)
 				return {
 					enabled: store.enabled,             // 直播接入总开关(per-user 布尔)
 					config: store.config,               // 个人差异层原样回传(前端回填"我改了哪些" + SetData 形状参照)
+					carrier,                            // 有效承载目标：显式 live 绑定 > 正在运行的陪伴 session
 					capabilities,                       // 有效能力谱(控件描述形态，渲染 min/max/options 用)
 					rules: resolveLiveRules(capabilities), // 摊平运行值(回填 value / 后端消费用)
 					platforms: listPlatformsForUI(),    // 平台声明投影(下拉选项 + 凭据控件动态渲染)
@@ -303,7 +338,12 @@ const pluginExport = {
 				const store = getStore(_user)
 
 				if (typeof data.enabled === 'boolean') store.enabled = data.enabled
-				if (data.config && typeof data.config === 'object' && !Array.isArray(data.config)) store.config = data.config
+				// 前端每次只发送一个字段 patch（例如 {config:{filter:{minLength:3}}}）。
+				// 写端必须递归合并到 per-user 差异层；旧的整对象替换会在改一个控件时抹掉其余
+				// 平台凭据/过滤/节奏字段，造成 GetData 读回对象与用户刚才看到的对象分叉。
+				if (data.config && typeof data.config === 'object' && !Array.isArray(data.config)) {
+					store.config = mergeLiveConfigPatch(store.config, data.config)
+				}
 
 				saveConfigToDisk(_user, store)
 				return { success: true }

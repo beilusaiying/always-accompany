@@ -199,14 +199,16 @@ export async function getChatRequest(chatid, charname, options = {}) {
   try {
     if (_activationDeps === undefined) {
       try {
-        const [_stor, _preset] = await Promise.all([
+        const [_stor, _preset, _smAct] = await Promise.all([
           import("../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"),
           import("../../../../../../yonban/core/functions/prompt/preset/main.mjs"),
+          import("../../../../../../yonban/core/functions/memory/storage_mod/subModeActivation.mjs"),
         ]);
         _activationDeps = {
           resolveGenerationMode: _stor.resolveGenerationMode ?? null,
           buildPresetContext: _preset.buildPresetContext ?? null,
           ensureWindowModePresetBindings: _preset.ensureWindowModePresetBindings ?? null,
+          getActivationSnapshot: _smAct.getActivationSnapshot ?? null, // D3 0804：子模式激活快照（revision/provenance/requestProfile）
         };
       } catch { _activationDeps = null; }
     }
@@ -218,7 +220,18 @@ export async function getChatRequest(chatid, charname, options = {}) {
       const _actPreset = _activationDeps.buildPresetContext
         ? (_activationDeps.buildPresetContext(username, chatid, _actMode)?.presetName || null)
         : null;
-      result.extension.activation = Object.freeze({ chatid, mode: _actMode, preset_name: _actPreset });
+      // [D3 0804] sub_mode 快照同批冻结：切换期在飞请求用备料时刻的 revision/requestProfile/provenance，
+      //   不随中途 activateSubMode 漂移（与 mode/preset_name 同一激活语义：备料时刻的值，跑完蒸发）。
+      //   快照失败=null（消费端回退每轮解析链，与 activation 缺位同款诚实回退，非吞错）。
+      let _actSubMode = null;
+      if (_activationDeps.getActivationSnapshot) {
+        try {
+          _actSubMode = Object.freeze(_activationDeps.getActivationSnapshot(username, result.char_id || "", chatid, _actMode));
+        } catch (e) {
+          console.warn("[requestBuilder] sub_mode 快照失败(消费端回退每轮解析):", e?.message);
+        }
+      }
+      result.extension.activation = Object.freeze({ chatid, mode: _actMode, preset_name: _actPreset, sub_mode: _actSubMode });
     }
   } catch (e) {
     console.warn("[requestBuilder] activation 备料失败(消费端回退原解析链):", e?.message);

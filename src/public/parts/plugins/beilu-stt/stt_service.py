@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.metadata
+import importlib.util
 import logging
 import os
+import re
 import sys
 import tempfile
 import time
@@ -22,8 +25,10 @@ from typing import Any
 # 依赖白盒检测 — 启动前逐项检查，缺什么报什么
 # ---------------------------------------------------------------------------
 _REQUIRED = [
-    ("torch", "torch"),
-    ("transformers", "transformers>=5.0.0"),
+    ("torch", "torch>=2.8"),
+    # OpenMOSS upstream requires this exact major-version window. 4.57 can be
+    # imported but lacks torch_compilable_check, so import-only checks lie.
+    ("transformers", "transformers>=5.6.0,<6.0.0"),
     ("fastapi", "fastapi"),
     ("uvicorn", "uvicorn"),
     ("multipart", "python-multipart"),
@@ -34,11 +39,41 @@ _REQUIRED = [
     ("noisereduce", "noisereduce"),
     ("silero_vad", "silero-vad"),
 ]
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    """Comparable release tuple; dependency bounds here are numeric releases."""
+    match = re.match(r"\s*(\d+(?:\.\d+)*)", value)
+    return tuple(int(part) for part in match.group(1).split(".")) if match else ()
+
+
+def _requirement_satisfied(requirement: str) -> bool:
+    """Check the declared distribution version without importing stale code."""
+    dist_name = re.split(r"[<>=!~]", requirement, maxsplit=1)[0]
+    try:
+        installed = _version_tuple(importlib.metadata.version(dist_name))
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    if not installed:
+        return False
+    for operator, bound_text in re.findall(r"(>=|<=|==|>|<)\s*(\d+(?:\.\d+)*)", requirement):
+        bound = _version_tuple(bound_text)
+        if operator == ">=" and not installed >= bound:
+            return False
+        if operator == "<=" and not installed <= bound:
+            return False
+        if operator == ">" and not installed > bound:
+            return False
+        if operator == "<" and not installed < bound:
+            return False
+        if operator == "==" and not installed == bound:
+            return False
+    return True
+
+
 _missing = []
 for _mod, _pkg in _REQUIRED:
-    try:
-        importlib.import_module(_mod)
-    except ImportError:
+    if importlib.util.find_spec(_mod) is None or not _requirement_satisfied(_pkg):
         _missing.append(_pkg)
 if _missing:
     import subprocess
@@ -47,9 +82,9 @@ if _missing:
         [sys.executable, "-m", "pip", "install", "--quiet"] + _missing,
         stdout=sys.stderr,
     )
-    for _mod, _pkg in _REQUIRED:
-        if _pkg in _missing:
-            importlib.import_module(_mod)
+    importlib.invalidate_caches()
+for _mod, _pkg in _REQUIRED:
+    importlib.import_module(_mod)
 
 import torch
 import uvicorn
@@ -454,7 +489,11 @@ async def transcribe_json(req: dict):
 # 单槽设计(本地单用户):同时只有一路录音。
 # ---------------------------------------------------------------------------
 _rec = {"stream": None, "chunks": [], "device": None, "started_at": None,
-        "wave": None, "peak_recent": 0.0, "error": None}
+        "wave": None, "peak_recent": 0.0, "error": None,
+        "continuous": False, "peak_threshold": 0.02, "silence_ms": 1000,
+        "min_speech_ms": 300, "max_utterance_s": 20, "pre_roll_s": 0.5,
+        "pre_roll": [], "pre_roll_frames": 0, "speech_started_at": None,
+        "last_voice_at": None, "utterance_ready": False}
 
 
 @app.get("/record/devices")
@@ -520,22 +559,61 @@ async def record_probe(req: dict):
 
 @app.post("/record/start")
 async def record_start(req: dict):
-    """开始后端录音。device 缺省=系统默认输入。"""
+    """开始后端录音。continuous=true 时用有界预卷+电平 VAD 自动切一句，不无限积累静音。"""
     import numpy as np
     import sounddevice as sd
     if _rec["stream"] is not None:
         return JSONResponse(status_code=409, content={"error": "already recording"})
     device = req.get("device")
     device = int(device) if device not in (None, "") else None
+    continuous = bool(req.get("continuous"))
+    peak_threshold = max(0.001, min(1.0, float(req.get("peak_threshold", 0.02))))
+    silence_ms = max(200, min(5000, int(req.get("silence_ms", 1000))))
+    min_speech_ms = max(100, min(5000, int(req.get("min_speech_ms", 300))))
+    max_utterance_s = max(2, min(120, float(req.get("max_utterance_s", 20))))
+    pre_roll_s = max(0, min(2, float(req.get("pre_roll_s", 0.5))))
     _rec.update({"chunks": [], "device": device, "started_at": time.monotonic(),
-                 "wave": None, "peak_recent": 0.0, "error": None})
+                 "wave": None, "peak_recent": 0.0, "error": None,
+                 "continuous": continuous, "peak_threshold": peak_threshold,
+                 "silence_ms": silence_ms, "min_speech_ms": min_speech_ms,
+                 "max_utterance_s": max_utterance_s, "pre_roll_s": pre_roll_s,
+                 "pre_roll": [], "pre_roll_frames": 0, "speech_started_at": None,
+                 "last_voice_at": None, "utterance_ready": False})
 
     def _cb(indata, frames, t, status):
         if status:
             _rec["error"] = str(status)
         data = indata.copy().reshape(-1)
+        peak = float(np.abs(data).max())
+        _rec["peak_recent"] = peak
+        if not _rec["continuous"]:
+            _rec["chunks"].append(data)
+            return
+        if _rec["utterance_ready"]:
+            return
+        now = time.monotonic()
+        if _rec["speech_started_at"] is None:
+            _rec["pre_roll"].append(data)
+            _rec["pre_roll_frames"] += len(data)
+            max_pre = int(_rec["pre_roll_s"] * 16000)
+            while _rec["pre_roll"] and _rec["pre_roll_frames"] > max_pre:
+                old = _rec["pre_roll"].pop(0)
+                _rec["pre_roll_frames"] -= len(old)
+            if peak >= _rec["peak_threshold"]:
+                _rec["speech_started_at"] = now
+                _rec["last_voice_at"] = now
+                _rec["chunks"] = list(_rec["pre_roll"])
+                _rec["pre_roll"] = []
+                _rec["pre_roll_frames"] = 0
+            return
         _rec["chunks"].append(data)
-        _rec["peak_recent"] = float(np.abs(data).max())
+        if peak >= _rec["peak_threshold"]:
+            _rec["last_voice_at"] = now
+        speech_ms = (now - _rec["speech_started_at"]) * 1000
+        silence_ms_now = (now - (_rec["last_voice_at"] or now)) * 1000
+        if ((speech_ms >= _rec["min_speech_ms"] and silence_ms_now >= _rec["silence_ms"])
+                or speech_ms >= _rec["max_utterance_s"] * 1000):
+            _rec["utterance_ready"] = True
 
     try:
         stream = sd.InputStream(samplerate=16000, channels=1, dtype="float32",
@@ -545,7 +623,8 @@ async def record_start(req: dict):
         dev_name = sd.query_devices(device)["name"] if device is not None else \
             sd.query_devices(sd.default.device[0])["name"]
         logger.info("Recording started: device=%s (%s)", device, dev_name)
-        return {"status": "recording", "device": device, "device_name": dev_name}
+        return {"status": "recording", "device": device, "device_name": dev_name,
+                "continuous": continuous}
     except Exception as e:
         _rec["stream"] = None
         logger.error("Record start failed: %s", e)
@@ -559,6 +638,11 @@ async def record_status():
     return {"recording": recording,
             "elapsed_s": round(time.monotonic() - _rec["started_at"], 1) if recording and _rec["started_at"] else 0,
             "peak_recent": round(_rec["peak_recent"], 5),
+            "continuous": bool(_rec["continuous"]),
+            "speech_detected": _rec["speech_started_at"] is not None,
+            "speech_elapsed_ms": round((time.monotonic() - _rec["speech_started_at"]) * 1000) if recording and _rec["speech_started_at"] else 0,
+            "silence_elapsed_ms": round((time.monotonic() - _rec["last_voice_at"]) * 1000) if recording and _rec["last_voice_at"] else 0,
+            "utterance_ready": bool(_rec["utterance_ready"]),
             "has_audio": _rec["wave"] is not None,
             "error": _rec["error"]}
 

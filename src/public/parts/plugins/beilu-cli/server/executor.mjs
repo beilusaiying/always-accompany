@@ -29,7 +29,9 @@ import { readFile, writeFile, listFiles } from "./tools/file-tools.mjs";
 import { editXlsx } from "./tools/doc-tools.mjs";
 import { searchFiles, searchByName } from "./tools/search-tools.mjs";
 import { replaceLines, insertAtLine, fuzzyEdit } from "./tools/edit-tools.mjs";
-import { runCommand, runScript, disposeShellSession } from "./tools/command-tools.mjs";
+import {
+  runCommand, runScript, disposeShellSession, consumeShellTerminationFailures,
+} from "./tools/command-tools.mjs";
 import { getDiagnostics, getStatus } from "./tools/diagnostic-tools.mjs";
 import {
   gotoDefinition, findReferences, getProjectSummary,
@@ -117,9 +119,30 @@ function _transportContext(raw, {
   };
 }
 
+function _collectTerminationFailures(value, path = "result", seen = new Set(), failures = []) {
+  if (!value || typeof value !== "object" || seen.has(value)) return failures;
+  seen.add(value);
+  if (value.processTermination && typeof value.processTermination === "object"
+      && value.processTermination.stopped === false) {
+    failures.push({ path: `${path}.processTermination`, ...value.processTermination });
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => _collectTerminationFailures(entry, `${path}[${index}]`, seen, failures));
+  } else {
+    for (const [key, entry] of Object.entries(value)) {
+      if (key !== "processTermination") _collectTerminationFailures(entry, `${path}.${key}`, seen, failures);
+    }
+  }
+  return failures;
+}
+
 export class ToolExecutor {
   constructor(workspaceRoot) {
     if (workspaceRoot) setWorkspaceRoot(workspaceRoot);
+    this._accepting = true;
+    this._activeExecutions = new Set();
+    this._terminationFailures = [];
+    this._disposePromise = null;
     // ══ checkpoint 按窗口/线分池（凛倾 0727「直接做池，每个窗口的指令 id 不一样就行」）══
     // 【why】原来是**进程级唯一**一个 FileCheckpoint：一个 CLI 服务 N 条线（指令已按会话键分池，
     //   command-tools.mjs 会话池同范式），但快照/回档空间只有一份 → 线 A 的检查点会出现在线 B 的
@@ -187,15 +210,15 @@ export class ToolExecutor {
       _reveal: (p) => _reveal(p),
 
       // ── 结构化 git ──
-      git_status: (p) => gitStatus(p),
-      git_diff: (p) => gitDiff(p),
-      git_log: (p) => gitLog(p),
-      git_add: (p) => gitAdd(p),
-      git_commit: (p) => gitCommit(p),
-      git_branch: (p) => gitBranch(p),
-      git_checkout: (p) => gitCheckout(p),
-      git_stash: (p) => gitStash(p),
-      git_merge: (p) => gitMerge(p),
+      git_status: (p, context) => gitStatus(p, context),
+      git_diff: (p, context) => gitDiff(p, context),
+      git_log: (p, context) => gitLog(p, context),
+      git_add: (p, context) => gitAdd(p, context),
+      git_commit: (p, context) => gitCommit(p, context),
+      git_branch: (p, context) => gitBranch(p, context),
+      git_checkout: (p, context) => gitCheckout(p, context),
+      git_stash: (p, context) => gitStash(p, context),
+      git_merge: (p, context) => gitMerge(p, context),
     };
   }
 
@@ -219,7 +242,24 @@ export class ToolExecutor {
    * 执行工具调用（唯一入口）。前/后处理与 YonBan ToolExecutor.execute 同构：
    * checkpoint 钉住 → handler → hint/_debug → 写后诊断 → contextAnchor → resolvedPath → A2 去吞错。
    */
-  async execute(req, lifecycle = null) {
+  execute(req, lifecycle = null) {
+    if (!this._accepting) {
+      return Promise.resolve({ id: req?.id, success: false, error: "executor_shutting_down" });
+    }
+    const execution = this._execute(req, lifecycle);
+    this._activeExecutions.add(execution);
+    void execution.then(
+      (result) => {
+        const failures = _collectTerminationFailures(result, `tool:${req?.tool || "unknown"}`);
+        if (failures.length) this._terminationFailures.push(...failures);
+        this._activeExecutions.delete(execution);
+      },
+      () => this._activeExecutions.delete(execution),
+    );
+    return execution;
+  }
+
+  async _execute(req, lifecycle = null) {
     const params = req.params && typeof req.params === "object" && !Array.isArray(req.params)
       ? req.params
       : {};
@@ -253,7 +293,7 @@ export class ToolExecutor {
 
     const _t0 = Date.now();
     try {
-      const result = RUNTIME_POLICY_TOOLS.has(req.tool)
+      const result = RUNTIME_POLICY_TOOLS.has(req.tool) || req.tool.startsWith("git_")
         ? await handler(handlerParams, context)
         : await handler(handlerParams);
       const _ms = Date.now() - _t0;
@@ -380,7 +420,35 @@ export class ToolExecutor {
     }
     // 持久 shell 全部销毁：工作区是进程级的，换根后**每条线**的 shell cwd 都失效了，
     //   不是只有当前线（故此处无参全销毁是对的，不改成按键销毁）。
-    try { disposeShellSession(); } catch { /* 无在跑 session 时 no-op */ }
+    void disposeShellSession().then((results) => {
+      const failures = results.filter((result) => result.stopped === false);
+      if (failures.length) console.warn("[executor] 工作区切换时 shell 未完全终止", failures);
+    }).catch((error) => {
+      console.warn(`[executor] 工作区切换时销毁 shell 失败: ${error?.message || error}`);
+    });
+  }
+
+  /**
+   * 进程级资源收口：停止接收新调用，等待已在执行的 handler，
+   * 再销毁并等待全部长驻 shell 进程树退出。幂等，所有关停路径共用同一个 promise。
+   */
+  dispose() {
+    if (this._disposePromise) return this._disposePromise;
+    this._accepting = false;
+    this._disposePromise = (async () => {
+      const active = [...this._activeExecutions];
+      if (active.length) await Promise.allSettled(active);
+      const shellResults = await disposeShellSession();
+      const shellLedgerFailures = await consumeShellTerminationFailures();
+      const terminationFailures = [...this._terminationFailures, ...shellLedgerFailures];
+      return {
+        success: terminationFailures.length === 0,
+        activeExecutions: active.length,
+        shellResults,
+        terminationFailures,
+      };
+    })();
+    return this._disposePromise;
   }
 
   getToolList() {

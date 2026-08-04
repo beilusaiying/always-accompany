@@ -55,6 +55,9 @@ let lastOutputId = 0; // 上次获取的输出ID
 let messages = []; // 对话面板消息记录
 let fileTreeVisible = false; // 文件树是否可见
 let currentActiveMode = "chat"; // 当前活跃模式（chat/code）
+let _presetsChangedListenerBound = false; // init 可能被重复调用；跨面板刷新事件只绑定一次
+let _presetActivationBusy = false;
+let _presetActivationTargetId = "";
 
 // ============================================================
 // DOM 引用
@@ -101,7 +104,7 @@ async function memoryPost(data) {
   return sendAction({ verb: _action, target: "plugins:beilu-memory", source: "web", payload: rest });
 }
 
-async function fetchPresets() {
+async function fetchPresets({ throwOnError = false } = {}) {
   try {
     // T6b批7：getdata → sendAction beilu-memory#getData（桥路由，unwrap 还原为旧 REST 裸数据形状），返回同结构。
     const result = await sendAction({ verb: "getData", target: "plugins:beilu-memory", source: "web" });
@@ -110,6 +113,7 @@ async function fetchPresets() {
     return result?.memory_presets || [];
   } catch (err) {
     console.error("[memoryPresetChat] 获取预设列表失败:", err);
+    if (throwOnError) throw err;
     return [];
   }
 }
@@ -169,16 +173,19 @@ const TRIGGER_LABELS = {
   manual_or_auto: "手动/自动",
 };
 
+function getVisibleManualPresets() {
+  return currentActiveMode === "code" || currentActiveMode === "work"
+    ? presets.filter((p) => p.id !== "P1")
+    : presets.filter((p) => p.id !== "P1" && p.id !== "P7");
+}
+
 function renderPresetSwitcher() {
   if (!els.presetSwitcher) return;
 
   // 根据模式过滤预设：
   // - 编程/工作模式显示 P2-P7（P1 自动检索不需手动，P2-P6 有专用提示词，P7 压缩AI）
   // - 聊天模式显示 P2-P6（P1 自动检索，P7 仅编程/工作模式可见）
-  const manualPresets =
-    currentActiveMode === "code" || currentActiveMode === "work"
-      ? presets.filter((p) => p.id !== "P1")
-      : presets.filter((p) => p.id !== "P1" && p.id !== "P7");
+  const manualPresets = getVisibleManualPresets();
 
   if (manualPresets.length === 0) {
     els.presetSwitcher.innerHTML =
@@ -193,7 +200,10 @@ function renderPresetSwitcher() {
       const shortName = (p.name || "").replace(/\s*AI\s*$/, "").substring(0, 4);
       return `
 			<button class="mem-switcher-btn ${isActive ? "mem-switcher-active" : ""}"
+					type="button"
 					data-preset-id="${escapeHtml(p.id)}"
+					${_presetActivationBusy ? "disabled" : ""}
+					${_presetActivationTargetId === p.id ? 'aria-busy="true"' : ""}
 					title="${escapeHtml(p.name || p.id)}${p.description ? "\n" + escapeHtml(p.description) : ""}${triggerLabel ? "\n触发: " + triggerLabel : ""}">
 				<span class="mem-switcher-id">${escapeHtml(p.id)}</span>
 				${shortName ? `<span class="text-[8px] opacity-50 leading-none">${escapeHtml(shortName)}</span>` : ""}
@@ -204,26 +214,69 @@ function renderPresetSwitcher() {
 
   // 绑定点击事件
   els.presetSwitcher.querySelectorAll(".mem-switcher-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      selectPreset(btn.dataset.presetId, { persist: true }); // 用户点击=改绑（凛倾0706），写后端持久位
-      showChatView();
-    });
+    btn.addEventListener("click", () => activatePresetFromUi(btn.dataset.presetId));
   });
+}
+
+async function handleMemoryPresetsChanged(event) {
+  const previousSelectedId = selectedPresetId;
+  const { presetId = "", activated = false, source = "" } = event?.detail || {};
+  if (source === "memory-chat") return;
+  try {
+    presets = await fetchPresets({ throwOnError: true });
+  } catch (e) {
+    console.error("[memoryPresetChat] 创建后刷新预设列表失败:", e);
+    return;
+  }
+
+  const visibleIds = new Set(getVisibleManualPresets().map((preset) => preset.id));
+  if (activated && presetId && visibleIds.has(presetId)) {
+    selectPreset(presetId); // 后端已完成激活；这里只同步 UI，不再次持久化
+    return;
+  }
+  if (previousSelectedId && visibleIds.has(previousSelectedId)) {
+    selectPreset(previousSelectedId); // 保持用户当前有效选择，不写后端
+    return;
+  }
+  if (_persistedActiveId && visibleIds.has(_persistedActiveId)) {
+    selectPreset(_persistedActiveId); // 当前选择已失效时回到后端真 active，不写后端
+    return;
+  }
+  renderPresetSwitcher();
 }
 
 // ============================================================
 // 预设选择
 // ============================================================
 
-function selectPreset(presetId, opts = {}) {
-  selectedPresetId = presetId;
-  // p系列持久激活位（凛倾0706「切换=改绑」）：仅用户显式点击 persist（init/模式切换的默认选中
-  //   不写，防把兜底默认覆盖用户已存绑定）。fire-and-forget：写失败不阻断选中 UI，console 可见。
-  if (opts.persist) {
+async function activatePresetFromUi(presetId) {
+  if (_presetActivationBusy || !presets.some((preset) => preset.id === presetId)) return;
+  _presetActivationBusy = true;
+  _presetActivationTargetId = presetId;
+  renderPresetSwitcher();
+  try {
+    const result = await memoryPost({ _action: "setActiveMemoryPreset", presetId });
+    if (!result?.success || result?.active_preset_id !== presetId) {
+      const error = new Error(result?.error || "后端未回读到目标 presetId");
+      error.isBusinessFailure = true;
+      throw error;
+    }
     _persistedActiveId = presetId;
-    memoryPost({ _action: "setActiveMemoryPreset", presetId }).catch((e) =>
-      console.warn("[memoryPresetChat] 持久化激活预设失败:", e?.message || e));
+    selectPreset(presetId);
+    showChatView();
+    window.dispatchEvent(new CustomEvent("beilu:memory-presets-changed", { detail: { presetId, activated: true, source: "memory-chat" } }));
+  } catch (error) {
+    console.warn("[memoryPresetChat] 激活记忆预设失败:", error);
+    if (error?.isBusinessFailure) window._beiluToast?.(`切换预设失败：${error.message}`, "error");
+  } finally {
+    _presetActivationBusy = false;
+    _presetActivationTargetId = "";
+    renderPresetSwitcher();
   }
+}
+
+function selectPreset(presetId) {
+  selectedPresetId = presetId;
   const preset = presets.find((p) => p.id === presetId);
   if (!preset) return;
 
@@ -1261,6 +1314,11 @@ function formatTime(ts) {
 
 export async function initMemoryPresetChat() {
   cacheDom();
+
+  if (!_presetsChangedListenerBound) {
+    window.addEventListener("beilu:memory-presets-changed", handleMemoryPresetsChanged);
+    _presetsChangedListenerBound = true;
+  }
 
   // 绑定事件
   els.aiRunBtn?.addEventListener("click", handleRun);

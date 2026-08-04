@@ -5,14 +5,17 @@
 /* IDE 容器 */
 .ide-container {
   height: 100%;
-  background-color: var(--color-base-100);
+  background-color: var(--beilu-surface-workspace);
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
 }
 
 /* 活动栏 */
 .ide-activity-bar {
   width: 48px;
-  background-color: var(--beilu-shadow-15);
-  border-right: 1px solid oklch(var(--bc) / 0.08);
+  background-color: var(--beilu-surface-raised);
+  border-right: 1px solid var(--beilu-border-default);
   padding: 4px 0;
   gap: 2px;
 }
@@ -24,12 +27,14 @@
   width: 40px;
   height: 40px;
   border: none;
-  background: transparent;
-  color: inherit;
+  background: var(--beilu-surface-raised);
+  color: var(--beilu-fg-muted);
   cursor: pointer;
   border-radius: 0.375rem;
-  opacity: 0.45;
-  transition: all 0.12s ease;
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    box-shadow var(--beilu-motion-press) var(--beilu-ease-standard);
   position: relative;
 }
 
@@ -44,13 +49,23 @@
 }
 
 .ide-activity-btn:hover {
-  opacity: 0.8;
-  background-color: oklch(var(--bc) / 0.06);
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-hover);
+}
+
+.ide-activity-btn:active {
+  background-color: var(--beilu-active);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
+}
+
+.ide-activity-btn:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 .ide-activity-btn.ide-activity-active {
-  opacity: 1;
-  background-color: var(--beilu-amber-15);
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-selection);
 }
 
 .ide-activity-btn.ide-activity-active::before {
@@ -60,7 +75,7 @@
   top: 25%;
   height: 50%;
   width: 2px;
-  background-color: var(--beilu-amber);
+  background-color: var(--beilu-action-accent);
   border-radius: 0 2px 2px 0;
 }
 
@@ -217,8 +232,9 @@
   width: 240px;
   min-width: 160px;
   max-width: 50vw;
-  background-color: var(--beilu-bg-card);
-  border-right: 1px solid oklch(var(--bc) / 0.08);
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+  border-right: 1px solid var(--beilu-border-default);
   position: relative;
 }
 
@@ -227,8 +243,9 @@
   width: 264px;
   min-width: 180px;
   max-width: 40vw;
-  background-color: var(--beilu-bg-card);
-  border-left: 1px solid oklch(var(--bc) / 0.08);
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+  border-left: 1px solid var(--beilu-border-default);
   transition: width 0.2s ease, min-width 0.2s ease;
 }
 .ide-rightbar.collapsed {
@@ -380,6 +397,12 @@
   height: 100%;
 }
 
+#ide-panel-explorer,
+#ide-editor-tabs + div {
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+}
+
 .ide-sidebar-panel.hidden {
   display: none !important;
 }
@@ -413,14 +436,16 @@
 
 /* IDE 主区域 */
 .ide-main {
-  background-color: var(--color-base-100);
+  background-color: var(--beilu-surface-workspace);
+  color: var(--beilu-fg-primary);
 }
 
 /* 菜单栏 */
 .ide-menubar {
   height: 28px;
-  background-color: var(--beilu-shadow-8);
-  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  min-height: 32px;
+  background-color: var(--beilu-surface-raised);
+  border-bottom: 1px solid var(--beilu-border-default);
   padding: 0 4px;
   font-size: 0.75rem;
   user-select: none;
@@ -433,17 +458,23 @@
 }
 
 .ide-menu-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
   padding: 2px 8px;
   cursor: pointer;
   border-radius: 0.25rem;
   transition: background-color 0.1s ease;
-  color: inherit;
-  opacity: 0.75;
+  color: var(--beilu-fg-secondary);
 }
 
 .ide-menu-label:hover {
-  opacity: 1;
-  background-color: var(--beilu-amber-12);
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-hover);
+}
+
+.ide-menu-label:active {
+  background-color: var(--beilu-active);
 }
 
 /* 菜单下拉 */
@@ -453,10 +484,11 @@
   left: 0;
   z-index: 50;
   min-width: 200px;
-  background-color: var(--beilu-bg-card);
-  border: 1px solid var(--beilu-amber-25);
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  border: 1px solid var(--beilu-border-default);
   border-radius: 0.375rem;
-  box-shadow: 0 4px 16px var(--beilu-shadow-40);
+  box-shadow: var(--beilu-panel-shadow);
   padding: 4px 0;
   animation: ide-menu-in 0.1s ease;
 }
@@ -480,7 +512,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  min-height: 36px;
+  padding: 6px 12px;
   font-size: 0.75rem;
   cursor: pointer;
   transition: background-color 0.1s ease;
@@ -488,8 +521,31 @@
 }
 
 .ide-menu-action:hover {
-  background-color: var(--beilu-amber-15);
-  color: var(--beilu-amber);
+  background-color: var(--beilu-hover);
+  color: var(--beilu-fg-primary);
+}
+
+.ide-menu-action:active {
+  background-color: var(--beilu-active);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
+}
+
+.ide-menu-action:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
+}
+
+/* 保留点击事件用于解释禁用原因；不用 pointer-events:none，也不靠父级 opacity 淡化文字。 */
+.ide-menu-action.ide-menu-action-disabled,
+.ide-menu-action[aria-disabled="true"],
+.ide-menu-action.ide-menu-action-disabled:hover,
+.ide-menu-action[aria-disabled="true"]:hover,
+.ide-menu-action.ide-menu-action-disabled:active,
+.ide-menu-action[aria-disabled="true"]:active {
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-disabled);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .ide-menu-action[data-shortcut]::after {
@@ -518,10 +574,10 @@
 
 /* 编辑器标签栏 */
 .ide-editor-tabs {
-  height: 32px;
-  min-height: 32px;
-  background-color: var(--beilu-shadow-5);
-  border-bottom: 1px solid oklch(var(--bc) / 0.07);
+  height: 36px;
+  min-height: 36px;
+  background-color: var(--beilu-surface-raised);
+  border-bottom: 1px solid var(--beilu-border-default);
   gap: 0;
   scrollbar-width: none;
 }
@@ -538,22 +594,39 @@
   height: 100%;
   font-size: 0.75rem;
   cursor: pointer;
-  border-right: 1px solid oklch(var(--bc) / 0.06);
-  transition: background-color 0.1s ease;
+  border-right: 1px solid var(--beilu-border-subtle);
+  border-bottom: 2px solid transparent;
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    box-shadow var(--beilu-motion-press) var(--beilu-ease-standard);
   white-space: nowrap;
   max-width: 160px;
   position: relative;
 }
 
 .ide-editor-tab:hover {
-  background-color: oklch(var(--bc) / 0.06);
+  background-color: var(--beilu-hover);
+  color: var(--beilu-fg-primary);
+}
+
+.ide-editor-tab:active {
+  background-color: var(--beilu-active);
+  box-shadow: inset 0 -3px 0 var(--beilu-action-accent);
+}
+
+.ide-editor-tab:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 .ide-editor-tab.ide-tab-active {
-  background-color: var(--color-base-100);
-  color: var(--beilu-amber);
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
   font-weight: 500;
-  border-bottom: 2px solid var(--beilu-amber);
+  border-bottom-color: var(--beilu-action-accent);
 }
 
 .ide-editor-tab .ide-tab-name {
@@ -565,48 +638,167 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  min-inline-size: var(--beilu-target-min);
+  min-block-size: var(--beilu-target-min);
   border: none;
-  background: transparent;
-  color: inherit;
+  background: var(--beilu-surface-raised);
+  color: var(--beilu-fg-muted);
   font-size: 0.7rem;
   cursor: pointer;
   border-radius: 2px;
-  opacity: 0;
-  transition: all 0.1s ease;
+  transition:
+    background-color var(--beilu-motion-press) var(--beilu-ease-standard),
+    color var(--beilu-motion-press) var(--beilu-ease-standard);
   flex-shrink: 0;
 }
 
-.ide-editor-tab:hover .ide-tab-close {
-  opacity: 0.5;
+.ide-editor-tab .ide-tab-close:hover {
+  background-color: var(--beilu-hover);
+  color: var(--beilu-state-error);
 }
 
-.ide-editor-tab .ide-tab-close:hover {
-  opacity: 1;
-  background-color: var(--beilu-error-25);
-  color: var(--beilu-error);
+.ide-editor-tab .ide-tab-close:active {
+  background-color: var(--beilu-active);
+}
+
+.ide-editor-tab .ide-tab-close:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 .ide-editor-tab .ide-tab-dirty {
-  color: var(--beilu-amber);
-  font-size: 0.5rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--beilu-state-warning);
   flex-shrink: 0;
 }
 
 .ide-tabs-placeholder {
   padding: 0 12px;
+  color: var(--beilu-fg-muted);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
   font-style: italic;
+}
+
+.ide-tabs-close-all {
+  margin-left: auto;
+  min-height: 32px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 活动文件 breadcrumb 由 fileExplorer owner 动态插入，不依赖静态 HTML。 */
+.ide-editor-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 0.625rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--beilu-border-subtle);
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-secondary);
+  font-family: var(--beilu-font-ui);
+  font-size: 0.75rem;
+}
+
+.ide-editor-breadcrumb[hidden] {
+  display: none;
+}
+
+.ide-editor-breadcrumb-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--beilu-fg-accent);
+}
+
+.ide-editor-breadcrumb-segment {
+  display: inline-block;
+  flex: 0 1 auto;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.ide-editor-breadcrumb-segment.current {
+  color: var(--beilu-fg-primary);
+  font-weight: 600;
+}
+
+.ide-editor-breadcrumb-separator {
+  flex: 0 0 auto;
+  color: var(--beilu-fg-muted);
+}
+
+.ide-editor-breadcrumb-type {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--beilu-fg-muted);
 }
 
 /* 状态栏 */
 .ide-statusbar {
   height: 22px;
   min-height: 22px;
-  background-color: var(--beilu-amber-dark);
+  background-color: var(--beilu-surface-inverse);
   padding: 0 8px;
-  color: var(--color-base-content);
-  text-shadow: 0 1px 2px var(--beilu-shadow-30);
+  color: var(--beilu-fg-inverse);
+  font-family: var(--beilu-font-mono);
+  font-size: 0.75rem;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.ide-statusbar > div {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ide-statusbar > div:last-child {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ide-statusbar > div:last-child::-webkit-scrollbar {
+  display: none;
+}
+
+.ide-statusbar #ide-status-file,
+.ide-statusbar #ide-status-encoding,
+.ide-statusbar #ide-status-lang,
+.ide-status-item {
+  color: inherit;
+  font-family: var(--beilu-font-mono);
+  font-size: 0.75rem;
+}
+
+#ide-status-state {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+#ide-status-state[data-state="dirty"],
+#ide-status-state[data-state="saving"] {
+  border-color: var(--beilu-state-warning);
+}
+
+#ide-status-state[data-state="error"] {
+  border-color: var(--beilu-state-error);
+}
+
+#ide-status-state[data-state="readonly"] {
+  border-color: var(--beilu-border-strong);
 }
 
 /* ============================================================
@@ -614,13 +806,323 @@
    ============================================================ */
 
 #file-root-input {
-  background-color: var(--beilu-shadow-10);
-  border-color: var(--beilu-amber-20);
+  min-height: 36px;
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
 }
 
 #file-root-input:focus {
-  border-color: var(--beilu-amber);
-  box-shadow: 0 0 0 2px var(--beilu-amber-15);
+  border-color: var(--beilu-border-focus);
+  box-shadow: 0 0 0 2px var(--beilu-focus);
+}
+
+#file-search-input {
+  min-height: 36px;
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+}
+
+#file-search-input::placeholder {
+  color: var(--beilu-fg-secondary);
+}
+
+#file-search-input:focus {
+  border-color: var(--beilu-border-focus);
+  box-shadow: 0 0 0 2px var(--beilu-focus);
+}
+
+#file-root-go,
+#file-search-go,
+#file-tree-open-folder,
+#file-tree-open-file,
+#file-tree-refresh,
+#file-root-copy {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: var(--z-popup);
+  min-width: 180px;
+  padding: 0.25rem 0;
+  border: 1px solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  box-shadow: var(--beilu-panel-shadow);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+}
+
+.file-context-action {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.375rem 0.75rem;
+  border: 0;
+  border-left: 3px solid transparent;
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-press) var(--beilu-ease-standard);
+}
+
+.file-context-action:hover {
+  background-color: var(--beilu-hover);
+}
+
+.file-context-action:active {
+  background-color: var(--beilu-active);
+  border-left-color: var(--beilu-action-accent);
+}
+
+.file-context-action:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
+}
+
+.file-context-action.danger {
+  color: var(--beilu-state-error);
+}
+
+.file-context-menu .divider {
+  background-color: var(--beilu-border-subtle);
+}
+
+/* filePicker 的旧规则在 inline-components.css；此处是 A3 的语义 surface/状态收口。 */
+.fp-modal {
+  background-color: var(--beilu-surface-modal);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+  box-shadow: var(--beilu-panel-shadow);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+}
+
+.fp-header,
+.fp-path-bar,
+.fp-breadcrumb,
+.fp-footer {
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+}
+
+.fp-title {
+  color: var(--beilu-fg-primary);
+}
+
+.fp-list-container,
+.fp-list {
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+}
+
+.fp-path-input {
+  min-height: 36px;
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+}
+
+.fp-path-input:focus {
+  border-color: var(--beilu-border-focus);
+  box-shadow: 0 0 0 2px var(--beilu-focus);
+}
+
+.fp-close-btn,
+.fp-up-btn,
+.fp-go-btn {
+  min-width: 32px;
+  min-height: 32px;
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+  border-color: var(--beilu-border-default);
+}
+
+.fp-close-btn:hover,
+.fp-up-btn:hover,
+.fp-go-btn:hover {
+  background-color: var(--beilu-hover);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-strong);
+}
+
+.fp-close-btn:active,
+.fp-up-btn:active,
+.fp-go-btn:active,
+.fp-cancel-btn:active,
+.fp-confirm-btn:active {
+  background-color: var(--beilu-active);
+}
+
+.fp-close-btn:focus-visible,
+.fp-up-btn:focus-visible,
+.fp-go-btn:focus-visible,
+.fp-path-input:focus-visible,
+.fp-cancel-btn:focus-visible,
+.fp-confirm-btn:focus-visible,
+.fp-crumb:focus-visible,
+.fp-item:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
+}
+
+.fp-crumb {
+  min-height: 28px;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid transparent;
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+}
+
+.fp-crumb:hover {
+  background-color: var(--beilu-hover);
+  color: var(--beilu-fg-primary);
+}
+
+.fp-crumb:active {
+  background-color: var(--beilu-active);
+  border-color: var(--beilu-action-accent);
+}
+
+.fp-crumb-active {
+  color: var(--beilu-fg-primary);
+  border-bottom-color: var(--beilu-action-accent);
+}
+
+.fp-crumb-sep,
+.fp-selected-label,
+.fp-item-size,
+.fp-item-kind,
+.fp-loading,
+.fp-empty {
+  color: var(--beilu-fg-muted);
+}
+
+.fp-item {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-press) var(--beilu-ease-standard),
+    box-shadow var(--beilu-motion-press) var(--beilu-ease-standard);
+}
+
+.fp-item:hover {
+  background-color: var(--beilu-hover);
+}
+
+.fp-item:active {
+  background-color: var(--beilu-active);
+  border-left-color: var(--beilu-action-accent);
+}
+
+.fp-item[aria-selected="true"] {
+  background-color: var(--beilu-selection);
+  color: var(--beilu-fg-primary);
+  border-left-color: var(--beilu-action-accent);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
+}
+
+.fp-item-icon {
+  color: var(--beilu-fg-secondary);
+}
+
+.fp-item-kind {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.fp-error {
+  color: var(--beilu-state-error);
+}
+
+.fp-cancel-btn,
+.fp-confirm-btn {
+  min-height: 36px;
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-primary);
+  border-color: var(--beilu-border-default);
+}
+
+.fp-confirm-btn:not(:disabled) {
+  background-color: var(--beilu-action-accent);
+  color: var(--beilu-fg-on-accent);
+  border-color: var(--beilu-action-accent);
+}
+
+.fp-confirm-btn:disabled {
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-disabled);
+  border-color: var(--beilu-border-subtle);
+}
+
+.fp-disclaimer-overlay {
+  z-index: var(--z-overlay);
+}
+
+.fp-modal-disclaimer {
+  max-width: 480px;
+}
+
+.fp-disclaimer-body {
+  padding: 1rem;
+  color: var(--beilu-fg-primary);
+  font-size: var(--beilu-font-size-ui);
+  line-height: var(--beilu-line-height-content);
+}
+
+.fp-disclaimer-body p {
+  margin-bottom: 0.75rem;
+}
+
+.fp-disclaimer-warning {
+  color: var(--beilu-state-warning);
+}
+
+.fp-disclaimer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--beilu-border-default);
+}
+
+.fp-disclaimer-accept {
+  min-width: 112px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-tree-item,
+  .file-search-hit,
+  .file-context-action,
+  .ide-activity-btn,
+  .ide-editor-tab,
+  .fp-item,
+  .fp-crumb {
+    transition-duration: 0.01ms;
+  }
 }
 
 /* ============================================================
@@ -791,9 +1293,12 @@
 /* 单条输出条目 */
 .memory-ai-output-entry {
   padding: 0.25rem 0;
-  border-bottom: 1px solid oklch(var(--bc) / 0.06);
-  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
-  font-size: 0.72rem;
+  border-bottom: 1px solid var(--beilu-border-subtle);
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -833,11 +1338,11 @@
 
 /* 预设提示词编辑区 */
 #mem-preset-content {
-  font-family:
-    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-  font-size: 0.72rem;
-  line-height: 1.5;
-  background-color: var(--beilu-shadow-8);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
   tab-size: 4;
 }
 
@@ -1032,4 +1537,30 @@
 
 #right-sidebar-container {
   display: none !important;
+}
+
+/* 动效可访问性：所有实际 animation consumer 在减少动态时保持静态且可见。 */
+@media (prefers-reduced-motion: reduce) {
+  .cardp-run,
+  .ide-menu-dropdown,
+  .iframe-placeholder::before,
+  .mem-ai-msg {
+    animation: none;
+  }
+
+  .ide-menu-dropdown,
+  .iframe-placeholder::before,
+  .mem-ai-msg {
+    transform: none;
+  }
+
+  .cardp-run,
+  .ide-menu-dropdown,
+  .mem-ai-msg {
+    opacity: 1;
+  }
+
+  .mem-ai-msg {
+    transition-duration: 0.01ms;
+  }
 }

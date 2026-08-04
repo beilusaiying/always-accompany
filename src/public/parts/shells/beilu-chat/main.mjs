@@ -1,6 +1,6 @@
 import info from './info.json' with { type: 'json' }
 import { setEndpoints } from './src/endpoints.mjs'
-import { getChatIdsByCharName, deleteChat } from './src/chat.mjs'
+import { getChatIdsByCharName, deleteChat, classifyCharChatsForDeletion, isIndexedChat } from './src/chat.mjs'
 
 /**
  * beilu-chat Shell — always accompany 聊天界面
@@ -29,6 +29,8 @@ export default {
 		chat: {
 			getChatIdsByCharName,
 			deleteChat,
+			classifyCharChatsForDeletion,
+			isIndexedChat,
 		},
 	},
 }

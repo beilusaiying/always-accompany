@@ -30,6 +30,8 @@ YonBan 提供 30+ 工具，AI 在对话中通过 `<ideToolCall>` 标签调用。
 | run_command | 在 IDE 终端执行命令 | command, cwd | 写 |
 | run_script | 执行脚本文件 | path, args | 写 |
 
+**进程静默看门狗（Command Stall Watchdog）**：run_command / run_script 执行期间，系统监控进程的 CPU、内存与输出静默时长——命令长时间无输出且无活动时（默认静默 60 秒判定、5 秒采样），自动终止整棵进程树并返回结构化的 `[tool_failure]`（附已产生的 stdout/stderr），AI 能据此判断和汇报，而不是黑屏干等。看门狗策略（终止/仅通知）与停滞通知开关在设置面板可编辑。**失败语义也更诚实**：非零退出码、输出超限（1MB）现在会如实报失败——不会再"看起来成功"。
+
 ## 诊断（5）
 
 | 工具 | 功能 | 关键参数 | 读/写 |

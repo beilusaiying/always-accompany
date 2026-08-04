@@ -242,8 +242,12 @@ async function handleCreateUser() {
 			return
 		}
 
-		// 新用户标志：beilu-chat 首次进入据此自动打开「设置→语言」一次（凛倾 0716：只对新用户，出现一次）
-		try { localStorage.setItem('beiluNewUser', '1') } catch { /* 存储不可用则跳过引导 */ }
+		// 新用户语言引导必须同时绑定“本次注册用户名”和当前标签页：自动登录失败后即使切回
+		// 旧账号，也不能让浏览器全局布尔值把引导错误消费到另一个用户。
+		try {
+			sessionStorage.setItem('beiluNewUser', JSON.stringify({ version: 1, username, createdAt: Date.now() }))
+			localStorage.removeItem('beiluNewUser') // 清理旧版本无账号归属的全局标志
+		} catch { /* 存储不可用则跳过引导 */ }
 
 		// 2. 自动登录
 		const deviceId = getDeviceId()

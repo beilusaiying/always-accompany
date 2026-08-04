@@ -17,7 +17,7 @@ import {
   switchModeTo,
   getModeChatIdKey,
 } from "../../panels/feature/featureControls.mjs";
-import { escapeHtml, DEFAULT_AVATAR, resolveAvatar, normalizeModelsUrl } from "../state/utils.mjs"; // [合并批 0714] normalizeModelsUrl=models 端点规整单源
+import { escapeHtml, DEFAULT_AVATAR, resolveAvatar } from "../state/utils.mjs";
 import { DEFAULTS } from "../../config/defaults.mjs"; // T6：cleanup 模式缺省单源，收口 `|| "auto"` 副本
 
 const _escHtml = escapeHtml;
@@ -836,17 +836,14 @@ function initAuxMenu() {
     });
   });
 
-  // auto_trigger: 教程JSON可配首次使用/首次可见/事件触发自动出现（凛倾0715审阅第2条）
-  // 替代原硬编码的welcome首次播放——现在任何教程都可以配auto_trigger
-  setTimeout(() => {
-    import("../tutorial/tutorialEngine.mjs").then(eng => eng.initAutoTriggers()).catch(() => {});
-  }, 3500);
+  // 实验性教程不再随页面自动启动。教程开发与「帮助教程」手动入口仍保留，
+  // 但 auto_trigger / desk_button 不得在用户打开聊天时遮挡真实界面。
 }
 
 /**
  * 帮助模式入口(凛倾0715MSG#9/12: 不是列表盲选，是模式开关)。
  * 点帮助图标 → 进帮助模式(板块出?) / 再点退出。每种结果都有可见反馈, 不静默。
- * (welcome 首播由教程JSON的 auto_trigger first_open 承接, 不在此处)
+ * 自动播放已停用；这里只保留用户主动点击的帮助模式。
  */
 async function _playTutorialHelpMode() {
   const eng = await import("../tutorial/tutorialEngine.mjs");
@@ -904,16 +901,86 @@ document.addEventListener("keydown", (e) => {
 // API 未配置 banner 检查
 // ============================================================
 
-async function checkChatApiBanner() {
+let _chatApiSetupStatusRequestId = 0;
+
+function _describeChatApiSetup(setup, bindingState = {}) {
+  if (bindingState.hasExplicitBinding && !bindingState.explicitBindingUsable) {
+    const role = bindingState.charName ? `当前角色「${bindingState.charName}」` : "当前角色";
+    return `${role}绑定的 AI 源「${bindingState.sourceName}」不存在或配置不完整；请重新绑定或修复该源。`;
+  }
+  switch (setup?.status) {
+    case "default_missing":
+      return `已保存 ${setup?.usableSourceNames?.length || 0} 个可用 AI 源，但当前角色尚未绑定，且没有默认 API。`;
+    case "invalid_default":
+      return "默认 AI 服务源不完整或已失效；请到设置中修复或重新选择默认源。";
+    case "source_incomplete":
+      return "已检测到 AI 服务源，但渠道、地址或模型尚未完整保存。";
+    case "missing":
+      return "尚未配置 AI 服务源，发送消息将无法获得回复。";
+    default:
+      return "无法读取 AI 服务源状态；请打开设置检查配置。";
+  }
+}
+
+async function checkChatApiBanner({ charName: requestedCharName } = {}) {
   const banner = document.getElementById("chat-api-warning-banner");
   if (!banner) return;
+  const requestId = ++_chatApiSetupStatusRequestId;
   try {
-    // 原 raw GET AI 源列表 → 门面 getAISources；!ok 由门面抛错走 catch（原 catch 隐藏 banner 等价）
-    const list = await sendAction({ verb: "getAISources", target: "shells:serviceSourceManage", source: "web" });
-    banner.style.display =
-      Array.isArray(list) && list.length > 0 ? "none" : "flex";
-  } catch {
-    banner.style.display = "none";
+    // 状态只读；唯一完整的历史源没有默认绑定时，显式请求无歧义修复。多源/脏源不猜测。
+    let setup = await sendAction({ verb: "getAISetupStatus", target: "shells:serviceSourceManage", source: "web" });
+    if (setup?.repairableDefaultSourceName) {
+      setup = await sendAction({ verb: "repairAISetupDefault", target: "shells:serviceSourceManage", source: "web" });
+    }
+    if (requestId !== _chatApiSetupStatusRequestId) return;
+    // banner 判断的是「当前聊天能否取得源」，不是「是否存在全局默认」：
+    // 当前角色绑定的源可用时，即使多源用户没有全局默认，本轮生成链也已完整，不能假报警。
+    let currentCharConfigured = false;
+    let hasExplicitBinding = false;
+    let boundSourceName = "";
+    let bindingReadFailed = false;
+    const charName = requestedCharName || getCharId();
+    if (charName && Array.isArray(setup?.usableSourceNames)) {
+      try {
+        const binding = await sendAction({
+          verb: "getCharAISource",
+          target: "shells:chat",
+          source: "web",
+          payload: { charName },
+        });
+        boundSourceName = typeof binding?.AIsource === "string" ? binding.AIsource.trim() : "";
+        hasExplicitBinding = !!boundSourceName;
+        currentCharConfigured = hasExplicitBinding && setup.usableSourceNames.includes(boundSourceName);
+      } catch (error) {
+        // 角色绑定读取失败不覆盖 setup-status 的真实结果；保留提示并给设置入口。
+        bindingReadFailed = true;
+        console.warn("[layout] 无法读取当前角色 AI 源绑定:", error);
+      }
+    }
+    if (requestId !== _chatApiSetupStatusRequestId) return;
+    const text = document.getElementById("chat-api-warning-text");
+    if (text) text.textContent = bindingReadFailed
+      ? "无法读取当前角色的 AI 源绑定；请打开设置检查配置。"
+      : _describeChatApiSetup(setup, {
+          charName,
+          sourceName: boundSourceName,
+          hasExplicitBinding,
+          explicitBindingUsable: currentCharConfigured,
+        });
+    // 运行链优先使用角色显式绑定，只有绑定为空时才回退全局默认；提示必须复刻同一优先级。
+    const configuredForCurrentChat = bindingReadFailed
+      ? false
+      : hasExplicitBinding
+        ? currentCharConfigured
+        : setup?.configured === true;
+    banner.style.display = configuredForCurrentChat ? "none" : "flex";
+  } catch (error) {
+    if (requestId !== _chatApiSetupStatusRequestId) return;
+    // 读状态失败时仍保留显式配置入口，不能静默伪装为已配置。
+    console.warn("[layout] 无法读取 AI 配置状态:", error);
+    const text = document.getElementById("chat-api-warning-text");
+    if (text) text.textContent = "无法读取 AI 服务源状态；请打开设置检查配置。";
+    banner.style.display = "flex";
   }
 }
 
@@ -1128,69 +1195,19 @@ export function initLayout() {
       if (banner) banner.style.display = "none";
     });
 
-  // W29 §2.2: 首次使用引导 — 内联快速API配置
-  document.getElementById("onboard-toggle")?.addEventListener("click", () => {
-    const form = document.getElementById("onboard-form");
-    if (form) form.classList.toggle("hidden");
-  });
-  document.getElementById("onboard-save")?.addEventListener("click", async () => {
-    const url = document.getElementById("onboard-url")?.value?.trim();
-    const key = document.getElementById("onboard-key")?.value?.trim();
-    const model = document.getElementById("onboard-model")?.value?.trim();
-    if (!url) { window._beiluToast?.("请填写API地址", "warning"); return; }
-    if (!key) { window._beiluToast?.("请填写API Key", "warning"); return; }
-    if (!model) { window._beiluToast?.("请填写模型名称", "warning"); return; }
-    try {
-      // 创建AI服务源。原 raw POST AI/${sourceName} {name,url,key,model} → 复用分身S 已注册 saveAISource（payload.name 进 URL，payload.data 进 body）；!ok 由门面抛错走 catch
-      const sourceName = "default";
-      await sendAction({ verb: "saveAISource", target: "shells:serviceSourceManage", source: "web", payload: {
-        name: sourceName,
-        data: { name: sourceName, url: url.replace(/\/+$/, ""), key, model },
-      } });
-      window._beiluToast?.("API 配置已保存", "success");
-      // 隐藏banner
-      const banner = document.getElementById("chat-api-warning-banner");
-      if (banner) banner.style.display = "none";
-      // 刷新API配置
-      window.dispatchEvent(new Event("resource:api-changed"));
-    } catch (err) {
-      window._beiluToast?.("保存失败: " + err.message, "error");
-    }
-  });
-
-  // 模型列表获取（onboarding 下拉）
-  document.getElementById("onboard-fetch-models")?.addEventListener("click", async () => {
-    const url = document.getElementById("onboard-url")?.value?.trim();
-    const key = document.getElementById("onboard-key")?.value?.trim();
-    if (!url) { window._beiluToast?.("请先填写API地址", "warning"); return; }
-    const btn = document.getElementById("onboard-fetch-models");
-    if (btn) { btn.disabled = true; btn.textContent = "..."; }
-    try {
-      // [合并批 0714] 内联规整副本删除 → normalizeModelsUrl 单源（原副本缺协议补全，收口后顺带补齐）
-      const modelsUrl = normalizeModelsUrl(url);
-      if (!modelsUrl) { window._beiluToast?.("无效的API地址", "error"); return; }
-      // R1-SKIP: modelsUrl=用户填的外部 API 端点(自管 Authorization Bearer)；apiFetch 401→/login 对外站有害。
-      const resp = await fetch(modelsUrl, { headers: key ? { Authorization: "Bearer " + key } : {} });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const result = await resp.json();
-      const models = (result.data || result || []);
-      const datalist = document.getElementById("onboard-model-list");
-      if (datalist) {
-        datalist.innerHTML = "";
-        for (const m of models) {
-          const id = typeof m === "string" ? m : m.id || m.name || "";
-          if (id) { const opt = document.createElement("option"); opt.value = id; datalist.appendChild(opt); }
-        }
-      }
-      window._beiluToast?.(`获取到 ${models.length} 个模型`, "success");
-    } catch (e) {
-      window._beiluToast?.("获取模型列表失败: " + e.message, "error");
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "获取"; }
-    }
+  // 只复用完整的 API 设置页，不再维护一套字段/协议不完整的内联“快速配置”表单。
+  document.getElementById("chat-api-open-settings")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("beilu:openApiSettings", { detail: { source: "chat-api-warning" } }));
   });
 
   window.addEventListener("resource:api-changed", () => checkChatApiBanner());
+  // 初始 check 常早于角色解析；角色/窗口身份就绪后必须按同一链重新判定，不能停在启动时假状态。
+  window.addEventListener("beilu:char-changed", (event) => {
+    checkChatApiBanner({ charName: event.detail?.charId || event.detail?.charName });
+  });
+  window.addEventListener("beilu:window-switched", (event) => {
+    checkChatApiBanner({ charName: event.detail?.char });
+  });
 
   // 初始化 MCP 管理面板（**全局唯一实例**：work 侧栏用的是同一个 DOM，见 workPanel._renderMcpSidebar
   //   的容器间搬移——0727 凛倾「work 的直接拉线,直接复刻 code 的,也不用缓存隔离」）
@@ -1295,4 +1312,3 @@ export function initLayout() {
     "[beilu-chat] 布局已初始化（顶部选项卡 + IDE 模式 + E1 模式会话隔离）",
   );
 }
-

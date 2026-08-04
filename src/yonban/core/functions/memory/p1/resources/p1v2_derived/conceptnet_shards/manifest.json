@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "shardCount": 256,
+  "languages": {
+    "zh": {
+      "file": "conceptnet_zh.json",
+      "size": 23092909,
+      "sourceSha256": "c4da002b25bc271b9db30a5c44c1af2a2432874e7fad5393eb72346987106a7e",
+      "sourceFingerprintVersion": 2,
+      "dir": "zh_23092909_c4da002b25bc271b",
+      "entries": 200697,
+      "shards": 256,
+      "format": "jsonl-pairs-v1",
+      "buildSeconds": 29.29
+    },
+    "en": {
+      "file": "conceptnet_en.json",
+      "size": 134405521,
+      "sourceSha256": "bf65f3da2227e7ec4b8b259ff50a4cecf2d067f65947a0710f71c1adbb7cf941",
+      "sourceFingerprintVersion": 2,
+      "dir": "en_134405521_bf65f3da2227e7ec",
+      "entries": 813144,
+      "shards": 256,
+      "format": "jsonl-pairs-v1",
+      "buildSeconds": 126.17
+    }
+  }
+}

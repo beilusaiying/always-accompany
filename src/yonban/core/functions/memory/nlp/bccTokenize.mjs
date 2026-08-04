@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { findResource as _resdirFind } from "../p1/p1_resdir.mjs"; // env P1_RESOURCE_DIR > memory/p1_res > 旧运行位
+import { findResource as _resdirFind } from "../p1/p1_resdir.mjs"; // P1 单一资源根
 
 const __bcc_dirname = path.dirname(path.dirname(fileURLToPath(import.meta.url))); // nlp/ → memory 根(数据文件所在)
 

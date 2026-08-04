@@ -54,10 +54,13 @@ import { createDiag } from "../../../../server/diagLogger.mjs";
 //   框架级中和（与 beilu-ejs sandboxOptOut 同范式）：allowExec 的【生效】走 deployGatedAllow——
 //   local（owner 自己机器）放行；server 多用户下除非 owner 显式 config.allowFileExec=true / env BEILU_FILE_EXEC=on，
 //   否则非 owner 经 setdata 翻的 allowExec 不生效（exec 照常拒）。
-import { deployGatedAllow } from "../../../../yonban/core/functions/security/path_confine.mjs";
+import { confinePath, confineSegment, deployGatedAllow } from "../../../../yonban/core/functions/security/path_confine.mjs";
 // N42: Bot 来源访问档位（L0-3）单源解析——与 10 个 bot 壳共用 botContentShared
 import { resolveRequestBotPermission } from "../../../../scripts/botContentShared.mjs";
-import { readJsonSafe } from "../../../../scripts/safeJsonIO.mjs"; // T019：持久化设置损坏不静默重建，备份.corrupt.bak后抛错（node:fs在Deno下可用，同上F6范式）
+// [D6 §4 2026-08-04] settings 单写者：本插件不再自行 read/parse/write beilu-files-settings.json
+//   （原 readJsonSafe 读侧 + 整文档 RMW 写队列 = B1 三写者之一），改经 filesSettingsStore
+//   （versioned+CAS+跨入口锁+损坏 fail-closed+显式 repair）。root/browse 政策同库单源。
+import * as settingsStore from "../../../../yonban/core/functions/security/filesSettingsStore.mjs";
 
 // 操作结果回喂指令文案：0710 配置链专项收口——默认值迁入 injectTexts CATALOG（files.op_result_instruction 键），
 // 用户覆盖通道落地（2026-07-08 注释挂账的「接覆盖待后批」即本批；[文件操作执行结果] 包裹=结构标注仍留代码）。
@@ -112,31 +115,63 @@ function generateId() {
  * @param {string[]} blockedPaths - 禁止的路径前缀
  * @returns {boolean}
  */
-function isPathAllowed(filePath, allowedPaths, blockedPaths) {
-  // F7a：filePath 进入时已是 canonical 绝对路径（ReplyHandler 已 resolveCanonicalOpPath）。
-  //   归一 + 边界形态比较（=== 或 prefix + "/"），防裸前缀误判兄弟目录
-  //   （如 blocked "/a/b" 不应误拦 "/a/bc"；allowed 同理）。条目本身也 resolve+norm 同口径。
+function isPathAllowed(filePath, workspaceRoot, physicalRoot, allowedPaths, blockedPaths) {
+  // filePath/physicalRoot 进入时均已是 physical canonical。
+  // [D6 §3.4 2026-08-04] blockedPaths 改 deny-overrides：根自身/祖先黑名单【不再】被
+  //   "显式选中的工作区根"覆盖（原覆盖分支正是"C盘根可绕过 blockedPaths"的实现点）。
+  //   root 建立政策（resolveWorkspaceRootCandidate）已保证新根不落黑名单区；本处对
+  //   遗留内存态/旧盘态双保险。唯一收窄=部署锚定例外（与 store 政策同源）：黑名单条目
+  //   覆盖到【应用部署根的祖先】（如默认 C:/ 而应用装在 C 盘）时，对部署根内部不生效——
+  //   那是部署位置事实，不是用户选根覆盖。
   const norm = (s) =>
     _normCase(String(s).replace(/\\/g, "/")).replace(/\/+$/, "");
   const normalized = norm(filePath);
-  const within = (prefix) =>
-    normalized === prefix || normalized.startsWith(prefix + "/");
+  const root = norm(physicalRoot);
+  const lexicalRootPath = path.resolve(workspaceRoot);
+  const lexicalRoot = norm(lexicalRootPath);
+  const within = (value, prefix) => value === prefix || value.startsWith(prefix + "/");
+  const appRoot = norm(path.resolve("."));
 
-  // 检查禁止列表（条目 resolve 到 canonical，与 filePath 同锚）
-  for (const blocked of blockedPaths) {
+  const canonicalPolicyPath = (entry) => {
+    const lexicalEntry = norm(path.resolve(entry));
+    // 允许列表中的祖先条目等价于允许整个已选根。
+    if (within(lexicalRoot, lexicalEntry)) return root;
+    if (!within(lexicalEntry, lexicalRoot)) return null;
+    try {
+      return norm(confinePath(workspaceRoot, path.resolve(entry), { realpath: true }));
+    } catch {
+      // 根内表面条目若经链接指向根外，它不能形成根内有效策略前缀。
+      return null;
+    }
+  };
+
+  for (const blocked of blockedPaths || []) {
     if (!blocked) continue;
-    const nb = norm(path.resolve(blocked));
-    if (within(nb)) return false;
+    const lexicalBlocked = norm(path.resolve(blocked));
+    // deny-overrides：目标或根落在黑名单条目之下即拒（含盘符键 "c:" 前缀形态）。
+    const hitTarget = within(normalized, lexicalBlocked)
+      || (lexicalBlocked.endsWith(":") && normalized.startsWith(lexicalBlocked));
+    const hitRoot = within(root, lexicalBlocked)
+      || (lexicalBlocked.endsWith(":") && root.startsWith(lexicalBlocked));
+    if (hitTarget || hitRoot) {
+      // 部署锚定例外：条目是应用部署根的祖先，且目标在部署根内部 → 该条目不适用。
+      if (within(appRoot, lexicalBlocked) && within(normalized, appRoot)) {
+        /* 继续查根内后代黑名单 */
+      } else {
+        return false;
+      }
+    }
+    // 根内后代黑名单（realpath 域，防链接伪装）照拦。
+    const nb = canonicalPolicyPath(blocked);
+    if (nb && nb !== root && within(normalized, nb)) return false;
   }
 
-  // 如果允许列表为空，默认允许所有（除了被禁止的）
-  if (allowedPaths.length === 0) return true;
+  if (!allowedPaths || allowedPaths.length === 0) return true;
 
-  // 检查允许列表
   for (const allowed of allowedPaths) {
     if (!allowed) continue;
-    const na = norm(path.resolve(allowed));
-    if (within(na)) return true;
+    const na = canonicalPolicyPath(allowed);
+    if (na && within(normalized, na)) return true;
   }
 
   return false;
@@ -387,24 +422,26 @@ function parseFileOperations(content) {
 //   由 Load 钩子启动时 mkdir recursive（幂等）根除——目录保证存在后此默认值才安全。
 const DEFAULT_WORKSPACE_ROOT = "ai玩耍空间";
 
-// 工作区根校验（2026-08-01 凛倾「不检测…直接创建一个」案根修——实证：YonBan 反向桥把按
-//   GitHub 仓库名拼出的不存在路径 D:/…/always-accompany/ai玩耍空间 写进 canonical，
-//   setWorkspaceRoot 零校验照单全收，重启后 mkdir recursive 整棵造出幽灵工作区）：
-//   绝对路径根：本身存在（目录）合法；本身不存在但【父目录真实存在】也合法（=在真实项目下
-//   新建玩耍空间，一层可建）；父链不存在=幽灵路径，一律拒绝且不落任何写。
-//   相对路径（含默认玩耍空间）锚 CWD 恒合法。返回 null=合法，string=拒绝原因（可见报错）。
-function validateWorkspaceRoot(p) {
-  if (!p || !(p.startsWith("/") || /^[a-zA-Z]:/.test(p))) return null;
-  try {
-    if (Deno.statSync(p).isDirectory) return null;
-    return `工作区根不是目录: ${p}`;
-  } catch { /* 根不存在，继续查父目录 */ }
-  const _norm = p.replace(/\\/g, "/").replace(/\/+$/, "");
-  const parent = _norm.slice(0, _norm.lastIndexOf("/"));
-  try {
-    if (parent && Deno.statSync(parent).isDirectory) return null;
-  } catch { /* 父目录也不存在 */ }
-  return `工作区根及其父目录均不存在，拒绝创建幽灵工作区: ${p}`;
+// [D6 §2.2 2026-08-04] 工作区根候选统一政策（取代旧 validateWorkspaceRoot/ensureWorkspaceRootExists
+//   的"只查存在性"校验）：settingsStore.resolveWorkspaceRootCandidate 单源——锚定 browseBases
+//   （系统盘不入基=C:/ 域结构性拒）、系统/应用敏感目录拒、blockedPaths deny-overrides
+//   （祖先黑名单不再被"显式选根"覆盖）、链接逃逸物理域裁决、幽灵路径拒（一层可建，父链必真实）。
+//   2026-08-01 幽灵工作区案的"父目录必须真实存在"语义保留在政策内。
+//   返回 {ok:true, root:<canonical绝对路径>} 或 {ok:false, code:E_WORKSPACE_ROOT_*, error}；
+//   合法 root 一律以 canonical real path 写盘（D6 §2.3）。
+async function _resolveRootCandidateAndEnsure(owner, requestedPath) {
+  const cand = settingsStore.resolveWorkspaceRootCandidate(owner, requestedPath, {
+    userBlockedPaths: pluginData.blockedPaths,
+  });
+  if (!cand.ok) return cand;
+  if (!cand.exists) {
+    try {
+      await Deno.mkdir(cand.root, { recursive: false });
+    } catch (err) {
+      return { ok: false, code: "E_WORKSPACE_ROOT_CREATE", error: `工作区根无法创建: ${requestedPath}（${err?.message || err}）` };
+    }
+  }
+  return { ok: true, root: cand.root };
 }
 
 // ============================================================
@@ -447,6 +484,57 @@ function getWorkspaceRoot(sessionKey) {
   const k = sessionKey || "";
   if (k && pluginData.workspaceRoots.has(k)) return pluginData.workspaceRoots.get(k);
   return pluginData.workspaceRoot || DEFAULT_WORKSPACE_ROOT;
+}
+
+function snapshotWorkspaceRoot(sessionKey) {
+  const chatId = String(sessionKey || "");
+  return {
+    chatId,
+    globalRoot: pluginData.workspaceRoot,
+    hadWindowRoot: !!chatId && pluginData.workspaceRoots.has(chatId),
+    windowRoot: chatId ? pluginData.workspaceRoots.get(chatId) : undefined,
+  };
+}
+
+function applyWorkspaceRoot(sessionKey, root) {
+  const chatId = String(sessionKey || "");
+  if (chatId) pluginData.workspaceRoots.set(chatId, root);
+  else pluginData.workspaceRoot = root;
+}
+
+function restoreWorkspaceRoot(snapshot) {
+  if (snapshot.chatId) {
+    if (snapshot.hadWindowRoot) pluginData.workspaceRoots.set(snapshot.chatId, snapshot.windowRoot);
+    else pluginData.workspaceRoots.delete(snapshot.chatId);
+  } else {
+    pluginData.workspaceRoot = snapshot.globalRoot;
+  }
+}
+
+// 根变更必须把“取快照→改内存→写整张 workspaceRoots→失败回滚”作为一个临界区。
+// 否则 A 写失败回滚前，B 会冻结包含 A 失败值的整表快照，并在队列后段把它重新写回磁盘。
+let _workspaceRootMutationTail = Promise.resolve();
+const _workspaceRootMutationContext = new AsyncLocalStorage();
+
+function _isInsideWorkspaceRootMutation() {
+  return _workspaceRootMutationContext.getStore()?.active === true;
+}
+
+async function withWorkspaceRootMutation(fn) {
+  // 根事务内部会调用 savePersistedSettingsNow；允许同一异步调用链重入，避免自己等待自己。
+  if (_isInsideWorkspaceRootMutation()) return await fn();
+  const previous = _workspaceRootMutationTail;
+  let release;
+  _workspaceRootMutationTail = new Promise((resolve) => { release = resolve; });
+  await previous.catch(() => {});
+  const lease = { active: true };
+  try {
+    return await _workspaceRootMutationContext.run(lease, fn);
+  } finally {
+    // AsyncLocalStorage 会被异步子任务继承；租约失效后，迟到任务必须重新排队而不能假装重入。
+    lease.active = false;
+    release();
+  }
 }
 
 function resolveCanonicalOpPath(p, sessionKey) {
@@ -1328,64 +1416,486 @@ function _xlsxSheetToCsvAndFormulas(sheetXml, sharedStrings) {
   return { csv: csvLines.join("\n"), formulas };
 }
 
-/**
- * 读 .xlsx → 文本视图：每表 `--- Sheet: 名 ---` + CSV(值) + `[公式 N格]` 列表。纯 jszip 解 XML。
- * @param {string} absPath
- * @returns {Promise<string>}
- */
-async function extractXlsxText(absPath) {
-  const { default: JSZip } = await import("npm:jszip");
-  const data = await Deno.readFile(absPath); // Uint8Array
-  const zip = await JSZip.loadAsync(data);
-  const wbXml = await zip.file("xl/workbook.xml")?.async("string");
-  if (!wbXml) throw new Error("非法 xlsx：缺 xl/workbook.xml");
-  const relsXml =
-    (await zip.file("xl/_rels/workbook.xml.rels")?.async("string")) || "";
-  const sheetMap = _xlsxMapSheets(wbXml, relsXml); // name → path
-  const sstXml = await zip.file("xl/sharedStrings.xml")?.async("string");
-  const sharedStrings = _xlsxParseSharedStrings(sstXml);
+/** 可文本化解析的文档扩展名（AI read 分流 + 前端 readFileExtract 预览共用单源） */
+const DOC_EXTRACT_EXTS = new Set([".xlsx", ".docx", ".pptx", ".pdf"]);
 
-  let out = "";
-  for (const [name, sp] of Object.entries(sheetMap)) {
-    const sheetXml = await zip.file(sp)?.async("string");
-    if (!sheetXml) continue;
-    const { csv, formulas } = _xlsxSheetToCsvAndFormulas(sheetXml, sharedStrings);
-    out += `--- Sheet: ${name} ---\n${csv}\n`;
-    let fs2 = formulas;
-    if (fs2.length > 2000) fs2 = fs2.slice(0, 2000).concat("[公式过多已截断]");
-    if (fs2.length) out += `[公式 ${fs2.length}格]\n${fs2.join("\n")}\n`;
-    out += "\n";
+// 文件读取/文档提取的服务器资源策略。默认值集中在这里，部署方可用同名环境变量覆盖；
+// 环境变量在模块加载时读取，所以修改后需重启服务。所有值都必须是正安全整数，配置错误直接失败，
+// 不静默回退到默认值。文档策略同时约束前端 readFileExtract 与 AI read 的共享提取入口。
+const FILE_RESOURCE_POLICY_DEFAULTS = Object.freeze({
+  frontendPreviewMaxBytes: 20 * 1024 * 1024,
+  documentInputMaxBytes: 20 * 1024 * 1024,
+  documentArchiveMaxEntries: 4096,
+  documentArchiveMaxEntryBytes: 16 * 1024 * 1024,
+  documentArchiveMaxTotalBytes: 64 * 1024 * 1024,
+  documentTextMaxCharacters: 2_000_000,
+  documentTextMaxBytes: 8 * 1024 * 1024,
+});
+
+function readPositiveServerLimit(envName, fallback) {
+  const raw = process.env?.[envName];
+  if (raw === undefined) return fallback;
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error(`[beilu-files] ${envName} 必须是正整数`);
   }
-  return out.trim();
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`[beilu-files] ${envName} 超出安全整数范围`);
+  }
+  return value;
+}
+
+const FILE_RESOURCE_POLICY = Object.freeze({
+  frontendPreviewMaxBytes: readPositiveServerLimit(
+    "BEILU_FILES_PREVIEW_MAX_BYTES",
+    FILE_RESOURCE_POLICY_DEFAULTS.frontendPreviewMaxBytes,
+  ),
+  documentInputMaxBytes: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_INPUT_BYTES",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentInputMaxBytes,
+  ),
+  documentArchiveMaxEntries: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_ARCHIVE_ENTRIES",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentArchiveMaxEntries,
+  ),
+  documentArchiveMaxEntryBytes: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_ENTRY_BYTES",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentArchiveMaxEntryBytes,
+  ),
+  documentArchiveMaxTotalBytes: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_TOTAL_BYTES",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentArchiveMaxTotalBytes,
+  ),
+  documentTextMaxCharacters: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_TEXT_CHARACTERS",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentTextMaxCharacters,
+  ),
+  documentTextMaxBytes: readPositiveServerLimit(
+    "BEILU_FILES_EXTRACT_MAX_TEXT_BYTES",
+    FILE_RESOURCE_POLICY_DEFAULTS.documentTextMaxBytes,
+  ),
+});
+
+const FRONTEND_PREVIEW_MAX_BYTES = FILE_RESOURCE_POLICY.frontendPreviewMaxBytes;
+const DOCUMENT_EXTRACTION_POLICY = Object.freeze({
+  maxInputBytes: FILE_RESOURCE_POLICY.documentInputMaxBytes,
+  maxArchiveEntries: FILE_RESOURCE_POLICY.documentArchiveMaxEntries,
+  maxArchiveEntryBytes: FILE_RESOURCE_POLICY.documentArchiveMaxEntryBytes,
+  maxArchiveTotalBytes: FILE_RESOURCE_POLICY.documentArchiveMaxTotalBytes,
+  maxTextCharacters: FILE_RESOURCE_POLICY.documentTextMaxCharacters,
+  maxTextBytes: FILE_RESOURCE_POLICY.documentTextMaxBytes,
+});
+
+class FileResourceLimitError extends Error {
+  constructor(code, message, details = {}) {
+    super(message);
+    this.name = "FileResourceLimitError";
+    this.code = code;
+    Object.assign(this, details);
+  }
+}
+
+function throwResourceLimit(code, message, details) {
+  throw new FileResourceLimitError(code, message, details);
+}
+
+function formatMiB(bytes) {
+  return (bytes / 1048576).toFixed(1);
+}
+
+function countUtf8BytesForCodePoint(codePoint) {
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
+}
+
+function measureAndAssertText(text, policy, context, startCharacters = 0, startBytes = 0) {
+  let characters = startCharacters;
+  let bytes = startBytes;
+  for (const symbol of String(text)) {
+    characters += 1;
+    if (characters > policy.maxTextCharacters) {
+      throwResourceLimit(
+        "E_DOCUMENT_TEXT_CHARACTER_LIMIT",
+        `${context}文本字符数超过上限（${characters} > ${policy.maxTextCharacters}）`,
+        { resource: "documentTextCharacters", limit: policy.maxTextCharacters, actual: characters },
+      );
+    }
+    bytes += countUtf8BytesForCodePoint(symbol.codePointAt(0));
+    if (bytes > policy.maxTextBytes) {
+      throwResourceLimit(
+        "E_DOCUMENT_TEXT_BYTE_LIMIT",
+        `${context}文本 UTF-8 字节数超过上限（${bytes} > ${policy.maxTextBytes}）`,
+        { resource: "documentTextBytes", limit: policy.maxTextBytes, actual: bytes },
+      );
+    }
+  }
+  return { characters, bytes };
+}
+
+function createBoundedTextBuilder(policy, context) {
+  const chunks = [];
+  let characters = 0;
+  let bytes = 0;
+  return {
+    append(value) {
+      const text = String(value);
+      ({ characters, bytes } = measureAndAssertText(text, policy, context, characters, bytes));
+      chunks.push(text);
+    },
+    finish() {
+      return chunks.join("");
+    },
+  };
+}
+
+function assertFileSnapshotComparable(stat) {
+  if (!(stat?.mtime instanceof Date) || !Number.isFinite(stat.mtime.getTime())) {
+    throw new Error("无法确认文件修改时间，拒绝生成不稳定快照");
+  }
+  if (stat.dev == null || stat.ino == null) {
+    throw new Error("无法确认文件身份，拒绝生成不稳定快照");
+  }
+}
+
+function assertBoundedFileStat(stat, maxBytes, tooLargeCode, label) {
+  if (!stat?.isFile) throw new Error("目标不是文件");
+  if (!Number.isSafeInteger(stat.size) || stat.size < 0) throw new Error("无法确认文件大小");
+  if (stat.size > maxBytes) {
+    throwResourceLimit(
+      tooLargeCode,
+      `${label}过大（${formatMiB(stat.size)}MB > ${formatMiB(maxBytes)}MB）`,
+      { resource: "inputBytes", limit: maxBytes, actual: stat.size, size: stat.size, maxBytes },
+    );
+  }
+  assertFileSnapshotComparable(stat);
+}
+
+function fileSnapshotStatChanged(before, after) {
+  return before.size !== after.size ||
+    before.mtime.getTime() !== after.mtime.getTime() ||
+    before.dev !== after.dev ||
+    before.ino !== after.ino;
+}
+
+async function readBoundedFileSnapshot(absPath, maxBytes, { tooLargeCode, label }) {
+  const file = await Deno.open(absPath, { read: true });
+  try {
+    const beforeStat = await file.stat();
+    assertBoundedFileStat(beforeStat, maxBytes, tooLargeCode, label);
+
+    // 只给“打开时大小+1”，且绝不超过 MAX+1；增长文件只会多读一个见证字节，
+    // 不可能在 stat 竞态窗口里把完整增长内容装进内存。
+    const buffer = new Uint8Array(Math.min(maxBytes + 1, beforeStat.size + 1));
+    let total = 0;
+    while (total < buffer.byteLength) {
+      const read = await file.read(buffer.subarray(total));
+      if (read === null) break;
+      if (read <= 0) throw new Error("文件读取未取得进展");
+      total += read;
+      if (total > maxBytes) {
+        throwResourceLimit(
+          tooLargeCode,
+          `${label}读取超过上限（>${formatMiB(maxBytes)}MB）`,
+          { resource: "inputBytes", limit: maxBytes, actual: total, size: total, maxBytes },
+        );
+      }
+    }
+
+    const afterStat = await file.stat();
+    assertBoundedFileStat(afterStat, maxBytes, tooLargeCode, label);
+    if (total !== afterStat.size || fileSnapshotStatChanged(beforeStat, afterStat)) {
+      const err = new Error("文件在读取期间发生变化，请重试");
+      err.code = "E_FILE_SNAPSHOT_CHANGED";
+      throw err;
+    }
+    return buffer.subarray(0, total);
+  } finally {
+    file.close();
+  }
+}
+
+async function consumeZipEntryBounded(entry, policy, totalState, collectBytes = false) {
+  const chunks = collectBytes ? [] : null;
+  let entryBytes = 0;
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const stream = entry.internalStream("uint8array");
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      try { stream.pause(); } catch { /* StreamHelper may already be closed */ }
+      reject(err);
+    };
+    stream.on("data", (chunk) => {
+      if (settled) return;
+      const chunkBytes = chunk?.byteLength;
+      if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 0) {
+        fail(new Error(`文档解压条目 ${entry.name} 返回非法数据块`));
+        return;
+      }
+      entryBytes += chunkBytes;
+      if (entryBytes > policy.maxArchiveEntryBytes) {
+        try {
+          throwResourceLimit(
+            "E_DOCUMENT_ARCHIVE_ENTRY_BYTE_LIMIT",
+            `文档解压条目 ${entry.name} 超过单条上限（>${policy.maxArchiveEntryBytes} 字节）`,
+            { resource: "archiveEntryBytes", entry: entry.name, limit: policy.maxArchiveEntryBytes, actual: entryBytes },
+          );
+        } catch (err) { fail(err); }
+        return;
+      }
+      totalState.actual += chunkBytes;
+      if (totalState.actual > policy.maxArchiveTotalBytes) {
+        try {
+          throwResourceLimit(
+            "E_DOCUMENT_ARCHIVE_TOTAL_BYTE_LIMIT",
+            `文档累计解压大小超过上限（>${policy.maxArchiveTotalBytes} 字节）`,
+            { resource: "archiveTotalBytes", limit: policy.maxArchiveTotalBytes, actual: totalState.actual },
+          );
+        } catch (err) { fail(err); }
+        return;
+      }
+      if (chunks) chunks.push(chunk.slice());
+    });
+    stream.on("error", fail);
+    stream.on("end", () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    });
+    stream.resume();
+  });
+  if (!chunks) return null;
+  const bytes = new Uint8Array(entryBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function readZipEntryTextBounded(entry, policy, totalState) {
+  if (!entry) return undefined;
+  const bytes = await consumeZipEntryBounded(entry, policy, totalState, true);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+async function loadValidatedOfficeArchive(data, policy) {
+  const { default: JSZip } = await import("npm:jszip");
+  const zip = await JSZip.loadAsync(data);
+  const entries = Object.values(zip.files);
+  if (entries.length > policy.maxArchiveEntries) {
+    throwResourceLimit(
+      "E_DOCUMENT_ARCHIVE_ENTRY_COUNT_LIMIT",
+      `文档解压条目数超过上限（${entries.length} > ${policy.maxArchiveEntries}）`,
+      { resource: "archiveEntries", limit: policy.maxArchiveEntries, actual: entries.length },
+    );
+  }
+  // 先仅看中央目录元数据：显然越界的 ZIP 在解压任何条目之前就拒绝。
+  let declaredTotal = 0;
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    const declaredSize = entry?._data?.uncompressedSize;
+    if (declaredSize === undefined) continue;
+    if (!Number.isSafeInteger(declaredSize) || declaredSize < 0) {
+      throw new Error(`文档解压条目 ${entry.name} 的声明大小非法`);
+    }
+    if (declaredSize > policy.maxArchiveEntryBytes) {
+      throwResourceLimit(
+        "E_DOCUMENT_ARCHIVE_ENTRY_BYTE_LIMIT",
+        `文档解压条目 ${entry.name} 超过单条上限（${declaredSize} > ${policy.maxArchiveEntryBytes} 字节）`,
+        { resource: "archiveEntryBytes", entry: entry.name, limit: policy.maxArchiveEntryBytes, actual: declaredSize },
+      );
+    }
+    declaredTotal += declaredSize;
+    if (declaredTotal > policy.maxArchiveTotalBytes) {
+      throwResourceLimit(
+        "E_DOCUMENT_ARCHIVE_TOTAL_BYTE_LIMIT",
+        `文档声明的累计解压大小超过上限（${declaredTotal} > ${policy.maxArchiveTotalBytes} 字节）`,
+        { resource: "archiveTotalBytes", limit: policy.maxArchiveTotalBytes, actual: declaredTotal },
+      );
+    }
+  }
+
+  // 中央目录可伪造；再逐条流式解压并按实际块大小复核，过程中不积累条目内容。
+  const totalState = { actual: 0 };
+  for (const entry of entries) {
+    if (!entry.dir) await consumeZipEntryBounded(entry, policy, totalState);
+  }
+  return zip;
+}
+
+async function getDocumentSourceBytes(absPath, sourceBytes, policy) {
+  if (sourceBytes !== undefined) {
+    if (!(sourceBytes instanceof Uint8Array)) throw new TypeError("文档源必须是 Uint8Array");
+    if (sourceBytes.byteLength > policy.maxInputBytes) {
+      throwResourceLimit(
+        "E_DOCUMENT_INPUT_BYTE_LIMIT",
+        `文档压缩输入过大（${formatMiB(sourceBytes.byteLength)}MB > ${formatMiB(policy.maxInputBytes)}MB）`,
+        { resource: "inputBytes", limit: policy.maxInputBytes, actual: sourceBytes.byteLength, size: sourceBytes.byteLength, maxBytes: policy.maxInputBytes },
+      );
+    }
+    return sourceBytes;
+  }
+  return await readBoundedFileSnapshot(absPath, policy.maxInputBytes, {
+    tooLargeCode: "E_DOCUMENT_INPUT_BYTE_LIMIT",
+    label: "文档压缩输入",
+  });
 }
 
 /**
- * 任务C office 解析（凛倾 2026-07-09「还有ppt,xlsx等等…读取文件的返回」，对标 YonBan file-tools readDocument）：
- * pptx → 按 slide 顺序抽 <a:t> 文本（纯 jszip 解压，零新依赖，移植 YonBan extractPptx 同口径）。
- * @param {string} absPath
- * @returns {Promise<string>}
+ * 读 .xlsx → 文本视图：每表 `--- Sheet: 名 ---` + CSV(值) + `[公式 N格]` 列表。纯 jszip 解 XML。
  */
-async function extractPptxText(absPath) {
-  const { default: JSZip } = await import("npm:jszip");
-  const data = await Deno.readFile(absPath);
-  const zip = await JSZip.loadAsync(data);
+async function extractXlsxText(data, policy) {
+  const zip = await loadValidatedOfficeArchive(data, policy);
+  const extractionState = { actual: 0 };
+  const wbXml = await readZipEntryTextBounded(zip.file("xl/workbook.xml"), policy, extractionState);
+  if (!wbXml) throw new Error("非法 xlsx：缺 xl/workbook.xml");
+  const relsXml =
+    (await readZipEntryTextBounded(zip.file("xl/_rels/workbook.xml.rels"), policy, extractionState)) || "";
+  const sheetMap = _xlsxMapSheets(wbXml, relsXml); // name → path
+  const sstXml = await readZipEntryTextBounded(zip.file("xl/sharedStrings.xml"), policy, extractionState);
+  const sharedStrings = _xlsxParseSharedStrings(sstXml);
+
+  const out = createBoundedTextBuilder(policy, "xlsx 提取");
+  for (const [name, sp] of Object.entries(sheetMap)) {
+    const sheetXml = await readZipEntryTextBounded(zip.file(sp), policy, extractionState);
+    if (!sheetXml) continue;
+    const { csv, formulas } = _xlsxSheetToCsvAndFormulas(sheetXml, sharedStrings);
+    out.append(`--- Sheet: ${name} ---\n${csv}\n`);
+    let fs2 = formulas;
+    if (fs2.length > 2000) fs2 = fs2.slice(0, 2000).concat("[公式过多已截断]");
+    if (fs2.length) out.append(`[公式 ${fs2.length}格]\n${fs2.join("\n")}\n`);
+    out.append("\n");
+  }
+  return out.finish().trim();
+}
+
+/**
+ * pptx → 按 slide 顺序抽 <a:t> 文本（纯 jszip 解压，零新依赖）。
+ */
+async function extractPptxText(data, policy) {
+  const zip = await loadValidatedOfficeArchive(data, policy);
+  const extractionState = { actual: 0 };
   const slides = Object.keys(zip.files)
     .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
     .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
   const decodeXml = (s) =>
     s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
-  let out = "";
+  const out = createBoundedTextBuilder(policy, "pptx 提取");
   for (const n of slides) {
-    const xml = await zip.file(n)?.async("string");
+    const xml = await readZipEntryTextBounded(zip.file(n), policy, extractionState);
     if (!xml) continue;
     const texts = [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((m) => decodeXml(m[1]));
-    out += `--- Slide ${n.match(/\d+/)[0]} ---\n${texts.join("\n")}\n\n`;
+    out.append(`--- Slide ${n.match(/\d+/)[0]} ---\n${texts.join("\n")}\n\n`);
   }
-  return out.trim() || "(空演示文稿)";
+  const text = out.finish().trim() || "(空演示文稿)";
+  measureAndAssertText(text, policy, "pptx 提取");
+  return text;
 }
 
-/** 可文本化解析的文档扩展名（AI read 分流 + 前端 readFileExtract 预览共用单源） */
-const DOC_EXTRACT_EXTS = new Set([".xlsx", ".docx", ".pptx", ".pdf"]);
+async function extractPdfText(data, policy) {
+  // 直接使用 pdf-parse v1 锁定的同版 pdfjs；pdf-parse 自身会先把每页文本完整拼入 ret.text，
+  // 且吞掉 pagerender 异常。这里逐 TextItem 进入有界 builder，超限立即向调用方显式报错。
+  const pdfjsModule = await import("npm:pdf-parse@1.1.1/lib/pdf.js/v1.10.100/build/pdf.js");
+  const PDFJS = pdfjsModule.default?.getDocument ? pdfjsModule.default : pdfjsModule;
+  PDFJS.disableWorker = true;
+  const doc = await PDFJS.getDocument(data);
+  const out = createBoundedTextBuilder(policy, "pdf 提取");
+  try {
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+      out.append("\n\n");
+      const page = await doc.getPage(pageNumber);
+      try {
+        const textContent = await page.getTextContent({
+          normalizeWhitespace: false,
+          disableCombineTextItems: false,
+        });
+        let lastY;
+        for (const item of textContent.items) {
+          const currentY = item.transform?.[5];
+          if (lastY === currentY || !lastY) out.append(item.str || "");
+          else out.append(`\n${item.str || ""}`);
+          lastY = currentY;
+        }
+      } finally {
+        page.cleanup?.();
+      }
+    }
+  } finally {
+    doc.destroy();
+  }
+  const text = out.finish().trim() || "(PDF 无可提取文本)";
+  measureAndAssertText(text, policy, "pdf 提取");
+  return text;
+}
+
+// Frontend preview reads share one bounded byte contract. Extension lookup is
+// only presentation metadata; unknown files are classified from their bytes.
+const FRONTEND_PREVIEW_MIME_BY_EXT = Object.freeze({
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif",
+  svg: "image/svg+xml",
+  mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg",
+  flac: "audio/flac", m4a: "audio/mp4", aac: "audio/aac",
+  mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  mkv: "video/x-matroska", avi: "video/x-msvideo", m4v: "video/x-m4v",
+  pdf: "application/pdf",
+});
+
+function encodePreviewBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 32768) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  }
+  return btoa(binary);
+}
+
+function assertBoundedFrontendPreviewStat(stat) {
+  assertBoundedFileStat(stat, FRONTEND_PREVIEW_MAX_BYTES, "E_FILE_PREVIEW_BYTE_LIMIT", "文件");
+}
+
+function frontendPreviewStatChanged(before, after) {
+  return fileSnapshotStatChanged(before, after);
+}
+
+async function readBoundedFrontendPreview(absPath, requestedPath) {
+  const bytes = await readBoundedFileSnapshot(absPath, FRONTEND_PREVIEW_MAX_BYTES, {
+    tooLargeCode: "E_FILE_PREVIEW_BYTE_LIMIT",
+    label: "文件",
+  });
+  const ext = String(requestedPath || "").split(".").pop()?.toLowerCase() || "";
+  return {
+    bytes,
+    size: bytes.byteLength,
+    mime: FRONTEND_PREVIEW_MIME_BY_EXT[ext] || "application/octet-stream",
+  };
+}
+
+function frontendReadErrorResult(err, requestedPath) {
+  const result = {
+    error: err?.message || String(err),
+    path: requestedPath,
+  };
+  // 旧消费者只读 error/path；资源拒绝附带稳定机器字段，四条预览读取路共用同一响应口径。
+  for (const key of ["code", "resource", "limit", "actual", "size", "maxBytes", "entry"]) {
+    if (err?.[key] !== undefined) result[key] = err[key];
+  }
+  return { _result: result };
+}
+
+function detectUtf8Text(bytes) {
+  if (bytes.includes(0)) return null;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 统一文档文本提取入口（xlsx 纯 jszip 既有实现；docx/pdf 惰性 npm import——
@@ -1393,31 +1903,36 @@ const DOC_EXTRACT_EXTS = new Set([".xlsx", ".docx", ".pptx", ".pdf"]);
  * 加载失败返回明确错误提示=优雅退化不吞错）。
  * @param {string} absPath
  * @param {string} ext 含点小写扩展名（".docx"）
+ * @param {Uint8Array} [sourceBytes] 可选的有界稳定字节快照；AI read 不传时由本函数单句柄有界读取
  * @returns {Promise<string>}
  */
-async function extractDocumentText(absPath, ext) {
+async function extractDocumentText(absPath, ext, sourceBytes) {
+  const data = await getDocumentSourceBytes(absPath, sourceBytes, DOCUMENT_EXTRACTION_POLICY);
+  let text;
   switch (ext) {
     case ".xlsx":
-      return await extractXlsxText(absPath);
+      text = await extractXlsxText(data, DOCUMENT_EXTRACTION_POLICY);
+      break;
     case ".pptx":
-      return await extractPptxText(absPath);
+      text = await extractPptxText(data, DOCUMENT_EXTRACTION_POLICY);
+      break;
     case ".docx": {
+      // mammoth 会自行再次解包；先逐条流式验证整个 Office ZIP，确保其后可分配资源有硬上界。
+      await loadValidatedOfficeArchive(data, DOCUMENT_EXTRACTION_POLICY);
       const mammoth = (await import("npm:mammoth")).default;
-      const data = await Deno.readFile(absPath);
       const r = await mammoth.extractRawText({ buffer: data });
-      return (r?.value || "").trim() || "(空文档)";
+      text = (r?.value || "").trim() || "(空文档)";
+      break;
     }
     case ".pdf": {
-      // 锁 v1 子路径（对标 YonBan/Cline 同款）：v2 改 PDFParse class API 且底层 pdfjs v4 依赖 DOMMatrix；
-      //   v1 函数式 + pdfjs v2.x 无 DOM 依赖，子路径绕开 index.js 启动读测试文件的 bug。Deno 实测可用。
-      const pdfParse = (await import("npm:pdf-parse@1.1.1/lib/pdf-parse.js")).default;
-      const data = await Deno.readFile(absPath);
-      const r = await pdfParse(data);
-      return (r?.text || "").trim() || "(PDF 无可提取文本)";
+      text = await extractPdfText(data, DOCUMENT_EXTRACTION_POLICY);
+      break;
     }
     default:
       throw new Error(`不支持的文档格式: ${ext}`);
   }
+  measureAndAssertText(text, DOCUMENT_EXTRACTION_POLICY, `${ext} 提取`);
+  return text;
 }
 
 /**
@@ -1637,7 +2152,7 @@ function _parseExecArgv(cmd) {
  * 影响：写类操作(write/create/delete/move/fuzzy_edit/edit_xlsx/insert/replace_lines)经 withFileWriteLock 串行；
  *       move 双键字典序加锁防 A→B/B→A 交叉死锁；
  *       exec 经 argv 直传 Deno.Command（不经 shell，D3 安全闸）；
- *       op.path/destPath 兜底再调 resolveCanonicalOpPath（幂等，兼容手动审批路径）。
+ *       op.path/destPath 必须直接使用 validateOpSecurity 返回的 physical canonical 值。
  *
  * 约束：fuzzy_edit 的 _needSubtagFallback 标记会直接失败（K10/X2 协议层降级，不调算法层）；
  *       exec 拦截 shell 包装(cmd /c, sh -c, powershell -Command)；
@@ -1651,16 +2166,6 @@ async function executeFileOperation(op) {
     op.status = "failed";
     op.error = "File operations require Deno runtime";
     return op;
-  }
-
-  // F2 框架级修：主路径解析上移到 ReplyHandler 安全检查段之前（resolveCanonicalOpPath），
-  //   自动批准路径进来时 op.path 已是 canonical（校验与执行同一值）。
-  //   兜底：手动审批（approveOp/approveAll）路径的 op 可能来自「权限 OFF 早退队列」（尚未 canonical）——
-  //   此处对非 exec 再调一次 resolveCanonicalOpPath。该函数幂等（已 canonical 的绝对路径 resolve 返回自身），
-  //   不破坏已解析值；保持与旧 resolveOpPath「在执行点解析」对手动审批的等价行为。
-  if (op.type !== "exec") {
-    if (op.path) op.path = resolveCanonicalOpPath(op.path, op._cid);
-    if (op.destPath) op.destPath = resolveCanonicalOpPath(op.destPath, op._cid);
   }
 
   // F6 写锁：write/create/delete/move/fuzzy_edit 是 read→modify→write 形态，同文件并发会 lost update。
@@ -2086,18 +2591,12 @@ async function executeFileOperation(op) {
  * [0723 问题1.1] 返回类型扩展:checkSensitivePath 的 keywords 命中返回 warn 对象,此处原样透传,
  *   validateOpSecurity/_gateBrowseListing 按 typeof 区分处理。blockedPaths(用户黑名单)仍硬拦(string)。
  */
-function checkSystemDriveBlock(filePath) {
+function checkSystemDriveBlock(filePath, workspaceRoot) {
   if (!filePath) return null;
-  const normalized = _normCase(filePath.replace(/\\/g, "/"));
-  // 用户配置的黑名单（前端可调）
-  for (const bp of pluginData.blockedPaths || []) {
-    const nbp = _normCase(bp.replace(/\\/g, "/")).replace(/\/+$/, "");
-    if (normalized === nbp || normalized.startsWith(nbp + "/")) {
-      return `路径被禁止访问: ${bp}`;
-    }
-  }
-  // W61: 敏感路径检查（W13/W36设计）—— 返回可能是 string(硬拦) 或 {level:'warn'}(提醒)，原样透传
-  const sensitiveMsg = checkSensitivePath(normalized);
+  // 敏感词只在已选根之下的相对路径上生效；根的 AppData/Program Files
+  // 祖先不参与策略判定，否则显式选中的根自身会不可用。
+  const relative = path.relative(workspaceRoot, filePath).replace(/\\/g, "/");
+  const sensitiveMsg = checkSensitivePath("/" + relative);
   if (sensitiveMsg) return sensitiveMsg;
   return null;
 }
@@ -2162,60 +2661,65 @@ function checkSensitivePath(normalizedPath) {
  * @param {{ type: string, path?: string, destPath?: string, _cid?: string }} op - 操作对象
  * @returns {{ ok: boolean, error?: string }}
  */
+const _FILE_OP_ACTOR = Symbol("beilu-files.actor");
+
+function _trustedFrontendActor() {
+  const source = _als.getStore()?.dispatchSource;
+  return source === "web" || source === "ws" ? "human" : "ai";
+}
+
 function validateOpSecurity(op) {
-  // 路径 canonical 化（exec 不锚，沿用 cwd 语义）。FT-multiwin：按 op 发起窗口 op._cid 取隔离沙箱根。
+  // actor 只认模块内 Symbol；JSON/payload 不可伪造。ReplyHandler/审批默认 AI。
   const _sk = op._cid;
-  if (op.type !== "exec") {
-    if (op.path) op.path = resolveCanonicalOpPath(op.path, _sk);
-    if (op.destPath) op.destPath = resolveCanonicalOpPath(op.destPath, _sk);
+  const actor = op[_FILE_OP_ACTOR] === "human" ? "human" : "ai";
+  // [D6 §4] 安全设置损坏/不可读期间禁止一切文件操作（含 exec）：闸的政策数据本身不可信时
+  //   fail-closed，不能拿宽默认继续裁决。显式 repair 成功后自动恢复。
+  //   每次同步 store 内存健康态（零 IO）：运行中被其他读者（commandGate 等）发现的损坏立即传导。
+  _syncSettingsHealthFromStore();
+  if (_settingsHealth) {
+    const error = `安全设置文件${_settingsHealth.state === "corrupt" ? "损坏" : "不可读"}，文件操作已 fail-closed（请在安全中心执行 settings 修复）`;
+    wbD(_sk, "files", "validateOpSecurity:settings_health", false, error, { type: op.type, state: _settingsHealth.state });
+    return { ok: false, error };
+  }
+  if (op.type === "exec") return { ok: true };
+
+  const wsRoot = getWorkspaceRoot(_sk);
+  let physicalRoot;
+  try {
+    physicalRoot = confinePath(wsRoot, "", { realpath: true });
+    // 空路径（如 list）也必须锚到根，不得在执行层落到 CWD。
+    op.path = confinePath(wsRoot, op.path || "", { realpath: true });
+    if (op.type === "move" && op.destPath) {
+      op.destPath = confinePath(wsRoot, op.destPath, { realpath: true });
+    }
+  } catch (err) {
+    const error = `Path outside workspace or physical confinement failed: ${err?.message || err}`;
+    wbD(_sk, "files", "validateOpSecurity:outside_workspace", false, error, { type: op.type, path: op.path, destPath: op.destPath, wsRoot, actor });
+    return { ok: false, error };
   }
 
-  // 系统盘/敏感路径黑名单 [0723 问题1.1] typeof 区分:string=硬拦(block)/object=提醒(warn 收集不拦)
+  // Human/UI 在显式根内只受 containment；AI/审批再叠加根内相对敏感策略与黑白名单。
+  if (actor === "human") return { ok: true };
+
   const _warnings = [];
-  if (op.path && op.type !== "exec") {
-    const sysBlock = checkSystemDriveBlock(op.path);
+  if (op.path) {
+    const sysBlock = checkSystemDriveBlock(op.path, physicalRoot);
     if (typeof sysBlock === "string") { wbD(_sk, "files", "validateOpSecurity:sysdrive_block", false, sysBlock, { type: op.type, path: op.path }); return { ok: false, error: sysBlock }; }
     else if (sysBlock && sysBlock.level === "warn") { _warnings.push(sysBlock.message); }
   }
   if (op.destPath && op.type === "move") {
-    const sysBlockDest = checkSystemDriveBlock(op.destPath);
+    const sysBlockDest = checkSystemDriveBlock(op.destPath, physicalRoot);
     if (typeof sysBlockDest === "string") { wbD(_sk, "files", "validateOpSecurity:sysdrive_block_dest", false, sysBlockDest, { type: op.type, destPath: op.destPath }); return { ok: false, error: sysBlockDest }; }
     else if (sysBlockDest && sysBlockDest.level === "warn") { _warnings.push(sysBlockDest.message); }
   }
 
-  // 工作区沙箱（op.path 已 canonical；wsRoot 用 path.resolve 同锚，与主循环 F1 一致）
-  const wsRoot = getWorkspaceRoot(_sk);
-  const norm = (s) =>
-    _normCase(String(s).replace(/\\/g, "/")).replace(/\/+$/, "");
-  const wsRootNorm = norm(path.resolve(wsRoot));
-  if (op.path && op.type !== "exec") {
-    const opPathNorm = norm(op.path);
-    if (!opPathNorm.startsWith(wsRootNorm + "/") && opPathNorm !== wsRootNorm) {
-      wbD(_sk, "files", "validateOpSecurity:outside_workspace", false, "路径越界:超出会话沙箱根", { type: op.type, path: op.path, wsRoot });
-      return {
-        ok: false,
-        error: `Path outside workspace: "${op.path}" is not within "${wsRoot}"`,
-      };
-    }
-  }
-  if (op.destPath && op.type === "move") {
-    const destNorm = norm(op.destPath);
-    if (!destNorm.startsWith(wsRootNorm + "/") && destNorm !== wsRootNorm) {
-      wbD(_sk, "files", "validateOpSecurity:dest_outside_workspace", false, "目标路径越界:超出会话沙箱根", { type: op.type, destPath: op.destPath, wsRoot });
-      return {
-        ok: false,
-        error: `Destination outside workspace: "${op.destPath}" is not within "${wsRoot}"`,
-      };
-    }
-  }
-
-  // 路径白名单/黑名单（F7a 边界形态在 isPathAllowed 内）
-  if (
-    op.path &&
-    !isPathAllowed(op.path, pluginData.allowedPaths, pluginData.blockedPaths)
-  ) {
+  if (op.path && !isPathAllowed(op.path, wsRoot, physicalRoot, pluginData.allowedPaths, pluginData.blockedPaths)) {
     wbD(_sk, "files", "validateOpSecurity:path_not_allowed", false, "路径被黑白名单拦截", { type: op.type, path: op.path });
     return { ok: false, error: `Path not allowed: ${op.path}` };
+  }
+  if (op.type === "move" && op.destPath && !isPathAllowed(op.destPath, wsRoot, physicalRoot, pluginData.allowedPaths, pluginData.blockedPaths)) {
+    wbD(_sk, "files", "validateOpSecurity:dest_not_allowed", false, "目标路径被黑白名单拦截", { type: op.type, destPath: op.destPath });
+    return { ok: false, error: `Destination path not allowed: ${op.destPath}` };
   }
 
   // [0723 问题1.1] 通过校验,但可能带 warn(文件名含敏感词)→放行并透传 warnings 供前端 confirm
@@ -2231,27 +2735,55 @@ function validateOpSecurity(op) {
 //   隔离沙箱根（对齐 AI op 路径 replyHandler:2998 op._cid=_cid）。无 _cid 时回落全局根=旧行为不破坏。
 //   原缺 _cid → 多窗设不同根时前端 op 一律按全局根(最后设置者)判沙箱 → A 窗可越界读写 B 窗工作区。
 function _gateFrontendFileOp(type, p, _cid) {
-  const op = { type, path: p, _cid };
+  const op = { type, path: p, _cid, [_FILE_OP_ACTOR]: _trustedFrontendActor() };
   const v = validateOpSecurity(op);
   if (!v.ok) return { ok: false, error: v.error };
   // [0723 问题1.1] 透传 warnings(文件名含敏感词)→前端据此弹 confirm 提醒,用户确认后继续
   return v.warnings ? { ok: true, path: op.path, warnings: v.warnings } : { ok: true, path: op.path };
 }
 
-// M7：owner-gated 只读列举闸——专供 filePicker 浏览整机选 workspace 根（💻计算机/D:/任意目录）。
-//   只读列举仅暴露目录项名字+size+mtime（不读内容、不写），是 validateOpSecurity 拦的三类(list/read/write)中最低危的一档，
-//   故对【工作区沙箱根】放宽（跳过 :1785 的 startsWith(wsRoot) 判定），但【保留】系统盘拦截 checkSystemDriveBlock + 黑白名单 isPathAllowed
-//   （C:/system32/blockedPaths 照拦）。与 validateOpSecurity 的差异仅在去掉工作区沙箱这一层。
-//   只在 listDir(前端浏览)case 被 owner 闸命中时调用；AI op / read / write 一律不经此函数。
-function _gateBrowseListing(p) {
-  const op = { type: "list", path: resolveCanonicalOpPath(p, undefined) };
-  // [0723 问题1.1] typeof 区分:只读列举对 warn(文件名含敏感词)放行(仅暴露名字/size/mtime,不读内容),只硬拦 string(系统目录/黑名单)
-  const sysBlock = checkSystemDriveBlock(op.path);
-  if (typeof sysBlock === "string") return { ok: false, error: sysBlock };
-  if (!isPathAllowed(op.path, pluginData.allowedPaths, pluginData.blockedPaths)) {
-    return { ok: false, error: `Path not allowed: ${op.path}` };
+// [D6 §3 2026-08-04] human browse 受限 grant 模型（取代 iter14 的"gate 失败即整机列举"止血版）：
+//   browse 是「选择候选工作区」的受限目录元数据动作，不是通用系统文件浏览。
+//   四要件缺一不可：① authenticated ALS user（owner-bound）② 可信 human web/ws actor
+//   ③ 部署闸 deployGatedAllow(allowComputerBrowse) ④ 一次性短期 grant（requestBrowseGrant 签发，
+//   TTL 内可逐级列举，过期/换 owner 失效；grant 不扩大路径、不授 read/write、不改根）。
+//   路径裁决=settingsStore.resolveBrowseListingTarget 统一政策（browseBases 基包含/系统卷/
+//   blockedPaths deny-overrides/链接逃逸），typed 错误 E_BROWSE_*（D6 §3.3）。
+const _browseGrants = new Map(); // owner → { id, expiresAt }
+const BROWSE_GRANT_TTL_MS = 120_000;
+
+function _issueBrowseGrant(owner) {
+  const grant = { id: `bg_${generateId()}${generateId()}`, expiresAt: Date.now() + BROWSE_GRANT_TTL_MS };
+  _browseGrants.set(owner, grant);
+  wbT(null, "files", "browse:grantIssued", { owner, grantId: grant.id, expiresAt: grant.expiresAt });
+  return grant;
+}
+
+function _gateBrowseListing(p, grantId) {
+  _syncSettingsHealthFromStore(); // 运行中损坏立即传导（零 IO 内存态）
+  if (_settingsHealth) {
+    return { ok: false, code: "E_FILES_SETTINGS_CORRUPT", error: "安全设置文件损坏/不可读，browse 已 fail-closed（等显式修复）" };
   }
-  return { ok: true, path: op.path };
+  if (_trustedFrontendActor() !== "human") {
+    return { ok: false, code: "E_BROWSE_SCOPE", error: "Computer browse requires a trusted human web/ws dispatch" };
+  }
+  if (!deployGatedAllow("allowComputerBrowse", "BEILU_COMPUTER_BROWSE")) {
+    return { ok: false, code: "E_BROWSE_SCOPE", error: "当前部署未开放整机目录浏览（owner 可在配置中开启 allowComputerBrowse）" };
+  }
+  const owner = _als.getStore()?.username || "";
+  if (!owner) return { ok: false, code: "E_BROWSE_SCOPE", error: "browse 需要已认证用户" };
+  const g = _browseGrants.get(owner);
+  if (!grantId || !g || g.id !== grantId) {
+    return { ok: false, code: "E_BROWSE_GRANT_REQUIRED", error: "整机目录浏览需要有效的 browse 授权（请先 requestBrowseGrant）" };
+  }
+  if (Date.now() > g.expiresAt) {
+    _browseGrants.delete(owner);
+    return { ok: false, code: "E_BROWSE_GRANT_EXPIRED", error: "browse 授权已过期，请重新发起" };
+  }
+  const r = settingsStore.resolveBrowseListingTarget(owner, p, { userBlockedPaths: pluginData.blockedPaths });
+  if (!r.ok) return { ok: false, code: r.code, error: r.error };
+  wbT(null, "files", "browse:list", { owner, grantId, path: r.path }); // 审计：grant/owner/path 齐全（D6 白盒 F）
+  return { ok: true, path: r.path };
 }
 
 // ============================================================
@@ -2292,12 +2824,13 @@ function matchApprovalAlwaysRule(op) {
 /** 落一条 always 规则（去重）；持久化由 action 流程末尾的 savePersistedSettings 统一负责。 */
 function addApprovalAlwaysRule(type, pathPrefix) {
   if (!Array.isArray(pluginData.approvalAlwaysRules)) pluginData.approvalAlwaysRules = [];
-  const dup = pluginData.approvalAlwaysRules.some(
+  const existing = pluginData.approvalAlwaysRules.find(
     (r) => r && r.type === type && _normPathKey(r.pathPrefix || "") === _normPathKey(pathPrefix),
   );
-  if (!dup) {
-    pluginData.approvalAlwaysRules.push({ type, pathPrefix, createdAt: new Date().toISOString() });
-  }
+  if (existing) return { rule: existing, added: false };
+  const rule = { type, pathPrefix, createdAt: new Date().toISOString() };
+  pluginData.approvalAlwaysRules.push(rule);
+  return { rule, added: true };
 }
 
 // ============================================================
@@ -2327,10 +2860,11 @@ async function withFileWriteLock(absPath, fn) {
 }
 
 // ============================================================
-// SEC 破口B per-user 重构（T27，凛倾决策：A 全量 + 多用户/公开部署 + workspaceRoot 保持全局）
+// SEC 破口B per-user 重构（T27）→ [D6 §2 2026-08-04 补正] workspaceRoot 簇也改 owner 分区
 // 原 `let pluginData = {...}` 是 module-level 全局单例 → ESM 跨用户共享 → 用户 A 的配置/操作历史/
 // 待审批/错误队列泄漏给 B（I-01~I-10）。改为 per-user：
-//   · 沙箱根簇 workspaceRoot/workspaceRoots 保持【全局】（凛倾指示，沙箱根本就是机器级）。
+//   · 沙箱根簇 workspaceRoot/workspaceRoots：T27 时曾按"机器级"保持全局，D6 定案改 owner 分区
+//     （双用户同 origin 串根 = 新用户重大回归 #14 的组成部分）——见上方 _workspaceByOwner。
 //   · 其余字段按 username 隔离（_userStores）。
 //   · username 经 AsyncLocalStorage(_als) 从入口（router getUserByReq / GetData/SetData / GetPrompt/
 //     ReplyHandler）携带；无上下文回退 "_default"。`pluginData` 改 Proxy，163 个访问点零改动透明路由。
@@ -2340,13 +2874,36 @@ function _curUser() {
   const u = _als.getStore()?.username;
   return (u && typeof u === "string") ? u : "_default";
 }
-// 全局沙箱根簇（不 per-user）：IDE 工作区根目录是机器/部署级，多窗口经 workspaceRoots(Map<chatid>) 再细分。
-const _globalSandbox = {
-  workspaceRoot: DEFAULT_WORKSPACE_ROOT, // IDE 文件浏览器当前打开的根目录（兜底键/前端焦点根，持久化）
-  workspaceRoots: new Map(),   // Map<chatid|"", root>（FT-multiwin：AI op 经 op._cid 读隔离根，回落 workspaceRoot）
-  _workspaceRootFromIDE: false, // IDE(YonBan) 设的根 → 防本体初始化用默认值覆盖
-};
-const _GLOBAL_FIELDS = new Set(["workspaceRoot", "workspaceRoots", "_workspaceRootFromIDE"]);
+// [D6 §2 2026-08-04] 工作区根簇改 owner 分区（原"机器级全局"是双用户同 origin 串根的根因之一）：
+//   Map<owner, { defaultRoot, byChatId:Map<chatid,root>, fromIDE }>。Proxy 的 workspaceRoot/
+//   workspaceRoots/_workspaceRootFromIDE 三字段路由到当前 ALS owner 的分区——163 个
+//   `pluginData.X` 访问点零改动即获得 owner 隔离（与其余 per-user 字段同机制）。
+//   defaultRoot=""（未设）时 getWorkspaceRoot 回落 DEFAULT_WORKSPACE_ROOT（每 owner 各自的玩耍空间语义）。
+//   持久化形状：settings _global.workspaceByOwner（filesSettingsStore 单写者）；
+//   旧全局 workspaceRoot(s) 已迁 legacyUnassigned，运行时不自动授予（D6 §2.3）。
+const _workspaceByOwner = new Map();
+function _ownerWs(u) {
+  const key = (u && typeof u === "string") ? u : "_default";
+  let e = _workspaceByOwner.get(key);
+  if (!e) {
+    e = { defaultRoot: "", byChatId: new Map(), fromIDE: false };
+    _workspaceByOwner.set(key, e);
+  }
+  return e;
+}
+const _WORKSPACE_FIELDS = new Set(["workspaceRoot", "workspaceRoots", "_workspaceRootFromIDE"]);
+function _wsFieldGet(p) {
+  const e = _ownerWs(_curUser());
+  if (p === "workspaceRoot") return e.defaultRoot;
+  if (p === "workspaceRoots") return e.byChatId;
+  return e.fromIDE;
+}
+function _wsFieldSet(p, v) {
+  const e = _ownerWs(_curUser());
+  if (p === "workspaceRoot") e.defaultRoot = (typeof v === "string") ? v : "";
+  else if (p === "workspaceRoots") e.byChatId = v instanceof Map ? v : new Map();
+  else e.fromIDE = !!v;
+}
 // per-user 数据工厂：除沙箱根簇外全部字段，每用户独立实例（含已 per-chatid 的 Map 字段，per-user 后变双层键）
 function _makeUserData() {
   return {
@@ -2390,20 +2947,21 @@ function _store(u) {
   if (!s) { s = _makeUserData(); _userStores.set(u, s); }
   return s;
 }
-// pluginData：透明 Proxy——沙箱根簇 → _globalSandbox，其余 → 当前 user store（ALS 解析）。
+// pluginData：透明 Proxy——工作区根簇 → 当前 owner 的 _workspaceByOwner 分区（D6 §2），
+//   其余 → 当前 user store（ALS 解析）。
 // 全文件 163 个 `pluginData.X` 读写零改动；无任何 ...pluginData/Object.keys(pluginData) 枚举（已核），故只需 get/set/has。
 const pluginData = new Proxy(Object.create(null), {
   get(_t, p) {
     if (typeof p === "symbol") return undefined;
-    return _GLOBAL_FIELDS.has(p) ? _globalSandbox[p] : _store(_curUser())[p];
+    return _WORKSPACE_FIELDS.has(p) ? _wsFieldGet(p) : _store(_curUser())[p];
   },
   set(_t, p, v) {
-    if (_GLOBAL_FIELDS.has(p)) _globalSandbox[p] = v;
+    if (_WORKSPACE_FIELDS.has(p)) _wsFieldSet(p, v);
     else _store(_curUser())[p] = v;
     return true;
   },
   has(_t, p) {
-    return _GLOBAL_FIELDS.has(p) || (typeof p !== "symbol" && p in _store(_curUser()));
+    return _WORKSPACE_FIELDS.has(p) || (typeof p !== "symbol" && p in _store(_curUser()));
   },
 });
 
@@ -2472,7 +3030,24 @@ export function drainPendingOpResultsForSession(sessionKey) {
  * worker → worker GetReply 前设回本 isolate，使 worker 与主进程模式一致。
  */
 // FT-multiwin 白盒钩子：暴露工作区隔离纯函数 + pluginData，供 verify_workspace_iso 验证沙箱根隔离逻辑（无副作用，不影响插件加载）。
-export const __workspaceTestHooks = { pluginData, getWorkspaceRoot, resolveCanonicalOpPath, validateOpSecurity, executeFileOperation, parseFileOperations, extractDocumentText };
+export const __workspaceTestHooks = {
+  pluginData,
+  getWorkspaceRoot,
+  resolveCanonicalOpPath,
+  validateOpSecurity,
+  gateFrontendFileOp: _gateFrontendFileOp,
+  gateBrowseListing: _gateBrowseListing,
+  executeFileOperation,
+  parseFileOperations,
+  extractDocumentText,
+  readBoundedFrontendPreview,
+  readBoundedFileSnapshot,
+  assertBoundedFrontendPreviewStat,
+  frontendPreviewStatChanged,
+  FRONTEND_PREVIEW_MAX_BYTES,
+  DOCUMENT_EXTRACTION_POLICY,
+  FILE_RESOURCE_POLICY,
+};
 
 // yonban functions:files 节点身份换算面专用（与 REST 端点 :2331/:2345 同一 run 机制、同 store 形状
 // {username}——facade 有身份才 run，无身份直调=chatStorage forgetChatState 先例的 _default 语义）。
@@ -2549,10 +3124,9 @@ function clearFileModeSession(sessionKey) {
 }
 
 // ============================================================
-// 持久化：将权限和关键设置写入磁盘
+// 持久化：将权限和关键设置写入磁盘（[D6 §4] 物理文件唯一 owner=filesSettingsStore，
+//   本插件只经 store API 读写，不再持有文件路径/私有写队列）
 // ============================================================
-
-const PERSIST_FILE = "data/beilu-files-settings.json";
 
 /** 需要持久化的字段 */
 const PERSIST_KEYS = [
@@ -2572,7 +3146,7 @@ const PERSIST_KEYS = [
   "treeDepth",
   "treeShowSize",
 ];
-// 破口B：workspaceRoot 是全局沙箱根（持久化进 _global）；其余 14 项是 per-user 配置。
+// workspaceRoot 是 IDE/CLI 共享全局根；workspaceRoots 是 chatid→root 的窗口根，两者均属机器级并持久化进 _global。
 const _GLOBAL_PERSIST_KEYS = new Set(["workspaceRoot"]);
 const _USER_PERSIST_KEYS = PERSIST_KEYS.filter((k) => !_GLOBAL_PERSIST_KEYS.has(k));
 function _applyPersistKey(target, key, val) {
@@ -2581,71 +3155,177 @@ function _applyPersistKey(target, key, val) {
 }
 
 /**
- * 从磁盘加载持久化设置（破口B per-user 布局：{ _global:{workspaceRoot}, <username>:{...14项} }）。
+ * 从磁盘加载持久化设置（破口B per-user 布局：{ _global:{workspaceRoot,workspaceRoots}, <username>:{...14项} }）。
  * 兼容旧单文件全局格式（顶层直接是键）：迁移 → workspaceRoot 进 _global，其余进 "_default" 桶（无 user 上下文的兜底）。
  * 老用户原全局配置因此落到 _default；具名用户首次访问得安全默认值（blockedPaths=["C:/"]/不可 exec），一次性重配即可。
  */
-async function loadPersistedSettings() {
-  if (typeof Deno === "undefined") return;
-  try {
-    const text = await Deno.readTextFile(PERSIST_FILE);
-    const saved = JSON.parse(text);
-    const isLegacy = saved._global === undefined &&
-      (saved.workspaceRoot !== undefined || saved.enabled !== undefined || saved.permissions !== undefined);
-    if (isLegacy) {
-      if (saved.workspaceRoot !== undefined) _globalSandbox.workspaceRoot = saved.workspaceRoot;
-      const d = _store("_default");
-      for (const key of _USER_PERSIST_KEYS) if (saved[key] !== undefined) _applyPersistKey(d, key, saved[key]);
-      console.log("[beilu-files] 已迁移旧全局设置 → _global + _default 桶（per-user）");
-    } else {
-      if (saved._global?.workspaceRoot !== undefined) _globalSandbox.workspaceRoot = saved._global.workspaceRoot;
-      // 持久化根自愈（2026-08-01 幽灵工作区案）：盘上存的绝对根已不存在（或本就是幽灵路径）
-      //   → 诚实告警并回落默认玩耍空间（锚 CWD，Load 钩子保证存在），下次 save 即持久化痊愈值。
-      {
-        const _vErrLoad = validateWorkspaceRoot(_globalSandbox.workspaceRoot);
-        if (_vErrLoad) {
-          console.warn(`[beilu-files] 持久化工作区根非法，回落默认玩耍空间: ${_vErrLoad}`);
-          _globalSandbox.workspaceRoot = DEFAULT_WORKSPACE_ROOT;
-        }
-      }
-      for (const [uname, bucket] of Object.entries(saved)) {
-        if (uname === "_global" || !bucket || typeof bucket !== "object") continue;
-        const d = _store(uname);
-        for (const key of _USER_PERSIST_KEYS) if (bucket[key] !== undefined) _applyPersistKey(d, key, bucket[key]);
-      }
-      console.log("[beilu-files] 已从磁盘恢复设置(per-user)");
-    }
-  } catch {
-    console.log("[beilu-files] 无持久化设置文件，使用默认值");
+// [0804 根因修·B2 → D6 §4 完整版] 设置健康状态：单源=filesSettingsStore.getSettingsHealth
+//   （损坏/不可读的判定、.corrupt 备份、fail-closed 持续到显式 repair 全在 store）。
+//   本镜像只服务插件内同步读点（validateOpSecurity/_gateBrowseListing/GetData 门控）；
+//   load 时与 store 对齐，mutation 失败时按 store 真值刷新。null=健康。
+let _settingsHealth = null; // null | { state:"corrupt"|"unreadable", detail, backupPath }
+let _settingsRevision = 0;  // store 落盘 revision（GetData 回显，前端 CAS/显示用）
+export function getFilesSettingsHealth() { return _settingsHealth; }
+function _syncSettingsHealthFromStore() {
+  const h = settingsStore.getSettingsHealth();
+  _settingsHealth = h ? { state: h.state, detail: h.detail, backupPath: h.backupPath ?? null } : null;
+  return _settingsHealth;
+}
+function _applyFailClosedSecurityPosture() {
+  // 只压安全关键字段到最严（不动非安全的 UI/历史项）；损坏期禁自动批准/禁 exec/删除权限关，C 盘保持 blocked。
+  _store("_default"); // 先确保无 user 上下文的兜底桶存在，再统一覆盖（含它）
+  for (const s of _userStores.values()) {
+    s.autoApprove = false;
+    s.autoApproveRead = false;
+    s.autoApproveList = false;
+    s.allowExec = false;
+    if (!Array.isArray(s.blockedPaths)) s.blockedPaths = ["C:/"];
+    else if (!s.blockedPaths.some((p) => String(p).replace(/\\/g, "/").toUpperCase().startsWith("C:"))) s.blockedPaths.push("C:/");
+    if (s.permissions) { s.permissions.file_write = false; s.permissions.file_delete = false; s.permissions.mcp = false; }
   }
 }
 
+async function loadPersistedSettings() {
+  if (typeof Deno === "undefined") return;
+  return await withWorkspaceRootMutation(async () => {
+    // [D6 §4] 一次性迁移：旧格式打 v2 戳；旧全局 workspaceRoot(s)（无可证明 owner）
+    //   → _global.legacyUnassigned 落盘归档（B6 根修：幽灵根离开运行时读路且【盘上】同步更新，
+    //   不再"只修内存不修盘"）。运行时不自动授予任何登录用户（D6 §2.3）。
+    try {
+      await settingsStore.ensureMigrated();
+    } catch (e) {
+      console.warn(`[beilu-files] settings v2 迁移失败（本轮按盘上现状继续）: ${e?.message || e}`);
+    }
+    const snap = settingsStore.readSnapshot();
+    if (!snap.ok) {
+      _syncSettingsHealthFromStore();
+      _applyFailClosedSecurityPosture();
+      console.error(`[beilu-files] ★ 持久化设置${_settingsHealth?.state === "corrupt" ? "损坏" : "不可读"}，已 fail-closed（禁自动批准/exec/根变更/browse/文件操作）等显式修复：${_settingsHealth?.detail}`);
+      return;
+    }
+    _settingsHealth = null;
+    _settingsRevision = snap.revision;
+    if (!snap.persisted) {
+      console.log("[beilu-files] 无持久化设置文件，使用默认值");
+      return;
+    }
+    const doc = snap.doc;
+    // 用户桶（兼容既有桶名，D6 §4 文档形状）
+    for (const [uname, bucket] of Object.entries(doc)) {
+      if (uname === "_global" || uname === "schemaVersion" || uname === "revision" || uname === "commandGate" || uname === "_legacyShape") continue;
+      if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
+      const d = _store(uname);
+      for (const key of _USER_PERSIST_KEYS) if (bucket[key] !== undefined) _applyPersistKey(d, key, bucket[key]);
+    }
+    // owner 分区工作区读回：每条根都过同一政策（D6"配置读回"入口同拒——非法/越权根跳过留告警，
+    //   盘上不动（等 owner 重选或 repair），运行时不加载=幽灵根不复活）。
+    _workspaceByOwner.clear();
+    const byOwner = doc._global?.workspaceByOwner || {};
+    for (const [owner, entry] of Object.entries(byOwner)) {
+      if (!entry || typeof entry !== "object") continue;
+      const ws = _ownerWs(owner);
+      if (typeof entry.defaultRoot === "string" && entry.defaultRoot) {
+        const v = settingsStore.resolveWorkspaceRootCandidate(owner, entry.defaultRoot, { userBlockedPaths: _store(owner).blockedPaths });
+        if (v.ok) ws.defaultRoot = v.root;
+        else console.warn(`[beilu-files] 读回拒绝 ${owner} 的默认工作区根(${entry.defaultRoot}): [${v.code}] ${v.error}`);
+      }
+      if (entry.byChatId && typeof entry.byChatId === "object") {
+        for (const [chatId, root] of Object.entries(entry.byChatId)) {
+          if (!chatId || confineSegment(chatId) !== chatId || typeof root !== "string" || !root) continue;
+          const v = settingsStore.resolveWorkspaceRootCandidate(owner, root, { userBlockedPaths: _store(owner).blockedPaths });
+          if (v.ok) ws.byChatId.set(chatId, v.root);
+          else console.warn(`[beilu-files] 读回拒绝 ${owner} 的窗口工作区根(${chatId}=${root}): [${v.code}] ${v.error}`);
+        }
+      }
+      if (entry.fromIDE === true) ws.fromIDE = true;
+    }
+    if (doc._global?.legacyUnassigned) {
+      console.warn("[beilu-files] 检测到未认领旧工作区根(_global.legacyUnassigned)，运行时不自动授予；owner 可经 adoptLegacyWorkspaceRoots 显式认领");
+    }
+    console.log(`[beilu-files] 已从 settings store 恢复设置(per-user + workspaceByOwner, revision=${snap.revision})`);
+  });
+}
+
 /**
- * 将当前设置写入磁盘（防抖：100ms 内多次调用只写一次）
+ * 将当前设置写入磁盘——[D6 §4 2026-08-04] 改经 filesSettingsStore 单一 mutate：
+ * 本插件不再自持写队列/整文档 RMW（B1 三写者之一退役）；锁+CAS+原子写+读回校验在 store。
+ * 普通配置写仍可防抖；工作区根会显式等待本函数完成（"内存已改"≠"重启后仍有效"）。
+ * 快照只带本 owner 的用户桶 + 本 owner 的 workspaceByOwner 分区——其他用户桶/其他 owner
+ * 的根由 store 锁内保全，不再整表携带（原整表携带正是跨用户互覆的面）。
  */
 const _persistTimers = new Map(); // username → timer（per-user 防抖，防多用户互相 clearTimeout 串）
+
+function _clonePersistValue(value) {
+  if (value === undefined || value === null || typeof value !== "object") return value;
+  try { return structuredClone(value); } catch { return JSON.parse(JSON.stringify(value)); }
+}
+
+function _capturePersistedSettings(username) {
+  if (!_isInsideWorkspaceRootMutation()) {
+    throw new Error("持久化快照必须在工作区根串行边界内捕获");
+  }
+  const d = _store(username);
+  const userSettings = {};
+  for (const key of _USER_PERSIST_KEYS) userSettings[key] = _clonePersistValue(d[key]);
+  const ws = _ownerWs(username);
+  // 冻结本次接受的根与用户桶，不能在写时重新读取可变 Proxy/Map。
+  return {
+    username,
+    workspace: {
+      defaultRoot: ws.defaultRoot || "",
+      byChatId: Object.fromEntries(ws.byChatId),
+      fromIDE: ws.fromIDE === true,
+    },
+    userSettings,
+  };
+}
+
+async function _persistSettingsForUser(username) {
+  return await withWorkspaceRootMutation(async () => {
+    const snapshot = _capturePersistedSettings(username);
+    try {
+      const r = await settingsStore.mutate(null, { kind: "plugin", username: snapshot.username }, (doc) => {
+        const bucket = (doc[snapshot.username] && typeof doc[snapshot.username] === "object" && !Array.isArray(doc[snapshot.username]))
+          ? doc[snapshot.username]
+          : (doc[snapshot.username] = {});
+        for (const key of _USER_PERSIST_KEYS) bucket[key] = snapshot.userSettings[key];
+        if (!doc._global.workspaceByOwner || typeof doc._global.workspaceByOwner !== "object") doc._global.workspaceByOwner = {};
+        doc._global.workspaceByOwner[snapshot.username] = {
+          defaultRoot: snapshot.workspace.defaultRoot,
+          byChatId: snapshot.workspace.byChatId,
+          ...(snapshot.workspace.fromIDE ? { fromIDE: true } : {}),
+        };
+      });
+      _settingsRevision = r.revision;
+    } catch (e) {
+      // 损坏 fail-closed（E_FILES_SETTINGS_*）或写失败：健康镜像刷新后上抛——
+      // savePersistedSettingsNow 的调用方（根变更等）据此回滚并给可见错误，不吞。
+      _syncSettingsHealthFromStore();
+      throw e;
+    }
+  });
+}
+
 function savePersistedSettings() {
   if (typeof Deno === "undefined") return;
   const u = _curUser(); // 同步捕获当前用户：setTimeout 回调内不依赖 ALS，且防抖按 user 隔离
   if (_persistTimers.get(u)) clearTimeout(_persistTimers.get(u));
-  _persistTimers.set(u, setTimeout(async () => {
+  _persistTimers.set(u, setTimeout(() => {
     _persistTimers.delete(u);
-    try {
-      // 读现有文件 → 只更新本 user 桶 + 全局沙箱根 → 整体写回（绝不丢别的 user 的设置）
-      // T019：损坏→备份.corrupt.bak后抛错（外层catch warn），不空表顶上整体写回清空所有user设置；不存在→{}首装。
-      let all = await readJsonSafe(PERSIST_FILE, {});
-      if (all._global === undefined || typeof all._global !== "object") all = { _global: {} }; // 旧格式/空 → 重置为 per-user 结构（旧顶层键 load 时已迁进 _default）
-      all._global.workspaceRoot = _globalSandbox.workspaceRoot;
-      const d = _store(u); // 直接读 user store（非 Proxy/ALS），保证写的是 u 自己的数据
-      const bucket = (all[u] && typeof all[u] === "object") ? all[u] : (all[u] = {});
-      for (const key of _USER_PERSIST_KEYS) bucket[key] = d[key];
-      const dir = PERSIST_FILE.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
-      if (dir) await Deno.mkdir(dir, { recursive: true }).catch(() => {});
-      await Deno.writeTextFile(PERSIST_FILE, JSON.stringify(all, null, 2));
-    } catch (err) {
+    _persistSettingsForUser(u).catch((err) => {
       console.warn("[beilu-files] 持久化设置失败:", err.message);
-    }
+    });
   }, 100));
+}
+
+async function savePersistedSettingsNow() {
+  if (typeof Deno === "undefined") throw new Error("当前运行环境不支持工作区持久化");
+  const u = _curUser();
+  if (_persistTimers.get(u)) {
+    clearTimeout(_persistTimers.get(u));
+    _persistTimers.delete(u);
+  }
+  await _persistSettingsForUser(u);
 }
 
 // ============================================================
@@ -2693,7 +3373,7 @@ const pluginExport = {
       async (req, res) => {
         try {
           const _u = await _reqUser(req);
-          const data = await _als.run({ username: _u }, () => pluginExport.interfaces.config.GetData());
+          const data = await _als.run({ username: _u, dispatchSource: "web" }, () => pluginExport.interfaces.config.GetData());
           res.json(data);
         } catch (err) {
           res.status(500).json({ error: err.message });
@@ -2707,7 +3387,7 @@ const pluginExport = {
       async (req, res) => {
         try {
           const _u = await _reqUser(req);
-          const result = await _als.run({ username: _u }, () => pluginExport.interfaces.config.SetData(req.body));
+          const result = await _als.run({ username: _u, dispatchSource: "web" }, () => pluginExport.interfaces.config.SetData(req.body));
           res.json(result || { success: true });
         } catch (err) {
           res.status(500).json({ error: err.message });
@@ -2718,7 +3398,7 @@ const pluginExport = {
   Unload: async () => {},
   interfaces: {
     config: {
-      GetData: async () => {
+      GetData: async (args = {}) => {
       // T060b：fileHistory 配置只是本聚合快照的一项，config.json 损坏时 loadConfig 抛 CorruptJsonError
       //   （已备份 .corrupt.bak）。局部承接为 {error} 对象——让配置面板知道该项损坏并留痕，而非让整个
       //   GetData 抛错导致 config 面板全空（其余 pluginData 字段仍正常返回）。
@@ -2739,16 +3419,21 @@ const pluginExport = {
         maxHistory: pluginData.maxHistory,
         pendingOperations: pluginData.pendingOperations,
         operationHistory: pluginData.operationHistory.slice(-20), // 只返回最近20条
-        // N1：GetData 无 chatid 上下文（前端 config 面板不按会话查；当前模式前端走 B 通道
-        //   getCurrentMode/syncModeFromBackend，不消费此字段）→ 返回兜底键 "" 的值，等价旧全局行为。
-        activeMode: getActiveMode(""),
+        // facade 会传入已验证 chatid；旧 REST/全局配置面无参时仍读兜底键。
+        activeMode: getActiveMode(args?.chatid || ""),
         customPrompt: pluginData.customPrompt,
         customPromptEnabled: pluginData.customPromptEnabled,
         permissions: pluginData.permissions,
         approvalAlwaysRules: pluginData.approvalAlwaysRules,
-        workspaceRoot: pluginData.workspaceRoot,
+        workspaceRoot: getWorkspaceRoot(args?.chatid),
+        globalWorkspaceRoot: pluginData.workspaceRoot, // [D6 §2] owner 分区后=本认证用户的默认根（非跨用户全局）
         treeDepth: pluginData.treeDepth,
         treeShowSize: pluginData.treeShowSize,
+        // [D6 §4] settings 单写者健康/版本回显：损坏必须可见（前端据此显示"文件损坏"而非静默默认），
+        //   revision 供 UI 显示与未来 CAS 前端接线；hasLegacyWorkspace=有未认领旧根（可提示 owner 认领）。
+        settingsHealth: _settingsHealth,
+        settingsRevision: _settingsRevision,
+        hasLegacyWorkspace: (() => { try { return !!settingsStore.getWorkspaceView().legacyUnassigned; } catch { return false; } })(),
         _stats: {
           totalOps: pluginData.operationHistory.length,
           pendingCount: pluginData.pendingOperations.length,
@@ -2775,44 +3460,69 @@ const pluginExport = {
               if (!_g.ok)
                 return { _result: { error: _g.error, path: data.path } };
               try {
-                const content = await Deno.readTextFile(_g.path);
+                const preview = await readBoundedFrontendPreview(_g.path, data.path);
+                const content = new TextDecoder("utf-8").decode(preview.bytes);
                 // [0723 问题1.1] 透传 warnings(文件名含敏感词)→前端据此弹 confirm 提醒,不拦读取
-                return { _result: { content, path: data.path, warnings: _g.warnings } };
+                return { _result: { content, size: preview.size, path: data.path, warnings: _g.warnings } };
               } catch (err) {
-                return { _result: { error: err.message, path: data.path } };
+                return frontendReadErrorResult(err, data.path);
+              }
+            }
+            case "readFileAuto": {
+              const _raPath = resolveWorkspacePath(data.path || "");
+              const _raG = _gateFrontendFileOp("read", _raPath, data.chatid);
+              if (!_raG.ok)
+                return { _result: { error: _raG.error, path: data.path } };
+              try {
+                const preview = await readBoundedFrontendPreview(_raG.path, data.path);
+                const content = detectUtf8Text(preview.bytes);
+                if (content !== null) {
+                  return {
+                    _result: {
+                      kind: "text",
+                      content,
+                      encoding: "UTF-8",
+                      size: preview.size,
+                      path: data.path,
+                      warnings: _raG.warnings,
+                    },
+                  };
+                }
+                return {
+                  _result: {
+                    kind: "binary",
+                    base64: encodePreviewBase64(preview.bytes),
+                    mime: preview.mime,
+                    size: preview.size,
+                    path: data.path,
+                    warnings: _raG.warnings,
+                  },
+                };
+              } catch (err) {
+                return frontendReadErrorResult(err, data.path);
               }
             }
             case "readFileBase64": {
               // 任务B多类型预览（凛倾 2026-07-09「打开更多种类的内容和优化显示」）：媒体文件
               //   （图片/音视频）字节读路——readFile 是 readTextFile 文本路，二进制走这里返 base64+mime
-              //   给前端 <img>/<audio>/<video> data URL。stat 先行超限即拒（不读入内存），沙箱闸同 readFile。
+              //   给前端 <img>/<audio>/<video> data URL。读取前/后的同句柄 stat 与真实字节共用服务器策略上限，沙箱闸同 readFile。
               const _rbPath = resolveWorkspacePath(data.path || "");
               const _rbG = _gateFrontendFileOp("read", _rbPath, data.chatid);
               if (!_rbG.ok)
                 return { _result: { error: _rbG.error, path: data.path } };
               try {
-                const _rbStat = await Deno.stat(_rbG.path);
-                const _RB_MAX = 20 * 1024 * 1024;
-                if (_rbStat.size > _RB_MAX) {
-                  return { _result: { error: `文件过大（${(_rbStat.size / 1048576).toFixed(1)}MB > 20MB），不支持预览`, path: data.path, size: _rbStat.size } };
-                }
-                const _rbBytes = await Deno.readFile(_rbG.path);
-                // 分块转码：String.fromCharCode(...全量) 会超函数参数上限（>百KB 即爆）
-                let _rbBin = "";
-                for (let _i = 0; _i < _rbBytes.length; _i += 32768) {
-                  _rbBin += String.fromCharCode(..._rbBytes.subarray(_i, _i + 32768));
-                }
-                const _rbExt = String(data.path || "").split(".").pop()?.toLowerCase() || "";
-                const _rbMime = {
-                  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
-                  webp: "image/webp", bmp: "image/bmp", ico: "image/x-icon", svg: "image/svg+xml",
-                  mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg",
-                  mp4: "video/mp4", webm: "video/webm",
-                  pdf: "application/pdf", // 任务C：pdf 走 base64 → 前端 iframe data URL（浏览器内置查看器）
-                }[_rbExt] || "application/octet-stream";
-                return { _result: { base64: btoa(_rbBin), mime: _rbMime, size: _rbStat.size, path: data.path } };
+                const preview = await readBoundedFrontendPreview(_rbG.path, data.path);
+                return {
+                  _result: {
+                    base64: encodePreviewBase64(preview.bytes),
+                    mime: preview.mime,
+                    size: preview.size,
+                    path: data.path,
+                    warnings: _rbG.warnings,
+                  },
+                };
               } catch (err) {
-                return { _result: { error: err.message, path: data.path } };
+                return frontendReadErrorResult(err, data.path);
               }
             }
             case "readFileExtract": {
@@ -2827,10 +3537,13 @@ const pluginExport = {
                 if (!DOC_EXTRACT_EXTS.has(_reExt)) {
                   return { _result: { error: `不支持的文档格式: ${_reExt}`, path: data.path } };
                 }
-                const text = await extractDocumentText(_reG.path, _reExt);
-                return { _result: { text, path: data.path } };
+                // 前端 Office/PDF 预览也先取得同一份有界且稳定的字节快照；提取器消费该快照，
+                // 不再在 stat 之后按 path 二次无界读取，避免增长竞态绕过服务器策略上限。
+                const preview = await readBoundedFrontendPreview(_reG.path, data.path);
+                const text = await extractDocumentText(_reG.path, _reExt, preview.bytes);
+                return { _result: { text, size: preview.size, path: data.path, warnings: _reG.warnings } };
               } catch (err) {
-                return { _result: { error: err.message, path: data.path } };
+                return frontendReadErrorResult(err, data.path);
               }
             }
             case "writeFile": {
@@ -2858,17 +3571,18 @@ const pluginExport = {
                 if (/^[a-zA-Z]:$/.test(dirPath)) dirPath += "/";
 
                 // SEC-T2/RCE-3：走统一沙箱闸（防列举工作区外/他人用户目录）
-                // M7：沙箱内正常过闸；沙箱外目录（filePicker 浏览整机选 workspace 根）走 owner-gated 只读列举旁路。
+                // [D6 §3.3] listDir 不再以"沙箱闸失败"作为整机浏览的旁路开关：工作区外列举
+                //   唯一路径 = 调用方【显式】携带 browseGrantId（requestBrowseGrant 签发的短期
+                //   owner-bound 授权），typed E_BROWSE_* 错误原样回传（不折叠成泛错）。
                 let _g = _gateFrontendFileOp("list", dirPath, data.chatid);
                 if (!_g.ok) {
-                  // 只读列举仅暴露文件名(不读内容/不写)=最低危；owner 边界经 deployGatedAllow
-                  //   (local=owner 自己机器恒放行 / server 默认收紧、需 owner 显式开 config)；C:/敏感仍由 _gateBrowseListing 拦；AI op 不走本前端 case。
-                  if (deployGatedAllow("allowComputerBrowse", "BEILU_COMPUTER_BROWSE")) {
-                    const _gb = _gateBrowseListing(dirPath);
-                    if (_gb.ok) _g = _gb;
-                  }
-                  if (!_g.ok)
+                  if (data.browseGrantId != null) {
+                    const _gb = _gateBrowseListing(dirPath, data.browseGrantId);
+                    if (!_gb.ok) return { _result: { error: _gb.error, code: _gb.code, path: data.path } };
+                    _g = _gb;
+                  } else {
                     return { _result: { error: _g.error, path: data.path } };
+                  }
                 }
                 dirPath = _g.path;
 
@@ -2994,6 +3708,15 @@ const pluginExport = {
               const op = pluginData.pendingOperations.find(
                 (o) => o.id === data.opId,
               );
+              if (!op) return { _result: { success: false, error: "待审批操作不存在或已处理" } };
+              if (data.chatid && op._cid && op._cid !== data.chatid) {
+                return { _result: { success: false, error: "待审批操作不属于当前窗口会话" } };
+              }
+              let _approvalStatus = "rejected";
+              let _approvalError = "";
+              let _addedAlwaysRule = null;
+              let _alwaysRuleActive = false;
+              let _alwaysRuleWasAdded = false;
               if (op) {
                 op.status = "approved";
                 pluginData.pendingOperations =
@@ -3006,6 +3729,8 @@ const pluginExport = {
                 if (!sec.ok) {
                   op.status = "rejected";
                   op.error = sec.error;
+                  _approvalStatus = "rejected";
+                  _approvalError = sec.error;
                   pluginData.operationHistory.push(op);
                   // 传导链修：拦截结果也要回注 AI（否则 AI 以为还在等审批，静默挂死）
                   pushPendingOpResult(op._cid, { text: _formatOpResultLine(op), timestamp: Date.now(), opCount: 1 });
@@ -3016,7 +3741,10 @@ const pluginExport = {
                   // N46 policy:"always"：sec.ok 后 op.path 已 canonical，据此落 always 规则
                   //（type+目录前缀），本条照常执行；持久化走 action 流程末尾统一落盘。
                   if (data.policy === "always" && op.type !== "exec" && op.path) {
-                    addApprovalAlwaysRule(op.type, path.dirname(op.path));
+                    const ruleOutcome = addApprovalAlwaysRule(op.type, path.dirname(op.path));
+                    _alwaysRuleActive = !!ruleOutcome?.rule;
+                    _alwaysRuleWasAdded = ruleOutcome?.added === true;
+                    _addedAlwaysRule = _alwaysRuleWasAdded ? ruleOutcome.rule : null;
                     console.log(
                       `[beilu-files] N46 落 always 规则: ${op.type} ${path.dirname(op.path)}`,
                     );
@@ -3030,6 +3758,8 @@ const pluginExport = {
                     try { _apStopped = await fileEditRegistry.onWriteStart(resolveCanonicalOpPath(op.path, op._cid), op._cid); } catch { /* 不阻断 */ }
                   }
                   const result = await executeFileOperation(op);
+                  _approvalStatus = result?.status || op.status || "failed";
+                  _approvalError = result?.error || op.error || "";
                   pluginData.operationHistory.push(result);
                   // 传导链修（凛倾 2026-07-09）：手动批准的执行结果回注 AI——此前只进 operationHistory，
                   //   用户点了「允许」但结果永远到不了 pendingOpResults → GetPrompt 注入链在此断。
@@ -3050,12 +3780,38 @@ const pluginExport = {
                     pluginData.operationHistory.slice(-pluginData.maxHistory);
                 }
               }
-              break;
+              let _rulePersistence = { ok: true };
+              if (_addedAlwaysRule) {
+                try {
+                  await savePersistedSettingsNow();
+                } catch (err) {
+                  pluginData.approvalAlwaysRules = pluginData.approvalAlwaysRules.filter((rule) => rule !== _addedAlwaysRule);
+                  _alwaysRuleActive = false;
+                  _rulePersistence = { ok: false, error: err?.message || String(err) };
+                }
+              }
+              return {
+                _result: {
+                  success: true,
+                  handled: true,
+                  opId: data.opId,
+                  executed: _approvalStatus === "completed",
+                  status: _approvalStatus,
+                  ...(_approvalError ? { error: _approvalError } : {}),
+                  ruleActive: _alwaysRuleActive && _rulePersistence.ok,
+                  ruleAdded: _alwaysRuleWasAdded && _rulePersistence.ok,
+                  rulePersistence: _rulePersistence,
+                },
+              };
             }
             case "rejectOp": {
               const op = pluginData.pendingOperations.find(
                 (o) => o.id === data.opId,
               );
+              if (!op) return { _result: { success: false, error: "待审批操作不存在或已处理" } };
+              if (data.chatid && op._cid && op._cid !== data.chatid) {
+                return { _result: { success: false, error: "待审批操作不属于当前窗口会话" } };
+              }
               if (op) {
                 op.status = "rejected";
                 if (!op.error) op.error = "用户拒绝了此操作";
@@ -3067,7 +3823,8 @@ const pluginExport = {
                 // 传导链修：拒绝也要告知 AI（对齐主循环 rejectedOps 注入——否则 AI 以为还在等审批）
                 pushPendingOpResult(op._cid, { text: _formatOpResultLine(op), timestamp: Date.now(), opCount: 1 });
               }
-              break;
+              savePersistedSettings();
+              return { _result: { success: true, opId: data.opId } };
             }
             case "approveAll": {
               // 多窗口隔离：只批本会话(op._cid===chatid)+无归属(!op._cid)的 op；
@@ -3079,6 +3836,9 @@ const pluginExport = {
               //   并发 approveAll（多窗口同时点全批）会对无归属 op(_cid=null) 双取双执行。先摘后执行根除。
               const _aaClaimed = pluginData.pendingOperations.filter(_aaMatch);
               pluginData.pendingOperations = pluginData.pendingOperations.filter((o) => !_aaMatch(o));
+              let _aaCompleted = 0;
+              let _aaFailed = 0;
+              let _aaRejected = 0;
               for (const op of _aaClaimed) {
                 op.status = "approved";
                 // N2：同 approveOp，审批≠路径免检，批量审批每个 op 都过单源校验链。
@@ -3087,6 +3847,8 @@ const pluginExport = {
                   op.status = "rejected";
                   op.error = sec.error;
                   pluginData.operationHistory.push(op);
+                  _aaRejected += 1;
+                  pushPendingOpResult(op._cid, { text: _formatOpResultLine(op), timestamp: Date.now(), opCount: 1 });
                   console.log(
                     `[beilu-files] 批量审批 op 被路径校验拦截: ${op.type} ${op.path} (${sec.error})`,
                   );
@@ -3100,6 +3862,8 @@ const pluginExport = {
                 }
                 const result = await executeFileOperation(op);
                 pluginData.operationHistory.push(result);
+                if ((result?.status || op.status) === "completed") _aaCompleted += 1;
+                else _aaFailed += 1;
                 // 传导链修：批量批准的执行结果同样回注 AI（逐 op 按其发起窗口 _cid 分桶推）
                 pushPendingOpResult(op._cid, { text: _formatOpResultLine(result || op), timestamp: Date.now(), opCount: 1 });
                 if (op.path && (result?.status || op.status) === "completed") {
@@ -3110,7 +3874,16 @@ const pluginExport = {
                 }
               }
               // 已处理项在认领时即从队列摘走（见上），此处无需再 filter。
-              break;
+              savePersistedSettings();
+              return {
+                _result: {
+                  success: true,
+                  handled: _aaClaimed.length,
+                  completed: _aaCompleted,
+                  failed: _aaFailed,
+                  rejected: _aaRejected,
+                },
+              };
             }
             case "rejectAll": {
               // 多窗口隔离 + 先认领后处理（同 approveAll）：只拒本会话+无归属 op，其他会话留队。
@@ -3125,7 +3898,8 @@ const pluginExport = {
                 // 传导链修：批量拒绝同样告知 AI（逐 op 按发起窗口 _cid 分桶）
                 pushPendingOpResult(op._cid, { text: _formatOpResultLine(op), timestamp: Date.now(), opCount: 1 });
               }
-              break;
+              savePersistedSettings();
+              return { _result: { success: true, handled: _raClaimed.length, rejected: _raClaimed.length } };
             }
             // N46：删一条 always 规则（按 {type,pathPrefix} 或 index）；落盘走 action 流程末尾。
             case "removeApprovalAlwaysRule": {
@@ -3153,9 +3927,22 @@ const pluginExport = {
             case "forgetChatState": {
               const _fcid = data.chatid;
               if (_fcid) {
+                // 这些是已完成会话删除后的运行时清理；即使根表落盘失败也不应把它们复活。
                 pluginData.activeModes.delete(_fcid);
                 pluginData.pendingOpResults.delete(_fcid);
                 pluginData.fileModeSessions.delete(_fcid);
+                // workspaceRoots 是持久化整表，删除也必须与 setWorkspaceRoot 的事务共用同一边界。
+                // 失败只恢复本 root 项并把错误抛给调用方；不回滚上面已经正确完成的运行时清理。
+                return await withWorkspaceRootMutation(async () => {
+                  const _rootSnapshot = snapshotWorkspaceRoot(_fcid);
+                  pluginData.workspaceRoots.delete(_fcid);
+                  try {
+                    await savePersistedSettingsNow();
+                  } catch (err) {
+                    restoreWorkspaceRoot(_rootSnapshot);
+                    throw new Error(`清理会话工作区根未能持久化: ${err?.message || err}`);
+                  }
+                });
               }
               break;
             }
@@ -3345,24 +4132,30 @@ const pluginExport = {
               return { hasPending: true, count, resultsText };
             }
             case "getPendingErrors": {
-              // 前端轮询：是否有操作错误需要显示
+              // 前端轮询：只读本会话 + 历史无归属错误，不窥探其他窗口。
+              const _peCid = data.chatid || "";
+              const _peErrors = _peCid
+                ? pluginData.pendingErrors.filter((entry) => !entry?._cid || entry._cid === _peCid)
+                : pluginData.pendingErrors;
               return {
-                hasErrors: pluginData.hasOperationErrors,
-                count: pluginData.pendingErrors.length,
-                errors: pluginData.pendingErrors,
+                hasErrors: _peErrors.length > 0,
+                count: _peErrors.length,
+                errors: _peErrors,
               };
             }
             case "consumePendingErrors": {
-              // 前端消费错误：返回错误信息并清空
-              if (pluginData.pendingErrors.length === 0) {
+              // 前端消费错误：只认领本会话 + 历史无归属条目，其他窗口继续留队。
+              const _ceCid = data.chatid || "";
+              const _ceMatch = (entry) => !_ceCid || !entry?._cid || entry._cid === _ceCid;
+              const errors = pluginData.pendingErrors.filter(_ceMatch);
+              if (errors.length === 0) {
                 return { hasErrors: false, errors: [] };
               }
-              const errors = [...pluginData.pendingErrors];
-              const count = pluginData.pendingErrors.length;
-              pluginData.pendingErrors = [];
-              pluginData.hasOperationErrors = false;
+              const count = errors.length;
+              pluginData.pendingErrors = pluginData.pendingErrors.filter((entry) => !_ceMatch(entry));
+              pluginData.hasOperationErrors = pluginData.pendingErrors.length > 0;
               console.log(
-                `[beilu-files] consumePendingErrors: 消费 ${count} 条操作错误`,
+                `[beilu-files] consumePendingErrors: 会话 ${_ceCid || "(全局)"} 消费 ${count} 条操作错误`,
               );
               return { hasErrors: true, count, errors };
             }
@@ -3401,21 +4194,63 @@ const pluginExport = {
                 const _cid = data.chatid || "";
                 const previousMode = getActiveMode(_cid);
                 setActiveMode(_cid, data.mode);
+                let _modeRootResult = null;
 
-                // 同步工作区根路径（2026-08-01 幽灵根拒收：非法根保留旧值，模式切换本身不失败）
+                // 模式和工作区根可以独立成功；携根时必须把根的拒绝/落盘失败显式返回，
+                // 不能把“模式已切换”伪装成“新根也已生效”。
                 if (data.rootPath !== undefined) {
-                  const _vErr2 = validateWorkspaceRoot(data.rootPath || DEFAULT_WORKSPACE_ROOT);
-                  if (_vErr2) { console.warn(`[beilu-files] setMode 携带非法工作区根，保留旧根: ${_vErr2}`); }
-                  else {
-                  pluginData.workspaceRoot = data.rootPath || DEFAULT_WORKSPACE_ROOT;
-                  // FT-multiwin：同步写本窗口(_cid)隔离根，AI op 经 op._cid 锚到此根，多窗口不串台。
-                  pluginData.workspaceRoots.set(_cid, pluginData.workspaceRoot);
-                  // 清除目录树缓存，下次 GetPrompt 时重新读取
-                  pluginData.workspaceTreeCache = "";
-                  pluginData.workspaceTreeCacheTime = 0;
-                  console.log(
-                    `[beilu-files] 工作区根路径更新: ${pluginData.workspaceRoot}`,
-                  );
+                  const _requestedRoot = data.rootPath || DEFAULT_WORKSPACE_ROOT;
+                  // [D6 §2.2] 与 setWorkspaceRoot 同一统一政策（基包含/系统卷/blockedPaths deny-overrides/
+                  //   幽灵路径拒/一层可建），owner=当前 ALS 用户；合法根以 canonical real path 生效。
+                  const _cand2 = await _resolveRootCandidateAndEnsure(_curUser(), _requestedRoot);
+                  if (!_cand2.ok) {
+                    console.warn(`[beilu-files] setMode 携带不可用工作区根，保留旧根: [${_cand2.code}] ${_cand2.error}`);
+                    _modeRootResult = {
+                      ok: false,
+                      code: _cand2.code,
+                      error: _cand2.error,
+                      modeApplied: true,
+                      requestedRoot: _requestedRoot,
+                      effectiveRoot: getWorkspaceRoot(_cid),
+                      chatid: _cid,
+                    };
+                  } else {
+                    const _canonicalRoot2 = _cand2.root;
+                    _modeRootResult = await withWorkspaceRootMutation(async () => {
+                      const _rootSnapshot = snapshotWorkspaceRoot(_cid);
+                      // 有 chatid 只写该窗口根；无 chatid 才写本 owner 默认根。
+                      // 不再因副窗口切目录而热切整个 CLI 工作区。
+                      applyWorkspaceRoot(_cid, _canonicalRoot2);
+                      // 清除目录树缓存，下次 GetPrompt 时重新读取
+                      pluginData.workspaceTreeCache = "";
+                      pluginData.workspaceTreeCacheTime = 0;
+                      try {
+                        await savePersistedSettingsNow();
+                        console.log(`[beilu-files] 工作区根路径更新: ${_requestedRoot}`);
+                        return {
+                          ok: true,
+                          modeApplied: true,
+                          requestedRoot: _requestedRoot,
+                          effectiveRoot: _canonicalRoot2,
+                          chatid: _cid,
+                          persistence: { ok: true },
+                        };
+                      } catch (err) {
+                        restoreWorkspaceRoot(_rootSnapshot);
+                        pluginData.workspaceTreeCache = "";
+                        pluginData.workspaceTreeCacheTime = 0;
+                        return {
+                          ok: false,
+                          code: "E_WORKSPACE_ROOT_PERSIST",
+                          error: `工作区根未能持久化: ${err?.message || err}`,
+                          modeApplied: true,
+                          requestedRoot: _requestedRoot,
+                          effectiveRoot: getWorkspaceRoot(_cid),
+                          chatid: _cid,
+                          persistence: { ok: false },
+                        };
+                      }
+                    });
                   }
                 }
 
@@ -3455,8 +4290,13 @@ const pluginExport = {
                     cleanup,
                   );
 
-                  if (cleanup) return cleanup;
+                  if (cleanup) {
+                    // 携根的 setMode 不能因旧的 cleanup 回包而丢失根路径的真实结果。
+                    return _modeRootResult ? { ...cleanup, _result: _modeRootResult } : cleanup;
+                  }
                 }
+
+                if (_modeRootResult) return { _result: _modeRootResult };
               }
               break;
             }
@@ -3478,34 +4318,250 @@ const pluginExport = {
             }
             case "setWorkspaceRoot": {
               const _newRoot = data.rootPath || DEFAULT_WORKSPACE_ROOT;
-              // 幽灵根拒收（2026-08-01，见 validateWorkspaceRoot 注释）：拒绝即返回错误，
-              //   不改内存不落盘——调用方（YonBan 反向桥/前端）收到可见错误自行纠正。
-              {
-                const _vErr = validateWorkspaceRoot(_newRoot);
-                if (_vErr) {
-                  console.warn(`[beilu-files] setWorkspaceRoot 拒绝: ${_vErr}`);
-                  return { _result: { error: _vErr } };
-                }
+              const _cid = data.chatid || "";
+              const _wsOwner = _curUser();
+              // [D6 §4] 损坏期禁根变更（fail-closed，不能在政策数据不可信时改根）。
+              if (_settingsHealth) {
+                return {
+                  _result: {
+                    ok: false,
+                    code: "E_FILES_SETTINGS_CORRUPT",
+                    error: "安全设置文件损坏/不可读，根变更已 fail-closed（请先执行 settings 修复）",
+                    requestedRoot: _newRoot,
+                    effectiveRoot: getWorkspaceRoot(_cid),
+                    chatid: _cid,
+                    persistence: { ok: false },
+                  },
+                };
               }
-              // IDE 保护：IDE(YonBan) 已设非默认根 → 本体初始化试图用默认值覆盖时跳过
-              if (_newRoot === DEFAULT_WORKSPACE_ROOT
+              // [D6 §2.4] 无验证的 _fromIDE 直写已废（原 ideClient 反向桥调用点已删）：
+              //   IDE 根确认唯一路径 = confirmIdeWorkspaceRoot（owner+chatId+instanceId+connectionId
+              //   与 live 路由精确匹配）。仍带 _fromIDE 的调用一律拒绝，防第三方复刻旧直写。
+              if (data._fromIDE) {
+                return {
+                  _result: {
+                    ok: false,
+                    code: "E_WORKSPACE_ROOT_IDE_UNVERIFIED",
+                    error: "IDE 根写入必须走 confirmIdeWorkspaceRoot（需已认证实例绑定），不再接受 _fromIDE 直写",
+                    requestedRoot: _newRoot,
+                    effectiveRoot: getWorkspaceRoot(_cid),
+                    chatid: _cid,
+                    persistence: { ok: false },
+                  },
+                };
+              }
+              // [D6 §2.2] 统一政策校验（幽灵根拒收语义含在内）：拒绝即返回 typed 错误，
+              //   不改内存不落盘——调用方收到可见错误自行纠正。合法根以 canonical real path 生效。
+              const _cand = await _resolveRootCandidateAndEnsure(_wsOwner, _newRoot);
+              if (!_cand.ok) {
+                console.warn(`[beilu-files] setWorkspaceRoot 拒绝: [${_cand.code}] ${_cand.error}`);
+                return {
+                  _result: {
+                    ok: false,
+                    code: _cand.code,
+                    error: _cand.error,
+                    requestedRoot: _newRoot,
+                    effectiveRoot: pluginData.workspaceRoots.get(_cid) ?? pluginData.workspaceRoot,
+                    chatid: _cid,
+                    persistence: { ok: false },
+                  },
+                };
+              }
+              const _canonicalRoot = _cand.root;
+              // IDE 保护：IDE(YonBan) 已确认非默认根 → 本体初始化试图用默认值覆盖时跳过（owner 分区内判定）
+              if (!_cid
+                  && _newRoot === DEFAULT_WORKSPACE_ROOT
                   && pluginData._workspaceRootFromIDE
+                  && pluginData.workspaceRoot
                   && pluginData.workspaceRoot !== DEFAULT_WORKSPACE_ROOT) {
                 console.log(
                   `[beilu-files] IDE 已设工作区根 ${pluginData.workspaceRoot}, 跳过默认值覆盖`,
                 );
-                break;
+                return {
+                  _result: {
+                    ok: true,
+                    applied: false,
+                    code: "WORKSPACE_ROOT_OWNED_BY_IDE",
+                    requestedRoot: _newRoot,
+                    effectiveRoot: pluginData.workspaceRoots.get(_cid) ?? pluginData.workspaceRoot,
+                    chatid: _cid,
+                    persistence: { ok: true },
+                  },
+                };
               }
-              if (data._fromIDE) pluginData._workspaceRootFromIDE = true;
-              pluginData.workspaceRoot = _newRoot;
-              // FT-multiwin：同步写本窗口(data.chatid)隔离根（无 chatid → 兜底键 ""=全局默认）。
-              pluginData.workspaceRoots.set(data.chatid || "", pluginData.workspaceRoot);
-              pluginData.workspaceTreeCache = "";
-              pluginData.workspaceTreeCacheTime = 0;
-              console.log(
-                `[beilu-files] 工作区根路径设置: ${pluginData.workspaceRoot}`,
-              );
-              break;
+              return await withWorkspaceRootMutation(async () => {
+                const _rootSnapshot = snapshotWorkspaceRoot(_cid);
+                const _previousFromIDE = pluginData._workspaceRootFromIDE;
+                // 窗口作用域与 owner 默认根是两个维度：有 chatid 只写本 owner 的 byChatId，
+                // 无 chatid 才改本 owner 默认根（owner 分区后不再存在跨用户共享全局根）。
+                applyWorkspaceRoot(_cid, _canonicalRoot);
+                pluginData.workspaceTreeCache = "";
+                pluginData.workspaceTreeCacheTime = 0;
+                try {
+                  await savePersistedSettingsNow();
+                  console.log(`[beilu-files] 工作区根路径设置(owner=${_wsOwner}): ${_canonicalRoot}`);
+                  return {
+                    _result: {
+                      ok: true,
+                      applied: true,
+                      requestedRoot: _newRoot,
+                      effectiveRoot: _canonicalRoot,
+                      chatid: _cid,
+                      settingsRevision: _settingsRevision,
+                      persistence: { ok: true },
+                    },
+                  };
+                } catch (err) {
+                  restoreWorkspaceRoot(_rootSnapshot);
+                  pluginData._workspaceRootFromIDE = _previousFromIDE;
+                  pluginData.workspaceTreeCache = "";
+                  pluginData.workspaceTreeCacheTime = 0;
+                  const _error = `工作区根未能持久化: ${err?.message || err}`;
+                  console.warn(`[beilu-files] setWorkspaceRoot 回滚: ${_error}`);
+                  return {
+                    _result: {
+                      ok: false,
+                      code: err?.code === "E_SETTINGS_REVISION_CONFLICT" ? "E_SETTINGS_REVISION_CONFLICT" : "E_WORKSPACE_ROOT_PERSIST",
+                      error: _error,
+                      requestedRoot: _newRoot,
+                      effectiveRoot: getWorkspaceRoot(_cid),
+                      chatid: _cid,
+                      persistence: { ok: false },
+                    },
+                  };
+                }
+              });
+            }
+            // [D6 §2.4 2026-08-04] IDE 根确认（原 ideClient 无 owner 反向直写的替代）：
+            //   只有已认证 bindIdeInstance 建立了 (owner,chatId,instanceId,connectionId) 绑定、
+            //   且请求携带的 expectedIdeRoute 与该会话 live 路由【精确同代际】时，才允许一次
+            //   ide-bound 根写入。未绑定/旧 connection generation → 拒且零写（白盒动线 I）。
+            case "confirmIdeWorkspaceRoot": {
+              const _cid = data.chatid || "";
+              const _wsOwner = _curUser();
+              if (_settingsHealth) {
+                return { _result: { ok: false, code: "E_FILES_SETTINGS_CORRUPT", error: "安全设置文件损坏/不可读，根变更已 fail-closed", chatid: _cid, persistence: { ok: false } } };
+              }
+              if (!_cid) {
+                return { _result: { ok: false, code: "E_FILES_CHAT_REQUIRED", error: "IDE 根确认需要明确的发起窗口会话", persistence: { ok: false } } };
+              }
+              let _ide;
+              try {
+                _ide = await import("../../../../yonban/core/transport/ideClient.mjs");
+              } catch (e) {
+                return { _result: { ok: false, code: "E_WORKSPACE_ROOT_IDE_ROUTE", error: `IDE 客户端不可用: ${e?.message || e}`, chatid: _cid, persistence: { ok: false } } };
+              }
+              const _actualRoute = _ide.ideClient.getRouteSnapshot(_cid);
+              const _expectedRoute = data.expectedIdeRoute;
+              if (!_ide.isValidIdeRouteSnapshot(_expectedRoute) || _actualRoute.connected !== true
+                  || !_ide.ideRouteSnapshotsEqual(_expectedRoute, _actualRoute)) {
+                return {
+                  _result: {
+                    ok: false,
+                    code: "E_WORKSPACE_ROOT_IDE_ROUTE",
+                    error: "IDE 路由令牌无效或连接代际已漂移（未绑定/重连后旧令牌），已拒绝根写入",
+                    expectedIdeRoute: _expectedRoute ?? null,
+                    actualIdeRoute: _actualRoute,
+                    chatid: _cid,
+                    persistence: { ok: false },
+                  },
+                };
+              }
+              // owner 一致性：ideClient 登记的 chat owner 与认证 owner 冲突即拒（fail-closed）。
+              if (!_ide.ideClient.registerChatOwner(_cid, _wsOwner)) {
+                return { _result: { ok: false, code: "E_WORKSPACE_ROOT_IDE_OWNER", error: "会话 owner 与 IDE 绑定 owner 不一致，已拒绝", chatid: _cid, persistence: { ok: false } } };
+              }
+              const _ideCandidate = (typeof data.rootPath === "string" && data.rootPath)
+                ? data.rootPath
+                : (_ide.ideClient.ideInfoFor(_cid)?.status?.workspaceFolders?.[0] || "");
+              if (!_ideCandidate) {
+                return { _result: { ok: false, code: "E_WORKSPACE_ROOT_INVALID", error: "IDE 未宣称工作区候选根", chatid: _cid, persistence: { ok: false } } };
+              }
+              const _candIde = await _resolveRootCandidateAndEnsure(_wsOwner, _ideCandidate);
+              if (!_candIde.ok) {
+                return { _result: { ok: false, code: _candIde.code, error: _candIde.error, requestedRoot: _ideCandidate, chatid: _cid, persistence: { ok: false } } };
+              }
+              return await withWorkspaceRootMutation(async () => {
+                const _rootSnapshot = snapshotWorkspaceRoot(_cid);
+                applyWorkspaceRoot(_cid, _candIde.root);
+                pluginData._workspaceRootFromIDE = true;
+                pluginData.workspaceTreeCache = "";
+                pluginData.workspaceTreeCacheTime = 0;
+                try {
+                  await savePersistedSettingsNow();
+                  console.log(`[beilu-files] IDE 根已确认(owner=${_wsOwner}, chat=${_cid}): ${_candIde.root}`);
+                  return { _result: { ok: true, applied: true, source: "ide-bound", requestedRoot: _ideCandidate, effectiveRoot: _candIde.root, chatid: _cid, settingsRevision: _settingsRevision, persistence: { ok: true } } };
+                } catch (err) {
+                  restoreWorkspaceRoot(_rootSnapshot);
+                  pluginData.workspaceTreeCache = "";
+                  pluginData.workspaceTreeCacheTime = 0;
+                  return { _result: { ok: false, code: "E_WORKSPACE_ROOT_PERSIST", error: `工作区根未能持久化: ${err?.message || err}`, chatid: _cid, persistence: { ok: false } } };
+                }
+              });
+            }
+            // [D6 §2.4] IDE 候选根+路由快照取用（confirmIdeWorkspaceRoot 的前置读：UI 拿到
+            //   它"看到的那条连接代际"再确认，防重连后旧令牌写入）。只读不写。
+            case "getIdeRootCandidate": {
+              const _cid = data.chatid || "";
+              if (!_cid) return { _result: { success: false, code: "E_FILES_CHAT_REQUIRED", error: "需要明确的发起窗口会话" } };
+              let _ide;
+              try {
+                _ide = await import("../../../../yonban/core/transport/ideClient.mjs");
+              } catch (e) {
+                return { _result: { success: false, error: `IDE 客户端不可用: ${e?.message || e}` } };
+              }
+              const _route = _ide.ideClient.getRouteSnapshot(_cid);
+              const _candidate = _route.connected === true
+                ? (_ide.ideClient.ideInfoFor(_cid)?.status?.workspaceFolders?.[0] || "")
+                : "";
+              return {
+                _result: {
+                  success: true,
+                  connected: _route.connected === true,
+                  candidate: _candidate,
+                  route: _route,
+                  currentRoot: getWorkspaceRoot(_cid),
+                  chatid: _cid,
+                },
+              };
+            }
+            // [D6 §3 2026-08-04] browse 授权签发/释放（human+认证+部署闸；grant owner-bound 短期）。
+            case "requestBrowseGrant": {
+              if (_settingsHealth) {
+                return { _result: { success: false, code: "E_FILES_SETTINGS_CORRUPT", error: "安全设置文件损坏/不可读，browse 已 fail-closed" } };
+              }
+              if (_trustedFrontendActor() !== "human") {
+                return { _result: { success: false, code: "E_BROWSE_SCOPE", error: "browse 授权只能由可信 human web/ws 请求发起" } };
+              }
+              if (!deployGatedAllow("allowComputerBrowse", "BEILU_COMPUTER_BROWSE")) {
+                return { _result: { success: false, code: "E_BROWSE_SCOPE", error: "当前部署未开放整机目录浏览（owner 可在配置中开启 allowComputerBrowse）" } };
+              }
+              const _bgOwner = _als.getStore()?.username || "";
+              if (!_bgOwner) return { _result: { success: false, code: "E_BROWSE_SCOPE", error: "browse 需要已认证用户" } };
+              const _grant = _issueBrowseGrant(_bgOwner);
+              return { _result: { success: true, grantId: _grant.id, expiresAt: _grant.expiresAt, bases: settingsStore.listBrowseBases() } };
+            }
+            case "releaseBrowseGrant": {
+              const _bgOwner = _als.getStore()?.username || "";
+              if (_bgOwner) _browseGrants.delete(_bgOwner);
+              return { _result: { success: true } };
+            }
+            // [D6 §2.3] 旧无主根显式认领（legacyUnassigned → 本 owner 分区）；UI 接线见交接待决。
+            case "adoptLegacyWorkspaceRoots": {
+              if (_settingsHealth) {
+                return { _result: { success: false, code: "E_FILES_SETTINGS_CORRUPT", error: "安全设置文件损坏/不可读，已 fail-closed" } };
+              }
+              const _adoptOwner = _als.getStore()?.username || "";
+              if (!_adoptOwner) return { _result: { success: false, error: "认领需要已认证用户" } };
+              try {
+                const r = await settingsStore.adoptLegacyWorkspace(_adoptOwner);
+                _settingsRevision = r.revision;
+                // 认领后重载本 owner 分区（读回同政策校验，非法旧根仍会被拒）
+                await loadPersistedSettings();
+                return { _result: { success: true, settingsRevision: r.revision } };
+              } catch (e) {
+                return { _result: { success: false, code: e?.code, error: e?.message || String(e) } };
+              }
             }
             case "ensureDefaultWorkspace": {
               // 任务A防护：前端面板初始化时调用——创建（幂等 mkdir，用户删了下次进来自动重建）并返回
@@ -3860,6 +4916,7 @@ const pluginExport = {
           });
 
           pluginData.pendingErrors.push({
+            _cid,
             text: errorLines.join("\n\n"),
             timestamp: Date.now(),
             opCount: failedOps.length,

@@ -61,7 +61,7 @@ export async function executeVocabEditOps(blocks, opts) {
   if (Number.isFinite(Number(opts?.maxChangesPerTag))) {
     _cap = Math.max(1, Math.trunc(Number(opts.maxChangesPerTag)));
   } else {
-    const _cfg = await getP1Config();
+    const _cfg = await getP1Config(opts?.username || "");
     const _cfgCap = Number(_cfg?.vocabEditMaxChanges);
     _cap = Number.isFinite(_cfgCap) && _cfgCap >= 1 ? Math.trunc(_cfgCap) : DEFAULT_MAX_CHANGES_PER_TAG;
   }
@@ -82,26 +82,54 @@ export async function executeVocabEditOps(blocks, opts) {
       if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) { fmtErr = `entries["${k}"] 必须是字符串数组`; break; }
     }
     if (fmtErr) { results.push({ status: "error", file, reason: fmtErr }); continue; }
-    const oldContent = await getUserVocabFile(file); // null=新建
+    const username = String(opts?.username || "");
+    const pendingKey = `${username}\0${file}`;
+    const readResult = await getUserVocabFile(file, username);
+    // 只有后端明确返回 E_P1_VOCAB_NOT_FOUND 才能进入新建语义。任何传输、HTTP、
+    // JSON 解析或其他业务失败都必须在 diff/confirm/save 之前 fail-closed，避免以空文件
+    // 作为旧内容覆盖已有用户词库；同时清掉旧 pending，恢复后必须重新 preview。
+    if (readResult?.kind !== "found" && readResult?.kind !== "not_found") {
+      _vocabPending.delete(pendingKey);
+      const readError = readResult?.error || "P1 用户词库读取返回了未知状态";
+      results.push({
+        status: "error",
+        file,
+        code: readResult?.code || "E_P1_VOCAB_READ_STATE_INVALID",
+        httpStatus: readResult?.status,
+        error: readError,
+        reason: `读取现有词库失败: ${readError}`,
+      });
+      continue;
+    }
+    const oldContent = readResult.kind === "found" ? readResult.content : null;
     const diff = _diffVocabEntries(oldContent, content.entries);
     if (diff.total > _cap) {
-      _vocabPending.delete(file);
+      _vocabPending.delete(pendingKey);
       results.push({ status: "rejected_cap", file, ...diff, reason: `改动 ${diff.total} 条超过单次上限 ${_cap}，请拆分为多次提交` });
       continue;
     }
     const contentHash = _vocabHash(content);
-    const pending = _vocabPending.get(file);
+    const pending = _vocabPending.get(pendingKey);
     const isConfirmed = body.confirm === true && pending && pending.hash === contentHash;
     if (!isConfirmed) {
-      _vocabPending.set(file, { hash: contentHash, ...diff, reason: String(body.reason || "") });
+      _vocabPending.set(pendingKey, { hash: contentHash, ...diff, reason: String(body.reason || "") });
       results.push({ status: "preview", file, ...diff, reason: String(body.reason || "") });
       continue;
     }
-    const saveRes = await saveUserVocabFile(file, content);
-    _vocabPending.delete(file);
+    const saveRes = await saveUserVocabFile(file, content, username);
+    _vocabPending.delete(pendingKey);
     if (saveRes?.success) results.push({ status: "written", file, ...diff, reason: String(body.reason || ""), entryCount: saveRes.entryCount });
-    else results.push({ status: "error", file, reason: saveRes?.error || "写入失败" });
+    else {
+      const writeError = saveRes?.error || "写入失败";
+      results.push({
+        status: "error",
+        file,
+        code: saveRes?.code,
+        httpStatus: saveRes?.status,
+        error: writeError,
+        reason: writeError,
+      });
+    }
   }
   return results;
 }
-

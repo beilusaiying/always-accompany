@@ -802,7 +802,6 @@
   max-width: 90vw;
   max-height: 85vh;
   background: var(--beilu-modal-bg);
-  opacity: var(--beilu-modal-opacity);
   border: 1px solid var(--color-base-300);
   border-radius: 12px;
   box-shadow: 0 8px 24px oklch(0 0 0 / 0.3);
@@ -1297,6 +1296,17 @@
 }
 .transcript-footer .btn-inject:hover { filter: brightness(1.1); }
 
+/* 状态色仍表达连接/运行阶段；减少动态偏好只停止循环脉冲与缩放。 */
+@media (prefers-reduced-motion: reduce) {
+  .conn-dot-connecting,
+  .work-badge.badge-running,
+  .conv-inuse-badge,
+  .ext-status-dot.starting {
+    animation: none;
+    transform: none;
+  }
+}
+
 @media (max-width: 640px) {
   .ext-panel-nav { width: 56px; min-width: 56px; }
   .ext-panel-nav-title { display: none; }
@@ -1304,4 +1314,3 @@
   .ext-panel-content { padding: 16px; }
   .transcript-segment-time { width: 70px; font-size: 10px; }
 }
-

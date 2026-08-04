@@ -1,64 +1,52 @@
 /**
- * tempConversation.mjs — 全智能模式临时对话区（设计文档 3.3）
+ * tempConversation.mjs — 全智能提案确认卡（P0-A 2026-08-03 重构）
  *
  * 功能链：
- *   全智能 AI 输出 <modeSwitch>work|code</modeSwitch> → 外部调用 showTempConversation()
- *   → 在聊天区与输入框之间插入临时对话容器
- *   → 用户与确认师交流（可含跨模式上下文引用 buildChatContextRef）
- *   → 用户点「确认开始」→ _bindChatMode(chatId, mode) 绑定模式 → 切换到对应 Tab
- *   → 用户点「取消」/ 超时 → hideTempConversation() → DOM 移除
+ *   Smart/Chat AI 输出 <modeSwitch>work|code</modeSwitch>
+ *   → 后端 replyHandler 提案硬门（本轮可变操作全拒、pending 记录持久化，非 running）
+ *   → extension._pendingConfirmation → websocket dispatch beilu:smart-pending-confirmation
+ *   → 本模块确认卡（提案展示 + 本地补充说明输入）
+ *   → 用户点「确认开始」→ sendAction shells:chat#smartConfirm（认证端点单次 claim）
+ *     → 服务端 ensureModeChatsForChar 单源补齐目标线 + 绑定 + task_start 落盘 → accepted
+ *     → 前端才切 Tab + 显示「任务已提交」（区分于 IDE ready / 任务完成）
+ *   → 用户点「取消」→ sendAction shells:chat#smartCancel（pending→cancelled）
+ *   刷新/重连（beilu:wsReconnected）→ shells:chat#smartConfirmations status 重新投影。
  *
- * why：
- *   全智能模式检测到需要切换到 work/code 时，不应立即跳转，而应先让用户确认任务细节；
- *   _bindChatMode（N38）把对话线绑到对应模式，是切换后 AI 获得正确 INJ/预设的唯一来源（取消全局翻转后）；
- *   buildChatContextRef 让确认师可以引用最近 N 条聊天内容，避免上下文断层。
+ * why（对旧版的根因级替换，Fable 审查阻断1/2/3）：
+ *   - 旧「确认师」= 把 <temp_confirm> 发进目标 Code/Work 普通生成链的全权 AI，服务端零硬门
+ *     ——该通道整体删除（不是拦一个标签）。本批不建独立 confirmation-only AI：补充说明只在
+ *     本地收集，随确认一起提交进 task_start，不伪装"确认师已回复"。
+ *   - 旧 _resolveModeChatId 前端散写建线（new+绑卡+指针）→ 删除，目标线唯一来源=服务端确认端点。
+ *   - 旧 onConfirm fire-and-forget + 无条件"任务已启动" → 确认按钮 await 服务端业务结果：
+ *     失败保留卡片、恢复按钮、显示真实错误，不切 Tab 不报成功。
+ *
+ * 契约：
+ *   - 按 confirmationId+revision 去重（同一提案广播重放/重连重投影不弹重复卡）。
+ *   - 成功文案=「任务已提交（目标窗口已接受）」，不写 ready/succeeded。
+ *   - ✕ = 本地暂时收起（不取消，pending 由服务端 TTL 管理，可经重投影找回）；
+ *     「取消」= 服务端 cancel。两个动作语义分开，不混。
  *
  * 关联链：
- *   ← websocket.mjs / messageParser（解析 <modeSwitch> 标签后调用）
- *   → shared/state/modeTabMap.mjs（MODE_TO_TAB：模式到 Tab 的映射）
- *   → beilu-memory 插件后端（bindChatMode action / 对话日志读取）
- *   → shared/transport/api-client.mjs（apiFetch）
- *   → shared/state/storage.mjs（KEYS.BEILU_XMODE_REFCOUNT / BEILU_XMODE_FORMAT：跨模式引用配置）
- *
- * 影响范围：
- *   DOM：在 .chat-messages 与 .chat-input 之间动态插入/移除临时对话容器；
- *   后端：_bindChatMode 写 active_modes_map[chatId]（幂等，失败不阻塞）；
- *   生命周期：用户确认/取消/超时后自动移除，不留残余状态。
- *
- * 使用效果：
- *   全智能 AI 触发模式切换意图时，弹出临时对话区由用户确认；
- *   确认后自动绑定模式并跳转对应 Tab，AI 在新 Tab 获得正确上下文。
+ *   ← transport/websocket.mjs（beilu:smart-pending-confirmation 事件生产者）
+ *   ← shared/layout/layout.mjs（initTempConversationListener 装载点）
+ *   → transport/sendAction.mjs（smartConfirm / smartCancel / smartConfirmations）
+ *   → shared/state/modeTabMap.mjs（确认成功后的 Tab 跳转映射）
+ *   buildChatContextRef 保留原实现（消费方=panels/smart/smart.mjs 跨模式引用预览）。
  */
 
 import { escapeHtml as _escapeHtml } from "../state/utils.mjs";
-import { getCharId } from "../state/sharedState.mjs";
 import { MODE_TO_TAB } from "../state/modeTabMap.mjs";
 import { sendAction } from "../transport/sendAction.mjs"; // T6b：出向统一门面
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
 
-let _tempController = null;
-let _pollAbort = null;
-
-/**
- * N38: 把模式专属对话线绑定到对应模式（后端 active_modes_map[chatId]）。
- * 旧链路靠 modeSwitch 的 char 级全局翻转让投递线"碰巧"拿到 work 模式；
- * N38 取消全局翻转后，绑定是投递线获得正确 INJ/预设的唯一来源。幂等，失败不阻塞
- * （后端回退 char 级默认解析）。
- */
-async function _bindChatMode(chatid, mode) {
-  try {
-    // T6b：走 beilu-memory 通配 setdata 路由（verb=bindChatMode，rest 平铺）
-    await sendAction({
-      verb: "bindChatMode", target: "plugins:beilu-memory", source: "web",
-      payload: { mode, chat_id: chatid, charName: getCharId() },
-    });
-  } catch { /* 绑定失败不阻塞确认流程 */ }
-}
+let _cardController = null;
+// 去重：已展示/已终态处理过的 confirmationId:revision（重连重投影、广播重放不弹重复卡）
+const _seenConfirmations = new Map(); // `${id}:${rev}` → "shown" | "done"
 
 /**
  * FT-A1: 跨模式上下文引用构造器（全智能MD §四.3）
  * 读当前对话最近 N 条（beilu-xmode-refcount），按 beilu-xmode-format 包装：
- * xml=<chat_context>块 / dash=---分隔。不压缩原文。预览按钮与确认师通道共用。
+ * xml=<chat_context>块 / dash=---分隔。不压缩原文。预览按钮消费（panels/smart/smart.mjs）。
  */
 export async function buildChatContextRef() {
   const n = Math.max(0, parseInt(storage.get(KEYS.BEILU_XMODE_REFCOUNT) || "5", 10) || 0);
@@ -90,14 +78,21 @@ export async function buildChatContextRef() {
   return `--- 聊天上下文（最近${recent.length}条）---\n${recent.join("\n")}\n---`;
 }
 
-/** 创建临时对话区 */
-export function createTempConversation(options) {
-  if (_tempController) closeTempConversation("replaced");
-
+/** 创建提案确认卡。confirmation=服务端投影（confirmationId/revision/targetMode/taskTitle/sourceChatId/lastError） */
+export function createTempConversation(confirmation) {
+  const conf = confirmation || {};
+  if (!conf.confirmationId) return null;
+  const dedupKey = `${conf.confirmationId}:${conf.revision ?? 1}`;
+  if (_seenConfirmations.get(dedupKey) === "done") return null;
+  if (_cardController) {
+    if (_cardController.dedupKey === dedupKey) return _cardController; // 同提案已在展示
+    _cardController.close("replaced");
+  }
   const area = document.getElementById("temp-conversation-area");
   if (!area) return null;
+  _seenConfirmations.set(dedupKey, "shown");
 
-  const { targetMode = "work", taskTitle = "", onConfirm, onCancel } = options || {};
+  const targetMode = conf.targetMode === "code" ? "code" : "work";
   const modeIcon = targetMode === "work" ? '<i data-ic="clipboard"></i>' : '<i data-ic="code"></i>';
   const modeLabel = targetMode === "work" ? "工作模式" : "代码模式";
 
@@ -105,25 +100,24 @@ export function createTempConversation(options) {
   area.innerHTML = `
     <div class="temp-conv-panel">
       <div class="temp-conv-header">
-        <span class="temp-conv-title">${modeIcon} ${modeLabel}</span>
+        <span class="temp-conv-title">${modeIcon} ${modeLabel} · 待确认</span>
         <div class="temp-conv-header-actions">
           <button class="btn btn-ghost btn-xs" data-tc-action="collapse" title="收起">–</button>
-          <button class="btn btn-ghost btn-xs" data-tc-action="close" title="取消">✕</button>
+          <button class="btn btn-ghost btn-xs" data-tc-action="dismiss" title="暂时收起（不取消，可从状态恢复）">✕</button>
         </div>
       </div>
       <div class="temp-conv-body">
         <div class="temp-conv-task-info">
-          <div class="text-xs opacity-60">检测到任务</div>
-          <div class="text-sm font-bold mt-1" id="temp-conv-task-title">${_escapeHtml(taskTitle || "(AI未提供任务描述)")}</div>
+          <div class="text-xs opacity-60">AI 提案任务（未开始执行）</div>
+          <div class="text-sm font-bold mt-1">${_escapeHtml(conf.taskTitle || "(AI未提供任务描述)")}</div>
         </div>
-        <div id="temp-conv-messages" class="temp-conv-messages"></div>
         <div class="temp-conv-input-row">
-          <textarea id="temp-conv-input" class="textarea textarea-bordered flex-1 text-xs" rows="2" placeholder="修改需求或补充说明..."></textarea>
-          <button class="btn btn-sm btn-ghost" data-tc-action="send-msg" title="发送">➤</button>
+          <textarea id="temp-conv-note" class="textarea textarea-bordered flex-1 text-xs" rows="2" placeholder="补充说明（随确认一起提交给执行 AI，可留空）..."></textarea>
         </div>
+        <div id="temp-conv-error" class="text-xs text-error mt-1 ${conf.lastError ? "" : "hidden"}">${_escapeHtml(conf.lastError || "")}</div>
         <div class="temp-conv-actions">
           <button class="btn btn-sm btn-primary" data-tc-action="confirm">✓ 确认开始</button>
-          <button class="btn btn-sm" data-tc-action="cancel">取消</button>
+          <button class="btn btn-sm" data-tc-action="cancel">取消提案</button>
         </div>
       </div>
       <div class="temp-conv-collapsed hidden" data-tc-action="expand">
@@ -132,222 +126,131 @@ export function createTempConversation(options) {
     </div>
   `;
 
-  const panel = area.querySelector(".temp-conv-panel");
   const body = area.querySelector(".temp-conv-body");
   const collapsed = area.querySelector(".temp-conv-collapsed");
+  const errEl = area.querySelector("#temp-conv-error");
+  const confirmBtn = area.querySelector('[data-tc-action="confirm"]');
+  const cancelBtn = area.querySelector('[data-tc-action="cancel"]');
 
-  _tempController = {
-    targetMode,
+  const _showError = (msg) => {
+    if (!errEl) return;
+    errEl.textContent = msg || "操作失败";
+    errEl.classList.remove("hidden");
+  };
+  const _setBusy = (busy) => {
+    if (confirmBtn) confirmBtn.disabled = busy;
+    if (cancelBtn) cancelBtn.disabled = busy;
+  };
+
+  _cardController = {
+    dedupKey,
+    confirmationId: conf.confirmationId,
     close(reason) {
       area.classList.add("hidden");
       area.innerHTML = "";
-      _tempController = null;
-      _pollAbort?.abort();
-      _pollAbort = null;
-      if (reason === "confirmed") onConfirm?.();
-      else if (reason === "cancelled") onCancel?.();
-    },
-    addMessage(role, content) {
-      const msgList = area.querySelector("#temp-conv-messages");
-      if (!msgList) return;
-      const el = document.createElement("div");
-      el.className = `temp-conv-msg temp-conv-msg-${role}`;
-      el.innerHTML = `<span class="temp-conv-msg-role">${role === "user" ? "你" : "确认师"}:</span> <span>${_escapeHtml(content)}</span>`;
-      msgList.appendChild(el);
-      msgList.scrollTop = msgList.scrollHeight;
+      _cardController = null;
+      if (reason === "confirmed" || reason === "cancelled" || reason === "terminal") {
+        _seenConfirmations.set(dedupKey, "done");
+      } else {
+        // dismiss/replaced：仅收起，允许状态重投影再次展示
+        _seenConfirmations.delete(dedupKey);
+      }
     },
   };
 
   area.querySelectorAll("[data-tc-action]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const act = btn.dataset.tcAction;
-      if (act === "close" || act === "cancel") {
-        closeTempConversation("cancelled");
-      } else if (act === "confirm") {
-        closeTempConversation("confirmed");
+      if (act === "dismiss") {
+        // 本地收起 ≠ 取消：pending 仍在服务端（TTL 管理），重投影可找回
+        _cardController?.close("dismissed");
       } else if (act === "collapse") {
         body.classList.add("hidden");
         collapsed.classList.remove("hidden");
       } else if (act === "expand") {
         body.classList.remove("hidden");
         collapsed.classList.add("hidden");
-      } else if (act === "send-msg") {
-        const input = area.querySelector("#temp-conv-input");
-        const text = input?.value.trim();
-        if (!text) return;
-        input.value = "";
-        _tempController?.addMessage("user", text);
-        // A6: 接独立确认师通道 — POST 到目标模式(work/code)的 chatId, 不污染主聊天
-        // 设计 §3.2 步骤4 + §4.2 步骤2: 独立消息通道, 走目标 chatId 的 message 端点
-        const sendBtn = btn;
-        sendBtn.disabled = true;
-        _sendToConfirmer(targetMode, text)
-          .then((replyText) => {
-            _tempController?.addMessage("assistant", replyText || "(确认师无回复)");
-          })
-          .catch((err) => {
-            console.warn("[tempConversation] 确认师通道失败,回退本地回显:", err?.message);
-            _tempController?.addMessage("assistant", "收到,请点[确认开始]或[取消]");
-          })
-          .finally(() => { sendBtn.disabled = false; });
+      } else if (act === "confirm") {
+        // P0-A 前端要求4：await 服务端业务成功；失败保留卡片、恢复按钮、显示真实错误
+        _setBusy(true);
+        const note = area.querySelector("#temp-conv-note")?.value.trim() || "";
+        try {
+          const r = await sendAction({
+            verb: "smartConfirm", target: "shells:chat", source: "web",
+            payload: { confirmationId: conf.confirmationId, revision: conf.revision ?? 1, sourceChatId: conf.sourceChatId || "", note },
+          });
+          if (r?.success && r?.status === "accepted") {
+            _cardController?.close("confirmed");
+            const tab = MODE_TO_TAB[targetMode];
+            if (tab) window.dispatchEvent(new CustomEvent("beilu:switchTab", { detail: { tab } }));
+            // 成功文案区分「已提交/已接受」与「IDE ready/任务完成」（P0-A 前端要求6）
+            window._beiluToast?.("任务已提交，目标窗口已接受（执行进度以目标窗口为准）", "success");
+          } else {
+            // 门面未抛错但业务未接受：真实回执可见
+            _showError(`提交未被接受: ${r?.error || r?.code || "未知回执"}`);
+            _setBusy(false);
+          }
+        } catch (err) {
+          _showError(`确认失败: ${err?.message || err}`);
+          _setBusy(false);
+        }
+      } else if (act === "cancel") {
+        _setBusy(true);
+        try {
+          const r = await sendAction({
+            verb: "smartCancel", target: "shells:chat", source: "web",
+            payload: { confirmationId: conf.confirmationId, sourceChatId: conf.sourceChatId || "" },
+          });
+          if (r?.success) {
+            _cardController?.close("cancelled");
+            window._beiluToast?.("提案已取消", "info");
+          } else {
+            _showError(`取消失败: ${r?.error || r?.code || "未知回执"}`);
+            _setBusy(false);
+          }
+        } catch (err) {
+          // 已执行/已过期等冲突：显示真实原因；卡片保留由用户决定收起
+          _showError(`取消失败: ${err?.message || err}`);
+          _setBusy(false);
+        }
       }
     });
   });
 
-  return _tempController;
+  return _cardController;
 }
 
-/** 关闭临时对话 */
-export function closeTempConversation(reason = "cancelled") {
-  _tempController?.close(reason);
-}
-
-// ============================================================
-// A6: 确认师独立消息通道 (设计 §3.2 / §4.2 / §4.3)
-// ------------------------------------------------------------
-// 临时对话的消息不混入主聊天: POST 到目标模式(work/code)自己的 chatId,
-// 用 XML 标签隔离临时对话内容. 回复经由轮询目标 chatId 的 /log 拿回填
-// (主 WS 连接的是 chat-chatid, 收不到 work-chatid 的广播 — 见设计 §15.1 P0-1,
-//  跨 chatId 广播 producer ⑤-1 尚未建, 故此处用轮询而非 WS).
-// ============================================================
-
-/** 解析目标模式的 chatId (work/code), 不存在则自动新建并记入 localStorage */
-async function _resolveModeChatId(mode) {
-  const { getModeChatIdKey } = await import("../../panels/feature/featureControls.mjs");
-  const _charName = storage.get(KEYS.BEILU_LAST_CHAR) || "";
-  // [补丁扫描修复二批 2026-07-13] 同 websocket._ensureModeChatId：`|| 旧全局键` 回退是死分支+
-  //   掩病（getModeChatIdKey 返 null 仅=mode 非法），删除，非法 mode 诚实抛错。
-  const key = getModeChatIdKey(mode, _charName);
-  if (!key) throw new Error("_resolveModeChatId: 非法 mode " + mode);
-  const existing = storage.get(key);
-  if (existing) {
-    // N38: 复用也补绑定（幂等）——老线可能建于绑定机制之前
-    await _bindChatMode(existing, mode);
-    return existing;
-  }
-  // T6b：走 shells:chat#new（HTTP !ok → 门面抛错走外层 catch，含 target#verb 定位）
-  const data = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-  const cid = data?.chatid || "";
-  if (!cid) throw new Error("新建" + mode + "聊天未返回 chatid");
-  // [R1 配套 0713] 懒建补绑卡（websocket._ensureModeChatId 同型）：无 primaryCharName 的对话
-  //   服务端 /using 反查定键失败、文件落旧路径无归属。绑卡失败不阻断（R4 toast 可见非静默）。
-  if (_charName) {
-    try {
-      await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: cid }, payload: { charname: _charName } });
-    } catch (e) { console.warn("[tempConversation] 懒建绑卡失败（在用指针将被服务端拒收）:", e?.message); }
-  }
-  // [补丁扫描修复二批 2026-07-13] 原 storage.set(key, cid) 只写本地=绕 markModeActiveChat 收口
-  //   （websocket._ensureModeChatId 同型病 0713 已收口，注释称"最后一个绕收口写点"漏了此处）——
-  //   本地换线服务端 mode_active_chats 不知情，恢复链/「XX窗口在用」徽标分叉。
-  //   改走单源（本地+服务端双写；动态 import 与 websocket 同款防静态环）。
-  const { markModeActiveChat } = await import("../chat-core/conversationManager.mjs");
-  markModeActiveChat(mode, _charName, cid);
-  await _bindChatMode(cid, mode);
-  return cid;
+/** 关闭确认卡（外部收敛入口，保留旧导出名） */
+export function closeTempConversation(reason = "dismissed") {
+  _cardController?.close(reason);
 }
 
 /**
- * 向确认师发送一条临时对话消息, 返回确认师的回复文本.
- * @param {"work"|"code"} mode 目标模式
- * @param {string} text 用户在临时对话里输入的内容
- * @returns {Promise<string>}
+ * 状态重投影（P0-A 前端要求5）：查当前对话的 pending 提案，恢复最新一张确认卡。
+ * 触发点：init（刷新恢复）、beilu:wsReconnected（断线重连恢复）。
  */
-async function _sendToConfirmer(mode, text) {
-  const chatid = await _resolveModeChatId(mode);
-
-  // 取目标 chatId 当前消息数作为基线, 用于轮询时识别"新出现的 assistant 回复"
-  let baseline = 0;
+export async function restorePendingConfirmations(chatid) {
+  const cid = chatid || window._beiluGetChatId?.() || "";
+  if (!cid) return;
   try {
-    // T6b：raw+手 lenRes.ok 语义并入门面（!ok → 抛错→catch → baseline 保持 0，语义等价）
-    baseline = Number(await sendAction({ verb: "getLogLength", target: "shells:chat", source: "web", scope: { chatId: chatid } })) || 0;
-  } catch { /* 拿不到基线就从 0 起轮询 */ }
-
-  // §4.3 XML 隔离: 临时对话内容用 <temp_confirm> 标签包裹, 与主对话上下文隔离,
-  // 不压缩原文 (保留场景信息). source 标记便于确认师区分临时确认会话.
-  // FT-A1: 附带聊天上下文引用（条数/格式=右栏跨模式设置,设计「确认师能看到引用的聊天上下文」）
-  let ctxRef = "";
-  try { ctxRef = await buildChatContextRef(); } catch { /* 上下文拿不到不阻塞确认 */ }
-  const isolated =
-    '<temp_confirm source="smart" mode="' + mode + '">\n' +
-    (ctxRef ? ctxRef + "\n\n" : "") + text + "\n</temp_confirm>";
-
-  // T6b：走 shells:chat#sendMessage（HTTP !ok → 门面抛错，含"发送到确认师"定位；具体错误 msg 由门面 target#verb 表达）
-  await sendAction({ verb: "sendMessage", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { reply: { content: isolated, files: [] } } });
-
-  // 后端 message 端点异步触发 AI 回复 (经 WS 推到 work-chatid), 此处轮询 /log 拿回填
-  return await _pollConfirmerReply(chatid, baseline);
-}
-
-/** 轮询目标 chatId 的日志, 等待 baseline 之后出现的 assistant 回复 */
-async function _pollConfirmerReply(chatid, baseline) {
-  _pollAbort = new AbortController();
-  const signal = _pollAbort.signal;
-  const MAX_TRIES = 60; // 60 × 1s = 60s 上限
-  for (let i = 0; i < MAX_TRIES; i++) {
-    if (signal.aborted) throw new Error("已取消");
-    await new Promise((r) => setTimeout(r, 1000));
-    if (signal.aborted) throw new Error("已取消");
-    let len = baseline;
-    try {
-      // T6b：门面（!ok → 抛错→catch → continue，与原 lenRes.ok=false 不 update len 等价）
-      len = Number(await sendAction({ verb: "getLogLength", target: "shells:chat", source: "web", scope: { chatId: chatid } })) || baseline;
-    } catch (e) { console.warn("[tempConv] 轮询取长度失败（下轮重试）:", e?.message || e); continue; /* T021 留痕 */ }
-    if (len <= baseline) continue;
-    // 拉取 baseline 之后的新消息, 找最后一条 assistant
-    try {
-      const entries = await sendAction({ verb: "getLog", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { start: baseline, end: len } });
-      if (!Array.isArray(entries)) continue;
-      const lastAssistant = [...entries].reverse().find(
-        (e) => e && e.role !== "user" && (e.content || "").trim(),
-      );
-      if (lastAssistant) return _stripTempTags(lastAssistant.content || "");
-    } catch { continue; }
-  }
-  throw new Error("等待确认师回复超时");
-}
-
-/** 去掉可能回显的隔离标签, 只给用户看纯文本 */
-function _stripTempTags(s) {
-  return String(s)
-    .replace(/<\/?temp_confirm[^>]*>/g, "")
-    .trim();
-}
-
-async function _fireWorkStart(mode, taskTitle) {
-  const chatid = await _resolveModeChatId(mode);
-  let ctxRef = "";
-  try { ctxRef = await buildChatContextRef(); } catch { /* 上下文拿不到不阻塞启动 */ }
-  const startMsg =
-    '<task_start source="smart" mode="' + mode + '">\n' +
-    (ctxRef ? ctxRef + "\n\n" : "") +
-    (taskTitle ? "任务: " + taskTitle + "\n" : "") +
-    "用户已确认开始。请开始执行任务。\n</task_start>";
-  // T6b：走 shells:chat#sendMessage；原 !ok 时的 console.warn 由门面 _report console.error 覆盖
-  try {
-    await sendAction({ verb: "sendMessage", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { reply: { content: startMsg, files: [] } } });
+    const r = await sendAction({ verb: "smartConfirmations", target: "shells:chat", source: "web", scope: { chatId: cid } });
+    const pending = (r?.confirmations || []).filter((c) => c && c.status === "pending");
+    if (pending.length > 0) createTempConversation(pending[0]);
   } catch (e) {
-    console.warn("[tempConversation] 启动指令发送失败:", e?.message);
+    console.warn("[tempConversation] 提案状态重投影失败:", e?.message || e);
   }
 }
 
-/** 全局监听: replyHandler通过websocket告知需要临时对话 */
+/** 全局监听: replyHandler 提案硬门经 websocket 告知有待确认提案 */
 export function initTempConversationListener() {
-  window.addEventListener("beilu:smart-mode-switch", (e) => {
-    const { from, to, taskTitle } = e.detail || {};
-    createTempConversation({
-      targetMode: to,
-      taskTitle,
-      onConfirm: () => {
-        _fireWorkStart(to, taskTitle).catch((err) => {
-          console.warn("[tempConversation] work 启动指令失败:", err?.message);
-        });
-        const tab = MODE_TO_TAB[to];
-        if (tab) window.dispatchEvent(new CustomEvent("beilu:switchTab", { detail: { tab } }));
-        window._beiluToast?.("任务已启动，AI 正在准备中...", "success");
-      },
-      onCancel: () => {
-        window._beiluToast?.("已取消", "info");
-      },
-    });
+  window.addEventListener("beilu:smart-pending-confirmation", (e) => {
+    const conf = e.detail?.confirmation;
+    if (conf?.confirmationId) createTempConversation(conf);
   });
+  // 断线重连：按重连对话重新投影 pending 卡（刷新场景由下方 init 恢复）
+  window.addEventListener("beilu:wsReconnected", (e) => {
+    restorePendingConfirmations(e.detail?.chatid || "");
+  });
+  // 页面装载恢复（fire-and-forget；无 pending 时无操作）
+  restorePendingConfirmations().catch?.(() => {});
 }

@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-22T14:19:55.156Z",
+  "updatedAt": "2026-08-03T03:40:40.599Z",
   "cycles": [
     [
       "public/pages/scripts/svgInliner.mjs",
@@ -32,8 +32,7 @@
       "public/parts/shells/beilu-chat/public/src/panels/editors/regexEditor.mjs",
       "public/parts/shells/beilu-chat/public/src/panels/settings/importExport.mjs",
       "public/parts/shells/beilu-chat/public/src/panels/settings/panels.mjs",
-      "public/parts/shells/beilu-chat/public/src/panels/settings/settings.mjs",
-      "public/parts/shells/beilu-chat/public/src/panels/settings/settingsSlots.mjs"
+      "public/parts/shells/beilu-chat/public/src/panels/settings/settings.mjs"
     ]
   ]
 }

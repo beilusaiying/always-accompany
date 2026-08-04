@@ -2,7 +2,7 @@
   "id": "code",
   "label": "编程",
   "icon": "⌨️",
-  "desc": "11 code 子模式角色流水线 + IDE 工具 + 任务打勾（DEFAULT_CODE_SUB_MODES 单一权威源）",
+  "desc": "9 code 子模式角色流水线 + IDE 工具 + 任务打勾（DEFAULT_CODE_SUB_MODES 单一权威源）",
   "base": "chat",
   "_note": "照抄现状真值：selfDriven=false 即 getPromptHandler:1385 『自驱动不走 code』；aiP1 仍跑（:1477 无模式门）。hotLayerDir/skills/orphanStrip/taskPlan 见散点清单 A/B/G。",
   "features": {
@@ -26,8 +26,8 @@
       "enabled": true,
       "config": {
         "selfDriven": true,
-        "aiP1": true,
-        "_note_selfDriven": "[0730 002拍板投入使用] chat/code/work三模式开启selfDriven。内存由beilu-p1-selfdriven插件生命周期管理(Load零资源+idle自动卸载+Unload清缓存),经p1Bridge.mjs桥调用。ide内部映射到code,共用code词库(AT_code 2005词)。双门:selfDriven=mode级路由;插件enabled=用户级开关。"
+        "aiP1": false,
+        "_note_selfDriven": "[0803 互斥收口] code 默认使用 10 自驱动召回；AI P1 为独立的 01 备选路由，二者只允许单选，不双跑、不互相降级。ide 内部映射到 code 并共用 code 词库；插件 enabled 仍是资源生命周期总闸。"
       }
     },
     "websearch": {

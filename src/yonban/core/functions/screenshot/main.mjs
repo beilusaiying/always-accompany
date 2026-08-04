@@ -18,23 +18,46 @@ import info from "../../../../public/parts/plugins/beilu-eye/info.json" with { t
 import { wbT, wbD } from "../../../../server/wbStub.mjs";
 import {
   consumePendingInjection,
+  getPetClientSeenAgoMs,
+  getPetClientSeenAtMs,
+  hasActiveInteractionLease,
   hasPendingInjection,
   loadPetSettingsStore,
+  onInteractionLeaseChange,
   onPetSettingsChange,
   registerPetToken,
+  resolveHeartbeatConfirm,
   resolvePetModelName,
+  resolveStopOutcome,
+  revokeInteractionLeases,
   revokePetToken,
   savePetSettingsStore,
   setEyeProcessState,
   setPendingInjection,
+  setPetRuntimeState,
+  STOP_ACK_DEADLINE_MS,
 } from "./injection_state.mjs";
 
 // 桌宠拥有者 username：单桌宠进程归实例 owner（getOwnerUsername=createdAt 最早用户）。
 // orb per-user 隔离用此 username 作令牌绑定键。auth.mjs 在 server 域：beilu-eye→plugins→parts→public→src→server。
-// 惰性导入（与 whitebox 同范式）：拿不到(测试/早期)则降级 ""（落 orb 兜底键 __default__，旧行为）。
-let _authMod = null, _authInit = false;
-function _authEnsure() { if (_authInit) return; _authInit = true; import(new URL("../security/auth.mjs", import.meta.url).href).then(m => { _authMod = m; }).catch(() => {}); }
-function ownerUsername() { _authEnsure(); try { return (_authMod && _authMod.getOwnerUsername && _authMod.getOwnerUsername()) || ""; } catch { return ""; } }
+// 惰性导入避免 bootstrap 静态环，但桌宠签发令牌前必须 await 完成；旧实现只触发 import 就立即
+// 返回 ""，第一次启动会把 002 的桌宠绑定到 _default，继而谎报“角色未绑定”。
+let _authMod = null;
+const _authReady = import(new URL("../security/auth.mjs", import.meta.url).href)
+  .then((mod) => { _authMod = mod; return mod; })
+  .catch((error) => {
+    console.error("[beilu-eye] owner 鉴权模块加载失败:", error?.message || error);
+    return null;
+  });
+function ownerUsername() {
+  try { return (_authMod?.getOwnerUsername?.()) || ""; } catch { return ""; }
+}
+async function requireOwnerUsername() {
+  await _authReady;
+  const username = ownerUsername();
+  if (!username) throw new Error("无法确定桌宠所属用户，拒绝以空用户签发令牌");
+  return username;
+}
 
 // DIAG 探针默认关（同 MVU M10 范式）：原无条件 console.log 把 message 正文前50字 + eyeStatus dump 到控制台(隐私/噪声)。需排查时 env BEILU_EYE_DIAG=1 开启；结构化追踪走 wbT 不受影响。
 // 0716 死标记接线：未设 env 时既有探针改走 diagLogger eye 模块（BEILU_DIAG=eye + debug 级可开），env=1 保持旧的无门槛直出。
@@ -83,15 +106,70 @@ let _pythonToken = null;
 // Electron 桌宠子进程(T1 接入本体:与 Python 截图眼【并存】。
 //   悬浮球已删除(凛倾 2026-07-09):Python 任何模式都不画球,只留 Alt+Shift+S/托盘;可见悬浮物=Live2D 桌宠。)
 let petProcess = null;
-let petStatus = "stopped"; // 'stopped' | 'installing' | 'starting' | 'running' | 'missing' | 'error'
+// D5 §2.1 状态机(2026-08-04 结构版):
+//   'stopped'|'installing'|'missing'|'starting'|'waiting_heartbeat'|'running'|'adopting'|'adopted'
+//   |'stopping'|'error'|'error_unconfirmed'
+//   spawn 后不再直接置 running——先 waiting_heartbeat,10s 内收到本代进程的 pet-token 心跳才 running;
+//   超窗记 error_unconfirmed(进程保留,心跳迟到仍可回升 running,不谎报就绪)。
+let petStatus = "stopped";
 // 桌宠启动令牌(orb per-user 鉴权)：拉起时随机生成 + registerPetToken(token, ownerUsername)，env 传桌宠；
 // killElectronPet 时 revokePetToken 回收。一次一进程一令牌，进程退出即作废。
 let _petToken = null;
+let _petOwner = "";
+let _petAdoptedAt = 0;
+let _petSpawnedAt = 0; // 本代 child spawn 时刻(心跳确认基准:露面时刻>=spawn 时刻才算本代心跳)
+const _PET_HANDOFF_EXIT_CODE = 73;
+const _PET_ADOPT_GRACE_MS = 8000;
+const _PET_HEARTBEAT_STALE_MS = 10000;
+
+// 状态迁移单点:改 petStatus 一律经此,顺手推运行时镜像(injection_state)供 DTO/端点只读消费。
+// 白盒定位点:每次迁移留痕(from→to)——桌宠生命周期排查看 eye:pet status_transition 一条线即可复现全程。
+function _setPetStatus(status, extra = {}) {
+  if (petStatus !== status) wbT(null, "eye:pet", "status_transition", { from: petStatus, to: status, pid: petProcess?.pid ?? null });
+  petStatus = status;
+  setPetRuntimeState({ status, pid: petProcess?.pid ?? null, ...extra });
+}
+
+// spawn 后心跳确认(WAITING_HEARTBEAT → RUNNING / ERROR_UNCONFIRMED):对账周期与状态读点调用,幂等。
+function _confirmHeartbeatIfDue() {
+  if (petStatus !== "waiting_heartbeat" && petStatus !== "error_unconfirmed") return;
+  if (!petProcess || !_petSpawnedAt) return;
+  const outcome = resolveHeartbeatConfirm({
+    spawnedAt: _petSpawnedAt,
+    heartbeatSeenAt: _petOwner ? getPetClientSeenAtMs(_petOwner) : null,
+    now: Date.now(),
+  });
+  if (outcome === "running" && petStatus !== "running") {
+    wbT(null, "eye:pet", "heartbeat_confirmed", { pid: petProcess.pid });
+    _setPetStatus("running", { error: null });
+  } else if (outcome === "unconfirmed" && petStatus === "waiting_heartbeat") {
+    wbD(null, "eye:pet", "heartbeat_unconfirmed", false, "spawn 后 10s 未收到本代 pet-token 心跳(进程保留,心跳到达可回升)", { pid: petProcess.pid });
+    _setPetStatus("error_unconfirmed", { error: "spawn 后 10s 内未收到桌宠心跳确认" });
+  }
+}
+
+function petRuntimeHealthy() {
+  _confirmHeartbeatIfDue();
+  // 本代 child 存活即算"在跑"(running/等心跳/心跳未确认都不该被自愈重拉——进程真实存在,重拉=双实例churn)
+  if (petProcess && (petStatus === "running" || petStatus === "waiting_heartbeat" || petStatus === "error_unconfirmed")) return true;
+  if (petStatus !== "adopting" && petStatus !== "adopted") return false;
+  const seenAgo = _petOwner ? getPetClientSeenAgoMs(_petOwner) : null;
+  if (seenAgo !== null && seenAgo <= _PET_HEARTBEAT_STALE_MS) {
+    if (petStatus !== "adopted") _setPetStatus("adopted");
+    return true;
+  }
+  return petStatus === "adopting" && Date.now() - _petAdoptedAt <= _PET_ADOPT_GRACE_MS;
+}
 
 /** 读当前桌宠开关(默认关闭,但用户开/关已持久化=操作储存)。 */
 function petEnabled() {
   try { return !!loadPetSettingsStore(projectRoot).petEnabled; }
   catch { return false; }
+}
+
+/** effective desired 单点(D5 §2.1):显式持久开关 || 活跃互动租约。进程生杀只看它。 */
+function effectiveDesired() {
+  return petEnabled() || hasActiveInteractionLease();
 }
 /** 读当前桌宠选用模型(0722 去指名硬编码:空=按可用性解析首个图片包,无包返 ""→renderer 字典首项/兜底)。 */
 function petModel() {
@@ -173,6 +251,10 @@ function killPythonEye() {
 // Electron 自动安装(联网自愈,去重共享同一 promise——形状同 crawlProbe.ensureBrowsers)。
 // cwd=desktop-eye 用其自有 package.json,与项目根清单/overrides 无关;离线或失败=保持既有优雅降级。
 let _electronInstalling = null;
+// 进程启动单飞：顶层 autostart、part Load、设置订阅和 4s reconcile 可能同时进入。
+// 没有本闸时两个调用会一起越过 await Deno.stat 前的 petProcess 检查，产生双 Electron；
+// 后启动者因单例锁退出并把仍存活的前一实例状态清空，随后每 30s 无限重拉。
+let _petLaunchPromise = null;
 // 失败冷却:离线时自愈对账每 30s 重进,若每次都真跑 npm=持续进程churn+双行日志刷屏。
 // 失败后 10min 内自愈路径静默跳过;用户显式开关桌宠(边沿/SetData)清零冷却=立即重试。
 let _electronInstallFailAt = 0;
@@ -214,108 +296,236 @@ function ensureElectronInstalled() {
   return _electronInstalling;
 }
 
-async function launchElectronPet() {
-  if (petProcess && petStatus === "running") return;
+async function _launchElectronPetOnce() {
+  if (petRuntimeHealthy()) return;
   // 优雅自举:检查 electron 二进制是否存在;缺失先走自动安装(联网自愈),仍缺才降级
   try {
     await Deno.stat(electronExe);
   } catch {
-    petStatus = "installing";
+    _setPetStatus("installing", { error: null });
     const installed = await ensureElectronInstalled();
     if (!installed) {
-      petStatus = "missing";
+      _setPetStatus("missing", { error: "Electron 未安装且自动安装未成功(离线?)" });
       wbD(null, "eye:pet", "electron_missing", false, "Electron 未安装且自动安装未成功", { electronExe });
       console.warn("[beilu-eye] 桌宠已开启但 Electron 未装上(离线?)。联网后重开桌宠即自动重装,或手动: cd desktop-eye && npm i");
       return;
     }
   }
-  petStatus = "starting";
+  // 安装/鉴权等待期间用户可能已撤回全部意愿(显式关+lease 释放)或插件已 Unload，禁止迟到启动。
+  // 判据=effectiveDesired(D5 §2.1):互动 lease 与显式开关同为合法启动来源。
+  if (!effectiveDesired() || _petUnloaded) return;
+  _setPetStatus("starting", { error: null });
   console.log("[beilu-eye] 启动 Electron 桌宠(并存)...");
+  let token = null;
   try {
     const port = (typeof Deno !== "undefined" && Deno.env.get("BEILU_PORT")) || "1314";
     // orb per-user 鉴权令牌：每次拉起生成新随机 token，绑定本桌宠拥有者 username。
     // 桌宠经 env 持令牌 → orb 请求带 x-pet-token → 端点反解出 username 只访问该 user 的 orb 槽。
-    _petToken = crypto.randomUUID();
-    registerPetToken(_petToken, ownerUsername());
+    const petOwner = await requireOwnerUsername();
+    if (!effectiveDesired() || _petUnloaded) return;
+    token = crypto.randomUUID();
+    registerPetToken(token, petOwner);
     const command = new Deno.Command(electronExe, {
       args: ["."],
       cwd: desktopEyeDir,
-      env: { BEILU_PORT: String(port), BEILU_PET_MODEL: petModel(), BEILU_PET_TOKEN: _petToken },
+      env: { BEILU_PORT: String(port), BEILU_PET_MODEL: petModel(), BEILU_PET_TOKEN: token },
       stdout: "piped",
       stderr: "piped",
     });
-    petProcess = command.spawn();
-    petStatus = "running";
-    wbT(null, "eye:pet", "spawn_ok", { pid: petProcess.pid });
-    console.log("[beilu-eye] Electron 桌宠已启动 (PID:", petProcess.pid, ")");
-    petProcess.status
+    const child = command.spawn();
+    _petToken = token;
+    _petOwner = petOwner;
+    _petAdoptedAt = 0;
+    petProcess = child;
+    _petSpawnedAt = Date.now();
+    // D5 §2.1:spawn ≠ 已就绪。先 waiting_heartbeat,首个本代 pet-token 心跳(≤10s)才 RUNNING;
+    // 超窗 error_unconfirmed(见 _confirmHeartbeatIfDue),不把"进程拉起了"谎报成"桌宠已就绪"。
+    _setPetStatus("waiting_heartbeat", { error: null });
+    wbT(null, "eye:pet", "spawn_ok", { pid: child.pid, owner: petOwner });
+    console.log("[beilu-eye] Electron 桌宠已启动 (PID:", child.pid, ", owner:", petOwner, "),等待心跳确认...");
+    child.status
       .then((status) => {
-        console.log("[beilu-eye] Electron 桌宠进程已退出, code:", status.code);
-        petProcess = null;
-        petStatus = "stopped";
-        if (_petToken) { try { revokePetToken(_petToken); } catch { /* ignore */ } _petToken = null; }
+        console.log("[beilu-eye] Electron 桌宠进程已退出, code:", status.code, "pid:", child.pid);
+        if (status.code === _PET_HANDOFF_EXIT_CODE && petProcess === child && _petToken === token) {
+          // 已有跨后端重启的桌宠拿到 second-instance 新令牌；当前短命子进程只负责交接。
+          // 令牌必须保留给被接管实例，后续以 pet-token 请求的 lastSeen 判断真实存活。
+          petProcess = null;
+          _petAdoptedAt = Date.now();
+          _setPetStatus("adopting");
+          wbT(null, "eye:pet", "adopt_handoff", { owner: petOwner });
+          return;
+        }
+        try { revokePetToken(token); } catch { /* ignore */ }
+        if (petProcess === child) {
+          petProcess = null;
+          _setPetStatus("stopped");
+        }
+        if (_petToken === token) { _petToken = null; _petOwner = ""; _petAdoptedAt = 0; }
       })
       .catch(() => {
-        petProcess = null;
-        petStatus = "stopped";
-        if (_petToken) { try { revokePetToken(_petToken); } catch { /* ignore */ } _petToken = null; }
+        try { revokePetToken(token); } catch { /* ignore */ }
+        if (petProcess === child) {
+          petProcess = null;
+          _setPetStatus("stopped");
+        }
+        if (_petToken === token) { _petToken = null; _petOwner = ""; _petAdoptedAt = 0; }
       });
-    pipeOutput(petProcess.stdout, "[pet]");
-    pipeOutput(petProcess.stderr, "[pet ERR]");
+    pipeOutput(child.stdout, "[pet]");
+    pipeOutput(child.stderr, "[pet ERR]");
   } catch (err) {
+    if (token) { try { revokePetToken(token); } catch { /* ignore */ } }
+    if (_petToken === token) { _petToken = null; _petOwner = ""; _petAdoptedAt = 0; }
     wbD(null, "eye:pet", "spawn_error", false, "桌宠启动失败", { err: err.message });
     console.error("[beilu-eye] Electron 桌宠启动失败:", err.message);
     petProcess = null;
-    petStatus = "error";
+    _setPetStatus("error", { error: err.message });
   }
 }
 
-/** 关闭 Electron 桌宠子进程(SIGKILL,同 Python GUI 进程)。 */
+function launchElectronPet() {
+  if (petRuntimeHealthy()) return Promise.resolve();
+  if (_petLaunchPromise) return _petLaunchPromise;
+  _petLaunchPromise = _launchElectronPetOnce().finally(() => { _petLaunchPromise = null; });
+  return _petLaunchPromise;
+}
+
+/** 立即终止(SIGKILL)——仅 Unload/进程收尾路径使用(整插件退场必须即时,不适用 10s 优雅协议)。
+ *  用户可见的"关闭桌宠/停止互动"一律走 stopElectronPetGraceful(有 ack,不谎报 stopped)。 */
 function killElectronPet() {
   // 令牌随进程作废：即使 petProcess 已自行退出(status.then 置 null)，也回收令牌防泄漏。
   if (_petToken) { try { revokePetToken(_petToken); } catch { /* ignore */ } _petToken = null; }
+  _petOwner = "";
+  _petAdoptedAt = 0;
   if (petProcess) {
     try { petProcess.kill("SIGKILL"); } catch { /* ignore */ }
     petProcess = null;
-    petStatus = "stopped";
+    _setPetStatus("stopped");
     wbT(null, "eye:pet", "killed", null);
     console.log("[beilu-eye] Electron 桌宠进程已终止");
   }
+  if (!petProcess && petStatus !== "stopped") _setPetStatus("stopped");
 }
 
-/** 确保桌宠状态与持久化开关一致:petEnabled=true 拉起、false 关闭。 */
+// ── 优雅停止(D5 §2.1:停止 deadline 10s,先请求退出,确认 exit/心跳消失才置 stopped) ──
+// 优雅通道=既有 pet-settings 轮询:调用前提是 effectiveDesired 已为 false,Electron 每 orbPollSec(≤3s)
+// 轮询 GET /api/eye/pet-settings 见 effective=false 自行 app.quit()(desktop-eye/main.js _syncPetSettingsFromBeilu)。
+// ack 判据(resolveStopOutcome 纯函数,tests/pet_lifecycle_contract_test.mjs 覆盖):
+//   本代 child → child.status 落定;到期未退 → 升级 SIGKILL 再等 status 落定(有界)。
+//   接管实例(无句柄) → 心跳消失;到期心跳仍新鲜 → 记 stop_timeout,状态保持 stopping(不谎报),对账继续观察。
+let _petStopPromise = null;
+function stopElectronPetGraceful(reason = "desired-off") {
+  if (!petProcess && petStatus === "stopped") return Promise.resolve({ stopped: true, alreadyStopped: true });
+  if (_petStopPromise) return _petStopPromise;
+  _petStopPromise = _stopElectronPetOnce(reason).finally(() => { _petStopPromise = null; });
+  return _petStopPromise;
+}
+async function _stopElectronPetOnce(reason) {
+  const child = petProcess;
+  const token = _petToken;
+  const owner = _petOwner;
+  const requestedAt = Date.now();
+  _setPetStatus("stopping", { stopRequestedAt: requestedAt, stopDeadlineMs: STOP_ACK_DEADLINE_MS, stopTimeout: false, error: null });
+  wbT(null, "eye:pet", "stop_requested", { reason, pid: child?.pid ?? null, adopted: !child });
+  let childExited = false;
+  if (child) child.status.then(() => { childExited = true; }, () => { childExited = true; });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let escalated = false;
+  while (true) {
+    // 停止期间意愿翻回(用户又开/新互动 lease):中止停止,交回 ensure 走启动线(child 若已死会重拉)
+    if (effectiveDesired() && !_petUnloaded) {
+      wbT(null, "eye:pet", "stop_cancelled_desired_back", { reason });
+      if (child && !childExited) { _setPetStatus(childExited ? "stopped" : "waiting_heartbeat"); return { stopped: false, cancelled: true }; }
+      _setPetStatus("stopped");
+      return { stopped: !child || childExited, cancelled: true };
+    }
+    const outcome = resolveStopOutcome({
+      childExited,
+      hasChild: !!child,
+      heartbeatAgoMs: owner ? getPetClientSeenAgoMs(owner) : null,
+      heartbeatStaleMs: _PET_HEARTBEAT_STALE_MS,
+      elapsedMs: Date.now() - requestedAt,
+    });
+    if (outcome === "confirmed") break;
+    if (outcome === "escalate_kill" && !escalated) {
+      escalated = true;
+      wbD(null, "eye:pet", "stop_escalate_kill", false, "10s 内未优雅退出,升级 SIGKILL(仍等 exit 落定后才置 stopped)", { pid: child?.pid });
+      try { child?.kill("SIGKILL"); } catch { /* ignore */ }
+      const t0 = Date.now();
+      while (!childExited && Date.now() - t0 < 3000) await sleep(100);
+      break; // TerminateProcess 后 status 必然落定;3s 兜底防句柄异常挂死
+    }
+    if (outcome === "timeout") {
+      // 接管实例仍在发心跳:不能宣布 stopped。记录 stop_timeout,保持 stopping,4s 对账继续观察
+      // (它下一次 pet-settings 轮询会看到 effective=false 自退;心跳一消失即由对账收尾置 stopped)。
+      setPetRuntimeState({ status: "stopping", stopTimeout: true, error: "stop_timeout: 10s 内接管实例未确认退出(心跳仍新鲜),继续观察" });
+      wbD(null, "eye:pet", "stop_timeout", false, "接管实例 10s 未确认退出,状态保持 stopping", { owner });
+      return { stopped: false, stopTimeout: true };
+    }
+    await sleep(250);
+  }
+  // 已确认退出:收尾(child.status 处理器可能已抢先清理,全部幂等)
+  if (token && _petToken === token) { try { revokePetToken(token); } catch { /* ignore */ } _petToken = null; }
+  if (!child || petProcess === child) petProcess = null;
+  _petOwner = "";
+  _petAdoptedAt = 0;
+  _setPetStatus("stopped", { error: null, stopTimeout: false });
+  wbT(null, "eye:pet", "stop_confirmed", { reason, escalated });
+  console.log("[beilu-eye] Electron 桌宠已确认停止" + (escalated ? "(升级 SIGKILL)" : "(优雅退出)"));
+  return { stopped: true, escalated };
+}
+
+/** 确保桌宠进程与 effective desired(显式开关 || 互动 lease)一致:true 拉起、false 优雅停止。 */
 async function ensurePetRunning() {
-  if (petEnabled()) {
-    if (!(petProcess && petStatus === "running")) await launchElectronPet();
+  if (effectiveDesired()) {
+    if (petStatus === "stopping") return; // 停止收束中:等 settle,由停止环的意愿回翻检测/下轮对账接手
+    if (!petRuntimeHealthy()) await launchElectronPet();
+  } else if (petProcess || petRuntimeHealthy() || petStatus === "stopping") {
+    await stopElectronPetGraceful();
   } else {
+    // 无进程无接管:直接归位(回收可能残留的令牌)
     killElectronPet();
   }
 }
 
-// 桌宠开关对账:开关【变更】已由 savePetSettingsStore 订阅即时处理(下方 onPetSettingsChange,
-// 凛倾 2026-07-22"两处启动,不同步的散写"收口——任何写入口落盘即触发,不再等本轮询)。
-// 本周期对账只剩崩溃自愈职责(电平触发:应跑而没跑=补拉)+订阅遗漏的兜底边沿。
-let _lastPetEnabled = null;
+// 桌宠意愿对账:意愿【变更】由两条订阅即时处理(petEnabled 落盘 funnel + 互动 lease 变更),
+// 本周期对账只剩崩溃自愈职责(电平触发:应跑而没跑=补拉)+ stopping 收尾观察 + 订阅遗漏兜底边沿。
+// 基线从 petEnabled 升级为 effectiveDesired(D5 §2.1):lease 与显式开关同为合法意愿源。
+let _lastDesired = null;
 let _lastSelfHealAt = 0;
 let _petUnloaded = false; // Unload(有意关闭)抑制自愈复活;Load 解除
 // 写侧单 funnel 订阅:petEnabled 一落盘(无论 web POST/SetData/托盘回写哪个入口)立即同步基线+清冷却+进程生杀。
-// 基线先行同步=reconcilePet 不会对同一变更二次动作(边沿判定 on===_lastPetEnabled 已相等)。
+// 基线先行同步=reconcilePet 不会对同一变更二次动作(边沿判定已相等)。
 onPetSettingsChange((patch) => {
   if (!patch || typeof patch !== "object" || !("petEnabled" in patch)) return;
   const on = !!patch.petEnabled;
   wbT(null, "eye:pet", "settings_change", { on });
-  _lastPetEnabled = on;
+  // 用户显式关闭=接管(D5 §2.2/iter6 语义升级):互动租约一并吊销——session 继续跑(文字陪伴不受影响),
+  // 桌宠按用户显式意愿停止;停止互动时 release 已吊销的 lease 幂等无害。
+  if (!on) revokeInteractionLeases("explicit-off");
+  _lastDesired = effectiveDesired();
   if (on) _electronInstallFailAt = 0; // 显式开=清安装冷却,立即允许重试自动安装(原语义只在 SetData 入口,现全入口)
   return ensurePetRunning();
 });
+// 互动租约变更(acquire/release/revoke)即时生杀——与 pet-settings 订阅同型,零轮询延迟。
+onInteractionLeaseChange((event) => {
+  wbT(null, "eye:pet", "lease_change", { type: event?.type, count: event?.count });
+  _lastDesired = effectiveDesired();
+  if (event?.type === "acquire") _electronInstallFailAt = 0; // 互动要求桌宠=同显式开,清安装冷却
+  return ensurePetRunning();
+});
 async function reconcilePet() {
-  const on = petEnabled();
+  const desired = effectiveDesired();
+  // stopping 收尾观察:接管实例 stop_timeout 后由这里持续复查(心跳消失即置 stopped;意愿回翻由停止环自理)。
+  if (petStatus === "stopping" && !desired && !_petStopPromise) {
+    await stopElectronPetGraceful("reconcile-stopping-settle");
+    return;
+  }
   // 电平触发自愈(操作闭环审计 2026-07-12:原纯边沿触发——开关值不变就不动作,
-  // 桌宠进程崩溃/被外杀后 petEnabled 仍=true,永远不重拉=用户"启用着却没有桌宠"且无同面回路)。
-  // 开关值变化照旧动作;值没变但"应跑而没跑"也补拉(ensurePetRunning 幂等:running 即返回,不抖动)。
-  if (on === _lastPetEnabled) {
+  // 桌宠进程崩溃/被外杀后意愿仍=true,永远不重拉=用户"启用着却没有桌宠"且无同面回路)。
+  // 意愿变化照旧动作;值没变但"应跑而没跑"也补拉(ensurePetRunning 幂等:running 即返回,不抖动)。
+  if (desired === _lastDesired) {
     // 自愈只治"崩溃/被外杀",不复活"有意关闭":Unload(角色卡退出)期间抑制,Load 解除。
-    if (on && !_petUnloaded && !(petProcess && petStatus === "running")) {
+    if (desired && !_petUnloaded && !petRuntimeHealthy() && petStatus !== "stopping") {
       // 退避可配(凛倾 2026-07-13 去硬编码):pet_settings.selfHealBackoffSec,默认30(=原值);0=每次对账都重试。
       // why 退避:孤儿实例占 Electron 单例锁时新实例立退,无退避=4s 无限重生 spawn churn。
       const _backoffSec = Number(loadPetSettingsStore(projectRoot).selfHealBackoffSec);
@@ -328,9 +538,9 @@ async function reconcilePet() {
     }
     return;
   }
-  _lastPetEnabled = on;
-  wbT(null, "eye:pet", "reconcile", { on });
-  if (on) _electronInstallFailAt = 0; // 用户显式打开=清冷却,立即允许重试自动安装
+  _lastDesired = desired;
+  wbT(null, "eye:pet", "reconcile", { desired });
+  if (desired) _electronInstallFailAt = 0; // 意愿转正=清冷却,立即允许重试自动安装
   await ensurePetRunning();
 }
 
@@ -346,7 +556,7 @@ setTimeout(() => {
   // Python 眼(beilu_eye.py)拉起已摘除(凛倾 2026-07-12"已经废弃的beilu eye……直接替换beilueye"):
   // 截图全链(热键框选/自动截图 captureRequested/去重/元数据)由桌宠 Electron 进程接管(desktop-eye/autoCapture.js)。
   // 桌宠默认关闭;仅当用户上次开启(持久化)才并存拉起(操作储存,凛倾决策)。
-  _lastPetEnabled = petEnabled(); // 设基线,避免对账首跳误触发
+  _lastDesired = effectiveDesired(); // 设基线,避免对账首跳误触发(启动时无 lease=等价 petEnabled)
   ensurePetRunning().catch((err) => {
     wbD(null, "eye:pet", "autostart_error", false, "桌宠自启动失败", { err: err.message });
     console.error("[beilu-eye] 桌宠自启动失败:", err.message);

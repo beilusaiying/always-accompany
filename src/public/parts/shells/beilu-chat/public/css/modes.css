@@ -145,13 +145,14 @@
   background: transparent;
   border-radius: 6px;
   cursor: pointer;
-  opacity: 0.6;
-  transition: all 0.15s;
-  color: inherit;
+  color: var(--beilu-fg-secondary);
+  transition:
+    color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard);
 }
 .chat-toolbar-btn:hover {
-  opacity: 1;
-  background: var(--beilu-amber-10);
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-amber-10);
 }
 
 .chat-model-selector {
@@ -164,11 +165,12 @@
   background: transparent;
   font-size: 0.75rem;
   cursor: pointer;
-  opacity: 0.7;
-  transition: all 0.15s;
-  color: inherit;
+  color: var(--beilu-fg-secondary);
+  transition:
+    color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-fast) var(--beilu-ease-standard);
 }
-.chat-model-selector:hover { opacity: 1; border-color: var(--beilu-amber); }
+.chat-model-selector:hover { color: var(--beilu-fg-primary); border-color: var(--beilu-amber); }
 /* 长模型名截断（如 claude-sonnet-4-5-20250929）：无上限时撑爆工具栏挤压左侧按钮组 */
 #model-selector-label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-selector-arrow { font-size: 0.6rem; }
@@ -185,7 +187,10 @@
   background: var(--beilu-amber);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    box-shadow var(--beilu-motion-fast) var(--beilu-ease-standard),
+    filter var(--beilu-motion-fast) var(--beilu-ease-standard),
+    transform var(--beilu-motion-press) var(--beilu-ease-standard);
   box-shadow: 0 2px 8px var(--beilu-amber-30);
 }
 .chat-send-btn:hover { filter: brightness(1.1); transform: scale(1.05); box-shadow: 0 3px 12px var(--beilu-amber-40); }
@@ -819,5 +824,3 @@ html[data-theme="light"] .floating-window-header { background: rgba(155, 123, 30
 html[data-theme="light"] .settings-modal,
 html[data-theme="light"] .editor-section,
 html[data-theme="light"] .beilu-usage-nav { background-color: var(--beilu-modal-bg) !important; }
-
-

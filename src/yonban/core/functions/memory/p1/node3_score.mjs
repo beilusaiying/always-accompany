@@ -1,7 +1,7 @@
 // node3_score.mjs — 汇池审查: 标注 + 打分(自驱动召回新管线 第4节)
 //
 // 设计来源: P1_新管线设计_算法标注版.md §标注打分
-// 审查机制: BLQ / NB300关联 / LogicScore四维 已接线;EmoBank(VAD词级聚合) / WordNet路径 未接线(factorStatus如实声明)
+// 审查机制: BLQ / NB300关联 / LogicScore四维 已接线;EmoBank VAD仅标注未计分;WordNet路径用于双重验证
 // 标注层(NRC/conc78k)不产出候选,只给候选贴标签供审查过滤加权
 //
 // 白盒铁律: 每个候选输出完整因子分解 {vote, ib, logic, novelty, nbCos, goldilocks...},
@@ -9,19 +9,20 @@
 // 红线: Vote 指数 α=1.2(改 1.0 退步, A01);Goldilocks 分段 0.15/0.25/0.70/0.80 已定档
 
 import { httpCall } from './cluster.mjs';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { loadNrc, loadConc78k, loadEmobankVad, DERIVED } from './resources2.mjs';
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { loadNrc, loadConc78k, loadEmobankVad } from './resources2.mjs';
 import { loadMeldSch, loadBrysbaert } from './resources.mjs';
 import { REL_WEIGHTS } from './node2_diverge.mjs';
+import { STORAGE_ROOT } from './paths.mjs';
 
 // NB300 + WordNet → 集群 vector_service :13152
 // novelty_usage 按角色卡隔离: memDir 由调用方传入(p1_service_stdio → pipeline → scorePool)
-// 全局 DERIVED 兜底(拉线测试/无 memDir 场景)
-const _USAGE_FALLBACK = join(DERIVED, 'novelty_usage.json');
+// 拉线测试/无角色身份时也写 P1 storage，不反写资源目录。
+const _USAGE_FALLBACK = join(STORAGE_ROOT, 'users', '_default', 'characters', '_global', 'novelty.json');
 let _usageDir = null;
 export function setUsageDir(dir) { _usageDir = dir; }
-function _usagePath() { return _usageDir ? join(_usageDir, 'p1_novelty_usage.json') : _USAGE_FALLBACK; }
+function _usagePath() { return _usageDir ? join(_usageDir, 'novelty.json') : _USAGE_FALLBACK; }
 
 const envF = (n, d) => { const v = parseFloat(process.env[n]); return Number.isFinite(v) ? v : d; };
 
@@ -48,8 +49,8 @@ export const PARAMS = {
   // WordNet 双重验证阈值: NB cos 和 WN path_similarity 都 > 此值才保留(设计§L261-262)
   WN_DUAL_FLOOR: envF('P1_WN_DUAL_FLOOR', 0.1),
   // BLQ 模式权重(30号MD §模式权重;设计原文 modeWeights 四列逐字保留)
-  // 消费现状: emotion/domain 进 modeBonus;logic 列已接线(LogicScore 四维,BLQ 主链乘法因子),
-  // user_pref 列无消费点(用户偏好层未接线)。user_pref 保留=设计原值占位,接线时启用,factorStatus 已如实声明
+  // 消费现状: emotion/domain 进 modeBonus;logic 仅在有四维逻辑信号时调制 LogicScore;
+  // user_pref 列无数值公式/数据源，仅保留设计原值并在 factorStatus 如实声明未消费
   MODE_WEIGHTS: {
     chat: { emotion: 1.0, logic: 1.0, domain: 1.0, user_pref: 0.5 },
     airp: { emotion: 1.5, logic: 0.8, domain: 1.0, user_pref: 0.5 },
@@ -68,6 +69,37 @@ export async function nbCosineBatch(anchorWords, candidateWords) {
   if (r.available === false) return { available: false, why: r.why, cos: new Map() };
   _nbAvailable = true;
   return { available: true, cos: new Map(Object.entries(r.cos || {})), oov: r.oov };
+}
+
+// 候选词两两近义判断：一次请求批量计算 cos(w1,w2)，供 Node4 按框架阈值去重。
+export async function nbPairwiseBatch(pairs) {
+  const pairList = Array.isArray(pairs) ? pairs : [];
+  if (pairList.length === 0) {
+    return { available: false, why: 'empty_pairs', cosines: [], covered: 0, oov: [] };
+  }
+  if (_nbAvailable === false) {
+    return { available: false, why: 'nb_unavailable', cosines: [], covered: 0, oov: [] };
+  }
+  const r = await httpCall('vector', 'nb_pairs', { pairs: pairList });
+  if (r._cluster_err) {
+    _nbAvailable = false;
+    return { available: false, why: r.error, cosines: [], covered: 0, oov: [] };
+  }
+  if (r.available === false) {
+    return { available: false, why: r.why, cosines: [], covered: 0, oov: r.oov ?? [] };
+  }
+  const cosines = Array.isArray(r.cosines) ? r.cosines : [];
+  if (cosines.length !== pairList.length) {
+    return {
+      available: false,
+      why: `bad_pair_response(${cosines.length}/${pairList.length})`,
+      cosines,
+      covered: Number(r.covered) || 0,
+      oov: r.oov ?? [],
+    };
+  }
+  _nbAvailable = true;
+  return { available: true, cosines, covered: Number(r.covered) || 0, oov: r.oov ?? [] };
 }
 
 // ---- WordNet 路径相似度桥(设计 审查机制4;与 NB300 双重验证,阈值[白盒定]先标注不硬滤) ----
@@ -115,7 +147,7 @@ const REL_TO_LOGIC_DIM = {
 };
 const SOURCE_LOGIC = { cilin: { dim: 'induction', w: 0.5 } };
 
-function calcLogicScore(poolEntry) {
+export function calcLogicFactors(poolEntry, mode = 'chat') {
   const dims = { deduction: 0, induction: 0, abduction: 0, contrast: 0 };
   for (const rel of poolEntry.rels ?? []) {
     const dim = REL_TO_LOGIC_DIM[rel];
@@ -126,20 +158,44 @@ function calcLogicScore(poolEntry) {
     if (m) dims[m.dim] = Math.max(dims[m.dim], m.w);
   }
   const maxDim = Math.max(dims.deduction, dims.induction, dims.abduction, dims.contrast);
-  return { logic: maxDim > 0 ? +maxDim.toFixed(3) : 1.0, dims };
+  const hasLogicSignal = maxDim > 0;
+  const rawLogic = hasLogicSignal ? +maxDim.toFixed(3) : 1.0;
+  // 模式权重只调制真实信号；无信号时权重也必须中性，不能凭空生成逻辑加成。
+  const logicModeWeight = hasLogicSignal
+    ? (PARAMS.MODE_WEIGHTS[mode] ?? PARAMS.MODE_WEIGHTS.chat).logic
+    : 1.0;
+  const weightedLogic = hasLogicSignal ? +(rawLogic * logicModeWeight).toFixed(3) : 1.0;
+  return { rawLogic, logicModeWeight, weightedLogic, hasLogicSignal, dims };
+}
+
+// 预筛与最终打分共用同一 BLQ 公式，避免模式逻辑权重在某一阶段重复或漏计。
+export function calcBlq({ vote, ib = 1.0, weightedLogic, novelty }) {
+  return vote * ib * weightedLogic * novelty;
 }
 
 // ---- NoveltyBonus: 1/√(historical_count+1),使用记录落盘持久 ----
 function loadUsage() {
   const p = _usagePath();
-  try { return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : {}; }
-  catch { return {}; }
+  if (!existsSync(p)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(p, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('root must be an object');
+    return parsed;
+  } catch (error) {
+    throw Object.assign(new Error(`novelty usage is unreadable: ${p}: ${error.message}`), {
+      code: 'P1_NOVELTY_STATE_CORRUPT', details: { path: p },
+    });
+  }
 }
 // 调用方=p1_pipeline/p1_service_stdio 召回出口(只记实际参与命中的扩展词);historyMode:false 时 scorePool 不读账本
 export function recordUsage(words) {
   const u = loadUsage();
   for (const w of words) u[w] = (u[w] ?? 0) + 1;
-  writeFileSync(_usagePath(), JSON.stringify(u));
+  const target = _usagePath();
+  mkdirSync(dirname(target), { recursive: true });
+  const temp = `${target}.tmp.${process.pid}.${Date.now()}`;
+  writeFileSync(temp, JSON.stringify(u));
+  renameSync(temp, target);
 }
 
 // ---- 情感/具体性/VAD 标注(标注层: 不滤,只贴标签供模式加权) ----
@@ -180,7 +236,7 @@ export async function scorePool(node2Result, { historyMode = true } = {}) {
     const lang = /\p{Script=Han}/u.test(p.word) ? 'zh' : 'en';
     const tags = annotate(p.word, lang);
     const vote = Math.pow(Math.max(1, p.resonance), PARAMS.VOTE_ALPHA);
-    const { logic, dims: logicDims } = calcLogicScore(p);
+    const { rawLogic, logicModeWeight, weightedLogic, hasLogicSignal, dims: logicDims } = calcLogicFactors(p, mode);
     const novelty = 1 / Math.sqrt((usage[p.word] ?? 0) + 1);
     let modeBonus = 0;
     if (tags.emotions?.length) modeBonus += mw.emotion * PARAMS.EMOTION_BONUS_W * tags.emotions.length;
@@ -191,9 +247,13 @@ export async function scorePool(node2Result, { historyMode = true } = {}) {
     if (lang === 'en' && tags.conc78k !== undefined && tags.conc78k < PARAMS.CONC78K_PENALTY_THRESH) {
       concPenalty = PARAMS.CONC78K_PENALTY_W * (PARAMS.CONC78K_PENALTY_THRESH - tags.conc78k);
     }
-    const preBlq = vote * logic * novelty;
+    const preBlq = calcBlq({ vote, weightedLogic, novelty });
     const preScore = preBlq + modeBonus + p.strength * PARAMS.POOL_STRENGTH_W - concPenalty;
-    return { ...p, lang, tags, vote, logic, logicDims, novelty, modeBonus, concPenalty, preBlq, preScore };
+    return {
+      ...p, lang, tags, vote,
+      rawLogic, logicModeWeight, weightedLogic, hasLogicSignal, logicDims,
+      novelty, modeBonus, concPenalty, preBlq, preScore,
+    };
   });
 
   const droppedByBlq = preScored.filter(p => p.preScore < PARAMS.BLQ_SCORE_FLOOR);
@@ -210,11 +270,14 @@ export async function scorePool(node2Result, { historyMode = true } = {}) {
     vote: 'live(机制共振数)',
     ib: nb.available ? 'live(numberbatch int8子集 82.4万词)' : `neutral(NB不可用: ${nb.why ?? ''})`,
     goldilocks: nb.available ? 'live' : 'neutral(NB不可用)',
-    logic: 'live(LogicScore=max{演绎,归纳,溯因,对比};rel→REL_WEIGHTS,cilin→归纳0.5,无信号=中性1.0)',
+    logic: `live(rawLogic=max{演绎,归纳,溯因,对比};有信号×modeWeight=${mw.logic};无信号 raw/weight/weighted 均为中性1.0)`,
     novelty: historyMode ? 'live(novelty_usage.json)' : 'off',
-    emotion: 'live(NRC标注×模式权重+EmoBank VAD词级标注,仅英文词表覆盖处)',
-    emobank: ebVad.available ? `live(emobank_word_vad ${ebVad.data.size}词)` : 'unavailable',
+    emotion: 'live(NRC标注命中数×模式权重,仅英文词表覆盖处)',
+    emobank: ebVad.available
+      ? `annotated_only(not consumed in score; emobank_word_vad ${ebVad.data.size}词)`
+      : 'unavailable(not consumed in score)',
     domain: 'live(术语机制来源加成×模式权重)',
+    user_pref: 'not_consumed(no numeric formula or data source)',
     wordnet: wn.available ? 'live(nltk path_similarity 双重验证硬过滤)' : `unavailable(${wn.why ?? ''})`,
     blqPreFilter: `${pool.length}→${survived.length}(预筛淘汰${droppedByBlq.length})`,
   };
@@ -224,7 +287,7 @@ export async function scorePool(node2Result, { historyMode = true } = {}) {
     const cos = nb.cos.has(p.word) ? nb.cos.get(p.word) : null;
     const { ib, d } = ibFactor(cos);
     const gold = goldilocksFactor(cos);
-    const blq = p.vote * ib * p.logic * p.novelty;
+    const blq = calcBlq({ vote: p.vote, ib, weightedLogic: p.weightedLogic, novelty: p.novelty });
     const final = blq * gold.factor + p.modeBonus + p.strength * PARAMS.POOL_STRENGTH_W - p.concPenalty;
 
     const wnSim = wn.sim.get(p.word) ?? null;
@@ -237,7 +300,10 @@ export async function scorePool(node2Result, { historyMode = true } = {}) {
     return {
       word: p.word, sources: p.sources, strength: p.strength, resonance: p.resonance, via: p.via,
       lang: p.lang, tags: p.tags,
-      factors: { vote: +p.vote.toFixed(3), ib, d, logic: p.logic, logicDims: p.logicDims, novelty: +p.novelty.toFixed(3),
+      factors: { vote: +p.vote.toFixed(3), ib, d,
+                 logic: p.weightedLogic, rawLogic: p.rawLogic, logicModeWeight: p.logicModeWeight,
+                 weightedLogic: p.weightedLogic, hasLogicSignal: p.hasLogicSignal, logicDims: p.logicDims,
+                 novelty: +p.novelty.toFixed(3),
                  nbCos: cos !== null ? +(+cos).toFixed(3) : null, wnSim,
                  goldilocks: gold, modeBonus: +p.modeBonus.toFixed(3) },
       score: +final.toFixed(4),

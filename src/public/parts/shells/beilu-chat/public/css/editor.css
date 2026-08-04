@@ -3,34 +3,59 @@
    ============================================================ */
 
 .file-tree {
-  font-family:
-    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+  color: var(--beilu-fg-primary);
 }
 
 .file-tree-item {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  min-height: 36px;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--beilu-radius-control);
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    box-shadow var(--beilu-motion-press) var(--beilu-ease-standard);
   user-select: none;
 }
 
 .file-tree-item:hover {
-  background-color: var(--beilu-amber-10);
+  background-color: var(--beilu-hover);
+}
+
+.file-tree-item:active {
+  background-color: var(--beilu-active);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
+}
+
+.file-tree-item:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 .file-tree-item.active {
-  background-color: var(--beilu-amber-18);
-  color: var(--beilu-amber);
+  background-color: var(--beilu-selection);
+  border-left-color: var(--beilu-action-accent);
+  color: var(--beilu-fg-primary);
   font-weight: 600;
+}
+
+.file-tree-item.active:focus-visible {
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
 }
 
 .file-tree-item .tree-icon {
   flex-shrink: 0;
   font-size: 0.85em;
+  color: var(--beilu-fg-secondary);
 }
 
 .file-tree-item .tree-toggle {
@@ -38,7 +63,25 @@
   width: 0.8em;
   font-size: 0.7em;
   text-align: center;
-  color: oklch(var(--bc) / 0.65);
+  color: var(--beilu-fg-muted);
+  position: relative;
+}
+
+.file-tree-item.folder .tree-toggle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.42em;
+  height: 0.42em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translate(-65%, -50%) rotate(-45deg);
+  transition: transform var(--beilu-motion-fast) var(--beilu-ease-standard);
+}
+
+.file-tree-item.folder[aria-expanded="true"] .tree-toggle::before {
+  transform: translate(-50%, -65%) rotate(45deg);
 }
 
 .file-tree-item .tree-label {
@@ -49,8 +92,189 @@
 }
 
 .file-tree-children {
-  border-left: 1px solid oklch(var(--bc) / 0.08);
+  border-left: 1px solid var(--beilu-border-subtle);
   margin-left: 0.5rem;
+}
+
+.file-explorer-shell,
+.file-search-results-panel {
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+}
+
+.file-explorer-title,
+.file-search-hit-path {
+  color: var(--beilu-fg-accent);
+}
+
+.file-tree-sort {
+  min-height: 32px;
+  min-width: 32px;
+  color: var(--beilu-fg-secondary);
+}
+
+.file-root-breadcrumb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-height: 36px;
+  padding: 0.25rem;
+  border: 1px solid var(--beilu-border-subtle);
+  border-radius: var(--beilu-radius-control);
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+  font-family: var(--beilu-font-mono);
+  font-size: 0.75rem;
+}
+
+.file-root-crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.file-root-crumb,
+.file-root-copy {
+  min-width: 28px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--beilu-radius-control);
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+  cursor: pointer;
+}
+
+.file-root-crumb {
+  padding: 0.125rem 0.375rem;
+}
+
+.file-root-crumb:hover,
+.file-root-copy:hover {
+  background-color: var(--beilu-hover);
+  color: var(--beilu-fg-primary);
+}
+
+.file-root-crumb:active,
+.file-root-copy:active {
+  background-color: var(--beilu-active);
+  border-color: var(--beilu-action-accent);
+}
+
+.file-root-crumb:focus-visible,
+.file-root-copy:focus-visible,
+.file-tree-sort:focus-visible,
+.file-search-hit:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
+}
+
+.file-root-crumb.current {
+  color: var(--beilu-fg-primary);
+  border-bottom-color: var(--beilu-action-accent);
+}
+
+.file-root-separator {
+  color: var(--beilu-fg-muted);
+}
+
+.file-search-option,
+.file-tree-status,
+.file-search-hit-line,
+.file-search-hit-content,
+.file-search-summary,
+.file-search-progress {
+  color: var(--beilu-fg-muted);
+}
+
+.file-search-results-panel {
+  border: 1px solid var(--beilu-border-default);
+}
+
+.file-search-hit {
+  min-height: 36px;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  border-left: 3px solid transparent;
+  background-color: var(--beilu-surface-panel);
+  transition:
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-press) var(--beilu-ease-standard);
+}
+
+.file-search-hit:hover {
+  background-color: var(--beilu-hover);
+}
+
+.file-search-hit-icon {
+  flex: 0 0 auto;
+  color: var(--beilu-fg-accent);
+}
+
+.file-search-hit:active {
+  background-color: var(--beilu-active);
+  border-left-color: var(--beilu-action-accent);
+}
+
+.file-search-error {
+  color: var(--beilu-state-error);
+  font-size: 0.75rem;
+}
+
+.file-tree-size,
+.file-search-hit-line,
+.file-search-hit-content,
+.file-search-summary,
+.file-search-progress {
+  color: var(--beilu-fg-muted);
+  font-size: 0.75rem;
+}
+
+.file-tree-empty-state,
+.file-tree-loading-state {
+  color: var(--beilu-fg-muted);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+}
+
+.file-state-marker {
+  flex: 0 0 auto;
+}
+
+.file-state-dirty {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--beilu-state-warning);
+  box-shadow: 0 0 0 2px var(--beilu-surface-panel);
+}
+
+.file-state-dirty[hidden] {
+  display: none;
+}
+
+.file-state-badge {
+  flex: 0 0 auto;
+  min-width: 1.75rem;
+  padding: 0.0625rem 0.25rem;
+  border: 1px solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-control);
+  color: var(--beilu-fg-secondary);
+  background-color: var(--beilu-surface-raised);
+  font-family: var(--beilu-font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.file-state-binary {
+  border-color: var(--beilu-state-warning);
+}
+
+.file-state-readonly {
+  border-color: var(--beilu-border-strong);
 }
 
 /* left-content-files/memory 已不存在，滚动条规则已清除 */
@@ -93,17 +317,27 @@
    ============================================================ */
 
 .editor-toolbar {
-  background-color: oklch(var(--bc) / 0.03);
-  border-color: oklch(var(--bc) / 0.1);
+  background-color: var(--beilu-surface-raised);
+  border-color: var(--beilu-border-default);
 }
 
 .editor-toolbar .btn-ghost:hover {
-  background-color: var(--beilu-amber-12);
+  background-color: var(--beilu-hover);
+}
+
+.editor-toolbar .btn-ghost:active {
+  background-color: var(--beilu-active);
+}
+
+.editor-toolbar .btn-ghost:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 #file-editor-area,
 #memory-editor-area {
-  background-color: var(--beilu-shadow-8);
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
 }
 
 /* 编辑器查找/替换浮条 */
@@ -119,10 +353,11 @@
   flex-direction: column;
   gap: 4px;
   padding: 6px;
-  border-radius: 6px;
-  background: var(--beilu-bg-card);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
-  box-shadow: 0 4px 14px var(--beilu-shadow-35);
+  border-radius: var(--beilu-radius-control);
+  background: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  border: 1px solid var(--beilu-border-default);
+  box-shadow: var(--beilu-panel-shadow);
 }
 .ide-find-bar.hidden {
   display: none;
@@ -135,45 +370,56 @@
 .ide-find-input {
   width: 150px;
   padding: 2px 6px;
-  font-size: 0.8rem;
-  border-radius: 4px;
-  background: var(--color-base-100);
-  color: var(--color-base-content);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  border-radius: var(--beilu-radius-control);
+  background: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+  border: 1px solid var(--beilu-border-default);
   outline: none;
 }
 .ide-find-input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--beilu-border-focus);
+  box-shadow: 0 0 0 2px var(--beilu-focus);
+}
+.ide-find-input::placeholder {
+  color: var(--beilu-fg-secondary);
 }
 .ide-find-count {
   min-width: 38px;
   font-size: 0.7rem;
   text-align: center;
-  color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  color: var(--beilu-fg-muted);
 }
 .ide-find-btn {
   padding: 2px 6px;
   font-size: 0.75rem;
   line-height: 1;
   border-radius: 4px;
-  background: transparent;
-  color: var(--color-base-content);
+  background: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
   border: 1px solid transparent;
   cursor: pointer;
 }
 .ide-find-btn:hover {
-  background: color-mix(in oklch, var(--color-base-content) 12%, transparent);
+  background: var(--beilu-hover);
+}
+.ide-find-btn:active {
+  background: var(--beilu-active);
+}
+.ide-find-btn:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 .ide-find-btn-text {
-  border-color: color-mix(in oklch, var(--color-base-content) 20%, transparent);
+  border-color: var(--beilu-border-default);
 }
 
 /* 编辑器内容（当有文件打开时）— 仅适用于IDE文件编辑器 */
 .ide-container .editor-content {
-  font-family:
-    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
   padding: 1rem;
   white-space: pre-wrap;
   word-break: break-word;
@@ -181,8 +427,8 @@
 }
 
 .editor-content:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--beilu-amber-20);
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 /* 行号区 */
@@ -191,45 +437,58 @@
   left: 0;
   padding: 1rem 0.75rem 1rem 0.5rem;
   text-align: right;
-  color: oklch(var(--bc) / 0.55);
-  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
-  font-size: 0.75rem;
-  line-height: 1.6;
+  color: var(--beilu-fg-muted);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
   user-select: none;
-  border-right: 1px solid oklch(var(--bc) / 0.07);
-  background-color: var(--beilu-shadow-5);
+  border-right: 1px solid var(--beilu-border-subtle);
+  background-color: var(--beilu-surface-raised);
 }
 
 /* 文件编辑器 textarea + 行号同步 */
 #file-editor-textarea {
-  font-family:
-    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-  line-height: 1.4em;
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
   tab-size: 4;
-  background: transparent;
-  color: inherit;
+  background: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
+  caret-color: var(--beilu-focus);
+  border: 0;
 }
 
-#file-editor-textarea:focus {
-  box-shadow: none;
+#file-editor-textarea:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--beilu-border-focus);
   outline: none;
 }
 
+#file-editor-textarea::placeholder {
+  color: var(--beilu-fg-secondary);
+}
+
+#file-editor-textarea::selection {
+  background-color: var(--beilu-selection);
+  color: var(--beilu-fg-primary);
+}
+
 #editor-line-numbers {
-  font-family:
-    "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-  line-height: 1.4em;
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
   white-space: pre;
-  color: oklch(var(--bc) / 0.55);
+  color: var(--beilu-fg-muted);
+  background-color: var(--beilu-surface-raised);
+  border-right: 1px solid var(--beilu-border-subtle);
   min-width: 2.5em;
 }
 
 /* [0723 代码美化] 结构化行号 div：why 原 textContent 纯数字无法承载活动行/缩进线，
-   改 innerHTML 每行一个 .ide-ln div。关键=line-height 严格 1.4em 对齐 textarea(L207)，
+   改 innerHTML 每行一个 .ide-ln div。关键=line-height 使用共享等宽排版 token 对齐 textarea，
    零 margin/padding + block，防 innerHTML div 累积高度导致行号↔代码行错位(Regression)。 */
 .ide-ln {
   display: block;
-  line-height: 1.4em;
+  line-height: var(--beilu-line-height-mono);
   margin: 0;
   padding: 0;
   /* 缩进参考线：data-indent 层级 → 左侧内边距 + 竖线(box-shadow 不占位不破坏对齐) */
@@ -237,17 +496,183 @@
 }
 /* 缩进参考线：每级一条淡竖线，用 background 渐变模拟(不占高度，不影响行号对齐)。
    data-indent 0~6 级，每级约 0.6em 宽。挂在行号 gutter 右缘暗示代码缩进层级。 */
-.ide-ln[data-indent="1"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.12); }
-.ide-ln[data-indent="2"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.18); }
-.ide-ln[data-indent="3"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.24); }
-.ide-ln[data-indent="4"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.30); }
-.ide-ln[data-indent="5"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.36); }
-.ide-ln[data-indent="6"] { box-shadow: inset -0.5em 0 0 -0.45em oklch(var(--bc) / 0.42); }
-/* 活动行高亮：光标所在行号 div 加 .ide-ln-active(updateCursorPos 触发)，VSCode 同款琥珀色 */
+.ide-ln[data-indent]:not([data-indent="0"]) { box-shadow: inset -0.5em 0 0 -0.45em var(--beilu-border-subtle); }
+/* 活动行高亮：光标所在行号 div 加 .ide-ln-active(updateCursorPos 触发)，使用主题语义焦点色。 */
 .ide-ln-active {
-  color: var(--beilu-amber, #f59e0b) !important;
-  background: oklch(var(--bc) / 0.06);
+  color: var(--beilu-fg-accent);
+  background: var(--beilu-selection-inactive);
   font-weight: 600;
+}
+
+.file-editor-workspace,
+.file-preview-pane,
+.file-editor-binary {
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
+}
+
+.file-editor-empty {
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-secondary);
+  font-family: var(--beilu-font-ui);
+  font-size: var(--beilu-font-size-ui);
+}
+
+.file-editor-empty-content {
+  color: var(--beilu-fg-secondary);
+}
+
+.file-editor-empty-icon {
+  display: block;
+  color: var(--beilu-fg-muted);
+  font-size: 4rem;
+}
+
+.file-editor-empty-title {
+  color: var(--beilu-fg-secondary);
+  font-size: var(--beilu-font-size-ui);
+  font-weight: 600;
+}
+
+.file-editor-empty-help {
+  color: var(--beilu-fg-muted);
+  font-size: var(--beilu-font-size-ui);
+}
+
+.file-editor-modebar {
+  min-height: 36px;
+  border-bottom: 1px solid var(--beilu-border-default);
+  background-color: var(--beilu-surface-raised);
+}
+
+.file-editor-modebar .btn {
+  min-height: 32px;
+}
+
+.file-editor-modebar .btn:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
+}
+
+.file-editor-modebar .btn:active {
+  background-color: var(--beilu-active);
+}
+
+.file-editor-binary {
+  color: var(--beilu-fg-secondary);
+}
+
+.file-editor-binary-icon {
+  color: var(--beilu-fg-accent);
+  font-size: 2.5rem;
+}
+
+.file-editor-binary-title {
+  color: var(--beilu-fg-primary);
+  font-size: var(--beilu-font-size-ui);
+  font-weight: 600;
+}
+
+.file-editor-binary-name,
+.file-preview-unavailable {
+  color: var(--beilu-fg-secondary);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+}
+
+.file-md-preview-content {
+  color: var(--beilu-fg-primary);
+  font-family: var(--beilu-font-content);
+  font-size: var(--beilu-font-size-content);
+  line-height: var(--beilu-line-height-content);
+}
+
+.file-md-preview-code,
+.file-doc-preview {
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-surface-code);
+  font-family: var(--beilu-font-mono);
+  font-size: var(--beilu-font-size-mono);
+  line-height: var(--beilu-line-height-mono);
+}
+
+.file-preview-media {
+  object-fit: contain;
+}
+
+.file-preview-loading {
+  color: var(--beilu-fg-muted);
+}
+
+.file-editor-statusbar {
+  min-height: 28px;
+  border-top: 1px solid var(--beilu-border-default);
+  background-color: var(--beilu-surface-raised);
+  color: var(--beilu-fg-secondary);
+  font-family: var(--beilu-font-mono);
+  font-size: 0.75rem;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.file-editor-status-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.file-editor-status-meta {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.file-editor-status-meta::-webkit-scrollbar {
+  display: none;
+}
+
+.file-editor-state-badge {
+  flex: 0 0 auto;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--beilu-border-default);
+  border-radius: 999px;
+  color: var(--beilu-fg-secondary);
+  background-color: var(--beilu-surface-panel);
+}
+
+.file-editor-state-badge[data-state="dirty"],
+.file-editor-state-badge[data-state="saving"] {
+  color: var(--beilu-state-warning);
+  border-color: var(--beilu-state-warning);
+}
+
+.file-editor-state-badge[data-state="error"] {
+  color: var(--beilu-state-error);
+  border-color: var(--beilu-state-error);
+}
+
+.file-editor-state-badge[data-state="readonly"] {
+  color: var(--beilu-fg-secondary);
+  border-color: var(--beilu-border-strong);
+}
+
+@media (max-width: 720px) {
+  .ide-editor-breadcrumb-type {
+    display: none;
+  }
+
+  .file-editor-statusbar {
+    padding-inline: 0.375rem;
+  }
+
+  .file-editor-status-meta {
+    max-width: 62%;
+  }
+
+  #editor-char-count {
+    display: none;
+  }
 }
 
 /* 正则编辑器列表 */
@@ -716,4 +1141,3 @@
 .dt-danger-title {
   color: var(--beilu-error) !important;
 }
-

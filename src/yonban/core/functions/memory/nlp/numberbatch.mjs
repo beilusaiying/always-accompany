@@ -14,11 +14,12 @@ import fs from "node:fs";
 import readline from "node:readline";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getResDir } from "../p1/p1_resdir.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ZH_FILE = path.join(__dirname, "..", "numberbatch_zh.txt");
-const BIN_FILE = path.join(__dirname, "..", "numberbatch_zh.bin");
-const IDX_FILE = path.join(__dirname, "..", "numberbatch_zh_idx.json");
+const ZH_FILE = path.join(getResDir(), "numberbatch_zh.txt");
+const BIN_FILE = path.join(getResDir(), "numberbatch_zh.bin");
+const IDX_FILE = path.join(getResDir(), "numberbatch_zh_idx.json");
 
 const DIMS = 300;
 const ZH_RE = /^[\u4e00-\u9fff\u3400-\u4dbf]+$/;
@@ -100,8 +101,8 @@ function _loadBin() {
   // 加载英文Numberbatch(凛倾: "直接用英文,面向国际用户")
   // 真300维: numberbatch-en-19.08原库(516782×300)重建,与中文同一对齐空间。
   // 旧版numberbatch_en.json只有20维(被截断/降维),用Math.min补0到300导致中英不对齐 → 已废弃。
-  const EN_BIN = path.join(__dirname, "..", "numberbatch_en.bin");
-  const EN_IDX = path.join(__dirname, "..", "numberbatch_en_idx.json");
+  const EN_BIN = path.join(getResDir(), "numberbatch_en.bin");
+  const EN_IDX = path.join(getResDir(), "numberbatch_en_idx.json");
   if (fs.existsSync(EN_BIN) && fs.existsSync(EN_IDX)) {
     try {
       const enIdx = JSON.parse(fs.readFileSync(EN_IDX, "utf-8"));
@@ -124,8 +125,8 @@ function _loadBin() {
     console.warn("[numberbatch] en 300d bin/idx not found, English vectors skipped");
   }
   // C7(154号): 技术词补充向量merge（照EN merge先例，失败恒无副作用）
-  const TECH_BIN = path.join(__dirname, "..", "numberbatch_tech.bin");
-  const TECH_IDX = path.join(__dirname, "..", "numberbatch_tech_idx.json");
+  const TECH_BIN = path.join(getResDir(), "numberbatch_tech.bin");
+  const TECH_IDX = path.join(getResDir(), "numberbatch_tech_idx.json");
   if (fs.existsSync(TECH_BIN) && fs.existsSync(TECH_IDX)) {
     try {
       const techIdx = JSON.parse(fs.readFileSync(TECH_IDX, "utf-8"));

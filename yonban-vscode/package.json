@@ -121,6 +121,11 @@
           "default": 5,
           "description": "%config.maxFileReferences.description%"
         },
+        "yonban.fileReferencePromptTemplate": {
+          "type": "string",
+          "default": "\n\n[引用文件: {fileReferences} — 请用read_file读取这些文件]",
+          "description": "文件引用提示模板。{fileReferences} 会替换为按 yonban.maxFileReferences 截断并格式化的 @路径列表；不含占位符时，模板按原文追加；空字符串表示不追加任何文件引用提示。"
+        },
         "yonban.autoRevealOnEdit": {
           "type": "boolean",
           "default": true,

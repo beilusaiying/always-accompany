@@ -49,13 +49,40 @@ register("functions:rollback", {
 			return { ok: true, data: restoreSnapshot(payload?.projectRoot, context?.user ?? payload?.username, payload?.charName, payload?.snapshotId, payload?.memoryDir) };
 		},
 		async tableSnapshot(payload, context) {
-			return { ok: true, data: createTableSnapshot(context?.user ?? payload?.username, payload?.charName, payload?.tableData, payload?.meta) };
+			const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
+			const data = createTableSnapshot(
+				context?.user ?? payload?.username,
+				payload?.charName,
+				payload?.tableData,
+				payload?.chatId ?? meta.chatId,
+				payload?.messageIndex ?? meta.messageIndex ?? -1,
+				payload?.reason ?? meta.reason ?? "tableEdit前自动快照",
+				payload?.mode ?? meta.mode ?? "",
+				payload?.messageId ?? meta.messageId ?? "",
+			);
+			return { ok: data?.success === true, data, ...(data?.success === true ? {} : { error: data?.error || "表格快照创建失败" }) };
 		},
 		async listTableSnapshots(payload, context) {
 			return { ok: true, data: listTableSnapshots(context?.user ?? payload?.username, payload?.charName) };
 		},
 		async restoreTable(payload, context) {
-			return { ok: true, data: restoreTableSnapshot(context?.user ?? payload?.username, payload?.charName, payload?.snapshotId) };
+			const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
+			const expectedScope = payload?.expectedScope && typeof payload.expectedScope === "object"
+				? payload.expectedScope
+				: {
+					chatId: payload?.chatId ?? meta.chatId,
+					...(payload?.messageIndex !== undefined || meta.messageIndex !== undefined
+						? { messageIndex: payload?.messageIndex ?? meta.messageIndex }
+						: {}),
+					...(payload?.messageId || meta.messageId ? { messageId: payload?.messageId ?? meta.messageId } : {}),
+				};
+			const data = restoreTableSnapshot(
+				context?.user ?? payload?.username,
+				payload?.charName,
+				payload?.snapshotId,
+				expectedScope,
+			);
+			return { ok: data?.success === true, data, ...(data?.success === true ? {} : { error: data?.error || "表格快照恢复失败" }) };
 		},
 		async backupFile(payload, context) {
 			return { ok: true, data: backupBeforeWrite(context?.user ?? payload?.username, payload?.absPath, payload?.meta ?? {}) };

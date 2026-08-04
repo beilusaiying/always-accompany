@@ -270,22 +270,113 @@ export function asyncHandler(fn, routeName) {
 
 // ── 插件状态追踪 ─────────────────────────────────────
 
-const _pluginStatus = new Map();
+// 部件状态是用户运行时状态，不是进程级全局状态。
+// 第一层 username，第二层 partpath；任何读取都必须先给出明确 username。
+const _pluginStatusByUser = new Map();
+let _pluginOccurrenceCounter = 0;
+
+function assertPluginStatusIdentity(value, field) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`reportPluginStatus ${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function pluginStatusMapForUser(username, create = false) {
+  assertPluginStatusIdentity(username, "username");
+  let statuses = _pluginStatusByUser.get(username);
+  if (!statuses && create) {
+    statuses = new Map();
+    _pluginStatusByUser.set(username, statuses);
+  }
+  return statuses;
+}
+
+function createPluginOccurrenceId() {
+  return `part_${Date.now().toString(36)}_${(++_pluginOccurrenceCounter).toString(36)}`;
+}
+
+/**
+ * 返回某用户的部件状态快照。返回对象与内部 Map/entry 解耦，调用方不能篡改状态仓。
+ */
+export function getPluginStatusesForUser(username) {
+  const statuses = pluginStatusMapForUser(username);
+  if (!statuses) return {};
+  return Object.fromEntries(Array.from(statuses, ([partpath, entry]) => [partpath, { ...entry }]));
+}
+
+/**
+ * 返回当前 isolate 实际持有部件状态的用户列表。
+ *
+ * parts_loader 的跨 isolate 静止协议必须覆盖“只有 unload/error 状态、当前没有
+ * parts_set 实例”的 isolate；通过公开只读接口取得 owner，避免跨模块读取私有 Map。
+ */
+export function getPluginStatusUsernames() {
+  return [..._pluginStatusByUser.keys()];
+}
 
 /**
  * 上报插件运行状态（供 /api/v1/monitor/plugins 端点查询）。
  *
- * @param {string} name - 插件标识。
+ * @param {string} username - 状态 owner，必填。
+ * @param {string} partpath - 部件路径，必填。
  * @param {string} status - 状态字符串（如 'ok'/'error'/'loading'）。
- * @param {string} [detail] - 附加描述。
+ * @param {*} [detail] - 附加描述。
+ * @param {object} [opts]
+ * @param {string} [opts.occurrenceId] - 同一实际发生在多个状态/事件节点间显式复用的 ID。
+ * @returns {object} 已写入的 entry；即时事件必须复用其 occurrenceId。
  */
-export function reportPluginStatus(name, status, detail) {
-  _pluginStatus.set(name, {
-    name,
+export function reportPluginStatus(username, partpath, status, detail, opts = {}) {
+  // 旧签名 (partpath, status, detail) 的三个字符串在类型上无法与新签名前三参区分；
+  // 必须强制显式第四参（无 detail 也传 null/undefined），防止旧调用静默写入伪用户。
+  if (arguments.length < 4) {
+    throw new TypeError("reportPluginStatus requires (username, partpath, status, detail[, opts])");
+  }
+  assertPluginStatusIdentity(username, "username");
+  assertPluginStatusIdentity(partpath, "partpath");
+  assertPluginStatusIdentity(status, "status");
+  if (opts == null || typeof opts !== "object" || Array.isArray(opts)) {
+    throw new TypeError("reportPluginStatus opts must be an object");
+  }
+  if (opts.occurrenceId !== undefined) assertPluginStatusIdentity(opts.occurrenceId, "opts.occurrenceId");
+
+  const statuses = pluginStatusMapForUser(username, true);
+  const previous = statuses.get(partpath);
+  const entry = {
+    username,
+    name: partpath,
+    partpath,
     status,
-    detail: detail || null,
+    detail: detail ?? null,
     lastUpdate: new Date().toISOString(),
-  });
+    occurrenceId: opts.occurrenceId ?? createPluginOccurrenceId(),
+    revision: (previous?.revision || 0) + 1,
+  };
+  statuses.set(partpath, entry);
+  return { ...entry };
+}
+
+/** 用户删除/退出生命周期：清理其全部部件状态，防止 detail 被后续同名身份继承。 */
+export function clearPluginStatusesForUser(username) {
+  const statuses = pluginStatusMapForUser(username);
+  const cleared = statuses?.size || 0;
+  _pluginStatusByUser.delete(username);
+  return cleared;
+}
+
+/**
+ * 用户改名生命周期：状态是短命运行时观测，不搬迁旧 detail。
+ * 同时清旧名与新名槽位，由新 owner 后续真实加载重建，避免冲突时静默覆盖/混合。
+ */
+export function renamePluginStatusesForUser(oldUsername, newUsername) {
+  assertPluginStatusIdentity(oldUsername, "oldUsername");
+  assertPluginStatusIdentity(newUsername, "newUsername");
+  if (oldUsername === newUsername) return { clearedOld: 0, clearedTarget: 0 };
+  const clearedOld = _pluginStatusByUser.get(oldUsername)?.size || 0;
+  const clearedTarget = _pluginStatusByUser.get(newUsername)?.size || 0;
+  _pluginStatusByUser.delete(oldUsername);
+  _pluginStatusByUser.delete(newUsername);
+  return { clearedOld, clearedTarget };
 }
 
 // ── 日志轮转 ─────────────────────────────────────────
@@ -334,7 +425,7 @@ cleanOldLogs();
 export function registerMonitorRoutes(router) {
   registerEnvCheckRoutes(router, authenticate);
   // 聚合健康检查
-  router.get("/api/v1/monitor/health", authenticate, (_req, res) => {
+  router.get("/api/v1/monitor/health", authenticate, (req, res) => {
     const memUsage = process.memoryUsage();
     const recentErrors = _errorBuffer.filter(
       (e) => e.level === "error" && Date.now() - new Date(e.timestamp).getTime() < 300000,
@@ -353,7 +444,7 @@ export function registerMonitorRoutes(router) {
         last5min: recentErrors.length,
         totalBuffered: _errorBuffer.length,
       },
-      plugins: Object.fromEntries(_pluginStatus),
+      plugins: getPluginStatusesForUser(req.user.username),
       logDir: LOG_DIR,
     });
   });
@@ -404,7 +495,7 @@ export function registerMonitorRoutes(router) {
   });
 
   // 运行时统计
-  router.get("/api/v1/monitor/stats", authenticate, (_req, res) => {
+  router.get("/api/v1/monitor/stats", authenticate, (req, res) => {
     const memUsage = process.memoryUsage();
     const routeEntries = [];
     for (const [route, stat] of _routeStats) {
@@ -433,18 +524,17 @@ export function registerMonitorRoutes(router) {
         warnCount: _errorBuffer.filter((e) => e.level === "warn").length,
       },
       routes: routeEntries,
-      plugins: Object.fromEntries(_pluginStatus),
+      plugins: getPluginStatusesForUser(req.user.username),
     });
   });
 
-  // 插件状态（匿名可达：该端点只返回插件名+状态文本，无敏感数据。
-  //   根因修复：此前挂 authenticate → 崩溃波及认证链时返回 401 →
-  //   前端 pollPartLoadErrors 静默 return → 监控面板零信号。
-  //   改为 rateLimit 防灌，与 errors/report 同策略）
-  router.get("/api/v1/monitor/plugins", rateLimit({ maxRequests: 60, windowMs: "1m" }), (_req, res) => {
+  // 插件状态可含错误 detail，必须经认证并按 req.user.username 隔离。
+  // 进程级/跨用户聚合不复用此路由；如未来需要，必须另设明确 owner 授权端点。
+  router.get("/api/v1/monitor/plugins", authenticate, rateLimit({ maxRequests: 60, windowMs: "1m" }), (req, res) => {
+    const plugins = getPluginStatusesForUser(req.user.username);
     res.json({
-      plugins: Object.fromEntries(_pluginStatus),
-      count: _pluginStatus.size,
+      plugins,
+      count: Object.keys(plugins).length,
     });
   });
 

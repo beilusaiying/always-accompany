@@ -24,7 +24,7 @@ function resolveResource(filename) {
     path.join(__sdp_dirname, "resources", filename),
   ];
   for (const p of candidates) { if (fs.existsSync(p)) return p; }
-  return _resdirFind(filename); // env P1_RESOURCE_DIR > memory/p1_res > 旧运行位
+  return _resdirFind(filename); // 本次启动的唯一 P1_RESOURCE_DIR
 }
 
 // v37: vocab.mjs重构后不再导出_getBccDict等，内联stub

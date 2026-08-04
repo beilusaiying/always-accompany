@@ -111,6 +111,10 @@ export function getActivePresetName(username, chatId, mode) {
  * @param {string} [chatId] - 窗口/对话 ID
  */
 export async function setActivePresetName(username, name, chatId, mode) {
+  if (!chatId) {
+    console.warn(`[presetBridge] setActivePresetName("${name}") 无 chatId,全局写已废除(没有全局),跳过`);
+    return false;
+  }
   const p = _configPath(username);
   const _writeTo = (obj) => {
     if (chatId) {
@@ -119,9 +123,6 @@ export async function setActivePresetName(username, name, chatId, mode) {
       // 裸键=跨模式共享槽，双写会让任一模式的切换污染同 cid 全部模式的回退值。
       if (mode) obj.active_preset_map[chatId + ":" + mode] = name;
       else obj.active_preset_map[chatId] = name;
-    } else {
-      // [0725 凛倾「没有全局」] 无 chatId 写 active_preset 摘除(字段退役)——降级桥只服务线级写
-      console.warn(`[presetBridge] setActivePresetName("${name}") 无 chatId,全局写已废除(没有全局),跳过`);
     }
   };
   // [缺口⑦ 2026-07-16] 盘段 load→mutate→save 进 withFileLock（键=config.json，与主模块 saveConfigToDisk/
@@ -142,6 +143,7 @@ export async function setActivePresetName(username, name, chatId, mode) {
       st.globalCfgCache = { mtime: 0, data: null };
     }
   } catch (e) { console.warn(`[presetBridge] setActivePresetName 内存态同写失败（盘写已成；主模块 saveConfigToDisk 已不覆盖 map——0724 激活态漏斗收口后无回滚风险，仅主模块内存镜像暂旧，下次漏斗写会镜像盘归位）:`, e?.message || e); }
+  return getActivePresetName(username, chatId, mode) === name;
 }
 
 /** 获取某用户预设注册表 { [name]: { file, source, description, tags, ... } } */
@@ -208,13 +210,103 @@ function _sanitize(name) {
     .slice(0, 100);
 }
 
+// [0804 根因修·builtin 保留名] 官方 builtin 名单（静态发布 registry，进程级缓存一次）。
+//   E 现场根因：memory 侧在 beilu-preset 首访播种之前，用 registry-only 的 hasPreset 判缺 →
+//   createPreset 写出与 builtin 同文件名的骨架 → seedBuiltinsForUser 见「文件已存在」跳过 →
+//   官方完整预设永远进不了该用户池（21 个 11-entry 空壳抢占案）。守卫收口在 createPreset 单点：
+//   任何调用方（子模式补建/flow group/AI 标签）都不得用 builtin 保留名占位。
+let _builtinNamesCache = null;
+function _isBuiltinPresetName(name) {
+  if (!_builtinNamesCache) {
+    try {
+      const reg = loadJsonFileIfExists(path.join(BEILU_PRESET_PLUGIN_DIR, "registry.json"), { presets: {} });
+      _builtinNamesCache = new Set(Object.entries(reg.presets || {}).filter(([, e]) => e?.source === "builtin").map(([n]) => n));
+    } catch { _builtinNamesCache = new Set(); }
+  }
+  return _builtinNamesCache.has(name);
+}
+
+/**
+ * [0804] 触发 beilu-preset owner 对该用户 store 的首访（惰性播种 builtin 的公用机制入口）。
+ * 消费方：_ensureSubModePresetsFor（子模式引用 builtin 预设但用户池尚未播种时，先播官方内容再复查，
+ * 替代原「造 11-entry 骨架」的第二内容生产者）。GetData 首访 → getStore → loadConfigFromDisk →
+ * seedBuiltinsForUser（官方完整内容 + registry source=builtin）。
+ * @param {string} username
+ * @returns {Promise<boolean>} true=owner 已触达（播种由其幂等保证）
+ */
+export async function ensurePresetStoreLoaded(username) {
+  try {
+    const mainUrl = pathToFileURL(path.join(BEILU_PRESET_PLUGIN_DIR, "main.mjs")).href;
+    const mod = await import(mainUrl);
+    const exp = mod?.default || mod;
+    const getData = exp?.interfaces?.config?.GetData;
+    if (getData) {
+      await getData(undefined, username);
+      return true;
+    }
+  } catch (e) {
+    console.warn(`[presetBridge] ensurePresetStoreLoaded 失败 (user="${username}"):`, e?.message || e);
+  }
+  return false;
+}
+
+/**
+ * [D2 Owner API 薄适配] 确保单个 builtin 预设已为该用户播种，返回结构化 outcome。
+ * 动态 import beilu-preset owner（main.mjs）的 named export ensureBuiltinForUser——
+ * presetBridge 只做薄适配，不在 memory 域复制播种/写文件逻辑（D2 §「Owner 放 preset/main.mjs」）。
+ * 消费方：D3 子模式激活引用 builtin 预设时。
+ * @param {string} username
+ * @param {{name?:string}} opts
+ * @returns {Promise<object>} owner PresetOutcome；owner 不可达时 {status:"error"}
+ */
+export async function ensureBuiltinForUser(username, opts) {
+  try {
+    // [D3 批2 断链修] 原指 BEILU_PRESET_PLUGIN_DIR/main.mjs——那是 re-export 薄壳（仅 `export {default}`
+    //   =pluginExport 对象，无 named export），named owner 函数拿不到 → 恒 owner-unreachable 死路。
+    //   owner 实现体在 yonban prompt/preset/main.mjs（T3d 迁移后单源），改指实现模块；保持动态 import
+    //   （memory↔preset 静态环规避，与本文件其余适配同范式）。
+    const mod = await import("../../prompt/preset/main.mjs");
+    const fn = mod?.ensureBuiltinForUser || mod?.default?.ensureBuiltinForUser;
+    if (typeof fn === "function") return await fn(username, opts);
+    console.warn(`[presetBridge] ensureBuiltinForUser: owner 未导出该函数`);
+  } catch (e) {
+    console.warn(`[presetBridge] ensureBuiltinForUser 失败 (user="${username}", name="${opts?.name}"):`, e?.message || e);
+  }
+  return { status: "error", reason: "owner-unreachable", name: opts?.name };
+}
+
+/**
+ * [D2 Owner API 薄适配] 子模式/流程引用某预设的只读 resolve（不造骨架）。
+ * builtin→触发官方播种；非 builtin 缺失→rejected(E_PRESET_REFERENCE_MISSING)。
+ * @param {string} username
+ * @param {{name?:string, reference?:string}} opts
+ * @returns {Promise<object>} owner PresetOutcome
+ */
+export async function ensurePresetReference(username, opts) {
+  try {
+    // [D3 批2 断链修] 同 ensureBuiltinForUser：插件壳无 named export，改指 yonban 实现模块（动态 import 防环）
+    const mod = await import("../../prompt/preset/main.mjs");
+    const fn = mod?.ensurePresetReference || mod?.default?.ensurePresetReference;
+    if (typeof fn === "function") return await fn(username, opts);
+    console.warn(`[presetBridge] ensurePresetReference: owner 未导出该函数`);
+  } catch (e) {
+    console.warn(`[presetBridge] ensurePresetReference 失败 (user="${username}", name="${opts?.name}"):`, e?.message || e);
+  }
+  return { status: "error", reason: "owner-unreachable", name: opts?.name };
+}
+
 /**
  * 为某用户创建新预设（直写文件 + 更新其 registry）
  * @param {string} username
- * @returns {boolean} true=创建成功, false=已存在
+ * @returns {boolean} true=创建成功, false=已存在/保留名被拒
  */
 export function createPreset(username, name, presetJson, description = "") {
   if (hasPreset(username, name)) return false;
+  if (_isBuiltinPresetName(name)) {
+    // builtin 保留名且该用户尚未播种 → 拒绝第二生产者占位；正确路径=ensurePresetStoreLoaded 触发官方播种
+    console.warn(`[presetBridge] createPreset 拒绝：「${name}」是官方 builtin 保留名（该用户尚未播种），不允许以骨架/自定义内容抢占；请先触发播种或换名`);
+    return false;
+  }
 
   const fileName = _sanitize(name) + ".json";
   const presetsDir = _userPresetDir(username);
@@ -267,11 +359,12 @@ export async function switchPresetViaAPI(name, arg, chatId, mode) {
       // R1（2026-07-08 断链审计病根二④）：补传 mode+charName——原不传 mode 使隔离强切只写裸键
       //   active_preset_map[cid]，与手动切换的精确键 [cid:mode] 错位（读侧精确键优先，裸键被强切持续占领）。
       //   mode=调用方生成链已解析的权威 _activeMode；charName 供 switch_preset 缺省 mode 时自解析兜底。
-      await setData(
+      const result = await setData(
         { switch_preset: { name, ...(chatId ? { chatid: chatId } : {}), ...(mode ? { mode } : {}), ...(arg?.char_id ? { charName: arg.char_id } : {}) } },
         arg,
       );
-      return true;
+      if (result?.success === true && result?.switch_preset_applied === true) return true;
+      console.warn(`[presetBridge] switchPresetViaAPI 未获成功回执 (preset="${name}"):`, result?.error || result);
     }
   } catch (e) {
     // 留痕不吞（2026-07-12 F1）：此处失败=降级触发的唯一原因,静默会让"预设没跟着子模式切"不可诊断
@@ -299,13 +392,16 @@ export async function clearPresetOverrideViaAPI(arg, chatId, mode) {
     const exp = mod?.default || mod;
     const setData = exp?.interfaces?.config?.SetData || exp?.interfaces?.chat?.SetData;
     if (setData) {
-      await setData(
+      const result = await setData(
         { switch_preset: { clear: true, chatid: chatId, ...(mode ? { mode } : {}) } },
         arg,
       );
-      return true;
+      if (result?.success === true && result?.switch_preset_applied === true && result?.operation === "clear") return true;
+      console.warn(`[presetBridge] clearPresetOverrideViaAPI 未获成功回执 (chatId="${chatId}"):`, result?.error || result);
     }
-  } catch { /* 调用方自行降级 */ }
+  } catch (e) {
+    console.warn(`[presetBridge] clearPresetOverrideViaAPI 失败 (chatId="${chatId}"):`, e?.message || e);
+  }
   return false;
 }
 
@@ -332,7 +428,7 @@ export async function applySubModePresetDefault(username, subMode, chatId) {
     // （读侧 resolveActivePresetName 按 mtime 读盘,写后即生效;内存态同写防回滚——见 setActivePresetName）。
     // 已知半态:该场景正则 resync/广播不可达,warn 已留痕。
     console.warn(`[presetBridge] switch_preset 通道异常,走降级直写 (subMode="${subMode?.id}", preset="${name}")`);
-    await setActivePresetName(username, name, chatId || undefined, mode);
+    return setActivePresetName(username, name, chatId || undefined, mode);
   }
   return true;
 }

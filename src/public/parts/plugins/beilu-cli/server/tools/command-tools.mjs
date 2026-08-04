@@ -72,39 +72,98 @@ const SESSION_IDLE_TTL_MS = 30 * 60 * 1000;
 /** @type {Map<string, { proc: import("node:child_process").ChildProcess|null, cwd: string, busy: boolean, lastUsedAt: number }>} */
 const _shellSessions = new Map();
 let _sessionReaper = null;
+const TERMINATION_FAILURE_LEDGER_MAX = 100;
+const _terminationFailureLedger = [];
+const _pendingShellDisposals = new Set();
+let _terminationFailureOverflow = 0;
 
-function _killProc(proc) {
-  if (!proc || proc.exitCode !== null) return;
-  const isWin = process.platform === "win32";
-  if (isWin && proc.pid) {
-    cp.exec(`taskkill /PID ${proc.pid} /T /F`, { timeout: TASKKILL_TIMEOUT_MS }, () => {});
-  } else {
-    try { proc.kill("SIGKILL"); } catch {}
+function _recordShellTerminationFailures(results, key) {
+  for (const result of results) {
+    if (result?.stopped !== false) continue;
+    _terminationFailureLedger.push({
+      source: "shell_dispose",
+      key: typeof key === "string" && key ? key : null,
+      occurredAt: new Date().toISOString(),
+      ...result,
+    });
+  }
+  if (_terminationFailureLedger.length > TERMINATION_FAILURE_LEDGER_MAX) {
+    const overflow = _terminationFailureLedger.length - TERMINATION_FAILURE_LEDGER_MAX;
+    _terminationFailureLedger.splice(0, overflow);
+    _terminationFailureOverflow += overflow;
   }
 }
 
+export function getShellTerminationFailures() {
+  return [
+    ...(_terminationFailureOverflow ? [{
+      source: "shell_dispose_ledger_overflow",
+      stopped: false,
+      error: `${_terminationFailureOverflow} earlier termination failures exceeded ledger detail capacity`,
+      count: _terminationFailureOverflow,
+    }] : []),
+    ..._terminationFailureLedger.map((entry) => ({ ...entry })),
+  ];
+}
+
+export async function consumeShellTerminationFailures() {
+  while (_pendingShellDisposals.size) {
+    await Promise.allSettled([..._pendingShellDisposals]);
+  }
+  const failures = getShellTerminationFailures();
+  _terminationFailureLedger.length = 0;
+  _terminationFailureOverflow = 0;
+  return failures;
+}
+
 /** 等待进程树终止动作完成；超时/失败也结构化返回，不能把“已发 kill”伪报成“已终止”。 */
-function _killProcAndWait(proc) {
-  if (!proc || proc.exitCode !== null) return Promise.resolve({ attempted: false, stopped: true, error: null });
+function _waitForProcessClose(proc, timeoutMs) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let timer = null;
+    const finish = (closed) => {
+      proc.off("close", onClose);
+      if (timer) clearTimeout(timer);
+      resolve(closed);
+    };
+    const onClose = () => finish(true);
+    proc.once("close", onClose);
+    timer = setTimeout(() => finish(false), timeoutMs);
+    timer.unref?.();
+  });
+}
+
+async function _killProcAndWait(proc) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return { attempted: false, stopped: true, error: null };
   if (process.platform === "win32" && proc.pid) {
-    return new Promise((resolve) => {
+    const closePromise = _waitForProcessClose(proc, TASKKILL_TIMEOUT_MS);
+    const taskkillError = await new Promise((resolve) => {
       cp.execFile(
         "taskkill.exe",
         ["/PID", String(proc.pid), "/T", "/F"],
         { timeout: TASKKILL_TIMEOUT_MS, windowsHide: true },
-        (error) => resolve({
-          attempted: true,
-          stopped: !error,
-          error: error ? String(error.message || error) : null,
-        }),
+        (error) => resolve(error || null),
       );
     });
+    const closed = await closePromise;
+    return {
+      attempted: true,
+      stopped: !taskkillError && closed,
+      error: taskkillError
+        ? String(taskkillError.message || taskkillError)
+        : (closed ? null : "process_close_timeout_after_taskkill"),
+    };
   }
   try {
     proc.kill("SIGKILL");
-    return Promise.resolve({ attempted: true, stopped: true, error: null });
+    const closed = await _waitForProcessClose(proc, TASKKILL_TIMEOUT_MS);
+    return {
+      attempted: true,
+      stopped: closed,
+      error: closed ? null : "process_close_timeout_after_sigkill",
+    };
   } catch (error) {
-    return Promise.resolve({ attempted: true, stopped: false, error: String(error?.message || error) });
+    return { attempted: true, stopped: false, error: String(error?.message || error) };
   }
 }
 
@@ -119,17 +178,52 @@ async function _removeAndKillShellSession(key, proc) {
   return _killProcAndWait(proc);
 }
 
-/** 销毁长驻 shell 会话：带 key 只销毁该会话；不带 key 销毁全池（dispose / 切 workspace 调用方语义不变） */
-export function disposeShellSession(key) {
+/**
+ * 销毁长驻 shell 会话并等待进程树终止。
+ * 带 key 只销毁该会话；不带 key 销毁全池（dispose / 切 workspace 调用方语义不变）。
+ * 先同步从池里摘除，所以即使调用方不 await，新命令也不会复用正在退出的 shell。
+ */
+async function _disposeShellSession(key) {
+  const targets = [];
   if (typeof key === "string" && key) {
     const entry = _shellSessions.get(key);
     _shellSessions.delete(key);
-    if (entry) { entry.busy = false; _killProc(entry.proc); entry.proc = null; }
+    if (entry) {
+      entry.busy = false;
+      if (entry.proc) targets.push(entry.proc);
+      entry.proc = null;
+    }
   } else {
-    for (const entry of _shellSessions.values()) { entry.busy = false; _killProc(entry.proc); entry.proc = null; }
+    for (const entry of _shellSessions.values()) {
+      entry.busy = false;
+      if (entry.proc) targets.push(entry.proc);
+      entry.proc = null;
+    }
     _shellSessions.clear();
   }
   if (_shellSessions.size === 0 && _sessionReaper) { clearInterval(_sessionReaper); _sessionReaper = null; }
+  const results = await Promise.all(targets.map((proc) => _killProcAndWait(proc)));
+  _recordShellTerminationFailures(results, key);
+  return results;
+}
+
+export function disposeShellSession(key) {
+  const operation = _disposeShellSession(key);
+  _pendingShellDisposals.add(operation);
+  void operation.then(
+    () => _pendingShellDisposals.delete(operation),
+    () => _pendingShellDisposals.delete(operation),
+  );
+  return operation;
+}
+
+function _disposeShellSessionDetached(key, reason) {
+  void disposeShellSession(key).then((results) => {
+    const failures = results.filter((result) => result.stopped === false);
+    if (failures.length) wbD("cmd", "session:disposeFail", false, reason, { key, failures });
+  }).catch((error) => {
+    wbD("cmd", "session:disposeException", false, error?.message || String(error), { key, reason });
+  });
 }
 
 /** 闲置回收表：超 TTL 未用的空闲会话销毁；池空即停表（unref 不阻进程退出） */
@@ -138,7 +232,7 @@ function _ensureSessionReaper() {
   _sessionReaper = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of [..._shellSessions]) {
-      if (!entry.busy && now - entry.lastUsedAt > SESSION_IDLE_TTL_MS) { wbT("cmd", "session:reap", { key, idleMin: Math.round((now - entry.lastUsedAt) / 60000) }); disposeShellSession(key); }
+      if (!entry.busy && now - entry.lastUsedAt > SESSION_IDLE_TTL_MS) { wbT("cmd", "session:reap", { key, idleMin: Math.round((now - entry.lastUsedAt) / 60000) }); _disposeShellSessionDetached(key, "session_idle_reap"); }
     }
     if (_shellSessions.size === 0 && _sessionReaper) { clearInterval(_sessionReaper); _sessionReaper = null; }
   }, 60 * 1000);
@@ -460,7 +554,7 @@ function _runInSession(
     for (const [k, e] of _shellSessions) {
       if (!e.busy && e.lastUsedAt < _oldestAt) { _oldestAt = e.lastUsedAt; _oldestKey = k; }
     }
-    if (_oldestKey != null) { wbT("cmd", "session:evict", { evicted: _oldestKey, for: key, pool: _shellSessions.size }); disposeShellSession(_oldestKey); }
+    if (_oldestKey != null) { wbT("cmd", "session:evict", { evicted: _oldestKey, for: key, pool: _shellSessions.size }); _disposeShellSessionDetached(_oldestKey, "session_pool_evict"); }
     else { wbD("cmd", "session:poolFull", false, `${SESSION_POOL_MAX} 条全在执行中`, { for: key }); return Promise.resolve({ command, success: false, error: `持久会话池已满（${SESSION_POOL_MAX} 条全在执行中），请稍后重试或改用非 session 执行`, busy: true }); }
   }
 
@@ -492,7 +586,7 @@ function _runInSession(
 
   const proc = entry.proc;
   if (!proc || !proc.stdin || !proc.stdout) {
-    disposeShellSession(key);
+    _disposeShellSessionDetached(key, "session_stream_unavailable");
     return Promise.resolve({
       command,
       success: false,

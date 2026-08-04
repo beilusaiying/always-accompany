@@ -57,6 +57,16 @@ export function EndJob(username, partpath, uid) {
  * @param {string} username - 应重新启动其作业的用户的用户名。
  * @returns {Promise<number>} 一个解析为已重新启动作业数量的承诺。
  */
+// [0804 根因修·B4] 单个 job 的启动 await 上限。ReStartJob 的实现体在各平台 bot 插件里，
+//   对永久平台错误可能 while(true) 无期限重试且从不 resolve promise；startJobsOfUser 又被
+//   ReStartJobs → server.mjs:288 `await ReStartJobs()` 串在启动链上 → 单个 bot 卡住 = 整个
+//   服务器启动无限等待（03 §九.5 真启动永久等待风险）。给每个 job 的 restart 加 deadline：
+//   到期不再 await（转后台继续重试，不阻塞 boot；不 cancel——bot 内部循环归 B5 backlog 单独治）。
+const JOB_RESTART_STARTUP_DEADLINE_MS = Math.max(
+	1000,
+	parseInt(process.env.BEILU_JOB_RESTART_STARTUP_DEADLINE_MS, 10) || 30000,
+)
+
 async function startJobsOfUser(username) {
 	const jobs = getUserByUsername(username).jobs ?? {}
 	const promises = []
@@ -65,7 +75,20 @@ async function startJobsOfUser(username) {
 			promises.push((async () => {
 				console.logI18n('beiluConsole.jobs.restartingJob', { username, partpath, uid })
 				const part = await loadPart(username, partpath)
-				await part.interfaces.jobs.ReStartJob(username, jobs[partpath][uid] ?? uid)
+				// 有界 await：restart 与 deadline 竞速。超时 → 不再阻塞启动，restart 在后台继续
+				//   （其内部重试循环不受影响），并留可见告警，不静默吞。
+				const _restart = Promise.resolve(part.interfaces.jobs.ReStartJob(username, jobs[partpath][uid] ?? uid))
+				let _timer
+				const _deadline = new Promise((resolve) => {
+					_timer = setTimeout(() => resolve('__job_restart_deadline__'), JOB_RESTART_STARTUP_DEADLINE_MS)
+				})
+				const _r = await Promise.race([_restart.then(() => '__done__'), _deadline])
+				clearTimeout(_timer)
+				if (_r === '__job_restart_deadline__') {
+					console.warn(`[startup] 作业重启超过 ${JOB_RESTART_STARTUP_DEADLINE_MS}ms 未完成，转后台继续（不阻塞启动）: ${username}/${partpath}/${uid}`)
+					// 后台继续，吞其后续 reject（已脱离启动 await，避免 unhandledRejection）
+					_restart.catch(console.error)
+				}
 			})().catch(console.error))
 	await Promise.all(promises)
 	return promises.length

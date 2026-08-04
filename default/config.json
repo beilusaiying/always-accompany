@@ -32,6 +32,23 @@
 		"keyFile": "./data/ssl/key.pem",
 		"certFile": "./data/ssl/cert.pem"
 	},
+	"parts_loader_policy": {
+		"backoff_base_ms": 500,
+		"backoff_max_ms": 30000,
+		"transient_max_attempts": 4,
+		"circuit_open_ms": 300000,
+		"owner_lease_ms": 180000,
+		"isolate_stale_ms": 10000,
+		"user_quiesce_timeout_ms": 30000,
+		"lifecycle_deadlines_ms": {
+			"Init": 60000,
+			"Load": 60000,
+			"SetData": 60000,
+			"afterInit": 60000,
+			"afterLoad": 60000,
+			"Unload": 30000
+		}
+	},
 	"data": {
 		"users": {}
 	}

@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 import { on_shutdown } from "npm:on-shutdown";
 
-import { loadJsonFileIfExists, saveJsonFile } from "../scripts/json_loader.mjs";
+import { loadJsonFile, saveJsonFile } from "../scripts/json_loader.mjs";
 
 import { getUserDictionary } from "../yonban/core/functions/security/auth.mjs";
 import { events } from "./events.mjs";
@@ -36,6 +36,28 @@ function _hasPlaintextBotSecret(obj) {
 }
 
 const userDataSet = {};
+
+function _loadSettingsFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    return loadJsonFile(filePath);
+  } catch (cause) {
+    const error = new Error(`无法读取设置文件: ${filePath}`, { cause });
+    error.code = "E_SETTINGS_READ_FAILED";
+    error.filePath = filePath;
+    throw error;
+  }
+}
+
+function _requireLoadedData(store, keys, filePath) {
+  let current = store;
+  for (const key of keys) current = current?.[key];
+  if (current !== undefined) return current;
+  const error = new Error(`拒绝保存尚未成功加载的设置文件: ${filePath}`);
+  error.code = "E_SETTINGS_NOT_LOADED";
+  error.filePath = filePath;
+  throw error;
+}
 /**
  * 从 JSON 文件加载用户数据。
  * @param {string} username - 用户的用户名。
@@ -44,14 +66,12 @@ const userDataSet = {};
  */
 export function loadData(username, dataname) {
   userDataSet[username] ??= {};
-  try {
-    return (userDataSet[username][dataname] ??= loadJsonFileIfExists(
-      getUserDictionary(username) + "/settings/" + dataname + ".json",
-    ));
-  } catch (error) {
-    console.error(error);
-    return (userDataSet[username][dataname] = {});
-  }
+  const cached = userDataSet[username][dataname];
+  if (cached !== undefined) return cached;
+  const filePath = getUserDictionary(username) + "/settings/" + dataname + ".json";
+  const data = _loadSettingsFile(filePath);
+  userDataSet[username][dataname] = data;
+  return data;
 }
 /**
  * 将用户数据保存到 JSON 文件。
@@ -60,11 +80,11 @@ export function loadData(username, dataname) {
  * @returns {void}
  */
 export function saveData(username, dataname) {
-  fs.mkdirSync(getUserDictionary(username) + "/settings", { recursive: true });
-  saveJsonFile(
-    getUserDictionary(username) + "/settings/" + dataname + ".json",
-    userDataSet[username][dataname],
-  );
+  const settingsDir = getUserDictionary(username) + "/settings";
+  const filePath = settingsDir + "/" + dataname + ".json";
+  const data = _requireLoadedData(userDataSet, [username, dataname], filePath);
+  fs.mkdirSync(settingsDir, { recursive: true });
+  saveJsonFile(filePath, data);
 }
 on_shutdown(() => {
   for (const username in userDataSet)
@@ -88,27 +108,23 @@ export function loadShellData(username, shellname, dataname) {
   userShellDataSet[username][shellname] ??= {};
   const cached = userShellDataSet[username][shellname][dataname];
   if (cached !== undefined && cached !== null) return cached;
-  try {
-    const filePath =
-      getUserDictionary(username) + "/shells/" + shellname + "/" + dataname + ".json";
-    let data = loadJsonFileIfExists(filePath);
-    // N17: bot_configs 透明解密——磁盘密文→内存明文(供 client.login);明文值 passthrough(迁移容错)。
-    if (dataname === "bot_configs" && data && typeof data === "object") {
-      const hadPlaintext = _hasPlaintextBotSecret(data);
-      data = _transformBotSecrets(data, decryptSecret);
-      userShellDataSet[username][shellname][dataname] = data;
-      // 首次发现明文密钥→立即重写为密文(主动迁移);内存已是明文,saveShellData 落盘时加密。
-      if (hadPlaintext) {
-        try { saveShellData(username, shellname, dataname); }
-        catch (e) { console.error("[setting_loader] bot_configs 加密迁移失败:", e?.message); }
-      }
-      return data;
+  const filePath =
+    getUserDictionary(username) + "/shells/" + shellname + "/" + dataname + ".json";
+  let data = _loadSettingsFile(filePath);
+  // N17: bot_configs 透明解密——磁盘密文→内存明文(供 client.login);明文值 passthrough(迁移容错)。
+  if (dataname === "bot_configs" && data && typeof data === "object") {
+    const hadPlaintext = _hasPlaintextBotSecret(data);
+    data = _transformBotSecrets(data, decryptSecret);
+    userShellDataSet[username][shellname][dataname] = data;
+    // 首次发现明文密钥→立即重写为密文(主动迁移);内存已是明文,saveShellData 落盘时加密。
+    if (hadPlaintext) {
+      try { saveShellData(username, shellname, dataname); }
+      catch (e) { console.error("[setting_loader] bot_configs 加密迁移失败:", e?.message); }
     }
-    return (userShellDataSet[username][shellname][dataname] = data);
-  } catch (error) {
-    console.error(error);
-    return (userShellDataSet[username][shellname][dataname] = {});
+    return data;
   }
+  userShellDataSet[username][shellname][dataname] = data;
+  return data;
 }
 /**
  * 将特定于 shell 的用户数据保存到 JSON 文件。
@@ -118,22 +134,16 @@ export function loadShellData(username, shellname, dataname) {
  * @returns {void}
  */
 export function saveShellData(username, shellname, dataname) {
-  fs.mkdirSync(getUserDictionary(username) + "/shells/" + shellname, {
+  const shellDir = getUserDictionary(username) + "/shells/" + shellname;
+  const filePath = shellDir + "/" + dataname + ".json";
+  let data = _requireLoadedData(userShellDataSet, [username, shellname, dataname], filePath);
+  fs.mkdirSync(shellDir, {
     recursive: true,
   });
-  let data = userShellDataSet[username][shellname][dataname];
   // N17: bot_configs 落盘前加密(深克隆,不 mutate 内存明文缓存——bot.mjs 仍读明文 token)。
   if (dataname === "bot_configs" && data && typeof data === "object")
     data = _transformBotSecrets(data, encryptSecret);
-  saveJsonFile(
-    getUserDictionary(username) +
-      "/shells/" +
-      shellname +
-      "/" +
-      dataname +
-      ".json",
-    data,
-  );
+  saveJsonFile(filePath, data);
 }
 on_shutdown(() => {
   for (const username in userShellDataSet)

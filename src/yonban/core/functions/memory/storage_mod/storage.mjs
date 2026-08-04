@@ -25,7 +25,11 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  */
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path, { dirname } from "node:path";
+import process from "node:process";
+import { Buffer } from "node:buffer";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs"; // 0716 收口：原子写单源（renameSyncWithRetry 死 import 已删） // T3e: memory/storage_mod/ 新位到 src/ 5 级(旧 lib/storage_mod/ 为 6 级)
 import { bakCorruptFile, readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // [0716 断电安全] 损坏备份单源；严格 RMW 可选择损坏即抛
@@ -36,6 +40,51 @@ import { confinePath } from "../../security/path_confine.mjs"; // T3e: 6→5 级
 //   injectionSystem 顶层 import ideClient→commandGate，commandGate 顶层立即调 getFilesSettingsPath()
 //   → storage 未初始化完 __projectRoot 即被读 = TDZ 崩全部插件加载（0722 事故）。本文件保持叶子约定。
 import { isDataEntry } from "./entryKind.mjs"; // 数据类条目判据单源（播种域消费）
+
+function _stableContextSummarySourceSerialize(value, seen = new WeakSet()) {
+  if (value === null) return "null";
+  if (typeof value === "string") return `string:${JSON.stringify(value)}`;
+  if (typeof value === "boolean") return `boolean:${value ? 1 : 0}`;
+  if (typeof value === "number") return `number:${Number.isFinite(value) ? JSON.stringify(value) : JSON.stringify(String(value))}`;
+  if (typeof value === "bigint") return `bigint:${value.toString()}`;
+  if (value === undefined) return "undefined:";
+  if (typeof value !== "object") return `${typeof value}:${JSON.stringify(String(value))}`;
+  if (seen.has(value)) return "circular:";
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return `array:[${value.map((item) => _stableContextSummarySourceSerialize(item, seen)).join(",")}]`;
+    }
+    return `object:{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${_stableContextSummarySourceSerialize(value[key], seen)}`
+    )).join(",")}}`;
+  } finally {
+    seen.delete(value);
+  }
+}
+
+/**
+ * 摘要生成源版本单源。调用方传入其实际消费的权威条目；顺序、稳定消息 ID、
+ * role 与完整 content 任一变化都会改变版本，只持久化 SHA-256，不落正文。
+ */
+export function computeContextSummarySourceRevision(chatLog) {
+  const identities = (Array.isArray(chatLog) ? chatLog : []).map((entry, index) => {
+    const id = typeof entry?.id === "string" ? entry.id.trim() : "";
+    const sourceIndex = Number.isInteger(entry?._contextSummarySourceIndex)
+      ? entry._contextSummarySourceIndex
+      : index;
+    return [
+      sourceIndex,
+      id || null,
+      String(entry?.role ?? ""),
+      String(entry?.name ?? ""),
+      crypto.createHash("sha256")
+        .update(_stableContextSummarySourceSerialize(entry?.content ?? null))
+        .digest("hex"),
+    ];
+  });
+  return crypto.createHash("sha256").update(JSON.stringify(identities)).digest("hex");
+}
 
 
 // ============================================================
@@ -1257,10 +1306,13 @@ export function getActiveMode(username, charName, chatId = null) {
 //   resolveActiveSubModeId 也从 map["_default"] 读回（读写对称、有 subModeSwitch.from 消费），
 //   是系统保留合法键，非脏 hash。若用纯 _CHATID_RE 拦它会破坏 flowGroup 回读。
 const _SM_CHATID_RE = /^[a-z0-9]{7,15}$/; // 单源同步自前端 sharedState.mjs:105 _CHATID_RE
-/** map key 是否为合法 per-chatId 隔离键：真实 chatid(_SM_CHATID_RE) 或系统保留 "_default"。 */
-function _isValidSubModeChatKey(chatId) {
+/** map key 是否为合法 per-chatId 隔离键：真实 chatid(_SM_CHATID_RE) 或系统保留 "_default"。
+ *  [D3 0804] export 化：subModeActivation.mjs（激活记录写键守卫）与本文件 writeActiveSubModeId/
+ *  resolveActiveSubModeId 必须同一判定（激活记录键=map 键，两套判定=读写错位温床），禁再内联第二份正则。 */
+export function isValidSubModeChatKey(chatId) {
   return chatId === "_default" || (typeof chatId === "string" && _SM_CHATID_RE.test(chatId));
 }
+const _isValidSubModeChatKey = isValidSubModeChatKey;
 
 export function resolveActiveSubModeId(smConfig, modeGroup, chatId) {
   // [T047] 与 writeActiveSubModeId 守卫对称：脏 chatId 视同无 chatId 走全局字段回退，
@@ -1337,9 +1389,14 @@ export async function removeChatSubModeMapping(username, chatId) {
       if (cfg?.active_sub_modes_map && cfg.active_sub_modes_map[chatId] !== undefined) {
         delete cfg.active_sub_modes_map[chatId];
         _cleared = true;
-        return cfg;
       }
-      return SKIP_SAVE;
+      // [D3 0804] 激活记录配对删链（凡建 per-chat 键必配删链，同 selected_groups_map 范式）：
+      //   sub_mode_activations[chatId] 与 active_sub_modes_map[chatId] 同生命周期，删聊天一并清。
+      if (cfg?.sub_mode_activations && cfg.sub_mode_activations[chatId] !== undefined) {
+        delete cfg.sub_mode_activations[chatId];
+        _cleared = true;
+      }
+      return _cleared ? cfg : SKIP_SAVE;
     }, null);
     return _cleared;
   } catch (e) {
@@ -2296,6 +2353,140 @@ export function loadMemoryPresets(username, charName) {
         }
       }
     } catch (_seedErr) { console.warn("[beilu-memory] 数据类INJ播种失败:", _seedErr.message); }
+    // [P0-D 2026-08-03] 定向补种 + 条件迁移 v3（全智能确认/Bot 权限收口批，任务 MD P0-D 要求7）：
+    //   ① 新增 builtin 条目补种（存量副本没有=固定协议/待确认数据条目静默缺失）：
+    //      INJ-submode-protocol-work / INJ-submode-protocol-code（submodes-data 拆出的固定规则）、
+    //      INJ-3-capability（Bot 操作权限契约）、INJ-smart-confirm-data（Smart 待确认运行数据）。
+    //   ② 条件迁移：仅当用户副本仍与【旧默认逐字一致】才更新为新默认——用户改过的一律不动
+    //      （0615「删了就是删了」定调 + 预设双源陷阱：副本段与改前默认逐字一致才写）：
+    //      submodes-data×2 content（固定规则拆出）、INJ-p1-recall-usage 启用+历史前、
+    //      INJ-4-smart content（提案-确认协议）、INJ-history-open/close role→user（provider 不变式）。
+    //   marker 防重；迁移行为逐条 console 留痕（完成报告可对账）。
+    try {
+      const _m3 = path.join(memDir, "_inj_seed_p0d_v3.done");
+      if (!fs.existsSync(_m3)) {
+        const _tplPath3 = path.join(__pluginDir, "default_memory_presets.json");
+        const _tpl3 = fs.existsSync(_tplPath3) ? loadJsonFile(_tplPath3) : null;
+        const _tplById3 = new Map((_tpl3?.injection_prompts || []).map((p) => [p.id, p]));
+        let _changed3 = 0;
+        // ① 定向补种（按 id 判缺，不重放全量——防复活用户已删条目）
+        for (const _nid of ["INJ-submode-protocol-work", "INJ-submode-protocol-code", "INJ-3-capability", "INJ-smart-confirm-data", "INJ-p1-recall-usage"]) {
+          const _te = _tplById3.get(_nid);
+          if (_te && !data.injection_prompts.some((p) => p.id === _nid)) {
+            data.injection_prompts.push(structuredClone(_te));
+            _changed3++;
+            console.log(`[beilu-memory] P0-D v3 补种: ${_nid}`);
+          }
+        }
+        // ② 条件迁移（旧默认逐字对照）
+        // 旧默认候选集（分身C 0803 确诊修）：用户副本可能来自两个模板世代——
+        //   ①英文世代（0730-0802 dirty 工作树模板）②中文世代（git HEAD 2f1802c 模板）。
+        //   原实现只硬编码英文串 → HEAD 世代副本条件迁移永久 no-op，而补种照加新协议条目=固定规则重复注入。
+        //   现两世代逐字候选齐备，命中任一才迁移（用户手改过=都不命中=不动，0615 定调不破）。
+        const _OLD3_CONTENT = {
+          "INJ-work-submodes-data": [
+            "## Live work sub-mode registry\nSwitch with <subModeSwitch>exact id or label</subModeSwitch>:\n{{work_sub_modes_list}}",
+            "## 工作子模式清单（实时）\n可用 <subModeSwitch>id或中文名</subModeSwitch> 切换：\n{{work_sub_modes_list}}",
+          ],
+          "INJ-code-submodes-data": [
+            "## Live code sub-mode registry and suggested route\nRegistry order is the coordinator's default route. Omit irrelevant roles, continue after switching, and do not emit <stopContinue /> in the same reply.\n{{code_sub_modes_list}}",
+            "## 可切换的子模式清单（code 组实时）\nsubModeSwitch 切到下列任一（用 id 或中文名）；切换后继续执行新角色任务，不要同时输出 <stopContinue />：\n{{code_sub_modes_list}}",
+          ],
+          "INJ-4-smart": [
+            "<smart_capability>\n# Mode dispatch from companion chat\n\nStay in companion chat for ordinary conversation and simple explanations. Switch only when the request needs execution:\n- code/debugging/configuration/project files -> <modeSwitch>code</modeSwitch>\n- translation/research/documents/batch processing/workflows/PPT -> <modeSwitch>work</modeSwitch>\n\nTransition naturally in the current character voice. Do not switch for a simple question you can answer directly. After a delegated mode returns results, explain them to the user in character without inventing technical details.\n</smart_capability>",
+            "<smart_capability>\n# 你的辅助能力\n\n你在陪伴对话的同时，具备调度其他模式的能力。当用户的需求超出纯聊天范围时，你可以自然地调用这些能力。\n\n## 能力清单\n- 编程相关（写代码/调试/安装/配置/文件操作）→ 代码模式\n- 工作任务（翻译/调研/文档/批量处理/流程自动化）→ 工作模式\n- 做PPT/幻灯片/演示汇报（生成pptx/修改已有deck）→ 工作模式\n\n## 调用方式\n当你判断需要调用时，在回复中自然过渡，然后输出:\n<modeSwitch>work</modeSwitch> 或 <modeSwitch>code</modeSwitch>\n\n## 调用原则\n- 你是陪伴角色，调用能力时用角色语气自然过渡（\"我来帮你处理~\"）\n- 简单问题直接回答，不需要切换模式（如\"Python怎么写for循环\"直接说就行）\n- 任务完成后你会收到结果通知，用角色语气告诉用户结果\n- 你不需要了解任务的技术细节，专注于陪伴和沟通\n\n## 判断参考\n用户说\"帮我做/写/改/翻译/处理...\" → 可能需要切换\n用户说\"这是什么/为什么/怎么回事...\" → 直接回答就好\n用户聊天/闲聊/情感交流 → 保持陪伴，不切换\n</smart_capability>",
+          ],
+        };
+        for (const [_id3, _oldC3] of Object.entries(_OLD3_CONTENT)) {
+          const _cur3 = data.injection_prompts.find((p) => p.id === _id3);
+          const _te3 = _tplById3.get(_id3);
+          if (_cur3 && _te3 && Array.isArray(_oldC3) && _oldC3.includes(_cur3.content)) {
+            _cur3.content = _te3.content;
+            if (_te3.description) _cur3.description = _te3.description;
+            _changed3++;
+            console.log(`[beilu-memory] P0-D v3 条件迁移(content): ${_id3}`);
+          }
+        }
+        const _p1g3 = data.injection_prompts.find((p) => p.id === "INJ-p1-recall-usage");
+        const _p1t3 = _tplById3.get("INJ-p1-recall-usage");
+        if (_p1g3 && _p1t3 && _p1g3.enabled === false && _p1g3.depth === 0 && _p1g3.order === 101) {
+          _p1g3.enabled = _p1t3.enabled === true;
+          _p1g3.depth = _p1t3.depth;
+          _p1g3.order = _p1t3.order;
+          if (_p1t3.description) _p1g3.description = _p1t3.description;
+          _changed3++;
+          console.log("[beilu-memory] P0-D v3 条件迁移: INJ-p1-recall-usage 启用+历史前");
+        }
+        for (const _hid3 of ["INJ-history-open", "INJ-history-close"]) {
+          const _h3 = data.injection_prompts.find((p) => p.id === _hid3);
+          const _ht3 = _tplById3.get(_hid3);
+          const _hOldC = _hid3 === "INJ-history-open" ? "<chat_history>" : "</chat_history>";
+          if (_h3 && _ht3 && _h3.role === "system" && String(_h3.content || "").trim() === _hOldC) {
+            _h3.role = _ht3.role;
+            if (_ht3.description) _h3.description = _ht3.description;
+            _changed3++;
+            console.log(`[beilu-memory] P0-D v3 条件迁移(role→user): ${_hid3}`);
+          }
+          // close 界标 order 修（历史边界失真根修）：below 区升序排序下旧默认 -1 排在 -500~-40 的
+          // 动态 data 条目之后=数据块被包进 <chat_history> 内。仅旧默认(-1 且内容未改)迁 -9999。
+          if (_hid3 === "INJ-history-close" && _h3 && _ht3 && _h3.order === -1 && String(_h3.content || "").trim() === _hOldC) {
+            _h3.order = _ht3.order;
+            _changed3++;
+            console.log("[beilu-memory] P0-D v3 条件迁移(order→below区最前): INJ-history-close");
+          }
+        }
+        fs.writeFileSync(_m3, new Date().toISOString());
+        if (_changed3 > 0) {
+          console.log(`[beilu-memory] P0-D v3 INJ 迁移: 共 ${_changed3} 项`);
+          _writeMemoryPresetsStore(memDir, data);
+        }
+      }
+    } catch (_seedErr3) { console.warn("[beilu-memory] P0-D INJ 迁移失败:", _seedErr3.message); }
+    // [0804 v4] INJ 中文内容恢复的存量条件迁移（新用户重大回归批·INJ 英文化删减根修）：
+    //   0803 英文化把 INJ-2/INJ-2-code/INJ-2-work/INJ-1-chat 的完整中文手册（示例/引导/操作表）
+    //   删减成英文骨架（87%+ 正文损失族）；0804 模板已从 donor 备份恢复完整中文（含 {{ide_tools}}
+    //   签名小节与 -data 边界指引）。存量用户副本仍是英文短版 → 仅当副本与英文短版【逐字一致】
+    //   （sha256 等价判定，不内联 12KB 原文）才更新为恢复版——用户改过=hash 不命中=不动
+    //   （0615「删了就是删了」定调 + v3 同款条件迁移范式）。marker 防重。
+    try {
+      const _m4 = path.join(memDir, "_inj_restore_zh_v4.done");
+      if (!fs.existsSync(_m4)) {
+        const _tplPath4 = path.join(__pluginDir, "default_memory_presets.json");
+        const _tpl4 = fs.existsSync(_tplPath4) ? loadJsonFile(_tplPath4) : null;
+        const _tplById4 = new Map((_tpl4?.injection_prompts || []).map((p) => [p.id, p]));
+        // 英文短版（0803 英文化产物）的逐字 sha256；来源为修复前物理备份快照中的
+        // default_memory_presets.json（这里只保留内容指纹，不依赖任何本机绝对路径）。
+        const _OLD4_HASH = {
+          "INJ-2": ["aeae2323d58f9885e4c73ef9c51c65ffa4d28811ca554b5a58b3e3776b35e537"],
+          "INJ-2-code": ["3c11a4cc82ff291cf9eea3956c37a24541954d94fcfaad1cd4841b777d044f05"],
+          "INJ-2-work": ["431bc0dee373b47a2a8baa285cc03ef349553b43969991a2a9e2e86514a19bea"],
+          "INJ-1-chat": ["2cf8a6cfde9b1ee4c779bab4e4f2f6a56ba4daa2021b3741d74a0f5c81abddba"],
+          // [0804 contract 删除随迁] 两条 -data 条目旧版含 {{sub_mode_contract_json}} 与 delta contract
+          //   小节；模板已改 {{sub_mode_tool_permissions_json}}。逐字命中才迁（用户改过不动，
+          //   getPromptHandler 另有旧宏名兼容替换兜底不产裸宏）。
+          "INJ-1-write-code-data": ["9fc1ac6b04a22be18fa2f9f9f943503d35865df25458a2a828c48a503a9f0585"],
+          "INJ-2-work-data": ["d4fc212266e1a82acf63ede406f3b2648135b1facec045449e3005a5dfb632d5"],
+        };
+        let _changed4 = 0;
+        for (const [_id4, _hashes4] of Object.entries(_OLD4_HASH)) {
+          const _cur4 = data.injection_prompts.find((p) => p.id === _id4);
+          const _te4 = _tplById4.get(_id4);
+          if (!_cur4 || !_te4) continue;
+          const _curHash4 = crypto.createHash("sha256").update(String(_cur4.content || ""), "utf8").digest("hex");
+          if (_hashes4.includes(_curHash4)) {
+            _cur4.content = _te4.content;
+            if (_te4.description) _cur4.description = _te4.description;
+            _changed4++;
+            console.log(`[beilu-memory] v4 条件迁移(中文手册恢复): ${_id4}`);
+          }
+        }
+        fs.writeFileSync(_m4, new Date().toISOString());
+        if (_changed4 > 0) {
+          console.log(`[beilu-memory] v4 INJ 中文恢复迁移: 共 ${_changed4} 条`);
+          _writeMemoryPresetsStore(memDir, data);
+        }
+      }
+    } catch (_seedErr4) { console.warn("[beilu-memory] v4 INJ 恢复迁移失败:", _seedErr4.message); }
     if (injMigrated) {
       _writeMemoryPresetsStore(memDir, data); // [0717 store v2] write through directory store
     }
@@ -2373,48 +2564,590 @@ export function isPathSafe(fullPath, resolvedMemDir) {
 // 压缩摘要 I/O（Step 6: P7 压缩 AI 写入，前端展示区读取）
 // ============================================================
 
+const CONTEXT_SUMMARY_STATE_VERSION = 1;
+const CONTEXT_SUMMARY_LOCK_TIMEOUT_MS = 5000;
+const CONTEXT_SUMMARY_REWRITE_LEASE_MS = 120000;
+
+// Node 22 没有 FileHandle.lock。Windows 下的 Node 路径用 .NET FileStream.Lock 持有同一个
+// 永久 lockfile 的 OS 字节范围锁；Deno 路径用 FsFile.lock。两者都由内核在句柄关闭/进程
+// 崩溃时释放，因此不需要也不允许根据文件年龄 rename/unlink “抢回”锁。
+const CONTEXT_SUMMARY_WINDOWS_LOCK_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$lockPath = [Environment]::GetEnvironmentVariable('BEILU_SUMMARY_LOCK_PATH')
+$leaseId = [Environment]::GetEnvironmentVariable('BEILU_SUMMARY_LOCK_LEASE')
+$timeoutMs = [int][Environment]::GetEnvironmentVariable('BEILU_SUMMARY_LOCK_TIMEOUT_MS')
+$deadline = [DateTime]::UtcNow.AddMilliseconds($timeoutMs)
+$stream = $null
+try {
+  while ($null -eq $stream) {
+    try {
+      $candidate = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
+      try {
+        $candidate.Lock(0, 1)
+        $stream = $candidate
+      } catch [System.IO.IOException] {
+        $candidate.Dispose()
+        if ([DateTime]::UtcNow -ge $deadline) { exit 73 }
+        Start-Sleep -Milliseconds 20
+      }
+    } catch [System.IO.IOException] {
+      if ([DateTime]::UtcNow -ge $deadline) { exit 73 }
+      Start-Sleep -Milliseconds 20
+    }
+  }
+  [Console]::Out.WriteLine("LOCKED:$leaseId")
+  [Console]::Out.Flush()
+  [Console]::In.ReadLine() | Out-Null
+} finally {
+  if ($null -ne $stream) {
+    try { $stream.Unlock(0, 1) } catch {}
+    $stream.Dispose()
+  }
+}
+`;
+const CONTEXT_SUMMARY_WINDOWS_LOCK_ENCODED = Buffer
+  .from(CONTEXT_SUMMARY_WINDOWS_LOCK_SCRIPT, "utf16le")
+  .toString("base64");
+
+function _safeSummaryChatId(chatId) {
+  const value = String(chatId || "").trim();
+  if (!value) throw Object.assign(new Error("chatId must be a non-empty string"), { code: "E_CONTEXT_SUMMARY_CHAT_ID_REQUIRED" });
+  return value.replace(/[\\/]|\.\./g, "_");
+}
+
+function _contextSummaryPaths(username, charName, chatId) {
+  const memDir = ensureMemoryDir(username, charName);
+  const dir = path.join(memDir, "hot", "chat_ctx", _safeSummaryChatId(chatId));
+  return {
+    dir,
+    state: path.join(dir, "context_summary_state.json"),
+    mirror: path.join(dir, "context_summary.json"),
+    lock: path.join(dir, "context_summary_state.lock"),
+    legacy: path.join(memDir, "hot", "context_summary.json"),
+  };
+}
+
+function _summaryStateDefault() {
+  return {
+    version: CONTEXT_SUMMARY_STATE_VERSION,
+    epoch: 0,
+    revision: 0,
+    legacyFallbackBlocked: false,
+    rewriteInProgress: false,
+    leaseId: null,
+    leaseExpiresAt: null,
+    updatedAt: null,
+    summaryData: null,
+  };
+}
+
+function _readContextSummaryState(statePath) {
+  const state = readJsonSafeSync(statePath, null);
+  if (state === null) return null;
+  const valid = state && typeof state === "object" && !Array.isArray(state)
+    && state.version === CONTEXT_SUMMARY_STATE_VERSION
+    && Number.isSafeInteger(state.epoch) && state.epoch >= 0
+    && Number.isSafeInteger(state.revision) && state.revision >= 0
+    && typeof state.legacyFallbackBlocked === "boolean"
+    && typeof state.rewriteInProgress === "boolean"
+    && (state.leaseId === null || (typeof state.leaseId === "string" && state.leaseId.length > 0))
+    && (state.leaseExpiresAt === null || (typeof state.leaseExpiresAt === "string" && Number.isFinite(Date.parse(state.leaseExpiresAt))))
+    && (state.summaryData === null || (typeof state.summaryData === "object" && !Array.isArray(state.summaryData)));
+  if (!valid || (state.rewriteInProgress && (!state.leaseId || !state.leaseExpiresAt))) {
+    throw Object.assign(new Error(`context summary state protocol invalid: ${statePath}`), {
+      code: "E_CONTEXT_SUMMARY_STATE_INVALID",
+      statePath,
+    });
+  }
+  return state;
+}
+
+function _contextSummaryLockError(message, code, operationId, lockPath, cause = undefined) {
+  return Object.assign(new Error(message), { code, operationId, lockPath, ...(cause ? { cause } : {}) });
+}
+
+async function _acquireDenoContextSummaryLock(paths, operationId, leaseId, timeoutMs) {
+  const file = await globalThis.Deno.open(paths.lock, { read: true, write: true, create: true });
+  const deadline = Date.now() + timeoutMs;
+  try {
+    for (;;) {
+      if (await file.tryLock(true)) return { kind: "deno", file, leaseId, operationId };
+      if (Date.now() >= deadline) {
+        throw _contextSummaryLockError(
+          "context summary state lock timed out",
+          "E_CONTEXT_SUMMARY_LOCK_TIMEOUT",
+          operationId,
+          paths.lock,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  } catch (error) {
+    try { file.close(); } catch {}
+    if (error?.code === "E_CONTEXT_SUMMARY_LOCK_TIMEOUT") throw error;
+    throw _contextSummaryLockError(
+      "context summary OS lock acquisition failed",
+      "E_CONTEXT_SUMMARY_LOCK_ACQUIRE_FAILED",
+      operationId,
+      paths.lock,
+      error,
+    );
+  }
+}
+
+async function _acquireWindowsContextSummaryLock(paths, operationId, leaseId, timeoutMs) {
+  return await new Promise((resolve, reject) => {
+    const child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", CONTEXT_SUMMARY_WINDOWS_LOCK_ENCODED], {
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        BEILU_SUMMARY_LOCK_PATH: paths.lock,
+        BEILU_SUMMARY_LOCK_LEASE: leaseId,
+        BEILU_SUMMARY_LOCK_TIMEOUT_MS: String(timeoutMs),
+      },
+    });
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+    const cleanup = () => {
+      clearTimeout(watchdog);
+      child.stdout?.removeAllListeners();
+      child.stderr?.removeAllListeners();
+      child.removeAllListeners("error");
+      child.removeAllListeners("exit");
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (child.exitCode === null) child.kill();
+      reject(error);
+    };
+    const watchdog = setTimeout(() => fail(_contextSummaryLockError(
+      "context summary state lock timed out",
+      "E_CONTEXT_SUMMARY_LOCK_TIMEOUT",
+      operationId,
+      paths.lock,
+    )), timeoutMs + 2000);
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk) => {
+      if (settled) return;
+      stdout += chunk;
+      if (!stdout.split(/\r?\n/).includes(`LOCKED:${leaseId}`)) return;
+      settled = true;
+      cleanup();
+      resolve({ kind: "windows-helper", child, leaseId, operationId });
+    });
+    child.stderr?.on("data", (chunk) => { stderr = (stderr + chunk).slice(-4096); });
+    child.once("error", (error) => fail(_contextSummaryLockError(
+      "context summary OS lock helper unavailable",
+      "E_CONTEXT_SUMMARY_OS_LOCK_UNAVAILABLE",
+      operationId,
+      paths.lock,
+      error,
+    )));
+    child.once("exit", (code) => {
+      if (settled) return;
+      fail(_contextSummaryLockError(
+        code === 73 ? "context summary state lock timed out" : `context summary OS lock helper exited (${code}): ${stderr.trim()}`,
+        code === 73 ? "E_CONTEXT_SUMMARY_LOCK_TIMEOUT" : "E_CONTEXT_SUMMARY_LOCK_ACQUIRE_FAILED",
+        operationId,
+        paths.lock,
+      ));
+    });
+  });
+}
+
+async function _acquireContextSummaryLock(paths, operationId, { timeoutMs = CONTEXT_SUMMARY_LOCK_TIMEOUT_MS } = {}) {
+  await fs.promises.mkdir(paths.dir, { recursive: true });
+  // lockfile 是永久命名节点，只锁句柄，从不以存在性/年龄判定所有权。
+  const bootstrap = await fs.promises.open(paths.lock, "a");
+  await bootstrap.close();
+  const leaseId = crypto.randomUUID();
+  const boundedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.floor(timeoutMs)
+    : CONTEXT_SUMMARY_LOCK_TIMEOUT_MS;
+  if (typeof globalThis.Deno?.open === "function") {
+    return _acquireDenoContextSummaryLock(paths, operationId, leaseId, boundedTimeoutMs);
+  }
+  if (process.platform === "win32") {
+    return _acquireWindowsContextSummaryLock(paths, operationId, leaseId, boundedTimeoutMs);
+  }
+  throw _contextSummaryLockError(
+    "context summary OS file lock is unavailable on this runtime",
+    "E_CONTEXT_SUMMARY_OS_LOCK_UNAVAILABLE",
+    operationId,
+    paths.lock,
+  );
+}
+
+async function _releaseContextSummaryLock(paths, lock) {
+  if (lock.kind === "deno") {
+    try { await lock.file.unlock(); }
+    finally { try { lock.file.close(); } catch {} }
+    return;
+  }
+  if (lock.kind !== "windows-helper" || !lock.child) {
+    throw _contextSummaryLockError(
+      "context summary OS lock handle is invalid",
+      "E_CONTEXT_SUMMARY_LOCK_RELEASE_INVALID",
+      lock.operationId,
+      paths.lock,
+    );
+  }
+  const child = lock.child;
+  if (child.exitCode !== null) {
+    throw _contextSummaryLockError(
+      `context summary OS lock helper exited before release (${child.exitCode})`,
+      "E_CONTEXT_SUMMARY_LOCK_OWNERSHIP_LOST",
+      lock.operationId,
+      paths.lock,
+    );
+  }
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode === null) child.kill();
+      reject(_contextSummaryLockError(
+        "context summary OS lock helper did not release",
+        "E_CONTEXT_SUMMARY_LOCK_RELEASE_TIMEOUT",
+        lock.operationId,
+        paths.lock,
+      ));
+    }, 2000);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(_contextSummaryLockError(
+        "context summary OS lock helper release failed",
+        "E_CONTEXT_SUMMARY_LOCK_RELEASE_FAILED",
+        lock.operationId,
+        paths.lock,
+        error,
+      ));
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(_contextSummaryLockError(
+        `context summary OS lock helper exited during release (${code})`,
+        "E_CONTEXT_SUMMARY_LOCK_RELEASE_FAILED",
+        lock.operationId,
+        paths.lock,
+      ));
+    });
+    child.stdin.end("release\n");
+  });
+}
+
+async function _withContextSummaryStateLock(username, charName, chatId, operationId, task) {
+  const paths = _contextSummaryPaths(username, charName, chatId);
+  const op = typeof operationId === "string" && operationId ? operationId : `context-summary:${crypto.randomUUID()}`;
+  const lock = await _acquireContextSummaryLock(paths, op);
+  let taskError = null;
+  try {
+    return await task(paths, op);
+  } catch (error) {
+    taskError = error;
+    throw error;
+  } finally {
+    try { await _releaseContextSummaryLock(paths, lock); }
+    catch (releaseError) {
+      if (!taskError) throw releaseError;
+      diag.error("context_summary lock release failed after task error", { operationId: op, error: releaseError.message });
+    }
+  }
+}
+
+function _saveContextSummaryState(paths, state) {
+  saveJsonFile(paths.state, state);
+}
+
+function _mirrorContextSummary(paths, data) {
+  try {
+    if (data === null) {
+      try { fs.unlinkSync(paths.mirror); } catch (error) { if (error?.code !== "ENOENT") throw error; }
+    } else {
+      saveJsonFile(paths.mirror, data);
+    }
+    return null;
+  } catch (error) {
+    diag.warn("context_summary compatibility mirror update failed", { path: paths.mirror, error: error.message });
+    return error.message;
+  }
+}
+
+function _recoverExpiredRewriteLease(paths, state, operationId) {
+  if (!state.rewriteInProgress) return state;
+  const expiresAtMs = Date.parse(state.leaseExpiresAt || "");
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs > Date.now()) return state;
+  const recovered = {
+    ...state,
+    epoch: state.epoch + 1,
+    revision: state.revision + 1,
+    rewriteInProgress: false,
+    leaseId: null,
+    leaseExpiresAt: null,
+    updatedAt: new Date().toISOString(),
+    lastOperationId: operationId,
+    recovery: { reason: "expired_rewrite_lease", recoveredAt: new Date().toISOString() },
+  };
+  _saveContextSummaryState(paths, recovered);
+  return recovered;
+}
+
 /**
- * 读取压缩摘要。
- * O17 per-chatId 隔离：有 chatId 时优先读 hot/chat_ctx/<safeChatId>/context_summary.json，
- * 文件不存在则 fallback 到旧路径 hot/context_summary.json（兼容旧数据 / 首次迁移前）。
- * 无 chatId 时走旧路径，行为同旧（零回归）。
- * @param {string} username
- * @param {string} charName
- * @param {string|null} [chatId=null]
- * @returns {object|null} 摘要对象，或 null（文件不存在）
+ * 读取压缩摘要。state 一旦存在就是唯一可见真值；summaryData=null 或回档改写租约期间
+ * 均返回 null，不再 fallback 旧 per-chat/legacy 镜像。只有尚无 state 的旧对话保留迁移前兼容读。
  */
 export function readContextSummary(username, charName, chatId = null) {
   const memDir = ensureMemoryDir(username, charName);
   if (chatId) {
-    const safeChatId = String(chatId).replace(/[\\/]|\.\./g, "_");
-    const perChatPath = path.join(memDir, "hot", "chat_ctx", safeChatId, "context_summary.json");
-    const perChatData = loadJsonFileIfExists(perChatPath, null);
+    const paths = _contextSummaryPaths(username, charName, chatId);
+    const state = _readContextSummaryState(paths.state);
+    if (state !== null) {
+      if (state.rewriteInProgress) return null;
+      return state.summaryData ?? null;
+    }
+    const perChatData = loadJsonFileIfExists(paths.mirror, null);
     if (perChatData !== null) return perChatData;
-    // fallback：旧全局路径（兼容未迁移数据）
   }
-  return loadJsonFileIfExists(
-    path.join(memDir, "hot", "context_summary.json"),
-    null,
-  );
+  return loadJsonFileIfExists(path.join(memDir, "hot", "context_summary.json"), null);
+}
+
+/** 异步摘要工作开始前捕获 CAS token；AI/network await 不在文件锁内。 */
+export async function beginContextSummaryWrite(username, charName, chatId, { operationId, sourceRevision = null } = {}) {
+  const normalizedSourceRevision = sourceRevision === null
+    ? null
+    : (typeof sourceRevision === "string" && sourceRevision.trim() ? sourceRevision.trim() : undefined);
+  if (normalizedSourceRevision === undefined) {
+    throw Object.assign(new Error("context summary sourceRevision must be a non-empty string or null"), {
+      code: "E_CONTEXT_SUMMARY_SOURCE_REVISION_INVALID",
+    });
+  }
+  // 这段读在本 async 函数的第一个 await 之前同步完成：即使随后阻塞等锁，
+  // 回档已推进的 epoch/revision 也不会被迟到 begin 当成新基线。
+  const observedPaths = _contextSummaryPaths(username, charName, chatId);
+  const observedState = _readContextSummaryState(observedPaths.state) || _summaryStateDefault();
+  const observedBase = { epoch: observedState.epoch, revision: observedState.revision };
+  return _withContextSummaryStateLock(username, charName, chatId, operationId, async (paths, op) => {
+    let state = _readContextSummaryState(paths.state) || _summaryStateDefault();
+    state = _recoverExpiredRewriteLease(paths, state, op);
+    if (state.rewriteInProgress) {
+      return {
+        ok: false,
+        busy: true,
+        code: "E_CONTEXT_SUMMARY_REWRITE_IN_PROGRESS",
+        leaseId: state.leaseId,
+        leaseExpiresAt: state.leaseExpiresAt,
+        operationId: op,
+      };
+    }
+    if (state.epoch !== observedBase.epoch || state.revision !== observedBase.revision) {
+      return {
+        ok: false,
+        superseded: true,
+        code: "E_CONTEXT_SUMMARY_BEGIN_SUPERSEDED",
+        expected: observedBase,
+        actual: { epoch: state.epoch, revision: state.revision },
+        operationId: op,
+      };
+    }
+    return {
+      ok: true,
+      username: String(username),
+      charName: String(charName),
+      chatId: String(chatId),
+      epoch: state.epoch,
+      revision: state.revision,
+      sourceRevision: normalizedSourceRevision,
+      operationId: op,
+    };
+  });
+}
+
+/** 仅当 epoch/revision 仍与 begin token 一致时提交；state 先写，context_summary.json 只做兼容镜像。 */
+export async function commitContextSummaryWrite(username, charName, chatId, token, data, { currentSourceRevision = null } = {}) {
+  if (!token || token.ok !== true || !Number.isSafeInteger(token.epoch) || !Number.isSafeInteger(token.revision)) {
+    throw Object.assign(new Error("valid context summary write token required"), { code: "E_CONTEXT_SUMMARY_TOKEN_INVALID" });
+  }
+  if (token.username !== String(username)
+    || token.charName !== String(charName)
+    || token.chatId !== String(chatId)) {
+    throw Object.assign(new Error("context summary write token scope mismatch"), {
+      code: "E_CONTEXT_SUMMARY_TOKEN_SCOPE_MISMATCH",
+      expected: { username: String(username), charName: String(charName), chatId: String(chatId) },
+      actual: { username: token.username, charName: token.charName, chatId: token.chatId },
+    });
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw Object.assign(new Error("context summary data must be an object"), { code: "E_CONTEXT_SUMMARY_DATA_INVALID" });
+  }
+  const normalizedCurrentSourceRevision = currentSourceRevision === null
+    ? null
+    : (typeof currentSourceRevision === "string" && currentSourceRevision.trim() ? currentSourceRevision.trim() : undefined);
+  if (normalizedCurrentSourceRevision === undefined) {
+    throw Object.assign(new Error("current context summary sourceRevision must be a non-empty string or null"), {
+      code: "E_CONTEXT_SUMMARY_SOURCE_REVISION_INVALID",
+    });
+  }
+  if (token.sourceRevision !== null && token.sourceRevision !== normalizedCurrentSourceRevision) {
+    return {
+      committed: false,
+      superseded: true,
+      code: "E_CONTEXT_SUMMARY_SOURCE_REVISION_CHANGED",
+      expectedSourceRevision: token.sourceRevision,
+      actualSourceRevision: normalizedCurrentSourceRevision,
+      operationId: token.operationId,
+    };
+  }
+  return _withContextSummaryStateLock(username, charName, chatId, token.operationId, async (paths, op) => {
+    let state = _readContextSummaryState(paths.state) || _summaryStateDefault();
+    state = _recoverExpiredRewriteLease(paths, state, op);
+    if (state.rewriteInProgress) {
+      return { committed: false, busy: true, superseded: true, code: "E_CONTEXT_SUMMARY_REWRITE_IN_PROGRESS", operationId: op };
+    }
+    if (state.epoch !== token.epoch || state.revision !== token.revision) {
+      return {
+        committed: false,
+        superseded: true,
+        code: "E_CONTEXT_SUMMARY_WRITE_SUPERSEDED",
+        expected: { epoch: token.epoch, revision: token.revision },
+        actual: { epoch: state.epoch, revision: state.revision },
+        operationId: op,
+      };
+    }
+    const next = {
+      ...state,
+      epoch: state.epoch,
+      revision: state.revision + 1,
+      legacyFallbackBlocked: true,
+      rewriteInProgress: false,
+      leaseId: null,
+      leaseExpiresAt: null,
+      updatedAt: new Date().toISOString(),
+      lastOperationId: op,
+      summaryData: structuredClone(data),
+    };
+    _saveContextSummaryState(paths, next);
+    const mirrorError = _mirrorContextSummary(paths, data);
+    return { committed: true, epoch: next.epoch, revision: next.revision, operationId: op, ...(mirrorError ? { mirrorError } : {}) };
+  });
+}
+
+/** 回档 commit 点建立跨 isolate 改写租约，并用 epoch 使所有旧 writer 失效。 */
+export async function beginContextSummaryRollback(username, charName, chatId, { operationId, leaseMs = CONTEXT_SUMMARY_REWRITE_LEASE_MS } = {}) {
+  return _withContextSummaryStateLock(username, charName, chatId, operationId, async (paths, op) => {
+    let state = _readContextSummaryState(paths.state);
+    if (state) state = _recoverExpiredRewriteLease(paths, state, op);
+    else state = _summaryStateDefault();
+    if (state.rewriteInProgress) {
+      return { ok: false, busy: true, code: "E_CONTEXT_SUMMARY_REWRITE_IN_PROGRESS", leaseId: state.leaseId, leaseExpiresAt: state.leaseExpiresAt, operationId: op };
+    }
+    const visibleBefore = state.summaryData !== null
+      || (!fs.existsSync(paths.state) && (fs.existsSync(paths.mirror) || fs.existsSync(paths.legacy)));
+    const leaseId = crypto.randomUUID();
+    const now = Date.now();
+    const boundedLeaseMs = Number.isFinite(leaseMs) && leaseMs >= 1000
+      ? leaseMs
+      : CONTEXT_SUMMARY_REWRITE_LEASE_MS;
+    const next = {
+      ...state,
+      epoch: state.epoch + 1,
+      revision: state.revision + 1,
+      legacyFallbackBlocked: true,
+      rewriteInProgress: true,
+      leaseId,
+      leaseExpiresAt: new Date(now + boundedLeaseMs).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+      lastOperationId: op,
+      summaryData: null,
+    };
+    _saveContextSummaryState(paths, next);
+    const mirrorError = _mirrorContextSummary(paths, null);
+    return {
+      ok: true,
+      invalidated: true,
+      deleted: visibleBefore,
+      leaseId,
+      epoch: next.epoch,
+      revision: next.revision,
+      leaseExpiresAt: next.leaseExpiresAt,
+      operationId: op,
+      ...(mirrorError ? { mirrorError } : {}),
+    };
+  });
+}
+
+/** 只有原始 leaseId 能结束回档改写期；不能清除别的协调器租约。 */
+export async function completeContextSummaryRollback(username, charName, chatId, { leaseId, operationId } = {}) {
+  if (typeof leaseId !== "string" || !leaseId) {
+    return { completed: false, code: "E_CONTEXT_SUMMARY_LEASE_ID_REQUIRED" };
+  }
+  return _withContextSummaryStateLock(username, charName, chatId, operationId, async (paths, op) => {
+    const state = _readContextSummaryState(paths.state);
+    if (!state || !state.rewriteInProgress || state.leaseId !== leaseId) {
+      return {
+        completed: false,
+        code: "E_CONTEXT_SUMMARY_LEASE_MISMATCH",
+        expectedLeaseId: leaseId,
+        actualLeaseId: state?.leaseId || null,
+        rewriteInProgress: state?.rewriteInProgress === true,
+        operationId: op,
+      };
+    }
+    const next = {
+      ...state,
+      revision: state.revision + 1,
+      rewriteInProgress: false,
+      leaseId: null,
+      leaseExpiresAt: null,
+      updatedAt: new Date().toISOString(),
+      lastOperationId: op,
+    };
+    _saveContextSummaryState(paths, next);
+    return { completed: true, epoch: next.epoch, revision: next.revision, operationId: op };
+  });
+}
+
+/** 用户主动清摘要：推进 epoch 阻止在途旧 AI 结果回写，但不占用回档 rewrite lease。 */
+export async function clearContextSummary(username, charName, chatId, { operationId } = {}) {
+  if (!chatId) {
+    const legacy = path.join(ensureMemoryDir(username, charName), "hot", "context_summary.json");
+    try { await fs.promises.unlink(legacy); return { cleared: true, legacy: true }; }
+    catch (error) { if (error?.code === "ENOENT") return { cleared: false, legacy: true }; throw error; }
+  }
+  return _withContextSummaryStateLock(username, charName, chatId, operationId, async (paths, op) => {
+    let state = _readContextSummaryState(paths.state) || _summaryStateDefault();
+    state = _recoverExpiredRewriteLease(paths, state, op);
+    if (state.rewriteInProgress) return { cleared: false, busy: true, code: "E_CONTEXT_SUMMARY_REWRITE_IN_PROGRESS", leaseId: state.leaseId };
+    const visibleBefore = state.summaryData !== null
+      || (!fs.existsSync(paths.state) && (fs.existsSync(paths.mirror) || fs.existsSync(paths.legacy)));
+    const next = {
+      ...state,
+      epoch: state.epoch + 1,
+      revision: state.revision + 1,
+      legacyFallbackBlocked: true,
+      summaryData: null,
+      updatedAt: new Date().toISOString(),
+      lastOperationId: op,
+    };
+    _saveContextSummaryState(paths, next);
+    const mirrorError = _mirrorContextSummary(paths, null);
+    return { cleared: visibleBefore, invalidated: true, epoch: next.epoch, revision: next.revision, ...(mirrorError ? { mirrorError } : {}) };
+  });
 }
 
 /**
- * 写入压缩摘要。
- * O17 per-chatId 隔离：有 chatId 时写 hot/chat_ctx/<safeChatId>/context_summary.json（mkdir 由 saveJsonFile 自动处理）。
- * 无 chatId 时写旧路径，行为同旧（零回归）。
- * @param {string} username
- * @param {string} charName
- * @param {object} data - 摘要数据
- * @param {string|null} [chatId=null]
+ * 无 chatId 的 legacy 写保持兼容。per-chat 写必须走 begin/commit CAS，禁止新增无令牌覆盖点。
  */
 export function writeContextSummary(username, charName, data, chatId = null) {
-  const memDir = ensureMemoryDir(username, charName);
   if (chatId) {
-    const safeChatId = String(chatId).replace(/[\\/]|\.\./g, "_");
-    saveJsonFile(path.join(memDir, "hot", "chat_ctx", safeChatId, "context_summary.json"), data);
-  } else {
-    saveJsonFile(path.join(memDir, "hot", "context_summary.json"), data);
+    throw Object.assign(new Error("per-chat context summary writes require beginContextSummaryWrite/commitContextSummaryWrite"), {
+      code: "E_CONTEXT_SUMMARY_CAS_REQUIRED",
+    });
   }
+  saveJsonFile(path.join(ensureMemoryDir(username, charName), "hot", "context_summary.json"), data);
 }
 
 // ============================================================

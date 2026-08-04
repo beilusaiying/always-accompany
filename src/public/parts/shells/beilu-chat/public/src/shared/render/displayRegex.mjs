@@ -388,6 +388,8 @@ export function applyBuiltinProcessors(content) {
 		content = renderAirpDSL(content, cachedAirpCaps)
 	}
 
+	// 5. era 指令防御剥离——后端 ReplyHandler 已剥主路径，此处兜历史楼层/手编原文残留（无标签零成本早退）
+
 	wbTrace('displayRegex', 'applyBuiltinProcessors', { outLen: content?.length, codeFold: codeFoldCfg.enabled, airp: !!cachedAirpCaps })
 	return content
 }

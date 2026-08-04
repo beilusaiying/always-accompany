@@ -96,6 +96,55 @@ import type { AuthService } from "./AuthService";
 import type { ConnectionService } from "./ConnectionService";
 import { API_TIMEOUT_MS, PLUGIN_API_TIMEOUT_MS, BULK_OP_TIMEOUT_MS, WS_RECONNECT_DELAY_MS, HEARTBEAT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS, NOTIFY_RECONNECT_DELAY_MS, DEFAULT_MODE } from "../constants"; // T003 默认模式单源
 
+export type IdeRouteSnapshot =
+  | { connected: false }
+  | {
+    connected: true;
+    backendKind: "yonban" | "cli" | null;
+    port: number;
+    instanceId: string | null;
+    connectionId: string;
+  };
+
+export interface EditMessageResult {
+  success: boolean;
+  applied: boolean;
+  entry: ChatLogEntry | null;
+  reason?: string;
+  error?: string;
+  code?: string;
+  messageId: string;
+  index: number;
+  indexHint: number;
+  chatCommitted: boolean;
+  status: string;
+  revision: string | null;
+  derived: Record<string, unknown> | null;
+  warning?: string;
+  editOperationId?: string;
+  payloadFingerprint?: string;
+  deduped?: boolean;
+}
+
+const CONNECTED_IDE_ROUTE_KEYS = ["connected", "backendKind", "port", "instanceId", "connectionId"] as const;
+
+/** 与后端 ideClient.isValidIdeRouteSnapshot 同形；布尔连接状态不能代替连接代次。 */
+export function isExactIdeRouteSnapshot(value: unknown): value is IdeRouteSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const route = value as Record<string, unknown>;
+  const keys = Object.keys(route);
+  if (route.connected === false) return keys.length === 1 && keys[0] === "connected";
+  if (route.connected !== true
+    || keys.length !== CONNECTED_IDE_ROUTE_KEYS.length
+    || !CONNECTED_IDE_ROUTE_KEYS.every((key) => Object.prototype.hasOwnProperty.call(route, key))) {
+    return false;
+  }
+  return (route.backendKind === null || route.backendKind === "yonban" || route.backendKind === "cli")
+    && Number.isSafeInteger(route.port) && (route.port as number) > 0 && (route.port as number) <= 65535
+    && (route.instanceId === null || (typeof route.instanceId === "string" && route.instanceId.length > 0))
+    && typeof route.connectionId === "string" && route.connectionId.length > 0;
+}
+
 export class ChatService {
   // ── 依赖 ──────────────────────────────────────────
   private _connectionService: ConnectionService;
@@ -125,8 +174,11 @@ export class ChatService {
   }>();
   private _onMessageDeleted = new vscode.EventEmitter<{ index: number }>();
   private _onMessageEdited = new vscode.EventEmitter<{
+    chatId: string;
     index: number;
     entry: ChatLogEntry;
+    editOperationId?: string;
+    payloadFingerprint?: string;
   }>();
 
   // ── 流式事件 ───────────────────────────────────────
@@ -277,6 +329,39 @@ export class ChatService {
     return resp.json() as Promise<T>;
   }
 
+  /**
+   * 回档事务专用：业务拒绝/部分完成使用非 2xx + 结构化 JSON 表达，调用方必须拿到原始
+   * success/applied/partial/warning，而不能让通用 HTTP 异常折叠掉这些状态。
+   */
+  private async _callStructuredApi<T extends Record<string, unknown>>(
+    endpoint: string,
+    body: unknown,
+    timeoutMs: number = API_TIMEOUT_MS,
+  ): Promise<T> {
+    const serverUrl = this._connectionService.state.serverUrl;
+    const url = serverUrl + "/api/parts/shells:chat/" + endpoint;
+    const resp = await this._fetchWithAuth(url, {
+      method: "POST",
+      body,
+      timeoutMs,
+      jsonBody: true,
+    });
+    const raw = await resp.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("[ChatService] API POST " + endpoint + " → " + resp.status + ": 非结构化响应");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("[ChatService] API POST " + endpoint + " → " + resp.status + ": 响应结构无效");
+    }
+    if (!resp.ok && typeof (parsed as Record<string, unknown>).success !== "boolean") {
+      throw new Error("[ChatService] API POST " + endpoint + " → " + resp.status + ": " + raw);
+    }
+    return parsed as T;
+  }
+
   /** 获取聊天列表 */
   async getChatList(): Promise<ChatSummary[]> {
     return this._callApi<ChatSummary[]>("getchatlist");
@@ -352,72 +437,124 @@ export class ChatService {
   /** 编辑消息 */
   async editMessage(
     chatId: string,
-    index: number,
+    indexHint: number,
+    messageId: string,
     content: string,
-  ): Promise<void> {
-    // ★ A3 修复：后端 editMessage → BuildChatLogEntryFromUserMessage/CharReply
-    // 期望 content 是对象 { content: string, files?: [] }，不是裸字符串。
-    // 后端 endpoints.mjs 从 req.body.content 取值后直接传给 chatOps.editMessage，
-    // 而 messageBuilder 通过 result.content 读取文本内容。
-    await this._callApi(`${chatId}/message/${index}`, "PUT", {
+    editOperationId: string,
+  ): Promise<EditMessageResult> {
+    if (!Number.isSafeInteger(indexHint) || indexHint < 0) {
+      throw new Error("编辑消息 indexHint 无效");
+    }
+    const normalizedMessageId = typeof messageId === "string" ? messageId.trim() : "";
+    if (!normalizedMessageId) throw new Error("编辑消息缺少稳定 messageId");
+    const normalizedOperationId = typeof editOperationId === "string" ? editOperationId.trim() : "";
+    if (!normalizedOperationId) throw new Error("编辑消息缺少稳定 editOperationId");
+    const serverUrl = this._connectionService.state.serverUrl;
+    const endpoint = `${chatId}/message/${indexHint}`;
+    const requestBody = {
+      messageId: normalizedMessageId,
       content: { content },
-    });
+      editOperationId: normalizedOperationId,
+    };
+    const sendEdit = () => this._fetchWithAuth(
+      `${serverUrl}/api/parts/shells:chat/${endpoint}`,
+      { method: "PUT", body: requestBody, timeoutMs: API_TIMEOUT_MS, jsonBody: true },
+    );
+    let resp: Response;
+    try {
+      resp = await sendEdit();
+    } catch (initialError: unknown) {
+      // 超时/断连属于“提交结果未知”：先用同一 payload 对账。只有服务端明确 404 未命中，
+      // 才重放相同 operationId；owner 串行化保证与仍在途的首请求也只会提交一次。
+      try {
+        const reconcile = await this._fetchWithAuth(
+          `${serverUrl}/api/parts/shells:chat/${endpoint}/edit-operation/${encodeURIComponent(normalizedOperationId)}/reconcile`,
+          {
+            method: "POST",
+            body: { messageId: normalizedMessageId, content: { content } },
+            timeoutMs: API_TIMEOUT_MS,
+            jsonBody: true,
+          },
+        );
+        resp = reconcile.status === 404 ? await sendEdit() : reconcile;
+      } catch (reconcileError: unknown) {
+        const initialMessage = initialError instanceof Error ? initialError.message : String(initialError);
+        const reconcileMessage = reconcileError instanceof Error ? reconcileError.message : String(reconcileError);
+        throw new Error(`${initialMessage}; 编辑操作对账失败: ${reconcileMessage}`);
+      }
+    }
+    const raw = await resp.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error(`[ChatService] API PUT ${endpoint} → ${resp.status}: 非结构化响应`);
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`[ChatService] API PUT ${endpoint} → ${resp.status}: 响应结构无效`);
+    }
+    const result = parsed as Partial<EditMessageResult>;
+    if (typeof result.success !== "boolean"
+      || typeof result.applied !== "boolean"
+      || typeof result.chatCommitted !== "boolean"
+      || typeof result.status !== "string") {
+      throw new Error(`[ChatService] API PUT ${endpoint} → ${resp.status}: 缺少编辑事务字段`);
+    }
+    return result as EditMessageResult;
   }
 
-  /** 删除消息 */
-  async deleteMessage(chatId: string, index: number): Promise<void> {
-    await this._callApi(`${chatId}/message/${index}`, "DELETE");
+  /** 按稳定 messageId 删除消息；indexHint 仅用于后端定位提示，不能单独解释动作。 */
+  async deleteMessage(
+    chatId: string,
+    indexHint: number,
+    messageId: string,
+  ): Promise<Record<string, unknown>> {
+    const result = await this._callApi<Record<string, unknown>>(
+      `${chatId}/message/${indexHint}?messageId=${encodeURIComponent(messageId)}`,
+      "DELETE",
+    );
+    if (result.applied !== true) {
+      const reason = typeof result.reason === "string" ? result.reason : "后端未应用删除操作";
+      throw new Error(reason);
+    }
+    return result;
   }
 
-  /**
-   * ★ A4 回档：删除指定索引之后的所有消息（保留 targetIndex 及之前的消息）
-   * 后端 API：POST /api/parts/shells:chat/{chatId}/messages/delete-range
-   * Body: { startIndex: number, endIndex?: number }
-   */
+  /** 单一聊天后端回档事务：文件、表格、消息均由后端按预览令牌协调。 */
   async rollbackToMessage(
     chatId: string,
-    targetIndex: number,
-  ): Promise<{ deleted: number }> {
-    return this._callApi<{ deleted: number }>(
-      `${chatId}/messages/delete-range`,
-      "POST",
-      { startIndex: targetIndex + 1 },
-    );
-  }
-
-  /**
-   * ★ A4 记忆回档：通知 beilu-memory 插件回退表格快照
-   * POST /api/parts/plugins:beilu-memory/config/setdata
-   * Body: { _action: "rollbackMemoryToMessage", chatId, targetIndex }
-   */
-  async rollbackMemory(
-    chatId: string,
-    targetIndex: number,
+    payload: {
+      anchorMessageId: string;
+      targetIndex: number;
+      afterCount: number;
+      expectedIdeConnected: boolean;
+      expectedIdeRoute: IdeRouteSnapshot;
+      checkpointIds: string[];
+      tableSnapshotId: unknown;
+    },
   ): Promise<Record<string, unknown>> {
-    return this._callPluginApi<Record<string, unknown>>(
-      "beilu-memory",
-      "config/setdata",
-      "POST",
-      { _action: "rollbackMemoryToMessage", chatId, targetIndex },
+    if (!isExactIdeRouteSnapshot(payload.expectedIdeRoute)
+      || payload.expectedIdeConnected !== payload.expectedIdeRoute.connected) {
+      throw new Error("回档缺少有效的 expectedIdeRoute，或连接布尔值与精确路由令牌不一致");
+    }
+    return this._callStructuredApi<Record<string, unknown>>(
+      `${chatId}/rollback`,
+      payload,
     );
   }
 
-  /**
-   * ★ P3 回档预览（只读）：回档到 targetIndex 前查文件层会还原/删哪些文件。
-   * 复用 beilu-memory 的 getRollbackPreview 动作（setDataActions.mjs），纯查询不改状态。
-   * 注意：该后端 action 原名 getCheckpointDiff，因与 checkpoint 面板按 id 查 diff 的同名 case 撞 label
-   * 已改名 getRollbackPreview（本调用方曾被漏改，会命中 id 版报"缺少 id"，已修）。
-   * 返回 { success, ideConnected, checkpointsToRevert, filesToRestore[], filesToDelete[] }。
-   */
+  /** 只读回档预览：返回执行时必须原样带回的检查点/表格/IDE 身份令牌。 */
   async getRollbackPreview(
     chatId: string,
-    targetIndex: number,
+    payload: {
+      anchorMessageId: string;
+      targetIndex: number;
+      afterCount: number;
+    },
   ): Promise<Record<string, unknown>> {
-    return this._callPluginApi<Record<string, unknown>>(
-      "beilu-memory",
-      "config/setdata",
-      "POST",
-      { _action: "getRollbackPreview", chatId, targetIndex },
+    return this._callStructuredApi<Record<string, unknown>>(
+      `${chatId}/rollback/preview`,
+      payload,
     );
   }
 
@@ -429,13 +566,25 @@ export class ChatService {
    * 多开 VSCode 时各窗口的对话各写各的工作区（原单连接=全部打到最后注册的窗口）。
    * 调用点：Provider switchChat / sendMessage 恢复 / 聊天 WS (重)连接（幂等，重复上报无害）。
    */
-  async bindIdeInstance(chatId: string, wsPort: number): Promise<Record<string, unknown>> {
-    return this._callPluginApi<Record<string, unknown>>(
+  async bindIdeInstance(chatId: string, wsPort: number, instanceId: string): Promise<Record<string, unknown>> {
+    const normalizedChatId = typeof chatId === "string" ? chatId.trim() : "";
+    const normalizedInstanceId = typeof instanceId === "string" ? instanceId.trim() : "";
+    if (!normalizedChatId || !Number.isInteger(wsPort) || wsPort <= 0 || !normalizedInstanceId) {
+      throw new Error("IDE 实例绑定身份无效（chatId/port/instanceId 必须完整）");
+    }
+    const result = await this._callPluginApi<Record<string, unknown>>(
       "beilu-memory",
       "config/setdata",
       "POST",
-      { _action: "bindIdeInstance", chatid: chatId, port: wsPort },
+      { _action: "bindIdeInstance", chatid: normalizedChatId, port: wsPort, instanceId: normalizedInstanceId },
     );
+    if (result?.success !== true) {
+      const reason = typeof result?.error === "string" && result.error.trim()
+        ? result.error
+        : "后端未确认 IDE 实例绑定成功";
+      throw new Error(reason);
+    }
+    return result;
   }
 
   /** 后端 IDE 连接池状态快照 { instances:[{port,kind,connected,primary,workspaceFolders}], bindings:{chatid:port}, primaryPort }。 */
@@ -472,12 +621,16 @@ export class ChatService {
     );
   }
 
-  /** 单条消息 hide/unhide（可逆 _hidden 掩码，走 shells:chat 端点）。 */
-  async hideMessage(chatId: string, index: number, hide: boolean): Promise<{ hidden: number }> {
-    return this._callApi<{ hidden: number }>(
+  /** 单条消息 hide/unhide：messageId 是权威身份，indexHint 仅作兼容定位提示。 */
+  async hideMessage(
+    chatId: string,
+    indexHint: number,
+    messageId: string,
+    hide: boolean,
+  ): Promise<Record<string, unknown>> {
+    return this._callStructuredApi<Record<string, unknown>>(
       `${chatId}/messages/hide`,
-      "POST",
-      { indices: [index], hide },
+      { indices: [indexHint], messageIds: [messageId], hide },
     );
   }
 
@@ -1021,24 +1174,26 @@ export class ChatService {
     );
   }
 
-  /** 删除指定范围的聊天消息 */
+  /** 删除指定范围的聊天消息：anchorMessageId 是权威起点，索引只作提示。 */
   async deleteMessageRange(
     chatId: string,
+    anchorMessageId: string,
     startIndex: number,
     endIndex: number,
-  ): Promise<void> {
-    const serverUrl = this._connectionService.state.serverUrl;
-    // H1: 统一走 _fetchWithAuth（补 401-refresh-retry）
-    const resp = await this._fetchWithAuth(
-      `${serverUrl}/api/parts/shells:chat/${chatId}/messages/delete-range`,
-      {
-        method: "POST",
-        body: { startIndex, endIndex },
-        timeoutMs: BULK_OP_TIMEOUT_MS,
-        jsonBody: true,
-      },
+  ): Promise<Record<string, unknown>> {
+    const normalizedChatId = typeof chatId === "string" ? chatId.trim() : "";
+    const normalizedAnchor = typeof anchorMessageId === "string" ? anchorMessageId.trim() : "";
+    if (!normalizedChatId || !normalizedAnchor) {
+      throw new Error("范围删除缺少 chatId 或 anchorMessageId");
+    }
+    if (!Number.isInteger(startIndex) || startIndex < 0 || !Number.isInteger(endIndex) || endIndex < 0) {
+      throw new Error("范围删除索引提示无效");
+    }
+    return this._callStructuredApi<Record<string, unknown>>(
+      `${normalizedChatId}/messages/delete-range`,
+      { anchorMessageId: normalizedAnchor, startIndex, endIndex },
+      BULK_OP_TIMEOUT_MS,
     );
-    if (!resp.ok) throw new Error(`deleteMessageRange failed: ${resp.status}`);
   }
 
   /** 获取指定 API 源的配置（含 model/url/apikey） */
@@ -1438,7 +1593,9 @@ export class ChatService {
     };
 
     this._chatWs.onmessage = (event) => {
-      this._handleWsMessage(event);
+      // chatId 由创建这条 socket 时的闭包冻结；切换对话后旧 socket 的晚到事件
+      // 不得借用 this._currentChatId 冒充新对话的事件归属。
+      this._handleWsMessage(event, chatId);
     };
 
     this._chatWs.onclose = () => {
@@ -1569,7 +1726,7 @@ export class ChatService {
   // =================================================================
 
   /** 处理收到的 WS 消息（通道A 分发中枢：解析 JSON → switch(type) → fire 对应 EventEmitter） */
-  private _handleWsMessage(event: WebSocket.MessageEvent): void {
+  private _handleWsMessage(event: WebSocket.MessageEvent, ownerChatId: string): void {
     let msg: { type: string; payload: unknown };
     try {
       msg = JSON.parse(String(event.data));
@@ -1594,8 +1751,13 @@ export class ChatService {
         break;
 
       case "message_edited": {
-        const p = msg.payload as { index: number; entry: ChatLogEntry };
-        this._onMessageEdited.fire(p);
+        const p = msg.payload as {
+          index: number;
+          entry: ChatLogEntry;
+          editOperationId?: string;
+          payloadFingerprint?: string;
+        };
+        this._onMessageEdited.fire({ ...p, chatId: ownerChatId });
         break;
       }
 

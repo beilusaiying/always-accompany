@@ -23,8 +23,8 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
  *   常见 action 示例（2026-07 grep 真实 `_action ===`/`case` 分支核对，非示意）：
  *     "updateTable"                  — 保存表格数据
  *     "switchMode"（if 分支非 case） — 切换 chat/code/work 模式
- *     "updateMemoryPreset"           — 更新已有记忆预设字段（创建预设是 getSubModes/saveSubModes
- *                                      内部副作用调 presetBridge.createBeiluPreset，非独立 action）
+ *     "updateMemoryPreset"           — 更新已有记忆预设字段（[0804] getSubModes/saveSubModes 对缺失
+ *                                      预设引用只触发 preset owner 官方播种，不再自造预设文件）
  *     "scheduler_addJob"/"scheduler_removeJob" — 调度器任务增删
  *     "endDay"                       — 触发日终9步归档
  *     "ideToolCall"                  — 手动触发 IDE 工具调用
@@ -61,8 +61,10 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import JSZip from "npm:jszip";
 import { safeFetch, assertSafeOutboundInServerMode } from "../../security/safe_fetch.mjs";
-import { hasPreset as presetExists, createPreset as createBeiluPreset, applySubModePresetDefault } from "../ai/presetBridge.mjs"; // [0725] getActivePresetNameBridge 随 using_preset 孤儿产者删除（跨域第二解析源收口）
-import { DEFAULT_INJECTION_DEPTH } from "../../prompt/preset/engine/preset_engine.mjs"; // T8·回切：改指 yonban 新位实现体
+import { hasPreset as presetExists, applySubModePresetDefault, clearPresetOverrideViaAPI, ensurePresetReference } from "../ai/presetBridge.mjs"; // [0725] getActivePresetNameBridge 随 using_preset 孤儿产者删除（跨域第二解析源收口）；[0804] createBeiluPreset 随 11-entry 空壳工厂删除（memory 不再是预设内容第二生产者）；[D3 批2] ensurePresetStoreLoaded 整店播种改 ensurePresetReference 单名结构化 outcome（D2-③ Owner API）
+// [D3 0804] 子模式激活唯一 owner：setActiveSubMode 成 adapter、新 verb activateSubMode 三入口统一；
+//   saveSubModes 写门归一（flat↔nested 同步+冲突标记+contract 剥除）收口 normalizeSubModeForSave 单源。
+import { activateSubMode as activateSubModeCore, deactivateSubMode as deactivateSubModeCore, preflightSubModeActivation, normalizeSubModeForSave, listMissingPresetReferences } from "../storage_mod/subModeActivation.mjs";
 // 链路2（2026-07-08 可操作处禁硬编码）：getSubModes 响应附 param_schema，YonBan 子模式表单
 //   值域/默认值据此渲染（替代 chat-modes.js 写死 0.7/1/8192 与 min/max/step 副本）
 // 链路2扩展（2026-07-09）：再附 enum_schema——pp/预填充选项集单源下发，YonBan 两 select
@@ -73,6 +75,8 @@ import { sanitizeFilename } from "../../../../../scripts/sanitizeName.mjs"; // 0
 import { safeUnlink } from "../../rollback/safeDelete.mjs"; // T8·回切：改指 yonban 新位实现体
 // inj 识别系统 2026-07-13：autoMode 写入校验单源（原零校验=垃圾值静默入库后在门控被拒无诊断面）
 import { isValidInjectionAutoMode } from "../storage_mod/injectionSystem.mjs";
+import { inspectInjectionCachePrefix } from "./volatileMacros.mjs";
+import { resolveEffectiveP1RouteConfig, resolveP1RouteUpdate } from "../p1Route.mjs";
 import { dispatch } from "../../../dispatch/dispatcher.mjs"; // [0716 T3对接首批] 广播副作用改经 bus:broadcast 出口节点（exits.mjs），删 4 个 _broadcast* 内的动态 import broadcast.mjs 散拼样板
 
 import {
@@ -104,6 +108,12 @@ import {
   clearCharCache,
   presetSwitchCooldown,
   readContextSummary,
+  beginContextSummaryWrite,
+  commitContextSummaryWrite,
+  computeContextSummarySourceRevision,
+  beginContextSummaryRollback,
+  completeContextSummaryRollback,
+  clearContextSummary,
   saveJsonFile,
   saveMemoryPresets,
   saveTablesData,
@@ -180,8 +190,12 @@ import { countTokensSync } from "../nlp/tokenizer.mjs";
 //   不是进程态:盘上版本达标=getSubModes 纯读;低版本才进一次性迁移写路径(迁移完推版本号落盘,
 //   跨进程/isolate 天然一致,配置被删重建时版本字段缺失自然重迁)。版本号语义:1=初始化+W64迁移+建预设已完成;
 //   2=0722 新增 work-job-hunt/work-stock 子模式(存量用户经迁移段5"补充缺失的工作子模式"按 id union 补齐);
-//   3=0722 凛倾撤销 work-job-hunt/work-stock(迁移段5.5按 id 剔除+激活指针归位,默认表已同步删除)。
-const SUB_MODES_SCHEMA = 4;
+//   3=0722 凛倾撤销 work-job-hunt/work-stock(迁移段5.5按 id 剔除+激活指针归位,默认表已同步删除);
+//   4=0724 code组重组中文id(段0.9分流+旧英文id剔除+映射表直达最终id);
+//   5=[D3 0804] 存量条目过 normalizeSubModeForSave 写门归一(段7:contract 剥除+schemaVersion:2+
+//     fallbackPolicy 默认 fail_closed+flat↔nested 缺侧同步+真冲突只标 _profile_conflicts 不静默挑选;
+//     幂等可重复,不覆盖用户值)。
+const SUB_MODES_SCHEMA = 5;
 
 import {
   asyncAITasks,
@@ -200,7 +214,7 @@ import {
   setPluginEnabled,
 } from "../ai/aiRunner.mjs";
 
-import { ideClient, isIdeToolResultMsg, isIdeToolCallMsg, deriveApprovalSkipRule, buildPermissionTemplateRules, collectNoiseToHide, CLONE_TAG_RE, PERMISSION_WRITE_TOOLS, FILE_EDIT_TOOLS, WRITE_TOOLS_ALL, DELETE_CMD_FIRST_WORDS, isSensitiveEnvBasename } from "../../../transport/ideClient.mjs";
+import { ideClient, isValidIdeRouteSnapshot, ideRouteSnapshotsEqual, isIdeToolResultMsg, isIdeToolCallMsg, deriveApprovalSkipRule, buildPermissionTemplateRules, collectNoiseToHide, CLONE_TAG_RE, PERMISSION_WRITE_TOOLS, FILE_EDIT_TOOLS, WRITE_TOOLS_ALL, DELETE_CMD_FIRST_WORDS, isSensitiveEnvBasename } from "../../../transport/ideClient.mjs";
 import {
   normalizeToolRuntimeConfig,
   normalizeToolRuntimeConfigForRecovery,
@@ -582,35 +596,30 @@ function _c2CopyDomain(domain, sourceMemDir, targetMemDir) {
 // P系列提示词组整组写入的统一归一+守卫（replacePresetPrompts 与 importMemoryPreset 共用，
 // 禁再各写一份=散写）：字段归一 → deletable:false 原条目漏删插回 → 内置条目内容/身份标志锁
 // （content/builtin/deletable 保原值，role/enabled/name/顺序放行，凛倾0711）
-// ── 子模式「成员即有预设」不变式（0731 002"没有新建预设"根修：原逻辑困在 getSubModes 初始化/迁移
-//   分支，schema 达标纯读与 saveSubModes 新增条目永远不建预设）。幂等：presetExists 命中跳过。
-//   消费方：getSubModes（初始化/迁移后）+ saveSubModes（写入后同步补建）。──
-function _ensureSubModePresetsFor(smUser, subModes) {
-  let _created = 0;
-  for (const sm of subModes) {
-    if (sm.presetName && !presetExists(smUser, sm.presetName)) {
-      const defaultOrder = [{ identifier: "main", enabled: true }, { identifier: "personaDescription", enabled: true }, { identifier: "worldInfoBefore", enabled: true }, { identifier: "charDescription", enabled: true }, { identifier: "charPersonality", enabled: true }, { identifier: "scenario", enabled: true }, { identifier: "nsfw", enabled: true }, { identifier: "worldInfoAfter", enabled: true }, { identifier: "dialogueExamples", enabled: true }, { identifier: "chatHistory", enabled: true }, { identifier: "jailbreak", enabled: true }];
-      const presetJson = {
-        prompts: [
-          { name: "Main Prompt", system_prompt: true, role: "system", content: DEFAULT_SYSTEM_TEXTS.submode_main_prompt.replaceAll("{label}", sm.label).replaceAll("{desc}", sm.desc || ""), identifier: "main", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-          { name: "NSFW Prompt", system_prompt: true, role: "system", content: "", identifier: "nsfw", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-          { name: "Jailbreak", system_prompt: true, role: "system", content: "", identifier: "jailbreak", forbid_overrides: false, injection_position: 0, injection_depth: DEFAULT_INJECTION_DEPTH, injection_order: 100 },
-          { identifier: "personaDescription", name: "Persona Description", system_prompt: true, marker: true },
-          { identifier: "scenario", name: "Scenario", system_prompt: true, marker: true },
-          { identifier: "charDescription", name: "Char Description", system_prompt: true, marker: true },
-          { identifier: "charPersonality", name: "Char Personality", system_prompt: true, marker: true },
-          { identifier: "worldInfoBefore", name: "World Info (before)", system_prompt: true, marker: true },
-          { identifier: "worldInfoAfter", name: "World Info (after)", system_prompt: true, marker: true },
-          { identifier: "chatHistory", name: "Chat History", system_prompt: true, marker: true },
-          { identifier: "dialogueExamples", name: "Chat Examples", system_prompt: true, marker: true },
-        ],
-        prompt_order: [{ character_id: 100000, order: defaultOrder.map((o) => ({ ...o })) }, { character_id: 100001, order: defaultOrder.map((o) => ({ ...o })) }],
-      };
-      createBeiluPreset(smUser, sm.presetName, presetJson, `[${sm.label}] ${sm.desc}`);
-      _created++;
-    }
+// ── 子模式「成员即有预设」不变式（0804 根因重修）。
+//   【why·E 现场根因】原实现对任何缺失 presetName 直接 createBeiluPreset 造 11-entry 骨架——
+//   新用户首访 getSubModes 早于 beilu-preset 首访播种，21 个 builtin 名称被骨架抢占同名文件，
+//   seedBuiltinsForUser 见「文件已存在」跳过 → 官方完整预设（17-42 prompts）永远进不了用户池，
+//   code/work 全线拿 11 条空壳发请求（「预设系统全面死亡」实证）。
+//   【修】memory 侧不再是预设内容的第二生产者：缺失时先经 ensurePresetStoreLoaded 触发
+//   preset owner 的既有惰性播种（官方 builtin 完整内容，幂等），播种后复查；仍缺 = 非 builtin
+//   自定义引用 → 可见警告跳过，交用户在预设面板显式创建或改选——绝不静默造骨架占名。
+//   幂等：presetExists 命中直接跳过。消费方：getSubModes（初始化/迁移后）+ saveSubModes（写入后）。──
+async function _ensureSubModePresetsFor(smUser, subModes) {
+  const _missing = (subModes || []).filter((sm) => sm?.presetName && !presetExists(smUser, sm.presetName));
+  if (_missing.length === 0) return 0;
+  // [D3 批2·消费 D2-③ Owner API] 原「整店 ensurePresetStoreLoaded 播种 + presetExists 复查」升级为
+  //   逐引用 ensurePresetReference（presetBridge 薄适配 → preset owner 单名结构化 ensure）：
+  //   builtin=seeded（缺文件复制 DEFAULTS+registry）/reconciled（registry 缺项补）/exists；
+  //   用户显式删过的 builtin=skipped-deleted 不复活；非 builtin 缺失=rejected（禁造骨架）。
+  //   outcome 可审计单点裁决在 owner，本模块不写任何预设文件（防 E 现场骨架抢名根因复发）。
+  let _resolved = 0;
+  for (const sm of _missing) {
+    const _oc = await ensurePresetReference(smUser, { name: sm.presetName, reference: "submode" });
+    if (_oc?.status === "seeded" || _oc?.status === "reconciled" || _oc?.status === "exists") { _resolved++; continue; }
+    console.warn(`[beilu-memory] 子模式「${sm.label || sm.id}」引用的预设「${sm.presetName}」未就绪（${_oc?.status || "unknown"}${_oc?.reason ? ":" + _oc.reason : ""}）——不自动生成骨架（防抢占官方命名空间），请显式创建或改选已有预设`);
   }
-  return _created;
+  return _resolved;
 }
 
 function sanitizePromptSet(orig, incoming, presetId, setKey) {
@@ -696,6 +705,317 @@ export async function _resolveChatOwner(chatid) {
     const { getChatMetadatas } = await import("../../../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
     return getChatMetadatas().get(chatid)?.username ?? null;
   } catch { return null; }
+}
+
+/**
+ * 回档坐标只能由 chatOps 的稳定消息 ID 解析器决定。targetIndex 仅是旧调用提示，
+ * 给出 anchorMessageId 后不得用 hint 覆盖当前真实下标。
+ */
+async function _resolveRollbackAnchor(chatid, anchorMessageId, indexHint) {
+  if (typeof chatid !== "string" || !chatid) throw new Error("缺少 chatId");
+  if (indexHint !== undefined && (!Number.isInteger(indexHint) || indexHint < 0)) {
+    throw new Error("targetIndex 必须是有限非负整数");
+  }
+  if (typeof anchorMessageId === "string" && anchorMessageId) {
+    const chatOpsPath = path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs");
+    const { pathToFileURL } = await import("node:url");
+    const chatOps = await import(pathToFileURL(chatOpsPath).href);
+    if (typeof chatOps.resolveMessageAnchor !== "function") {
+      throw new Error("聊天锚点解析器不可用，拒绝按易漂移下标回档");
+    }
+    const resolved = await chatOps.resolveMessageAnchor(chatid, anchorMessageId, indexHint);
+    if (!resolved?.found || !Number.isInteger(resolved.index) || resolved.index < 0) {
+      const error = new Error(resolved?.reason || "anchor_not_found");
+      error.code = "ROLLBACK_ANCHOR_NOT_FOUND";
+      throw error;
+    }
+    return { messageId: resolved.messageId || anchorMessageId, index: resolved.index };
+  }
+  if (!Number.isInteger(indexHint) || indexHint < 0) throw new Error("缺少 targetIndex 或 anchorMessageId");
+  return { messageId: null, index: indexHint };
+}
+
+const _ROLLBACK_HISTORY_COORDINATION_CAPABILITY = Symbol("rollback-history-coordination");
+
+/**
+ * 仅供服务端 rollbackCoordinator 使用。协调权限由模块私有 Symbol 传递，不能由
+ * HTTP/WS payload 中的同名布尔字段伪造。
+ */
+export async function executeCoordinatedMemoryRollback(data, args) {
+  return handleSetData(data, args, _ROLLBACK_HISTORY_COORDINATION_CAPABILITY);
+}
+
+function _isActiveCompactSourceEntry(entry) {
+  return entry?.extension?._hidden !== true
+    && entry?.extension?._deleted !== true
+    && entry?._hidden !== true
+    && entry?._deleted !== true;
+}
+
+async function _readAuthoritativeCompactSource(chatId, sourceMessageIds) {
+  if (!Array.isArray(sourceMessageIds)
+    || sourceMessageIds.length === 0
+    || sourceMessageIds.some((id) => typeof id !== "string" || !id.trim())
+    || new Set(sourceMessageIds).size !== sourceMessageIds.length) {
+    const error = new Error("sourceMessageIds 必须是唯一非空稳定消息 ID 数组");
+    error.code = "E_CONTEXT_SUMMARY_SOURCE_IDS_INVALID";
+    throw error;
+  }
+  const chatOpsPath = path.join(__pluginDir, "..", "..", "shells", "beilu-chat", "src", "lib", "chatOps.mjs");
+  const { pathToFileURL } = await import("node:url");
+  const chatOps = await import(pathToFileURL(chatOpsPath).href);
+  const total = await chatOps.GetChatLogLength(chatId);
+  const chatLog = total > 0 ? await chatOps.GetChatLog(chatId, 0, total) : [];
+  const byId = new Map();
+  for (let index = 0; index < chatLog.length; index++) {
+    const entry = chatLog[index];
+    const id = typeof entry?.id === "string" ? entry.id.trim() : "";
+    if (!id) continue;
+    if (byId.has(id)) {
+      const error = new Error(`权威聊天记录存在重复消息 ID: ${id}`);
+      error.code = "E_CONTEXT_SUMMARY_SOURCE_ID_AMBIGUOUS";
+      throw error;
+    }
+    byId.set(id, { entry, index });
+  }
+  const selected = sourceMessageIds.map((id) => byId.get(id));
+  if (selected.some((item) => !item || !_isActiveCompactSourceEntry(item.entry))) {
+    const error = new Error("压缩来源已被删除、隐藏或不再存在，旧窗口结果已拒绝");
+    error.code = "E_CONTEXT_SUMMARY_SOURCE_SUPERSEDED";
+    throw error;
+  }
+  for (let index = 1; index < selected.length; index++) {
+    if (selected[index - 1].index >= selected[index].index) {
+      const error = new Error("压缩来源顺序与权威聊天记录不一致");
+      error.code = "E_CONTEXT_SUMMARY_SOURCE_ORDER_DRIFT";
+      throw error;
+    }
+  }
+  const entries = selected.map(({ entry, index }) => ({
+    ...entry,
+    _contextSummarySourceIndex: index,
+  }));
+  const chatHistory = entries.map((entry, index) => {
+    const speaker = String(entry?.name ?? entry?.role ?? "未知").trim() || "未知";
+    const content = typeof entry?.content === "string"
+      ? entry.content.trim()
+      : String(entry?.content ?? "").trim();
+    return `[消息#${index}] ${speaker}: ${content}`;
+  }).join("\n\n");
+  return {
+    entries,
+    chatHistory,
+    sourceRevision: computeContextSummarySourceRevision(entries),
+  };
+}
+
+function _parseExpectedCheckpointIds(value) {
+  if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !id)) {
+    throw new Error("expected checkpointIds 必须是非空字符串数组");
+  }
+  if (new Set(value).size !== value.length) throw new Error("expected checkpointIds 不得重复");
+  return [...value];
+}
+
+function _sameCheckpointIds(left, right) {
+  return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length
+    && left.every((id, index) => id === right[index]);
+}
+
+function _isCheckpointIdArray(value) {
+  return Array.isArray(value)
+    && value.every((id) => typeof id === "string" && id)
+    && new Set(value).size === value.length;
+}
+
+function _isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function _readCheckpointPreviewEnvelope(envelope) {
+  const result = envelope?.result;
+  const pending = envelope?.pending === true || result?.pending === true;
+  const indeterminate = pending || envelope?.indeterminate === true || result?.indeterminate === true;
+  const drift = envelope?.drift || result?.drift || null;
+  const checkpointSetDrift = envelope?.checkpointSetDrift === true || result?.checkpointSetDrift === true;
+  if (pending || indeterminate || drift || checkpointSetDrift === true) {
+    return {
+      ok: false,
+      pending,
+      indeterminate,
+      drift: drift || (checkpointSetDrift === true ? "checkpointIds" : null),
+      result: result && typeof result === "object" ? result : null,
+      error: result?.error || envelope?.error || "检查点预览处于未决或已漂移状态",
+    };
+  }
+  if (!envelope || typeof envelope !== "object" || envelope.success !== true) {
+    return { ok: false, result: result && typeof result === "object" ? result : null, error: result?.error || envelope?.error || "检查点预览执行端未确认成功" };
+  }
+  if (!result || typeof result !== "object" || result.success !== true) {
+    return { ok: false, result: result && typeof result === "object" ? result : null, error: result?.error || "检查点预览缺少内层 success:true" };
+  }
+  const shapeOk = _isCheckpointIdArray(result.checkpointIds)
+    && result.checkpointSetDrift === false
+    && Number.isInteger(result.checkpointsToRevert) && result.checkpointsToRevert >= 0
+    && result.checkpointsToRevert === result.checkpointIds.length
+    && _isStringArray(result.filesToRestore)
+    && _isStringArray(result.filesToDelete);
+  if (!shapeOk) {
+    return { ok: false, result, error: "检查点预览协议不完整，拒绝生成回档令牌" };
+  }
+  return { ok: true, result };
+}
+
+/**
+ * 纯函数：把 callTool 外层 envelope 与 FileCheckpoint 内层结果归一化。
+ * pending/indeterminate 不是失败终态；调用方必须停止截断对话并禁止重试。
+ */
+export function normalizeRollbackFileResult(fileResult, expectedCheckpointIds = undefined) {
+  const outer = fileResult && typeof fileResult === "object" && !Array.isArray(fileResult)
+    ? fileResult
+    : {};
+  const inner = outer.result && typeof outer.result === "object" && !Array.isArray(outer.result)
+    ? outer.result
+    : outer;
+  const conflicts = [];
+  const _protocolEqual = (left, right) => {
+    if (Array.isArray(left) || Array.isArray(right)) {
+      return Array.isArray(left) && Array.isArray(right)
+        && left.length === right.length
+        && left.every((value, index) => Object.is(value, right[index]));
+    }
+    return Object.is(left, right);
+  };
+  const protocolField = (name) => {
+    const hasInner = Object.hasOwn(inner, name);
+    const hasOuter = inner !== outer && Object.hasOwn(outer, name);
+    if (hasInner && hasOuter && !_protocolEqual(inner[name], outer[name])) conflicts.push(name);
+    return hasInner ? inner[name] : outer[name];
+  };
+  // 先读完所有重复危险字段，任一外层/内层冲突都 fail-closed。
+  const successField = protocolField("success");
+  const partialField = protocolField("partial");
+  const pendingField = protocolField("pending");
+  const indeterminateField = protocolField("indeterminate");
+  const driftField = protocolField("drift");
+  const pending = outer.pending === true || inner.pending === true;
+  const indeterminate = pending || outer.indeterminate === true || inner.indeterminate === true;
+  const hasDrift = driftField !== undefined && driftField !== null && driftField !== "";
+  const count = (value) => Number.isInteger(value) && value >= 0 ? value : 0;
+  const attemptedField = protocolField("attempted");
+  const checkpointsAttemptedField = protocolField("checkpointsAttempted");
+  if (attemptedField !== undefined && checkpointsAttemptedField !== undefined
+    && !_protocolEqual(attemptedField, checkpointsAttemptedField)) conflicts.push("attempted/checkpointsAttempted");
+  const attempted = count(attemptedField ?? checkpointsAttemptedField);
+  const reverted = count(protocolField("reverted") ?? protocolField("checkpointsReverted"));
+  const totalRestored = count(protocolField("totalRestored"));
+  const totalDeleted = count(protocolField("totalDeleted"));
+  const checkpointSetDrift = protocolField("checkpointSetDrift");
+  const resultCheckpointIds = protocolField("checkpointIds");
+  const remainingCheckpointIds = protocolField("remainingCheckpointIds");
+  const errors = protocolField("errors");
+  const failedFiles = protocolField("failedFiles");
+  const hasExpected = expectedCheckpointIds !== undefined;
+  const expectedValid = !hasExpected || _isCheckpointIdArray(expectedCheckpointIds);
+  const resultCheckpointIdsValid = _isCheckpointIdArray(resultCheckpointIds);
+  const remainingCheckpointIdsValid = _isCheckpointIdArray(remainingCheckpointIds);
+  const errorsValid = _isStringArray(errors);
+  const failedFilesValid = _isStringArray(failedFiles);
+  const expectedIds = hasExpected && expectedValid ? expectedCheckpointIds : resultCheckpointIds;
+  const expectedCount = Array.isArray(expectedIds) ? expectedIds.length : -1;
+  const canonicalInnerShape = [
+    "success", "partial", "checkpointSetDrift", "attempted", "reverted",
+    "checkpointsReverted", "totalRestored", "totalDeleted", "errors", "failedFiles",
+    "checkpointIds", "remainingCheckpointIds",
+  ].every((name) => Object.hasOwn(inner, name));
+  const shapeOk = conflicts.length === 0
+    && canonicalInnerShape
+    && expectedValid
+    && !hasDrift
+    && inner.partial === false
+    && partialField === false
+    && checkpointSetDrift === false
+    && Number.isInteger(protocolField("attempted")) && protocolField("attempted") >= 0
+    && Number.isInteger(protocolField("reverted")) && protocolField("reverted") >= 0
+    && Number.isInteger(protocolField("checkpointsReverted")) && protocolField("checkpointsReverted") >= 0
+    && Number.isInteger(protocolField("totalRestored")) && protocolField("totalRestored") >= 0
+    && Number.isInteger(protocolField("totalDeleted")) && protocolField("totalDeleted") >= 0
+    && errorsValid
+    && failedFilesValid
+    && resultCheckpointIdsValid
+    && remainingCheckpointIdsValid
+    && protocolField("reverted") === protocolField("checkpointsReverted");
+  const semanticOk = shapeOk
+    && (!hasExpected || _sameCheckpointIds(resultCheckpointIds, expectedCheckpointIds))
+    && errors.length === 0
+    && failedFiles.length === 0
+    && remainingCheckpointIds.length === 0
+    && attempted === expectedCount
+    && reverted === expectedCount;
+  const confirmed = outer.success === true
+    && inner.success === true
+    && successField === true
+    && !indeterminate
+    && semanticOk;
+  const partial = confirmed
+    ? false
+    : (indeterminate || outer.partial === true || inner.partial === true || reverted > 0 || totalRestored > 0 || totalDeleted > 0);
+  const fileRollback = {
+    success: confirmed,
+    partial,
+    pending,
+    indeterminate,
+    ...(driftField !== undefined ? { drift: driftField } : {}),
+    attempted,
+    reverted,
+    checkpointsReverted: reverted,
+    totalRestored,
+    totalDeleted,
+    ...(typeof checkpointSetDrift === "boolean" ? { checkpointSetDrift } : {}),
+    ...(resultCheckpointIds !== undefined ? { checkpointIds: resultCheckpointIds } : {}),
+    ...(remainingCheckpointIds !== undefined ? { remainingCheckpointIds } : {}),
+    ...(errors !== undefined ? { errors } : {}),
+    ...(failedFiles !== undefined ? { failedFiles } : {}),
+  };
+  return {
+    confirmed,
+    pending,
+    indeterminate,
+    shapeOk,
+    semanticOk,
+    conflicts,
+    fileRollback,
+    error: conflicts.length > 0
+      ? `回档执行包外层/内层危险字段冲突: ${[...new Set(conflicts)].join(", ")}`
+      : (hasDrift ? `回档执行结果存在漂移: ${String(driftField)}` : (inner.error || outer.error || null)),
+  };
+}
+
+function _memoryArchiveNotCovered() {
+  return {
+    status: "not_covered",
+    coveredByLedger: false,
+    affectedOperations: null,
+    restoredOperations: 0,
+    reason: "角色级 hot/warm/cold 归档记忆尚无按消息范围的操作账本或快照，本次回档无法恢复该层。",
+  };
+}
+
+function _legacyContextSummaryNotCovered() {
+  return {
+    status: "not_covered_ambiguous",
+    deleted: false,
+    reason: "角色级 legacy context_summary 没有 chatId 归属账本，无法证明属于本次对话，回档不删除。",
+  };
+}
+
+function _withMemoryArchiveCoverage(result) {
+  return {
+    ...(result || {}),
+    memoryArchive: _memoryArchiveNotCovered(),
+    legacyContextSummary: _legacyContextSummaryNotCovered(),
+  };
 }
 
 // 0714 chatid→char 归位（与 _resolveChatOwner 同源同范式）：无 char 上下文的调用方（YonBan 等）
@@ -854,11 +1174,25 @@ async function _resolveCompanionTarget(username, charName, cfg) {
       }
     } catch { ok = false; }
     if (ok) {
-      const _bindModeOfChat = getActiveMode(username, effChar, cfg.bindChat);
-      if (_bindModeOfChat === "code" || _bindModeOfChat === "work") {
-        warnings.push({ field: "bindChat", value: cfg.bindChat, reason: `mode_${_bindModeOfChat}_forbidden`, fellBackTo: "companion_dedicated" });
+      // 角色与承载对话必须是同一份契约：旧实现只证明 chat 文件存在，却没有证明其中挂载了
+      // bindChar。gameCompanion 随后把 session.charName 丢掉、生成器再从对话首角色猜，导致
+      // bindChar/实际 prompt/API 源分叉。显式绑定不擅自往用户已有对话加角色；不匹配就如实
+      // 回退专门陪伴线并返回 warning。
+      let _hasBoundChar = false;
+      try {
+        const { loadChat: _loadBoundChat } = await import("../../../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
+        const _boundMeta = await _loadBoundChat(cfg.bindChat);
+        _hasBoundChar = !!_boundMeta?.LastTimeSlice?.chars?.[effChar];
+      } catch { _hasBoundChar = false; }
+      if (!_hasBoundChar) {
+        warnings.push({ field: "bindChat", value: cfg.bindChat, reason: "character_mismatch", expectedChar: effChar, fellBackTo: "companion_dedicated" });
       } else {
-        effChatid = cfg.bindChat;
+        const _bindModeOfChat = getActiveMode(username, effChar, cfg.bindChat);
+        if (_bindModeOfChat === "code" || _bindModeOfChat === "work") {
+          warnings.push({ field: "bindChat", value: cfg.bindChat, reason: `mode_${_bindModeOfChat}_forbidden`, fellBackTo: "companion_dedicated" });
+        } else {
+          effChatid = cfg.bindChat;
+        }
       }
     } else {
       warnings.push({ field: "bindChat", value: cfg.bindChat, reason: "not_found", fellBackTo: "companion_dedicated" });
@@ -879,20 +1213,62 @@ async function _resolveCompanionTarget(username, charName, cfg) {
   return { effChar, effChatid, warnings };
 }
 
-export async function handleSetData(data, args) {
+/**
+ * [P0-C 2026-08-03] chat 归属校验单源：chatid → chatMetadatas 索引（启动全量扫描 + 创建即入索引）。
+ * 未知 chatid / 归属不匹配 / 校验设施不可用 → 一律 fail-closed（不可证明即不放行）。
+ * 消费方：handleSetData 头部统一闸（data.chatid/chatId/args.chatid 归一值）+ bindChatMode 的 chat_id。
+ */
+async function _verifyChatOwnership(chatid, username) {
+  try {
+    const { getChatMetadatas } = await import("../../../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
+    const _meta = getChatMetadatas().get(chatid);
+    if (!_meta) return { ok: false, code: "E_CHAT_UNKNOWN", error: `chatid 未知，归属不可证明（fail-closed）: ${String(chatid).slice(0, 40)}` };
+    if (_meta.username !== username) return { ok: false, code: "E_CHAT_OWNER_MISMATCH", error: "chatid 不属于当前认证用户，已拒绝" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, code: "E_CHAT_OWNER_UNVERIFIABLE", error: `chat 归属校验不可用（fail-closed）: ${e?.message || e}` };
+  }
+}
+
+export async function handleSetData(data, args, internalCapability = null) {
   if (!data) return;
 
-  // SEC-T1（跨账号越权根因·框架级单点收口）：存在认证上下文(args.username)时，
-  //   认证身份是 username 的唯一权威源——强制覆盖请求体里的 data.username，
-  //   使下游所有 `data.username || args?.username` 必解析到认证用户，杜绝
-  //   "注册一个号→请求体塞 username:他人→读写其数据" 的横向越权。
-  //   无 args.username 的调用(part 加载恢复 parts_loader:670 / 插件间内部调用)不受影响。
-  if (args?.username) data.username = args.username;
+  // SEC-T1（跨账号越权根因·框架级单点收口）+ [P0-C 2026-08-03 升级]：存在认证上下文(args.username)时，
+  //   认证身份是 username 的唯一权威源。原实现静默覆盖 data.username——payload 与可信身份
+  //   不一致时现在【直接拒绝】（任务 MD P0-C 要求2：不能静默任选一个），一致/缺失才归一。
+  //   无 args.username 的调用（纯插件间内部调用）不受影响。
+  //   [分身C 0803 注释校准] 原例"parts_loader:670 恢复无 username"已失真——parts_loader 生命周期
+  //   SetData 现带 username（lifecycleContext），不再点名行号防漂移。
+  if (args?.username) {
+    if (typeof data.username === "string" && data.username && data.username !== args.username) {
+      wbD(null, "setDataActions", "handleSetData:identityMismatch", false,
+        `payload username 与认证身份不一致（拒绝）`, { _action: data._action });
+      return { success: false, code: "E_IDENTITY_MISMATCH", error: "payload username 与认证身份不一致，已拒绝" };
+    }
+    data.username = args.username;
+  }
 
   // 桥接调用把认证会话写在 args.chatid（HTTP/WS dispatch 同契约），旧 REST 调用
   // 仍可能把 chatid 放在 data。两条入口必须在这里统一归一；否则 ideToolCall 会
   // 以无会话 Job 执行，owner 广播被拒，运行快照也无法按当前聊天读到该 Job。
-  const _chatid = data.chatid || data.chatId || args?.chatid || null;
+  // [分身C 0803 堵洞] 归一公式与下方 _rawChatId 完全同源（含 args.chat_name 派生候选）——
+  //   原头部闸少 chat_name 一路，调用方只传 chat_name 时可绕过归属校验（枚举现存调用方虽未触发，
+  //   两公式不同源本身就是绕过面，收成同一公式）。
+  const _chatid = data.chatid || data.chatId || args?.chatid ||
+    (args?.chat_name ? args.chat_name.replace("common_chat_", "") : null);
+
+  // [P0-C 2026-08-03] chat owner 统一校验（任务 MD P0-C 要求4）：认证上下文存在且 action 带 chatid
+  //   时，chatid 必须属于认证用户——未知 chatid（索引无记录=归属不可证明）与归属不匹配一律
+  //   fail-closed 拒绝。chatMetadatas 索引启动即全量扫描（chatStorage.mjs:236-303），新建对话
+  //   创建时入索引，可靠作为归属单源。payload 指向自己名下另一条线（记忆中心跨线查看/编辑）
+  //   仍合法——安全不变量是「归属」而非「与传输会话同线」。
+  if (_chatid && args?.username) {
+    const _own = await _verifyChatOwnership(_chatid, args.username);
+    if (!_own.ok) {
+      wbD(_chatid, "setDataActions", "handleSetData:chatOwnerReject", false, `${_own.code}: ${_own.error}`, { _action: data._action });
+      return { success: false, code: _own.code, error: _own.error };
+    }
+  }
   const _isReadOnly = typeof data._action === "string" && (data._action.startsWith("get") || data._action.startsWith("list"));
   if (!_isReadOnly) {
     wbT(_chatid, "setDataActions", "handleSetData:enter", { _action: data._action, username: data.username, charName: data.charName });
@@ -915,7 +1291,13 @@ export async function handleSetData(data, args) {
     //   getActiveMode 第三级回退（per-cid → char 级 → _global）污染一切"char 级无记录"窗口的模式
     //   解析（airp 表格面板翻成 code 的后端毒源，盘上 _global active_mode=code 实证）。带 chatid 归位。
     const switchCharName = await _resolveRequestChar(data, args, data.charName || args?.char_id || "_global");
-    wbT(_chatid, "setDataActions", "switchMode:enter", { targetMode, switchUsername, switchCharName });
+    // [P0-C 2026-08-03] switchMode 全链 canonical chatid 单源（任务 MD P0-C 要求5）：
+    //   原实现写入/verify/files 扇出读 data.chatid、broadcast 却读 _chatid（data||args 合成）——
+    //   payload 无 chatid 而桥会话有时，广播与写入取值分叉。现四消费点统一 _switchChatId
+    //   （payload 显式声明=线级写意图；无声明=char 级语义，广播走无 chatid 的 emitAll 回退）。
+    //   归属已在 handleSetData 头部闸校验（data.chatid 是 _chatid 首选候选）。
+    const _switchChatId = data.chatid || data.chatId || null;
+    wbT(_chatid, "setDataActions", "switchMode:enter", { targetMode, switchUsername, switchCharName, switchChatId: _switchChatId });
     console.log(`[beilu-memory] switchMode: mode=${targetMode}, user=${switchUsername}, char=${switchCharName}`);
     // [隔离架构 2026-07-25 mode 域对称化 · 凛倾「高内聚低耦合」] 带窗口坐标=只写线级（与 preset 域
     //   actSetLine 对称）：原实现无条件先调 3 参 setActiveMode（写 char 级 active_mode + _global 层，
@@ -923,14 +1305,14 @@ export async function handleSetData(data, args) {
     //   "无线级记录"窗口的回退层（多窗口被强制切换的 mode 域病根，与 preset 全局槽被夺同构）。
     //   char 级/_global 保留"无记录对话初始回退"语义（0708 N38），现只被无坐标调用方
     //   （YonBan/委派链等显式 char 级语义）更新；4 参线级分支 storage 侧本就早返回不碰 char 级。
-    const result = data.chatid
-      ? setActiveMode(switchUsername, switchCharName, targetMode, data.chatid)
+    const result = _switchChatId
+      ? setActiveMode(switchUsername, switchCharName, targetMode, _switchChatId)
       : setActiveMode(switchUsername, switchCharName, targetMode);
     if (result.success) {
       // [多窗口审计 2026-07-11 A3] verify 维度对齐写点：带 chatid 时核线级 active_modes_map[cid]
       //   （本次真正写的键），原不带 cid 恒核 char 级——双窗并发时 A 的 verify 读到 B 刚写的
       //   char 级值 → A 误报"验证失败"提前 return（绑定初始化/扇出全跳过），而 A 的写已落盘。
-      const verifyMode = getActiveMode(switchUsername, switchCharName, data.chatid || null);
+      const verifyMode = getActiveMode(switchUsername, switchCharName, _switchChatId);
       if (verifyMode !== targetMode) {
         return { success: false, error: `模式切换验证失败: 预期=${targetMode}, 实际=${verifyMode}` };
       }
@@ -974,7 +1356,7 @@ export async function handleSetData(data, args) {
             const _filesRes = await _setData({
               _action: "setMode",
               mode: _filesMode,
-              chatid: data.chatid || "",
+              chatid: _switchChatId || "",
               currentMessageCount: data.currentMessageCount ?? -1,
             });
             result.filesMode = "ok";
@@ -1000,7 +1382,8 @@ export async function handleSetData(data, args) {
       // A3：大模式持久化 + 扇出完成后广播 mode_changed（本体唯一 producer）。
       //   INJ 互斥（getPromptHandler）按 _activeMode 选注入，YonBan 面板需即时同步大模式，
       //   否则只能靠 4s 轮询拿到 stale 模式。
-      await _broadcastModeChanged(_chatid, {
+      // [P0-C] 广播与写入同一 canonical（原读 _chatid=data||args 合成，与写入点分叉）
+      await _broadcastModeChanged(_switchChatId, {
         mode: targetMode,
         charName: switchCharName,
       });
@@ -1041,6 +1424,16 @@ export async function handleSetData(data, args) {
       return { success: false, error: `非法模式值: ${bindMode}` };
     }
     const bindUsername = data.username || args?.username || "_default";
+    // [P0-C 2026-08-03] bindChatMode 归属校验（Fable 审查非阻断5：原任意 chat_id+mode 可写
+    //   active_modes_map 无归属校验）：认证上下文存在时 chat_id 必须属于认证用户，fail-closed。
+    //   头部统一闸只覆盖 data.chatid/chatId，本 action 的目标键是 chat_id，单独补校验。
+    if (args?.username) {
+      const _bindOwn = await _verifyChatOwnership(bindChatId, args.username);
+      if (!_bindOwn.ok) {
+        wbD(bindChatId, "setDataActions", "bindChatMode:chatOwnerReject", false, `${_bindOwn.code}: ${_bindOwn.error}`, {});
+        return { success: false, code: _bindOwn.code, error: _bindOwn.error };
+      }
+    }
     // 断链② 同族：线级绑定同归位（bindChatMode 本就带 chat_id，data.chatid 缺省时也按 chat_id 归位）
     const bindCharName = await _resolveRequestChar({ ...data, chatid: data.chatid || data.chat_id }, args, data.charName || args?.char_id || "_global");
     const bindResult = setActiveMode(bindUsername, bindCharName, bindMode, bindChatId);
@@ -1538,6 +1931,36 @@ export async function handleSetData(data, args) {
       const injPrompts = presetsData.injection_prompts || [];
       const inj = injPrompts.find((p) => p.id === data.injectionId);
       if (!inj) return { success: false, error: `未找到注入条目 ${data.injectionId}` };
+      // 缓存前缀契约：先对完整拟保存状态校验，再修改内存对象，避免失败请求留下半更新。
+      // 启用且 depth>=1 的条目只允许 volatileMacros.mjs 登记的稳定宏；动态宏必须拆到 depth:0。
+      if (data.autoMode !== undefined && !isValidInjectionAutoMode(String(data.autoMode)))
+        return { success: false, error: `非法 autoMode "${data.autoMode}"（合法值=always/all/manual/file + 已注册模式/别名域）` };
+      const _nextEnabled = data.enabled !== undefined ? !!data.enabled : inj.enabled !== false;
+      const _nextDepth = data.depth !== undefined ? (parseInt(data.depth, 10) || 0) : (Number(inj.depth) || 0);
+      const _nextRole = data.role !== undefined ? String(data.role || "system") : String(inj.role || "system");
+      const _nextContent = data.content !== undefined ? String(data.content) : String(inj.content || "");
+      const _placement = inspectInjectionCachePrefix({
+        enabled: _nextEnabled,
+        depth: _nextDepth,
+        role: _nextRole,
+        content: _nextContent,
+      });
+      if (_placement.effectiveDepth !== _placement.requestedDepth) {
+        return {
+          success: false,
+          error: `历史前条目不能使用非稳定宏：${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}。请拆到 depth:0 数据条目。`,
+          code: "E_INJ_UNSAFE_CACHE_PREFIX_MACRO",
+          unsafeMacros: _placement.unsafeMacros,
+        };
+      }
+      if (_placement.effectiveRole !== _placement.requestedRole) {
+        return {
+          success: false,
+          error: `历史后动态数据条目必须使用 user 角色，否则 Claude 适配器会把 system 消息抽回缓存前缀。`,
+          code: "E_INJ_DYNAMIC_DATA_REQUIRES_USER_ROLE",
+          unsafeMacros: _placement.unsafeMacros,
+        };
+      }
       if (data.enabled !== undefined) inj.enabled = !!data.enabled;
       if (data.content !== undefined) inj.content = String(data.content);
       if (data.name !== undefined) inj.name = String(data.name);
@@ -1546,9 +1969,6 @@ export async function handleSetData(data, args) {
       if (data.depth !== undefined) inj.depth = parseInt(data.depth, 10) || 0;
       if (data.order !== undefined) inj.order = parseInt(data.order, 10) || 0;
       if (data.autoMode !== undefined) {
-        // inj 识别系统 2026-07-13：值域校验（单源=injectionSystem），非法值可见拒绝不静默入库
-        if (!isValidInjectionAutoMode(String(data.autoMode)))
-          return { success: false, error: `非法 autoMode "${data.autoMode}"（合法值=always/all/manual/file + 已注册模式/别名域）` };
         inj.autoMode = String(data.autoMode);
       }
       // 平台限定注入（凛倾 07-09）：platform 仅对 autoMode="bot" 有门控意义（getPromptHandler bot 分支）；
@@ -1584,6 +2004,23 @@ export async function handleSetData(data, args) {
         // 平台限定注入（凛倾 07-09）：可选字段，autoMode="bot" 时门控只进该平台 bot 会话
         ...(data.platform ? { platform: String(data.platform) } : {}),
       };
+      const _placement = inspectInjectionCachePrefix(newInj);
+      if (_placement.effectiveDepth !== _placement.requestedDepth) {
+        return {
+          success: false,
+          error: `历史前条目不能使用非稳定宏：${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}。请拆到 depth:0 数据条目。`,
+          code: "E_INJ_UNSAFE_CACHE_PREFIX_MACRO",
+          unsafeMacros: _placement.unsafeMacros,
+        };
+      }
+      if (_placement.effectiveRole !== _placement.requestedRole) {
+        return {
+          success: false,
+          error: `历史后动态数据条目必须使用 user 角色，否则 Claude 适配器会把 system 消息抽回缓存前缀。`,
+          code: "E_INJ_DYNAMIC_DATA_REQUIRES_USER_ROLE",
+          unsafeMacros: _placement.unsafeMacros,
+        };
+      }
       injPrompts.push(newInj);
       presetsData.injection_prompts = injPrompts;
       saveMemoryPresets(username, charName, presetsData);
@@ -1666,8 +2103,10 @@ export async function handleSetData(data, args) {
       return { success: true, message: "P2-code归档已异步触发" };
     }
     case "triggerP2Summary": {
+      // [0804 根因修] 传 opts.manual=true：这是用户显式点击手动按钮，必须绕过
+      //   triggerP2Summary 内「trigger===manual_button 跳过自动触发」守卫（否则手动按钮永远 no-op）。
       const { triggerP2Summary } = await import("../ai/aiRunner.mjs");
-      triggerP2Summary(username, charName).catch(e =>
+      triggerP2Summary(username, charName, undefined, { manual: true }).catch(e =>
         console.error("[beilu-memory] 手动P2归档失败:", e.message));
       return { success: true, message: "P2归档已异步触发" };
     }
@@ -2073,6 +2512,16 @@ export async function handleSetData(data, args) {
       {
         const _badAm = importData.injection_prompts.filter((p) => p?.autoMode !== undefined && !isValidInjectionAutoMode(String(p.autoMode)));
         if (_badAm.length) return { success: false, error: `导入含非法 autoMode 条目: ${_badAm.map((p) => `${p.id || p.name || "?"}(${p.autoMode})`).join(", ")}` };
+        const _badCachePlacement = importData.injection_prompts
+          .map((p) => ({ entry: p, placement: inspectInjectionCachePrefix(p) }))
+          .filter(({ placement }) => !placement.safe);
+        if (_badCachePlacement.length) {
+          return {
+            success: false,
+            code: "E_IMPORT_UNSAFE_INJ_CACHE_PLACEMENT",
+            error: `导入含不安全缓存位置/角色条目: ${_badCachePlacement.map(({ entry, placement }) => `${entry?.id || entry?.name || "?"}[depth ${placement.requestedDepth}->${placement.effectiveDepth}, role ${placement.requestedRole}->${placement.effectiveRole}]`).join(", ")}`,
+          };
+        }
       }
       if (data.backupExisting !== false) {
         const memDir = ensureMemoryDir(username, "_global");
@@ -2275,7 +2724,8 @@ export async function handleSetData(data, args) {
 
     // ★ 直接触发分身执行（测试用，返回完整每轮详情）
     case "testClone": {
-      const _tcInstruction = data.instruction || "查看项目结构并汇报";
+      const _tcInstruction = typeof data.instruction === "string" ? data.instruction.trim() : "";
+      if (!_tcInstruction) return { success: false, error: "测试分身需要明确 instruction" };
       const _tcConfigPath = getYonbanConfigPath(username);
       const _tcConfig = loadJsonFileIfExists(_tcConfigPath, { clones: [] });
       // 契约对账修复（20260706）：详情页测试传 cloneId（subModePanel:2672）原被无视——恒 find(enabled)
@@ -2288,7 +2738,7 @@ export async function handleSetData(data, args) {
       const _tcMaxRounds = data.maxRounds || _tcClone.maxRounds || 40;
 
       try {
-        const { parseIdeToolCallTags } = await import("../../../transport/ideClient.mjs");
+        const { parseIdeToolCallTags, renderStaticIdeToolSignatures } = await import("../../../transport/ideClient.mjs");
         const { pathToFileURL } = await import("node:url");
 
         // 加载预设提示词
@@ -2311,6 +2761,9 @@ export async function handleSetData(data, args) {
           // ★ 过滤分身相关段落，防止分身递归调用分身
           let _tcInj2Content = _tcInj2.content
             .replace(/\{\{user\}\}/g, username)
+            // 测试分身与正式分身消费同一静态工具注册表；动态项目环境不进入历史前工具文档。
+            .replace(/\{\{env_tools\}\}/g, "")
+            .replace(/\{\{ide_tools\}\}/g, renderStaticIdeToolSignatures())
             .replace(/<ide_extended>[\s\S]*?## 分身AI[\s\S]*?(?=##|<\/ide_extended>)/, "")
             .replace(/并行调用分身AI[\s\S]*?结果下一轮自动注入/g, "");
           _tcSystemPrompts.push({ role: "system", content: _tcInj2Content });
@@ -2551,11 +3004,82 @@ export async function handleSetData(data, args) {
     }
 
     case "compactContext": {
-      if (!data.chatHistory) return { success: false, error: "缺少 chatHistory" };
+      let _compactSource = null;
+      if (chatId) {
+        try {
+          _compactSource = await _readAuthoritativeCompactSource(chatId, data.sourceMessageIds);
+        } catch (error) {
+          return {
+            success: false,
+            applied: false,
+            superseded: error?.code === "E_CONTEXT_SUMMARY_SOURCE_SUPERSEDED"
+              || error?.code === "E_CONTEXT_SUMMARY_SOURCE_ORDER_DRIFT",
+            code: error?.code || "E_CONTEXT_SUMMARY_SOURCE_UNAVAILABLE",
+            error: error?.message || String(error),
+          };
+        }
+      } else if (typeof data.chatHistory === "string" && data.chatHistory.trim()) {
+        // 无 per-chat 坐标的旧内部调用没有可重读的聊天真源，只保留既有角色级兼容行为。
+        _compactSource = { chatHistory: data.chatHistory, sourceRevision: null, entries: null };
+      } else {
+        return { success: false, applied: false, error: "缺少权威压缩来源", code: "E_CONTEXT_SUMMARY_SOURCE_REQUIRED" };
+      }
+      const _authoritativeHistory = _compactSource.chatHistory;
+      if (!_authoritativeHistory.trim()) {
+        return { success: false, applied: false, error: "权威压缩来源为空", code: "E_CONTEXT_SUMMARY_SOURCE_EMPTY" };
+      }
+
+      const _summaryWriteToken = chatId
+        ? await beginContextSummaryWrite(username, charName, chatId, {
+          sourceRevision: _compactSource.sourceRevision,
+        })
+        : null;
+      if (_summaryWriteToken && _summaryWriteToken.ok !== true) {
+        return {
+          success: false,
+          applied: false,
+          busy: _summaryWriteToken.busy === true,
+          code: _summaryWriteToken.code || "E_CONTEXT_SUMMARY_WRITE_BLOCKED",
+          error: "当前对话摘要正在回档改写期，本次压缩未执行",
+          leaseExpiresAt: _summaryWriteToken.leaseExpiresAt || null,
+        };
+      }
+      const _commitSummary = async (summaryData) => {
+        if (!chatId) {
+          writeContextSummary(username, charName, summaryData);
+          return { committed: true, legacy: true };
+        }
+        let currentSource;
+        try {
+          currentSource = await _readAuthoritativeCompactSource(chatId, data.sourceMessageIds);
+        } catch (error) {
+          return {
+            committed: false,
+            superseded: true,
+            code: error?.code || "E_CONTEXT_SUMMARY_SOURCE_SUPERSEDED",
+            error: error?.message || String(error),
+          };
+        }
+        return commitContextSummaryWrite(username, charName, chatId, _summaryWriteToken, summaryData, {
+          currentSourceRevision: currentSource.sourceRevision,
+        });
+      };
+      const _summaryCommitFailure = (commit) => ({
+        success: false,
+        applied: false,
+        superseded: commit?.superseded === true,
+        busy: commit?.busy === true,
+        code: commit?.code || "E_CONTEXT_SUMMARY_WRITE_NOT_COMMITTED",
+        error: commit?.error || (commit?.superseded
+          ? "压缩期间对话摘要已被回档或更新，迟到结果已丢弃"
+          : "对话摘要未能确认提交"),
+        expected: commit?.expected || null,
+        actual: commit?.actual || null,
+      });
 
       // === 第一级：快速裁剪（不调AI，直接删旧对话30%） ===
       if (data.quickPrune) {
-        const lines = data.chatHistory.split("\n");
+        const lines = _authoritativeHistory.split("\n");
         const keepStart = Math.floor(lines.length * 0.3);
         const pruned = [
           lines[0], // 保留第一条（开场上下文）
@@ -2565,11 +3089,12 @@ export async function handleSetData(data, args) {
         const summaryData = {
           summary: pruned, keep_indices: [],
           timestamp: new Date().toISOString(),
-          originalChars: data.chatHistory.length, summaryChars: pruned.length,
-          compressionRatio: ((1 - pruned.length / data.chatHistory.length) * 100).toFixed(1),
+          originalChars: _authoritativeHistory.length, summaryChars: pruned.length,
+          compressionRatio: ((1 - pruned.length / _authoritativeHistory.length) * 100).toFixed(1),
           method: "quickPrune",
         };
-        writeContextSummary(username, charName, summaryData, chatId);
+        const commit = await _commitSummary(summaryData);
+        if (commit.committed !== true) return _summaryCommitFailure(commit);
         return { success: true, summary: pruned, method: "quickPrune", compressionRatio: summaryData.compressionRatio };
       }
 
@@ -2580,8 +3105,11 @@ export async function handleSetData(data, args) {
       else { const p1P = presetsData.presets.find((p) => p.id === "P1"); if (p1P?.api_config) aiApiConfig = p1P.api_config; else { const anyP = presetsData.presets.find((p) => p.enabled && p.api_config); if (anyP?.api_config) aiApiConfig = anyP.api_config; } }
       if (!aiApiConfig) return { success: false, error: "未找到可用的 AI 配置" };
 
-      const compactMsgCount = data.messageCount || 0, compactKeepLast = data.keepLastN || 0;
-      const compactRange = Math.max(0, compactMsgCount - compactKeepLast);
+      const compactKeepLast = Number.isInteger(data.keepLastN) && data.keepLastN >= 0 ? data.keepLastN : 0;
+      const compactRange = Array.isArray(_compactSource.entries)
+        ? _compactSource.entries.length
+        : Math.max(0, (Number.isInteger(data.messageCount) ? data.messageCount : 0) - compactKeepLast);
+      const compactMsgCount = compactRange + compactKeepLast;
 
       // 接通：用户在面板编辑的 P7 prompts 优先（按当前模式选 prompts/_code/_work，
       // 由 runMemoryPresetAI 自动替换 {{chat_history}}）；未配置有效 prompts 时回退单源默认指令。
@@ -2590,7 +3118,7 @@ export async function handleSetData(data, args) {
       let compactPreset, compactChatHistory;
       if (p7Preset && p7HasMeaningfulPrompts(_p7Set)) {
         compactPreset = p7Preset;
-        compactChatHistory = data.chatHistory; // 真实历史经 {{chat_history}} 注入
+        compactChatHistory = _authoritativeHistory; // 服务端权威历史经 {{chat_history}} 注入
       } else {
         compactPreset = {
           id: "P7_compact", name: "上下文压缩", enabled: true,
@@ -2598,13 +3126,16 @@ export async function handleSetData(data, args) {
           prompts: [
             { role: "system", content: DEFAULT_COMPACT_MERGE_INSTRUCTIONS, identifier: "P7_system", enabled: true, builtin: true },
             // 引导句已删（凛倾0712：代码禁产生进对话的文本）——system 侧默认指令已含压缩语义，user 侧只给数据
-            { role: "user", content: data.chatHistory, identifier: "P7_user", enabled: true, builtin: true },
+            { role: "user", content: _authoritativeHistory, identifier: "P7_user", enabled: true, builtin: true },
           ],
         };
         compactChatHistory = ""; // 历史已内联进合成 user prompt
       }
 
-      // 第二级：完整AI摘要
+      // 第二级：完整AI摘要。AI/network await 始终在文件锁外，落盘只走上方 CAS。
+      let summaryData;
+      let responsePayload;
+      let fullError = null;
       try {
         const result = await runMemoryPresetAI(username, charName, compactPreset, memData, data.charDisplayName || charName, data.userDisplayName || username, compactChatHistory, { maxRounds: 1, chatId: _rawChatId }); // T4靶点④
         const rawReply = (result.reply || "").trim();
@@ -2613,30 +3144,32 @@ export async function handleSetData(data, args) {
         try { parsedResponse = JSON.parse(rawReply); } catch { const jsonMatch = rawReply.match(/\{[\s\S]*\}/); if (jsonMatch) { try { parsedResponse = JSON.parse(jsonMatch[0]); } catch { parsedResponse = { summary: rawReply, keep_indices: [] }; } } else { parsedResponse = { summary: rawReply, keep_indices: [] }; } }
         const summary = parsedResponse.summary || rawReply;
         const keepIndices = Array.isArray(parsedResponse.keep_indices) ? parsedResponse.keep_indices.filter((i) => typeof i === "number" && i >= 0 && i < compactRange) : [];
-        const summaryData = { summary, keep_indices: keepIndices, timestamp: new Date().toISOString(), originalChars: data.chatHistory.length, summaryChars: summary.length, messageCount: compactMsgCount, compactRange, keepLastN: compactKeepLast, compressionRatio: ((1 - summary.length / data.chatHistory.length) * 100).toFixed(1), method: "aiSummary" };
-        writeContextSummary(username, charName, summaryData, chatId);
-        return { success: true, summary, keep_indices: keepIndices, reasoning: parsedResponse.reasoning || "", summaryChars: summary.length, originalChars: data.chatHistory.length, compressionRatio: summaryData.compressionRatio, method: "aiSummary" };
-      } catch (fullError) {
+        summaryData = { summary, keep_indices: keepIndices, timestamp: new Date().toISOString(), originalChars: _authoritativeHistory.length, summaryChars: summary.length, messageCount: compactMsgCount, compactRange, keepLastN: compactKeepLast, compressionRatio: ((1 - summary.length / _authoritativeHistory.length) * 100).toFixed(1), method: "aiSummary" };
+        responsePayload = { success: true, summary, keep_indices: keepIndices, reasoning: parsedResponse.reasoning || "", summaryChars: summary.length, originalChars: _authoritativeHistory.length, compressionRatio: summaryData.compressionRatio, method: "aiSummary" };
+      } catch (error) {
+        fullError = error;
         console.warn(`[beilu-memory] compactContext 完整摘要失败，降级为快速裁剪:`, fullError.message);
 
         // 第三级：兜底 — 快速裁剪
-        const lines = data.chatHistory.split("\n");
+        const lines = _authoritativeHistory.split("\n");
         const keepStart = Math.floor(lines.length * 0.3);
         const fallback = [
           lines[0],
           `[...AI摘要失败，已省略 ${keepStart - 1} 条早期对话（原因：${fullError.message}）...]`,
           ...lines.slice(keepStart),
         ].join("\n");
-        const summaryData = {
+        summaryData = {
           summary: fallback, keep_indices: [],
           timestamp: new Date().toISOString(),
-          originalChars: data.chatHistory.length, summaryChars: fallback.length,
-          compressionRatio: ((1 - fallback.length / data.chatHistory.length) * 100).toFixed(1),
+          originalChars: _authoritativeHistory.length, summaryChars: fallback.length,
+          compressionRatio: ((1 - fallback.length / _authoritativeHistory.length) * 100).toFixed(1),
           method: "fallbackPrune",
         };
-        writeContextSummary(username, charName, summaryData, chatId);
-        return { success: true, summary: fallback, method: "fallbackPrune", compressionRatio: summaryData.compressionRatio, warning: fullError.message };
+        responsePayload = { success: true, summary: fallback, method: "fallbackPrune", compressionRatio: summaryData.compressionRatio, warning: fullError.message };
       }
+      const commit = await _commitSummary(summaryData);
+      if (commit.committed !== true) return _summaryCommitFailure(commit);
+      return { ...responsePayload, ...(commit.mirrorError ? { mirrorWarning: commit.mirrorError } : {}) };
     }
 
     case "clearInjections": {
@@ -2649,16 +3182,16 @@ export async function handleSetData(data, args) {
           for (const [k] of listChatSearchSlots(username, charName, chatId)) pendingChatSearchResults.delete(k);
         }
         if (data.clearSummary) {
-          // O17 per-chatId 隔离：有 chatId 时删 per-chat 文件，同时也清旧全局文件（兼容迁移残留）
-          try {
-            if (chatId) {
-              const _safeCid = String(chatId).replace(/[\\/]|\.\./g, "_");
-              const _perChatPath = path.join(ensureMemoryDir(username, charName), "hot", "chat_ctx", _safeCid, "context_summary.json");
-              if (fs.existsSync(_perChatPath)) await safeUnlink(_perChatPath, "clearSummary_perChat");
-            }
-            const _csPath = path.join(ensureMemoryDir(username, charName), "hot", "context_summary.json");
-            if (fs.existsSync(_csPath)) await safeUnlink(_csPath, "clearSummary");
-          } catch { /* ignore */ }
+          const _summaryClear = await clearContextSummary(username, charName, chatId);
+          if (_summaryClear?.busy) {
+            return {
+              success: false,
+              applied: false,
+              busy: true,
+              code: _summaryClear.code,
+              error: "对话摘要正在回档改写期，已拒绝无令牌清理",
+            };
+          }
         }
         let toolHidden = 0;
         if (data.clearTool && data.chatid) {
@@ -3001,6 +3534,7 @@ export async function handleSetData(data, args) {
         blockDelRegexes.push(/<memoryNote\s+type="\w+">[\s\S]*?<\/memoryNote>/gi);
         const ideTagRegex = /<ideToolCall\s+[^>]*>[\s\S]*?<\/ideToolCall>/gi;
         const fileOpTagRegex = /<file_op\s+[^>]*>[\s\S]*?<\/file_op>/gi;
+        const editFailures = [];
         for (let i = 0; i < chatLog.length; i++) {
           const msg = chatLog[i]; if (!msg.content) continue;
           let cleanContent = msg.content;
@@ -3015,10 +3549,30 @@ export async function handleSetData(data, args) {
           });
           cleanContent = cleanContent.trim();
           if (cleanContent !== msg.content) {
-            // T012 独立发现修复（数据销毁级）：editMessage 契约=对象（BuildChatLogEntry* 取 result.content），
-            // 原实现传裸字符串 → entry.content=undefined=消息内容销毁；且 files/extension 未传=附件与标志丢失。
-            await chatOps.editMessage(chatid, i, { content: cleanContent, files: msg.files || [], extension: msg.extension || {} });
-            cleanedCount++;
+            const messageId = typeof msg.id === "string" ? msg.id.trim() : "";
+            if (!messageId) {
+              editFailures.push({ indexHint: i, code: "E_EDIT_MESSAGE_ID_REQUIRED", error: "遗留消息缺少稳定 ID，已拒绝按 index 编辑" });
+              continue;
+            }
+            // messageId 是唯一身份，i 只是锁内重定位的 hint。未传 files/extension 时由 editMessage
+            // 保留原附件与 extension，本链路不改图片/SVG/附件注入规则。
+            const editResult = await chatOps.editMessage(
+              chatid,
+              messageId,
+              i,
+              { content: cleanContent },
+              { expectedUsername: username },
+            );
+            if (editResult?.applied !== true) {
+              editFailures.push({
+                indexHint: i,
+                messageId,
+                code: editResult?.code || "E_EDIT_NOT_APPLIED",
+                error: editResult?.reason || editResult?.error || "编辑未确认应用",
+              });
+              continue;
+            }
+            cleanedCount += 1;
           }
         }
         // 系统工具结果消息=不发送掩码（_hidden），非物理删除：留盘可逆
@@ -3032,59 +3586,27 @@ export async function handleSetData(data, args) {
           await chatOps.hideMessages(chatid, _toolIdx, true, { ...(_idsSCC.every(Boolean) ? { ids: _idsSCC } : {}), meta: { by: "auto", reason: "cleanIdeResults" } });
           cleanedCount += _toolIdx.length;
         }
-        return { success: true, cleanedCount, totalMessages: chatLog.length };
+        const partial = editFailures.length > 0 && cleanedCount > 0;
+        return {
+          success: editFailures.length === 0,
+          applied: cleanedCount > 0,
+          partial,
+          cleanedCount,
+          totalMessages: chatLog.length,
+          ...(editFailures.length ? {
+            code: partial ? "E_CLEAN_XML_PARTIAL" : "E_CLEAN_XML_EDIT_FAILED",
+            error: `${editFailures.length}条消息因稳定 ID 或提交确认失败未编辑`,
+            editFailures,
+          } : {}),
+        };
       } catch (e) {
-        try {
-          const port = process.env.BEILU_PORT || "1314";
-          const lenRes = await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/log/length`);
-          if (!lenRes.ok) return { success: false, error: "无法获取消息数量" };
-          const totalLen = await lenRes.json();
-          let cleanedCount = 0;
-          const xmlTagRegex = /<(tableEdit|memoryArchive|memorySearch|memoryNote\s+type="\w+")>[\s\S]*?<\/(tableEdit|memoryArchive|memorySearch|memoryNote)>/gi;
-          const ideTagRegex2 = /<ideToolCall\s+[^>]*>[\s\S]*?<\/ideToolCall>/gi;
-          const fileOpTagRegex2 = /<file_op\s+[^>]*>[\s\S]*?<\/file_op>/gi;
-          // 第一遍：系统工具结果消息=不发送掩码（_hidden），非物理删除：索引稳定
-          const _sysDeleteIndices = [];
-          for (let i = 0; i < totalLen; i++) {
-            try {
-              const msgRes = await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/log/${i}`);
-              if (!msgRes.ok) continue;
-              const msg = await msgRes.json();
-              if (isIdeToolResultMsg(msg)) {
-                _sysDeleteIndices.push(i);
-              }
-            } catch { /* skip */ }
-          }
-          if (_sysDeleteIndices.length > 0) {
-            try {
-              await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/messages/hide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ indices: _sysDeleteIndices, meta: { by: "auto", reason: "cleanIdeResults" } }) });
-              cleanedCount += _sysDeleteIndices.length;
-            } catch { /* skip */ }
-          }
-          // 第二遍：清理剩余消息中的XML标签（重新获取长度，因为删了一些）
-          const lenRes2 = await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/log/length`);
-          const totalLen2 = lenRes2.ok ? await lenRes2.json() : 0;
-          for (let i = 0; i < totalLen2; i++) {
-            try {
-              const msgRes = await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/log/${i}`);
-              if (!msgRes.ok) continue;
-              const msg = await msgRes.json(); if (!msg.content) continue;
-              let cleanContent = msg.content;
-              cleanContent = cleanContent.replace(xmlTagRegex, "");
-              cleanContent = cleanContent.replace(ideTagRegex2, (match) => {
-                const tm = match.match(/tool="([^"]*)"/);
-                return tm ? `[已执行: ${tm[1]}]` : "";
-              });
-              cleanContent = cleanContent.replace(fileOpTagRegex2, (match) => {
-                const tm = match.match(/tool="([^"]*)"/);
-                return tm ? `[已执行: ${tm[1]}]` : "";
-              });
-              cleanContent = cleanContent.trim();
-              if (cleanContent !== msg.content) { await fetch(`http://localhost:${port}/api/parts/shells:chat/${chatid}/message/${i}/edit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: cleanContent }) }); cleanedCount++; }
-            } catch { /* skip */ }
-          }
-          return { success: true, cleanedCount, totalMessages: totalLen };
-        } catch (httpE) { return { success: false, error: httpE.message }; }
+        return {
+          success: false,
+          applied: false,
+          partial: false,
+          code: e?.code || "E_CLEAN_XML_FAILED",
+          error: e?.message || String(e),
+        };
       }
     }
 
@@ -3575,9 +4097,44 @@ export async function handleSetData(data, args) {
     }
 
     // === 启动编辑器 (P4) ===
+    // [P1 2026-08-03 launch_ide 收紧（Fable 审查阻断5 根修）]
+    //   ① schema：editor ∈ cursor|code|auto；projectPath 必须是已存在目录的绝对解析路径且不以 "-"
+    //      开头（防被编辑器 CLI 当选项解析=参数注入面）；waitTimeout 钳 1s-120s。
+    //   ② 允许域：yonban_config.launch_editor.allowed_workspaces（绝对路径前缀数组）配置后强制
+    //      前缀匹配；未配置=保持本机单用户既有语义（仅基础校验），该默认已写入完成报告。
+    //   ③ 返回态拆 spawned / connected(global) / ready(目标 workspace 实例已接入)：success 只表达
+    //      spawn 成立；ready 才证明目标窗口就绪（按 ideClient.listLiveInstances 的 instanceId/workspace
+    //      事实，不再拿"全局任意连接"冒充）；无 projectPath 时 ready 恒 false（无目标=无法证明）。
+    //   ④ 本 action 只在认证 SetData 链可达（web/bridge 会话）；Bot 标签链无此通道——capability
+    //      registry（launch_ide）接入并过 owner/审批门前，不对 Bot 开放。
     case "launchEditor": {
-      const _leProject = data.projectPath || "";
-      const _leEditor = data.editor || "auto"; // "cursor" | "code" | "auto"
+      const _leProjectRaw = typeof data.projectPath === "string" ? data.projectPath.trim() : "";
+      const _leEditor = data.editor === "cursor" || data.editor === "code" ? data.editor : "auto";
+      let _leProject = "";
+      if (_leProjectRaw) {
+        if (_leProjectRaw.startsWith("-")) {
+          return { success: false, spawned: false, code: "E_LAUNCH_BAD_PATH", error: "projectPath 非法（以 - 开头会被编辑器 CLI 当作选项解析，已拒绝）" };
+        }
+        const _leResolved = path.resolve(_leProjectRaw);
+        let _leStat = null;
+        try { _leStat = fs.statSync(_leResolved); } catch { /* 不存在 → 下方拒绝 */ }
+        if (!_leStat || !_leStat.isDirectory()) {
+          return { success: false, spawned: false, code: "E_LAUNCH_BAD_PATH", error: `projectPath 不是已存在的目录: ${_leResolved}` };
+        }
+        const _leAllow = loadJsonFileIfExists(getYonbanConfigPath(username), {}).launch_editor?.allowed_workspaces;
+        if (Array.isArray(_leAllow) && _leAllow.length > 0) {
+          const _leNorm = (p) => { try { return path.resolve(String(p)).toLowerCase(); } catch { return ""; } };
+          const _leTargetN = _leNorm(_leResolved);
+          const _leHit = _leAllow.some((w) => {
+            const _w = _leNorm(w);
+            return _w && (_leTargetN === _w || _leTargetN.startsWith(_w.endsWith(path.sep) ? _w : _w + path.sep));
+          });
+          if (!_leHit) {
+            return { success: false, spawned: false, code: "E_LAUNCH_WORKSPACE_DENIED", error: "projectPath 不在 launch_editor.allowed_workspaces 允许域内" };
+          }
+        }
+        _leProject = _leResolved;
+      }
       const { execSync: _leExecSync, spawn: _leSpawn } = await import("node:child_process");
 
       // 检测可用的编辑器
@@ -3597,7 +4154,7 @@ export async function handleSetData(data, args) {
       }
 
       if (!_leCmd) {
-        return { success: false, error: "未检测到 Cursor 或 VSCode，请确认已安装并添加到 PATH" };
+        return { success: false, spawned: false, error: "未检测到 Cursor 或 VSCode，请确认已安装并添加到 PATH" };
       }
 
       try {
@@ -3606,38 +4163,47 @@ export async function handleSetData(data, args) {
         _leProc.unref();
         console.log(`[beilu-memory] launchEditor: 已启动 ${_leCmd}${_leProject ? ` (${_leProject})` : ""}`);
 
-        // ★ 等待IDE连接（W14: launchEditor等待连接）
         const { ideClient: _leIdeClient } = await import("../../../transport/ideClient.mjs");
-        const _leMaxWait = data.waitTimeout || 30000;
+        const _leMaxWaitRaw = Number(data.waitTimeout);
+        const _leMaxWait = Number.isFinite(_leMaxWaitRaw) ? Math.min(Math.max(_leMaxWaitRaw, 1000), 120000) : 30000;
         const _lePollInterval = 1000;
+        const _leNormWs = (p) => { try { return path.resolve(String(p)).toLowerCase(); } catch { return ""; } };
+        const _leTargetWs = _leProject ? _leNormWs(_leProject) : "";
+        const _leReadyNow = () => {
+          if (!_leTargetWs) return false;
+          try { return (_leIdeClient.listLiveInstances?.() || []).some((i) => i.workspace && _leNormWs(i.workspace) === _leTargetWs); } catch { return false; }
+        };
         let _leWaited = 0;
-        let _leConnected = _leIdeClient.isConnected;
-
-        if (!_leConnected) {
-          console.log(`[beilu-memory] launchEditor: 等待IDE连接 (最多${_leMaxWait / 1000}秒)...`);
+        let _leReady = _leReadyNow();
+        if (_leTargetWs) {
+          // 有目标 workspace：等的是【目标实例】ready（per-instance 证明），非全局连接
+          while (!_leReady && _leWaited < _leMaxWait) {
+            await new Promise(r => setTimeout(r, _lePollInterval));
+            _leWaited += _lePollInterval;
+            _leReady = _leReadyNow();
+          }
+          if (!_leReady) console.log(`[beilu-memory] launchEditor: 目标 workspace 实例未在${_leMaxWait / 1000}秒内接入`);
+        } else if (!_leIdeClient.isConnected) {
+          // 无目标 workspace：保持旧全局连接等待语义（仅作 connected 信息，不冒充 ready）
           while (_leWaited < _leMaxWait) {
             await new Promise(r => setTimeout(r, _lePollInterval));
             _leWaited += _lePollInterval;
-            if (_leIdeClient.isConnected) {
-              _leConnected = true;
-              console.log(`[beilu-memory] launchEditor: IDE已连接 (${_leWaited / 1000}秒)`);
-              break;
-            }
-          }
-          if (!_leConnected) {
-            console.log(`[beilu-memory] launchEditor: IDE未在${_leMaxWait / 1000}秒内连接`);
+            if (_leIdeClient.isConnected) break;
           }
         }
 
         return {
-          success: true,
+          success: true, // 只表达 spawn 成立；消费方禁把它当 ready/succeeded（诚实语义拆分）
+          spawned: true,
           editor: _leCmd,
           project: _leProject || "(无)",
-          connected: _leConnected,
+          connected: _leIdeClient.isConnected, // 全局任意 IDE 连接（scope=global，不证明目标窗口）
+          connectedScope: "global",
+          ready: _leReady, // 目标 workspace 的实例已接入连接池；projectPath 未传=恒 false
           waitedMs: _leWaited,
         };
       } catch (e) {
-        return { success: false, error: `启动失败: ${e.message}` };
+        return { success: false, spawned: false, error: `启动失败: ${e.message}` };
       }
     }
 
@@ -3740,7 +4306,7 @@ export async function handleSetData(data, args) {
 
     // === 子模式动态管理 ===
     case "getSubModes": {
-      const smUser = data.username || args?.username || "_default";
+      const smUser = args?.username || data.username || "_default";
       // T4 收口：getSubModes 的「初始化默认 + W64 迁移」整段 read-modify-write 走 updateYonbanConfig
       //   串行锁。建预设 helper 已提升为模块级 _ensureSubModePresetsFor（0731 002"没有新建预设"根修：
       //   原定义困在本 case 且只在初始化/迁移分支被调 → schema 达标的纯读路径与 saveSubModes 新增条目
@@ -3883,17 +4449,31 @@ export async function handleSetData(data, args) {
             smConfig.active_sub_mode_work = "work-task-confirm";
             _migrated = true;
           }
+          // 7. [D3 0804 schema 5] 存量条目写门归一（单源 normalizeSubModeForSave，与 saveSubModes
+          //    写路径同一实现）：contract 剥除 + schemaVersion:2 + fallbackPolicy 默认 + 驼峰别名归位 +
+          //    flat↔nested 缺侧同步；双侧真冲突只标 _profile_conflicts（不静默挑选，读侧维持嵌套优先）。
+          //    幂等可重复执行，不覆盖用户显式值——版本门只保证至少跑过一次。
+          {
+            const _n5Conflicts = [];
+            for (const sm of smConfig.sub_modes) {
+              if (!sm) continue;
+              normalizeSubModeForSave(sm, _workIds);
+              if (Array.isArray(sm._profile_conflicts) && sm._profile_conflicts.length) _n5Conflicts.push(`${sm.id}[${sm._profile_conflicts.join(",")}]`);
+            }
+            _migrated = true; // schemaVersion 字段写入即变更
+            if (_n5Conflicts.length) console.warn(`[beilu-memory] getSubModes 迁移(schema5): flat/nested 冲突已标记不静默挑选: ${_n5Conflicts.join(" ")}`);
+          }
           if (_migrated) console.log(`[beilu-memory] getSubModes: 数据迁移完成 (${smConfig.sub_modes.length}个子模式)`);
         }
         smConfig.sub_modes_schema = SUB_MODES_SCHEMA; // 迁移完成标记写进数据本身=版本门关闭
         _gsmConfig = smConfig;
         return smConfig; // 版本号推进即变更,必落盘（只发生在低版本首遇一次）
       }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-      // 锁外统一建缺失预设（对最终 sub_modes；幂等，原初始化/迁移两块合并）
+      // 锁外统一补齐缺失预设（对最终 sub_modes；幂等；[0804] 补齐=触发官方播种，不再造骨架）
       try {
-        const _created = _ensureSubModePresets(_gsmConfig.sub_modes || []);
-        if (_created > 0) console.log(`[beilu-memory] getSubModes: 自动创建了 ${_created} 个缺失预设`);
-      } catch (e) { console.warn(`[beilu-memory] getSubModes: 自动创建预设失败: ${e.message}`); }
+        const _seeded = await _ensureSubModePresets(_gsmConfig.sub_modes || []);
+        if (_seeded > 0) console.log(`[beilu-memory] getSubModes: 经官方播种补齐 ${_seeded} 个缺失预设引用`);
+      } catch (e) { console.warn(`[beilu-memory] getSubModes: 预设播种补齐失败: ${e.message}`); }
       } // 数据版本门结束（建预设跟随迁移一跑;预设文件缺失另有解析层回退,不做每请求自愈）
       const smConfig = _gsmConfig;
       // [隔离架构 2026-07-25 双源收口] 原 using_preset 产出已删——它是 beilu-preset 激活预设的跨域
@@ -3925,16 +4505,26 @@ export async function handleSetData(data, args) {
       const smConfig = await updateYonbanConfig(smUser, (smConfig) => {
         if (Array.isArray(data.sub_modes)) {
           for (const sm of data.sub_modes) {
-            if (sm && !sm.modeGroup) sm.modeGroup = _smWorkIds.has(sm.id) ? "work" : "code";
+            // [D3 0804] 写门归一收口 normalizeSubModeForSave 单源：modeGroup 归一（原 D4 规则）+
+            //   contract 剥除（RC11 断点1 存量清洗）+ schemaVersion:2 + fallbackPolicy 默认 fail_closed +
+            //   flat↔nested 缺侧同步（消"旧入口只改一份"漂移）+ 真冲突标 _profile_conflicts 不静默挑选。
+            if (sm) normalizeSubModeForSave(sm, _smWorkIds);
           }
           smConfig.sub_modes = data.sub_modes;
         }
         return smConfig;
       }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-      _ensureSubModePresetsFor(smUser, smConfig.sub_modes || []); // 写入即建缺失预设（原只在 getSubModes 初始化建=新增条目永远没预设）
+      await _ensureSubModePresetsFor(smUser, smConfig.sub_modes || []); // 写入即补齐缺失预设引用（[0804] 补齐=触发官方播种，非 builtin 缺失只警告不造骨架）
+      // [D3 0804] 预设引用只读校验（播种复查后仍缺=非 builtin 悬空引用）：可见回传不静默——
+      //   配置本体已保存（其余子模式不陪葬），code=E_PRESET_REFERENCE_MISSING + 清单供前端提示
+      //   用户显式创建/改选（禁造骨架，D2 只读 API 就绪后改消费其 outcome）。
+      const _smMissingRefs = listMissingPresetReferences(smUser, smConfig.sub_modes || []);
       // _subModesChanged：上层（memory/main.mjs SetData 路由）据此广播 subModesConfigChanged，
       //   通知本体/YonBan 各客户端重拉（修"配置变更零推送"同步断链）。同 _subModeSwitch 信号范式。
-      return { success: true, sub_modes: smConfig.sub_modes, _subModesChanged: true };
+      return {
+        success: true, sub_modes: smConfig.sub_modes, _subModesChanged: true,
+        ...(_smMissingRefs.length ? { code: "E_PRESET_REFERENCE_MISSING", invalid_preset_references: _smMissingRefs } : {}),
+      };
     }
 
     case "deleteSubMode": {
@@ -3958,7 +4548,15 @@ export async function handleSetData(data, args) {
         if (cfg.active_sub_mode_work === _dsId) cfg.active_sub_mode_work = "work-task-confirm";
         if (cfg.active_sub_modes_map) {
           for (const _k of Object.keys(cfg.active_sub_modes_map)) {
-            if (cfg.active_sub_modes_map[_k] === _dsId) delete cfg.active_sub_modes_map[_k];
+            if (cfg.active_sub_modes_map[_k] === _dsId) {
+              delete cfg.active_sub_modes_map[_k];
+              if (cfg.sub_mode_activations) delete cfg.sub_mode_activations[_k];
+            }
+          }
+        }
+        if (cfg.sub_mode_activations) {
+          for (const _k of Object.keys(cfg.sub_mode_activations)) {
+            if (cfg.sub_mode_activations[_k]?.subModeId === _dsId) delete cfg.sub_mode_activations[_k];
           }
         }
         if (Array.isArray(cfg.parallel_sub_modes)) cfg.parallel_sub_modes = cfg.parallel_sub_modes.filter((p) => p.id !== _dsId);
@@ -3998,45 +4596,122 @@ export async function handleSetData(data, args) {
       if (!_cwChar2) return { success: false, error: "缺少 charName" };
       return { success: true, workspace_root: getCardWorkspaceRoot(username, _cwChar2) };
     }
+    // [D3 0804] 三入口统一的显式激活 verb（UI 目标入口）：一次请求完成
+    //   跨组模式切换（内部重入既有 switchMode 管线——scheduler 启停 + beilu-files setMode 扇出 +
+    //   mode_changed 广播全套复用，禁造第二套扇出）+ 子模式激活单事务（activateSubModeCore）+
+    //   默认预设应用，返回完整 activation 快照。原 UI 两次 HTTP（switchModeTo→setActiveSubMode）
+    //   的半失败窗口由此消除（RC11 断点3）。
+    case "activateSubMode": {
+      const _avUser = args?.username || data.username || "_default";
+      const _avChatId = data.chatId || data.chatid || args?.chatid || "";
+      if (!data.id) return { success: false, error: "缺少 id" };
+      const _avChar = await _resolveRequestChar(data, args, data.charName || args?.char_id || "_global");
+      // 跨组 switchMode 有调度器/文件/广播副作用。先以只读门禁完成 owner、primaryCharName、
+      // 子模式存在性和旧映射组冲突校验；此处不要求“当前模式已是目标组”，因为下一步就是受控切换。
+      const _avPreflight = await preflightSubModeActivation({
+        username: _avUser,
+        charName: _avChar === "_global" ? "" : _avChar,
+        chatId: _avChatId,
+        subModeId: data.id,
+        requireCurrentMode: false,
+      });
+      if (!_avPreflight.success) return _avPreflight;
+      const _avGroup = _avPreflight.modeGroup;
+      const _avVerifiedChar = _avPreflight.charName || _avChar;
+      const _avCurMode = getActiveMode(_avUser, _avVerifiedChar, _avChatId || null);
+      let _avModeSwitched = false;
+      if (_avGroup !== _avCurMode) {
+        const _avSwitch = await handleSetData({ _action: "switchMode", mode: _avGroup, chatid: _avChatId || undefined, charName: _avVerifiedChar, tab: data.tab }, args);
+        if (!_avSwitch?.success) {
+          // 模式切换失败=整体中止，子模式未激活。owner/角色/目标实体/旧 map 跨组冲突等
+          // 确定性失败已在切换前排除；切换后的 core 仍基于最新态复核，拒绝并发变化。
+          return { success: false, code: "E_MODE_SWITCH_FAILED", error: `跨组模式切换失败: ${_avSwitch?.error || "未知错误"}（子模式未激活）` };
+        }
+        _avModeSwitched = true;
+      }
+      const _avRes = await activateSubModeCore({
+        username: _avUser,
+        charName: _avVerifiedChar === "_global" ? "" : _avVerifiedChar,
+        chatId: _avChatId,
+        subModeId: data.id,
+        source: "ui",
+      });
+      if (!_avRes.success) return { success: false, error: _avRes.error, ...(_avRes.code ? { code: _avRes.code } : {}), mode_switched: _avModeSwitched };
+      return {
+        success: true,
+        activation: _avRes.activation,
+        mode_switched: _avModeSwitched,
+        modeGroup: _avRes.modeGroup,
+        preset_applied: _avRes.presetApplied,
+        active_sub_mode: _avRes.active_sub_mode,
+        active_sub_mode_work: _avRes.active_sub_mode_work,
+        active_sub_modes_map: _avRes.active_sub_modes_map,
+        _subModeSwitch: _avRes.event,
+      };
+    }
+
     case "setActiveSubMode": {
       const smUser = data.username || args?.username || "_default";
       const _smChatId = data.chatId || args?.chatid || "";
       if (data.id) {
-        // T4 收口：整段读改写（load→resolve prev→writeActiveSubModeId→save）走 updateYonbanConfig 串行锁；
-        //   子模式不存在时 mutator 返回 SKIP_SAVE 不落盘（保留原「校验失败不写」语义）。
-        //   applySubModePresetDefault（async）留在锁外——它不写 yonban_config（改的是 preset），无需持锁。
-        let _toMode = null, _prevSm = "", _targetGroup = "code", _smConfigSnap = null;
-        const _saved = await updateYonbanConfig(smUser, (smConfig) => {
-          _toMode = (smConfig.sub_modes || []).find(m => m.id === data.id);
-          if (!_toMode) { _smConfigSnap = smConfig; return SKIP_SAVE; } // 校验失败：不落盘，仅带回快照供错误响应读 active_sub_mode
-          _targetGroup = _toMode.modeGroup || "code";
-          _prevSm = resolveActiveSubModeId(smConfig, _targetGroup, _smChatId);
-          writeActiveSubModeId(smConfig, _targetGroup, data.id, _smChatId);
-          _smConfigSnap = smConfig;
-          return smConfig;
-        }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-        if (!_toMode) {
-          return { success: false, error: `子模式ID不存在: ${data.id}`, active_sub_mode: _smConfigSnap?.active_sub_mode };
+        // [D3 0804] compatibility adapter：整段事务收口 activateSubModeCore（storage_mod/subModeActivation.mjs
+        //   唯一 owner——单事务提交 map+版本化 activation 记录，chat fail-closed 校验，锁外 preset 默认应用）。
+        //   响应形状与旧版逐键等价（active_sub_mode* 三键 + _subModeSwitch 事件体走 main.mjs 既有广播链），
+        //   另附 activation 快照 + preset_applied 如实回传。原内联 T4 事务整块删除（第二实现镜像清零）。
+        const _saChar = await _resolveRequestChar(data, args, data.charName || args?.char_id || "");
+        const _saRes = await activateSubModeCore({
+          username: smUser,
+          charName: _saChar === "_global" ? "" : _saChar,
+          chatId: _smChatId,
+          subModeId: data.id,
+          source: "ui",
+        });
+        if (!_saRes.success) {
+          return { success: false, error: _saRes.error || `子模式ID不存在: ${data.id}`, ...(_saRes.code ? { code: _saRes.code } : {}), active_sub_mode: _saRes.active_sub_mode };
         }
-        const smConfig = _saved; // 已落盘的最新态
-        // 生效模型（凛倾 2026-07-08）：切入子模式=一次性应用其默认预设为「正在使用」，此后人/AI 自由切换，
-        //   生成时无强切盖回（原 T046 每轮强切已删）。失败不阻塞子模式切换本体。
-        try { await applySubModePresetDefault(smUser, _toMode, _smChatId); } catch (e) { console.warn(`[beilu-memory] 子模式默认预设应用失败: ${e.message}`); }
-        return { success: true, active_sub_mode: smConfig.active_sub_mode, active_sub_mode_work: smConfig.active_sub_mode_work || "work-task-confirm", active_sub_modes_map: smConfig.active_sub_modes_map || {}, _subModeSwitch: buildSubModeSwitchEvent({ from: _prevSm, to: data.id, sm: _toMode, modeGroup: _targetGroup, chatId: _smChatId }) }; // 键收口 2026-07-13：契约单源构造器（storage.mjs）
+        return {
+          success: true,
+          active_sub_mode: _saRes.active_sub_mode,
+          active_sub_mode_work: _saRes.active_sub_mode_work,
+          active_sub_modes_map: _saRes.active_sub_modes_map,
+          activation: _saRes.activation,
+          preset_applied: _saRes.presetApplied,
+          _subModeSwitch: _saRes.event, // 事件体单源=buildSubModeSwitchEvent（core 内构造，键收口契约不变）
+        };
       }
       // 清除线级覆盖（0723 bot 子模式：面板「无覆盖」选项）：删 active_sub_modes_map[chatId]，
       //   该线回到 resolveActiveSubModeId 无记录默认（bot=""无覆盖 / code/work=组起点）。通用不限组。
       if (data.clear && _smChatId) {
-        let _clCleared = false;
-        await updateYonbanConfig(smUser, (cfg) => {
-          if (cfg.active_sub_modes_map && cfg.active_sub_modes_map[_smChatId] !== undefined) {
-            delete cfg.active_sub_modes_map[_smChatId];
-            _clCleared = true;
-            return cfg;
+        const _clChar = await _resolveRequestChar(data, args, data.charName || args?.char_id || "");
+        const _clRes = await deactivateSubModeCore({
+          username: smUser,
+          charName: _clChar === "_global" ? "" : _clChar,
+          chatId: _smChatId,
+          expectedSubModeId: String(data.expectedId || "").trim(),
+        });
+        if (!_clRes.success) return _clRes;
+        // 调用方显式声明“回到承载对话 AIRP”时，一并清掉进入该子模式时写下的线级预设。
+        // 默认不清，保持通用 setActiveSubMode 的既有语义；陪伴专属开关会传 clearPreset=true。
+        let _clPresetCleared = false;
+        if (data.clearPreset === true && _clRes.cleared === true) {
+          try {
+            _clPresetCleared = await clearPresetOverrideViaAPI(
+              { username: smUser },
+              _smChatId,
+              data.modeGroup || "chat",
+            );
+          } catch (e) {
+            console.warn(`[beilu-memory] 清除子模式预设覆盖失败: ${e?.message || e}`);
           }
-          return SKIP_SAVE;
-        }, { sub_modes: [], active_sub_mode: "前置任务专家" });
-        return { success: true, cleared: _clCleared };
+        }
+        return {
+          success: true,
+          cleared: _clRes.cleared,
+          conflict: _clRes.conflict,
+          actual_sub_mode: _clRes.actualSubModeId,
+          active_sub_modes_map: _clRes.active_sub_modes_map,
+          preset_cleared: _clPresetCleared,
+        };
       }
       // 无 data.id：纯读当前态返回（原顶层 load 的只读用途，此分支不写盘）
       const _saNoIdCfg = loadJsonFileIfExists(getYonbanConfigPath(smUser), { sub_modes: [], active_sub_mode: "前置任务专家" });
@@ -4199,27 +4874,35 @@ export async function handleSetData(data, args) {
       return { success: true, tableCleanFrequency: _tcCfg.tableCleanFrequency || 0 };
     }
 
-    // P1 per-mode 开关用户覆盖层（2026-07-31 002 T2）：modes/*.json 是随代码模板禁直写，
-    //   features.p1.config 的用户覆盖落 yonban_config.mode_feature_overrides（抄 saveTableCleanConfig
-    //   形状：updateYonbanConfig 串行锁写 / loadJsonFileIfExists 读）。只存用户显式改过的键，
-    //   无字段=沿用 modes json 声明值。消费点=getPromptHandler _p1Feat 合并（唯一消费点，
-    //   不碰 modeFeature/_modeFeaturesById 通用机制）。lib 白名单只放行 "p1"（范围锁，防成任意 features 后门）。
+    // P1 per-mode 路由用户覆盖层：modes/*.json 是随代码模板禁直写，用户选择落
+    //   yonban_config.mode_feature_overrides。P1 允许 10/01/00、只禁止 11，写口、读口、GetPrompt 运行口
+    //   共用 p1Route.mjs；lib 白名单只放行 "p1"，避免把本写口扩成任意 features 后门。
     case "saveModeFeatureOverride": {
       const _mfUser = data.username || args?.username || "_default";
       const _mfMode = data.mode;
       if (!isValidModeId(_mfMode)) return { success: false, error: `非法模式值: ${_mfMode}` };
       if (data.lib !== "p1") return { success: false, error: "本写口仅支持 lib=p1" };
+      const _mfRouteShape = resolveP1RouteUpdate(data);
+      if (!_mfRouteShape.ok) {
+        return { success: false, code: _mfRouteShape.code, error: _mfRouteShape.error };
+      }
+      let _mfSavedRoute = null;
       await updateYonbanConfig(_mfUser, (cfg) => {
         cfg.mode_feature_overrides ??= {};
         cfg.mode_feature_overrides[_mfMode] ??= {};
+        const _mfDecl = modeFeature(_mfMode, "p1");
+        const _mfCurrentRoute = resolveEffectiveP1RouteConfig(
+          _mfDecl.config || {},
+          cfg.mode_feature_overrides[_mfMode].p1 || null,
+        );
+        _mfSavedRoute = resolveP1RouteUpdate(data, _mfCurrentRoute).config;
         cfg.mode_feature_overrides[_mfMode].p1 = {
           ...(cfg.mode_feature_overrides[_mfMode].p1 || {}),
-          ...(data.selfDriven !== undefined ? { selfDriven: !!data.selfDriven } : {}),
-          ...(data.aiP1 !== undefined ? { aiP1: !!data.aiP1 } : {}),
+          ..._mfSavedRoute,
         };
         return cfg;
       }, {});
-      return { success: true, mode: _mfMode };
+      return { success: true, mode: _mfMode, effective: _mfSavedRoute };
     }
 
     case "getModeFeatureOverrides": {
@@ -4230,11 +4913,10 @@ export async function handleSetData(data, args) {
       const _mfEffective = {};
       for (const _m of ["chat", "code", "work"]) {
         const _decl = modeFeature(_m, "p1");
-        _mfEffective[_m] = {
-          selfDriven: _decl.config?.selfDriven === true,
-          aiP1: _decl.config?.aiP1 !== false,
-          ...(_mfOv[_m]?.p1 || {}),
-        };
+        _mfEffective[_m] = resolveEffectiveP1RouteConfig(
+          _decl.config || {},
+          _mfOv[_m]?.p1 || null,
+        );
       }
       return { success: true, mode_feature_overrides: _mfOv, effective: _mfEffective };
     }
@@ -4806,22 +5488,170 @@ export async function handleSetData(data, args) {
 
     // === 回档 ===
     case "rollbackMemoryToMessage": {
+      return _withMemoryArchiveCoverage(await (async () => {
       if (!data.chatId) return { success: false, error: "缺少 chatId" };
-      if (data.targetIndex === undefined) return { success: false, error: "缺少 targetIndex" };
+      if (Object.prototype.hasOwnProperty.call(data, "_historyCoordinated")) {
+        return {
+          success: false,
+          applied: false,
+          partial: false,
+          code: "E_ROLLBACK_INTERNAL_CAPABILITY_REQUIRED",
+          error: "_historyCoordinated 是服务端内部能力，公共 SetData payload 不得传入",
+        };
+      }
+      const _historyCoordinated = internalCapability === _ROLLBACK_HISTORY_COORDINATION_CAPABILITY;
       // ★ P1-1 per-layer 自由度：data.layers={file?,table?}（缺省=全 true，向后兼容）。
-      // 仅 false 才跳过该层；缺省/未传 = 回。memory 层待 P2 接入后纳入。
+      // 仅 false 才跳过该层；缺省/未传 = 回。角色级归档记忆尚无按消息账本，
+      // 不参与执行，并由 memoryArchive:not_covered 显式声明边界。
       const _layers = (data.layers && typeof data.layers === "object") ? data.layers : {};
       const _doTable = _layers.table !== false;
       const _doFile = _layers.file !== false;
       try {
-        const snapshot = _doTable ? findSnapshotForRollback(username, charName, data.chatId, data.targetIndex) : null;
+        const anchor = await _resolveRollbackAnchor(data.chatId, data.anchorMessageId, data.targetIndex);
+        const targetIndex = anchor.index;
+        const actualIdeRoute = ideClient.getRouteSnapshot(data.chatId);
+        const ideConnected = actualIdeRoute.connected;
+        const hasExpectedIdeRoute = Object.prototype.hasOwnProperty.call(data, "expectedIdeRoute");
+        if (_historyCoordinated && !hasExpectedIdeRoute) {
+          return {
+            success: false,
+            applied: false,
+            error: "协调回档缺少 expectedIdeRoute，已拒绝执行",
+            drift: "ideRoute",
+            actualIdeRoute,
+            anchor,
+          };
+        }
+        if (hasExpectedIdeRoute && !isValidIdeRouteSnapshot(data.expectedIdeRoute)) {
+          return {
+            success: false,
+            applied: false,
+            error: "expectedIdeRoute 形状无效",
+            drift: "ideRoute",
+            expectedIdeRoute: data.expectedIdeRoute,
+            actualIdeRoute,
+            anchor,
+          };
+        }
+        if (hasExpectedIdeRoute && !ideRouteSnapshotsEqual(data.expectedIdeRoute, actualIdeRoute)) {
+          return {
+            success: false,
+            applied: false,
+            error: "回档令牌已漂移：IDE 路由连接代次变化",
+            drift: "ideRoute",
+            expectedIdeRoute: data.expectedIdeRoute,
+            actualIdeRoute,
+            anchor,
+          };
+        }
+        const hasExpectedIde = Object.prototype.hasOwnProperty.call(data, "expectedIdeConnected");
+        if (hasExpectedIde && typeof data.expectedIdeConnected !== "boolean") {
+          return { success: false, applied: false, error: "expectedIdeConnected 必须是布尔值", anchor };
+        }
+        if (hasExpectedIdeRoute && hasExpectedIde && data.expectedIdeConnected !== data.expectedIdeRoute.connected) {
+          return {
+            success: false,
+            applied: false,
+            error: "回档令牌无效：expectedIdeConnected 与 expectedIdeRoute 不一致",
+            drift: "ideRoute",
+            expectedIdeConnected: data.expectedIdeConnected,
+            expectedIdeRoute: data.expectedIdeRoute,
+            actualIdeRoute,
+            anchor,
+          };
+        }
+        // 旧的直接调用入口没有精确 route token 时，仅保留布尔连接状态兼容校验；
+        // 协调入口上方已强制 expectedIdeRoute，布尔值不能替代连接代次。
+        if (!hasExpectedIdeRoute && hasExpectedIde && data.expectedIdeConnected !== ideConnected) {
+          return {
+            success: false,
+            applied: false,
+            error: "回档令牌已漂移：IDE 连接状态变化",
+            drift: "ideConnected",
+            expectedIdeConnected: data.expectedIdeConnected,
+            actualIdeConnected: ideConnected,
+            anchor,
+          };
+        }
+
+        const hasExpectedCheckpoints = Object.prototype.hasOwnProperty.call(data, "checkpointIds");
+        const expectedCheckpointIds = hasExpectedCheckpoints ? _parseExpectedCheckpointIds(data.checkpointIds) : undefined;
+        let currentCheckpointIds = [];
+        // 文件令牌预检必须发生在表格写入前；执行时还会把同一令牌传给 revert 再校验一次，
+        // 防止预检与文件恢复之间新检查点插入。
+        if (_doFile && ideConnected && hasExpectedCheckpoints) {
+          const preflight = await ideClient.getCheckpointDiff(
+            data.chatId,
+            targetIndex,
+            expectedCheckpointIds,
+            hasExpectedIdeRoute ? data.expectedIdeRoute : undefined,
+          );
+          const preflightEnvelope = _readCheckpointPreviewEnvelope(preflight);
+          const preflightData = preflightEnvelope.result || {};
+          if (!preflightEnvelope.ok) {
+            const routeDrift = preflight?.drift === "ideRoute" || preflightData?.drift === "ideRoute";
+            return {
+              success: false,
+              applied: false,
+              error: preflightEnvelope.error || "检查点令牌校验失败",
+              drift: routeDrift ? "ideRoute" : "checkpointIds",
+              ...(routeDrift ? {
+                expectedIdeRoute: preflight?.expectedIdeRoute ?? preflightData?.expectedIdeRoute ?? data.expectedIdeRoute,
+                actualIdeRoute: preflight?.actualIdeRoute ?? preflightData?.actualIdeRoute ?? ideClient.getRouteSnapshot(data.chatId),
+              } : {}),
+              anchor,
+            };
+          }
+          currentCheckpointIds = preflightData.checkpointIds;
+          if (!_sameCheckpointIds(currentCheckpointIds, expectedCheckpointIds)) {
+            return { success: false, applied: false, error: "回档令牌已漂移：文件检查点集合变化", drift: "checkpointIds", expectedCheckpointIds, actualCheckpointIds: currentCheckpointIds, anchor };
+          }
+        } else if (_doFile && !ideConnected && expectedCheckpointIds?.length) {
+          return { success: false, applied: false, error: "回档令牌已漂移：绑定 IDE 离线且预览包含文件检查点", drift: "checkpointIds", anchor };
+        }
+
+        const snapshot = _doTable ? findSnapshotForRollback(username, charName, data.chatId, targetIndex) : null;
+        const currentTableSnapshotId = snapshot?.id || null;
+        const hasExpectedTable = Object.prototype.hasOwnProperty.call(data, "tableSnapshotId");
+        if (hasExpectedTable && data.tableSnapshotId !== null && (typeof data.tableSnapshotId !== "string" || !data.tableSnapshotId)) {
+          return { success: false, applied: false, error: "tableSnapshotId 必须是非空字符串或 null", anchor };
+        }
+        if (hasExpectedTable && data.tableSnapshotId !== currentTableSnapshotId) {
+          return {
+            success: false,
+            applied: false,
+            error: "回档令牌已漂移：表格快照变化",
+            drift: "tableSnapshotId",
+            expectedTableSnapshotId: data.tableSnapshotId,
+            actualTableSnapshotId: currentTableSnapshotId,
+            anchor,
+          };
+        }
         let tableRestored = false, snapshotId = null, snapshotTimestamp = null, tableCount = 0, pruned = 0;
         // ★ P0-1 保命快照：在改表格前抓当前 tables 深拷贝，文件层失败时回滚到改前状态，
         // 实现"要么全成、要么完全不动"原子性。_rollbackMemData 是 live 缓存对象（saveTablesData 写它）。
         let _safetyTables = null, _rollbackMemData = null;
         if (snapshot) {
-          const restoreResult = restoreTableSnapshot(username, charName, snapshot.id);
-          if (!restoreResult.success) return { success: false, error: restoreResult.error };
+          // 恢复不能只凭 snapshotId：旧时间戳 ID 可能碰撞，且快照文件跨同角色的多个 chat 共存。
+          // 这里把“刚按当前 anchor 解析出的同一条快照”事实作为作用域交给恢复端二次核对，拒绝跨对话/消息猜测。
+          const tableSnapshotScope = {
+            chatId: data.chatId,
+            messageIndex: snapshot.messageIndex,
+            ...(snapshot.messageId ? { messageId: snapshot.messageId } : {}),
+          };
+          const restoreResult = restoreTableSnapshot(username, charName, snapshot.id, tableSnapshotScope);
+          if (!restoreResult.success) {
+            return {
+              success: false,
+              applied: false,
+              error: restoreResult.error,
+              ...(restoreResult.code ? { code: restoreResult.code } : {}),
+              ...(restoreResult.drift ? { drift: restoreResult.drift } : {}),
+              ...(restoreResult.expectedScope ? { expectedTableSnapshotScope: restoreResult.expectedScope } : {}),
+              ...(restoreResult.actualScopes ? { actualTableSnapshotScopes: restoreResult.actualScopes } : {}),
+              anchor,
+            };
+          }
           clearCharCache(username, charName);
           // 修2 断链A（20260716）：按快照自带 mode 路由桶（tableEdit 快照的桶=创建时会话模式）；
           //   legacy 无 mode 快照按 undefined→active_mode（旧行为）。写盘 mode 必须取 _rollbackMemData.activeMode
@@ -4834,7 +5664,19 @@ export async function handleSetData(data, args) {
           // B-4：回档落盘必须 await + 校 .ok（对齐 updateTable/addTable M5 契约:645-646）——
           //   原 fire-and-forget：HTTP 可早于落盘返回崩溃即丢回档；且与下方保命回滚读同一 live cache 存写序竞态。
           const _wuRestore = await saveTablesData(username, charName, _rollbackMemData.activeMode, chatId);
-          if (_wuRestore && _wuRestore.ok === false) return { success: false, error: `回档表格落盘失败: ${_wuRestore.error || "saveTablesData ok=false"}` };
+          if (_wuRestore && _wuRestore.ok === false) {
+            // saveTablesData 失败时磁盘真值未推进，但 _rollbackMemData 是缓存中的 live 对象。
+            // 必须同步恢复缓存，否则接口虽返回失败，后续读取仍会看到未落盘的“已回档”表格。
+            _rollbackMemData.tables = _safetyTables;
+            return {
+              success: false,
+              applied: false,
+              partial: false,
+              restored: false,
+              error: `回档表格落盘失败: ${_wuRestore.error || "saveTablesData ok=false"}`,
+              anchor,
+            };
+          }
           // ★ P0-2 prune 推迟：pruneSnapshotsAfter 不可逆（删过期快照），推迟到文件层也成功的 commit 点。
           tableRestored = true; snapshotId = snapshot.id; snapshotTimestamp = snapshot.timestamp; tableCount = restoreResult.tables.length;
         }
@@ -4843,28 +5685,77 @@ export async function handleSetData(data, args) {
         // 不再吞错后无条件 success:true。success 反映各层真实结果，避免用户误判回档已成功。
         let fileError = null;
         let fileFailedFiles = null;
-        if (_doFile && ideClient.isConnected) {
+        let fileRouteDrift = null;
+        if (_doFile && ideConnected) {
           try {
-            const _fileResult = await ideClient.revertToMessage(data.chatId, data.targetIndex);
-            // ★ A2 双读真实结果：外层 envelope success（ToolExecutor 已吸收内层）+ 内层 result.success
-            //   （FileCheckpoint allErrors 聚合）都必须为真才算成功。防御性双判：即便外层因回归再次恒 true，
-            //   内层 result.success===false 仍会被识别 → fileError 非空 → 不删对话消息（fail-safe 顺序=
-            //   先文件层成功才动对话层）。failedFiles 透传给前端 toast 真实失败文件名。
-            const _fr = _fileResult?.result || {};
-            const _outerOk = _fileResult?.success !== false;
-            const _innerOk = _fr.success !== false; // 内层缺省(无 success 字段)视为通过，仅显式 false 才判失败
-            if (_outerOk && _innerOk) {
-              fileRollback = { checkpointsReverted: _fr.checkpointsReverted || 0, totalRestored: _fr.totalRestored || 0, totalDeleted: _fr.totalDeleted || 0 };
-            } else {
+            const _fileResult = await ideClient.revertToMessage(
+              data.chatId,
+              targetIndex,
+              expectedCheckpointIds,
+              hasExpectedIdeRoute ? data.expectedIdeRoute : undefined,
+            );
+            // 外层 callTool 与内层 FileCheckpoint 必须同时确认；pending/indeterminate 是
+            // “执行端仍可能落地”的未知终态，不能降格成普通失败，更不能继续截断对话。
+            const normalizedFile = normalizeRollbackFileResult(
+              _fileResult,
+              hasExpectedCheckpoints ? expectedCheckpointIds : undefined,
+            );
+            const _fr = (_fileResult?.result && typeof _fileResult.result === "object")
+              ? _fileResult.result
+              : (_fileResult || {});
+            fileRollback = normalizedFile.fileRollback;
+            if (normalizedFile.indeterminate) {
+              return {
+                success: false,
+                applied: true,
+                partial: true,
+                indeterminate: true,
+                pending: normalizedFile.pending,
+                restored: tableRestored,
+                tableRestored,
+                snapshotId,
+                snapshotTimestamp,
+                tableCount,
+                pruned: 0,
+                fileRollback,
+                fileError: normalizedFile.error,
+                checkpointIds: currentCheckpointIds,
+                tableSnapshotId: currentTableSnapshotId,
+                expectedIdeConnected: hasExpectedIde ? data.expectedIdeConnected : actualIdeRoute.connected,
+                expectedIdeRoute: hasExpectedIdeRoute ? data.expectedIdeRoute : actualIdeRoute,
+                actualIdeRoute,
+                contextSummaryDeleted: 0,
+                warning: "文件操作终态未知，禁止重试/截断对话；请等待执行端迟到结果并人工核对。",
+              };
+            }
+            if (!normalizedFile.confirmed) {
               const _errs = (Array.isArray(_fr.errors) && _fr.errors.length) ? _fr.errors.join("; ") : null;
-              fileError = _errs || _fileResult?.error || "文件回档未成功（revertToMessage 返回非 success 或内层部分文件失败）";
+              fileError = !normalizedFile.shapeOk || !normalizedFile.semanticOk
+                ? "文件回档执行端返回的协议或计数语义不闭合，无法确认结果；已拒绝继续截断对话"
+                : (_errs || normalizedFile.error || "文件回档未成功（执行端未同时确认外层与内层 success:true）");
+              if (_fileResult?.drift === "ideRoute" || _fr?.drift === "ideRoute") {
+                fileRouteDrift = {
+                  drift: "ideRoute",
+                  expectedIdeRoute: _fileResult?.expectedIdeRoute ?? _fr?.expectedIdeRoute ?? data.expectedIdeRoute,
+                  actualIdeRoute: _fileResult?.actualIdeRoute ?? _fr?.actualIdeRoute ?? ideClient.getRouteSnapshot(data.chatId),
+                };
+              }
               const _ff = _fr.failedFiles || _fileResult?.failedFiles;
               if (Array.isArray(_ff) && _ff.length) fileFailedFiles = _ff;
             }
-          } catch (_err) { fileError = _err?.message || String(_err); console.warn("[beilu-memory] rollbackMemory: 文件回档异常:", fileError); }
+          } catch (_err) {
+            fileError = _err?.message || String(_err);
+            fileRollback = { success: false, partial: false, attempted: 0, reverted: 0, checkpointsReverted: 0, totalRestored: 0, totalDeleted: 0 };
+            console.warn("[beilu-memory] rollbackMemory: 文件回档异常:", fileError);
+          }
         }
-        // ★ P0-2 原子失败回滚：文件层失败 → 把表格还原到改前保命快照，未 prune → 真正"完全不动"
+        // 文件层失败时表格仍尽力回到改前状态。但 FileCheckpoint 可能已恢复/删除
+        // 部分文件，表格保命成功不能把整体结果重写为“完全不动”。
         if (fileError) {
+          const _filePartial = !!fileRollback?.partial
+            || (fileRollback?.reverted || 0) > 0
+            || (fileRollback?.totalRestored || 0) > 0
+            || (fileRollback?.totalDeleted || 0) > 0;
           if (tableRestored && _safetyTables && _rollbackMemData) {
             try {
               _rollbackMemData.tables = _safetyTables;
@@ -4872,55 +5763,230 @@ export async function handleSetData(data, args) {
               //   mode 同上取 _rollbackMemData.activeMode（保命写回的就是它的桶）。
               const _wuSafety = await saveTablesData(username, charName, _rollbackMemData.activeMode, chatId);
               if (_wuSafety && _wuSafety.ok === false) throw new Error(`保命回滚落盘失败: ${_wuSafety.error || "saveTablesData ok=false"}`);
-              return { success: false, restored: false, snapshotId, snapshotTimestamp, tableCount: 0, pruned: 0, fileRollback: null, fileError, failedFiles: fileFailedFiles, warning: `文件层回档失败: ${fileError}（已回滚表格到改前、未删快照=完全不动，可重试）` };
+              return {
+                success: false,
+                applied: _filePartial,
+                partial: _filePartial,
+                restored: false,
+                snapshotId,
+                snapshotTimestamp,
+                tableCount: 0,
+                pruned: 0,
+                fileRollback,
+                fileError,
+                failedFiles: fileFailedFiles,
+                ...(fileRouteDrift || {}),
+                warning: `文件层回档失败: ${fileError}；表格已恢复到回档前状态，文件层${_filePartial ? "已发生部分变化，请人工核对" : "未确认发生变化，仍应核对后重试"}`,
+              };
             } catch (_revErr) {
               const _revMsg = _revErr?.message || String(_revErr);
               console.error("[beilu-memory] rollbackMemory: 保命回滚也失败:", _revMsg);
-              return { success: false, restored: tableRestored, snapshotId, snapshotTimestamp, tableCount, pruned: 0, fileRollback: null, fileError, failedFiles: fileFailedFiles, safetyRollbackError: _revMsg, warning: `文件层回档失败且表格保命回滚也失败=状态可能不一致，请人工核对（文件层:${fileError}；保命回滚:${_revMsg}）` };
+              return { success: false, applied: true, partial: true, restored: tableRestored, snapshotId, snapshotTimestamp, tableCount, pruned: 0, fileRollback, fileError, failedFiles: fileFailedFiles, ...(fileRouteDrift || {}), safetyRollbackError: _revMsg, warning: `文件层回档失败且表格保命回滚也失败=状态可能不一致，请人工核对（文件层:${fileError}；保命回滚:${_revMsg}）` };
             }
           }
           // 无表格快照（纯文件回档场景）文件层失败 → 表格本就未动，直接如实报告
-          return { success: false, restored: false, snapshotId, snapshotTimestamp, tableCount: 0, pruned: 0, fileRollback: null, fileError, failedFiles: fileFailedFiles, warning: `文件层回档失败: ${fileError}（表格无快照、未动=完全不动，可重试）` };
+          return {
+            success: false,
+            applied: _filePartial,
+            partial: _filePartial,
+            restored: false,
+            snapshotId,
+            snapshotTimestamp,
+            tableCount: 0,
+            pruned: 0,
+            fileRollback,
+            fileError,
+            failedFiles: fileFailedFiles,
+            ...(fileRouteDrift || {}),
+            warning: `文件层回档失败: ${fileError}；表格层无可恢复快照，文件层${_filePartial ? "已发生部分变化，请人工核对" : "未确认发生变化，仍应核对后重试"}`,
+          };
         }
         // ★ commit 点：表格+文件层都成功 → 此刻才 prune（不可逆清理过期快照）。
         // prune 失败不破坏已回档状态（只是残留过期快照），不应使整体 success 翻转。
         if (snapshot) {
-          try { pruned = pruneSnapshotsAfter(username, charName, data.chatId, data.targetIndex); }
+          try { pruned = pruneSnapshotsAfter(username, charName, data.chatId, targetIndex); }
           catch (_pruneErr) { console.warn("[beilu-memory] rollbackMemory: prune 过期快照失败(不影响回档结果):", _pruneErr?.message || _pruneErr); }
         }
-        // H3：回档后清 context_summary。压缩摘要覆盖的是被回档掉的较晚消息，留着会被 getPromptHandler:473
-        //   readContextSummary 无条件读 + 每轮当背景注入（回档↔压缩协同缺口）。清后下次压缩自然重建。同 :1785 口径。
-        // O17 per-chatId 隔离：有 chatId 时同时清 per-chat 文件 + 旧全局文件（兼容残留）。
-        try {
-          if (data.chatId) {
-            const _safeCid = String(data.chatId).replace(/[\\/]|\.\./g, "_");
-            const _perChatPath = path.join(ensureMemoryDir(username, charName), "hot", "chat_ctx", _safeCid, "context_summary.json");
-            if (fs.existsSync(_perChatPath)) fs.unlinkSync(_perChatPath);
+        // 摘要真值收口：表格+文件层均确认后才推进持久 epoch，建立 rewrite lease。
+        // 回档协调入口把 lease 持有到聊天截断的 finally；直接旧入口则在本函数内精确完成。
+        // state 一旦存在就禁止 legacy fallback，因此不删角色级模糊归属文件也不会复活旧摘要。
+        let contextSummaryDeleted = 0;
+        let contextSummaryInvalidated = false;
+        let contextSummaryLease = null;
+        const contextSummaryCleanupErrors = [];
+        let perChatContextSummary = { status: "absent", deleted: false };
+        if (data.chatId) {
+          try {
+            const _summaryRollback = await beginContextSummaryRollback(username, charName, data.chatId);
+            if (_summaryRollback?.ok !== true) {
+              const _error = new Error(_summaryRollback?.code || "context summary rewrite lease unavailable");
+              _error.code = _summaryRollback?.code || "E_CONTEXT_SUMMARY_ROLLBACK_BLOCKED";
+              throw _error;
+            }
+            contextSummaryInvalidated = true;
+            contextSummaryDeleted = _summaryRollback.deleted === true ? 1 : 0;
+            contextSummaryLease = {
+              leaseId: _summaryRollback.leaseId,
+              epoch: _summaryRollback.epoch,
+              revision: _summaryRollback.revision,
+              leaseExpiresAt: _summaryRollback.leaseExpiresAt,
+              operationId: _summaryRollback.operationId,
+            };
+            perChatContextSummary = {
+              status: "invalidated",
+              deleted: contextSummaryDeleted > 0,
+              epoch: _summaryRollback.epoch,
+              revision: _summaryRollback.revision,
+              ...(typeof _summaryRollback.mirrorError === "string" ? { mirrorWarning: _summaryRollback.mirrorError } : {}),
+            };
+            if (!_historyCoordinated) {
+              const _completed = await completeContextSummaryRollback(username, charName, data.chatId, {
+                leaseId: contextSummaryLease.leaseId,
+              });
+              if (_completed?.completed !== true) {
+                const _error = new Error(_completed?.code || "context summary rewrite lease completion failed");
+                _error.code = _completed?.code || "E_CONTEXT_SUMMARY_LEASE_COMPLETE_FAILED";
+                throw _error;
+              }
+              contextSummaryLease = null;
+              perChatContextSummary.rewriteCompleted = true;
+            }
+          } catch (_csErr) {
+            const _cleanupFailure = {
+              scope: "per_chat_state",
+              code: _csErr?.code || "E_CONTEXT_SUMMARY_INVALIDATION_FAILED",
+              error: _csErr?.message || String(_csErr),
+            };
+            contextSummaryCleanupErrors.push(_cleanupFailure);
+            perChatContextSummary = { status: "failed", deleted: false, code: _cleanupFailure.code, error: _cleanupFailure.error };
+            console.warn("[beilu-memory] rollbackMemory: context summary state invalidation failed:", _cleanupFailure.error);
           }
-          const _csPath = path.join(ensureMemoryDir(username, charName), "hot", "context_summary.json");
-          if (fs.existsSync(_csPath)) fs.unlinkSync(_csPath);
-        } catch (_csErr) { console.warn("[beilu-memory] rollbackMemory: 清 context_summary 失败(不翻转回档结果):", _csErr?.message || _csErr); }
-        return { success: true, restored: tableRestored || !!fileRollback, snapshotId, snapshotTimestamp, tableCount, pruned, fileRollback, layers: { table: _doTable, file: _doFile } };
-      } catch (e) { return { success: false, error: `记忆回档失败: ${e.message}` }; }
+        }
+        const fileApplied = fileRollback?.success === true && [
+          fileRollback.checkpointsReverted,
+          fileRollback.totalRestored,
+          fileRollback.totalDeleted,
+        ].some((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+        const applied = tableRestored || fileApplied || contextSummaryInvalidated;
+        const cleanupError = contextSummaryCleanupErrors.length > 0
+          ? contextSummaryCleanupErrors.map((item) => `${item.scope}: ${item.error}`).join("; ")
+          : null;
+        const result = {
+          success: !cleanupError,
+          applied,
+          partial: !!cleanupError,
+          restored: applied,
+          snapshotId,
+          snapshotTimestamp,
+          tableCount,
+          pruned,
+          fileRollback,
+          ideConnected,
+          expectedIdeConnected: hasExpectedIde ? data.expectedIdeConnected : actualIdeRoute.connected,
+          expectedIdeRoute: hasExpectedIdeRoute ? data.expectedIdeRoute : actualIdeRoute,
+          actualIdeRoute,
+          checkpointIds: currentCheckpointIds,
+          tableSnapshotId: currentTableSnapshotId,
+          anchor,
+          tableRestored,
+          contextSummaryDeleted,
+          contextSummaryInvalidated,
+          contextSummaryLease,
+          perChatContextSummary,
+          layers: { table: _doTable, file: _doFile },
+          historyCoordinated: _historyCoordinated,
+        };
+        if (cleanupError) {
+          result.cleanupError = cleanupError;
+          result.contextSummaryCleanupErrors = contextSummaryCleanupErrors;
+          result.error = `回档主体已执行，但 context_summary 清理失败: ${cleanupError}`;
+        }
+        return result;
+      } catch (e) {
+        return {
+          success: false,
+          applied: false,
+          error: `记忆回档失败: ${e.message}`,
+          ...(typeof e?.code === "string" ? { code: e.code } : {}),
+        };
+      }
+      })());
     }
 
     // ★ P1-2 只读预览：回档到 targetIndex 前预览文件层会还原/删哪些文件。纯查询，不改任何状态。
     // 注意：原名 "getCheckpointDiff" 与下方面板用的同名 case 撞 label（JS switch 只走第一个），
     // 导致面板按 id 查 diff 恒被本 case 拦截返回"缺少 chatId"。改名为 getRollbackPreview 解冲突（本 case 当前无前端调用方）。
     case "getRollbackPreview": {
+      return _withMemoryArchiveCoverage(await (async () => {
       if (!data.chatId) return { success: false, error: "缺少 chatId" };
-      if (data.targetIndex === undefined) return { success: false, error: "缺少 targetIndex" };
-      if (!ideClient.isConnected) {
-        return { success: true, ideConnected: false, checkpointsToRevert: 0, filesToRestore: [], filesToDelete: [] };
-      }
       try {
-        const _r = await ideClient.getCheckpointDiff(data.chatId, data.targetIndex);
-        if (_r?.success) {
-          const _d = _r.result || {};
-          return { success: true, ideConnected: true, checkpointsToRevert: _d.checkpointsToRevert || 0, filesToRestore: _d.filesToRestore || [], filesToDelete: _d.filesToDelete || [] };
+        const anchor = await _resolveRollbackAnchor(data.chatId, data.anchorMessageId, data.targetIndex);
+        const expectedIdeRoute = ideClient.getRouteSnapshot(data.chatId);
+        const ideConnected = expectedIdeRoute.connected;
+        const _layers = (data.layers && typeof data.layers === "object") ? data.layers : {};
+        const snapshot = _layers.table !== false
+          ? findSnapshotForRollback(username, charName, data.chatId, anchor.index)
+          : null;
+        const tableSnapshotId = snapshot?.id || null;
+        if (!ideConnected || _layers.file === false) {
+          return {
+            success: true,
+            applied: false,
+            anchor,
+            ideConnected,
+            expectedIdeConnected: ideConnected,
+            expectedIdeRoute,
+            checkpointIds: [],
+            tableSnapshotId,
+            checkpointsToRevert: 0,
+            filesToRestore: [],
+            filesToDelete: [],
+          };
         }
-        return { success: false, error: _r?.error || "回档预览未成功", ideConnected: true };
-      } catch (e) { return { success: false, error: `回档预览失败: ${e.message}` }; }
+        const _r = await ideClient.getCheckpointDiff(
+          data.chatId,
+          anchor.index,
+          undefined,
+          expectedIdeRoute,
+        );
+        const previewEnvelope = _readCheckpointPreviewEnvelope(_r);
+        if (previewEnvelope.ok) {
+          const _d = previewEnvelope.result;
+          return {
+            success: true,
+            applied: false,
+            anchor,
+            ideConnected: true,
+            expectedIdeConnected: true,
+            expectedIdeRoute,
+            checkpointIds: _d.checkpointIds,
+            tableSnapshotId,
+            checkpointsToRevert: _d.checkpointsToRevert || 0,
+            filesToRestore: _d.filesToRestore || [],
+            filesToDelete: _d.filesToDelete || [],
+          };
+        }
+        return {
+          success: false,
+          applied: false,
+          error: previewEnvelope.error || "回档预览未成功",
+          ideConnected: true,
+          expectedIdeRoute,
+          ...(_r?.drift ? {
+            drift: _r.drift,
+            actualIdeRoute: _r.actualIdeRoute,
+          } : {}),
+          anchor,
+        };
+      } catch (e) {
+        return {
+          success: false,
+          applied: false,
+          error: `回档预览失败: ${e.message}`,
+          ...(typeof e?.code === "string" ? { code: e.code } : {}),
+        };
+      }
+      })());
     }
 
     case "listTableSnapshots": {
@@ -4931,7 +5997,9 @@ export async function handleSetData(data, args) {
         const _tMode = _resolveTableMode(data, username, charName, chatId);
         const _all = listTableSnapshots(username, charName);
         return { success: true, mode: _tMode, snapshots: _all.filter((s) => !s.mode || s.mode === _tMode) };
-      } catch (e) { return { success: false, error: e.message }; }
+      } catch (e) {
+        return { success: false, error: e.message, ...(typeof e?.code === "string" ? { code: e.code } : {}) };
+      }
     }
 
     case "restoreTableSnapshot": {
@@ -4945,8 +6013,17 @@ export async function handleSetData(data, args) {
         const _snapId = data.snapshotId;
         if (!_snapId) return { success: false, error: "缺少 snapshotId" };
         const _tMode = _resolveTableMode(data, username, charName, chatId);
-        const _rResult = restoreTableSnapshot(username, charName, _snapId);
-        if (!_rResult.success) return { success: false, error: _rResult.error };
+        const _rResult = restoreTableSnapshot(username, charName, _snapId, { chatId });
+        if (!_rResult.success) {
+          return {
+            success: false,
+            error: _rResult.error,
+            ...(_rResult.code ? { code: _rResult.code } : {}),
+            ...(_rResult.drift ? { drift: _rResult.drift } : {}),
+            ...(_rResult.expectedScope ? { expectedTableSnapshotScope: _rResult.expectedScope } : {}),
+            ...(_rResult.actualScopes ? { actualTableSnapshotScopes: _rResult.actualScopes } : {}),
+          };
+        }
         if (_rResult.mode && _rResult.mode !== _tMode) {
           return { success: false, error: `快照属于「${_rResult.mode}」模式表格，当前查看「${_tMode}」，不跨桶恢复（切到对应模式再恢复）` };
         }
@@ -4956,7 +6033,9 @@ export async function handleSetData(data, args) {
         const _wuResult = await saveTablesData(username, charName, _tMode, chatId);
         if (_wuResult && _wuResult.ok === false) return { success: false, error: `表格落盘失败: ${_wuResult.error}` };
         return { success: true, snapshotId: _snapId, mode: _tMode };
-      } catch (e) { return { success: false, error: e.message }; }
+      } catch (e) {
+        return { success: false, error: e.message, ...(typeof e?.code === "string" ? { code: e.code } : {}) };
+      }
     }
 
     // === IDE 写操作审批 ===
@@ -5104,11 +6183,17 @@ export async function handleSetData(data, args) {
           _saved.ppt_budget = _n;
         } catch (e) { _saved.ppt_budget_error = e?.message; }
       }
-      // 委派最大轮次 / 模式切换上限 / 定时任务节流 → yonban_config.advanced_limits
+      // 委派最大轮次 / 模式切换上限 / 定时任务节流 / 历史改写静默时限 → yonban_config.advanced_limits
       const _updates = {};
       if (data.delegate_max_rounds !== undefined) _updates.delegate_max_rounds = Math.max(0, Math.round(Number(data.delegate_max_rounds) || 0));
       if (data.switch_loop_max !== undefined) _updates.switch_loop_max = Math.max(0, Math.round(Number(data.switch_loop_max) || 0));
       if (data.scheduler_pacing !== undefined) _updates.scheduler_pacing = !!data.scheduler_pacing;
+      if (data.history_rewrite_worker_settle_timeout_ms !== undefined) {
+        const { resolveHistoryRewriteWorkerSettleTimeoutMs } = await import("../../../transport/historyRewritePolicy.mjs");
+        _updates.history_rewrite_worker_settle_timeout_ms = resolveHistoryRewriteWorkerSettleTimeoutMs(
+          data.history_rewrite_worker_settle_timeout_ms,
+        );
+      }
       if (Object.keys(_updates).length) {
         await updateYonbanConfig(username, (cfg) => { cfg.advanced_limits = { ...(cfg.advanced_limits || {}), ..._updates }; });
         Object.assign(_saved, _updates);
@@ -5206,14 +6291,31 @@ export async function handleSetData(data, args) {
       const _biChatid = data.chatid || data.chat_id || args?.chatid || null;
       const _biPort = Number(data.port ?? args?.port);
       if (!_biChatid || !Number.isFinite(_biPort)) return { success: false, error: "缺少 chatid 或 port" };
+      const _biAuthUsername = typeof args?.username === "string" ? args.username.trim() : "";
+      if (!_biAuthUsername) return { success: false, error: "bindIdeInstance 缺少认证 username" };
+      const _biOwner = await _resolveChatOwner(_biChatid);
+      if (!_biOwner || _biOwner !== _biAuthUsername) {
+        return { success: false, error: "无权绑定该对话的 IDE 实例" };
+      }
+      const _biInstanceId = data.instanceId == null ? null : String(data.instanceId).trim();
+      if (data.instanceId != null && !_biInstanceId) return { success: false, error: "instanceId 无效" };
+      if (ideClient.registerChatOwner?.(_biChatid, _biAuthUsername) === false) {
+        return { success: false, error: "会话 owner 绑定冲突" };
+      }
       // [绑定来源 0726] source="manual"=用户在 ＋号 里明确指定执行端（粘性，不被自动上报覆盖）；
       //   缺省/"auto"=窗口打开某对话时的自动上报（弱）。缺省保持旧语义，YonBan 旧版不传也不报错。
-      return ideClient.bindChat(_biChatid, _biPort, data.source === "manual" ? "manual" : "auto");
+      return ideClient.bindChat(_biChatid, _biPort, data.source === "manual" ? "manual" : "auto", _biInstanceId);
     }
 
     case "unbindIdeInstance": {
       const _ubChatid = data.chatid || data.chat_id || args?.chatid || null;
       if (!_ubChatid) return { success: false, error: "缺少 chatid" };
+      const _ubAuthUsername = typeof args?.username === "string" ? args.username.trim() : "";
+      if (!_ubAuthUsername) return { success: false, error: "unbindIdeInstance 缺少认证 username" };
+      const _ubOwner = await _resolveChatOwner(_ubChatid);
+      if (!_ubOwner || _ubOwner !== _ubAuthUsername) {
+        return { success: false, error: "无权解绑该对话的 IDE 实例" };
+      }
       return ideClient.unbindChat(_ubChatid);
     }
 
@@ -5596,13 +6698,63 @@ export async function handleSetData(data, args) {
       const _gcStart = startGameCompanion(username, effChar, {
         interval: data.interval, // 可选：自定义间隔(ms)
         chatid: effChatid, // D-1:bindChat(已校验存在)锁定一条陪伴对话，否则前端 layout 传入 chatid
+        petLease: data.petLease === false ? false : undefined, // D5 §2.2 可选「只互动」:false=不申请桌宠租约
       });
-      return warnings.length ? { ...(_gcStart || {}), bindWarnings: warnings } : _gcStart; // 失效绑定不静默
+      // [D5 §2.2 结构版 2026-08-04] 分项 PetOperationResult:session 与 pet 各自真值,不用一个 success
+      // toast 抹平——互动可以成功而桌宠 waiting_heartbeat/installing/missing/error。lease acquire 已在
+      // startGameCompanion 内触发 PetLifecycle owner 拉起;此处只读 injection_state 运行时镜像组装 DTO,
+      // 有界等它离开 stopped(≤2s,装 Electron/等心跳等长阶段按当时快照如实上报,不阻塞互动开始)。
+      const _eye = await import("../../screenshot/injection_state.mjs");
+      let _petRt = _eye.getPetRuntimeState();
+      if (_gcStart?.success && _gcStart.petLeaseId && _petRt.status === "stopped") {
+        ({ state: _petRt } = await _eye.waitPetRuntimeSettled((s) => s.status !== "stopped", 2000, 100));
+      }
+      const _petDto = {
+        explicitEnabled: !!_eye.loadPetSettingsStore(__projectRoot).petEnabled,
+        interactionLease: !!_gcStart?.petLeaseId,
+        effectiveDesired: _eye.getPetEffectiveDesired(__projectRoot),
+        runtime: _petRt.status,
+        pid: _petRt.pid,
+        error: _petRt.error,
+      };
+      const _startDto = { ...(_gcStart || {}), operationId: crypto.randomUUID(), pet: _petDto };
+      // 白盒定位点:互动开始的分项真值单点留痕(session 结果+pet 运行时快照),排查"toast 与真实状态不一致"从这里看
+      wbT(effChatid, "gameCompanion", "start:dto", { success: _gcStart?.success, lease: _petDto.interactionLease, petRuntime: _petDto.runtime, effectiveDesired: _petDto.effectiveDesired, warnings: warnings.length });
+      return warnings.length ? { ..._startDto, bindWarnings: warnings } : _startDto; // 失效绑定不静默
     }
 
     case "stopGameCompanion": {
       const { stopGameCompanion } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
-      return stopGameCompanion(username);
+      const _gcStop = stopGameCompanion(username);
+      // [D5 §2.2] 停止分项收束:session stop 与本次 lease release 的结果均返回后才回包——
+      //   显式开着的桌宠(effectiveDesired 仍 true)不等停,直接如实上报 running;
+      //   lease 撤回触发优雅停止(10s ack)时等 runtime 收束(stopped / stopTimeout / 超时按快照上报,
+      //   状态保持 stopping 不谎报 stopped,对账继续观察——waitPetRuntimeSettled 到期即返)。
+      const _eyeStop = await import("../../screenshot/injection_state.mjs");
+      const _explicitOn = !!_eyeStop.loadPetSettingsStore(__projectRoot).petEnabled;
+      let _stopRt = _eyeStop.getPetRuntimeState();
+      if (_gcStop?.petLeaseReleased && !_eyeStop.getPetEffectiveDesired(__projectRoot)) {
+        ({ state: _stopRt } = await _eyeStop.waitPetRuntimeSettled(
+          (s) => s.status === "stopped" || s.stopTimeout === true,
+          _eyeStop.STOP_ACK_DEADLINE_MS + 1500, 250,
+        ));
+      }
+      // 白盒定位点:停止收束的分项真值单点留痕(lease 是否真实释放+pet 终态/stop_timeout),
+      // 排查"停不掉/假停止"先看这里与 eye:pet stop_* 链是否一致
+      wbT(null, "gameCompanion", "stop:dto", { success: _gcStop?.success, leaseReleased: _gcStop?.petLeaseReleased === true, petRuntime: _stopRt.status, stopTimeout: _stopRt.stopTimeout === true, explicitOn: _explicitOn });
+      return {
+        ...(_gcStop || {}),
+        operationId: crypto.randomUUID(),
+        pet: {
+          explicitEnabled: _explicitOn,
+          interactionLease: _eyeStop.hasActiveInteractionLease(),
+          effectiveDesired: _eyeStop.getPetEffectiveDesired(__projectRoot),
+          runtime: _stopRt.status,
+          pid: _stopRt.pid,
+          stopTimeout: _stopRt.stopTimeout === true,
+          error: _stopRt.error,
+        },
+      };
     }
 
     case "getGameCompanionStatus": {
@@ -5611,8 +6763,9 @@ export async function handleSetData(data, args) {
     }
 
     case "gameCompanionAction": {
-      const { gameCompanionUserAction } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
+      const { gameCompanionUserAction, gameCompanionCaptureNow } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
       // data.action: "reply" | "ignore" | "close" | "pause"
+      if (data.action === "captureNow") return await gameCompanionCaptureNow(username);
       gameCompanionUserAction(username, null, data.action || "ignore");
       const { getGameCompanionStatus: getStatus } = await import("../../../../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs");
       return getStatus(username);
@@ -5631,8 +6784,11 @@ export async function handleSetData(data, args) {
       const _sayFiles = Array.isArray(data.files) ? data.files.filter(f => f && typeof f.dataBase64 === "string" && f.dataBase64) : [];
       const _sayInject = typeof data.singleInject === "string" ? data.singleInject : "";
       if (!_sayText && !_sayFiles.length) return { success: false, error: "空消息" };
-      const _sayOk = gameCompanionTouchMessage(username, _sayText, { files: _sayFiles, singleInject: _sayInject });
-      return _sayOk ? { success: true } : { success: false, error: "陪伴未运行,请先启动桌宠陪伴" };
+      return await gameCompanionTouchMessage(username, _sayText, {
+        files: _sayFiles,
+        singleInject: _sayInject,
+        captureNow: data.captureNow === true,
+      });
     }
 
     case "getGameCompanionConfig": {

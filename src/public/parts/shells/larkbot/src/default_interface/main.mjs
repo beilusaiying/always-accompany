@@ -4,7 +4,7 @@ import { setTimeout } from "node:timers";
 import * as lark from "npm:@larksuiteoapi/node-sdk@^1.60.0";
 
 import { localhostLocales } from "../../../../../../scripts/i18n.mjs";
-import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
+import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, buildBotSourceMeta, pickBotSourceMeta, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
 import { createDiag } from "../../../../../../server/diagLogger.mjs";
 import { broadcastBotError } from '../../../botErrorBroadcast.mjs'
 
@@ -186,7 +186,7 @@ export async function createSimpleLarkInterface(
 			files: files.filter(Boolean),
 			// C6: bot 来源标记 + 独立权限等级（供下游消费端按 L0-L3 裁决；接入能力裁决属 K7 未接）
 			_sourceType: "bot",
-			_permissionLevel: resolveBotPermissionLevel(config, senderOpenId, !!isOwner),
+			...buildBotSourceMeta(config, senderOpenId, !!isOwner),
 			extension: {
 				...cachedAIReply?.extension,
 				lark_message_id: msgId,
@@ -224,7 +224,7 @@ export async function createSimpleLarkInterface(
 			await appendBotChatEntry(await resolveBotChatId(ownerUsername, botCharname, "lark"), {
 				role: newEntry.role, name: newEntry.name, content: newEntry.content,
 				files: newEntry.files, extension: newEntry.extension,
-				_sourceType: newEntry._sourceType, _permissionLevel: newEntry._permissionLevel,
+				...pickBotSourceMeta(newEntry),
 			});
 		} catch (e) { diag.warn(`bot 对话文件用户消息落盘失败（本轮回退壳内存）: ${e?.message || e}`); }
 		ChatChatLogs[chatId].push(newEntry);

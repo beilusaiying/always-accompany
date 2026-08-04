@@ -10,8 +10,8 @@ contextBridge.exposeInMainWorld('desktopEye', {
 	cropDone: (cropData) => ipcRenderer.send('crop-done', cropData),
 	// 取消框选
 	cropCancel: () => ipcRenderer.send('crop-cancel'),
-	// 发送截图到 beilu 后端
-	sendScreenshot: (data) => ipcRenderer.send('send-screenshot', data),
+	// 发送截图到 beilu 后端并等待真实成功/失败回执；失败时发送窗保留原图与输入。
+	sendScreenshot: (data) => ipcRenderer.invoke('send-screenshot', data),
 	// 取消发送
 	sendCancel: () => ipcRenderer.send('send-cancel'),
 
@@ -78,6 +78,9 @@ contextBridge.exposeInMainWorld('desktopEye', {
 	// 结果经 'stt-result' 回本窗({phase:'recording'|'transcribing'|'done'|'error', text?, error?})。
 	sttRecord: (cmd) => ipcRenderer.send('stt-record', String(cmd || '')),
 	onSttResult: (callback) => { ipcRenderer.on('stt-result', (_event, r) => callback(r)) },
+	// 快速语音：按钮与全局快捷键共用主进程状态机，第二次触发后自动转写并发送。
+	quickVoiceToggle: () => ipcRenderer.send('voice-quick-toggle'),
+	onQuickVoiceStatus: (callback) => { ipcRenderer.on('quick-voice-status', (_event, r) => callback(r)) },
 	// 悬浮对话窗:AI 回应同步进对话区(T9 凛倾 0722;与气泡同源 _showOrbBanner 单一出口)。
 	onPetChatReply: (callback) => { ipcRenderer.on('pet-chat-reply', (_event, text) => callback(text)) },
 })

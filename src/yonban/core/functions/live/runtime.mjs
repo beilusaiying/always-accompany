@@ -112,6 +112,7 @@ function _freshStats() {
 		evicted: 0,    // 因池满被挤出的（进了池但没轮到就被新弹幕挤掉）
 		injected: 0,   // 真正拼进上下文送进主链的
 		rounds: 0,     // 已执行的轮次数
+		generationRejected: 0, // 用户消息已落盘但主生成器未接受/排队（不得冒充 rounds）
 		skippedIdle: 0,   // 因池空跳过的轮（pacing.idleSkip）
 		skippedInFlight: 0, // 因上一轮未完成跳过的轮（重入闸）
 		byReason,
@@ -121,9 +122,8 @@ function _freshStats() {
 /**
  * 执行一轮：取池 → 选择 → 成型 → 进主链。
  *
- * 【重入闸】triggerCharReply 是异步的且【不 await】（AI 生成可能几十秒），
- *   单轮耗时可能 > minRoundIntervalMs → 定时器到点会重入。
- *   闸门收口在本函数入口单点（同 gameCompanion:338-344 范式）。
+ * 【重入闸】主链受理后等待 trigger.completion（AI 生成可能几十秒），
+ *   runtime inFlight 与真实生成同寿命；取池前还检查主链 chat 锁，避免忙时先丢候选消息。
  *   ⚠ 闸的释放在 finally，与加闸同判据，不在中途 return 处散写解锁。
  *
  * @param {object} session
@@ -148,6 +148,14 @@ async function _executeRound(session) {
 		// 过期清理：超过 ttlSec 的弹幕不再有注入价值（直播是即时场景，旧弹幕注入=答非所问）
 		session.pool.prune(rules.pool.ttlSec)
 
+		// 在从候选池破坏性 take 之前先问主生成器是否占用此 chat。旧链先 take/addUserReply，
+		// 后 trigger(userInitiated=false) 被主锁静默忽略，弹幕已丢且 rounds 还增加。
+		const { chatOps, generation } = await _loadMainChain()
+		if (generation.isChatGenerating?.(session.chatid)) {
+			session.stats.skippedInFlight += 1
+			return
+		}
+
 		const candidates = session.pool.take()
 		if (!candidates.length) {
 			// 池空：idleSkip=true 时不打扰主链（不发空轮），false 时也无内容可发 —— 两种情况都跳过，
@@ -163,8 +171,6 @@ async function _executeRound(session) {
 		if (!text) return // 模板全空 = 用户把 header/line/footer 都设成了空串，视为不注入
 
 		// ── 交给【既有】主链：先落盘（addUserReply），后触发生成（triggerCharReply）──
-		const { chatOps, generation } = await _loadMainChain()
-
 		// ⚠ content 是 formatForContext 的产出 —— 全部文案来自 contextTemplate（用户可配），
 		//   本文件【零硬编码进 messages 的文本】（禁止项7）。
 		await chatOps.addUserReply(session.chatid, {
@@ -174,31 +180,29 @@ async function _executeRound(session) {
 			extension: { beiluLiveRound: true },
 		})
 
-		// 记录本轮"被回复的对象"，供下一轮 selector.includeLastReplied 使用。
-		// ⚠ 这【不是】"AI 真正回复了谁" —— triggerCharReply 是异步的、回复由 ReplyHandler
-		//   落盘，runtime 拿不到完成回调（gameCompanion:472-474 注释记录了同一处境）。
-		//   此处取本轮注入内容里【权重最高/最新的那条】的 uid 作为近似：
-		//   它是本轮最可能被 AI 回应的对象，也是「注入刚刚回复的用户」这条需求在可实现范围内的最佳落点。
-		session.lastRepliedUid = selected[selected.length - 1]?.uid || session.lastRepliedUid
-
-		session.stats.injected += selected.length
-		session.stats.rounds += 1
-		session.lastRoundAt = Date.now()
-
-		// 不 await：AI 生成耗时不该阻塞定时器轮（同 gameCompanion:476 范式）。
-		// 失败只留痕不重试 —— 重试会在主链已受理的情况下产生重复轮。
+		// 直播弹幕已经作为 user entry 落盘，所以它在主生成锁里也属于“用户输入”：忙时应排队，
+		// 不能再以 userInitiated=false 静默丢弃。返回契约区分 accepted/queued/rejected；只有前两者
+		// 才计为 injected/rounds。accepted 时等待 completion，使本 runtime 的 inFlight 与真实 AI 轮同寿命。
 		// [0727] windowMode:'live' 让主链 resolveGenerationMode 选 live 模式
 		//   → aiRunner prompts 分组选 prompts_live（P1 辅助 AI 按 activeMode 选组）
 		//   → INJ autoMode 域也走 live 分支（如有）
 		//   链路：triggerCharReply options.windowMode → getChatRequest → requestBuilder:144
 		//         → request.mode='live' → resolveGenerationMode 第一优先级命中
-		generation.triggerCharReply(session.chatid, undefined, {
-			userInitiated: false,
+		const trigger = await generation.triggerCharReply(session.chatid, undefined, {
+			userInitiated: true,
 			sourceChannel: 'beiluLive',
 			windowMode: 'live',
-		}).catch((e) => {
-			console.warn(`[beilu-live] 主链生成触发失败(第${session.stats.rounds}轮):`, e.message)
 		})
+		if (!trigger?.accepted && !trigger?.queued) {
+			session.stats.generationRejected += 1
+			throw new Error(`主生成器未接受直播轮: ${trigger?.reason || 'unknown'}`)
+		}
+
+		session.lastRepliedUid = selected[selected.length - 1]?.uid || session.lastRepliedUid
+		session.stats.injected += selected.length
+		session.stats.rounds += 1
+		session.lastRoundAt = Date.now()
+		if (trigger.accepted && trigger.completion) await trigger.completion
 	} catch (e) {
 		console.error('[beilu-live] 轮次执行失败:', e.message)
 	} finally {
@@ -211,7 +215,7 @@ async function _executeRound(session) {
  * 启动一个直播接入会话。
  *
  * @param {string} username
- * @param {{platform:string, roomId:string, chatid:string, credentials?:object, getConfig:Function}} opts
+ * @param {{platform:string, roomId:string, chatid:string, targetSource?:string, credentials?:object, getConfig:Function}} opts
  *   getConfig: 取 per-user config 的函数（由 main.mjs 注入 —— runtime 不直接碰 store，
  *              避免 runtime 与 main 双向依赖）
  * @returns {Promise<{success:boolean, sessionId?:string, error?:string}>}
@@ -267,6 +271,7 @@ export async function startLive(username, opts) {
 		platform: platformId,
 		roomId,
 		chatid,
+		targetSource: String(opts?.targetSource || 'live_binding'),
 		getConfig: typeof opts.getConfig === 'function' ? opts.getConfig : () => ({}),
 		startedAt: Date.now(),
 		lastRoundAt: null,
@@ -338,9 +343,9 @@ export async function startLive(username, opts) {
 	}, rules.pacing.minRoundIntervalMs)
 
 	_sessions.set(user, session)
-	console.log(`[beilu-live] 已启动: ${user} → ${platformId}/${roomId}, 承载对话=${chatid}, 轮间隔=${Math.round(rules.pacing.minRoundIntervalMs / 1000)}秒`)
+	console.log(`[beilu-live] 已启动: ${user} → ${platformId}/${roomId}, 承载对话=${chatid}(${session.targetSource}), 轮间隔=${Math.round(rules.pacing.minRoundIntervalMs / 1000)}秒`)
 
-	return { success: true, sessionId: session.id }
+	return { success: true, sessionId: session.id, chatid: session.chatid, targetSource: session.targetSource }
 }
 
 /**
@@ -388,6 +393,7 @@ export function getLiveStatus(username) {
 		platform: session.platform,
 		roomId: session.roomId,
 		chatid: session.chatid,
+		targetSource: session.targetSource,
 		connState: session.connState,
 		connDetail: session.connDetail,
 		startedAt: session.startedAt,

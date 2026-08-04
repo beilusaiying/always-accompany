@@ -3,7 +3,7 @@
  *   不管后端持久化（那是后端 chatStorage/storage.mjs 的事）。
  *
  * 功能链：前端所有模块 → storage.get/set/remove(key) → try/catch 容错 → 浏览器 localStorage
- *   → 返回裸字符串（get）/ 无返回（set/remove）。
+ *   → 返回裸字符串（get）/ 无返回（set/remove）；storage.subscribe 仅转发同源其他窗口的原生 storage 事件。
  *   同时 re-export KEYS 常量，让消费方可以 `import { storage, KEYS } from "./storage.mjs"` 一行搞定。
  *
  * why：浏览器 localStorage 在私隐模式 / 存储配额满 / 跨域时会抛异常，直接裸调会导致整个模块崩溃。
@@ -60,6 +60,9 @@ const WINDOW_LOCAL_KEYS = new Set([
   // 草稿=输入框态（per-window）：messageInput 单键纯字符串，窗A打字中被窗B清空/覆盖=丢输入。
   //   （messageInput:72"单份草稿"指本窗内跨对话/模式共享一份，非跨窗共享的设计决策。）
   _K.BEILU_CHAT_DRAFT,
+  // 文件树当前根是窗口作业态：同一角色在两个窗口可分别查看不同目录，不能让窗口 B
+  // 覆盖窗口 A 的恢复值。后端仍按 chatid/角色保存权威根；localStorage 只给新窗口继承默认。
+  _K.BEILU_FILE_ROOT,
 ]);
 
 export const storage = {
@@ -94,6 +97,25 @@ export const storage = {
     } catch (e) {
       _cfgDiag?.warn("remove 失败:", key, e?.name || e?.message);
     }
+  },
+  /**
+   * 订阅同源其他窗口对指定 localStorage 键的变更。
+   * 原生 storage 事件不会在发起写入的当前窗口触发；当前窗口仍由设置入口立即 apply。
+   * event.key === null 表示 clear()，由消费方把所有监听键恢复为缺省值。
+   * @param {string|string[]} keys
+   * @param {(change: {key: string|null, value: string|null, oldValue: string|null}) => void} listener
+   * @returns {() => void} 取消订阅函数
+   */
+  subscribe(keys, listener) {
+    if (typeof window === "undefined" || typeof listener !== "function") return () => {};
+    const watched = new Set(Array.isArray(keys) ? keys : [keys]);
+    const onStorage = (event) => {
+      if (event.storageArea !== window.localStorage) return;
+      if (event.key !== null && !watched.has(event.key)) return;
+      listener({ key: event.key, value: event.newValue, oldValue: event.oldValue });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   },
   /**
    * 清空全部 beilu 前端状态（"beilu-" 前缀域）。仅限账号级终结场景（删号/等价重置）调用。

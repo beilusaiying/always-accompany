@@ -11,20 +11,19 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DERIVED } from './resources2.mjs';
+import { getResDir } from './p1_resdir.mjs';
 
-const LEXBASE = '<local-dev-path>';
+const LEXBASE = getResDir();
 export const PATHS = {
   stopwordsCN: [
-    `${LEXBASE}\\cn_stopwords\\cn_stopwords.txt`,
-    `${LEXBASE}\\cn_stopwords\\baidu_stopwords.txt`,
-    `${LEXBASE}\\cn_stopwords\\hit_stopwords.txt`,
-    `${LEXBASE}\\cn_stopwords\\scu_stopwords.txt`,
+    join(LEXBASE, 'chinese-stopwords', 'cn_stopwords.txt'),
+    join(LEXBASE, 'chinese-stopwords', 'baidu_stopwords.txt'),
+    join(LEXBASE, 'chinese-stopwords', 'hit_stopwords.txt'),
   ],
-  bccDialogue: `${LEXBASE}\\BCC-corpus\\dialogue_word_freq.txt`,
-  bccMulti: `${LEXBASE}\\BCC-corpus\\multi_domain_total_word_freq.txt`,
+  bccDialogue: join(LEXBASE, 'BCC-corpus', 'dialogue_word_freq.txt'),
+  bccMulti: join(LEXBASE, 'BCC-corpus', 'multi_domain_total_word_freq.txt'),
   meldSch: join(DERIVED, 'meld_sch_concreteness.tsv'),
-  brysbaert: `${LEXBASE}\\brysbaert_concreteness.txt`,
-  coreNatureDict: `${LEXBASE}\\CoreNatureDictionary.txt`,
+  brysbaert: join(LEXBASE, 'brysbaert_concreteness.txt'),
 };
 
 const cache = new Map();
@@ -33,7 +32,7 @@ function memo(key, build) {
   return cache.get(key);
 }
 
-// 中文停用词: 4 表取并集(设计"不需要担心误杀",误杀有回捞兜底)
+// 中文停用词: 随仓库的 3 表取并集(误杀有回捞兜底)
 export function loadStopwordsCN() {
   return memo('stopCN', () => {
     const set = new Set();
@@ -102,26 +101,6 @@ export function loadBrysbaert() {
   });
 }
 
-// CoreNatureDictionary: 词→主词性(取频率最高的词性)
-export function loadCoreNatureDict() {
-  return memo('coreNature', () => {
-    const map = new Map();
-    const lines = readFileSync(PATHS.coreNatureDict, 'utf8').split(/\r?\n/);
-    for (const line of lines) {
-      const parts = line.split('\t');
-      if (parts.length < 3) continue;
-      const word = parts[0];
-      let bestPos = parts[1], bestFreq = parseInt(parts[2], 10) || 0;
-      for (let i = 3; i + 1 < parts.length; i += 2) {
-        const f = parseInt(parts[i + 1], 10) || 0;
-        if (f > bestFreq) { bestPos = parts[i]; bestFreq = f; }
-      }
-      map.set(word, bestPos.toLowerCase());
-    }
-    return map;
-  });
-}
-
 // 资源清点(白盒: 管线启动时打印,一眼可见哪份表多大)
 export function clearResourceCaches() { cache.clear(); }
 
@@ -132,6 +111,5 @@ export function resourceReport() {
     bccMulti: loadBcc().multi.size,
     meldSch: loadMeldSch().size,
     brysbaert: loadBrysbaert().size,
-    coreNatureDict: loadCoreNatureDict().size,
   };
 }

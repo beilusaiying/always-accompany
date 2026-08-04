@@ -2,6 +2,106 @@
    响应式
    ============================================================ */
 
+/* 陪伴设置三栏由这一组断点统一协调。中心列是容器查询边界：外侧导航/预览变化后，
+   段内网格按“实际可用宽度”折行，而不是继续按整个浏览器 viewport 猜。 */
+#comp-settings-col {
+  container-type: inline-size;
+  container-name: companion-settings;
+}
+
+#comp-settings-scroll {
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+}
+
+@container companion-settings (max-width: 840px) {
+  #comp-settings-scroll .grid.grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #comp-settings-scroll .grid.grid-cols-6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #comp-settings-scroll .grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container companion-settings (max-width: 560px) {
+  #comp-settings-scroll .grid.grid-cols-2,
+  #comp-settings-scroll .grid.grid-cols-3,
+  #comp-settings-scroll .grid.grid-cols-4,
+  #comp-settings-scroll .grid.grid-cols-6 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #comp-settings-scroll .col-span-2,
+  #comp-settings-scroll .col-span-3 {
+    grid-column: auto;
+  }
+
+  #comp-settings-scroll .comp-say-row {
+    flex-wrap: wrap;
+  }
+
+  #comp-settings-scroll .comp-say-row > input {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+}
+
+/* 中等窗口把右侧“镜像预览列”收起；Live2D 桌面主场和全部设置仍在中列，功能不丢。 */
+@media (max-width: 1280px) {
+  #center-tab-companion #comp-preview-col,
+  #center-tab-companion #comp-preview-resize {
+    display: none !important;
+  }
+
+  #center-tab-companion #comp-settings-scroll {
+    max-width: none;
+  }
+}
+
+/* 更窄时左侧竖导航改成顶部横向可滚动标签，给设置表单释放完整宽度。 */
+@media (max-width: 760px) {
+  #center-tab-companion #comp-layout {
+    flex-direction: column;
+  }
+
+  #center-tab-companion #comp-nav-col {
+    width: 100% !important;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.25rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--beilu-border-subtle);
+  }
+
+  #center-tab-companion #comp-nav-col > div:first-child,
+  #center-tab-companion #comp-nav-col > .flex-1,
+  #center-tab-companion #comp-nav-col > div:last-child,
+  #center-tab-companion #comp-nav-resize {
+    display: none !important;
+  }
+
+  #center-tab-companion #comp-nav-col .comp-navbtn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  #center-tab-companion #comp-workspace {
+    min-height: 0;
+  }
+
+  #center-tab-companion #comp-settings-scroll {
+    padding: 0.75rem;
+  }
+}
+
 /* 响应式: 小屏幕下隐藏左右栏 */
 @media (max-width: 768px) {
   /* 手机端隐藏面板拖拽手柄 */
@@ -123,34 +223,25 @@
 }
 
 /* ============================================================
-	  字体大小配置（通过 CSS 变量）
+	  三角色字体/字号消费边界
 	  ============================================================ */
 
-:root {
-  --beilu-font-size: 14px;
+/* UI 字号作为 rem 基准，所有 text-xs/sm/base 等系统控件会随用户设置等比变化。 */
+html {
+  font-size: var(--beilu-font-size-ui, 16px);
 }
 
 body {
-  font-family: var(--beilu-font-family, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif);
+  font-family: var(--beilu-font-ui, ui-sans-serif, system-ui, "Noto Sans CJK SC", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif);
+  font-size: 1rem;
+  line-height: var(--beilu-line-height-ui, 1.45);
 }
 
-body.font-size-small {
-  --beilu-font-size: 12px;
-  font-size: 12px;
-}
-
-body.font-size-medium {
-  --beilu-font-size: 14px;
-  font-size: 14px;
-}
-
-body.font-size-large {
-  --beilu-font-size: 16px;
-  font-size: 16px;
-}
-
+/* 对话/长文只消费 content 角色，不再与系统 UI 或等宽编辑器共用一个字号。 */
 .message-content {
-  font-size: var(--beilu-font-size);
+  font-family: var(--beilu-font-content, ui-sans-serif, system-ui, "Noto Sans CJK SC", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif);
+  font-size: var(--beilu-font-size-content, 14px);
+  line-height: var(--beilu-line-height-content, 1.65);
 }
 
 /* ============================================================
@@ -254,4 +345,3 @@ body[data-msg-density="cozy"] .message-content {
   opacity: 1;
   background-color: rgba(217, 119, 6, 0.15);
 }
-

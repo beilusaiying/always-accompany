@@ -26,9 +26,11 @@ POST /api/parts/shells:chat/:chatid/message
 | GET | `:chatid/log/length` | chatLog 长度（`?visible=1` 仅未隐藏条目） |
 | POST | `:chatid/message` | 用户发送消息（R1 入口，触发 AI 回复） |
 | PUT | `:chatid/message/:index` | 编辑指定消息 |
-| DELETE | `:chatid/message/:index` | 删除指定消息 |
+| DELETE | `:chatid/message/:index?messageId=<id>` | 删除指定消息；`messageId` 必填，`:index` 仅是定位提示 |
 | POST | `:chatid/trigger-reply` | 仅触发 AI 回复（不保存用户消息） |
-| POST | `:chatid/messages/delete-range` | 批量删除消息范围 |
+| POST | `:chatid/messages/delete-range` | 批量删除消息范围；回档式尾部截断应同时带 `anchorMessageId` |
+| POST | `:chatid/rollback/preview` | 只读预览协调回档，返回锚点、检查点集合、表格快照与 IDE 路由令牌 |
+| POST | `:chatid/rollback` | 执行协调回档；必须回传预览得到的精确令牌 |
 | POST | `:chatid/messages/hide` | 隐藏/取消隐藏消息范围 |
 | PUT | `:chatid/timeline` | 切换时间线（greeting swipe） |
 | GET | `:chatid/render/entries` | regex 激活修复：render 查询 |
@@ -153,9 +155,25 @@ always-accompany 通过 WebSocket 实现实时通信。主要事件：
 | 404 | 对话 / 角色 / 资源不存在 |
 | 500 | 服务器内部错误 |
 
+## 删除/回档响应约定
+
+普通删除和协调回档都返回结构化结果。调用方不能只看 HTTP 码或一个 `success` 字段：
+
+| 字段 | 含义 |
+|------|------|
+| `success` | 此调用是否按其完整契约完成 |
+| `applied` | 本次是否已经落下了可观察的改动 |
+| `partial` | 是否只完成了部分层；为真时不能当作成功 |
+| `anchor` | 实际解析到的稳定消息 ID 与当前下标 |
+| `expectedIdeRoute` / `actualIdeRoute` | 回档预览与执行时的 IDE 路由快照；不一致即漂移 |
+| `checkpointIds` / `tableSnapshotId` | 预览冻结的文件/表格回档集合；集合变化需重新预览 |
+
+协调回档在成功时返回 200；锚点不存在为 404；预览令牌、检查点集合或 IDE 路由漂移，以及部分完成，均以结构化 409 返回。客户端收到非 2xx 时也应读取 JSON 正文，保留 `partial` 和错误细节，而不是把它折叠成笼统的“请求失败”。
+
 ## 导航
 
 - [系统架构](architecture.md) — 整体架构
 - [消息管线](message-pipeline.md) — 消息流转
+- [YonBan 执行链路](../yonban/architecture.md) — IDE 路由与检查点执行端
 - [权限与鉴权](../security/auth.md) — 认证体系
 - [插件开发](plugin-dev.md) — 自定义插件

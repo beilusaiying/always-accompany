@@ -473,7 +473,7 @@
       state.generatingMessageId = entry.id;
       state.streamingContent[entry.id] = "";
     }
-    appendMessageRow(entry);
+    appendMessageRow(entry, state.messages.length - 1);
     scrollToBottom();
     updateInputState();
   }
@@ -560,68 +560,256 @@
   //   现机制：entry._editVersion（后端 editMessage 每次 +1）——
   //     广播版本 ≤ 本地已应用版本 = 过期/乱序/回声 → 丢弃；
   //     该行正处编辑态 → 挂起最新广播，退出编辑（保存/取消）时应用，不打断输入。
-  var _pendingEditedBroadcasts = {}; // msgId → 编辑期间收到的最新 message_edited data
+  var _pendingEditedBroadcasts = {}; // chatId\0msgId → 编辑期间收到的最新权威版本
 
-  function onMessageEdited(data) {
-    var index = data.index;
-    var entry = data.entry;
-    var localIdx = index - state.logOffset;
-    if (localIdx < 0 || localIdx >= state.messages.length) return;
+  function editAuthorityKey(chatId, messageId) {
+    return String(chatId || "") + "\u0000" + String(messageId || "");
+  }
 
+  function editVersionOf(entry) {
+    return entry && Number.isSafeInteger(entry._editVersion) && entry._editVersion > 0
+      ? entry._editVersion
+      : null;
+  }
+
+  /** HTTP ack / WS / 编辑期 pending 的唯一应用口：按 chatId+messageId 定位，版本只能前进。 */
+  function applyAuthoritativeEdit(chatId, entry, options) {
+    options = options || {};
+    if (!chatId || chatId !== state.currentChatId || !entry || typeof entry.id !== "string" || !entry.id) {
+      return { applied: false, reason: "owner_or_message_mismatch" };
+    }
+    var version = editVersionOf(entry);
+    if (version === null) return { applied: false, reason: "invalid_edit_version" };
+    var localIdx = state.messages.findIndex(function (message) {
+      return message && message.id === entry.id;
+    });
+    if (localIdx < 0 || localIdx >= state.messages.length) {
+      return { applied: false, reason: "message_not_rendered" };
+    }
     var localMsg = state.messages[localIdx];
-    // 版本协商：广播带版本且 ≤ 本地版本 → 过期/回声，丢弃
-    if (localMsg && localMsg.id === entry.id &&
-        (entry._editVersion || 0) > 0 &&
-        (entry._editVersion || 0) <= (localMsg._editVersion || 0)) {
-      console.log("[chat-messages] 丢弃过期 message_edited（版本 " + entry._editVersion + " ≤ 本地 " + localMsg._editVersion + "）:", entry.id);
-      return;
+    var localVersion = editVersionOf(localMsg) || 0;
+    if (version <= localVersion) {
+      return { applied: false, stale: true, version: version };
     }
 
-    var allRows = dom.messageList
-      ? dom.messageList.querySelectorAll(".message-row")
-      : [];
-    var row = allRows[localIdx];
-    // 编辑中：挂起，退出编辑时应用（防 textarea 被广播重渲染打断）
-    if (row && row.classList.contains("editing")) {
-      _pendingEditedBroadcasts[entry.id] = data;
-      return;
+    var row = dom.messageList
+      ? dom.messageList.querySelector('[data-msg-id="' + entry.id + '"]')
+      : null;
+    var key = editAuthorityKey(chatId, entry.id);
+    if (options.deferWhileEditing && row && row.classList.contains("editing")) {
+      var previous = _pendingEditedBroadcasts[key];
+      if (!previous || version > (editVersionOf(previous.entry) || 0)) {
+        _pendingEditedBroadcasts[key] = {
+          chatId: chatId,
+          entry: entry,
+          editOperationId: options.editOperationId || null,
+          payloadFingerprint: options.payloadFingerprint || null,
+        };
+      }
+      return {
+        applied: false,
+        deferred: true,
+        version: version,
+        editOperationId: options.editOperationId || null,
+      };
     }
+
     state.messages[localIdx] = entry;
     if (row) updateMessageRow(row, entry);
+    var pending = _pendingEditedBroadcasts[key];
+    if (pending && (editVersionOf(pending.entry) || 0) <= version) {
+      delete _pendingEditedBroadcasts[key];
+    }
+    return { applied: true, version: version };
+  }
+
+  function onMessageEdited(data) {
+    if (!data || typeof data !== "object") return;
+    var result = applyAuthoritativeEdit(data.chatId, data.entry, {
+      deferWhileEditing: true,
+      editOperationId: data.editOperationId,
+      payloadFingerprint: data.payloadFingerprint,
+    });
+    if (result.applied !== true && result.deferred !== true && result.stale !== true) {
+      console.warn("[chat-messages] message_edited 未应用:", result.reason, data.chatId, data.entry && data.entry.id);
+    }
+  }
+
+  /** REST 编辑事务的明确 ack：失败保留 textarea，成功只应用后端权威 entry。 */
+  function onEditMessageResult(data) {
+    if (!data || !data.messageId) return;
+    if (data.chatId && state.currentChatId && data.chatId !== state.currentChatId) return;
+    var row = dom.messageList
+      ? dom.messageList.querySelector('[data-msg-id="' + data.messageId + '"]')
+      : null;
+    if (data.success !== true || data.applied !== true || data.chatCommitted !== true) {
+      var wsReceipt = applyPendingEditedBroadcast(data.chatId, data.messageId, data.editOperationId);
+      if (wsReceipt && wsReceipt.applied === true) {
+        if (row) row.classList.remove("editing");
+        YB.showToast("HTTP 回执丢失，但已通过同一编辑操作的权威同步确认提交", 3500);
+        return;
+      }
+      var saveButton = row && row.querySelector(".msg-edit-actions .btn-primary");
+      if (saveButton) saveButton.disabled = false;
+      return;
+    }
+
+    var localIdx = state.messages.findIndex(function (message) {
+      return message && message.id === data.messageId;
+    });
+    if (data.entry && data.entry.id === data.messageId && localIdx >= 0) {
+      var ackApply = applyAuthoritativeEdit(data.chatId, data.entry, {
+        deferWhileEditing: false,
+        editOperationId: data.editOperationId,
+        payloadFingerprint: data.payloadFingerprint,
+      });
+      if (ackApply.applied !== true && row) updateMessageRow(row, state.messages[localIdx]);
+    } else if (row && localIdx >= 0) {
+      // 已提交但响应条目缺失时不把输入内容当真值；Provider 会按原 chatId 发起权威刷新。
+      updateMessageRow(row, state.messages[localIdx]);
+    }
+    if (row) row.classList.remove("editing");
+    applyPendingEditedBroadcast(data.chatId, data.messageId);
   }
 
   // 退出编辑态后应用编辑期间挂起的最新广播（服务端真值，含 _editVersion/渲染字段）
-  function applyPendingEditedBroadcast(msgId) {
-    var data = _pendingEditedBroadcasts[msgId];
-    if (!data) return;
-    delete _pendingEditedBroadcasts[msgId];
-    onMessageEdited(data);
+  function applyPendingEditedBroadcast(chatId, msgId, expectedOperationId) {
+    var key = editAuthorityKey(chatId, msgId);
+    var data = _pendingEditedBroadcasts[key];
+    if (!data) return { applied: false, reason: "pending_edit_missing" };
+    if (expectedOperationId && data.editOperationId !== expectedOperationId) {
+      return { applied: false, reason: "pending_edit_operation_mismatch" };
+    }
+    delete _pendingEditedBroadcasts[key];
+    return applyAuthoritativeEdit(chatId, data.entry, {
+      deferWhileEditing: false,
+      editOperationId: data.editOperationId,
+      payloadFingerprint: data.payloadFingerprint,
+    });
   }
 
   // ═══════════════════════════════════════════════════════
   // 回档处理
   // ═══════════════════════════════════════════════════════
 
+  function rollbackDeletedCount(data) {
+    var coordinated = data && data.chat && data.chat.deletedCount;
+    if (typeof coordinated === "number" && Number.isFinite(coordinated)) return coordinated;
+    var legacy = data && data.deleted;
+    return typeof legacy === "number" && Number.isFinite(legacy) ? legacy : null;
+  }
+
+  function rollbackFileResult(data) {
+    var coordinated = data && data.memory && data.memory.fileRollback;
+    if (coordinated && typeof coordinated === "object") return coordinated;
+    var legacy = data && data.fileRollback;
+    return legacy && typeof legacy === "object" ? legacy : null;
+  }
+
+  function rollbackMetric(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  function readMemoryArchiveCoverage(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    if (value.status !== "not_covered" ||
+        value.coveredByLedger !== false ||
+        value.affectedOperations !== null ||
+        value.restoredOperations !== 0 ||
+        typeof value.reason !== "string" ||
+        !value.reason.trim()) return null;
+    return value;
+  }
+
+  var _CONNECTED_IDE_ROUTE_KEYS = ["connected", "backendKind", "port", "instanceId", "connectionId"];
+
+  /** 复制并冻结后端 preview 的精确连接代次；缺字段、额外字段或类型错误一律返回 null。 */
+  function copyExactIdeRouteToken(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    var keys = Object.keys(value);
+    if (value.connected === false) {
+      return keys.length === 1 && keys[0] === "connected"
+        ? Object.freeze({ connected: false })
+        : null;
+    }
+    if (value.connected !== true || keys.length !== _CONNECTED_IDE_ROUTE_KEYS.length) return null;
+    for (var i = 0; i < _CONNECTED_IDE_ROUTE_KEYS.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(value, _CONNECTED_IDE_ROUTE_KEYS[i])) return null;
+    }
+    if (value.backendKind !== null && value.backendKind !== "yonban" && value.backendKind !== "cli") return null;
+    if (!Number.isSafeInteger(value.port) || value.port <= 0 || value.port > 65535) return null;
+    if (value.instanceId !== null && (typeof value.instanceId !== "string" || !value.instanceId)) return null;
+    if (typeof value.connectionId !== "string" || !value.connectionId) return null;
+    return Object.freeze({
+      connected: true,
+      backendKind: value.backendKind,
+      port: value.port,
+      instanceId: value.instanceId,
+      connectionId: value.connectionId,
+    });
+  }
+
   function onRollbackResult(data) {
-    if (data && data.success) {
-      console.log("[chat-messages] 回档成功，删除了 " + data.deleted + " 条消息");
-      // ★ P3-4 持久回档记录：成功（含警告）即落一条到 webview 持久状态，供溯源。
+    var memoryArchive = readMemoryArchiveCoverage(data && data.memoryArchive);
+    var backendSucceeded = !!(
+      data &&
+      data.success === true &&
+      data.partial !== true
+    );
+    var backendApplied = !!(
+      backendSucceeded &&
+      data.applied === true &&
+      data.noOp !== true
+    );
+    var backendNoOp = !!(
+      backendSucceeded &&
+      data.applied === false &&
+      data.noOp === true
+    );
+    var detail = data && (data.warning || data.safetyRollbackError || data.rollbackWarning || data.error);
+    var deletedCount = rollbackDeletedCount(data);
+    if (backendSucceeded && !memoryArchive) {
       recordRollback(data);
-      // 文件/记忆回档失败时不能静默 — 消息删了但文件可能没还原，必须提示用户
-      if (data.rollbackWarning) {
-        console.warn("[chat-messages] 文件/记忆回档警告:", data.rollbackWarning);
-        YB.showToast("⚠ 已删除 " + (data.deleted || 0) + " 条消息，但文件/记忆回档未完成：" + data.rollbackWarning, 4000);
+      console.warn("[chat-messages] 回档成功结果缺少有效的归档记忆覆盖声明:", data);
+      YB.showToast("⚠ 后端声称回档成功，但未提供有效的归档记忆覆盖声明；结果不确定，请刷新并人工核对。", 5000);
+    } else if (backendSucceeded && data.chat && data.chat.status === "committed_derived_failed") {
+      recordRollback(data);
+      console.warn("[chat-messages] 主聊天截断已提交，但派生层失败:", data);
+      var derivedMsg = "⚠ 主聊天截断已提交，但备份/广播等派生步骤失败；归档记忆仍未覆盖。请刷新并人工核对。";
+      if (detail) derivedMsg += " " + detail;
+      YB.showToast(derivedMsg, 6000);
+    } else if (backendNoOp) {
+      console.log("[chat-messages] 当前已处于回档目标状态，无需应用变更");
+      recordRollback(data);
+      var noOpMsg = "↩ 当前已处于目标状态，无需回档；归档记忆仍未覆盖";
+      if (detail) noOpMsg += "：" + detail;
+      YB.showToast(noOpMsg, detail ? 4000 : 2500);
+    } else if (backendApplied) {
+      console.log("[chat-messages] 回档已应用到已支持层，删除消息数:", deletedCount);
+      recordRollback(data);
+      if (detail) {
+        console.warn("[chat-messages] 回档完成但后端返回警告:", detail);
+        YB.showToast("⚠ 已回档对话及已支持的数据层；归档记忆文件未回档：" + detail, 4000);
         return;
       }
-      var msg = "↩ 回档成功，已删除 " + (data.deleted || 0) + " 条消息";
-      var fr = data.fileRollback;
-      if (fr && (fr.totalRestored || fr.totalDeleted)) {
-        msg += "；文件还原 " + (fr.totalRestored || 0) + " 个、删除新建 " + (fr.totalDeleted || 0) + " 个";
+      var msg = "↩ 已回档对话及已支持的数据层；归档记忆文件未回档";
+      msg += deletedCount === null
+        ? "（后端未返回删除消息数）"
+        : "；已删除 " + deletedCount + " 条消息";
+      var fr = rollbackFileResult(data);
+      var restored = rollbackMetric(fr && fr.totalRestored);
+      var deletedFiles = rollbackMetric(fr && fr.totalDeleted);
+      if (restored !== null || deletedFiles !== null) {
+        msg += "；文件还原 " + (restored === null ? "未知" : restored) + " 个、删除新建 " + (deletedFiles === null ? "未知" : deletedFiles) + " 个";
       }
       YB.showToast(msg, 2000);
+    } else if (data && (data.partial === true || data.safetyRollbackError)) {
+      recordRollback(data);
+      var partialMsg = detail || "后端报告回档仅部分完成";
+      console.warn("[chat-messages] 回档部分完成:", data);
+      YB.showToast("⚠ 回档部分完成：" + partialMsg, 5000);
     } else {
-      // P0-4 去谎报：后端 success:false 时把如实信息放在 rollbackWarning，未删消息
-      var failMsg = (data && (data.rollbackWarning || data.error)) || "未知错误";
+      var failMsg = detail || "后端未确认回档已完整应用";
       console.error("[chat-messages] 回档失败:", failMsg);
       YB.showToast("✗ " + failMsg, 3500);
     }
@@ -633,14 +821,20 @@
     try {
       var st = (vscode.getState && vscode.getState()) || {};
       var hist = Array.isArray(st.rollbackHistory) ? st.rollbackHistory : [];
-      var fr = data.fileRollback || {};
+      var fr = rollbackFileResult(data);
+      var deletedCount = rollbackDeletedCount(data);
       hist.unshift({
         t: Date.now(),
-        chatId: state.currentChatId || "",
-        deleted: data.deleted || 0,
-        filesRestored: fr.totalRestored || 0,
-        filesDeleted: fr.totalDeleted || 0,
-        warning: data.rollbackWarning || null,
+        chatId: data.chatId || "",
+        anchorMessageId: data.anchorMessageId || "",
+        targetIndex: data.targetIndex,
+        success: data.success === true,
+        applied: data.applied === true,
+        partial: data.partial === true,
+        deleted: deletedCount,
+        filesRestored: rollbackMetric(fr && fr.totalRestored),
+        filesDeleted: rollbackMetric(fr && fr.totalDeleted),
+        warning: data.warning || data.safetyRollbackError || data.rollbackWarning || null,
       });
       if (hist.length > 20) hist = hist.slice(0, 20);
       YB.patchState({ rollbackHistory: hist }); // 散写收口 2026-07-13：经 chat-core 单点写
@@ -651,7 +845,7 @@
   }
 
   // ★ P3-1/P3-2 回档预览卡片：收到后端文件层 Δ 后渲染（消息计数 + 还原绿/删除红文件列表），
-  // 用户确认才真正 post rollbackToMessage。预览失败/未连 IDE 时降级为纯消息计数确认。
+  // 用户确认才真正 post rollbackToMessage；预览令牌不完整时禁止执行，必须重新预览。
   function onRollbackPreview(data) {
     if (!data) return;
     showRollbackPreview(data);
@@ -681,16 +875,17 @@
 
     var restore = Array.isArray(data.filesToRestore) ? data.filesToRestore : [];
     var del = Array.isArray(data.filesToDelete) ? data.filesToDelete : [];
+    var memoryArchive = readMemoryArchiveCoverage(data.memoryArchive);
 
-    if (data.previewError) {
+    if (data.previewError || data.success === false) {
       var errLine = document.createElement("div");
       errLine.style.cssText = "font-size:12px;margin:0 0 8px;color:#e6a23c;";
-      errLine.textContent = "⚠ 文件变更预览不可用（" + data.previewError + "），回档仍会执行文件层操作";
+      errLine.textContent = "⚠ 回档预览不可用（" + (data.previewError || data.error || "后端拒绝预览") + "），请关闭后重试";
       box.appendChild(errLine);
-    } else if (data.ideConnected === false) {
+    } else if (data.expectedIdeConnected === false) {
       var noIde = document.createElement("div");
       noIde.style.cssText = "font-size:12px;margin:0 0 8px;color:#909399;";
-      noIde.textContent = "· 未连接 IDE：本次仅删除对话消息，无文件变更";
+      noIde.textContent = "· 未连接 IDE：无文件检查点；表格与消息仍由后端事务统一处理";
       box.appendChild(noIde);
     } else {
       // P3-2 红绿文件列表
@@ -708,6 +903,13 @@
       }
     }
 
+    var archiveLine = document.createElement("div");
+    archiveLine.style.cssText = "font-size:12px;margin:8px 0;color:#e6a23c;font-weight:600;";
+    archiveLine.textContent = memoryArchive
+      ? "⚠ 归档记忆文件尚未纳入本次回档"
+      : "⚠ 后端未声明归档记忆覆盖范围，本次预览不可执行";
+    box.appendChild(archiveLine);
+
     var warn = document.createElement("div");
     warn.style.cssText = "font-size:12px;margin:10px 0 12px;color:#e53935;text-align:center;font-weight:600;";
     warn.textContent = "此操作不可撤销";
@@ -719,9 +921,37 @@
     var confirmBtn = document.createElement("button");
     confirmBtn.style.cssText = "padding:6px 18px;border:none;border-radius:6px;background:#e53935;color:#fff;cursor:pointer;font-size:13px;font-weight:600;";
     confirmBtn.textContent = "确认回档";
+    var expectedIdeRoute = copyExactIdeRouteToken(data.expectedIdeRoute);
+    var previewReady = data.success === true &&
+      !data.previewError &&
+      typeof data.expectedIdeConnected === "boolean" &&
+      expectedIdeRoute !== null &&
+      data.expectedIdeConnected === expectedIdeRoute.connected &&
+      Array.isArray(data.checkpointIds) &&
+      Object.prototype.hasOwnProperty.call(data, "tableSnapshotId") &&
+      memoryArchive !== null;
+    if (!previewReady) {
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = "0.5";
+      confirmBtn.style.cursor = "not-allowed";
+      confirmBtn.title = "预览令牌不完整，请重新预览";
+    }
     confirmBtn.addEventListener("click", function () {
+      if (!previewReady) return;
       overlay.remove();
-      vscode.postMessage({ type: "rollbackToMessage", payload: { index: data.index } });
+      vscode.postMessage({
+        type: "rollbackToMessage",
+        payload: {
+          chatId: data.chatId,
+          anchorMessageId: data.anchorMessageId,
+          targetIndex: data.targetIndex,
+          afterCount: data.afterCount,
+          expectedIdeConnected: data.expectedIdeConnected,
+          expectedIdeRoute: copyExactIdeRouteToken(expectedIdeRoute),
+          checkpointIds: data.checkpointIds.slice(),
+          tableSnapshotId: data.tableSnapshotId,
+        },
+      });
     });
     btnRow.appendChild(confirmBtn);
 
@@ -979,7 +1209,7 @@
       dom.messageList.appendChild(empty);
     }
     for (var i = 0; i < state.messages.length; i++) {
-      appendMessageRow(state.messages[i]);
+      appendMessageRow(state.messages[i], i);
     }
     _ensureScrollAnchor();
     scrollToBottom(true);
@@ -996,14 +1226,25 @@
     }
   }
 
-  function appendMessageRow(entry) {
+  function appendMessageRow(entry, localIndex) {
     if (!dom.messageList) return;
     if (entry.extension && entry.extension._deleted) return;
     var _isToolResult = !!(entry.extension && entry.extension._opType === "ide_tool_result");
     if ((entry.role === "system" || entry.name === "系统" || entry.name === "IDE工具结果") && !_isToolResult) return;
     // 插入到 scroll-anchor 之前（如果有的话），保持 anchor 在最底部
     var anchor = dom.messageList.querySelector(".scroll-anchor");
-    var row = _isToolResult ? _createIdeToolResultRow(entry) : createMessageRow(entry);
+    var ownerChatId = typeof state.currentChatId === "string" ? state.currentChatId.trim() : "";
+    var messageId = entry && typeof entry.id === "string" ? entry.id.trim() : "";
+    var indexHint = Number.isInteger(localIndex) && localIndex >= 0
+      ? (state.logOffset || 0) + localIndex
+      : -1;
+    var rowIdentity = Object.freeze({
+      chatId: ownerChatId,
+      messageId: messageId,
+      indexHint: indexHint,
+      localIndex: localIndex,
+    });
+    var row = _isToolResult ? _createIdeToolResultRow(entry) : createMessageRow(entry, rowIdentity);
     if (anchor) {
       dom.messageList.insertBefore(row, anchor);
     } else {
@@ -1102,7 +1343,7 @@
     });
   }
 
-function createMessageRow(entry) {
+function createMessageRow(entry, rowIdentity) {
     // 初始化content_for_edit，确保首次点击编辑时有内容
     if (entry && !entry.content_for_edit) {
       entry.content_for_edit = entry.content || entry.content_for_show || "";
@@ -1150,12 +1391,12 @@ function createMessageRow(entry) {
       editBtn.className = "msg-action-btn";
       editBtn.textContent = "✏";
       editBtn.title = "编辑";
-      (function (capturedEntry) {
+      (function (capturedEntry, capturedIdentity) {
         editBtn.addEventListener("click", function (e) {
           e.stopPropagation();
-          enterEditMode(row, capturedEntry);
+          enterEditMode(row, capturedEntry, capturedIdentity);
         });
-      })(entry);
+      })(entry, rowIdentity);
       actions.appendChild(editBtn);
     }
 
@@ -1164,69 +1405,80 @@ function createMessageRow(entry) {
     rollbackBtn.className = "msg-action-btn msg-action-rollback";
     rollbackBtn.textContent = "↩";
     rollbackBtn.title = "回档到这里（删除之后的消息）";
-    (function (capturedEntry) {
+    (function (capturedIdentity) {
       rollbackBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var localIdx = state.messages.findIndex(function (m) {
-          return m.id === capturedEntry.id;
-        });
-        if (localIdx < 0) return;
-        var afterCount = state.messages.length - localIdx - 1;
+        if (!capturedIdentity.chatId || !capturedIdentity.messageId || capturedIdentity.indexHint < 0) {
+          YB.showToast("✗ 回档消息身份无效，请刷新对话后重试", 3000);
+          return;
+        }
+        var afterCount = Math.max(0, state.messages.length - capturedIdentity.localIndex - 1);
         if (afterCount <= 0) return;
-        var globalIdx = state.logOffset + localIdx;
         // ★ P3 先请求预览（文件层 Δ），收到 rollbackPreview 后渲染预览卡片再确认。
-        // 后端预览失败/未连 IDE 时卡片降级为纯消息计数确认，不阻断回档。
+        // 预览失败时不提供确认入口；执行必须携带本次预览返回的完整令牌。
         vscode.postMessage({
           type: "previewRollback",
-          payload: { index: globalIdx, afterCount: afterCount },
+          payload: {
+            chatId: capturedIdentity.chatId,
+            anchorMessageId: capturedIdentity.messageId,
+            targetIndex: capturedIdentity.indexHint,
+            afterCount: afterCount,
+          },
         });
       });
-    })(entry);
+    })(rowIdentity);
     actions.appendChild(rollbackBtn);
 
     var hideBtn = document.createElement("button");
     hideBtn.className = "msg-action-btn";
     hideBtn.textContent = (entry.extension && entry.extension._hidden) ? "👁" : "🔇";
     hideBtn.title = (entry.extension && entry.extension._hidden) ? "恢复显示" : "隐藏（不发送AI）";
-    (function (capturedEntry, capturedRow, capturedBtn) {
+    (function (capturedEntry, capturedIdentity, capturedBtn) {
       capturedBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var localIdx = state.messages.findIndex(function (m) { return m.id === capturedEntry.id; });
-        if (localIdx < 0) return;
-        var globalIdx = state.logOffset + localIdx;
+        if (!capturedIdentity.chatId || !capturedIdentity.messageId || capturedIdentity.indexHint < 0) {
+          YB.showToast("✗ 隐藏消息身份无效，请刷新对话后重试", 3000);
+          return;
+        }
         var nextHide = !(capturedEntry.extension && capturedEntry.extension._hidden);
-        vscode.postMessage({ type: "hideMessage", payload: { index: globalIdx, hide: nextHide } });
-        if (!capturedEntry.extension) capturedEntry.extension = {};
-        capturedEntry.extension._hidden = nextHide;
-        capturedRow.style.opacity = nextHide ? "0.5" : "";
-        capturedRow.style.filter = nextHide ? "grayscale(0.55)" : "";
-        capturedRow.classList.toggle("beilu-hidden-msg", nextHide);
-        capturedBtn.textContent = nextHide ? "👁" : "🔇";
-        capturedBtn.title = nextHide ? "恢复显示" : "隐藏（不发送AI）";
+        // 不先改本地 DOM；后端按稳定 ID 应用后，由 messages_hidden/权威 initial-data 刷新。
+        vscode.postMessage({
+          type: "hideMessage",
+          payload: {
+            chatId: capturedIdentity.chatId,
+            messageId: capturedIdentity.messageId,
+            indexHint: capturedIdentity.indexHint,
+            hide: nextHide,
+          },
+        });
       });
-    })(entry, row, hideBtn);
+    })(entry, rowIdentity, hideBtn);
     actions.appendChild(hideBtn);
 
     var delBtn = document.createElement("button");
     delBtn.className = "msg-action-btn msg-action-delete";
     delBtn.textContent = "✕";
     delBtn.title = "删除";
-    (function (capturedEntry) {
+    (function (capturedIdentity) {
       delBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        var localIdx = state.messages.findIndex(function (m) {
-          return m.id === capturedEntry.id;
-        });
-        if (localIdx < 0) return;
-        var globalIdx = state.logOffset + localIdx;
+        if (!capturedIdentity.chatId || !capturedIdentity.messageId || capturedIdentity.indexHint < 0) {
+          YB.showToast("✗ 删除消息身份无效，请刷新对话后重试", 3000);
+          return;
+        }
+        var deletePayload = {
+          chatId: capturedIdentity.chatId,
+          messageId: capturedIdentity.messageId,
+          indexHint: capturedIdentity.indexHint,
+        };
         showInlineConfirm("确定删除此消息？", function () {
           vscode.postMessage({
             type: "deleteMessage",
-            payload: { index: globalIdx },
+            payload: deletePayload,
           });
         });
       });
-    })(entry);
+    })(rowIdentity);
     actions.appendChild(delBtn);
 
     header.appendChild(actions);
@@ -1284,12 +1536,19 @@ function createMessageRow(entry) {
   }
 
   // ═══════════════════════════════════════════════════════
-function enterEditMode(row, entry) {
+function enterEditMode(row, entry, capturedIdentity) {
     var bodyEl = row.querySelector(".msg-body");
     if (!bodyEl || row.classList.contains("editing")) return;
     // 实时从state查最新entry，避免闭包旧引用导致内容为空
     var freshEntry = (state && state.messages && state.messages.find(function(m) { return m.id === entry.id; })) || entry;
     row.classList.add("editing");
+    if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== "function") {
+      row.classList.remove("editing");
+      YB.showToast("✗ 当前环境不支持安全的编辑操作标识，请升级 IDE 后重试", 3500);
+      return;
+    }
+    // 同一编辑框的失败重试复用同一 operationId；服务端用 payload 指纹拒绝已提交操作漂移。
+    var editOperationId = globalThis.crypto.randomUUID();
     var originalText =
       freshEntry.content_for_edit || freshEntry.content || freshEntry.content_for_show || "";
     var editText =
@@ -1315,24 +1574,23 @@ function enterEditMode(row, entry) {
     saveBtn.style.padding = "2px 10px";
     saveBtn.addEventListener("click", function () {
       var newContent = textarea.value;
-      var localIdx = state.messages.findIndex(function (m) {
-        return m.id === entry.id;
-      });
-      if (localIdx >= 0) {
-        var globalIdx = state.logOffset + localIdx;
-        vscode.postMessage({
-          type: "editMessage",
-          payload: { index: globalIdx, content: newContent },
-        });
+      if (!capturedIdentity || !capturedIdentity.chatId || !capturedIdentity.messageId
+        || capturedIdentity.indexHint < 0 || capturedIdentity.messageId !== entry.id) {
+        YB.showToast("✗ 编辑消息身份无效，请刷新对话后重试", 3000);
+        return;
       }
-      row.classList.remove("editing");
-      entry.content = newContent;
-      // T009 契约：content_for_show=后端渲染产物，本地乐观更新无产物置 null（走纯文本分支显示 newContent）；
-      // 回显广播带服务端真值+_editVersion，经 onMessageEdited 版本协商正常应用（旧 5s 锁已删）
-      entry.content_for_show = null;
-      entry.content_for_edit = newContent;
-      updateMessageRow(row, entry);
-      applyPendingEditedBroadcast(entry.id);
+      saveBtn.disabled = true;
+      vscode.postMessage({
+        type: "editMessage",
+        payload: {
+          chatId: capturedIdentity.chatId,
+          messageId: capturedIdentity.messageId,
+          indexHint: capturedIdentity.indexHint,
+          content: newContent,
+          editOperationId: editOperationId,
+        },
+      });
+      // 等待 Provider 的 editMessageResult；请求发出不等于提交成功，禁止永久乐观改本地。
     });
     btnRow.appendChild(saveBtn);
 
@@ -1344,7 +1602,7 @@ function enterEditMode(row, entry) {
     cancelBtn.addEventListener("click", function () {
       row.classList.remove("editing");
       updateMessageRow(row, entry);
-      applyPendingEditedBroadcast(entry.id);
+      applyPendingEditedBroadcast(capturedIdentity && capturedIdentity.chatId, entry.id);
     });
     btnRow.appendChild(cancelBtn);
 
@@ -2445,6 +2703,7 @@ function enterEditMode(row, entry) {
   YB.onMessageReplaced = onMessageReplaced;
   YB.onMessageDeleted = onMessageDeleted;
   YB.onMessageEdited = onMessageEdited;
+  YB.onEditMessageResult = onEditMessageResult;
   YB.onRollbackResult = onRollbackResult;
   YB.onRollbackPreview = onRollbackPreview;
   YB.onStreamStart = onStreamStart;

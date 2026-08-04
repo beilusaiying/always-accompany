@@ -35,7 +35,7 @@
  *   管理面板可增删改子模式，调整预设名/API 源/启用状态，保存后全局生效。
  */
 
-import { getCurrentMode, switchModeTo } from "../feature/featureControls.mjs";
+import { getCurrentMode } from "../feature/featureControls.mjs"; // [D3 0804] switchModeTo 已不再引：跨组切换收口后端 activateSubMode verb 内部重入 switchMode 管线
 import { showToast as _toast } from "../../../../../../scripts/toast.mjs"; // 0716 轮子收口：toast 权威单源（原走 _beiluPublicShowToast 二级窗口桥+手绘 DOM 降级=第二套 toast UI）
 import { TAB_TO_MODE, PRESET_INHERIT_LABEL, MODEL_SOURCE_DEFAULT_LABEL } from "../../shared/state/modeTabMap.mjs"; // tab→mode 单一权威（禁内联第二张映射表,T-3教训）；PRESET_INHERIT_LABEL=未绑定预设文案单源 [D6 0713]；MODEL_SOURCE_DEFAULT_LABEL=源默认模型选项文案单源 [0716]
 import { escapeHtml as _esc, formatRelativeTime as _relTime } from "../../shared/state/utils.mjs"; // [合并批 0714] _relTime 手抄副本删除 → utils 单源（别名保调用点）
@@ -123,6 +123,7 @@ function _writeActiveSubMode(modeGroup, id, cid) {
   if (cid) _activeSubModesMap[cid] = id;
 }
 let _apiSources = [];
+let _aiSetupStatus = null;
 let _popupOpen = false;
 let _popupTarget = "conv"; // "conv" | "api" | "model"
 let _editingModeId = null;
@@ -267,8 +268,20 @@ async function _fetchSubModes() {
 
 async function _saveSubModes(modes) {
   try {
-    await sendAction({ verb: "saveSubModes", target: "plugins:beilu-memory", source: "web", payload: { sub_modes: modes } }); // 注意：unwrap 仅 dispatch 层异常(ok:false)抛；业务级 success:false 经桥恒 HTTP 200+ok:true 不抛不入 catch（≠原 REST res.ok 校验，2026-07-15 校准，见契约扫描留决12）
+    // unwrap 仅 dispatch 层异常(ok:false)抛；业务级 success:false 经桥恒 HTTP 200+ok:true 不抛不入
+    //   catch（2026-07-15 校准，见契约扫描留决12）——[D3 0804] 故必须显式校验 data.success，失败不更新本地。
+    var data = await sendAction({ verb: "saveSubModes", target: "plugins:beilu-memory", source: "web", payload: { sub_modes: modes } });
+    if (!data || data.success === false) {
+      console.warn("[subModePanel] 保存子模式业务失败:", data && (data.error || data.code));
+      return false;
+    }
     _subModes = modes;
+    // [D3 0804] 悬空预设引用可见提示（后端契约：配置已保存但引用的非 builtin 预设不存在，禁造骨架
+    //   只回清单）：用户需在预设面板创建同名预设或改选，否则该子模式生成时预设回退基线。
+    if (data.code === "E_PRESET_REFERENCE_MISSING" && Array.isArray(data.invalid_preset_references) && data.invalid_preset_references.length) {
+      var _refs = data.invalid_preset_references.map(function (r) { return (r.id || "?") + " → " + (r.presetName || "?"); }).join("、");
+      try { _showToast("⚠️ 已保存，但引用的预设不存在（未自动创建）: " + _refs, 5000); } catch (e2) { /* toast 未就绪不阻塞 */ }
+    }
     return true;
   } catch (e) {
     console.warn("[subModePanel] 保存子模式失败:", e.message);
@@ -361,34 +374,43 @@ async function _removeParallelSubMode(id) {
   } catch (e) { console.warn("[subModePanel] removeParallel 失败:", e.message); }
 }
 
+// [D3 0804] 激活成功后的本地镜像（_setActiveSubMode 与 _switchToSubMode 单请求路径共用，单函数收口）：
+//   活跃态收口写 + 采样哨兵重置 + 缓存失效 + subModeSwitched 事件补发。
+//   事件补发理由（0727 事件生产端补齐·凛倾实测"预设浮层两处显示打架"）：手动路径原只清自己可见的
+//   两个缓存不广播事实，其他消费者（preset.mjs _smCache、订阅面板）靠事件失效——AI 驱动/workPanel/
+//   skill 组三条路径本就走事件，手动缺席=同一事实两套通路。本模块监听器收到后做同值幂等写入+刷新，
+//   无副作用无自激（监听器不再派发）。
+function _applySubModeSwitchLocal(id, chatId) {
+  var mode = _subModes.find(function (m) { return m.id === id; });
+  // T5：活跃态单条切换走收口写函数（原按 modeGroup 分支散写 3 变量，与事件监听器同构）
+  _writeActiveSubMode((mode && mode.modeGroup) || "code", id, chatId);
+  // ★ [0716 散写收口] 原五键 runtime 推送（prompt_post_processing/prefill_enabled/claude_prefill_mode/
+  //   model/api_source）删除：这些值后端每轮从 sub_modes 权威 per-request 解析（getPromptHandler B18
+  //   副本优先 → mergeRuntimeParams 子模式 ext 最高优先级，跨组原子清零），推进 runtime-params=影子写——
+  //   ①与生成无关（ext 恒压过 runtime）②落盘持久且无哨兵清除，切到无绑定子模式/chat 后残留生效=跨模式污染
+  //   ③runtime 这几个键的合法生产者是 featureControls 全局设置面板（用户全局选择），子模式切换推送会盖掉用户设置。
+  //   剩余的采样哨兵重置与事件路径同构 → 收口 _resetRuntimeParamsSampling 单源（原内联副本删除）。
+  if (mode) _resetRuntimeParamsSampling();
+  try { if (window._beiluInvalidatePresetCache) window._beiluInvalidatePresetCache(); } catch {}
+  try { if (window._beiluInvalidateModelCache) window._beiluInvalidateModelCache(); } catch {}
+  window.dispatchEvent(new CustomEvent("beilu:subModeSwitched", {
+    detail: { to: id, label: (mode && (mode.label || mode.id)) || id, modeGroup: (mode && mode.modeGroup) || "code", chatId: chatId },
+  }));
+  return mode;
+}
+
 async function _setActiveSubMode(id) {
   try {
-    await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { id, chatId: _getCurrentChatId() } }); // T6b：!ok 抛错入 catch → return false
-    {
-      var mode = _subModes.find(function (m) { return m.id === id; });
-      // T5：活跃态单条切换走收口写函数（原按 modeGroup 分支散写 3 变量，与事件监听器同构）
-      _writeActiveSubMode((mode && mode.modeGroup) || "code", id, _getCurrentChatId());
-      // ★ [0716 散写收口] 原五键 runtime 推送（prompt_post_processing/prefill_enabled/claude_prefill_mode/
-      //   model/api_source）删除：这些值后端每轮从 sub_modes 权威 per-request 解析（getPromptHandler B18
-      //   副本优先 → mergeRuntimeParams 子模式 ext 最高优先级，跨组原子清零），推进 runtime-params=影子写——
-      //   ①与生成无关（ext 恒压过 runtime）②落盘持久且无哨兵清除，切到无绑定子模式/chat 后残留生效=跨模式污染
-      //   ③runtime 这几个键的合法生产者是 featureControls 全局设置面板（用户全局选择），子模式切换推送会盖掉用户设置。
-      //   剩余的采样哨兵重置与事件路径同构 → 收口 _resetRuntimeParamsSampling 单源（原内联副本删除）。
-      if (mode) _resetRuntimeParamsSampling();
-      try { if (window._beiluInvalidatePresetCache) window._beiluInvalidatePresetCache(); } catch {}
-      try { if (window._beiluInvalidateModelCache) window._beiluInvalidateModelCache(); } catch {}
-      // ══ [0727 事件生产端补齐·凛倾实测"预设浮层两处显示打架"] ══
-      // 手动切子模式此前**只清自己看得见的两个缓存**（预设/模型），却不广播"子模式切了"这个事实——
-      //   而其他消费者（preset.mjs:50-52 的 _smCache、任何订阅 beilu:subModeSwitched 的面板）正是靠
-      //   这个事件失效。后端该 verb 也不发 bus:broadcast、响应里的 _subModeSwitch 三个前端调用点又都丢弃，
-      //   于是「模式卡预设名」已更新、「当前子模式」还是旧值，要关掉浮层重开才追上（0727 截图实证）。
-      //   AI 驱动 / workPanel / skill 组三条路径本来就走这个事件，唯独手动路径缺席=同一事实两套通路。
-      //   补发即收口：本模块自己的监听器收到后做的是同值幂等写入+刷新，无副作用、无自激（监听器不再派发）。
-      window.dispatchEvent(new CustomEvent("beilu:subModeSwitched", {
-        detail: { to: id, label: (mode && (mode.label || mode.id)) || id, modeGroup: (mode && mode.modeGroup) || "code", chatId: _getCurrentChatId() },
-      }));
-      return true;
+    var data = await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { id, chatId: _getCurrentChatId() } }); // T6b：!ok 抛错入 catch → return false
+    // [D3 0804] 业务级 success:false 经桥恒 HTTP 200+ok:true 不抛（2026-07-15 校准）：core fail-closed
+    //   拒绝（chat 未知/子模式不存在）必须显式校验——失败不更新本地镜像，可见提示不静默装成功。
+    if (!data || data.success === false) {
+      console.warn("[subModePanel] 设置活跃子模式业务失败:", data && (data.error || data.code));
+      window._beiluToast?.("子模式激活被拒绝: " + ((data && data.error) || "未知错误"), "error");
+      return false;
     }
+    _applySubModeSwitchLocal(id, _getCurrentChatId());
+    return true;
   } catch (e) {
     console.warn("[subModePanel] 设置活跃子模式失败:", e.message);
     return false;
@@ -422,8 +444,10 @@ async function _persistSelectedGroup(group) {
   } catch (e) { console.warn("[subModePanel] 选中组持久化失败:", e.message); }
 }
 
-async function _fetchApiSources() {
+async function _fetchApiSources({ force = false } = {}) {
   try {
+    // 本窗口刚保存 API 时没有等待 WebSocket 回显；先主动失效 10 秒列表缓存，避免表单继续显示旧源。
+    if (force) window._beiluInvalidateApiSources?.();
     var fn = window._beiluGetApiSources;
     if (fn) { _apiSources = await fn(); return; }
     const list = await sendAction({ verb: "getAISources", target: "shells:serviceSourceManage", source: "web" }); // T6b
@@ -433,6 +457,17 @@ async function _fetchApiSources() {
   } catch (e) {
     _apiSources = [];
   }
+}
+
+async function _fetchAISetupStatus() {
+  try {
+    _aiSetupStatus = await sendAction({ verb: "getAISetupStatus", target: "shells:serviceSourceManage", source: "web" });
+  } catch (e) {
+    // 不能把状态请求失败伪装成“没有 API”；引导会明确显示无法确认。
+    _aiSetupStatus = { status: "unknown", configured: false };
+    console.warn("[subModePanel] 获取 AI 配置状态失败:", e.message);
+  }
+  return _aiSetupStatus;
 }
 
 async function _fetchPresetList() {
@@ -1407,33 +1442,31 @@ function _applySubModeBindingUI(mode) {
 //   刷新通知由 _updateTriggerBar 单点发（两个原调用点均已调它）。
 
 async function _switchToSubMode(mode) {
-  // 线路独立原则：子模式切换是一条完整管线（切模式→写子模式+预设→UI 反馈）。
-  // 模式必须先就位——_setActiveSubMode 内部 applySubModePresetDefault 会广播 preset_changed，
-  // 广播到达前端时 GetData 用 getActiveMode 解析预设，模式必须已是目标 modeGroup 才能读到正确键。
-  var modeGroup = mode.modeGroup;
-  var rawBeiluMode = getCurrentMode() || "code";
-  var currentBeiluMode = (rawBeiluMode === "chat" || rawBeiluMode === "file") ? "code" : rawBeiluMode;
-  if (modeGroup !== currentBeiluMode) {
-    // [0717 预设三症·R4 半态断链] 切模式失败必须中止整条子模式切换管线——原 warn 后继续
-    //   _setActiveSubMode：后端 applySubModePresetDefault 按 modeGroup 写 active_preset_map[cid:modeGroup]，
-    //   而窗口模式仍停留旧值 → 生成读 [cid:旧mode] 永 miss 回退全局（盘上实证 2qle8fw5jnv 模式=smart
-    //   预设写在 :code）。写读键错位不允许带病落盘，失败=可见中止。
-    try {
-      const _ok = await switchModeTo(modeGroup);
-      if (_ok === false) {
-        console.warn("[subModePanel] 切换后端模式失败（switchModeTo 三态 false），中止子模式切换防写读键错位");
-        _showToast("⚠️ 模式切换失败，子模式未切换", 3000);
-        return;
-      }
-      console.log("[subModePanel] 切换后端模式 →", modeGroup);
-    } catch (e) {
-      console.warn("[subModePanel] 切换后端模式失败:", e.message, "——中止子模式切换防写读键错位");
-      _showToast("⚠️ 模式切换失败，子模式未切换", 3000);
-      return;
-    }
+  // [D3 0804 单请求化·RC11断点3] 原两次 HTTP（switchModeTo 前置 → setActiveSubMode）存在半失败窗口
+  //   （模式切了子模式没切 / 两请求间隙其他窗口插写）。改调后端单 verb activateSubMode：跨组时服务端
+  //   内部重入既有 switchMode 管线（scheduler 启停 + beilu-files setMode 扇出 + mode_changed 广播全套
+  //   复用）+ 激活单事务，模式切换失败=整体中止零半态（后端 E_MODE_SWITCH_FAILED，子模式不激活）。
+  //   原 R4「写读键错位防护」（模式必须先就位再写预设键）由后端 verb 内序保证：switchMode 成功后才
+  //   activateSubModeCore→applySubModePresetDefault。
+  //   本窗 UI 模式态不在此手动翻转：mode_changed 广播回流 _beiluApplyModeFromWs 单源对齐
+  //   （updateModeSwitchUI + beilu:mode-switched 派发），不造第二份本地翻转实现。
+  var _swCid = _getCurrentChatId();
+  var data;
+  try {
+    data = await sendAction({ verb: "activateSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: mode.id, chatId: _swCid } });
+  } catch (e) {
+    console.warn("[subModePanel] activateSubMode 请求失败:", e.message);
+    _showToast("⚠️ 子模式切换失败: " + e.message, 3000);
+    return;
   }
-
-  await _setActiveSubMode(mode.id);
+  // 业务级 success:false 经桥不抛（2026-07-15 校准）：显式校验，失败不更新本地不装成功
+  if (!data || data.success === false) {
+    console.warn("[subModePanel] activateSubMode 业务失败:", data && (data.error || data.code));
+    _showToast("⚠️ 子模式未切换: " + ((data && data.error) || "未知错误"), 3000);
+    return;
+  }
+  if (data.mode_switched) console.log("[subModePanel] 后端已随激活切换模式 →", mode.modeGroup);
+  _applySubModeSwitchLocal(mode.id, _swCid);
   _closePopup();
   _updateTriggerBar();
   _updateTopBar();
@@ -1614,6 +1647,9 @@ function _renderManagePanel(targetContainer) {
     '<label class="label py-0"><span class="label-text text-[11px]">描述（可选）</span></label>' +
     '<input type="text" id="submode-form-desc" class="input input-xs input-bordered w-full text-xs" placeholder="编程实现" />' +
     "</div>" +
+    // [0804 契约字段删除·凛倾定案] 原「身份专用契约」表单是 desc 之外的第二描述通道：desc 已有宏注入，
+    //   contract 再走 sub_mode_contract_json 注入=同一身份描述双份散写+额外注入面（RC11 断点1）。
+    //   全链删除（表单/回填/保存/存储默认/宏/模板消费）；工具权限保留为独立 sub_mode_tool_permissions_json 宏。
     // 所属模式
     '<div class="form-control">' +
     '<label class="label py-0"><span class="label-text text-[11px]">所属模式</span></label>' +
@@ -1646,12 +1682,14 @@ function _renderManagePanel(targetContainer) {
     '<option value="">（使用 API 源默认模型）</option>' +
     "</select>" +
     "</div>" +
+    // 子模式不保存 Key/URL；这里明确“选择覆盖层”与“全局默认”的关系，并给出直达设置入口。
+    '<div id="submode-api-guide" class="rounded border border-base-300 bg-base-200/50 p-2 text-[11px] leading-5"></div>' +
     // 提示词后处理
     '<div class="form-control">' +
     '<label class="label py-0"><span class="label-text text-[11px]">提示词后处理</span></label>' +
     '<select id="submode-form-postprocess" class="select select-xs select-bordered w-full text-xs">' +
-    // T072a/0715收口：选项集从后端 enum_schema（退化=enumFallback.mjs）生成；空项=（使用默认），子模式不覆盖时继承全局
-    _buildModeOptions(_enumOptions("prompt_post_processing"), { emptyValue: "", emptyLabel: "（使用默认）" }) +
+    // 默认 strict 来自后端子模式种子；这里仅把同一产品默认呈现给“新建”表单，已有项照实回填。
+    _buildModeOptions(_enumOptions("prompt_post_processing"), { selectedValue: "strict" }) +
     "</select>" +
     "</div>" +
     // 备用API源
@@ -1659,6 +1697,15 @@ function _renderManagePanel(targetContainer) {
     '<label class="label py-0"><span class="label-text text-[11px]">备用 API 源（可选，主API失败时切换）</span></label>' +
     '<select id="submode-form-backup-api" class="select select-xs select-bordered w-full text-xs">' +
     '<option value="">（无备用）</option>' +
+    "</select>" +
+    "</div>" +
+    // [D3 0804 RC11断点8] 源失败策略：子模式独立源加载失败时的行为（消费端 char-template submode_source_override 分支）。
+    //   默认 fail_closed=本轮可见未发送错误，不静默改用角色绑定源（235734 病根：UI 说跟随全局、实际用角色源）。
+    '<div class="form-control">' +
+    '<label class="label py-0"><span class="label-text text-[11px]">源失败策略（独立 API 源加载失败时）</span></label>' +
+    '<select id="submode-form-fallback-policy" class="select select-xs select-bordered w-full text-xs">' +
+    '<option value="fail_closed">安全中止（默认：报错不发送，不换源）</option>' +
+    '<option value="explicit_fallback">显式回退（先试备用源，再用全局默认源）</option>' +
     "</select>" +
     "</div>" +
     // 温度 + 最大上下文 + 最大输出（一行三列）
@@ -2163,7 +2210,7 @@ function _renderManageGroup(list, modes) {
   });
 }
 
-function _populateApiSelect() {
+function _populateApiSelect(selectedSource) {
   var sel = document.getElementById("submode-form-api");
   if (!sel) return;
   while (sel.options.length > 1) sel.remove(1);
@@ -2172,6 +2219,82 @@ function _populateApiSelect() {
     opt.value = src;
     opt.textContent = src;
     sel.appendChild(opt);
+  });
+  // API 被删/列表读失败时保留存量绑定，不能在一次编辑保存里静默清空。
+  if (selectedSource && !_apiSources.includes(selectedSource)) {
+    var missing = document.createElement("option");
+    missing.value = selectedSource;
+    missing.textContent = "⚠ " + selectedSource + "（当前绑定，未在服务源列表中找到）";
+    sel.appendChild(missing);
+  }
+}
+
+function _populateBackupApiSelect(selectedSource) {
+  var sel = document.getElementById("submode-form-backup-api");
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
+  _apiSources.forEach(function (src) {
+    var opt = document.createElement("option");
+    opt.value = src;
+    opt.textContent = src;
+    sel.appendChild(opt);
+  });
+  if (selectedSource && !_apiSources.includes(selectedSource)) {
+    var missing = document.createElement("option");
+    missing.value = selectedSource;
+    missing.textContent = "⚠ " + selectedSource + "（当前绑定，未在服务源列表中找到）";
+    sel.appendChild(missing);
+  }
+}
+
+function _renderSubModeApiGuide() {
+  var guide = document.getElementById("submode-api-guide");
+  if (!guide) return;
+  var selectedApi = document.getElementById("submode-form-api")?.value || "";
+  var setup = _aiSetupStatus;
+  var message = "";
+  var tone = "text-base-content/70";
+
+  if (selectedApi) {
+    var usable = Array.isArray(setup?.usableSourceNames) ? setup.usableSourceNames.includes(selectedApi) : _apiSources.includes(selectedApi);
+    if (usable) {
+      message = "此子模式已单独绑定 API 源「" + _esc(selectedApi) + "」——生效期间本轮请求实际使用该源（per-request 覆盖，不改角色绑定）。模型留空时使用该源的默认模型。";
+    } else {
+      tone = "text-warning";
+      message = "此子模式绑定的 API 源「" + _esc(selectedApi) + "」当前不完整或已不存在；保存前请到 API 服务源设置修复。";
+    }
+  } else if (setup?.configured === true) {
+    var defaults = Array.isArray(setup.usableDefaultNames) ? setup.usableDefaultNames : [];
+    // [D3 0804 断点8 文案根修·235734] 原文案「将跟随全局默认源」与真实链路不符：无 override 时
+    //   实际使用**当前角色绑定的 AI 源**（char-template _effSource=AIsource；角色未绑定才回退默认源）
+    //   ——UI 声称权威与请求实际权威必须一致，不装"全局默认"。
+    message = "此子模式未单独绑定 API，本轮请求将使用当前角色绑定的 AI 源；角色未绑定时回退全局默认源" + (defaults.length ? "「" + _esc(defaults.join("、")) + "」" : "") + "。";
+  } else if (setup?.status === "default_missing") {
+    tone = "text-warning";
+    message = "此子模式未绑定 API；检测到服务源但尚未设置全局默认，当前不能依赖默认源回复。";
+  } else if (setup?.status === "unknown") {
+    tone = "text-warning";
+    message = "无法确认 API 状态。子模式不保存 Key/URL，请到 AI 服务源设置检查后返回。";
+  } else {
+    tone = "text-warning";
+    message = "此子模式未绑定 API，且没有可用的全局默认源。请先配置 AI 服务源。";
+  }
+
+  // [D3 0804 断点8] fallback 策略可见化：独立源加载失败时的真实行为随表单当前选择实时显示
+  var _fbPolicy = document.getElementById("submode-form-fallback-policy")?.value || "fail_closed";
+  var _fbBackup = document.getElementById("submode-form-backup-api")?.value || "";
+  var fallbackLine = selectedApi
+    ? (_fbPolicy === "explicit_fallback"
+      ? "源失败策略：显式回退——「" + _esc(selectedApi) + "」失败时先试" + (_fbBackup ? "备用源「" + _esc(_fbBackup) + "」" : "备用源（未设）") + "，再用角色绑定/默认源（每次回退都留痕）。"
+      : "源失败策略：安全中止——「" + _esc(selectedApi) + "」加载失败时本轮报错不发送，不会静默换源。")
+    : "";
+  guide.innerHTML =
+    '<div class="' + tone + '">' + message + '</div>' +
+    (fallbackLine ? '<div class="mt-1 text-base-content/60">' + fallbackLine + '</div>' : '') +
+    '<div class="mt-1 text-base-content/50">API Key、地址和模型先在“AI 服务源”保存；本页只决定这个子模式是否覆盖角色绑定/全局默认。</div>' +
+    '<button type="button" id="submode-api-guide-open" class="btn btn-xs btn-outline mt-1">打开 AI 服务源设置 →</button>';
+  guide.querySelector("#submode-api-guide-open")?.addEventListener("click", function () {
+    window.dispatchEvent(new CustomEvent("beilu:openApiSettings", { detail: { source: "submode-api-guide" } }));
   });
 }
 
@@ -2311,9 +2434,10 @@ function _openEditForm(mode) {
     ? mode.enabled !== false
     : true;
 
-  _populateApiSelect();
+  var selectedApiSource = mode ? mode.apiSource || "" : "";
+  _populateApiSelect(selectedApiSource);
   var apiSel = document.getElementById("submode-form-api");
-  if (apiSel) apiSel.value = mode ? mode.apiSource || "" : "";
+  if (apiSel) apiSel.value = selectedApiSource;
 
   // 填充模型下拉（基于当前选中的 API 源）
   var initialApi = mode ? mode.apiSource || "" : "";
@@ -2323,34 +2447,36 @@ function _openEditForm(mode) {
   if (apiSel) {
     apiSel.onchange = function () {
       _populateModelSelect(apiSel.value, "");
+      _renderSubModeApiGuide();
     };
   }
 
   // 回填提示词后处理 + 预填充
   var ppSel = document.getElementById("submode-form-postprocess");
-  if (ppSel) ppSel.value = mode ? mode.promptPostProcessing || "" : "";
+  if (ppSel) ppSel.value = mode ? mode.promptPostProcessing || "" : "strict";
   var pfCheck = document.getElementById("submode-form-prefill");
   if (pfCheck) pfCheck.checked = mode ? !!mode.prefillEnabled : false;
   var cpSel = document.getElementById("submode-form-claude-prefill");
   if (cpSel) cpSel.value = mode ? mode.claudePrefillMode || "" : "";
   // 备用API源回填
+  var backupApiSource = mode ? mode.backup_api_source || "" : "";
+  _populateBackupApiSelect(backupApiSource);
   var backupApiSel = document.getElementById("submode-form-backup-api");
-  if (backupApiSel) {
-    while (backupApiSel.options.length > 1) backupApiSel.remove(1);
-    _apiSources.forEach(function (src) {
-      var opt = document.createElement("option");
-      opt.value = src; opt.textContent = src;
-      backupApiSel.appendChild(opt);
-    });
-    if (mode && mode.backup_api_source) backupApiSel.value = mode.backup_api_source;
-  }
+  if (backupApiSel) backupApiSel.value = backupApiSource;
+  // [D3 0804] 源失败策略回填（缺字段=默认 fail_closed，与后端写门 normalizeSubModeForSave 同默认）
+  var fbPolicySel = document.getElementById("submode-form-fallback-policy");
+  if (fbPolicySel) fbPolicySel.value = mode && mode.fallbackPolicy === "explicit_fallback" ? "explicit_fallback" : "fail_closed";
+  // [D3 0804 断点8] fallback 策略/备用源改选 → guide 实时反映真实失败行为（与 apiSel.onchange 同刷新范式；
+  //   挂接位置必须在两 select 赋值之后——var 提升但赋值顺序在 apiSel 块之后）
+  if (fbPolicySel) fbPolicySel.onchange = _renderSubModeApiGuide;
+  if (backupApiSel) backupApiSel.onchange = _renderSubModeApiGuide;
   // 温度/最大上下文/最大输出回填
   var tempInput = document.getElementById("submode-form-temperature");
   if (tempInput) tempInput.value = mode && mode.temperature !== undefined ? mode.temperature : "";
   var maxCtxInput = document.getElementById("submode-form-max-context");
-  if (maxCtxInput) maxCtxInput.value = mode && mode.maxContext ? mode.maxContext : "";
+  if (maxCtxInput) maxCtxInput.value = mode && mode.maxContext ? mode.maxContext : "1000000";
   var maxTokInput = document.getElementById("submode-form-max-tokens");
-  if (maxTokInput) maxTokInput.value = mode && mode.maxTokens ? mode.maxTokens : "";
+  if (maxTokInput) maxTokInput.value = mode && mode.maxTokens ? mode.maxTokens : "30000";
   // 链路2扩展：top_k/min_p 回填（0 是合法显式值，用 !== undefined 判定同温度）
   var topKInput = document.getElementById("submode-form-top-k");
   if (topKInput) topKInput.value = mode && mode.top_k !== undefined ? mode.top_k : "";
@@ -2368,6 +2494,11 @@ function _openEditForm(mode) {
 
   var status = document.getElementById("submode-form-status");
   if (status) status.classList.add("hidden");
+
+  _renderSubModeApiGuide();
+  if (!_aiSetupStatus || _aiSetupStatus.status === "unknown") {
+    _fetchAISetupStatus().then(function () { _renderSubModeApiGuide(); });
+  }
 
   form.classList.remove("hidden");
   document.getElementById("submode-form-label").focus();
@@ -2550,6 +2681,8 @@ function _bindManagePanelEvents() {
         extended_thinking: undefined,
         thinking_budget: undefined,
         backup_api_source: document.getElementById("submode-form-backup-api").value || "",
+        // [D3 0804] 源失败策略（二值枚举，非法值落安全默认；后端写门 normalizeSubModeForSave 同规则兜底）
+        fallbackPolicy: document.getElementById("submode-form-fallback-policy")?.value === "explicit_fallback" ? "explicit_fallback" : "fail_closed",
         enabled: document.getElementById("submode-form-enabled").checked,
         // [0730] 工具权限开关（false=系统强制禁止，true/undefined=允许）
         allowCodeEdit: document.getElementById("submode-form-allow-code-edit")?.checked !== false ? undefined : false,
@@ -2599,38 +2732,21 @@ function _bindManagePanelEvents() {
       saveBtn.disabled = false;
 
       if (ok) {
-        // ★ 同步model_params到绑定的预设
-        // ★ 根病1 单源（收口③·建议a）：maxContext 不再双写进预设 model_params。
-        //   子模式 maxContext 作为「覆盖层」只活在子模式存储（yonban_config sub_modes[]），
-        //   生成层（main.mjs:2119）与后端 _effective（修点1）/AI 分母（收口②）均已以子模式为最高优先消费它，
-        //   双写纯属冗余且是「改子模式污染预设基线」的分叉源头。预设 model_params 保持「无子模式时基线」语义。
-        //   注：temperature/maxTokens 不在本次 max_context 族单源化范围，保持原双写不动。
+        // [0804 根因修·RC11断点6] 原此处在保存子模式后 switchPreset + updatePresetConfig 把
+        //   temperature/maxTokens 写进绑定预设的 model_params——三重跨域副作用：①改「当前激活预设」
+        //   ②污染可被其他窗口/角色/子模式复用的预设基线 ③与子模式覆盖层双写分叉（maxContext 族
+        //   0713 已单源化，temperature/maxTokens 当时遗留）。生效链证据：mergeRuntimeParams
+        //   （preset/main.mjs:1156-1157）子模式 sub_mode_temperature/sub_mode_max_tokens 在预设
+        //   model_params 之后展开=最高优先，且「每轮都有，不依赖 runtime-params」——参数只存子模式
+        //   即 per-request 生效，预设写属纯冗余。原「未绑定预设参数不会生效」警告同为错误认知，一并删除。
+        //   保存子模式 = 只写子模式定义；预设基线只由预设面板/导入维护。
         if (newMode.temperature !== undefined || newMode.maxTokens) {
-          if (!newMode.presetName) {
-            _showFormStatus("⚠️ 未绑定预设，温度/输出设置不会生效。请先在预设下拉中选择一个预设。", "error");
-            _renderManageList();
-            _updateTriggerBar();
-            return;
-          }
-          try {
-            // [预设切换互斥 2026-07-13 S2] 裸 sendAction → sharedState.switchPreset 统一收口：
-            //   原裸发缺 charName → 后端 getActiveMode 落 "_global" 桶,选了角色时模式解析错键（写键≠读键）；
-            //   收口自动补 chatid/charName 并 dispatch beilu:presetSwitched（顶栏/选择器同步）。cid 保留入口快照（A1）。
-            // [0713 病灶审计 G1] 原 `?:` 裸发 fallback 删除：_beiluSwitchPreset 由 sharedState 模块作用域
-            //   挂载（核心链静态加载必达），fallback 分支=绕缓存失效+事件派发的死支；缺失即真异常，走 catch 可见。
-            await window._beiluSwitchPreset(newMode.presetName, { chatid: _saveCid });
-
-            var _mpUpdate = {};
-            if (newMode.temperature !== undefined) _mpUpdate.temperature = newMode.temperature;
-            if (newMode.maxTokens) _mpUpdate.max_tokens = newMode.maxTokens;
-            // [预设切换互斥 2026-07-13] _target_preset 显式化：本写意图=绑定预设（见上方注释"同步model_params到绑定的预设"），
-            //   原裸写走后端 _tpEng 默认=全局激活 engine（main.mjs:1778）——全局槽被导入/全局切换占用时，
-            //   子模式参数灌进无关预设（读A写B，捕捉病灶 W2）。目标必须显式。
-            await sendAction({ verb: "updatePresetConfig", target: "plugins:beilu-preset", source: "web", payload: { _target_preset: newMode.presetName, update_model_params: _mpUpdate } }); // T6b
-            if (window.syncModelParamsUI) window.syncModelParamsUI(_mpUpdate);
-            if (window.refreshTokenProgress) window.refreshTokenProgress();
-            console.log("[subModePanel] 预设 " + newMode.presetName + " model_params已同步:", _mpUpdate);
-          } catch (_e) { console.warn("[subModePanel] 同步预设model_params失败:", _e.message); }
+          var _mpUpdate = {};
+          if (newMode.temperature !== undefined) _mpUpdate.temperature = newMode.temperature;
+          if (newMode.maxTokens) _mpUpdate.max_tokens = newMode.maxTokens;
+          // 仅同步参数面板显示（子模式覆盖层的当前值），零后端预设写
+          if (window.syncModelParamsUI) window.syncModelParamsUI(_mpUpdate);
+          if (window.refreshTokenProgress) window.refreshTokenProgress();
         }
         // 0714 根修（凛倾「保存后转跳为空白，子模式管理也是」）：原 _closeEditForm() 把右栏踢回
         //   「未选择子模式」占位=保存即丢选中态（操作逻辑闭环：保存≠退出编辑）。改为先重渲列表
@@ -3406,7 +3522,7 @@ export async function initSubModePanel() {
   _injectManagePanel();
 
   // 加载数据
-  await Promise.all([_fetchSubModes(), _fetchApiSources(), _fetchPresetList(), _fetchSkillGroups()]);
+  await Promise.all([_fetchSubModes(), _fetchApiSources(), _fetchAISetupStatus(), _fetchPresetList(), _fetchSkillGroups()]);
   try { _cachedConvList = await fetchChatList(); } catch { /* non-fatal */ }
 
   // 渲染
@@ -3418,6 +3534,23 @@ export async function initSubModePanel() {
 
   // 绑定事件
   _bindTriggerEvents();
+
+  // API 保存/删改在本窗和跨窗都统一派发 resource:api-changed。
+  // 先失效来源缓存再读权威状态；表单正在编辑时保留选择值，绝不借刷新静默清空用户绑定。
+  window.addEventListener("resource:api-changed", async function () {
+    await Promise.all([_fetchApiSources({ force: true }), _fetchAISetupStatus()]);
+    var form = document.getElementById("submode-edit-form");
+    if (!form || form.classList.contains("hidden")) return;
+    var apiSel = document.getElementById("submode-form-api");
+    var selectedApi = apiSel?.value || "";
+    _populateApiSelect(selectedApi);
+    if (apiSel) apiSel.value = selectedApi;
+    var backupSel = document.getElementById("submode-form-backup-api");
+    var selectedBackup = backupSel?.value || "";
+    _populateBackupApiSelect(selectedBackup);
+    if (backupSel) backupSel.value = selectedBackup;
+    _renderSubModeApiGuide();
+  });
 
   // 响应外部打开请求（layout.mjs / workPanel dispatch beilu:openSubModePanel）
   window.addEventListener("beilu:openSubModePanel", function () {

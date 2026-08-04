@@ -4,20 +4,20 @@
  * 功能链：
  *   initFileExplorer → 渲染文件树（rootPath 下目录列表）→ 点目录展开/折叠 → 点文件
  *     → openFileTab → GET beilu-files getdata {_action:"readFile", path} → textarea 展示内容
- *   Ctrl+S / 点「保存」→ POST beilu-files setdata {_action:"writeFile", path, content, chatid}
- *     → 后端 workspaceRoots per-chatId 隔离写文件
+ *   Ctrl+S / 点「保存」→ 冻结发起窗口 chatId → POST beilu-files setdata
+ *     → scope.chatId 经服务端 facade 盖章 → workspaceRoots per-chatId 隔离写文件
  *   点「打开文件夹」→ showFolderPicker → 用户选目录 → rootPath 更新 → 刷新文件树
  *   右键文件/目录 → 上下文菜单（新建/重命名/删除）→ 对应 setdata action
  *   AI 审批队列：file_op pending 条目 → 点「允许/拒绝」→ approveAll/rejectAll → 后端执行/丢弃
  *
  * why（多窗口会话隔离）：
- *   setFilesData 统一注入 chatid（endpoints.currentChatId ES live binding，切卡自动更新），
- *   后端按 per-chatId workspaceRoots Map 隔离工作区根，防止多窗口互串文件操作。
+ *   每次用户动作只冻结一次发起窗口 chatId；所有文件动作只传 scope.chatId，由服务端
+ *   facade 从可信 context 统一盖章，前端不再维护 payload.chatid 动作清单。
  *
  * 关联链：
  *   → filePicker.mjs showFolderPicker / showFilePicker（打开文件夹/文件弹窗）
  *   → shared/transport/api-client.mjs apiFetch（beilu-files 所有 REST 调用统一出口）
- *   → shared/transport/endpoints.mjs currentChatId（chatid 来源）
+ *   → shared/transport/endpoints.mjs currentChatId（窗口函数不可用时的归属后备来源）
  *   → shared/state/storage.mjs（rootPath / 展开目录集合持久化）
  *   → shared/widgets/beiluDialog.mjs（beiluConfirm/beiluPrompt 替换 window.confirm/prompt）
  *   ← idePanel.mjs / layout.mjs（IDE 模式初始化时挂载到 #file-explorer-container）
@@ -31,10 +31,11 @@
  *   AI 写文件请求在审批队列出现，点允许后真实落盘，点拒绝则丢弃不写。
  */
 
-import { showFilePicker, showFolderPicker } from "./filePicker.mjs";
+import { getPathBreadcrumbSegments, showFilePicker, showFolderPicker } from "./filePicker.mjs";
+import { getDetectedFileType, getFileType, getFileTypeIconMarkup } from "./fileTypeRegistry.mjs";
 import { escapeHtml, positionContextMenu, bindClickOutsideClose } from "../../shared/state/utils.mjs"; // [合并批 0714·二] 点外关闭收口单源
-// 多窗口会话隔离：file_op 审批按本窗口 chatid 收口（与 ideToolCall dock 一致）。
-// currentChatId 是 endpoints.mjs 的 ES live binding，切卡自动更新。
+// 多窗口会话隔离：动作入口先冻结发起窗口，后续 await 链不得重新读取当前窗口。
+// currentChatId 仅是窗口函数不可用时的后备来源，不能在 payload 与 scope 形成双源。
 import { currentChatId } from "../../shared/transport/endpoints.mjs";
 import { wbDetect } from "../../shared/widgets/whitebox.mjs";
 import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b：出向统一门面（getFilesData→beilu-files#getData；setFilesData verb=真动作→通配）
@@ -58,23 +59,28 @@ if (typeof window !== "undefined" && !window.__beiluArtifactSaveWired) {
     if (!code) return;
     const ext = /^[a-z0-9]{1,8}$/i.test(e?.detail?.ext || "") ? e.detail.ext : "html";
     const name = `artifact_${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14)}.${ext}`;
+    let originChatId = null;
     try {
+      originChatId = freezeFileActionOriginChatId();
       // 传导链核修：后端前端 case 的相对路径锚 CWD（resolveWorkspacePath）而非工作区根——裸文件名会
       //   落 app 根且被沙箱闸拒。必须显式拼工作区根：rootPath 有则用；无（用户没开过文件面板）则
       //   ensureDefaultWorkspace 幂等拿默认根（=ai玩耍空间，与任务A同源）。
       let _base = rootPath;
       if (!_base) {
-        const _dw = await setFilesData({ _action: "ensureDefaultWorkspace" });
+        const _dw = await setFilesData({ _action: "ensureDefaultWorkspace" }, { originChatId });
         _base = _dw?._result?.path || null;
       }
       if (!_base) throw new Error("无可用工作区根");
       const _savePath = joinPath(_base, name);
-      const _res = await setFilesData({ _action: "createFile", path: _savePath, content: code });
+      const _res = await setFilesData(
+        { _action: "createFile", path: _savePath, content: code },
+        { originChatId },
+      );
       if (_res?._result?.error) throw new Error(_res._result.error);
-      showToast(`已保存到工作区: ${name}`, "success");
-      if (treeContainer) await loadFileTree(rootPath || _base);
+      showFileActionToast(originChatId, `已保存到工作区: ${name}`, "success");
+      if (treeContainer) await loadFileTree(rootPath || _base, originChatId);
     } catch (err) {
-      showToast("保存失败: " + (err?.message || err), "error");
+      showFileActionToast(originChatId, "保存失败: " + (err?.message || err), "error");
     }
   });
 }
@@ -83,21 +89,177 @@ if (typeof window !== "undefined" && !window.__beiluArtifactSaveWired) {
 // API 通信
 // ============================================================
 
-async function getFilesData() {
-  // 门面 getData（GET getdata）：返回后端配置对象（含 pendingOperations 等），形状与原 REST 等价。
-  return sendAction({ verb: "getData", target: "plugins:beilu-files", source: "web" });
+function freezeFileActionOriginChatId(originChatId = null) {
+  let owner = originChatId;
+  if (!owner) {
+    try { owner = window._beiluCurWinChatId?.() || null; } catch { owner = null; }
+  }
+  if (!owner) owner = currentChatId || null;
+  if (typeof owner !== "string" || !owner.trim()) {
+    throw new Error("当前窗口没有有效对话归属，无法执行窗口隔离文件动作");
+  }
+  return owner.trim();
 }
 
-async function setFilesData(data) {
-  // 多窗口会话隔离:唯一 POST 出口统一注入本窗口 chatid → 后端 getWorkspaceRoot(_cid) 按窗口根隔离,
-  //   不再所有 file_op 落全局根(多窗互相看到/操作对方工作区)。后端已支持 per-chatid(workspaceRoots Map);
-  //   已显式带 chatid 的(审批类 approveAll/rejectAll)不覆盖。currentChatId=endpoints ES live binding,切卡自动更新。
-  // T6b：verb=data._action（真动作）→ beilu-files 通配路由组装 {_action:verb, ...payload}；chatid 作为 payload 字段注入。
-  const { _action, ...rest } = (data && typeof data === "object") ? data : {};
-  const _payload = (data && typeof data === "object" && data.chatid === undefined && currentChatId)
-    ? { ...rest, chatid: currentChatId }
-    : rest;
-  return sendAction({ verb: _action, target: "plugins:beilu-files", source: "web", payload: _payload });
+function showFileActionToast(ownerChatId, message, type = "info") {
+  const owner = String(ownerChatId || "").trim();
+  let visibleOwner = "";
+  try { visibleOwner = String(window._beiluCurWinChatId?.() || "").trim(); } catch { /* 无窗口桥 */ }
+  const prefix = owner && visibleOwner && owner !== visibleOwner
+    ? `后台对话 ${owner.slice(0, 8)}…：`
+    : "";
+  showToast(prefix + message, type);
+}
+
+async function getFilesData({ originChatId = null } = {}) {
+  const ownerChatId = freezeFileActionOriginChatId(originChatId);
+  // 门面 getData（GET getdata）：返回后端配置对象（含 pendingOperations 等），形状与原 REST 等价。
+  return sendAction({
+    verb: "getData", target: "plugins:beilu-files", source: "web",
+    scope: { chatId: ownerChatId },
+  });
+}
+
+async function setFilesData(data, { originChatId = null } = {}) {
+  const ownerChatId = freezeFileActionOriginChatId(originChatId);
+  // 路径/工作区动作只把冻结 owner 放入 scope，由 functions:files facade 在可信服务端
+  // context 中盖章；不再把 ES live binding 的 currentChatId 另塞进 payload 形成双源。
+  const { _action, chatid: _ignoredChatId, chatId: _ignoredCamelChatId, ...payload } =
+    (data && typeof data === "object") ? data : {};
+  return sendAction({
+    verb: _action,
+    target: "plugins:beilu-files",
+    source: "web",
+    scope: { chatId: ownerChatId },
+    payload,
+  });
+}
+
+/**
+ * beilu-files 写动作的业务成功断言。传输 resolve 不等于写盘成功：后端会把
+ * 沙箱拒绝和 Deno 写入异常作为 `{ _result: { error } }` 正常回包。
+ */
+function assertFileActionSuccess(response, action) {
+  const result = response?._result;
+  if (!result || typeof result !== "object") {
+    throw new Error(`${action} 返回缺少有效 _result`);
+  }
+  if (Object.prototype.hasOwnProperty.call(result, "error")) {
+    throw new Error(`${action} 失败: ${result.error || "未知业务错误"}`);
+  }
+  if (result.success !== true) {
+    throw new Error(`${action} 未返回 success:true，无法确认写盘成功`);
+  }
+  return result;
+}
+
+function assertApprovalActionHandled(response, action) {
+  const result = response?._result;
+  if (!result || typeof result !== "object" || result.success !== true) {
+    throw new Error(result?.error || `${action} 未返回可确认的处理结果`);
+  }
+  return result;
+}
+
+/** 将本次发送的内容作为成功基线；保存期间产生的新输入仍保持 dirty。 */
+async function persistTabContent(tab, writeFile) {
+  const contentToSave = tab.content;
+  const response = await writeFile({
+    _action: "writeFile",
+    path: tab.path,
+    content: contentToSave,
+  }, { originChatId: tab.ownerChatId });
+  const result = assertFileActionSuccess(response, "writeFile");
+  tab.originalContent = contentToSave;
+  tab.isDirty = tab.content !== contentToSave;
+  return result;
+}
+
+function detectLineEnding(content, fallback = "LF") {
+  const value = String(content ?? "");
+  if (value.includes("\r\n")) return "CRLF";
+  if (value.includes("\n")) return "LF";
+  return fallback === "CRLF" ? "CRLF" : "LF";
+}
+
+function detectIndentation(content) {
+  let tabIndented = 0;
+  const spaceWidths = [];
+  for (const line of String(content ?? "").split(/\r?\n/)) {
+    if (/^\t+\S/.test(line)) tabIndented += 1;
+    const spaces = line.match(/^( +)\S/)?.[1].length || 0;
+    if (spaces > 0) spaceWidths.push(spaces);
+  }
+  if (tabIndented && spaceWidths.length) return "混合缩进";
+  if (tabIndented) return "Tab";
+  if (!spaceWidths.length) return "无缩进";
+  const width = Math.min(...spaceWidths);
+  return `空格: ${Math.max(1, Math.min(width, 8))}`;
+}
+
+function getLineColumn(content, selectionStart = 0) {
+  const value = String(content ?? "");
+  const offset = Math.max(0, Math.min(Number(selectionStart) || 0, value.length));
+  const beforeCursor = value.slice(0, offset).replace(/\r\n/g, "\n");
+  const lines = beforeCursor.split("\n");
+  return Object.freeze({ line: lines.length, column: (lines.at(-1)?.length || 0) + 1 });
+}
+
+/**
+ * 将 TabState 投影为 IDE breadcrumb/status 所需的稳定只读模型。
+ * 文件语言与 readonly/editable 始终来自 fileTypeRegistry，不在状态层重判扩展名。
+ */
+export function createEditorTabProjection(tab, selectionStart = tab?.selectionStart || 0, visibleContent = tab?.content || "") {
+  if (!tab) {
+    return Object.freeze({
+      path: "", language: "", encoding: "UTF-8", eol: "", indent: "",
+      line: 1, column: 1, readonly: false, dirty: false, state: "idle",
+      stateLabel: "就绪", stateTitle: "未打开文件",
+    });
+  }
+
+  const fileType = tab.fileType || getFileType(tab.path);
+  const position = getLineColumn(visibleContent, selectionStart);
+  const readonly = fileType.readonly === true;
+  let state = "saved";
+  let stateLabel = "已保存";
+  let stateTitle = "内容与已确认保存版本一致";
+  if (tab.saveState === "error") {
+    state = "error";
+    stateLabel = "保存错误";
+    stateTitle = tab.lastError || "文件保存失败";
+  } else if (tab.saveState === "saving") {
+    state = "saving";
+    stateLabel = "保存中";
+    stateTitle = "正在写入文件";
+  } else if (tab.isDirty) {
+    state = "dirty";
+    stateLabel = "未保存";
+    stateTitle = "存在尚未保存的更改";
+  } else if (readonly) {
+    state = "readonly";
+    stateLabel = "只读";
+    stateTitle = `${fileType.languageLabel} 仅支持只读预览`;
+  } else if (tab.saveState === "auto-saved") {
+    state = "saved";
+    stateLabel = "已自动保存";
+    stateTitle = "自动保存已完成";
+  }
+
+  return Object.freeze({
+    path: tab.path,
+    language: fileType.languageLabel,
+    encoding: tab.encoding || "UTF-8",
+    eol: tab.lineEnding || detectLineEnding(tab.content),
+    indent: detectIndentation(visibleContent),
+    line: position.line,
+    column: position.column,
+    readonly,
+    dirty: tab.isDirty === true,
+    state,
+    stateLabel,
+    stateTitle,
+  });
 }
 
 // ============================================================
@@ -130,12 +292,20 @@ let sortMode = "name";
 /**
  * @typedef {Object} TabState
  * @property {string} path - 文件路径
+ * @property {string} ownerChatId - 打开该标签的窗口会话（读写作用域单源）
  * @property {string} content - 文件内容
+ * @property {string} originalContent - 最近一次已确认读入或写盘成功的内容
  * @property {boolean} isDirty - 是否有未保存修改
  * @property {number} scrollTop - textarea 滚动位置
  * @property {number} scrollLeft - textarea 水平滚动位置
  * @property {number} selectionStart - 光标起始位置
  * @property {number} selectionEnd - 光标结束位置
+ * @property {ReturnType<typeof getFileType>} fileType - 注册表解析后的文件类型与能力
+ * @property {string} kind - 预览路由类型（由 fileType.previewKind 投影）
+ * @property {"UTF-8"} encoding - 当前文件编码展示值
+ * @property {"LF"|"CRLF"} lineEnding - 最近一次真实内容检测到的换行格式
+ * @property {"saved"|"auto-saved"|"dirty"|"saving"|"error"} saveState - 保存状态
+ * @property {string} lastError - 最近一次保存错误
  */
 
 /** @type {TabState[]} */
@@ -143,9 +313,216 @@ let openTabs = [];
 
 /** @type {string|null} 当前活动标签的文件路径 */
 let activeTabPath = null;
+/** @type {string|null} 当前活动标签的窗口 owner */
+let activeTabOwnerChatId = null;
+/** 文件面板当前投影的窗口 owner；标签不在窗口间混用。 */
+let filePanelOwnerChatId = "";
+const activeTabPathByOwner = new Map();
+/** 每个窗口自己的文件树投影；后端 workspaceRoots 仍是根路径权威。 */
+const fileWorkspaceStateByOwner = new Map();
+let filePanelWindowListenerBound = false;
+let filePanelActivationEpoch = 0;
+
+function cloneFileWorkspaceState(state) {
+  if (!state) return null;
+  return {
+    rootPath: String(state.rootPath || ""),
+    currentPath: String(state.currentPath || state.rootPath || "."),
+    expandedDirs: new Set(state.expandedDirs || []),
+  };
+}
+
+function rememberCurrentFileWorkspace(ownerChatId = filePanelOwnerChatId) {
+  const owner = String(ownerChatId || "").trim();
+  if (!owner) return;
+  fileWorkspaceStateByOwner.set(owner, cloneFileWorkspaceState({ rootPath, currentPath, expandedDirs }));
+}
+
+function projectFileWorkspaceState(state) {
+  const next = cloneFileWorkspaceState(state);
+  if (!next) return false;
+  rootPath = next.rootPath;
+  currentPath = next.currentPath;
+  expandedDirs = next.expandedDirs;
+  return true;
+}
+
+async function activateFilePanelOwner(nextOwner) {
+  nextOwner = freezeFileActionOriginChatId(nextOwner);
+  if (nextOwner === filePanelOwnerChatId) return;
+
+  const epoch = ++filePanelActivationEpoch;
+  fileOpenCoordinator.invalidateIntents();
+  saveActiveTabState();
+  rememberCurrentFileWorkspace(filePanelOwnerChatId);
+  document.querySelectorAll(".file-context-menu").forEach((menu) => menu.remove());
+
+  // 先提交 owner 并撤下旧树，避免读取新根期间把 B 的目录当成 A 的界面继续操作。
+  filePanelOwnerChatId = nextOwner;
+  const nextPath = activeTabPathByOwner.get(nextOwner) || null;
+  const nextTab = nextPath ? getTab(nextPath, nextOwner) : null;
+  activeTabPath = nextTab?.path || null;
+  activeTabOwnerChatId = nextTab?.ownerChatId || null;
+  renderTabs();
+  if (nextTab) renderEditor();
+  else renderEmptyEditor();
+  renderTreeLoading();
+
+  let nextState = cloneFileWorkspaceState(fileWorkspaceStateByOwner.get(nextOwner));
+  if (!nextState) {
+    const config = await getFilesData({ originChatId: nextOwner });
+    const backendRoot = String(config?.workspaceRoot || "").trim();
+    nextState = backendRoot
+      ? { rootPath: backendRoot, currentPath: backendRoot, expandedDirs: new Set([backendRoot]) }
+      : null;
+  }
+
+  if (epoch !== filePanelActivationEpoch || filePanelOwnerChatId !== nextOwner) return;
+  if (!nextState?.rootPath) {
+    renderTreeEmpty();
+    return;
+  }
+
+  fileWorkspaceStateByOwner.set(nextOwner, cloneFileWorkspaceState(nextState));
+  projectFileWorkspaceState(nextState);
+  await loadFileTree(nextState.rootPath, nextOwner);
+}
+
+function bindFilePanelWindowOwner() {
+  if (filePanelWindowListenerBound) return;
+  filePanelWindowListenerBound = true;
+  window.addEventListener("beilu:window-switched", (event) => {
+    const nextOwner = String(event?.detail?.chatid || "").trim();
+    if (!nextOwner || nextOwner === filePanelOwnerChatId) return;
+    void activateFilePanelOwner(nextOwner).catch((err) => {
+      if (filePanelOwnerChatId !== nextOwner) return;
+      const message = err?.message || String(err);
+      console.warn("[fileExplorer] 切换窗口文件工作区失败:", message);
+      renderTreeError(message);
+      window._reportError?.(`[fileExplorer] 切换窗口文件工作区失败: ${message}`, err?.stack);
+    });
+  });
+}
+
+/**
+ * 文件打开的并发协调器：同一路径复用一次真实读取，焦点只服从最后一次用户意图。
+ * 读取 Promise 无论成功或失败都会从 Map 移除，因此网络波动后下一次点击能真实重试。
+ */
+export function createFileOpenCoordinator() {
+  const inFlightByPath = new Map();
+  let latestIntentId = 0;
+
+  return Object.freeze({
+    beginIntent(path) {
+      return Object.freeze({ id: ++latestIntentId, path });
+    },
+    isLatest(intent) {
+      return intent?.id === latestIntentId;
+    },
+    invalidateIntents() {
+      latestIntentId += 1;
+    },
+    getOrCreate(path, factory) {
+      const existing = inFlightByPath.get(path);
+      if (existing) return existing;
+
+      let request;
+      request = Promise.resolve()
+        .then(factory)
+        .finally(() => {
+          if (inFlightByPath.get(path) === request) inFlightByPath.delete(path);
+        });
+      inFlightByPath.set(path, request);
+      return request;
+    },
+    isInFlight(path) {
+      return inFlightByPath.has(path);
+    },
+  });
+}
+
+const fileOpenCoordinator = createFileOpenCoordinator();
+
+/**
+ * 真实保存请求按文件路径隔离。不同标签可以并行保存；同一路径仍拒绝重复提交，
+ * 避免一个标签的慢写入让另一个标签的自动保存被全局忙锁直接丢弃。
+ */
+const saveInFlightPaths = new Set();
+const queuedSaveByPath = new Map();
+
+function tabIdentity(path, ownerChatId) {
+  return `${String(ownerChatId || "")}\0${String(path || "")}`;
+}
+
+function isTabSaveInFlight(tab) {
+  return !!tab?.path && !!tab?.ownerChatId
+    && saveInFlightPaths.has(tabIdentity(tab.path, tab.ownerChatId));
+}
 
 /** 标签栏 DOM 容器 */
 let tabBarContainer = null;
+
+/**
+ * 从标签的注册表能力与真实请求状态计算保存能力，不写 UI。
+ * 显式 tab 保存（含后台自动保存）与当前工具栏投影共用这一判断。
+ * @param {TabState|undefined|null} tab
+ * @param {boolean} isSaveInFlight
+ * @returns {{ canSave: boolean, reason: string, busy: boolean }}
+ */
+function getFileSaveCapability(tab, isSaveInFlight) {
+  const busy = isSaveInFlight === true;
+  const fileType = tab ? (tab.fileType || getFileType(tab.path)) : null;
+  let canSave = false;
+  let reason = "";
+
+  if (!tab) {
+    reason = "未打开文件，无法保存";
+  } else if (fileType?.detectionPending === true) {
+    reason = "文件类型尚未检测，无法保存";
+  } else if (fileType?.editable !== true) {
+    const fileName = tab.path?.split("/").pop() || "当前文件";
+    const typeLabel = fileType?.languageLabel || "未知文件类型";
+    reason = `“${fileName}”（${typeLabel}）仅支持只读预览，无法保存`;
+  } else if (busy) {
+    reason = "文件正在保存，请稍候";
+  } else {
+    canSave = true;
+  }
+
+  return { canSave, reason, busy };
+}
+
+/**
+ * 将当前活动标签的保存能力投影到工具栏和菜单。
+ * fileTypeRegistry 仍是 editable 的唯一事实源；这里不重新判断扩展名。
+ * @param {TabState|undefined|null} tab
+ * @param {boolean} isSaveInFlight
+ * @returns {{ canSave: boolean, reason: string, busy: boolean }}
+ */
+function projectFileToolbarState(tab, isSaveInFlight) {
+  const state = getFileSaveCapability(tab, isSaveInFlight);
+  const { canSave, reason, busy } = state;
+
+  const title = canSave ? "保存 (Ctrl+S)" : `保存不可用：${reason}`;
+  const saveButton = document.getElementById("file-save-btn");
+  if (saveButton) {
+    saveButton.disabled = !canSave;
+    saveButton.title = title;
+    saveButton.setAttribute("aria-label", title);
+    saveButton.setAttribute("aria-busy", String(busy));
+  }
+
+  const saveMenuAction = document.querySelector('.ide-menu-action[data-action="save"]');
+  if (saveMenuAction) {
+    saveMenuAction.setAttribute("aria-disabled", String(!canSave));
+    saveMenuAction.title = title;
+    saveMenuAction.classList.toggle("ide-menu-action-disabled", !canSave);
+    if (canSave) delete saveMenuAction.dataset.disabledReason;
+    else saveMenuAction.dataset.disabledReason = reason;
+  }
+
+  return state;
+}
 
 // ============================================================
 // 初始化
@@ -160,17 +537,19 @@ export async function initFileExplorer(treeEl, editorEl) {
   treeContainer = treeEl;
   editorContainer = editorEl;
   if (!treeContainer || !editorContainer) return;
+  const originChatId = freezeFileActionOriginChatId();
+  filePanelOwnerChatId = originChatId;
+  filePanelActivationEpoch += 1;
+  bindFilePanelWindowOwner();
 
   // 获取标签栏容器
   tabBarContainer = document.getElementById("ide-editor-tabs");
 
-  // Phase2 修复：恢复上次打开的文件夹路径（问题F: IDE文件夹历史记忆）
+  // localStorage 只作旧版缓存后备；窗口根的权威读点是后端 workspaceRoots[chatId]。
+  let legacySavedRoot = null;
   try {
     const saved = storage.get(KEYS.BEILU_FILE_ROOT);
-    if (saved) {
-      rootPath = saved;
-      console.log("[fileExplorer] 恢复上次文件夹路径:", saved);
-    }
+    if (saved) legacySavedRoot = saved;
     // 恢复上次的文件排序模式（why: 用户切了mtime/size排序后刷新/重开应保持,不回name默认）
     //   key 与写侧(排序切换 storage.set)保持一致,单源不分叉; 非法值回退 name
     const savedSort = storage.get(KEYS.BEILU_FILE_SORT || "beilu_file_sort");
@@ -184,6 +563,10 @@ export async function initFileExplorer(treeEl, editorEl) {
   // 绑定编辑器事件
   bindEditorEvents();
 
+  // 首次进入文件面板时建立无标签状态；之后所有保存 UI 都只由同一投影函数写入。
+  projectFileToolbarState(getActiveTab(), isTabSaveInFlight(getActiveTab()));
+  updateStatusBar(null);
+
   // 渲染初始标签栏（空）
   renderTabs();
 
@@ -192,49 +575,40 @@ export async function initFileExplorer(treeEl, editorEl) {
   //   用户手动删掉玩耍空间 → 下次初始化在这里自动重建，不落 listDir NotFound。
   let _defaultRoot = null;
   try {
-    const _dw = await setFilesData({ _action: "ensureDefaultWorkspace" });
+    const _dw = await setFilesData({ _action: "ensureDefaultWorkspace" }, { originChatId });
     _defaultRoot = _dw?._result?.path || null;
     if (!_defaultRoot && _dw?._result?.error) console.warn("[fileExplorer] 默认工作区创建失败:", _dw._result.error);
   } catch (err) {
     console.warn("[fileExplorer] 默认工作区初始化失败:", err?.message);
   }
 
-  if (rootPath) {
-    // 有已保存的工作区根 → 正常加载（用户开过别的目录就恢复那个，不回默认——记忆第一层 localStorage）
-    // 同步初始工作区根路径到后端
+  let backendRoot = null;
+  try {
+    const config = await getFilesData({ originChatId });
+    backendRoot = config?.workspaceRoot || null;
+  } catch (err) {
+    console.warn("[fileExplorer] 读取当前窗口工作区根失败:", err?.message);
+  }
+  const targetRoot = (backendRoot && backendRoot !== ".")
+    ? backendRoot
+    : ((legacySavedRoot && legacySavedRoot !== ".") ? legacySavedRoot : _defaultRoot);
+  if (targetRoot) {
     try {
-      await setFilesData({ _action: "setWorkspaceRoot", rootPath });
-    } catch (err) {
-      console.warn("[fileExplorer] 同步初始工作区根路径失败:", err.message);
-    }
-    renderTreeLoading();
-    await loadFileTree(rootPath);
-  } else {
-    // 无本地记录 ≠ 首次使用：可能是换浏览器/清缓存（localStorage 没了）。记忆第二层 = 后端持久化根
-    //   （beilu-files-settings.json _global.workspaceRoot，setWorkspaceRoot 每次都落盘）——它是用户真选过的
-    //   目录就恢复它并回写本地记录，防「一清缓存就被打回默认」；两层都空才落默认玩耍空间（真·首次）。
-    //   "." 是旧版默认值不算用户选择，一并升级为玩耍空间（防护收口）。
-    let _backendRoot = null;
-    try {
-      const _cfg = await getFilesData();
-      _backendRoot = _cfg?.workspaceRoot || null;
-    } catch (err) {
-      console.warn("[fileExplorer] 读取后端工作区根失败:", err?.message);
-    }
-    const _target =
-      (_backendRoot && _backendRoot !== "." && _backendRoot !== _defaultRoot) ? _backendRoot : _defaultRoot;
-    if (_target) {
-      try {
-        await setFileExplorerRoot(_target);
-        if (_target === _defaultRoot) showToast("已打开默认工作区「AI 玩耍空间」", "success");
-      } catch (err) {
-        console.warn("[fileExplorer] 初始工作区打开失败:", err?.message);
-        renderTreeEmpty();
+      await setFileExplorerRoot(targetRoot, originChatId);
+      if (!backendRoot && targetRoot === _defaultRoot) {
+        showFileActionToast(originChatId, "已打开默认工作区「AI 玩耍空间」", "success");
       }
-    } else {
-      // ensure 失败且后端无记录 → 回落原空态引导（错误已在上方 warn/后端 pendingErrors 可见），不吞不装饰
+    } catch (err) {
+      console.warn("[fileExplorer] 初始工作区打开失败:", err?.message);
       renderTreeEmpty();
     }
+  } else {
+    fileWorkspaceStateByOwner.set(originChatId, {
+      rootPath: "",
+      currentPath: ".",
+      expandedDirs: new Set(["."]),
+    });
+    renderTreeEmpty();
   }
 
   // 启动文件操作错误轮询（接入后端 pendingErrors 队列，否则失败静默丢失）
@@ -244,40 +618,116 @@ export async function initFileExplorer(treeEl, editorEl) {
 /**
  * 外部调用：设置文件树根路径并刷新
  * @param {string} path
+ * @param {string|null} originChatId 本次动作冻结的发起窗口归属
  */
-export async function setFileExplorerRoot(path) {
+export async function setFileExplorerRoot(path, originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
   diag.log("setFileExplorerRoot:", path);
-  rootPath = path || ".";
-  expandedDirs = new Set([rootPath]);
-  currentPath = rootPath;
-
-  try {
-    storage.set(KEYS.BEILU_FILE_ROOT, rootPath);
-  } catch {
-    /* ignore */
+  const requestedRoot = path || ".";
+  const windowBinding = (() => {
+    try { return window._beiluWinBindingForChat?.(originChatId) || null; }
+    catch { return null; }
+  })();
+  let charName = String(windowBinding?.charName || "").trim();
+  if (windowBinding && !charName) {
+    throw new Error("发起窗口的角色绑定不完整，工作区未切换");
+  }
+  if (!windowBinding) {
+    // 无多窗口登记时只允许“当前可见窗口 === 动作 owner”的原生回退。
+    // 弹窗等待期间若已切窗，不能拿新窗口的全局角色与旧 chatId 拼接。
+    const visibleOwner = freezeFileActionOriginChatId();
+    if (visibleOwner !== originChatId) {
+      throw new Error("发起窗口的角色绑定已不可用，工作区未切换");
+    }
+    charName = String(window._beiluGetCharName?.() || "").trim();
+  }
+  // 有角色时这次动作会写两个持久域。先取得后端当前真值作为补偿目标；不能只信
+  // localStorage，因为它正是可能已经过期的缓存。拿不到补偿点时拒绝开始双写。
+  let previousRoot = null;
+  if (charName) {
+    try {
+      previousRoot = (await getFilesData({ originChatId }))?.workspaceRoot || null;
+      if (!previousRoot) throw new Error("后端没有可用于回滚的当前工作区根");
+    } catch (err) {
+      const message = err?.message || String(err);
+      console.warn("[fileExplorer] 读取当前工作区根失败:", message);
+      showFileActionToast(originChatId, `无法切换工作区：${message}`, "error");
+      throw err;
+    }
   }
 
-  // 同步工作区根路径到后端（AI沙箱范围 = IDE当前打开的文件夹）
+  // 后端是根路径接受、规范化和落盘的唯一权威。此前此处先写 localStorage/角色卡，
+  // 再忽略 `_result.error`，导致被拒绝的旧路径仍持续传给 IDE、worker 和下次切卡。
+  let workspaceResult;
   try {
-    await setFilesData({ _action: "setWorkspaceRoot", rootPath });
-  } catch (err) {
-    console.warn("[fileExplorer] 同步工作区根路径失败:", err.message);
-  }
-
-  // 一窗一线：把当前卡的项目根也持久化到卡 _config（per-卡 worker 用各自根）。
-  //   复用同一个"打开文件夹"动作，不新增设置入口（防重复功能）。
-  try {
-    const _char = window._beiluGetCharName?.();
-    if (_char) {
-      // verb=setCardWorkspaceRoot → memory 通配路由组装 {_action, charName, root}；!ok 由 apiFetch 抛错走 catch（出信号）。
-      await sendAction({ verb: "setCardWorkspaceRoot", target: "plugins:beilu-memory", source: "web", payload: { charName: _char, root: rootPath } });
+    const response = await setFilesData(
+      { _action: "setWorkspaceRoot", rootPath: requestedRoot },
+      { originChatId },
+    );
+    workspaceResult = response?._result;
+    if (!workspaceResult?.ok || !workspaceResult.effectiveRoot) {
+      throw new Error(workspaceResult?.error || "工作区根未被后端确认");
     }
   } catch (err) {
-    // 持久化失败不阻断打开文件夹，但要出信号（否则 per-卡 worker 解析根静默退回默认）
-    console.warn("[fileExplorer] per-卡项目根持久化异常:", err?.message);
+    const message = err?.message || String(err);
+    console.warn("[fileExplorer] 同步工作区根路径失败:", message);
+    showFileActionToast(originChatId, `无法切换工作区：${message}`, "error");
+    throw err;
   }
 
-  await loadFileTree(rootPath);
+  const confirmedRoot = workspaceResult.effectiveRoot;
+
+  // 一窗一线：角色卡根只接受已确认的 effectiveRoot。若第二存储写失败，尽力回滚
+  // 后端根并明确报错；绝不把两个根不同步伪装成“文件夹已打开”。
+  try {
+    if (charName) {
+      const cardResult = await sendAction({
+        verb: "setCardWorkspaceRoot",
+        target: "plugins:beilu-memory",
+        source: "web",
+        scope: { chatId: originChatId },
+        payload: { charName, root: confirmedRoot },
+      });
+      if (cardResult?.success !== true) {
+        throw new Error(cardResult?.error || "角色工作区根未能保存");
+      }
+    }
+  } catch (err) {
+    const message = err?.message || String(err);
+    console.warn("[fileExplorer] per-卡项目根持久化异常:", message);
+    if (previousRoot) {
+      try {
+        const rollback = await setFilesData(
+          { _action: "setWorkspaceRoot", rootPath: previousRoot },
+          { originChatId },
+        );
+        if (!rollback?._result?.ok) console.warn("[fileExplorer] 工作区根回滚被拒绝:", rollback?._result?.error);
+      } catch (rollbackError) {
+        console.warn("[fileExplorer] 工作区根回滚异常:", rollbackError?.message || rollbackError);
+      }
+    }
+    showFileActionToast(originChatId, `工作区未完成切换：${message}`, "error");
+    throw err;
+  }
+
+  // 所有权威写入均确认后才提交对应窗口的投影。若用户等待期间已切窗，
+  // 只更新原窗口缓存，不把旧动作的目录树覆盖到新窗口。
+  const confirmedState = {
+    rootPath: confirmedRoot,
+    currentPath: confirmedRoot,
+    expandedDirs: new Set([confirmedRoot]),
+  };
+  fileWorkspaceStateByOwner.set(originChatId, cloneFileWorkspaceState(confirmedState));
+  if (filePanelOwnerChatId !== originChatId) return confirmedRoot;
+  projectFileWorkspaceState(confirmedState);
+  try {
+    storage.set(KEYS.BEILU_FILE_ROOT, confirmedRoot);
+  } catch {
+    /* localStorage 只是缓存，失败不改变已确认的后端根 */
+  }
+
+  await loadFileTree(confirmedRoot, originChatId);
+  return confirmedRoot;
 }
 
 // ============================================================
@@ -288,26 +738,29 @@ function renderTreeLoading() {
   if (!treeContainer) return;
   treeContainer.innerHTML = `
 		<div class="p-3 space-y-1">
-			<h3 class="font-bold text-sm flex items-center gap-2 mb-2" style="color:var(--beilu-amber)">
+			<h3 class="file-explorer-title font-bold text-sm flex items-center gap-2 mb-2">
 				<img src="/parts/shells:beilu-chat/icons/mdi__folder-outline.svg" class="w-4 h-4 icon" />
 				文件浏览
 			</h3>
-			<p class="text-xs text-base-content/40 text-center py-4">加载中...</p>
+			<p class="file-tree-status text-xs text-center py-4" role="status">加载中...</p>
 		</div>
 	`;
 }
 
 // 0714 时序扫尾：渲染令牌（范式=conversationManager._renderSeq）。连续切目录时慢的旧 listDir
 //   回来会无条件 renderFileTree 覆盖新目录树；await 后查令牌，被更新调用抢占则丢弃旧结果。
-let _treeReqId = 0;
-async function loadFileTree(path) {
-  const myReq = ++_treeReqId;
+const _treeReqIdByOwner = new Map();
+async function loadFileTree(path, originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  const myReq = (_treeReqIdByOwner.get(originChatId) || 0) + 1;
+  _treeReqIdByOwner.set(originChatId, myReq);
+  if (filePanelOwnerChatId === originChatId) treeContainer?.setAttribute("aria-busy", "true");
   try {
-    const result = await setFilesData({ _action: "listDir", path });
-    if (myReq !== _treeReqId) return; // 已被更新的目录加载取代，丢弃过期结果
+    const result = await setFilesData({ _action: "listDir", path }, { originChatId });
+    if (myReq !== _treeReqIdByOwner.get(originChatId) || filePanelOwnerChatId !== originChatId) return;
     if (result?._result?.entries) {
       diag.debug("loadFileTree:", path, "entries:", result._result.entries.length);
-      renderFileTree(path, result._result.entries);
+      renderFileTree(path, result._result.entries, originChatId);
     } else if (result?._result?.error) {
       diag.warn("loadFileTree 后端返错:", path, result._result.error);
       renderTreeError(result._result.error);
@@ -316,9 +769,13 @@ async function loadFileTree(path) {
       renderTreeError("服务器返回了无效响应");
     }
   } catch (err) {
-    if (myReq !== _treeReqId) return;
+    if (myReq !== _treeReqIdByOwner.get(originChatId) || filePanelOwnerChatId !== originChatId) return;
     diag.warn("loadFileTree 异常:", path, err?.message);
     renderTreeError(err.message);
+  } finally {
+    if (myReq === _treeReqIdByOwner.get(originChatId) && filePanelOwnerChatId === originChatId) {
+      treeContainer?.setAttribute("aria-busy", "false");
+    }
   }
 }
 
@@ -328,7 +785,7 @@ function renderTreeEmpty() {
   treeContainer.innerHTML = `
 		<div class="p-3 space-y-1">
 			<div class="flex items-center justify-between mb-1">
-				<h3 class="font-bold text-sm flex items-center gap-2" style="color:var(--beilu-amber)">
+				<h3 class="file-explorer-title font-bold text-sm flex items-center gap-2">
 					<img src="/parts/shells:beilu-chat/icons/mdi__folder-outline.svg" class="w-4 h-4 icon" />
 					文件浏览
 				</h3>
@@ -342,8 +799,9 @@ function renderTreeEmpty() {
 	`;
   treeContainer.querySelector("#file-tree-empty-folder")?.addEventListener("click", async () => {
     try {
-      const picked = await showFolderPicker();
-      if (picked) await setFileExplorerRoot(picked);
+      const originChatId = freezeFileActionOriginChatId();
+      const picked = await showFolderPicker(".", originChatId, rootPath);
+      if (picked) await setFileExplorerRoot(picked, originChatId);
     } catch (err) {
       console.error('[fileExplorer]', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -351,8 +809,9 @@ function renderTreeEmpty() {
   });
   treeContainer.querySelector("#file-tree-empty-file")?.addEventListener("click", async () => {
     try {
-      const picked = await showFilePicker();
-      if (picked) openFileInEditor(picked);
+      const originChatId = freezeFileActionOriginChatId();
+      const picked = await showFilePicker(".", originChatId, rootPath);
+      if (picked) openFileInEditor(picked, originChatId);
     } catch (err) {
       console.error('[fileExplorer]', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -365,7 +824,7 @@ function renderTreeError(message) {
   treeContainer.innerHTML = `
 		<div class="p-3 space-y-1">
 			<div class="flex items-center justify-between mb-1">
-				<h3 class="font-bold text-sm flex items-center gap-2" style="color:var(--beilu-amber)">
+				<h3 class="file-explorer-title font-bold text-sm flex items-center gap-2">
 					<img src="/parts/shells:beilu-chat/icons/mdi__folder-outline.svg" class="w-4 h-4 icon" />
 					文件浏览
 				</h3>
@@ -382,11 +841,12 @@ function renderTreeError(message) {
   treeContainer.querySelector("#file-tree-retry")?.addEventListener("click", () => loadFileTree(rootPath));
   treeContainer.querySelector("#file-tree-err-folder")?.addEventListener("click", async () => {
     try {
-      const picked = await showFolderPicker();
+      const originChatId = freezeFileActionOriginChatId();
+      const picked = await showFolderPicker(".", originChatId, rootPath);
       // 收口修（凛倾 2026-07-09「同一键多处散写/双键不同步」审计）：原 `rootPath = picked` 裸赋值
       //   绕过 setFileExplorerRoot → localStorage/后端沙箱根/per-卡 三键全不同步（前端浏览新目录、
       //   AI op 沙箱仍锚旧根、刷新即丢）。写根一律走唯一收口。
-      if (picked) await setFileExplorerRoot(picked);
+      if (picked) await setFileExplorerRoot(picked, originChatId);
     } catch (err) {
       console.error('[fileExplorer]', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -394,8 +854,9 @@ function renderTreeError(message) {
   });
   treeContainer.querySelector("#file-tree-err-file")?.addEventListener("click", async () => {
     try {
-      const picked = await showFilePicker();
-      if (picked) openFileInEditor(picked);
+      const originChatId = freezeFileActionOriginChatId();
+      const picked = await showFilePicker(".", originChatId, rootPath);
+      if (picked) openFileInEditor(picked, originChatId);
     } catch (err) {
       console.error('[fileExplorer]', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -403,16 +864,27 @@ function renderTreeError(message) {
   });
 }
 
-async function renderFileTree(treePath, entries) {
-  if (!treeContainer) return;
+async function renderFileTree(treePath, entries, originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  if (!treeContainer || filePanelOwnerChatId !== originChatId) return;
 
-  const displayPath =
-    treePath === "." ? "项目根目录" : treePath.replace(/\\/g, "/");
+  const sortPresentation = {
+    name: { label: "名称 A–Z", title: "按名称升序" },
+    mtime: { label: "时间 新→旧", title: "按修改时间降序" },
+    size: { label: "大小 大→小", title: "按文件大小降序" },
+  }[sortMode];
+  const breadcrumb = getPathBreadcrumbSegments(treePath)
+    .map((segment, index, all) => {
+      const isCurrent = index === all.length - 1;
+      const action = segment.isComputer ? 'data-root-action="pick"' : `data-root-path="${escapeAttr(segment.path)}"`;
+      return `<button type="button" class="file-root-crumb${isCurrent ? " current" : ""}" ${action} title="${escapeAttr(segment.path)}" ${isCurrent ? 'aria-current="location"' : ""}>${escapeHtml(segment.label)}</button>${isCurrent ? "" : '<span class="file-root-separator" aria-hidden="true">/</span>'}`;
+    })
+    .join("");
 
   treeContainer.innerHTML = `
-		<div class="p-3 space-y-1">
+		<div class="file-explorer-shell p-3 space-y-1">
 			<div class="flex items-center justify-between mb-1">
-				<h3 class="font-bold text-sm flex items-center gap-2" style="color:var(--beilu-amber)">
+				<h3 class="file-explorer-title font-bold text-sm flex items-center gap-2">
 					<img src="/parts/shells:beilu-chat/icons/mdi__folder-outline.svg" class="w-4 h-4 icon" />
 					文件浏览
 				</h3>
@@ -420,7 +892,7 @@ async function renderFileTree(treePath, entries) {
 					<button id="file-tree-open-folder" class="btn btn-xs btn-ghost btn-square" title="打开文件夹"><i data-ic="folder-open"></i></button>
 					<button id="file-tree-open-file" class="btn btn-xs btn-ghost btn-square" title="打开文件"><i data-ic="file"></i></button>
 					<button id="file-tree-refresh" class="btn btn-xs btn-ghost btn-square" title="刷新"><i data-ic="refresh"></i></button>
-					<button id="file-tree-sort" class="btn btn-xs btn-ghost btn-square" title="排序: ${sortMode === 'mtime' ? '时间' : sortMode === 'size' ? '大小' : '名称'}">⇅</button>
+					<button id="file-tree-sort" class="file-tree-sort btn btn-xs btn-ghost" title="${sortPresentation.title}" aria-label="${sortPresentation.title}"><i data-ic="filter" aria-hidden="true"></i><span>${sortPresentation.label}</span></button>
 				</div>
 			</div>
 
@@ -438,15 +910,16 @@ async function renderFileTree(treePath, entries) {
 					<input type="text" id="file-search-input"
 						class="input input-xs input-bordered flex-1 text-xs"
 						placeholder="搜索文件内容..." spellcheck="false" />
-					<label class="flex items-center gap-0.5 text-[10px] text-base-content/50 cursor-pointer" title="正则匹配">
+					<label class="file-search-option flex items-center gap-0.5 cursor-pointer" title="正则匹配">
 						<input type="checkbox" id="file-search-regex" class="checkbox checkbox-xs" />.*
 					</label>
 					<button id="file-search-go" class="btn btn-xs btn-ghost btn-square" title="搜索"><i data-ic="search"></i></button>
 				</div>
 				<div id="file-search-results" class="text-xs"></div>
 
-			<div class="text-xs text-base-content/40 mb-1 font-mono truncate" title="${escapeHtml(treePath)}">
-				<i data-ic="folder-open"></i> ${escapeHtml(displayPath)}
+			<div class="file-root-breadcrumb" title="${escapeAttr(treePath)}" aria-label="工作区路径">
+				<div class="file-root-crumbs"><i data-ic="folder-open" aria-hidden="true"></i>${breadcrumb}</div>
+				<button type="button" id="file-root-copy" class="file-root-copy" title="复制完整路径" aria-label="复制完整路径"><i data-ic="clipboard" aria-hidden="true"></i></button>
 			</div>
 
 			<!-- 操作按钮 -->
@@ -455,7 +928,7 @@ async function renderFileTree(treePath, entries) {
 				<button id="file-tree-new-dir" class="btn btn-xs btn-ghost" title="新建目录"><i data-ic="folder-open"></i>+ 新目录</button>
 			</div>
 
-			<div id="file-tree-entries" class="file-tree text-xs space-y-0.5">
+			<div id="file-tree-entries" class="file-tree text-xs space-y-0.5" role="tree" aria-label="工作区文件">
 				${renderEntries(entries, treePath)}
 			</div>
 			<div class="divider my-1 opacity-30"></div>
@@ -467,10 +940,11 @@ async function renderFileTree(treePath, entries) {
   bindTreeEvents();
 
   // 递归加载所有已展开目录的子内容
-  await loadExpandedDirs();
+  await loadExpandedDirs(originChatId);
+  if (filePanelOwnerChatId !== originChatId) return;
 
   // 加载待审批操作
-  loadPendingOps();
+  loadPendingOps(originChatId);
   initPendingOpsAutoRefresh();
 }
 
@@ -497,7 +971,7 @@ function joinPath(base, name) {
 
 function renderEntries(entries, parentPath) {
   if (!entries || entries.length === 0) {
-    return '<p class="text-base-content/50 text-center py-2 text-[10px]">(空目录)</p>';
+    return '<p class="file-tree-empty-state text-center py-2" role="status">（空目录）</p>';
   }
 
   // 排序：目录在前，文件在后；支持按名称/修改时间/大小排序
@@ -518,24 +992,36 @@ function renderEntries(entries, parentPath) {
   let html = "";
   for (const entry of entries) {
     const fullPath = joinPath(parentPath, entry.name);
-    const icon = entry.isDirectory ? '<i data-ic="folder-open"></i>' : getFileIcon(entry.name);
     const isOpen = entry.isDirectory && expandedDirs.has(fullPath);
     const isSelected = activeTabPath === fullPath;
+    const tab = entry.isDirectory ? null : getTab(fullPath);
+    const type = tab?.fileType || getFileType(entry.name, { isDirectory: entry.isDirectory, isOpen });
+    const icon = getFileTypeIconMarkup(entry.name, { isDirectory: entry.isDirectory, isOpen, fileType: type });
+    const isDirty = tab?.isDirty === true;
+    const stateClasses = [isSelected ? "active" : "", isDirty ? "dirty" : "", type.binary ? "is-binary" : "", type.readonly === true ? "is-readonly" : "", type.detectionPending ? "is-detection-pending" : ""]
+      .filter(Boolean)
+      .join(" ");
 
     html += `
-		<div class="file-tree-item ${entry.isDirectory ? "folder" : "file"} ${isSelected ? "active" : ""}"
-			data-path="${escapeAttr(fullPath)}" data-is-dir="${entry.isDirectory}">
-			<span class="tree-toggle ${entry.isDirectory ? "cursor-pointer" : "invisible"}">${entry.isDirectory ? (isOpen ? "▾" : "▸") : ""}</span>
+		<div class="file-tree-item ${entry.isDirectory ? "folder" : "file"} ${stateClasses}"
+			data-path="${escapeAttr(fullPath)}" data-is-dir="${entry.isDirectory}" data-file-kind="${type.kind}"
+			role="treeitem" tabindex="0" aria-selected="${isSelected}" ${entry.isDirectory ? `aria-expanded="${isOpen}"` : ""}
+			title="${escapeAttr(fullPath)}">
+			<span class="tree-toggle ${entry.isDirectory ? "cursor-pointer" : "invisible"}" aria-hidden="true"></span>
 			<span class="tree-icon">${icon}</span>
 			<span class="tree-label flex-1 truncate">${escapeHtml(entry.name)}</span>
-			${entry.size != null && !entry.isDirectory ? `<span class="text-[10px] text-base-content/50 ml-1">${formatSize(entry.size)}</span>` : ""}
+			<span class="file-state-marker file-state-dirty" aria-label="未保存" ${isDirty ? "" : "hidden"}></span>
+			<span class="file-state-badge file-state-pending" title="打开后自动检测文件类型" ${type.detectionPending ? "" : "hidden"}>AUTO</span>
+			<span class="file-state-badge file-state-binary" title="二进制文件" ${type.binary ? "" : "hidden"}>BIN</span>
+			<span class="file-state-badge file-state-readonly" title="只读预览" ${type.readonly === true ? "" : "hidden"}>RO</span>
+			${entry.size != null && !entry.isDirectory ? `<span class="file-tree-size">${formatSize(entry.size)}</span>` : ""}
 		</div>
 		`;
 
     // 如果目录已展开，显示子内容占位
     if (entry.isDirectory && isOpen) {
       html += `<div class="file-tree-children pl-4" data-parent="${escapeAttr(fullPath)}">
-				<p class="text-[10px] text-base-content/50 py-1">加载中...</p>
+				<p class="file-tree-loading-state py-1" role="status">加载中...</p>
 			</div>`;
     }
   }
@@ -543,69 +1029,10 @@ function renderEntries(entries, parentPath) {
   return html;
 }
 
-function getFileIcon(name) {
-  const ext = name.split(".").pop()?.toLowerCase();
-  const icons = {
-    js: '<i data-ic="script"></i>',
-    mjs: '<i data-ic="script"></i>',
-    ts: '<i data-ic="book"></i>',
-    json: "{ }",
-    css: '<i data-ic="palette"></i>',
-    html: '<i data-ic="earth"></i>',
-    md: "≡",
-    txt: '<i data-ic="file"></i>',
-    py: '<i data-ic="python"></i>',
-    sh: '<i data-ic="zap"></i>',
-    bat: '<i data-ic="zap"></i>',
-    png: '<i data-ic="image"></i>',
-    jpg: '<i data-ic="image"></i>',
-    jpeg: '<i data-ic="image"></i>',
-    gif: '<i data-ic="image"></i>',
-    svg: '<i data-ic="image"></i>',
-  };
-  return icons[ext] || '<i data-ic="file"></i>';
-}
-
 function formatSize(bytes) {
   if (bytes < 1024) return bytes + "B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + "K";
   return (bytes / (1024 * 1024)).toFixed(1) + "M";
-}
-
-// ============================================================
-// 任务B多类型预览：文件种类判定（决定读取路 + 预览器 + 默认模式）
-//   凛倾核心场景=「AI 做了美化(HTML)，用户直接打开运行看看」→ html/md/媒体默认预览。
-//   格式集对齐 VSCode media-preview（jpg/png/bmp/gif/ico/webp + mp3/wav/ogg + mp4/webm）。
-// ============================================================
-const EDITABLE_EXTS = new Set([
-  "js", "mjs", "ts", "json", "css", "html", "htm", "md", "txt", "py", "sh",
-  "bat", "yml", "yaml", "toml", "ini", "cfg", "xml", "svg",
-]);
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico"]);
-const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga"]);
-const VIDEO_EXTS = new Set(["mp4", "webm"]);
-
-/**
- * @param {string} name 文件名
- * @returns {{kind:"html"|"md"|"image"|"audio"|"video"|"code"|"binary", ext:string, defaultMode:"preview"|"edit"}}
- *   kind 决定读取路（媒体走 readFileBase64 字节路，其余走 readFile 文本路）与预览器；
- *   svg 双身份：可文本编辑（EDITABLE）也可看图——归 image（默认看图），编辑模式仍可用（文本已随 readFile 读回? 否——
- *   媒体走字节路无文本），故 svg 特判：走文本路 + image 预览（data URL 由文本转，可编辑可看图两全）。
- */
-function classifyFile(name) {
-  const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
-  if (ext === "html" || ext === "htm") return { kind: "html", ext, defaultMode: "preview" };
-  if (ext === "md") return { kind: "md", ext, defaultMode: "preview" };
-  if (ext === "svg") return { kind: "svg", ext, defaultMode: "preview" };
-  if (IMAGE_EXTS.has(ext)) return { kind: "image", ext, defaultMode: "preview" };
-  if (AUDIO_EXTS.has(ext)) return { kind: "audio", ext, defaultMode: "preview" };
-  if (VIDEO_EXTS.has(ext)) return { kind: "video", ext, defaultMode: "preview" };
-  // 任务C office（凛倾「还有ppt,xlsx等等」）：提取文本预览（后端 readFileExtract，与 AI read 同解析单源）
-  if (ext === "xlsx" || ext === "docx" || ext === "pptx") return { kind: "doc", ext, defaultMode: "preview" };
-  // pdf：base64 → iframe data URL，浏览器内置 PDF 查看器（翻页/缩放/搜索全套白捡）
-  if (ext === "pdf") return { kind: "pdf", ext, defaultMode: "preview" };
-  if (EDITABLE_EXTS.has(ext)) return { kind: "code", ext, defaultMode: "edit" };
-  return { kind: "binary", ext, defaultMode: "preview" };
 }
 
 function bindTreeEvents() {
@@ -616,10 +1043,11 @@ function bindTreeEvents() {
     .querySelector("#file-tree-open-folder")
     ?.addEventListener("click", async () => {
       try {
-        const selected = await showFolderPicker(rootPath);
+        const originChatId = freezeFileActionOriginChatId();
+        const selected = await showFolderPicker(rootPath, originChatId);
         if (selected) {
-          await setFileExplorerRoot(selected);
-          showToast(`已切换到: ${selected}`, "success");
+          const effectiveRoot = await setFileExplorerRoot(selected, originChatId);
+          showFileActionToast(originChatId, `已切换到: ${effectiveRoot}`, "success");
         }
       } catch (err) {
         console.error('[fileExplorer]', err);
@@ -632,9 +1060,10 @@ function bindTreeEvents() {
     .querySelector("#file-tree-open-file")
     ?.addEventListener("click", async () => {
       try {
-        const selected = await showFilePicker(rootPath);
+        const originChatId = freezeFileActionOriginChatId();
+        const selected = await showFilePicker(rootPath, originChatId);
         if (selected) {
-          openFileInEditor(selected);
+          openFileInEditor(selected, originChatId);
         }
       } catch (err) {
         console.error('[fileExplorer]', err);
@@ -648,30 +1077,22 @@ function bindTreeEvents() {
 
   async function handleGoToPath(target) {
     if (!target) return;
+    const originChatId = freezeFileActionOriginChatId();
     // 先尝试当作目录加载
     try {
-      const result = await setFilesData({ _action: "listDir", path: target });
+      const result = await setFilesData({ _action: "listDir", path: target }, { originChatId });
       if (result?._result?.entries) {
         // 成功作为目录 → 设为根
-        await setFileExplorerRoot(target);
+        await setFileExplorerRoot(target, originChatId);
         return;
       }
     } catch (err) {
       console.error('[fileExplorer] 尝试作为目录打开失败:', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
     }
-    // 尝试当作文件打开
-    try {
-      const result = await setFilesData({ _action: "readFile", path: target });
-      if (result?._result?.content !== undefined) {
-        openFileInEditor(target);
-        return;
-      }
-    } catch (err) {
-      console.error('[fileExplorer] 尝试作为文件打开失败:', err);
-      window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
-    }
-    showToast("路径无效: " + target, "error");
+    // 目录路线不成立后直接进入统一文件打开链。不再先用 readFile
+    // 做文本探针，避免媒体/未知文件两次串行读取和假性失败。
+    await openFileInEditor(target, originChatId);
   }
 
   rootGoBtn?.addEventListener("click", () => {
@@ -686,6 +1107,24 @@ function bindTreeEvents() {
     }
   });
 
+  treeContainer.querySelectorAll(".file-root-crumb[data-root-path]").forEach((crumb) => {
+    crumb.addEventListener("click", () => handleGoToPath(crumb.dataset.rootPath));
+  });
+  treeContainer.querySelector('.file-root-crumb[data-root-action="pick"]')?.addEventListener("click", async () => {
+    const originChatId = freezeFileActionOriginChatId();
+    const selected = await showFolderPicker("__drives__", originChatId, rootPath);
+    if (selected) await setFileExplorerRoot(selected, originChatId);
+  });
+  treeContainer.querySelector("#file-root-copy")?.addEventListener("click", async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("浏览器未提供剪贴板写入能力");
+      await navigator.clipboard.writeText(rootPath);
+      showToast("工作区路径已复制", "success");
+    } catch (err) {
+      showToast("复制路径失败: " + (err?.message || err), "error");
+    }
+  });
+
   // 刷新
   treeContainer
     .querySelector("#file-tree-refresh")
@@ -694,12 +1133,9 @@ function bindTreeEvents() {
   // 排序切换
   document.getElementById("file-tree-sort")?.addEventListener("click", () => {
     const modes = ["name", "mtime", "size"];
-    const labels = { name: "名称", mtime: "时间", size: "大小" };
     const idx = (modes.indexOf(sortMode) + 1) % modes.length;
     sortMode = modes[idx];
     try { storage.set(KEYS.BEILU_FILE_SORT || "beilu_file_sort", sortMode); } catch {}
-    const btn = document.getElementById("file-tree-sort");
-    if (btn) btn.title = "排序: " + labels[sortMode];
     loadFileTree(rootPath);
   });
 
@@ -721,14 +1157,18 @@ function bindTreeEvents() {
   treeContainer
     .querySelector("#file-tree-new-file")
     ?.addEventListener("click", async () => {
+      const originChatId = freezeFileActionOriginChatId();
+      const actionBasePath = currentPath;
+      const actionRootPath = rootPath;
       const name = await beiluPrompt("新文件名:");
       if (!name?.trim()) return;
-      const path = joinPath(currentPath, name.trim());
+      const path = joinPath(actionBasePath, name.trim());
       try {
-        await setFilesData({ _action: "createFile", path, content: "" });
+        const response = await setFilesData({ _action: "createFile", path, content: "" }, { originChatId });
+        assertFileActionSuccess(response, "createFile");
         showToast(`文件 ${name} 已创建`, "success");
-        await loadFileTree(rootPath);
-        openFileInEditor(path);
+        await loadFileTree(actionRootPath, originChatId);
+        openFileInEditor(path, originChatId);
       } catch (err) {
         showToast("创建失败: " + err.message, "error");
       }
@@ -738,13 +1178,17 @@ function bindTreeEvents() {
   treeContainer
     .querySelector("#file-tree-new-dir")
     ?.addEventListener("click", async () => {
+      const originChatId = freezeFileActionOriginChatId();
+      const actionBasePath = currentPath;
+      const actionRootPath = rootPath;
       const name = await beiluPrompt("新目录名:");
       if (!name?.trim()) return;
-      const path = joinPath(currentPath, name.trim());
+      const path = joinPath(actionBasePath, name.trim());
       try {
-        await setFilesData({ _action: "createDir", path });
+        const response = await setFilesData({ _action: "createDir", path }, { originChatId });
+        assertFileActionSuccess(response, "createDir");
         showToast(`目录 ${name} 已创建`, "success");
-        await loadFileTree(rootPath);
+        await loadFileTree(actionRootPath, originChatId);
       } catch (err) {
         showToast("创建失败: " + err.message, "error");
       }
@@ -766,8 +1210,9 @@ function bindTreeItemEvents(container) {
     if (item.dataset.bound) return;
     item.dataset.bound = "true";
 
-    item.addEventListener("click", async () => {
+    const activateItem = async () => {
       try {
+        const originChatId = freezeFileActionOriginChatId();
         const path = item.dataset.path;
         const isDir = item.dataset.isDir === "true";
 
@@ -780,15 +1225,16 @@ function bindTreeItemEvents(container) {
               `.file-tree-children[data-parent="${CSS.escape(path)}"]`,
             );
             if (children) children.remove();
-            // 更新图标
-            const toggle = item.querySelector(".tree-toggle");
-            if (toggle) toggle.textContent = "▸";
+            item.setAttribute("aria-expanded", "false");
+            const icon = item.querySelector(".tree-icon");
+            if (icon) icon.innerHTML = getFileTypeIconMarkup(path, { isDirectory: true, isOpen: false });
           } else {
             expandedDirs.add(path);
             currentPath = path;
             // 加载子目录
             try {
-              const result = await setFilesData({ _action: "listDir", path });
+              const result = await setFilesData({ _action: "listDir", path }, { originChatId });
+              if (filePanelOwnerChatId !== originChatId) return;
               if (result?._result?.entries) {
                 // 插入子节点
                 const childHtml = `<div class="file-tree-children pl-4" data-parent="${escapeAttr(path)}">
@@ -800,12 +1246,12 @@ function bindTreeItemEvents(container) {
                 if (newChildren) {
                   bindTreeItemEvents(newChildren);
                 }
-                // 更新图标
-                const toggle = item.querySelector(".tree-toggle");
-                if (toggle) toggle.textContent = "▾";
+                item.setAttribute("aria-expanded", "true");
+                const icon = item.querySelector(".tree-icon");
+                if (icon) icon.innerHTML = getFileTypeIconMarkup(path, { isDirectory: true, isOpen: true });
 
                 // 递归加载该子树中已展开的目录
-                await loadExpandedDirsIn(newChildren);
+                await loadExpandedDirsIn(newChildren, originChatId);
               }
             } catch (err) {
               showToast("加载目录失败: " + err.message, "error");
@@ -813,11 +1259,20 @@ function bindTreeItemEvents(container) {
           }
         } else {
           // 打开文件
-          openFileInEditor(path);
+          openFileInEditor(path, originChatId);
         }
       } catch (err) {
         console.error('[fileExplorer]', err);
         window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
+      }
+    };
+
+    // 业务动作保持在 click/release 或键盘 activation；不在 pointerdown 提前执行。
+    item.addEventListener("click", activateItem);
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        activateItem();
       }
     });
 
@@ -839,16 +1294,18 @@ function bindTreeItemEvents(container) {
 /**
  * 递归加载所有已展开目录的子内容（全树范围）
  */
-async function loadExpandedDirs() {
-  await loadExpandedDirsIn(treeContainer);
+async function loadExpandedDirs(originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  await loadExpandedDirsIn(treeContainer, originChatId);
 }
 
 /**
  * 递归加载指定容器中已展开目录的子内容
  * @param {HTMLElement} container
  */
-async function loadExpandedDirsIn(container) {
+async function loadExpandedDirsIn(container, originChatId = null) {
   if (!container) return;
+  originChatId = freezeFileActionOriginChatId(originChatId);
 
   // 找到所有占位符为"加载中..."的已展开目录子容器
   const pendingChildren = container.querySelectorAll(".file-tree-children");
@@ -867,13 +1324,14 @@ async function loadExpandedDirsIn(container) {
       const result = await setFilesData({
         _action: "listDir",
         path: parentPath,
-      });
+      }, { originChatId });
       if (result?._result?.entries) {
+        if (filePanelOwnerChatId !== originChatId) return;
         childEl.innerHTML = renderEntries(result._result.entries, parentPath);
         // 绑定事件
         bindTreeItemEvents(childEl);
         // 递归加载子树中已展开的目录
-        await loadExpandedDirsIn(childEl);
+        await loadExpandedDirsIn(childEl, originChatId);
       }
     } catch {
       childEl.innerHTML = '<p class="text-[10px] text-error py-1">加载失败</p>';
@@ -890,8 +1348,9 @@ async function loadExpandedDirsIn(container) {
  * @param {string} path
  * @returns {TabState|undefined}
  */
-function getTab(path) {
-  return openTabs.find((t) => t.path === path);
+function getTab(path, ownerChatId = filePanelOwnerChatId || activeTabOwnerChatId) {
+  if (!ownerChatId) return openTabs.find((t) => t.path === path);
+  return openTabs.find((t) => t.path === path && t.ownerChatId === ownerChatId);
 }
 
 /**
@@ -899,7 +1358,41 @@ function getTab(path) {
  * @returns {TabState|undefined}
  */
 function getActiveTab() {
-  return activeTabPath ? getTab(activeTabPath) : undefined;
+  return activeTabPath && activeTabOwnerChatId
+    ? getTab(activeTabPath, activeTabOwnerChatId)
+    : undefined;
+}
+
+function isTabStillProjected(tab) {
+  return !!tab
+    && filePanelOwnerChatId === tab.ownerChatId
+    && getActiveTab() === tab;
+}
+
+function syncFileTreeState() {
+  treeContainer?.querySelectorAll(".file-tree-item.file").forEach((item) => {
+    const tab = getTab(item.dataset.path);
+    const fileType = tab?.fileType || getFileType(item.dataset.path);
+    const isActive = item.dataset.path === activeTabPath;
+    const isDirty = tab?.isDirty === true;
+    item.classList.toggle("active", isActive);
+    item.classList.toggle("dirty", isDirty);
+    item.classList.toggle("is-binary", fileType.binary === true);
+    item.classList.toggle("is-readonly", fileType.readonly === true);
+    item.classList.toggle("is-detection-pending", fileType.detectionPending === true);
+    item.dataset.fileKind = fileType.kind;
+    item.setAttribute("aria-selected", String(isActive));
+    const icon = item.querySelector(".tree-icon");
+    if (icon) icon.innerHTML = getFileTypeIconMarkup(item.dataset.path, { fileType });
+    const marker = item.querySelector(".file-state-dirty");
+    if (marker) marker.hidden = !isDirty;
+    const pendingBadge = item.querySelector(".file-state-pending");
+    const binaryBadge = item.querySelector(".file-state-binary");
+    const readonlyBadge = item.querySelector(".file-state-readonly");
+    if (pendingBadge) pendingBadge.hidden = fileType.detectionPending !== true;
+    if (binaryBadge) binaryBadge.hidden = fileType.binary !== true;
+    if (readonlyBadge) readonlyBadge.hidden = fileType.readonly !== true;
+  });
 }
 
 /**
@@ -907,12 +1400,13 @@ function getActiveTab() {
  */
 function saveActiveTabState() {
   if (!activeTabPath) return;
-  const tab = getTab(activeTabPath);
+  const tab = getTab(activeTabPath, activeTabOwnerChatId);
   if (!tab) return;
 
   const textarea = editorContainer?.querySelector("#file-editor-textarea");
   if (textarea) {
-    tab.content = textarea.value;
+    // textarea DOM 会把 CRLF 规范化成 LF；未发生 input 时保留后端原文，避免仅切 tab 就改写 EOL。
+    if (tab.isDirty) tab.content = textarea.value;
     tab.scrollTop = textarea.scrollTop;
     tab.scrollLeft = textarea.scrollLeft;
     tab.selectionStart = textarea.selectionStart;
@@ -925,30 +1419,36 @@ function saveActiveTabState() {
  */
 function renderTabs() {
   if (!tabBarContainer) return;
+  const visibleTabs = filePanelOwnerChatId
+    ? openTabs.filter((tab) => tab.ownerChatId === filePanelOwnerChatId)
+    : openTabs;
 
-  if (openTabs.length === 0) {
+  if (visibleTabs.length === 0) {
     tabBarContainer.innerHTML =
-      '<span class="ide-tabs-placeholder text-xs text-base-content/50 px-3">未打开文件</span>';
+      '<span class="ide-tabs-placeholder px-3">未打开文件</span>';
+    syncFileTreeState();
     return;
   }
 
   let html = "";
-  for (const tab of openTabs) {
+  for (const tab of visibleTabs) {
     const fileName = tab.path.split("/").pop();
-    const isActive = tab.path === activeTabPath;
-    const icon = getFileIcon(fileName);
+    const isActive = tab.path === activeTabPath && tab.ownerChatId === activeTabOwnerChatId;
+    const fileType = tab.fileType || getFileType(fileName);
+    const icon = getFileTypeIconMarkup(fileName, { fileType });
 
-    html += `<div class="ide-editor-tab ${isActive ? "ide-tab-active" : ""}" data-tab-path="${escapeAttr(tab.path)}" title="${escapeAttr(tab.path)}">
+    html += `<div class="ide-editor-tab ${isActive ? "ide-tab-active" : ""}" data-tab-path="${escapeAttr(tab.path)}" data-tab-owner="${escapeAttr(tab.ownerChatId)}" data-file-kind="${fileType.kind}" data-file-readonly="${fileType.readonly === true}" title="${escapeAttr(tab.path)}" role="tab" tabindex="0" aria-selected="${isActive}">
 			<span class="ide-tab-icon text-[0.7rem]">${icon}</span>
 			<span class="ide-tab-name">${escapeHtml(fileName)}</span>
-			${tab.isDirty ? '<span class="ide-tab-dirty">●</span>' : ""}
-			<button class="ide-tab-close" data-close-path="${escapeAttr(tab.path)}" title="关闭">×</button>
+			${fileType.readonly === true ? '<span class="file-state-badge file-state-readonly" title="只读预览">RO</span>' : ""}
+			${tab.isDirty ? '<span class="ide-tab-dirty" aria-label="未保存"></span>' : ""}
+            <button type="button" class="ide-tab-close" data-close-path="${escapeAttr(tab.path)}" data-close-owner="${escapeAttr(tab.ownerChatId)}" title="关闭文件" aria-label="关闭文件">×</button>
 		</div>`;
   }
 
   // 关闭全部按钮：多于1个标签才显示（why: 用户诉求一次性关闭所有打开文件）
-  if (openTabs.length > 1) {
-    html += `<button class="ide-tabs-close-all btn btn-xs btn-ghost" title="关闭全部文件" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">×全部</button>`;
+  if (visibleTabs.length > 1) {
+    html += `<button class="ide-tabs-close-all btn btn-xs btn-ghost" title="关闭全部文件">关闭全部</button>`;
   }
 
   tabBarContainer.innerHTML = html;
@@ -957,10 +1457,21 @@ function renderTabs() {
   tabBarContainer.querySelectorAll(".ide-editor-tab").forEach((el) => {
     el.addEventListener("click", (e) => {
       // 排除关闭按钮点击
-      if (e.target.classList.contains("ide-tab-close")) return;
+      if (e.target.closest(".ide-tab-close")) return;
       const path = el.dataset.tabPath;
-      if (path && path !== activeTabPath) {
-        switchToTab(path);
+      const ownerChatId = el.dataset.tabOwner;
+      if (path && ownerChatId && (path !== activeTabPath || ownerChatId !== activeTabOwnerChatId)) {
+        switchToTab(path, ownerChatId);
+      }
+    });
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const path = el.dataset.tabPath;
+        const ownerChatId = el.dataset.tabOwner;
+        if (path && ownerChatId && (path !== activeTabPath || ownerChatId !== activeTabOwnerChatId)) {
+          switchToTab(path, ownerChatId);
+        }
       }
     });
 
@@ -969,7 +1480,8 @@ function renderTabs() {
       if (e.button === 1) {
         e.preventDefault();
         const path = el.dataset.tabPath;
-        if (path) closeTab(path);
+        const ownerChatId = el.dataset.tabOwner;
+        if (path && ownerChatId) closeTab(path, ownerChatId);
       }
     });
   });
@@ -979,7 +1491,8 @@ function renderTabs() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const path = btn.dataset.closePath;
-      if (path) closeTab(path);
+      const ownerChatId = btn.dataset.closeOwner;
+      if (path && ownerChatId) closeTab(path, ownerChatId);
     });
   });
 
@@ -987,6 +1500,8 @@ function renderTabs() {
   tabBarContainer
     .querySelector(".ide-tabs-close-all")
     ?.addEventListener("click", () => closeAllTabs());
+
+  syncFileTreeState();
 
   // 确保活动标签可见（滚动到视野内）
   requestAnimationFrame(() => {
@@ -1000,15 +1515,20 @@ function renderTabs() {
  * 切换到指定标签
  * @param {string} path
  */
-function switchToTab(path) {
-  const tab = getTab(path);
-  if (!tab) return;
+function switchToTab(path, ownerChatId) {
+  const tab = getTab(path, ownerChatId);
+  if (!tab || tab.ownerChatId !== filePanelOwnerChatId) return;
+  // 切换既有标签也是新的用户焦点意图；使此前尚未完成的打开/刷新请求失效。
+  fileOpenCoordinator.invalidateIntents();
 
   // 保存当前标签状态
   saveActiveTabState();
 
   // 切换
   activeTabPath = path;
+  activeTabOwnerChatId = tab.ownerChatId;
+  filePanelOwnerChatId = tab.ownerChatId;
+  activeTabPathByOwner.set(tab.ownerChatId, path);
 
   // 渲染标签栏
   renderTabs();
@@ -1018,18 +1538,20 @@ function switchToTab(path) {
 
   // 恢复滚动和光标位置
   requestAnimationFrame(() => {
+    if (!isTabStillProjected(tab)) return;
     const textarea = editorContainer?.querySelector("#file-editor-textarea");
     if (textarea) {
       textarea.scrollTop = tab.scrollTop || 0;
       textarea.scrollLeft = tab.scrollLeft || 0;
       textarea.selectionStart = tab.selectionStart || 0;
       textarea.selectionEnd = tab.selectionEnd || 0;
+      updateCursorPos(
+        textarea,
+        editorContainer?.querySelector("#editor-cursor-pos"),
+        editorContainer?.querySelector("#editor-line-numbers"),
+        tab,
+      );
     }
-  });
-
-  // 更新文件树选中状态
-  treeContainer?.querySelectorAll(".file-tree-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.path === path);
   });
 
   // 更新状态栏文件信息
@@ -1040,8 +1562,8 @@ function switchToTab(path) {
  * 关闭标签
  * @param {string} path
  */
-async function closeTab(path) {
-  const tab = getTab(path);
+async function closeTab(path, ownerChatId = activeTabOwnerChatId) {
+  const tab = getTab(path, ownerChatId);
   if (!tab) return;
 
   // 检查未保存
@@ -1051,23 +1573,30 @@ async function closeTab(path) {
   }
 
   const idx = openTabs.indexOf(tab);
+  const ownerIdx = openTabs.filter((candidate) => candidate.ownerChatId === tab.ownerChatId).indexOf(tab);
   openTabs.splice(idx, 1);
 
   // 如果关闭的是当前活动标签，需要切换
-  if (path === activeTabPath) {
-    if (openTabs.length === 0) {
+  if (path === activeTabPath && tab.ownerChatId === activeTabOwnerChatId) {
+    const ownerTabs = openTabs.filter((candidate) => candidate.ownerChatId === tab.ownerChatId);
+    if (ownerTabs.length === 0) {
       activeTabPath = null;
+      activeTabOwnerChatId = null;
+      activeTabPathByOwner.delete(tab.ownerChatId);
       renderTabs();
       renderEmptyEditor();
     } else {
-      // 优先选择右侧邻居，无则左侧
-      const nextIdx = Math.min(idx, openTabs.length - 1);
-      activeTabPath = openTabs[nextIdx].path;
+      // 只在同一窗口的标签内选后继，不把另一窗口的文件投影过来。
+      const nextTab = ownerTabs[Math.min(ownerIdx, ownerTabs.length - 1)];
+      activeTabPath = nextTab.path;
+      activeTabOwnerChatId = nextTab.ownerChatId;
+      activeTabPathByOwner.set(nextTab.ownerChatId, nextTab.path);
       renderTabs();
       renderEditor();
       // 恢复新活动标签的滚动位置
-      const newTab = openTabs[nextIdx];
+      const newTab = nextTab;
       requestAnimationFrame(() => {
+        if (!isTabStillProjected(newTab)) return;
         const textarea = editorContainer?.querySelector(
           "#file-editor-textarea",
         );
@@ -1075,10 +1604,6 @@ async function closeTab(path) {
           textarea.scrollTop = newTab.scrollTop || 0;
           textarea.scrollLeft = newTab.scrollLeft || 0;
         }
-      });
-      // 更新文件树选中
-      treeContainer?.querySelectorAll(".file-tree-item").forEach((item) => {
-        item.classList.toggle("active", item.dataset.path === activeTabPath);
       });
       updateStatusBar(newTab);
     }
@@ -1095,7 +1620,9 @@ async function closeTab(path) {
  * 影响面: 纯前端 Additive，不动 closeTab；复用 renderTabs/renderEmptyEditor
  */
 async function closeAllTabs() {
-  const dirtyTabs = openTabs.filter((t) => t.isDirty);
+  const owner = filePanelOwnerChatId || activeTabOwnerChatId;
+  const closingTabs = owner ? openTabs.filter((tab) => tab.ownerChatId === owner) : [...openTabs];
+  const dirtyTabs = closingTabs.filter((t) => t.isDirty);
   if (dirtyTabs.length > 0) {
     const names = dirtyTabs.map((t) => t.path.split("/").pop()).join("、");
     if (
@@ -1105,117 +1632,343 @@ async function closeAllTabs() {
     )
       return;
   }
-  openTabs = [];
+  if (filePanelOwnerChatId !== owner) return;
+  openTabs = owner ? openTabs.filter((tab) => tab.ownerChatId !== owner) : [];
+  if (owner) activeTabPathByOwner.delete(owner);
+  else activeTabPathByOwner.clear();
   activeTabPath = null;
+  activeTabOwnerChatId = null;
   renderTabs();
   renderEmptyEditor();
-  // 清除文件树选中态
-  treeContainer
-    ?.querySelectorAll(".file-tree-item.active")
-    .forEach((item) => item.classList.remove("active"));
 }
 
-/**
- * 更新 IDE 状态栏
- * @param {TabState} tab
- */
-function updateStatusBar(tab) {
+function ensureEditorBreadcrumb() {
+  let breadcrumb = document.getElementById("ide-editor-breadcrumb");
+  if (breadcrumb || !editorContainer?.parentElement) return breadcrumb;
+  breadcrumb = document.createElement("nav");
+  breadcrumb.id = "ide-editor-breadcrumb";
+  breadcrumb.className = "ide-editor-breadcrumb";
+  breadcrumb.setAttribute("aria-label", "当前文件路径");
+  breadcrumb.hidden = true;
+  editorContainer.parentElement.insertBefore(breadcrumb, editorContainer);
+  return breadcrumb;
+}
+
+function updateEditorBreadcrumb(tab) {
+  const breadcrumb = ensureEditorBreadcrumb();
+  if (!breadcrumb) return;
+  if (!tab) {
+    breadcrumb.hidden = true;
+    breadcrumb.replaceChildren();
+    breadcrumb.removeAttribute("title");
+    return;
+  }
+
+  const fileName = tab.path.split(/[\\/]/).pop() || tab.path;
+  const fileType = tab.fileType || getFileType(fileName);
+  const segments = getPathBreadcrumbSegments(tab.path);
+  breadcrumb.hidden = false;
+  breadcrumb.title = tab.path;
+  breadcrumb.innerHTML = `<span class="ide-editor-breadcrumb-icon" aria-hidden="true">${getFileTypeIconMarkup(fileName, { fileType })}</span>${segments
+    .map((segment, index) => {
+      const current = index === segments.length - 1;
+      return `${index ? '<span class="ide-editor-breadcrumb-separator" aria-hidden="true">›</span>' : ""}<span class="ide-editor-breadcrumb-segment${current ? " current" : ""}" title="${escapeAttr(segment.path)}"${current ? ' aria-current="page"' : ""}>${escapeHtml(segment.label)}</span>`;
+    })
+    .join("")}<span class="ide-editor-breadcrumb-type">${escapeHtml(fileType.languageLabel)}</span>${fileType.readonly === true ? '<span class="file-state-badge file-state-readonly" title="只读预览">RO</span>' : ""}`;
+  requestAnimationFrame(() => {
+    breadcrumb.scrollLeft = breadcrumb.scrollWidth;
+  });
+}
+
+function ensureStatusItem(id) {
+  let item = document.getElementById(id);
+  if (item) return item;
+  const statusLang = document.getElementById("ide-status-lang");
+  const group = statusLang?.parentElement || document.getElementById("ide-statusbar");
+  if (!group) return null;
+  item = document.createElement("span");
+  item.id = id;
+  item.className = "ide-status-item";
+  group.appendChild(item);
+  return item;
+}
+
+/** 当前活动 TabState 到全局状态栏与动态 breadcrumb 的唯一投影。 */
+function updateStatusBar(tab, selectionStart = tab?.selectionStart || 0, visibleContent = tab?.content || "") {
+  const projection = createEditorTabProjection(tab, selectionStart, visibleContent);
   const statusFile = document.getElementById("ide-status-file");
   const statusLang = document.getElementById("ide-status-lang");
-  if (statusFile) statusFile.textContent = tab ? tab.path : "就绪";
-  if (statusLang && tab) {
-    const ext = tab.path.split(".").pop()?.toUpperCase() || "";
-    statusLang.textContent = ext;
+  const statusEncoding = document.getElementById("ide-status-encoding");
+  const statusEol = ensureStatusItem("ide-status-eol");
+  const statusIndent = ensureStatusItem("ide-status-indent");
+  const statusPosition = ensureStatusItem("ide-status-position");
+  const statusState = ensureStatusItem("ide-status-state");
+  if (statusFile) {
+    statusFile.textContent = projection.path || "就绪";
+    statusFile.title = projection.path;
   }
+  if (statusLang) statusLang.textContent = projection.language;
+  if (statusEncoding) statusEncoding.textContent = tab ? projection.encoding : "";
+  if (statusEol) statusEol.textContent = projection.eol;
+  if (statusIndent) statusIndent.textContent = projection.indent;
+  if (statusPosition) statusPosition.textContent = tab ? `行 ${projection.line}, 列 ${projection.column}` : "";
+  if (statusState) {
+    statusState.textContent = projection.stateLabel;
+    statusState.title = projection.stateTitle;
+    statusState.dataset.state = projection.state;
+  }
+  updateEditorBreadcrumb(tab);
+  return projection;
+}
+
+function projectActiveEditorStatus(tab) {
+  if (!tab || getActiveTab() !== tab) return null;
+  const textarea = editorContainer?.querySelector("#file-editor-textarea");
+  const projection = updateStatusBar(
+    tab,
+    textarea?.selectionStart ?? tab.selectionStart,
+    textarea?.value ?? tab.content,
+  );
+  const cursor = editorContainer?.querySelector("#editor-cursor-pos");
+  if (cursor && textarea) cursor.textContent = `行 ${projection.line}, 列 ${projection.column}`;
+  const stateBadge = editorContainer?.querySelector("#editor-dirty-indicator");
+  if (stateBadge) {
+    stateBadge.textContent = projection.stateLabel;
+    stateBadge.title = projection.stateTitle;
+    stateBadge.dataset.state = projection.state;
+    stateBadge.className = "file-editor-state-badge";
+  }
+  const localEncoding = editorContainer?.querySelector("#editor-status-encoding");
+  const localEol = editorContainer?.querySelector("#editor-status-eol");
+  const localIndent = editorContainer?.querySelector("#editor-status-indent");
+  const localLanguage = editorContainer?.querySelector("#editor-status-language");
+  if (localEncoding) localEncoding.textContent = projection.encoding;
+  if (localEol) localEol.textContent = projection.eol;
+  if (localIndent) localIndent.textContent = projection.indent;
+  if (localLanguage) localLanguage.textContent = projection.language;
+  const localStatus = editorContainer?.querySelector(".file-editor-statusbar");
+  if (localStatus) localStatus.dataset.state = projection.state;
+  return projection;
 }
 
 // ============================================================
 // 文件编辑器
 // ============================================================
 
-async function openFileInEditor(path) {
+function assertPreviewReadEnvelope(response, action) {
+  const payload = response?._result;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`${action} 响应协议错误: 缺少有效 _result`);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "error")) {
+    throw new Error(payload.error || `${action} 返回未知业务错误`);
+  }
+  if (typeof payload.size !== "number" || !Number.isSafeInteger(payload.size) || payload.size < 0) {
+    throw new Error(`${action} 响应协议错误: size 无效`);
+  }
+  if (payload.warnings !== undefined && (
+    !Array.isArray(payload.warnings) || payload.warnings.some((warning) => typeof warning !== "string")
+  )) {
+    throw new Error(`${action} 响应协议错误: warnings 无效`);
+  }
+  return Object.freeze({
+    payload,
+    warnings: payload.warnings ? [...payload.warnings] : [],
+  });
+}
+
+async function loadFileTab(path, originChatId = null, { reuseExisting = true } = {}) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  // 任务B多类型预览：按种类分读取路——媒体（图/音/视频）走后端 readFileBase64 字节路（data URL），
+  //   其余（含 svg：文本可编辑，看图由文本转 data URL 两全）走原 readFile 文本路。
+  let _fileType = getFileType(path.split("/").pop() || "");
+
+  let _content = "";
+  let _dataUrl = null;
+  let _mediaSize = 0;
+  let _encoding = "UTF-8";
+  let _warnings = [];
+  if (_fileType.readMode === "base64") {
+    const result = await setFilesData({ _action: "readFileBase64", path }, { originChatId });
+    const { payload, warnings } = assertPreviewReadEnvelope(result, "readFileBase64");
+    if (typeof payload.base64 !== "string" || typeof payload.mime !== "string" || payload.mime.length === 0) {
+      throw new Error("readFileBase64 响应协议错误: base64/mime 缺失");
+    }
+    _dataUrl = `data:${payload.mime};base64,${payload.base64}`;
+    _mediaSize = payload.size;
+    _warnings = warnings;
+  } else if (_fileType.readMode === "extract") {
+    // 任务C office：提取文本作只读预览内容（xlsx=CSV+公式视图 / docx=正文 / pptx=逐页文本）
+    const result = await setFilesData({ _action: "readFileExtract", path }, { originChatId });
+    const { payload, warnings } = assertPreviewReadEnvelope(result, "readFileExtract");
+    if (typeof payload.text !== "string") {
+      throw new Error("readFileExtract 响应协议错误: text 缺失");
+    }
+    _content = payload.text;
+    _mediaSize = payload.size;
+    _warnings = warnings;
+  } else if (_fileType.readMode === "auto") {
+    const result = await setFilesData({ _action: "readFileAuto", path }, { originChatId });
+    const { payload, warnings } = assertPreviewReadEnvelope(result, "readFileAuto");
+    _fileType = getDetectedFileType(payload.kind);
+    _warnings = warnings;
+    if (payload.kind === "text") {
+      if (typeof payload.content !== "string") {
+        throw new Error("readFileAuto 响应协议错误: text content 缺失");
+      }
+      if (payload.encoding !== "UTF-8") {
+        throw new Error("readFileAuto 响应协议错误: encoding 不受支持");
+      }
+      _content = payload.content;
+      _encoding = payload.encoding;
+    } else if (payload.kind === "binary") {
+      if (typeof payload.base64 !== "string" || typeof payload.mime !== "string" || payload.mime.length === 0) {
+        throw new Error("readFileAuto 响应协议错误: binary base64/mime 缺失");
+      }
+      _dataUrl = `data:${payload.mime};base64,${payload.base64}`;
+    }
+    _mediaSize = payload.size;
+  } else {
+    const result = await setFilesData({ _action: "readFile", path }, { originChatId });
+    const { payload, warnings } = assertPreviewReadEnvelope(result, "readFile");
+    if (typeof payload.content !== "string") {
+      throw new Error("readFile 响应协议错误: content 缺失");
+    }
+    _warnings = warnings;
+    _content = payload.content;
+    _mediaSize = payload.size;
+  }
+
+  // 防御并发外部入口：若读取期间已有同路径标签，复用现有对象，不重复建 tab。
+  const existingTab = getTab(path, originChatId);
+  if (reuseExisting && existingTab) return Object.freeze({ tab: existingTab, warnings: _warnings });
+
+  const newTab = {
+    path,
+    ownerChatId: originChatId,
+    content: _content,
+    originalContent: _content,
+    isDirty: false,
+    scrollTop: 0,
+    scrollLeft: 0,
+    selectionStart: 0,
+    selectionEnd: 0,
+    // 任务B：种类 + 当前视图模式 + 媒体数据（预览渲染用；不参与保存链——保存只走文本路 content）
+    fileType: _fileType,
+    kind: _fileType.previewKind,
+    encoding: _encoding,
+    lineEnding: detectLineEnding(_content),
+    saveState: "saved",
+    lastError: "",
+    viewMode: _fileType.editable && _fileType.previewKind === "code" ? "edit" : "preview",
+    dataUrl: _dataUrl,
+    mediaSize: _mediaSize,
+  };
+  return Object.freeze({ tab: newTab, warnings: _warnings });
+}
+
+/**
+ * 两阶段刷新：读取与警告确认都只产生候选快照；原标签直到最后一次意图校验通过才原位提交。
+ * 读取失败、用户拒绝、切窗/切标签、标签被关闭或读取期间又有编辑时，原标签保持不变。
+ */
+async function reloadFileTab(tab) {
+  if (!tab) return false;
+  const path = tab.path;
+  const ownerChatId = tab.ownerChatId;
+
+  if (tab.isDirty && !await beiluConfirm("有未保存的更改，确定刷新吗？")) return false;
+  if (filePanelOwnerChatId !== ownerChatId || getActiveTab() !== tab) return false;
+
+  const intent = fileOpenCoordinator.beginIntent(path);
+  const acceptedState = Object.freeze({
+    content: tab.content,
+    originalContent: tab.originalContent,
+    isDirty: tab.isDirty,
+  });
+  const requestKey = `${ownerChatId}\0${path}\0reload`;
+  let loaded;
+  try {
+    loaded = await fileOpenCoordinator.getOrCreate(
+      requestKey,
+      () => loadFileTab(path, ownerChatId, { reuseExisting: false }),
+    );
+  } catch (err) {
+    if (fileOpenCoordinator.isLatest(intent)
+        && filePanelOwnerChatId === ownerChatId
+        && getTab(path, ownerChatId) === tab) {
+      showFileActionToast(ownerChatId, "重新加载失败: " + (err?.message || err), "error");
+    }
+    return false;
+  }
+
+  if (!fileOpenCoordinator.isLatest(intent)) return false;
+  if (loaded.warnings.length > 0) {
+    const ok = await beiluConfirm(`⚠ ${loaded.warnings.join("；")}\n\n仍要重新加载此文件吗？`);
+    if (!ok || !fileOpenCoordinator.isLatest(intent)) return false;
+  }
+
+  // 等待期间的任何界面归属、标签身份或编辑状态变化都使本次提交失效。
+  if (filePanelOwnerChatId !== ownerChatId
+      || getActiveTab() !== tab
+      || getTab(path, ownerChatId) !== tab
+      || tab.content !== acceptedState.content
+      || tab.originalContent !== acceptedState.originalContent
+      || tab.isDirty !== acceptedState.isDirty) return false;
+
+  Object.assign(tab, loaded.tab);
+  activeTabPathByOwner.set(ownerChatId, path);
+  renderTabs();
+  renderEditor();
+  showFileActionToast(ownerChatId, "文件已重新加载", "info");
+  return true;
+}
+
+async function openFileInEditor(path, originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  const intent = fileOpenCoordinator.beginIntent(path);
+
   // 如果已有此标签，直接切换
-  if (getTab(path)) {
-    switchToTab(path);
-    return;
+  const existingTab = getTab(path, originChatId);
+  if (existingTab) {
+    switchToTab(path, originChatId);
+    return existingTab;
   }
   diag.debug("openFileInEditor:", path);
 
+  const requestKey = `${originChatId}\0${path}`;
+  const request = fileOpenCoordinator.getOrCreate(requestKey, () => loadFileTab(path, originChatId));
+  let loaded;
   try {
-    // 任务B多类型预览：按种类分读取路——媒体（图/音/视频）走后端 readFileBase64 字节路（data URL），
-    //   其余（含 svg：文本可编辑，看图由文本转 data URL 两全）走原 readFile 文本路。
-    const _cls = classifyFile(path.split("/").pop() || "");
-    const _isMedia = _cls.kind === "image" || _cls.kind === "audio" || _cls.kind === "video" || _cls.kind === "pdf";
-
-    let _content = "";
-    let _dataUrl = null;
-    let _mediaSize = 0;
-    if (_isMedia) {
-      const result = await setFilesData({ _action: "readFileBase64", path });
-      if (result?._result?.error) {
-        showToast("读取失败: " + result._result.error, "error");
-        return;
-      }
-      _dataUrl = `data:${result._result.mime};base64,${result._result.base64}`;
-      _mediaSize = result._result.size || 0;
-    } else if (_cls.kind === "doc") {
-      // 任务C office：提取文本作只读预览内容（xlsx=CSV+公式视图 / docx=正文 / pptx=逐页文本）
-      const result = await setFilesData({ _action: "readFileExtract", path });
-      if (result?._result?.error) {
-        showToast("读取失败: " + result._result.error, "error");
-        return;
-      }
-      _content = result._result.text || "";
-    } else {
-      const result = await setFilesData({ _action: "readFile", path });
-      if (result?._result?.error) {
-        showToast("读取失败: " + result._result.error, "error");
-        return;
-      }
-      // [0723 问题1.1] 文件名含敏感词→后端放行但带 warnings,前端弹 confirm 提醒(不禁止打开,002原话「给个提醒」)
-      const _warns = result._result.warnings;
-      if (Array.isArray(_warns) && _warns.length > 0) {
-        const _ok = await beiluConfirm(`⚠ ${_warns.join("；")}\n\n仍要打开此文件吗？`);
-        if (!_ok) return;
-      }
-      _content = result._result.content || "";
-    }
-
-    // 保存当前标签状态
-    saveActiveTabState();
-
-    // 创建新标签
-    const newTab = {
-      path,
-      content: _content,
-      isDirty: false,
-      scrollTop: 0,
-      scrollLeft: 0,
-      selectionStart: 0,
-      selectionEnd: 0,
-      // 任务B：种类 + 当前视图模式 + 媒体数据（预览渲染用；不参与保存链——保存只走文本路 content）
-      kind: _cls.kind,
-      viewMode: _cls.defaultMode,
-      dataUrl: _dataUrl,
-      mediaSize: _mediaSize,
-    };
-    openTabs.push(newTab);
-    activeTabPath = path;
-
-    // 渲染
-    renderTabs();
-    renderEditor();
-
-    // 更新文件树选中状态
-    treeContainer?.querySelectorAll(".file-tree-item").forEach((item) => {
-      item.classList.toggle("active", item.dataset.path === path);
-    });
-
-    updateStatusBar(newTab);
+    loaded = await request;
   } catch (err) {
     diag.warn("openFileInEditor 失败:", path, err?.message);
-    showToast("打开文件失败: " + err.message, "error");
+    if (fileOpenCoordinator.isLatest(intent)) {
+      showToast("打开文件失败: " + err.message, "error");
+    }
+    return null;
   }
+
+  // 警告属于一次用户打开意图，不属于按 path 共享的磁盘读取。只有精确的最新 intent
+  // 可以弹确认；同路径重复点击也不能让旧 intent 借“路径相同”穿过门。
+  if (loaded.warnings.length > 0) {
+    if (!fileOpenCoordinator.isLatest(intent)) return null;
+    const ok = await beiluConfirm(`⚠ ${loaded.warnings.join("；")}\n\n仍要打开此文件吗？`);
+    if (!fileOpenCoordinator.isLatest(intent) || !ok) return null;
+  }
+
+  let tab = getTab(path, originChatId);
+  if (!tab) {
+    tab = loaded.tab;
+    openTabs.push(tab);
+  }
+
+  if (fileOpenCoordinator.isLatest(intent) && filePanelOwnerChatId === originChatId) {
+    switchToTab(path, originChatId);
+  } else {
+    // 旧慢响应只把已读取内容加入标签栏，不得覆盖用户后来选择的活动标签。
+    renderTabs();
+  }
+  return tab;
 }
 
 function renderEditor() {
@@ -1227,42 +1980,43 @@ function renderEditor() {
   }
 
   const fileName = tab.path.split("/").pop() || "";
-  const ext = fileName.split(".").pop()?.toLowerCase() || "";
 
-  // 任务B多类型预览：旧 tab（本次改动前打开的）无 kind 字段 → 补分类，行为向后兼容
-  if (!tab.kind) {
-    const _c = classifyFile(fileName);
-    tab.kind = _c.kind;
-    if (!tab.viewMode) tab.viewMode = _c.defaultMode;
+  // 旧 tab 对象没有 fileType 时也从同一注册表补齐，不在渲染层再分类。
+  if (!tab.fileType) {
+    tab.fileType = getFileType(fileName);
+    tab.kind = tab.fileType.previewKind;
+    if (!tab.viewMode) tab.viewMode = tab.fileType.editable && tab.kind === "code" ? "edit" : "preview";
   }
-  // 可编辑=文本路种类（媒体字节路不可编辑；svg 走文本路可编辑）；可预览=binary 之外全部（code=高亮预览）
-  const canEdit = tab.kind === "code" || tab.kind === "html" || tab.kind === "md" || tab.kind === "svg";
+  if (typeof tab.originalContent !== "string") tab.originalContent = tab.content;
+  const canEdit = tab.fileType.editable === true;
   const mode = canEdit ? (tab.viewMode === "preview" ? "preview" : "edit") : "preview";
   tab.viewMode = mode;
+  const statusProjection = createEditorTabProjection(tab);
+  projectFileToolbarState(tab, isTabSaveInFlight(tab));
 
   // 模式切换钮：仅同时可编辑+可预览的种类显示（html/md/svg/code）；预览钮文案按种类
   const _prevLabel = tab.kind === "html" ? "▶ 运行" : '<i data-ic="eye"></i> 预览';
   const _modebar = (canEdit && tab.kind !== "binary")
-    ? `<div class="flex items-center justify-end gap-1 px-2 py-0.5 bg-base-300/20 border-b border-base-300/40 shrink-0">
-				<button id="file-mode-preview" class="btn btn-xs ${mode === "preview" ? "btn-warning" : "btn-ghost"}" title="预览">${_prevLabel}</button>
-				<button id="file-mode-edit" class="btn btn-xs ${mode === "edit" ? "btn-warning" : "btn-ghost"}" title="编辑"><i data-ic="edit"></i> 编辑</button>
+    ? `<div class="file-editor-modebar flex items-center justify-end gap-1 px-2 shrink-0">
+				<button id="file-mode-preview" class="btn btn-xs ${mode === "preview" ? "btn-warning" : "btn-ghost"}" title="预览" aria-pressed="${mode === "preview"}">${_prevLabel}</button>
+				<button id="file-mode-edit" class="btn btn-xs ${mode === "edit" ? "btn-warning" : "btn-ghost"}" title="编辑" aria-pressed="${mode === "edit"}"><i data-ic="edit"></i> 编辑</button>
 			</div>`
     : "";
 
   const _isBinary = tab.kind === "binary";
   editorContainer.innerHTML = `
-		<div class="flex flex-col h-full">
+		<div class="file-editor-workspace flex flex-col h-full" data-file-kind="${tab.fileType.kind}" data-file-readonly="${tab.fileType.readonly}" role="region" aria-label="${escapeAttr(fileName)} 文件工作区">
 			${_modebar}
 			<!-- 编辑器内容 -->
 			<div class="flex-1 overflow-auto relative">
 				${
           _isBinary
             ? `
-				<div class="flex items-center justify-center h-full text-base-content/50">
+				<div class="file-editor-binary flex items-center justify-center h-full" role="status">
 					<div class="text-center">
-						<div class="text-4xl mb-3">${getFileIcon(fileName)}</div>
-						<p class="text-sm">二进制或不可编辑文件</p>
-						<p class="text-xs mt-1">${escapeHtml(fileName)}</p>
+						<div class="file-editor-binary-icon mb-3">${getFileTypeIconMarkup(fileName, { fileType: tab.fileType })}</div>
+						<p class="file-editor-binary-title">${escapeHtml(tab.fileType.languageLabel)}：只读预览</p>
+						<p class="file-editor-binary-name mt-1">${escapeHtml(fileName)}</p>
 					</div>
 				</div>
 				`
@@ -1270,25 +2024,29 @@ function renderEditor() {
               ? `
 				<div class="flex h-full">
 					<!-- 行号 -->
-					<div id="editor-line-numbers" class="text-right pr-2 pl-2 py-2 text-[11px] font-mono text-base-content/25 bg-base-300/20 select-none shrink-0 overflow-hidden"></div>
+					<div id="editor-line-numbers" class="text-right pr-2 pl-2 py-2 select-none shrink-0 overflow-hidden"></div>
 					<!-- 编辑区 -->
 					<textarea id="file-editor-textarea"
-						class="flex-1 p-2 font-mono text-xs bg-transparent border-none resize-none focus:outline-none leading-[1.4em]"
+						class="flex-1 p-2 resize-none"
+						aria-label="编辑 ${escapeAttr(fileName)}"
 						spellcheck="false"
 						wrap="off">${escapeHtml(tab.content)}</textarea>
 				</div>
 				`
-              : `<div id="file-preview-pane" class="h-full overflow-auto"><p class="text-xs text-base-content/40 text-center py-6">预览加载中...</p></div>`
+              : `<div id="file-preview-pane" class="file-preview-pane h-full overflow-auto" role="region" aria-label="${escapeAttr(fileName)} 只读预览"><p class="file-preview-loading text-xs text-center py-6" role="status">预览加载中...</p></div>`
         }
 			</div>
 			<!-- 状态栏 -->
-			<div class="flex items-center justify-between px-3 py-1 bg-base-300/30 text-[10px] text-base-content/50 border-t border-base-300/50 shrink-0">
-				<div class="flex items-center gap-2">
-					<span id="editor-dirty-indicator" class="${tab.isDirty ? "text-warning" : ""}">${tab.isDirty ? "● 未保存" : "✓ 已保存"}</span>
-					<span id="editor-cursor-pos">${mode === "edit" ? "行 1, 列 1" : "预览模式"}</span>
+			<div class="file-editor-statusbar flex items-center justify-between px-3 shrink-0" data-state="${statusProjection.state}">
+				<div class="file-editor-status-group">
+					<span id="editor-dirty-indicator" class="file-editor-state-badge" data-state="${statusProjection.state}" title="${escapeAttr(statusProjection.stateTitle)}">${escapeHtml(statusProjection.stateLabel)}</span>
+					<span id="editor-cursor-pos">${mode === "edit" ? `行 ${statusProjection.line}, 列 ${statusProjection.column}` : "预览模式"}</span>
 				</div>
-				<div class="flex items-center gap-2">
-					<span>${ext.toUpperCase() || "TEXT"}</span>
+				<div class="file-editor-status-group file-editor-status-meta">
+					<span id="editor-status-encoding">${escapeHtml(statusProjection.encoding)}</span>
+					<span id="editor-status-eol">${escapeHtml(statusProjection.eol)}</span>
+					<span id="editor-status-indent">${escapeHtml(statusProjection.indent)}</span>
+					<span id="editor-status-language">${escapeHtml(statusProjection.language)}</span>
 					<span id="editor-char-count">${tab.dataUrl ? formatSize(tab.mediaSize || 0) : tab.content.length + " 字符"}</span>
 				</div>
 			</div>
@@ -1309,10 +2067,19 @@ function renderEditor() {
     tab.viewMode = "edit";
     renderEditor();
     requestAnimationFrame(() => {
+      if (!isTabStillProjected(tab) || tab.viewMode !== "edit") return;
       const _ta = editorContainer?.querySelector("#file-editor-textarea");
       if (_ta) {
         _ta.scrollTop = tab.scrollTop || 0;
         _ta.scrollLeft = tab.scrollLeft || 0;
+        _ta.selectionStart = tab.selectionStart || 0;
+        _ta.selectionEnd = tab.selectionEnd || 0;
+        updateCursorPos(
+          _ta,
+          editorContainer?.querySelector("#editor-cursor-pos"),
+          editorContainer?.querySelector("#editor-line-numbers"),
+          tab,
+        );
       }
     });
   });
@@ -1331,10 +2098,10 @@ function renderEditor() {
   const textarea = editorContainer.querySelector("#file-editor-textarea");
   const lineNumbers = editorContainer.querySelector("#editor-line-numbers");
   const cursorPos = editorContainer.querySelector("#editor-cursor-pos");
-  const dirtyIndicator = editorContainer.querySelector(
-    "#editor-dirty-indicator",
-  );
   const charCount = editorContainer.querySelector("#editor-char-count");
+
+  // DOM 已装配后再投影，保证动态 breadcrumb、全局状态栏和局部状态使用同一个 TabState。
+  projectActiveEditorStatus(tab);
 
   if (textarea && lineNumbers) {
     updateLineNumbers(textarea, lineNumbers);
@@ -1343,18 +2110,15 @@ function renderEditor() {
     let autoSaveTimer = null;
 
     textarea.addEventListener("input", () => {
-      const currentTab = getActiveTab();
-      if (currentTab) {
-        currentTab.isDirty = true;
-        currentTab.content = textarea.value;
-      }
-      if (dirtyIndicator) {
-        dirtyIndicator.textContent = "● 未保存";
-        dirtyIndicator.className = "text-warning";
-      }
+      // textarea 与创建它的 TabState 同属 renderEditor 闭包；切标签后不能重新猜 active owner。
+      tab.content = textarea.value;
+      tab.isDirty = tab.content !== tab.originalContent;
+      tab.lineEnding = detectLineEnding(tab.content, tab.lineEnding);
+      tab.saveState = tab.isDirty ? "dirty" : "saved";
+      tab.lastError = "";
       if (charCount) charCount.textContent = textarea.value.length + " 字符";
       updateLineNumbers(textarea, lineNumbers);
-      updateCursorPos(textarea, cursorPos, lineNumbers); // [0723] 输入后刷新活动行高亮(行号div已重建,重新标当前行)
+      updateCursorPos(textarea, cursorPos, lineNumbers, tab); // [0723] 输入后刷新活动行高亮(行号div已重建,重新标当前行)
       // 更新标签栏 dirty 指示
       renderTabs();
 
@@ -1362,13 +2126,8 @@ function renderEditor() {
       if (storage.get(KEYS.BEILU_IDE_AUTO_SAVE) === "true") {
         clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(async () => {
-          const tab = getActiveTab();
           if (tab && tab.isDirty) {
-            await saveCurrentFile();
-            if (dirtyIndicator && !tab.isDirty) {
-              dirtyIndicator.textContent = "✓ 已自动保存";
-              dirtyIndicator.className = "";
-            }
+            await saveTab(tab, { source: "auto" });
           }
         }, 1500);
       }
@@ -1379,10 +2138,10 @@ function renderEditor() {
     });
 
     textarea.addEventListener("click", () =>
-      updateCursorPos(textarea, cursorPos, lineNumbers),
+      updateCursorPos(textarea, cursorPos, lineNumbers, tab),
     );
     textarea.addEventListener("keyup", () =>
-      updateCursorPos(textarea, cursorPos, lineNumbers),
+      updateCursorPos(textarea, cursorPos, lineNumbers, tab),
     );
 
     // Ctrl+S 保存
@@ -1424,10 +2183,8 @@ function renderEditor() {
     });
   }
 
-  // 启用顶部工具栏按钮
-  const saveBtn = document.getElementById("file-save-btn");
+  // Reload 只取决于是否存在活动标签；保存能力由 projectFileToolbarState 单源投影。
   const reloadBtn = document.getElementById("file-reload-btn");
-  if (saveBtn) saveBtn.disabled = false;
   if (reloadBtn) reloadBtn.disabled = false;
 }
 
@@ -1456,14 +2213,14 @@ async function _renderPreviewInto(pane, tab) {
     }
     case "md": {
       const _html = await renderMarkdownAsString(tab.content);
-      pane.innerHTML = `<div class="p-4 text-sm file-md-preview">${_html}</div>`;
+      pane.innerHTML = `<div class="p-4 file-md-preview file-md-preview-content">${_html}</div>`;
       break;
     }
     case "code": {
       const _ext = (tab.path.split(".").pop() || "").toLowerCase();
       const _fenced = "```" + _ext + "\n" + tab.content + "\n```";
       const _html = await renderMarkdownAsString(_fenced);
-      pane.innerHTML = `<div class="p-2 text-xs file-md-preview">${_html}</div>`;
+      pane.innerHTML = `<div class="p-2 file-md-preview file-md-preview-code">${_html}</div>`;
       break;
     }
     case "svg": {
@@ -1472,7 +2229,7 @@ async function _renderPreviewInto(pane, tab) {
       break;
     }
     case "image":
-      pane.innerHTML = `<div class="flex items-center justify-center h-full p-4"><img src="${tab.dataUrl}" class="max-w-full max-h-full" style="object-fit:contain" alt="${escapeAttr(tab.path)}" /></div>`;
+      pane.innerHTML = `<div class="flex items-center justify-center h-full p-4"><img src="${tab.dataUrl}" class="file-preview-media max-w-full max-h-full" alt="${escapeAttr(tab.path)}" /></div>`;
       break;
     case "audio":
       pane.innerHTML = `<div class="flex items-center justify-center h-full p-4"><audio controls src="${tab.dataUrl}"></audio></div>`;
@@ -1482,7 +2239,7 @@ async function _renderPreviewInto(pane, tab) {
       break;
     case "doc":
       // office 提取文本只读预览（等宽保 CSV/幻灯片文本列对齐）
-      pane.innerHTML = `<pre class="p-3 text-xs font-mono whitespace-pre-wrap">${escapeHtml(tab.content)}</pre>`;
+      pane.innerHTML = `<pre class="file-doc-preview p-3 whitespace-pre-wrap">${escapeHtml(tab.content)}</pre>`;
       break;
     case "pdf": {
       pane.innerHTML = "";
@@ -1494,7 +2251,7 @@ async function _renderPreviewInto(pane, tab) {
       break;
     }
     default:
-      pane.innerHTML = `<p class="text-xs text-base-content/40 text-center py-6">该类型暂无预览器</p>`;
+      pane.innerHTML = `<p class="file-preview-unavailable text-center py-6">该类型暂无预览器</p>`;
   }
 }
 
@@ -1517,12 +2274,17 @@ function updateLineNumbers(textarea, lineNumbers) {
 
 // [0723 代码美化] 光标位置 + 活动行高亮：updateCursorPos 兼职触发活动行高亮(光标所在行号 div 加 .ide-ln-active)。
 //   why: 光标移动(click/keyup/input)时同步高亮当前行,VSCode 同款视觉。lineNumbers 参数可选(不传则跳过高亮)。
-function updateCursorPos(textarea, cursorPos, lineNumbers) {
+function updateCursorPos(textarea, cursorPos, lineNumbers, tab) {
   if (!textarea || !cursorPos) return;
   const value = textarea.value.substring(0, textarea.selectionStart);
   const line = value.split("\n").length;
   const col = value.split("\n").pop().length + 1;
   cursorPos.textContent = `行 ${line}, 列 ${col}`;
+  if (tab) {
+    tab.selectionStart = textarea.selectionStart;
+    tab.selectionEnd = textarea.selectionEnd;
+    projectActiveEditorStatus(tab);
+  }
   // 活动行高亮：清旧 + 标当前行
   if (lineNumbers) {
     const prev = lineNumbers.querySelector(".ide-ln-active");
@@ -1541,17 +2303,7 @@ function bindEditorEvents() {
   reloadBtn?.addEventListener("click", async () => {
     try {
       const tab = getActiveTab();
-      if (tab) {
-        if (tab.isDirty && !await beiluConfirm("有未保存的更改，确定刷新吗？")) return;
-        // 强制重新加载：删除标签后重新打开
-        const path = tab.path;
-        const idx = openTabs.indexOf(tab);
-        openTabs.splice(idx, 1);
-        activeTabPath = null;
-        // 重新打开（会走网络请求）
-        await openFileInEditor(path);
-        showToast("文件已重新加载", "info");
-      }
+      if (tab) await reloadFileTab(tab);
     } catch (err) {
       console.error('[fileExplorer]', err);
       window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1561,50 +2313,89 @@ function bindEditorEvents() {
   // 全局 Ctrl+S 拦截（当焦点不在 textarea 时也能保存）
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-      if (activeTabPath && getActiveTab()) {
-        e.preventDefault();
-        saveCurrentFile();
-      }
+      // textarea 的局部 handler 已处理并 preventDefault；避免同一次按键冒泡后重复进入保存。
+      if (e.defaultPrevented) return;
+      // 只在文件主模式可见时接管浏览器保存；即使无 tab 也进入同一 capability reason。
+      const filesPanel = document.getElementById("center-tab-files");
+      if (!filesPanel || filesPanel.hidden || filesPanel.classList.contains("hidden") || filesPanel.style.display === "none") return;
+      e.preventDefault();
+      saveCurrentFile();
     }
   });
 }
 
 async function saveCurrentFile() {
   const tab = getActiveTab();
-  if (!tab) return;
-  // 任务B/C卫：非文本编辑 tab 禁走文本保存——否则 Ctrl+S 会把图片/音视频/office 原文件写坏
-  //   （media=content 恒空写成空文件；doc=content 是提取文本非源格式，写回即毁 xlsx/docx/pptx）
-  if (tab.kind === "image" || tab.kind === "audio" || tab.kind === "video" || tab.kind === "binary" || tab.kind === "doc" || tab.kind === "pdf") return;
-
-  // 先同步 textarea 内容到 tab
+  // 手动保存的唯一额外职责：把当前可见 textarea 同步回当前 tab，再委托显式 owner。
   const textarea = editorContainer?.querySelector("#file-editor-textarea");
-  if (textarea) {
-    tab.content = textarea.value;
+  // textarea 会把 CRLF 规范化为 LF；没有发生 input 时必须保留 TabState 原文，
+  // 否则一次无改动 Ctrl+S 就会静默改写整份文件的换行符。
+  if (tab && textarea && tab.isDirty) tab.content = textarea.value;
+  return saveTab(tab);
+}
+
+/**
+ * 保存一个显式 TabState。手动保存和自动保存必须共用本 owner，避免异步到期后重猜活动标签。
+ * @param {TabState|undefined|null} tab
+ * @param {{source?: "manual"|"auto"}} options
+ */
+async function saveTab(tab, { source = "manual" } = {}) {
+  const saveCapability = getFileSaveCapability(tab, isTabSaveInFlight(tab));
+  if (!saveCapability.canSave) {
+    // 同一标签在真实写入期间又产生了新内容：记录一次后继保存，当前写入成功后再串行提交
+    // 最新 TabState。Set/Map 按路径去重，持续输入不会堆积无界请求。
+    if (saveCapability.busy && tab?.path && tab.isDirty) {
+      const saveKey = tabIdentity(tab.path, tab.ownerChatId);
+      const queued = queuedSaveByPath.get(saveKey);
+      queuedSaveByPath.set(saveKey, {
+        tab,
+        source: source === "manual" ? "manual" : (queued?.source || "auto"),
+      });
+      tab.saveState = "saving";
+      projectActiveEditorStatus(tab);
+      if (source === "manual") showToast("当前写入完成后将继续保存最新内容", "info");
+      return;
+    }
+    // 只读/二进制/未知类型在请求前明确拒绝；toast 与菜单 data reason 同源。
+    showToast(saveCapability.reason, "warning");
+    return;
   }
 
+  const saveKey = tabIdentity(tab.path, tab.ownerChatId);
+  saveInFlightPaths.add(saveKey);
+  tab.saveState = "saving";
+  tab.lastError = "";
+  // 后台可能保存非活动 tab；UI 始终只投影此刻的活动标签。
+  projectFileToolbarState(getActiveTab(), isTabSaveInFlight(getActiveTab()));
+  projectActiveEditorStatus(tab);
+  let writeSucceeded = false;
   try {
-    diag.debug("saveCurrentFile:", tab.path, "len:", tab.content?.length ?? 0);
-    await setFilesData({
-      _action: "writeFile",
-      path: tab.path,
-      content: tab.content,
-    });
-    tab.isDirty = false;
+    diag.debug("saveTab:", tab.path, "len:", tab.content?.length ?? 0);
+    await persistTabContent(tab, setFilesData);
+    writeSucceeded = true;
 
-    const dirtyIndicator = editorContainer?.querySelector(
-      "#editor-dirty-indicator",
-    );
-    if (dirtyIndicator) {
-      dirtyIndicator.textContent = "✓ 已保存";
-      dirtyIndicator.className = "";
-    }
-    // 更新标签栏（移除 dirty 指示）
+    tab.saveState = tab.isDirty ? "dirty" : source === "auto" ? "auto-saved" : "saved";
+    // 只有后端 success:true 后才更新保存基线；保存期间的新输入继续显示 dirty。
     renderTabs();
-    showToast("文件已保存", "success");
+    projectActiveEditorStatus(tab);
+    showFileActionToast(tab.ownerChatId, tab.isDirty ? "已保存请求时的内容，仍有新更改" : "文件已保存", tab.isDirty ? "warning" : "success");
   } catch (err) {
-    wbDetect("ide", "saveCurrentFile", false, err?.message);
-    diag.warn("saveCurrentFile 失败:", tab.path, err?.message);
-    showToast("保存失败: " + err.message, "error");
+    tab.saveState = "error";
+    tab.lastError = err?.message || String(err);
+    projectActiveEditorStatus(tab);
+    wbDetect("ide", "saveTab", false, err?.message);
+    diag.warn("saveTab 失败:", tab.path, err?.message);
+    showFileActionToast(tab.ownerChatId, "保存失败: " + err.message, "error");
+  } finally {
+    saveInFlightPaths.delete(saveKey);
+    const queued = queuedSaveByPath.get(saveKey);
+    queuedSaveByPath.delete(saveKey);
+    // 保存期间可能切换标签；结束时必须读取当前活动标签，不能恢复旧 tab 的能力。
+    projectFileToolbarState(getActiveTab(), isTabSaveInFlight(getActiveTab()));
+    projectActiveEditorStatus(getActiveTab());
+    if (writeSucceeded && queued && openTabs.includes(queued.tab) && queued.tab.isDirty) {
+      queueMicrotask(() => { void saveTab(queued.tab, { source: queued.source }); });
+    }
   }
 }
 
@@ -1613,13 +2404,14 @@ async function saveCurrentFile() {
 // ============================================================
 
 function showFileContextMenu(path, isDir, event) {
+  const menuOwnerChatId = freezeFileActionOriginChatId();
+  const menuRootPath = rootPath;
   // 移除已有菜单
   document.querySelectorAll(".file-context-menu").forEach((m) => m.remove());
 
   const menu = document.createElement("div");
-  menu.className =
-    "file-context-menu fixed bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 text-xs min-w-[140px]";
-  menu.style.zIndex = "var(--z-popup)";
+  menu.className = "file-context-menu";
+  menu.setAttribute("role", "menu");
   console.log(
     "[fileExplorer] 创建右键菜单:",
     path,
@@ -1642,7 +2434,7 @@ function showFileContextMenu(path, isDir, event) {
   items.push({ label: "—", action: "divider" });
   items.push({ label: '<i data-ic="clipboard"></i> 复制路径', action: "copyPath" });
   // D4（凛倾 06-16「注入的话是直接复制路径到对话框」）：右键补「插入路径到对话框」，
-  //   加选项不替换剪贴板功能。插入格式=超链接式 `[📄名](路径) `（范式源 skillPicker 已 0723 随说明书库删，此处为现存唯一实现），
+  //   加选项不替换剪贴板功能。插入格式=超链接式 `[文件:名](路径) `，
   //   插入 #message-input 光标处让 AI 据此读整份文件（file:isDir 才有意义，仅非目录显示）。
   if (!isDir) items.push({ label: '<i data-ic="clipboard"></i> 插入路径到对话框', action: "insertPath" });
   items.push({ label: '<i data-ic="edit"></i> 重命名', action: "rename" });
@@ -1657,7 +2449,9 @@ function showFileContextMenu(path, isDir, event) {
       continue;
     }
     const btn = document.createElement("button");
-    btn.className = `block w-full text-left px-3 py-1 hover:bg-base-300/50 ${item.danger ? "text-error" : ""}`;
+    btn.className = `file-context-action${item.danger ? " danger" : ""}`;
+    btn.type = "button";
+    btn.setAttribute("role", "menuitem");
     // 右键菜单 label 含 data-ic 图标标签（本文件 + 前置 pass 注入的 clipboard/trash），
     //   全部为内部常量串无用户数据（无 XSS），故用 innerHTML 让图标真正渲染（原 textContent 会把 <i> 当字面文本）。
     btn.innerHTML = item.label;
@@ -1665,26 +2459,30 @@ function showFileContextMenu(path, isDir, event) {
       e.stopPropagation();
       menu.remove();
       try {
+        const originChatId = menuOwnerChatId;
         switch (item.action) {
           case "open":
-            await openFileInEditor(path);
+            await openFileInEditor(path, originChatId);
             break;
           case "setRoot":
-            await setFileExplorerRoot(path);
-            showToast(`已切换到: ${path}`, "success");
+            {
+              const effectiveRoot = await setFileExplorerRoot(path, originChatId);
+              showFileActionToast(originChatId, `已切换到: ${effectiveRoot}`, "success");
+            }
             break;
           case "newFile": {
             const name = await beiluPrompt("新文件名:");
             if (!name?.trim()) return;
             const newPath = path.replace(/\/$/, "") + "/" + name.trim();
             try {
-              await setFilesData({
+              const response = await setFilesData({
                 _action: "createFile",
                 path: newPath,
                 content: "",
-              });
+              }, { originChatId });
+              assertFileActionSuccess(response, "createFile");
               showToast("文件已创建", "success");
-              await loadFileTree(rootPath);
+              await loadFileTree(menuRootPath, originChatId);
             } catch (err) {
               showToast("创建失败: " + err.message, "error");
             }
@@ -1695,9 +2493,10 @@ function showFileContextMenu(path, isDir, event) {
             if (!name?.trim()) return;
             const newPath = path.replace(/\/$/, "") + "/" + name.trim();
             try {
-              await setFilesData({ _action: "createDir", path: newPath });
+              const response = await setFilesData({ _action: "createDir", path: newPath }, { originChatId });
+              assertFileActionSuccess(response, "createDir");
               showToast("目录已创建", "success");
-              await loadFileTree(rootPath);
+              await loadFileTree(menuRootPath, originChatId);
             } catch (err) {
               showToast("创建失败: " + err.message, "error");
             }
@@ -1714,11 +2513,11 @@ function showFileContextMenu(path, isDir, event) {
             break;
           case "insertPath": {
             // D4：复制路径直通对话框。insertLink 范式（源 skillPicker 已 0723 删，此处自包含）——
-            //   取 #message-input 光标 selectionStart/End，拼超链接式 `[📄名](路径) ` 插入，
+            //   取 #message-input 光标 selectionStart/End，拼超链接式 `[文件:名](路径) ` 插入，
             //   focus+setSelectionRange 定位到插入尾，dispatch input 事件触发既有联动（草稿保存/高度自适应）。
             const input = document.getElementById("message-input");
             if (!input) { showToast("找不到对话框输入框", "error"); break; }
-            const link = `[📄${fileName}](${path}) `;
+            const link = `[文件:${fileName}](${path}) `;
             const a = input.selectionStart ?? input.value.length;
             const b = input.selectionEnd ?? input.value.length;
             input.value = input.value.slice(0, a) + link + input.value.slice(b);
@@ -1732,7 +2531,10 @@ function showFileContextMenu(path, isDir, event) {
             const newName = await beiluPrompt("新名称:", fileName);
             if (!newName?.trim() || newName === fileName) return;
             try {
-              const res = await setFilesData({ _action: "rename", path, newName: newName.trim() });
+              const res = await setFilesData(
+                { _action: "rename", path, newName: newName.trim() },
+                { originChatId },
+              );
               // setFilesData 仅 HTTP 非2xx 抛错；逻辑失败走 _result.error（200），须显式判，否则假成功
               if (res?._result?.error) { showToast("重命名失败: " + res._result.error, "error"); return; }
               // [0723 问题1.1] 改名已执行完(后端 move 先改名后返 warnings),用 warning toast 事后告知不用 confirm
@@ -1744,9 +2546,9 @@ function showFileContextMenu(path, isDir, event) {
                 showToast(`已重命名为 ${newName.trim()}`, "success");
               }
               // 路径已变：旧路径若有打开标签则关闭（避免指向不存在文件）
-              const rnTab = getTab(path);
-              if (rnTab) { rnTab.isDirty = false; closeTab(path); }
-              await loadFileTree(rootPath);
+              const rnTab = getTab(path, originChatId);
+              if (rnTab) { rnTab.isDirty = false; await closeTab(path, originChatId); }
+              await loadFileTree(menuRootPath, originChatId);
             } catch (err) {
               showToast("重命名失败: " + err.message, "error");
             }
@@ -1756,17 +2558,20 @@ function showFileContextMenu(path, isDir, event) {
             // T026: 后端 deleteFile 已改 safeTrash 进系统回收站（凛倾原话「文件级别的删除是进电脑的回收站」），文案同步
             if (!await beiluConfirm(`确定删除 "${fileName}" 吗？将移入系统回收站，可从回收站找回。`)) return;
             try {
-              const _delRes = await setFilesData({ _action: "deleteFile", path });
+              const _delRes = await setFilesData(
+                { _action: "deleteFile", path },
+                { originChatId },
+              );
               // setFilesData 仅 HTTP 非2xx 抛错；逻辑失败走 _result.error（200），须显式判（同 rename 模式）
               if (_delRes?._result?.error) { showToast("删除失败: " + _delRes._result.error, "error"); return; }
               showToast(`${fileName} 已移入回收站`, "success");
               // 如果该文件有标签，关闭它（不提示保存）
-              const delTab = getTab(path);
+              const delTab = getTab(path, originChatId);
               if (delTab) {
                 delTab.isDirty = false; // 文件已删除，无需提示保存
-                closeTab(path);
+                await closeTab(path, originChatId);
               }
-              await loadFileTree(rootPath);
+              await loadFileTree(menuRootPath, originChatId);
             } catch (err) {
               showToast("删除失败: " + err.message, "error");
             }
@@ -1792,32 +2597,39 @@ function showFileContextMenu(path, isDir, event) {
 /** 审批动作后踢续轮（传导链修，凛倾 2026-07-09）：批准/拒绝的结果已由后端回注 pendingOpResults，
  *  但续轮只在「生成结束时」由后端 peek 驱动——审批发生在生成之外，无人触发下一轮生成 →
  *  AI 拿不到结果挂等到用户下次说话。此处审批回调统一踢 trigger-reply（500ms 防抖合并连点）。 */
-let _kickReplyTimer = null;
-function _kickReplyAfterApproval() {
-  clearTimeout(_kickReplyTimer);
-  _kickReplyTimer = setTimeout(async () => {
+const _kickReplyTimers = new Map();
+function _kickReplyAfterApproval(originChatId) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
+  clearTimeout(_kickReplyTimers.get(originChatId));
+  const timer = setTimeout(async () => {
     try {
-      if (!currentChatId) return;
-      await sendAction({ verb: "triggerReply", target: "shells:chat", source: "web", scope: { chatId: currentChatId }, payload: {} });
+      await sendAction({ verb: "triggerReply", target: "shells:chat", source: "web", scope: { chatId: originChatId }, payload: {} });
     } catch (err) {
       // 触发失败不吞：结果仍在池中，下次任意生成的 GetPrompt 会注入（降级为旧行为）
       console.warn("[fileExplorer] 审批后触发续轮失败:", err?.message);
+    } finally {
+      if (_kickReplyTimers.get(originChatId) === timer) _kickReplyTimers.delete(originChatId);
     }
   }, 500);
+  _kickReplyTimers.set(originChatId, timer);
 }
 
-async function loadPendingOps() {
+async function loadPendingOps(originChatId = null) {
+  originChatId = freezeFileActionOriginChatId(originChatId);
   const container = treeContainer?.querySelector("#file-pending-ops");
   if (!container) return;
 
   try {
-    const data = await getFilesData();
-    // 多窗口隔离：只显示本会话(op._cid===currentChatId)+无归属的待审 op；无 chatid 时回退全量。
-    //   与下方 approveAll/rejectAll 传 chatid 收口一致（显示几条 = 全部批准会处理几条）。
+    const data = await getFilesData({ originChatId });
+    // renderFileTree(B) 可能在递归目录 await 期间切到 A；旧调用捕获到的新 A 容器后，
+    // 不能再把 B 的待审批列表写进 A。owner 与 DOM 身份都必须仍匹配。
+    if (filePanelOwnerChatId !== originChatId
+        || !container.isConnected
+        || container !== treeContainer?.querySelector("#file-pending-ops")) return;
+    // 多窗口隔离：只显示本次冻结归属的待审 op 与后端明确标记为无归属的旧条目。
+    //   审批动作沿同一 scope.chatId 进入服务端 facade，前端不另造 payload.chatid 双源。
     const _allPending = data?.pendingOperations || [];
-    const pending = currentChatId
-      ? _allPending.filter((op) => op._cid === currentChatId || !op._cid)
-      : _allPending;
+    const pending = _allPending.filter((op) => op._cid === originChatId || !op._cid);
     // N46：always 规则与待审队列同区渲染（规则存在时即使队列空也可见可删）
     const alwaysRules = Array.isArray(data?.approvalAlwaysRules)
       ? data.approvalAlwaysRules
@@ -1858,10 +2670,18 @@ async function loadPendingOps() {
       .querySelector("#file-approve-all")
       ?.addEventListener("click", async () => {
         try {
-          await setFilesData({ _action: "approveAll", chatid: currentChatId });
-          showToast("所有操作已批准", "success");
-          _kickReplyAfterApproval();
-          await loadPendingOps();
+          const response = await setFilesData({ _action: "approveAll" }, { originChatId });
+          const result = assertApprovalActionHandled(response, "approveAll");
+          const problems = Number(result.failed || 0) + Number(result.rejected || 0);
+          showFileActionToast(
+            originChatId,
+            problems > 0
+              ? `已处理 ${result.handled || 0} 项：成功 ${result.completed || 0}，失败/拒绝 ${problems}`
+              : `已批准并执行 ${result.completed || 0} 项`,
+            problems > 0 ? "warning" : "success",
+          );
+          _kickReplyAfterApproval(originChatId);
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1872,10 +2692,11 @@ async function loadPendingOps() {
       .querySelector("#file-reject-all")
       ?.addEventListener("click", async () => {
         try {
-          await setFilesData({ _action: "rejectAll", chatid: currentChatId });
-          showToast("所有操作已拒绝", "info");
-          _kickReplyAfterApproval();
-          await loadPendingOps();
+          const response = await setFilesData({ _action: "rejectAll" }, { originChatId });
+          const result = assertApprovalActionHandled(response, "rejectAll");
+          showFileActionToast(originChatId, `已拒绝 ${result.rejected || 0} 项`, "info");
+          _kickReplyAfterApproval(originChatId);
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1885,9 +2706,11 @@ async function loadPendingOps() {
     container.querySelectorAll(".approve-op").forEach((btn) => {
       btn.addEventListener("click", async () => {
         try {
-          await setFilesData({ _action: "approveOp", opId: btn.dataset.id });
-          _kickReplyAfterApproval();
-          await loadPendingOps();
+          const response = await setFilesData({ _action: "approveOp", opId: btn.dataset.id }, { originChatId });
+          const result = assertApprovalActionHandled(response, "approveOp");
+          if (!result.executed) showFileActionToast(originChatId, `操作未执行：${result.error || result.status || "已拒绝"}`, "warning");
+          _kickReplyAfterApproval(originChatId);
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1898,9 +2721,10 @@ async function loadPendingOps() {
     container.querySelectorAll(".reject-op").forEach((btn) => {
       btn.addEventListener("click", async () => {
         try {
-          await setFilesData({ _action: "rejectOp", opId: btn.dataset.id });
-          _kickReplyAfterApproval();
-          await loadPendingOps();
+          const response = await setFilesData({ _action: "rejectOp", opId: btn.dataset.id }, { originChatId });
+          assertFileActionSuccess(response, "rejectOp");
+          _kickReplyAfterApproval(originChatId);
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1932,14 +2756,21 @@ async function loadPendingOps() {
     container.querySelectorAll(".approve-op-always").forEach((btn) => {
       btn.addEventListener("click", async () => {
         try {
-          await setFilesData({
+          const response = await setFilesData({
             _action: "approveOp",
             opId: btn.dataset.id,
             policy: "always",
-          });
-          showToast("已执行，并加入总是允许", "success");
-          _kickReplyAfterApproval();
-          await loadPendingOps();
+          }, { originChatId });
+          const result = assertApprovalActionHandled(response, "approveOp");
+          if (result.executed && result.ruleActive) {
+            showFileActionToast(originChatId, result.ruleAdded ? "已执行，并加入总是允许" : "已执行，总是允许规则已生效", "success");
+          } else if (result.executed) {
+            showFileActionToast(originChatId, `已执行，但总是允许规则未保存：${result.rulePersistence?.error || "持久化失败"}`, "warning");
+          } else {
+            showFileActionToast(originChatId, `操作未执行${result.ruleActive ? "，规则已保存" : ""}：${result.error || result.status || "已拒绝"}`, "warning");
+          }
+          _kickReplyAfterApproval(originChatId);
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1954,8 +2785,8 @@ async function loadPendingOps() {
             _action: "removeApprovalAlwaysRule",
             type: btn.dataset.type,
             pathPrefix: btn.dataset.prefix,
-          });
-          await loadPendingOps();
+          }, { originChatId });
+          await loadPendingOps(originChatId);
         } catch (err) {
           console.error('[fileExplorer]', err);
           window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
@@ -1964,7 +2795,11 @@ async function loadPendingOps() {
     });
   } catch (err) {
     wbDetect("ide", "loadPendingOps", false, err?.message);
-    container.innerHTML = "";
+    if (filePanelOwnerChatId === originChatId
+        && container.isConnected
+        && container === treeContainer?.querySelector("#file-pending-ops")) {
+      container.innerHTML = "";
+    }
   }
 }
 
@@ -1972,22 +2807,22 @@ function renderEmptyEditor() {
   if (!editorContainer) return;
 
   activeTabPath = null;
+  activeTabOwnerChatId = null;
 
-  // 禁用顶部工具栏按钮
-  const saveBtn = document.getElementById("file-save-btn");
+  // 空态也走保存能力单源；Reload 继续只按有无活动标签控制。
+  projectFileToolbarState(null, false);
   const reloadBtn = document.getElementById("file-reload-btn");
-  if (saveBtn) saveBtn.disabled = true;
   if (reloadBtn) reloadBtn.disabled = true;
 
   // 更新状态栏
   updateStatusBar(null);
 
   editorContainer.innerHTML = `
-		<div class="flex items-center justify-center h-full text-base-content/50">
-			<div class="text-center">
-				<img src="/parts/shells:beilu-chat/icons/mdi__folder-open-outline.svg" class="w-16 h-16 mx-auto mb-4 opacity-20 icon" />
-				<p class="text-sm">从左侧文件树选择文件</p>
-				<p class="text-xs mt-1 text-base-content/50">或使用 <i data-ic="folder-open"></i> 打开文件夹 / <i data-ic="file"></i> 打开文件</p>
+		<div class="file-editor-empty flex items-center justify-center h-full" role="status">
+			<div class="file-editor-empty-content text-center">
+				<i data-ic="folder-open" class="file-editor-empty-icon mx-auto mb-4" aria-hidden="true"></i>
+				<p class="file-editor-empty-title">从左侧文件树选择文件</p>
+				<p class="file-editor-empty-help mt-1">或使用 <i data-ic="folder-open" aria-hidden="true"></i> 打开文件夹 / <i data-ic="file" aria-hidden="true"></i> 打开文件</p>
 			</div>
 		</div>
 	`;
@@ -2006,27 +2841,46 @@ function renderEmptyEditor() {
  * @param {boolean} isRegex - 是否按正则匹配
  */
 async function performSearch(query, isRegex) {
+  const originChatId = freezeFileActionOriginChatId();
+  const searchRoot = rootPath;
   const results = treeContainer?.querySelector("#file-search-results");
   if (!results) return;
+  const searchButton = treeContainer?.querySelector("#file-search-go");
+  results.setAttribute("role", "status");
+  results.setAttribute("aria-live", "polite");
+  results.setAttribute("aria-busy", "true");
+  if (searchButton) searchButton.disabled = true;
   results.innerHTML =
-    '<p class="text-[10px] text-base-content/40 py-1">搜索中...</p>';
+    `<p class="file-search-progress">正在搜索「${escapeHtml(query)}」·${isRegex ? "正则" : "普通文本"}</p>`;
   try {
     // 后端 searchFiles 返回 { _result: { matches, totalFiles, searchedFiles, truncated, error? } }
     const res = await setFilesData({
       _action: "searchFiles",
-      path: rootPath,
+      path: searchRoot,
       query,
       isRegex,
       maxResults: 50,
-    });
+    }, { originChatId });
+    if (filePanelOwnerChatId !== originChatId
+        || !results.isConnected
+        || results !== treeContainer?.querySelector("#file-search-results")) return;
     const r = res?._result;
     if (!r || r.error) {
       results.innerHTML = `<p class="text-[10px] text-error py-1">搜索失败: ${escapeHtml(r?.error || "无返回")}</p>`;
       return;
     }
-    renderSearchResults(r);
+    renderSearchResults(r, query, isRegex, originChatId, results);
   } catch (err) {
-    results.innerHTML = `<p class="text-[10px] text-error py-1">搜索失败: ${escapeHtml(err.message)}</p>`;
+    if (filePanelOwnerChatId === originChatId
+        && results.isConnected
+        && results === treeContainer?.querySelector("#file-search-results")) {
+      results.innerHTML = `<p class="file-search-error">搜索「${escapeHtml(query)}」失败: ${escapeHtml(err.message)}</p>`;
+    }
+  } finally {
+    if (filePanelOwnerChatId === originChatId && results.isConnected) {
+      results.setAttribute("aria-busy", "false");
+      if (searchButton?.isConnected) searchButton.disabled = false;
+    }
   }
 }
 
@@ -2034,41 +2888,51 @@ async function performSearch(query, isRegex) {
  * 渲染搜索结果列表，点击结果项在编辑器打开对应文件
  * @param {{matches:Array, searchedFiles:number, truncated:boolean}} r
  */
-function renderSearchResults(r) {
-  const results = treeContainer?.querySelector("#file-search-results");
-  if (!results) return;
+function renderSearchResults(r, query, isRegex, originChatId, results) {
+  if (!results
+      || filePanelOwnerChatId !== originChatId
+      || !results.isConnected
+      || results !== treeContainer?.querySelector("#file-search-results")) return;
   const matches = r.matches || [];
   if (matches.length === 0) {
     results.innerHTML =
-      `<p class="text-[10px] text-base-content/40 py-1">无匹配 (已搜 ${r.searchedFiles || 0} 文件)</p>`;
+      `<p class="file-search-summary">「${escapeHtml(query)}」·${isRegex ? "正则" : "普通文本"}：无匹配（已搜 ${r.searchedFiles || 0} 个文件）</p>`;
     return;
   }
   const header = `<div class="flex items-center justify-between mb-0.5">
-      <span class="text-[10px] text-base-content/50">${matches.length} 处匹配${r.truncated ? " (已截断)" : ""}</span>
-      <button id="file-search-clear" class="btn btn-xs btn-ghost btn-square" title="清除结果">✗</button>
+      <span class="file-search-summary">「${escapeHtml(query)}」·${isRegex ? "正则" : "普通文本"}：${matches.length} 处匹配，已搜 ${r.searchedFiles || 0} 个文件${r.truncated ? "，结果已截断" : ""}</span>
+      <button id="file-search-clear" class="btn btn-xs btn-ghost" title="清除结果">清除</button>
     </div>`;
   const list = matches
     .map(
       (m) => `
-      <div class="file-search-hit cursor-pointer hover:bg-base-300/40 rounded px-1 py-0.5" data-path="${escapeAttr(m.file)}">
+      <div class="file-search-hit cursor-pointer rounded px-1" data-path="${escapeAttr(m.file)}" role="button" tabindex="0" title="${escapeAttr(m.file)}">
         <div class="flex items-center gap-1">
-          <span class="text-[10px] font-mono truncate flex-1" style="color:var(--beilu-amber)">${escapeHtml(m.file)}</span>
-          <span class="text-[10px] text-base-content/40">:${m.line}</span>
+          <span class="file-search-hit-icon">${getFileTypeIconMarkup(m.file)}</span>
+          <span class="file-search-hit-path font-mono truncate flex-1">${escapeHtml(m.file)}</span>
+          <span class="file-search-hit-line">:${m.line}</span>
         </div>
-        <div class="text-[10px] font-mono text-base-content/60 truncate">${escapeHtml(m.content || "")}</div>
+        <div class="file-search-hit-content font-mono truncate">${escapeHtml(m.content || "")}</div>
       </div>`,
     )
     .join("");
-  results.innerHTML = `<div class="bg-base-200/40 border border-base-300/40 rounded-lg p-1 space-y-0.5 max-h-60 overflow-auto">${header}${list}</div>`;
+  results.innerHTML = `<div class="file-search-results-panel rounded-lg p-1 space-y-0.5 max-h-60 overflow-auto">${header}${list}</div>`;
   results
     .querySelector("#file-search-clear")
     ?.addEventListener("click", () => {
       results.innerHTML = "";
     });
   results.querySelectorAll(".file-search-hit").forEach((el) => {
-    el.addEventListener("click", () => {
+    const openHit = () => {
       const path = el.dataset.path;
-      if (path) openFileInEditor(path);
+      if (path) openFileInEditor(path, originChatId);
+    };
+    el.addEventListener("click", openHit);
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openHit();
+      }
     });
   });
 }
@@ -2089,25 +2953,33 @@ function startErrorPolling() {
   if (errorPollTimer !== null) return; // 已在轮询
   const tick = async () => {
     try {
+      const originChatId = freezeFileActionOriginChatId();
       // getPendingErrors 返回 { hasErrors, count, errors }（非 _result 包裹）
-      const probe = await setFilesData({ _action: "getPendingErrors" });
+      const probe = await setFilesData({ _action: "getPendingErrors" }, { originChatId });
       if (!probe?.hasErrors || !probe.count) return;
-      const consumed = await setFilesData({ _action: "consumePendingErrors" });
+      const consumed = await setFilesData({ _action: "consumePendingErrors" }, { originChatId });
       const errs = consumed?.errors || [];
       const toast = window._beiluToast || showToast;
+      const visibleOwner = (() => {
+        try { return String(window._beiluCurWinChatId?.() || "").trim(); } catch { return ""; }
+      })();
+      const ownerPrefix = visibleOwner && visibleOwner !== originChatId
+        ? `后台对话 ${originChatId.slice(0, 8)}…：`
+        : "";
       if (errs.length <= 2) {
         // 少量错误逐条弹
         for (const e of errs) {
           const detail = e?.error || e?.message || e?.path || JSON.stringify(e);
-          toast(`文件操作失败: ${detail}`, "error");
+          toast(`${ownerPrefix}文件操作失败: ${detail}`, "error");
         }
       } else {
         // 多条错误合并弹出，避免批量红色 toast 轰炸
         const first = errs[0]?.error || errs[0]?.message || errs[0]?.path || "";
-        toast(`${errs.length} 个文件操作失败（首条: ${first}）`, "error");
+        toast(`${ownerPrefix}${errs.length} 个文件操作失败（首条: ${first}）`, "error");
       }
-    } catch {
-      /* 轮询失败静默，下个周期重试 */
+    } catch (err) {
+      // 网络波动允许下周期重试，但不能吞掉持续失败的诊断线索。
+      diag.throttled("errorPollingFailed", 30, "文件错误轮询失败:", err?.message || err);
     }
   };
   errorPollTimer = setInterval(tick, 5000);

@@ -1,4 +1,5 @@
 {
   "type": "plugins",
-  "dirname": "beilu-plugin-host"
+  "dirname": "beilu-plugin-host",
+  "configContract": "command"
 }

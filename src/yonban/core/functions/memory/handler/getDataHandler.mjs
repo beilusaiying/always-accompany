@@ -62,7 +62,7 @@ import { pluginEnabled } from "../ai/aiRunner.mjs";
 import { ideClient } from "../../../transport/ideClient.mjs";
 // inj 识别系统 2026-07-13：识别+裁决+值域单源（生成链 getPromptHandler 同模块）
 import { resolveInjectionContext, resolveEffectiveInjections, getInjectionAutoModeMeta } from "../storage_mod/injectionSystem.mjs";
-import { VOLATILE_PROMPT_MACROS } from "./volatileMacros.mjs"; // 0731：高动态宏清单下发（INJ 编辑器"上方条目含动态宏"警告的判据单源）
+import { CACHE_PROMPT_MACRO_EXPRESSION_PATTERN, CACHE_STABLE_PREFIX_MACROS, CACHE_STABLE_PREFIX_MACRO_PATTERNS, VOLATILE_PROMPT_MACROS } from "./volatileMacros.mjs"; // 历史前缓存宏契约下发（前端只消费后端单源）
 import { _resolveChatOwner, _resolveRequestChar } from "./setDataActions.mjs"; // SEC 破口D owner 谓词 + 链1 chatid→char 归位（单一权威复用，不重复造）
 import { getDataSnapshot, initDataFiles } from "../data/dataSystem.mjs";
 // T072a（可操作处禁硬编码）：搜索引擎枚举唯一权威源（webSearch.mjs），
@@ -185,6 +185,11 @@ export async function handleGetData(args) {
     //   depth>=1 且启用的条目做"正文含每轮变宏"检测→弹窗警告+标行号（0729 {{tool_runtime_json}}
     //   写进上方手册致缓存归零，人眼审不出，必须机制拦）。
     volatile_macros: VOLATILE_PROMPT_MACROS,
+    // 0803：防漏项改为稳定宏 allowlist。前端对 depth>=1 的任意 {{...}} 表达式做默认拒绝，
+    // 与 setData 写闸和 getPrompt 运行时最终约束消费同一份契约；volatile_macros 仅保留旧客户端兼容。
+    cache_stable_prefix_macros: CACHE_STABLE_PREFIX_MACROS,
+    cache_stable_prefix_macro_patterns: CACHE_STABLE_PREFIX_MACRO_PATTERNS,
+    cache_prompt_macro_expression_pattern: CACHE_PROMPT_MACRO_EXPRESSION_PATTERN,
     // loadMemoryPresets(storage.mjs:2785) 已把缺失键归一成 []，不复制上面 ||DEFAULT 的死枝形状
     // [0718 半接线修] chatId 补传：桥层 0709 起统一注入 chatid（sendAction.mjs:145），本处一直未消费——
     //   同响应内 activeMode 已走 per-窗口(_cid :119)而本判定走 char 级，窗口绑定模式（active_modes_map）

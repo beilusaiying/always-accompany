@@ -82,17 +82,28 @@ export const PLATFORM_DISPLAY_TAGS = [
 //     触发模式三选一：仅主用户(owner) / 白名单(whitelist) / 所有人(all，不限制)。
 //   · 来源访问档位 L0 只读 / L1 读 / L2 读写需确认 / L3 完整+白名单命令；不继承用户设置；全用 author.id。
 //
-// ★ 不破坏现有使用：TriggerMode 默认 "all"（保持现状全放行），DefaultPermissionLevel 默认 3（不限制）。
-//   只有用户显式配置（设 whitelist/owner，或填 AllowedUserIDs，或调低访问档位）时才提高限制。
+// ★ [P0-B 2026-08-03 fail-closed 收口，任务 MD「缺失/非法策略 fail-closed；不得默认为 all/L3」]
+//   旧基线（TriggerMode 缺省 "all" + 非 owner 缺省 L3）= fail-open：默认配置下任意平台用户可触发
+//   并获得全通道权限（Fable 审查阻断4）。现：
+//   · 缺失 → 安全默认（owner 触发 / 非 owner L1 读）；非法值 → 更严（owner 触发 / L0）+ warn 可见。
+//   · 用户已显式保存的合法值（含旧模板持久化的 "all"/3）原样尊重——不覆盖用户明确保存的旧配置。
+//   · host_control（IDE/宿主能力）与档位数字解耦：HostControlEnabled 单独开关默认 false，
+//     且仅 owner 可获得（见 buildBotSourceMeta / operationRegistry）；L3 数字不再自动等于宿主能力。
+//   · 迁移记录：PermissionPolicyRevision=2 随模板补齐；旧条目缺 _isOwner/_hostControl 时
+//     消费端按非 owner/无宿主能力 fail-closed 解析（resolveRequestBotPermission）。
 
 /** 合法访问档位集合。 */
 export const BOT_PERMISSION_LEVELS = [0, 1, 2, 3];
 
+/** Bot 权限策略修订号（P0-B 2026-08-03 引入；随 buildBotSourceMeta 持久化进条目供事后对账）。 */
+export const BOT_PERMISSION_POLICY_REVISION = 2;
+
 /**
- * 触发模式默认值。"all"=所有人可触发（保持升级前现状，避免破坏现有 bot）。
- * 可选 "owner"=仅主用户，"whitelist"=主用户 + AllowedUserIDs。
+ * 触发模式默认值。[P0-B] "owner"=仅主用户（fail-closed 安全默认）。
+ * 可选 "all"=所有人可触发，"whitelist"=主用户 + AllowedUserIDs。
+ * 旧配置已持久化 TriggerMode 的不受影响；缺失该键的配置从"全放行"收紧为"仅主用户"。
  */
-export const BOT_DEFAULT_TRIGGER_MODE = "all";
+export const BOT_DEFAULT_TRIGGER_MODE = "owner";
 
 /**
  * 判定某外部用户是否被允许触发 bot（用户级触发策略，叠加在各壳已有的频道/@/私聊触发判定之后）。
@@ -104,12 +115,13 @@ export const BOT_DEFAULT_TRIGGER_MODE = "all";
  * @returns {boolean} 是否允许触发。
  */
 export function checkBotTriggerAllowed(config, authorId, isOwner) {
-	// 入口归一：TriggerMode 概念域 = all/owner/whitelist 三值。非法值（用户配置笔误）与缺失同等
-	// 对待——落文档化默认并 warn 可见（诊断面），下方分支穷尽三值，不设尾部放行兜底。
+	// 入口归一：TriggerMode 概念域 = all/owner/whitelist 三值。
+	// [P0-B fail-closed] 缺失 → 安全默认 "owner"；非法值（用户配置笔误）→ "owner" 并 warn 可见
+	// （旧实现非法/缺失一律回落 "all" = fail-open，任务 MD 明令禁止）。下方分支穷尽三值，无尾部放行兜底。
 	let mode = (config && config.TriggerMode) || BOT_DEFAULT_TRIGGER_MODE;
 	if (mode !== "all" && mode !== "owner" && mode !== "whitelist") {
-		console.warn(`[botContentShared] TriggerMode 非法值 "${mode}"，按默认 "${BOT_DEFAULT_TRIGGER_MODE}" 处理（合法值: all/owner/whitelist）`);
-		mode = BOT_DEFAULT_TRIGGER_MODE;
+		console.warn(`[botContentShared] TriggerMode 非法值 "${mode}"，fail-closed 按 "owner" 处理（合法值: all/owner/whitelist）`);
+		mode = "owner";
 	}
 	if (mode === "all") return true;         // 所有人可触发
 	if (isOwner) return true;                // owner 永远可触发
@@ -133,13 +145,58 @@ export function checkBotTriggerAllowed(config, authorId, isOwner) {
  * @returns {0|1|2|3} 访问档位。
  */
 export function resolveBotPermissionLevel(config, _authorId, isOwner) {
-	const _clamp = (v, dft) => {
+	// [P0-B fail-closed] 缺失/非法分流（旧实现二者一律回落默认 3 = 非 owner fail-open）：
+	//   owner：缺失/非法 → 3（owner 即用户本人，完整档合理）；
+	//   非 owner：缺失 → 1（读，安全新默认，不再默认 L3）；非法值 → 0（只读，配置笔误从严）。
+	//   用户已显式保存的合法档位（0-3）原样尊重。
+	const _lvl = (v, dfltMissing, dfltInvalid) => {
+		if (v === undefined || v === null) return dfltMissing;
 		const n = Number(v);
-		return BOT_PERMISSION_LEVELS.includes(n) ? n : dft;
+		return BOT_PERMISSION_LEVELS.includes(n) ? n : dfltInvalid;
 	};
 	if (isOwner)
-		return _clamp(config && config.OwnerPermissionLevel, 3); // owner 默认 L3 完整
-	return _clamp(config && config.DefaultPermissionLevel, 3);  // 非 owner 默认 L3（不限制，保持现状；提高限制由用户配置）
+		return _lvl(config && config.OwnerPermissionLevel, 3, 3);
+	return _lvl(config && config.DefaultPermissionLevel, 1, 0);
+}
+
+/**
+ * [P0-B 2026-08-03] Bot 条目来源元数据构造单源——壳侧构造触发条目时用 `...buildBotSourceMeta(...)`
+ * 替代散写 `_sourceType/_permissionLevel` 两字段。新增持久化字段（Fable 审查阻断4：
+ * 「sender id / isOwner 依据 / 配置版本均未持久化，事后无法回答这条 L3 是谁、凭什么」）：
+ *   _senderId：平台发送者 ID（审计锚）
+ *   _isOwner：壳判定瞬间的 owner 结论（host_control 裁决消费；缺失=非 owner fail-closed）
+ *   _hostControl：策略快照 = config.HostControlEnabled===true 且 isOwner（宿主能力与 L 数字解耦，
+ *                 默认关闭、owner-only；L3 不再自动获得 host_control）
+ *   _policyRev：BOT_PERMISSION_POLICY_REVISION（对账用）
+ * @param {object} config - bot 配置。
+ * @param {string|number} authorId - 平台发送者 ID。
+ * @param {boolean} isOwner - 壳已算好的 owner 判定。
+ * @returns {object} 展开进条目的元字段集。
+ */
+export function buildBotSourceMeta(config, authorId, isOwner) {
+	return {
+		_sourceType: "bot",
+		_permissionLevel: resolveBotPermissionLevel(config, authorId, isOwner),
+		_senderId: authorId === undefined || authorId === null ? "" : String(authorId),
+		_isOwner: isOwner === true,
+		_hostControl: (config && config.HostControlEnabled === true) && isOwner === true,
+		_policyRev: BOT_PERMISSION_POLICY_REVISION,
+	};
+}
+
+/**
+ * [P0-B] 从既有条目摘取来源元字段（壳侧 appendBotChatEntry 转发点用 `...pickBotSourceMeta(entry)`
+ * 替代散写两字段转发，保证新旧字段整组同行——防"构造点带了、转发点漏了"的半接线）。
+ */
+export function pickBotSourceMeta(entry) {
+	if (!entry || entry._sourceType !== "bot") return {};
+	const meta = { _sourceType: "bot" };
+	if (Number.isFinite(entry._permissionLevel)) meta._permissionLevel = entry._permissionLevel;
+	if (entry._senderId !== undefined) meta._senderId = entry._senderId;
+	if (entry._isOwner !== undefined) meta._isOwner = entry._isOwner === true;
+	if (entry._hostControl !== undefined) meta._hostControl = entry._hostControl === true;
+	if (Number.isFinite(entry._policyRev)) meta._policyRev = entry._policyRev;
+	return meta;
 }
 
 /**
@@ -158,14 +215,24 @@ export function resolveRequestBotPermission(chatLog) {
 	if (!Array.isArray(chatLog) || chatLog.length === 0) return null;
 	const e = chatLog[chatLog.length - 1];
 	if (e && e._sourceType === "bot" && BOT_PERMISSION_LEVELS.includes(Number(e._permissionLevel))) {
-		return { isBot: true, level: Number(e._permissionLevel) };
+		// [P0-B] 扩展身份字段：旧条目缺新字段 → isOwner:false / hostControl:false（fail-closed，
+		// 宿主能力在旧条目上不可证明即不授予）；senderId/policyRev 供审计（可为空）。
+		return {
+			isBot: true,
+			level: Number(e._permissionLevel),
+			isOwner: e._isOwner === true,
+			hostControl: e._hostControl === true,
+			senderId: e._senderId !== undefined ? String(e._senderId) : "",
+			policyRev: Number.isFinite(e._policyRev) ? Number(e._policyRev) : 1,
+		};
 	}
 	return null;
 }
 
 /**
  * 给 bot 配置模板补齐 C6 触发白名单 + 权限字段的默认值（各壳 GetBotConfigTemplate 调用，单点维护字段集）。
- * 默认值全部保持「升级前现状」：all 触发 + L3 完整。
+ * [P0-B 2026-08-03] 缺失键默认已收紧为 fail-closed：owner 触发 + owner L3 / 非 owner L1 / HostControl 关。
+ * 已持久化的用户配置值原样保留不覆盖。
  * @param {object} base - 各壳已有的配置模板对象。
  * @returns {object} 补齐 C6 字段后的模板（原字段不覆盖）。
  */
@@ -174,11 +241,15 @@ export function withBotPermissionDefaults(base) {
 	return {
 		...tpl,
 		// ---- C6 触发白名单 ----
+		// [P0-B fail-closed] 新配置默认 "owner"（旧配置已持久化的值原样保留，不覆盖用户已保存配置）
 		TriggerMode: tpl.TriggerMode ?? BOT_DEFAULT_TRIGGER_MODE, // "all" | "owner" | "whitelist"
 		AllowedUserIDs: Array.isArray(tpl.AllowedUserIDs) ? tpl.AllowedUserIDs : [], // 平台用户ID白名单（whitelist 模式生效）
 		// ---- C6 独立权限 L0-L3 ----
 		OwnerPermissionLevel: tpl.OwnerPermissionLevel ?? 3,     // 主用户权限等级，默认 L3 完整
-		DefaultPermissionLevel: tpl.DefaultPermissionLevel ?? 3, // 非主用户权限等级，默认 L3（收紧需手动降级）
+		DefaultPermissionLevel: tpl.DefaultPermissionLevel ?? 1, // [P0-B] 非主用户默认 L1 读（不再默认 L3；放开由用户显式配置）
+		// ---- P0-B 宿主能力与策略修订 ----
+		HostControlEnabled: tpl.HostControlEnabled === true,     // 宿主能力（IDE 工具/弹窗/感知控制等）单独开关：默认关闭、且仅 owner 生效
+		PermissionPolicyRevision: tpl.PermissionPolicyRevision ?? BOT_PERMISSION_POLICY_REVISION, // 策略修订对账
 	};
 }
 
@@ -540,8 +611,14 @@ export async function handleBotChatCommand({ username, charName, platform, text,
 					: `切换失败（预设引擎未响应），请稍后再试。`;
 			}
 			if (sSub === "clear") {
+				// [P2 2026-08-03 诚实性] 原文案恒报"已回退全平台默认预设"——但清除线级覆盖后 resolver
+				//   可能解析为"无预设"（全局默认未配置时）。改为清除后读回真实生效值再回执，不虚构状态。
 				const ok = await bridge.clearPresetOverrideViaAPI({ username }, line.chatid, "bot");
-				return ok ? "已回退全平台默认预设。" : "回退失败（预设引擎未响应）。";
+				if (!ok) return "回退失败（预设引擎未响应）。";
+				const eff = bridge.getActivePresetName(username, line.chatid, "bot");
+				return eff
+					? `已清除本线技能覆盖，当前生效：${String(eff).replace(/\.json$/i, "")}（全平台默认）。`
+					: "已清除本线技能覆盖；当前没有全平台默认预设（本线暂无预设生效）。";
 			}
 			return botCommandUsage(_hit.def); // 用法文案派生自注册表（原手写串纯删）
 		} catch (e) {
@@ -1549,8 +1626,17 @@ export function shouldAbsorbBurst({ config, pending, text, hasMedia }) {
 	return parseBotCommand(text) === null;
 }
 
-export function createBotStreamEditor({ diag, sendInitial, editMessage, maxLen = 4000, minIntervalMs = 1200 }) {
+export function createBotStreamEditor({ diag, sendInitial, editMessage, maxLen = 4000, minIntervalMs = 1200, opTimeoutMs = 15000 }) {
 	let _handle = null, _lastText = "", _pendingText = null, _busy = false, _dead = false, _timer = null, _nextAllowedAt = 0;
+	// [0804 根因修·B5] 平台 sendInitial/editMessage 无自带超时时可无期限挂起 → _busy 永不清 →
+	//   finalize 的 while(_busy) 死等（03 §九.6 finalize 无 deadline）。用超时竞速包裹平台调用，
+	//   保证 _busy 必清、finalize 必返；超时按失败处理走全量降级（下方去重逻辑防重复补发）。
+	async function _withTimeout(promise, label) {
+		let _t;
+		const _timeout = new Promise((_, reject) => { _t = setTimeout(() => reject(new Error(`${label} 超时 ${opTimeoutMs}ms`)), opTimeoutMs); });
+		try { return await Promise.race([promise, _timeout]); }
+		finally { clearTimeout(_t); }
+	}
 	async function _pump() {
 		if (_busy || _dead || _pendingText === null) return;
 		const now = Date.now();
@@ -1562,8 +1648,8 @@ export function createBotStreamEditor({ diag, sendInitial, editMessage, maxLen =
 		_pendingText = null;
 		_busy = true;
 		try {
-			if (_handle === null) _handle = await sendInitial(text);
-			else if (text !== _lastText) await editMessage(_handle, text);
+			if (_handle === null) _handle = await _withTimeout(Promise.resolve(sendInitial(text)), "sendInitial");
+			else if (text !== _lastText) await _withTimeout(Promise.resolve(editMessage(_handle, text)), "editMessage");
 			_lastText = text;
 			_nextAllowedAt = Date.now() + minIntervalMs;
 		} catch (e) {
@@ -1585,15 +1671,29 @@ export function createBotStreamEditor({ diag, sendInitial, editMessage, maxLen =
 		async finalize(finalText) {
 			_pendingText = null;
 			if (_timer) { clearTimeout(_timer); _timer = null; }
-			while (_busy) await new Promise((r) => setTimeout(r, 50));
+			// [0804 B5] 有界等待 in-flight 排空（原 while(_busy) 无 deadline）：_pump 已有超时保证
+			//   _busy 会清，这里再设兜底上限（略大于单次 op 超时），到点强制继续，绝不永久卡回复管线。
+			const _waitDeadline = Date.now() + opTimeoutMs + 2000;
+			while (_busy && Date.now() < _waitDeadline) await new Promise((r) => setTimeout(r, 50));
 			const handle = _handle;
 			_dead = true; // 停收后续 update
-			if (handle === null) return null; // 从未投递过预览=全量路径
+			if (handle === null) return null; // 从未投递过预览=全量路径（无重复风险）
 			const t = String(finalText || "").slice(0, maxLen);
 			if (!t.trim()) { diag?.warn?.("streamEditor: 最终首段为空，预览消息保留末态"); return null; }
-			if (t === _lastText) return handle;
-			try { await editMessage(handle, t); return handle; }
-			catch (e) { diag?.warn?.(`streamEditor: 最终编辑失败（${e.message}），全量降级（可能与预览重复）`); return null; }
+			if (t === _lastText) return handle; // 预览末态已=最终首段，无需编辑
+			// [0804 B5] 最终编辑失败原直接返 null → 调用方补发【完整】回复叠在已可见预览上 = 重复。
+			//   瞬时失败（限速/网络抖）占多数：单次退避重试削减重复触发。真失败仍返 null 走全量降级——
+			//   重复代价 < 内容丢失代价（改返 handle 让调用方跳首段会丢失预览未覆盖的首段尾部内容）；
+			//   彻底去重（删除陈旧预览 / 只补 delta）需调用方 redesign + delete 能力，留 B5 backlog。
+			for (let _attempt = 0; _attempt < 2; _attempt++) {
+				try { await _withTimeout(Promise.resolve(editMessage(handle, t)), "finalEdit"); return handle; }
+				catch (e) {
+					if (_attempt === 0) { diag?.warn?.(`streamEditor: 最终编辑失败（${e.message}），退避重试一次`); await new Promise((r) => setTimeout(r, minIntervalMs)); continue; }
+					diag?.warn?.(`streamEditor: 最终编辑重试仍失败（${e.message}），全量降级（内容完整；预览陈旧的彻底去重留 B5 backlog）`);
+					return null;
+				}
+			}
+			return null;
 		},
 	};
 }

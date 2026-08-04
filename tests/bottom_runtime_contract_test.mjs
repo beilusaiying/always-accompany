@@ -246,3 +246,50 @@ Deno.test("Bot settings are embedded and role binding has no auto-follow listene
   assert.match(botErrorSource, /sendEventToUser\(username/);
   assert.doesNotMatch(botErrorSource, /sendEventToAll\(/);
 });
+
+// ── [D5 §2.2 InteractionLifecycle 2026-08-04] 互动 session 与桌宠 lease 分项契约 ──
+// startGameCompanion 成功即 acquire 互动租约(petLeaseId 随 session 同寿命);stop release;
+// petLease:false=「只互动」不申请。只触碰 gameCompanion + interaction_lease(内存态),
+// 不 import screenshot/main.mjs(spawn 副作用);真实进程生杀归 E2E(未运行)。
+Deno.test("互动 start/stop 与桌宠租约同寿命；只互动不申请租约", async () => {
+  const { startGameCompanion: gcStart, stopGameCompanion: gcStop } = await import(
+    "../src/public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs"
+  );
+  const lease = await import(
+    "../src/yonban/core/functions/screenshot/interaction_lease.mjs"
+  );
+  lease.revokeInteractionLeases("test-reset");
+  const u = `lease-test-${crypto.randomUUID()}`;
+
+  // start 成功 → petLeaseId 非空 + 注册表可见
+  const started = gcStart(u, "测试角色", { chatid: "chat-lease-1" });
+  assert.equal(started.success, true);
+  assert.ok(started.petLeaseId, "start 成功必须返回 petLeaseId");
+  assert.equal(lease.hasActiveInteractionLease(), true);
+
+  // 重复 start 拒绝且不产生第二租约
+  const dup = gcStart(u, "测试角色", { chatid: "chat-lease-1" });
+  assert.equal(dup.success, false);
+  assert.equal(lease.listInteractionLeases().length, 1);
+
+  // stop → 本次租约释放(petLeaseReleased=true),注册表清空
+  const stopped = gcStop(u);
+  assert.equal(stopped.success, true);
+  assert.equal(stopped.petLeaseReleased, true);
+  assert.equal(lease.hasActiveInteractionLease(), false);
+
+  // 「只互动」:petLease:false 不申请租约,session 照常
+  const only = gcStart(u, "测试角色", { chatid: "chat-lease-2", petLease: false });
+  assert.equal(only.success, true);
+  assert.equal(only.petLeaseId, null);
+  assert.equal(lease.hasActiveInteractionLease(), false);
+  gcStop(u);
+
+  // 显式关闭接管(revoke)后,stop 的 release 幂等不炸
+  const again = gcStart(u, "测试角色", { chatid: "chat-lease-3" });
+  assert.ok(again.petLeaseId);
+  lease.revokeInteractionLeases("explicit-off");
+  const stop2 = gcStop(u);
+  assert.equal(stop2.success, true);
+  assert.equal(stop2.petLeaseReleased, false, "已被接管吊销的租约,release 应幂等返回 false");
+});

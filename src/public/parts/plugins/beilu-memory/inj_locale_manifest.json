@@ -1,0 +1,738 @@
+{
+  "_comment": "INJ 版本化 locale 资源清单（生成器/校验器=同目录 inj_locale_check.mjs，手改无效请重跑 --write）。语义资源以 {id,version} 为键；locale 文本是等义覆盖不是删减——跨 locale sections 结构指纹必须相同、字数不得显著少于 zh-CN。模板 zh 正文有意修订时重跑 --write（version 自动 +1）并同批提交。",
+  "base_locale": "zh-CN",
+  "entries": {
+    "INJ-2": {
+      "version": 1,
+      "locales": {
+        "zh-CN": {
+          "sha256": "5c3c4e3faf3f33f5b7f40139d375706baf72a31aefe1c6c82219577387f88dd7",
+          "chars": 20027,
+          "lines": 460,
+          "sections": [
+            {
+              "level": 1,
+              "ident": "file_op"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "read"
+            },
+            {
+              "level": 2,
+              "ident": "fuzzy_edit"
+            },
+            {
+              "level": 2,
+              "ident": "replace_lines"
+            },
+            {
+              "level": 2,
+              "ident": "xlsx"
+            },
+            {
+              "level": 2,
+              "ident": "exec"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 1,
+              "ident": "CLI"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "read_file"
+            },
+            {
+              "level": 3,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "list_files"
+            },
+            {
+              "level": 3,
+              "ident": "run_command"
+            },
+            {
+              "level": 2,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "fuzzy_edit"
+            },
+            {
+              "level": 3,
+              "ident": "replace_lines"
+            },
+            {
+              "level": 3,
+              "ident": "insert_at_line"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "search_files"
+            },
+            {
+              "level": 3,
+              "ident": "search_by_name"
+            },
+            {
+              "level": 3,
+              "ident": "smart_search"
+            },
+            {
+              "level": 3,
+              "ident": "ast_search"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_diagnostics"
+            },
+            {
+              "level": 3,
+              "ident": "get_status"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "goto_definition"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_project_summary"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "edit_xlsx"
+            },
+            {
+              "level": 3,
+              "ident": "run_script"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "todo_read"
+            },
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "Git"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "XML"
+            },
+            {
+              "level": 2,
+              "ident": "question"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            }
+          ]
+        }
+      }
+    },
+    "INJ-2-code": {
+      "version": 1,
+      "locales": {
+        "zh-CN": {
+          "sha256": "3471116c7cf64da879cd5086a523fb295574000ca68539479339a36132ee96d9",
+          "chars": 15703,
+          "lines": 376,
+          "sections": [
+            {
+              "level": 1,
+              "ident": "YonBan"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "read_file"
+            },
+            {
+              "level": 3,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "list_files"
+            },
+            {
+              "level": 3,
+              "ident": "run_command"
+            },
+            {
+              "level": 2,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "fuzzy_edit"
+            },
+            {
+              "level": 3,
+              "ident": "replace_lines"
+            },
+            {
+              "level": 3,
+              "ident": "insert_at_line"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "search_files"
+            },
+            {
+              "level": 3,
+              "ident": "search_by_name"
+            },
+            {
+              "level": 3,
+              "ident": "smart_search"
+            },
+            {
+              "level": 3,
+              "ident": "ast_search"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_diagnostics"
+            },
+            {
+              "level": 3,
+              "ident": "get_status"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "goto_definition"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_project_summary"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "edit_xlsx"
+            },
+            {
+              "level": 3,
+              "ident": "run_script"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "todo_read"
+            },
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "Git"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "XML"
+            },
+            {
+              "level": 2,
+              "ident": "question"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            }
+          ]
+        }
+      }
+    },
+    "INJ-2-work": {
+      "version": 1,
+      "locales": {
+        "zh-CN": {
+          "sha256": "7e545f3fb514dfdde40727b81cccbbb5cc88dffe20b1a7e1835737b39a5d1c45",
+          "chars": 25147,
+          "lines": 1075,
+          "sections": [
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "file_op"
+            },
+            {
+              "level": 2,
+              "ident": "ideToolCall"
+            },
+            {
+              "level": 1,
+              "ident": "CLI"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "read_file"
+            },
+            {
+              "level": 3,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "list_files"
+            },
+            {
+              "level": 3,
+              "ident": "run_command"
+            },
+            {
+              "level": 2,
+              "ident": "write_file"
+            },
+            {
+              "level": 3,
+              "ident": "fuzzy_edit"
+            },
+            {
+              "level": 3,
+              "ident": "replace_lines"
+            },
+            {
+              "level": 3,
+              "ident": "insert_at_line"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "search_files"
+            },
+            {
+              "level": 3,
+              "ident": "search_by_name"
+            },
+            {
+              "level": 3,
+              "ident": "smart_search"
+            },
+            {
+              "level": 3,
+              "ident": "ast_search"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_diagnostics"
+            },
+            {
+              "level": 3,
+              "ident": "get_status"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "goto_definition"
+            },
+            {
+              "level": 3,
+              "ident": "find_references"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "get_project_summary"
+            },
+            {
+              "level": 3,
+              "ident": "validate_html"
+            },
+            {
+              "level": 3,
+              "ident": "lint_code"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "edit_xlsx"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "run_script"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "todo_read"
+            },
+            {
+              "level": 3,
+              "ident": "todo_write"
+            },
+            {
+              "level": 1,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "Git"
+            },
+            {
+              "level": 3,
+              "ident": "git_status"
+            },
+            {
+              "level": 3,
+              "ident": "git_diff"
+            },
+            {
+              "level": 3,
+              "ident": "git_log"
+            },
+            {
+              "level": 3,
+              "ident": "git_add"
+            },
+            {
+              "level": 3,
+              "ident": "git_commit"
+            },
+            {
+              "level": 3,
+              "ident": "git_branch"
+            },
+            {
+              "level": 3,
+              "ident": "git_checkout"
+            },
+            {
+              "level": 3,
+              "ident": "git_stash"
+            },
+            {
+              "level": 3,
+              "ident": "git_merge"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "XML"
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "question"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "subModeSwitch"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "stopContinue/"
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": "workMemoryWrite"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            }
+          ]
+        }
+      }
+    },
+    "INJ-1-chat": {
+      "version": 1,
+      "locales": {
+        "zh-CN": {
+          "sha256": "bc3cfe7fa1ab14e89b44fbb87424821db345de9a5b475855485aefc02b378e95",
+          "chars": 3175,
+          "lines": 81,
+          "sections": [
+            {
+              "level": 1,
+              "ident": "dataTable"
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 2,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": null
+            },
+            {
+              "level": 3,
+              "ident": "updateRow"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

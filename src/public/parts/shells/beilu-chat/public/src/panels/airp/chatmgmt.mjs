@@ -176,7 +176,15 @@ function handleBatchDelete() {
     showToast("没有可删除的消息", "warning");
     return;
   }
-  showBatchDeleteModal(queue);
+  const batchChatId = (() => {
+    try { return window._beiluCurWinChatId?.() || currentChatId; }
+    catch { return currentChatId; }
+  })();
+  if (!batchChatId) {
+    showToast("无法确定批量删除所属对话，请刷新后重试", "error");
+    return;
+  }
+  showBatchDeleteModal(queue, batchChatId);
 }
 
 /**
@@ -205,9 +213,10 @@ async function handleRegenerate() {
 
 /**
  * 显示批量删除消息弹窗
- * @param {Array<object>} queue - 消息队列
+ * @param {Array<object>} queue - 消息队列快照
+ * @param {string} batchChatId - 打开弹窗时冻结的窗口/对话 ID
  */
-function showBatchDeleteModal(queue) {
+function showBatchDeleteModal(queue, batchChatId) {
   document.getElementById("batch-delete-overlay")?.remove();
 
   const overlay = document.createElement("div");
@@ -237,10 +246,18 @@ function showBatchDeleteModal(queue) {
   listContainer.className = "fp-list-container";
   listContainer.style.maxHeight = "450px";
 
-  const selectedIndices = new Set();
+  // 选中态保存完整删除身份而非单独索引；弹窗打开后即使切聊天，
+  // 后续请求仍指向原对话，后端再以 messageId 校验 indexHint。
+  const selectedRequests = new Map(); // qIdx -> { chatId, indexHint, messageId }
+  const deleteRequests = [];
 
   queue.forEach((msg, qIdx) => {
     const chatLogIdx = getChatLogIndexByQueueIndex(qIdx);
+    const messageId = typeof msg?.id === "string" && msg.id ? msg.id : "";
+    const deleteRequest = messageId && chatLogIdx >= 0
+      ? { chatId: batchChatId, indexHint: chatLogIdx, messageId }
+      : null;
+    deleteRequests[qIdx] = deleteRequest;
     const item = document.createElement("div");
     item.className = "fp-item batch-del-item";
     item.style.cursor = "pointer";
@@ -256,7 +273,7 @@ function showBatchDeleteModal(queue) {
     item.innerHTML = `
 			<label style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer;">
 				<input type="checkbox" class="checkbox checkbox-xs checkbox-warning batch-del-cb"
-					data-queue-idx="${qIdx}" data-chatlog-idx="${chatLogIdx}" />
+					data-queue-idx="${qIdx}"${deleteRequest ? "" : " disabled title=\"消息缺少稳定 ID，不能删除\""} />
 				<span style="font-size:0.75rem;flex-shrink:0;">${roleIcon}</span>
 				<span style="font-size:0.75rem;font-weight:500;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">${escapeHtml(name)}</span>
 				<span style="font-size:0.7rem;opacity:0.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${escapeHtml(preview)}${preview.length >= 60 ? "…" : ""}</span>
@@ -266,14 +283,15 @@ function showBatchDeleteModal(queue) {
 
     const cb = item.querySelector(".batch-del-cb");
     cb.addEventListener("change", () => {
-      if (cb.checked) selectedIndices.add(chatLogIdx);
-      else selectedIndices.delete(chatLogIdx);
+      if (cb.checked && deleteRequest) selectedRequests.set(qIdx, deleteRequest);
+      else selectedRequests.delete(qIdx);
       updateBatchDeleteFooter();
     });
 
     // 点击行也切换 checkbox（但不影响 label 内的 checkbox 自身事件）
     item.addEventListener("click", (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "LABEL") return;
+      if (cb.disabled) return;
       cb.checked = !cb.checked;
       cb.dispatchEvent(new Event("change"));
     });
@@ -299,15 +317,18 @@ function showBatchDeleteModal(queue) {
   const confirmBtn = footer.querySelector("#bd-confirm");
 
   function updateBatchDeleteFooter() {
-    countLabel.textContent = `已选 ${selectedIndices.size} 条`;
-    confirmBtn.disabled = selectedIndices.size === 0;
+    countLabel.textContent = `已选 ${selectedRequests.size} 条`;
+    confirmBtn.disabled = selectedRequests.size === 0;
   }
 
   // 全选
   footer.querySelector("#bd-select-all").addEventListener("click", () => {
     listContainer.querySelectorAll(".batch-del-cb").forEach((cb) => {
+      if (cb.disabled) return;
       cb.checked = true;
-      selectedIndices.add(parseInt(cb.dataset.chatlogIdx));
+      const qIdx = Number.parseInt(cb.dataset.queueIdx, 10);
+      const request = deleteRequests[qIdx];
+      if (request) selectedRequests.set(qIdx, request);
     });
     updateBatchDeleteFooter();
   });
@@ -317,22 +338,23 @@ function showBatchDeleteModal(queue) {
     listContainer.querySelectorAll(".batch-del-cb").forEach((cb) => {
       cb.checked = false;
     });
-    selectedIndices.clear();
+    selectedRequests.clear();
     updateBatchDeleteFooter();
   });
 
   // 确认删除
   confirmBtn.addEventListener("click", async () => {
-    if (selectedIndices.size === 0) return;
+    if (selectedRequests.size === 0) return;
     if (
       !await beiluConfirm(
-        `确定删除选中的 ${selectedIndices.size} 条消息吗？此操作不可撤销。`,
+        `确定删除选中的 ${selectedRequests.size} 条消息吗？此操作不可撤销。`,
       )
     )
       return;
 
-    // 从大到小排序索引，避免删除时索引移位
-    const sortedIndices = Array.from(selectedIndices).sort((a, b) => b - a);
+    // 索引只是定位提示；倒序仍可减少提示偏移，真实身份由 messageId 保证。
+    const requests = Array.from(selectedRequests.values())
+      .sort((a, b) => b.indexHint - a.indexHint);
 
     confirmBtn.disabled = true;
     confirmBtn.textContent = "⏳ 删除中...";
@@ -340,12 +362,20 @@ function showBatchDeleteModal(queue) {
     let successCount = 0;
     let failCount = 0;
 
-    for (const idx of sortedIndices) {
+    for (const request of requests) {
       try {
-        await deleteMessage(idx);
-        successCount++;
+        const result = await deleteMessage(
+          request.chatId,
+          request.indexHint,
+          request.messageId,
+        );
+        if (result?.applied === true) successCount++;
+        else {
+          console.warn(`删除消息 ${request.messageId} 未应用:`, result?.reason || result);
+          failCount++;
+        }
       } catch (err) {
-        console.error(`删除消息 ${idx} 失败:`, err);
+        console.error(`删除消息 ${request.messageId} 失败:`, err);
         failCount++;
       }
     }

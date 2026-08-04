@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { authenticate } from "../../../../yonban/core/functions/security/auth.mjs";
+import { createDownloadJobState, finalizeDownloadJobState } from "./download_job_model.mjs"; // D5 §2.3 Job DTO/终态合同(纯函数叶子,可单测)
 
 let _sttProcess = null;
 let _sttStderr = "";
@@ -124,7 +125,10 @@ function _advanceStartup(msg) {
   const shards = [...msg.matchAll(/Loading checkpoint shards:\s*(\d+)%/g)];
   if (shards.length) { _startup.phase = "loading_model"; _startup.pct = Number(shards[shards.length - 1][1]); }
   if (/Model loaded in [\d.]+s/.test(msg)) { _startup.phase = "binding"; _startup.pct = null; }
-  if (msg.includes("Failed to load model")) { _startup.phase = "failed"; _startup.error = msg.slice(0, 500); _startup.endedAt = Date.now(); }
+  if (msg.includes("Failed to load model")) {
+    _startup.phase = "failed"; _startup.error = msg.slice(0, 500); _startup.endedAt = Date.now();
+    return;
+  }
   if (msg.includes("Uvicorn running on") || msg.includes("Application startup complete")) {
     _startup.phase = "ready"; _startup.endedAt = Date.now();
   }
@@ -197,11 +201,26 @@ function _spawnSttService({ modelPath, port, pythonExe } = {}) {
 // 服务未起时自动 spawn 并等 health(uvicorn 先载模型后绑端口,健康=可用);并发去重单飞。
 // 入口:record/transcribe 代理 ECONNREFUSED 重试 + /api/eye/stt-ensure(桌宠,endpoints.mjs 直接 import)。
 let _ensurePromise = null;
-export async function ensureServiceStarted(port = 7861) {
+async function _probeSttHealth(port) {
   try {
-    const h = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1500) });
-    if (h.ok) return { ok: true, already: true };
-  } catch { /* 未起,走拉起 */ }
+    const response = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1500) });
+    let payload = null;
+    try { payload = await response.json(); } catch { /* 非 JSON 健康响应 */ }
+    return {
+      reachable: true,
+      ready: response.ok,
+      error: payload?.error || payload?.detail || (response.ok ? null : `health HTTP ${response.status}`),
+    };
+  } catch (error) {
+    return { reachable: false, ready: false, error: error?.message || String(error) };
+  }
+}
+
+export async function ensureServiceStarted(port = 7861) {
+  const existing = await _probeSttHealth(port);
+  if (existing.ready) return { ok: true, already: true };
+  // 端口已有 STT 服务响应但模型不可用，不能再 spawn 第二个进程撞端口。
+  if (existing.reachable) return { ok: false, error: existing.error || "模型未就绪" };
   if (_ensurePromise) return _ensurePromise;
   _ensurePromise = (async () => {
     try {
@@ -209,12 +228,14 @@ export async function ensureServiceStarted(port = 7861) {
         const r = _spawnSttService({ port });
         if (r.error) return { ok: false, error: r.error };
       }
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
-        try {
-          const h = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(1500) });
-          if (h.ok) return { ok: true };
-        } catch { /* 模型加载中 */ }
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        if (_startup?.phase === "failed")
+          return { ok: false, error: _startup.error || "模型加载失败" };
+        const health = await _probeSttHealth(port);
+        if (health.ready) return { ok: true };
+        if (health.reachable)
+          return { ok: false, error: health.error || "模型未就绪" };
         if (!(_sttProcess && !_sttProcess.killed))
           return { ok: false, error: "服务进程退出: " + _sttStderr.slice(-300) };
       }
@@ -342,7 +363,15 @@ export default {
     });
 
     router.post('/api/parts/plugins\\:beilu-stt/model/cancel', authenticate, (_req, res) => {
-      if (_dl?.running) { _dl.abort?.abort(); return res.json({ status: "cancelling" }); }
+      if (_dl?.running) {
+        // [D5 §2.3] cancel 收束语义:先标 cancelling 并 abort;terminal `cancelled` 只由后台任务的
+        // finally 在所有在途 list/probe/transfer settle 后写入(finalizeDownloadJobState)。
+        // .part 保留、已验证目标文件不删——取消不是 error。
+        _dl.phase = "cancelling";
+        _dl.note = "正在取消（等待在途连接收束，已下载部分保留）…";
+        _dl.abort?.abort();
+        return res.json({ status: "cancelling", jobId: _dl.jobId });
+      }
       res.json({ status: "not_running" });
     });
 
@@ -350,9 +379,9 @@ export default {
       if (_dl?.running) return res.status(409).json({ error: "已有下载任务在进行" });
       const wanted = MODEL_SOURCES.find((s) => s.id === (req.body?.source || "auto")) || MODEL_SOURCES[0];
       const abort = new AbortController();
-      _dl = { running: true, source: wanted.id, filesTotal: 0, filesDone: 0, currentFile: "",
-              doneBytes: 0, totalBytes: 0, error: null, finished: false, abort };
-      res.json({ status: "started", source: wanted.id, targetDir: DEFAULT_MODEL_PATH });
+      // [D5 §2.3] Job DTO 全字段(jobId/phase/sourceOrder/probe/resumeBytes/terminalReason)单源=download_job_model.mjs
+      _dl = { ...createDownloadJobState(wanted.id), abort };
+      res.json({ status: "started", jobId: _dl.jobId, source: wanted.id, targetDir: DEFAULT_MODEL_PATH });
 
       // 后台执行（单槽,进度经 /model/progress 轮询）。抗网络波动设计（凛倾 0722 + 20260724 多源化）:
       //   ①字节级断点续传:.part 保留,重试/重启任务用 Range: bytes=N- 续传（三源实测 206;
@@ -381,6 +410,7 @@ export default {
               let offset = 0;
               try { if (fs.existsSync(part)) offset = fs.statSync(part).size; } catch {}
               if (f.size > 0 && offset > f.size) { try { fs.unlinkSync(part); } catch {} offset = 0; }
+              _dl.resumeBytes = offset; // Job DTO:当前文件 .part 续传起点(取消/失败后即下次续传位置)
 
               const attemptCtrl = new AbortController();
               const onJobAbort = () => attemptCtrl.abort();
@@ -464,7 +494,14 @@ export default {
           // ── 选源:auto=并行测速按吞吐排序;手选=该源优先,其余源作故障转移后备 ──
           let ordered, files = null;
           if (wanted.auto) {
-            _dl.note = "各源并行测速中…";
+            // [0804 根因修·auto 检测失败但直连能下] 原实现把测速探针（12s list + 10s/256KB Range）
+            //   当下载准入门：probe 失败即整源剔除、三源全失败直接终止——而真实下载链有 30s 无字节
+            //   watchdog、每源 4 次指数退避重试、跨源 .part 续传，慢网/探针被拒时照样能传输
+            //   （E 现场"直连可以下载,自动检测直接失败"实证）。
+            //   改为 probe 只排序不作准入：可测速的按吞吐降序在前，probe 失败的保留在尾部作故障转移；
+            //   全 probe 失败时回落到与手选完全相同的 list 合同（20s/源、逐源换、任一成功即准入）。
+            //   只有所有源连文件列表都取不到，才报"所有下载源不可达"。
+            _dl.note = "正在选择下载源（慢网也会直接尝试下载）…";
             const probes = await Promise.all(REAL_SOURCES.map(async (s) => {
               try { return { s, ...(await _probeSource(s, abort.signal)) }; }
               catch (e) { return { s, error: e.message }; }
@@ -473,12 +510,30 @@ export default {
             const usable = probes.filter((p) => !p.error).sort((a, b) => b.bps - a.bps);
             _dl.probe = probes.map((p) => ({ id: p.s.id, label: p.s.label,
               mbps: p.error ? null : +(p.bps / 1048576).toFixed(2), error: p.error || null }));
-            if (!usable.length)
-              throw new Error("所有下载源不可达: " + probes.map((p) => `${p.s.id}: ${p.error}`).join("; "));
-            ordered = usable.map((p) => p.s);
-            files = usable[0].files; // 测速时已取到最快源的文件列表,直接复用
-            _dl.source = ordered[0].id;
-            _dl.note = `测速完成,选用${ordered[0].label}（${(usable[0].bps / 1048576).toFixed(2)} MB/s）`;
+            ordered = [...usable.map((p) => p.s), ...probes.filter((p) => p.error).map((p) => p.s)];
+            files = usable[0]?.files || null; // 测速时已取到最快源的文件列表,直接复用
+            if (files) {
+              _dl.source = ordered[0].id;
+              _dl.note = `测速完成,选用${ordered[0].label}（${(usable[0].bps / 1048576).toFixed(2)} MB/s）`;
+            } else {
+              // 全 probe 失败 → 与手选同一 list 合同逐源取清单（探针失败≠源不可用）
+              let probeListErr = null;
+              for (const src of ordered) {
+                try {
+                  files = await _listModelFiles(src, AbortSignal.any([abort.signal, AbortSignal.timeout(20_000)]));
+                  _dl.source = src.id;
+                  _dl.note = `测速均超时,已直连${src.label}获取文件列表,开始下载（慢网自适应重试/续传）`;
+                  ordered = [src, ...ordered.filter((s) => s.id !== src.id)];
+                  break;
+                } catch (e) {
+                  if (abort.signal.aborted) throw new Error("已取消");
+                  probeListErr = e;
+                  _dl.note = `文件列表获取失败(${src.id}: ${e.message}),换源重试`;
+                }
+              }
+              if (!files)
+                throw new Error("所有下载源不可达(文件列表均失败): " + probes.map((p) => `${p.s.id}: ${p.error}`).join("; ") + `; 最后错误: ${probeListErr?.message}`);
+            }
           } else {
             ordered = [wanted, ...REAL_SOURCES.filter((s) => s.id !== wanted.id)];
             let listErr = null;
@@ -495,6 +550,8 @@ export default {
             if (!files) throw new Error(`获取文件列表失败: ${listErr?.message}`);
           }
 
+          _dl.sourceOrder = ordered.map((s) => s.id); // Job DTO:最终故障转移顺序
+          if (_dl.phase === "selecting") _dl.phase = "transferring"; // cancelling 已标则不回退
           _dl.filesTotal = files.length;
           _dl.totalBytes = files.reduce((s, f) => s + (f.size || 0), 0);
           fs.mkdirSync(DEFAULT_MODEL_PATH, { recursive: true });
@@ -517,11 +574,15 @@ export default {
           }
           _dl.finished = true;
         } catch (e) {
-          _dl.error = abort.signal.aborted ? "已取消（已下载部分保留,可续传）" : e.message;
-          console.error("[stt] 模型下载失败:", e.message);
+          if (!abort.signal.aborted) _dl.error = e.message; // 取消不是 error(终态由 finalize 单点裁决)
+          console.error("[stt] 模型下载" + (abort.signal.aborted ? "已取消:" : "失败:"), e.message);
         } finally {
           clearInterval(speedTimer);
-          _dl.running = false;
+          // [D5 §2.3] 终态收束单点:此刻所有在途 list/probe/transfer 已 settle(同一 async 任务内),
+          // cancelling→cancelled / 完成→completed / 其余→failed;字段合同见 download_job_model.mjs。
+          Object.assign(_dl, finalizeDownloadJobState({
+            aborted: abort.signal.aborted, finished: _dl.finished, errorMessage: _dl.error,
+          }));
           _dl.currentFile = "";
         }
       })();

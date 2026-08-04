@@ -2,7 +2,7 @@ import { authenticate, getUserByReq } from '../../../../../yonban/core/functions
 // [0716 W3 刷新机制] AI 源增删改广播出口（preset_list_changed 同范式；dispatcher 不依赖具体 shell 无环）
 import { dispatch } from '../../../../../yonban/core/dispatch/dispatcher.mjs'
 
-import { addServiceSourceFile, deleteServiceSourceFile, getConfigDisplay, getConfigTemplate, getProviderMeta, getServiceSourceFile, saveServiceSourceFile } from './manager.mjs'
+import { deleteServiceSourceFile, ensureUsableDefaultAIServiceSource, getAIServiceSourceSetupStatus, getConfigDisplay, getConfigTemplate, getProviderMeta, getServiceSourceFile, isUsableAIServiceSourceConfig, normalizeServiceSourceFileName, repairSingleUsableDefaultAIServiceSource, saveServiceSourceFile, serviceSourceExists } from './manager.mjs'
 
 // [0716 W3 刷新机制] 服务源增删改/设默认后单点广播——此前全库无 aisource 广播（事件配对矩阵普查 D3）：
 //   跨窗口增删改源后，别窗口的源下拉/模型列表定格旧值。消费链：websocket "aisource_changed" →
@@ -26,11 +26,40 @@ function inferServiceSourcePath(type = 'AI') {
 	return `serviceSources/${type}`
 }
 
+function validateServiceSourceNameForRequest(name, res) {
+	try {
+		normalizeServiceSourceFileName(name)
+		return true
+	}
+	catch (error) {
+		res.status(400).json({ error: error.message })
+		return false
+	}
+}
+
 /**
  * 为服务源管理设置API端点，使用 RESTful 风格。
  * @param {object} router - Express的路由实例。
  */
 export function setEndpoints(router) {
+	// UI 引导、默认绑定和运行时读取共用这一状态；目录存在或 generator fallback 均不能代表可生成。
+	router.get('/api/parts/shells\\:serviceSourceManage/:type/setup-status', authenticate, async (req, res) => {
+		const { username } = await getUserByReq(req)
+		const { type = 'AI' } = req.params
+		if (type !== 'AI') return res.status(400).json({ error: 'Setup status is only available for AI sources' })
+		res.status(200).json(getAIServiceSourceSetupStatus(username))
+	})
+	// 旧版保存过的唯一完整源没有默认绑定时，允许前端在启动时显式请求一次无歧义修复。
+	// 绝不在状态 GET 中写数据，也绝不对多源场景替用户选择默认源。
+	router.post('/api/parts/shells\\:serviceSourceManage/:type/setup-repair', authenticate, async (req, res) => {
+		const { username } = await getUserByReq(req)
+		const { type = 'AI' } = req.params
+		if (type !== 'AI') return res.status(400).json({ error: 'Setup repair is only available for AI sources' })
+		const setup = repairSingleUsableDefaultAIServiceSource(username)
+		if (setup.autoRepaired) await _broadcastSourcesChanged(username, type, setup.repairedDefaultSourceName)
+		res.status(200).json(setup)
+	})
+
 	// 列出指定类型的所有服务源
 	router.get('/api/parts/shells\\:serviceSourceManage/:type', authenticate, async (req, res) => {
 		const { username } = await getUserByReq(req)
@@ -45,6 +74,7 @@ export function setEndpoints(router) {
 	router.get('/api/parts/shells\\:serviceSourceManage/:type/:name', authenticate, async (req, res) => {
 		const { username } = await getUserByReq(req)
 		const { type = 'AI', name } = req.params
+		if (!validateServiceSourceNameForRequest(name, res)) return
 		const serviceSourcePath = inferServiceSourcePath(type)
 		const data = await getServiceSourceFile(username, name, serviceSourcePath)
 		res.status(200).json(data)
@@ -54,41 +84,44 @@ export function setEndpoints(router) {
 	router.post('/api/parts/shells\\:serviceSourceManage/:type/:name', authenticate, async (req, res) => {
 		const { username } = await getUserByReq(req)
 		const { type = 'AI', name } = req.params
+		if (!validateServiceSourceNameForRequest(name, res)) return
 		const serviceSourcePath = inferServiceSourcePath(type)
-		const { generator, config } = req.body
+		const { generator, config } = req.body ?? {}
+		if (generator !== undefined && (typeof generator !== 'string' || !generator.trim()))
+			return res.status(400).json({ error: 'generator must be a non-empty string when provided' })
+		if (config !== undefined && (!config || typeof config !== 'object' || Array.isArray(config)))
+			return res.status(400).json({ error: 'config must be an object when provided' })
 
-		// 检查服务源是否存在
-		const existing = await getServiceSourceFile(username, name, serviceSourcePath).catch(() => null)
+		const existed = serviceSourceExists(username, name, serviceSourcePath)
+		// 新建必须一次性给出运行时 DTO。禁止「先建空壳、随后异步补 generator」：
+		// 那会让首次 Load 读取空配置，生成器/缓存与落盘配置从此分叉。
+		if (!existed && (!generator || !config))
+			return res.status(400).json({ error: 'Creating a service source requires { generator, config }' })
 
-		if (existing && (existing.generator || existing.config)) {
-			// 更新现有服务源
-			const data = {
-				...existing,
-				config: config ? { ...existing.config, ...config } : existing.config
-			}
-			if (generator) data.generator = generator
-			await saveServiceSourceFile(username, name, data, serviceSourcePath)
-			await _broadcastSourcesChanged(username, type, name) // [0716 W3]
-			res.status(200).json({ message: 'Service source updated successfully' })
+		const existing = existed
+			? await getServiceSourceFile(username, name, serviceSourcePath)
+			: { generator: '', config: {} }
+		const data = {
+			...existing,
+			...(generator ? { generator } : {}),
+			config: config ? { ...(existing.config || {}), ...config } : (existing.config || {})
 		}
-		else {
-			// 创建新服务源
-			await addServiceSourceFile(username, name, serviceSourcePath)
-			if (generator || config) {
-				const data = await getServiceSourceFile(username, name, serviceSourcePath)
-				if (generator) data.generator = generator
-				if (config) data.config = { ...data.config, ...config }
-				await saveServiceSourceFile(username, name, data, serviceSourcePath)
-			}
-			await _broadcastSourcesChanged(username, type, name) // [0716 W3]
-			res.status(201).json({ message: 'Service source created successfully' })
-		}
+		if (type === 'AI' && (!data.generator || !data.generator.trim()))
+			return res.status(400).json({ error: 'AI service source requires a non-empty generator' })
+		await saveServiceSourceFile(username, name, data, serviceSourcePath)
+		const setup = type === 'AI' ? ensureUsableDefaultAIServiceSource(username, name) : null
+		await _broadcastSourcesChanged(username, type, name) // [0716 W3]
+		res.status(existed ? 200 : 201).json({
+			message: existed ? 'Service source updated successfully' : 'Service source created successfully',
+			setup
+		})
 	})
 
 	// 删除服务源
 	router.delete('/api/parts/shells\\:serviceSourceManage/:type/:name', authenticate, async (req, res) => {
 		const { username } = await getUserByReq(req)
 		const { type = 'AI', name } = req.params
+		if (!validateServiceSourceNameForRequest(name, res)) return
 		const serviceSourcePath = inferServiceSourcePath(type)
 		// T026: mode=permanent 彻底删（防留痕，前端弹窗显式选择后才传）；缺省/其他值一律进回收站
 		const mode = req.query?.mode === 'permanent' ? 'permanent' : 'trash'
@@ -101,7 +134,13 @@ export function setEndpoints(router) {
 	router.put('/api/parts/shells\\:serviceSourceManage/:type/:name/default', authenticate, async (req, res) => {
 		const { username } = await getUserByReq(req)
 		const { type = 'AI', name } = req.params
+		if (!validateServiceSourceNameForRequest(name, res)) return
 		const serviceSourcePath = inferServiceSourcePath(type)
+		if (type === 'AI') {
+			const data = await getServiceSourceFile(username, name, serviceSourcePath)
+			if (!isUsableAIServiceSourceConfig(data))
+				return res.status(400).json({ error: 'AI service source is incomplete and cannot be set as default' })
+		}
 		const { setDefaultPart } = await import('../../../../../server/parts_loader.mjs')
 		await setDefaultPart(username, serviceSourcePath, name)
 		// beilu: achievements 已删除

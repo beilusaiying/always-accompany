@@ -22,9 +22,71 @@
 import { register } from "../../dispatch/registry.mjs";
 import filesPlugin, { _filesAls } from "../../../../public/parts/plugins/beilu-files/main.mjs";
 
+const ROOT_MUTATION_SOURCES = new Set(["web", "ws"]);
+const FILE_PATH_ACTIONS = new Set([
+	"readFile", "readFileAuto", "readFileBase64", "readFileExtract",
+	"writeFile", "listDir", "createFile", "deleteFile", "createDir",
+	"rename", "move", "moveFile", "searchFiles",
+]);
+// SetData 是兼容总入口，动作级 scope 契约必须在 facade 单源声明：
+// 前端和其它调用方只传 context.chatId，不再各自维护 payload chatid 名单。
+const CHAT_SCOPED_STATE_ACTIONS = new Set([
+	"approveOp", "rejectOp", "approveAll", "rejectAll",
+	"getPendingErrors", "consumePendingErrors",
+	"setMode", "getCleanupInfo",
+	"getFileVersions", "revertFileVersion", "getFileDiff", "manualBackup",
+	"listChatBackups", "restoreChatBackup",
+]);
+const _hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+// [D6 §3 2026-08-04] browse 授权动作：与根变更同级权威（只许已认证 web/ws 发起）。
+//   grant 是工作区外列举的唯一通行证（beilu-files _browseGrants owner-bound 短期），
+//   签发面必须锁在 facade 的 dispatchSource+context.user 闸后，AI/调度器路径不可达。
+//   getIdeRootCandidate=IDE 确认链的前置只读（同闸：候选/路由快照只给认证 web 用户）。
+const BROWSE_GRANT_ACTIONS = new Set(["requestBrowseGrant", "releaseBrowseGrant", "adoptLegacyWorkspaceRoots", "getIdeRootCandidate"]);
+
+function _isRootMutation(data) {
+	return !!data && typeof data === "object" && (
+		data._action === "setWorkspaceRoot"
+		// [D6 §2.4] IDE 根确认=根变更同级（web/ws+认证+可信 chatId 闸全套适用）
+		|| data._action === "confirmIdeWorkspaceRoot"
+		|| _hasOwn(data, "rootPath")
+		|| _hasOwn(data, "workspaceRoot")
+	);
+}
+
+function _authorityError(code, msg) {
+	return { ok: false, error: { code, msg } };
+}
+
+function _bindTrustedChatId(data, context, errorCode, { required = false } = {}) {
+	if (!data || typeof data !== "object") return { ok: true, data };
+	const trustedChatId = typeof context?.chatId === "string" ? context.chatId.trim() : "";
+	const hasClientClaim = data.chatid != null || data.chatId != null;
+	if (!trustedChatId) {
+		if (required || hasClientClaim)
+			return _authorityError("E_FILES_CHAT_REQUIRED", "文件操作需要明确的发起窗口会话");
+		return { ok: true, data };
+	}
+	for (const key of ["chatid", "chatId"]) {
+		if (data[key] != null && data[key] !== trustedChatId)
+			return _authorityError(errorCode, `文件请求 ${key} 与可信会话不一致`);
+	}
+	// SetData 旧契约只消费 chatid；下沉前去掉客户端 chatId 别名，不把双键带入业务层。
+	const { chatId: _discardedClientAlias, ...rest } = data;
+	return { ok: true, data: { ...rest, chatid: trustedChatId } };
+}
+
 function _withUser(context, payload, fn) {
 	const username = context?.user ?? payload?.username;
-	return username ? _filesAls.run({ username }, fn) : fn();
+	const store = {
+		...(username ? { username } : {}),
+		dispatchSource: context?.dispatchSource,
+		chatId: context?.chatId,
+	};
+	return (username || context?.dispatchSource !== undefined || context?.chatId !== undefined)
+		? _filesAls.run(store, fn)
+		: fn();
 }
 
 register("functions:files", {
@@ -35,10 +97,33 @@ register("functions:files", {
 	},
 	handlers: {
 		async getData(payload, context) {
-			return { ok: true, data: await _withUser(context, payload, () => filesPlugin.interfaces.config.GetData()) };
+			return {
+				ok: true,
+				data: await _withUser(context, payload, () => filesPlugin.interfaces.config.GetData({ chatid: context?.chatId })),
+			};
 		},
 		async setData(payload, context) {
-			return { ok: true, data: await _withUser(context, payload, () => filesPlugin.interfaces.config.SetData(payload?.data)) };
+			let data = payload?.data;
+			const rootMutation = _isRootMutation(data);
+			if (rootMutation) {
+				if (!ROOT_MUTATION_SOURCES.has(context?.dispatchSource) || !context?.user)
+					return _authorityError("E_FILES_ROOT_AUTHORITY", "工作区根只能由已认证的 Web 请求修改");
+				const bound = _bindTrustedChatId(data, context, "E_FILES_ROOT_AUTHORITY");
+				if (!bound.ok) return bound;
+				data = bound.data;
+			} else if (BROWSE_GRANT_ACTIONS.has(data?._action)) {
+				// [D6 §3.2] browse 授权/旧根认领：authenticated context.user + 可信 web/ws 来源硬性要求
+				if (!ROOT_MUTATION_SOURCES.has(context?.dispatchSource) || !context?.user)
+					return _authorityError("E_BROWSE_SCOPE", "browse 授权只能由已认证的 Web 请求发起");
+				const bound = _bindTrustedChatId(data, context, "E_FILES_CHAT_AUTHORITY");
+				if (!bound.ok) return bound;
+				data = bound.data;
+			} else if (FILE_PATH_ACTIONS.has(data?._action) || CHAT_SCOPED_STATE_ACTIONS.has(data?._action)) {
+				const bound = _bindTrustedChatId(data, context, "E_FILES_CHAT_AUTHORITY", { required: true });
+				if (!bound.ok) return bound;
+				data = bound.data;
+			}
+			return { ok: true, data: await _withUser(context, payload, () => filesPlugin.interfaces.config.SetData(data)) };
 		},
 	},
 });

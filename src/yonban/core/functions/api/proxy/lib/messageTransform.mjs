@@ -476,7 +476,9 @@ export function squashSystemMessages(messages) {
           return "";
         })
         .join("\n\n");
-      result.push({ role: "system", content: merged });
+      // 保留该连续段首条的组装元数据（尤其 _section=injectionBelow）。缓存边界在最终
+      // post-process 形状上依赖它定位首个历史后动态块；只产 {role,content} 会把证据抹掉。
+      result.push({ ...pendingSystem[0], role: "system", content: merged });
     }
     pendingSystem = [];
   }

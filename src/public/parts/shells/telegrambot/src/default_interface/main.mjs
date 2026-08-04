@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { clearInterval, setInterval } from "node:timers";
 
 import { localhostLocales } from "../../../../../../scripts/i18n.mjs";
-import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, createBotStreamEditor, makeStreamGenerationOptions, shouldAbsorbBurst, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
+import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, resolveBotPermissionLevel, buildBotSourceMeta, pickBotSourceMeta, withBotPermissionDefaults, tryFewTimes, sanitizeExternalMessage, registerBotDelegateWaker, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, mergeChatLog, createBotMessageLog, loadOwnerPersona, runExclusiveWakeSlot, createMessageQueueRuntime, resolveBotTrigger, createBotStreamEditor, makeStreamGenerationOptions, shouldAbsorbBurst, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from "../../../../../../scripts/botContentShared.mjs";
 import { createDiag } from "../../../../../../server/diagLogger.mjs";
 // BR2: runtime 错误外显——GetReply 失败时广播到前端红点
 import { broadcastBotError } from '../../../botErrorBroadcast.mjs'
@@ -190,7 +190,7 @@ export async function createSimpleTelegramInterface(charAPI, ownerUsername, botC
 				content: _finalContent,
 				files: files.filter(Boolean),
 				_sourceType: "bot",
-				_permissionLevel: resolveBotPermissionLevel(config, from?.id, isOwner),
+				...buildBotSourceMeta(config, from?.id, isOwner),
 				extension: {
 					...cachedAIReply?.extension,
 					telegram_message_id: msg.message_id,
@@ -224,7 +224,7 @@ export async function createSimpleTelegramInterface(charAPI, ownerUsername, botC
 				await appendBotChatEntry(await resolveBotChatId(ownerUsername, botCharname, "telegram"), {
 					role: newEntry.role, name: newEntry.name, content: newEntry.content,
 					files: newEntry.files, extension: newEntry.extension,
-					_sourceType: newEntry._sourceType, _permissionLevel: newEntry._permissionLevel,
+					...pickBotSourceMeta(newEntry),
 				});
 			} catch (e) { diag.warn(`bot 对话文件用户消息落盘失败（本轮回退壳内存）: ${e?.message || e}`); }
 			ChatLogs[chatId].push(newEntry);

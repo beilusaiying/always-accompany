@@ -36,7 +36,11 @@ register("functions:memory", {
 		},
 		async setData(payload, context) {
 			// args 缺失也必须盖章（否则 SEC-T1 的 args?.username 门不触发，data.username 自报生效=越权洞）
-			const _args = context?.user ? { ...payload?.args, username: context.user } : payload?.args;
+			// [P0-C 2026-08-03] context.chatId → args.chatid facade 单源（任务 MD P0-C 要求1）：
+			//   桥认证会话的 scope.chatId 在此统一落 args.chatid，下游 handleSetData 归一/归属校验
+			//   消费同一权威值；context 无 chatId 时不覆盖（内部调用方语义不变）。
+			let _args = context?.user ? { ...payload?.args, username: context.user } : payload?.args;
+			if (context?.chatId) _args = { ..._args, chatid: context.chatId };
 			const result = await handleSetData(payload?.data, _args);
 			// 子模式切换广播副作用（setData 过桥前置：REST 线 memory/main.mjs:97-110 的同一副作用在
 			// dispatch 线的对应实现——功能节点显式 dispatch 到出口节点，exits.mjs 架构形）。

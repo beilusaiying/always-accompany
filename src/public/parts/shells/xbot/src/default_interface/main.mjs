@@ -1,7 +1,7 @@
 import { clearInterval, setInterval } from 'node:timers'
 
 import { localhostLocales } from '../../../../../../scripts/i18n.mjs'
-import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, checkBotTriggerAllowed, resolveBotPermissionLevel, withBotPermissionDefaults, sanitizeExternalMessage, createBotMessageLog, loadOwnerPersona, registerBotDelegateWaker, runExclusiveWakeSlot, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, BOT_MSG_MERGE_WINDOW_MS, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from '../../../../../../scripts/botContentShared.mjs'
+import { applyBotContentFilter, loadAllDefaultPlugins, extractPlatformContentShared, checkBotTriggerAllowed, resolveBotPermissionLevel, buildBotSourceMeta, pickBotSourceMeta, withBotPermissionDefaults, sanitizeExternalMessage, createBotMessageLog, loadOwnerPersona, registerBotDelegateWaker, runExclusiveWakeSlot, handleBotChatCommand, resolveBotChatId, appendBotChatEntry, buildBotChatLogFromFile, BOT_MSG_MERGE_WINDOW_MS, BOT_DEFAULT_MAX_MESSAGE_DEPTH } from '../../../../../../scripts/botContentShared.mjs'
 import { createDiag } from '../../../../../../server/diagLogger.mjs'
 // BR2: runtime 错误外显——GetReply 失败时广播到前端红点
 import { broadcastBotError } from '../../../botErrorBroadcast.mjs'
@@ -183,7 +183,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 						files: [],
 						// C6: bot 来源标记 + 独立权限等级（供下游消费端按 L0-L3 裁决；接入能力裁决属 K7 未接）
 						_sourceType: 'bot',
-						_permissionLevel: resolveBotPermissionLevel(config, dmEvent.sender_id, sender.username === config.OwnerUserName),
+						...buildBotSourceMeta(config, dmEvent.sender_id, sender.username === config.OwnerUserName),
 						extension: { xbot_dm_event_id: dmEvent.id, xbot_conv_id: convId },
 					}
 
@@ -193,7 +193,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 						await appendBotChatEntry(await resolveBotChatId(ownerUsername, botCharname, 'x'), {
 							role: userEntry.role, name: userEntry.name, content: userEntry.content,
 							files: userEntry.files, extension: userEntry.extension,
-							_sourceType: userEntry._sourceType, _permissionLevel: userEntry._permissionLevel,
+							...pickBotSourceMeta(userEntry),
 						})
 					} catch (e) { diag.warn(`bot 对话文件用户消息落盘失败（本轮回退壳内存）: ${e?.message || e}`) }
 					chatLogs[convKey].push(userEntry)
@@ -288,7 +288,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 						files: [],
 						// C6: bot 来源标记 + 独立权限等级（供下游消费端按 L0-L3 裁决；接入能力裁决属 K7 未接）
 						_sourceType: 'bot',
-						_permissionLevel: resolveBotPermissionLevel(config, tweet.author_id, author.username === config.OwnerUserName),
+						...buildBotSourceMeta(config, tweet.author_id, author.username === config.OwnerUserName),
 						extension: { xbot_tweet_id: tweet.id },
 					}
 
@@ -298,7 +298,7 @@ export async function createSimpleXBotInterface(charAPI, ownerUsername, botCharn
 						await appendBotChatEntry(await resolveBotChatId(ownerUsername, botCharname, 'x'), {
 							role: userEntry.role, name: userEntry.name, content: userEntry.content,
 							files: userEntry.files, extension: userEntry.extension,
-							_sourceType: userEntry._sourceType, _permissionLevel: userEntry._permissionLevel,
+							...pickBotSourceMeta(userEntry),
 						})
 					} catch (e) { diag.warn(`bot 对话文件用户消息落盘失败（本轮回退壳内存）: ${e?.message || e}`) }
 					chatLogs[convKey].push(userEntry)

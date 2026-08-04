@@ -12,7 +12,7 @@
  *   Token 用量须含系统提示词+注入内容，前端无法精确计算，必须走 fake-send API 获取后端估算值；
  *   分母权威源为后端 _effective_max_context（子模式 > runtime > 预设 三层合并），防止前后端不一致；
  *   本模块只显示/清理，不管理上下文窗口——上下文入口在子模式面板与 AIRP 模型参数面板（凛倾 2026-07-07）；
- *   阈值自动弹窗通知已删（凛倾 2026-07-07"关闭上下文通知"），清理一律用户主动经🗜️面板。
+ *   阈值自动弹窗通知已删（凛倾 2026-07-07"关闭上下文通知"），清理一律由用户主动打开上下文管理面板。
  *   不管消息渲染（messageList）、不管 WS 通信（websocket.mjs）、不管记忆/归档后端逻辑（beilu-memory）。
  *
  * 关联链：
@@ -117,7 +117,7 @@ function createProgressBarDOM() {
         close: () => wrap.classList.add("hidden"),
       });
     }
-    // N26 同族收口：token 按钮族动态弹窗（🗜️压缩/📦归档/P1/P1诊断）接 ESC 仲裁——
+    // N26 同族收口：token 按钮族动态弹窗（上下文管理/归档/P1/P1诊断）接 ESC 仲裁——
     // 动态创建节点不在仲裁器内置兜底清单里，注册存在性条目（存在即视为打开）；
     // P1 诊断层叠在 P1 面板上层，优先级更高先被 ESC 关。
     for (const [oid, pri] of [
@@ -169,13 +169,13 @@ function createProgressBarDOM() {
   container.innerHTML = `
      <div class="token-progress-bar-wrapper" id="token-progress-bar-wrapper"
           title="Token 用量 · 事件驱动刷新 · 点击立即刷新">
-       <div class="token-progress-cache" id="token-progress-cache" style="position:absolute;height:100%;opacity:0.35;background:var(--beilu-accent);border-radius:4px;transition:width 0.3s"></div>
-       <div class="token-progress-fill" id="token-progress-fill" style="position:relative"></div>
+       <div class="token-progress-cache" id="token-progress-cache"></div>
+       <div class="token-progress-fill" id="token-progress-fill"></div>
      </div>
      <span class="token-progress-text" id="token-progress-text">—</span>
-     <button class="token-compress-btn" id="token-compress-btn" title="上下文管理">🗜️</button>
-     <button class="token-compress-btn" id="token-p1-btn" title="P1检索AI输出" style="font-size:11px">P1</button>
-     <button class="token-compress-btn" id="token-settings-btn" title="Token设置" style="font-size:12px">⚙️</button>
+     <button class="token-compress-btn menu_button" id="token-compress-btn" title="上下文管理" aria-label="上下文管理"><i data-ic="broom" aria-hidden="true"></i></button>
+     <button class="token-compress-btn token-p1-btn menu_button" id="token-p1-btn" title="P1检索AI输出" aria-label="P1检索AI输出">P1</button>
+     <button class="token-compress-btn menu_button" id="token-settings-btn" title="Token设置" aria-label="Token设置"><i data-ic="settings" aria-hidden="true"></i></button>
    `;
 
   // 常驻改造：container(进度条+读数+按钮族)直接挂顶栏 slot，内联常驻可见(原收进 hidden 的 token-expand-wrap 里=要点圆点才出现)。
@@ -1109,8 +1109,17 @@ async function executeFullCompact(keepCount, totalMessages) {
     //   避免把已压缩的旧对话/系统消息/工具输出当对话喂给摘要 AI。
     const allMsgs = chatMsgsEl.querySelectorAll(".chat-message:not(.system-hidden):not(.beilu-hidden-msg):not(.ide-tool-result-msg)");
     const parts = [];
+    const sourceMessageIds = [];
     for (let i = 0; i < Math.min(hideCount, allMsgs.length); i++) {
       const msgEl = allMsgs[i];
+      const identity = msgEl._beiluActionIdentity;
+      if (!identity
+        || typeof identity.messageId !== "string"
+        || !identity.messageId
+        || identity.chatId !== currentChatId) {
+        throw new Error("消息身份已过期或缺失，请刷新当前对话后重试压缩");
+      }
+      sourceMessageIds.push(identity.messageId);
       const name = msgEl.querySelector(".char-name")?.textContent?.trim() || "未知";
       const content = msgEl.querySelector(".message-content")?.textContent?.trim() || "";
       if (content) parts.push("[消息#" + i + "] " + name + ": " + content);
@@ -1126,7 +1135,7 @@ async function executeFullCompact(keepCount, totalMessages) {
     // T6b：走 beilu-memory 通配 setdata（verb=compactContext）
     const result = await sendAction({
       verb: "compactContext", target: "plugins:beilu-memory", source: "web",
-      payload: { chatHistory, messageCount: totalMessages, keepLastN: keepCount },
+      payload: { chatHistory, sourceMessageIds, messageCount: totalMessages, keepLastN: keepCount },
     });
     if (!result?.success) throw new Error(result?.error || "生成摘要失败");
 
@@ -1260,7 +1269,7 @@ export function initTokenProgressBar() {
   //     · 走 refreshTokenProgress（防抖 1s）而非 Immediate，与事件面共用同一条节流。
   //   "上下文变动直接刷新"由既有事件面承担（MutationObserver 消息增删 / generation_ended /
   //   模式·子模式·预设·runtime-params·API源 切换），本定时器只兜"事件面没覆盖到的变化"。
-  //   间隔由用户定（⚙️Token设置 → 刷新间隔，0=只事件驱动），改完即时重启定时器（下方 beilu:token-poll-changed）。
+  //   间隔由用户定（Token设置 → 刷新间隔，0=只事件驱动），改完即时重启定时器（下方 beilu:token-poll-changed）。
   const _startPoll = () => {
     _stopPoll();
     const sec = _pollSec();
@@ -1408,7 +1417,7 @@ async function _showTokenSettingsPopup() {
 
   const panel = document.createElement("div");
   panel.style.cssText = "background:oklch(var(--b1));border:1px solid oklch(var(--b3));border-radius:12px;padding:20px;max-width:420px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3)";
-  panel.innerHTML = '<div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold">🗜️ Token设置</h3><button id="token-popup-close" class="btn btn-xs btn-ghost">✕</button></div><div id="token-popup-body">加载中...</div>';
+  panel.innerHTML = '<div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold"><i data-ic="settings" aria-hidden="true"></i> Token设置</h3><button id="token-popup-close" class="btn btn-xs btn-ghost">✕</button></div><div id="token-popup-body">加载中...</div>';
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 

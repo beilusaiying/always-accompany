@@ -70,8 +70,10 @@ async function _livePost(patch) {
   try {
     await sendAction({ verb: "setData", target: "plugins:beilu-live", source: "web", payload: patch });
     _liveMsg("已保存");
+    return true;
   } catch (e) {
     _liveMsg("保存失败: " + (e?.message || e), true);
+    return false;
   }
 }
 
@@ -222,7 +224,7 @@ async function initCompanionLiveSettings() {
     _liveMsg("读取直播配置失败(需 beilu 后端运行): " + (e?.message || e), true);
     return; // 拉不到就不回填：留 HTML 空壳，不编造默认值
   }
-  const { enabled, config = {}, capabilities = {}, rules = {}, platforms = [] } = _liveData || {};
+  const { enabled, config = {}, carrier = {}, capabilities = {}, rules = {}, platforms = [] } = _liveData || {};
 
   if (g("comp-live-enabled")) g("comp-live-enabled").checked = !!enabled;
   if (g("comp-live-roomid")) g("comp-live-roomid").value = config.roomId || "";
@@ -232,16 +234,20 @@ async function initCompanionLiveSettings() {
   const bl = config.filter?.blacklist || {};
   if (g("comp-live-bl-words")) g("comp-live-bl-words").value = Array.isArray(bl.words) ? bl.words.join("\n") : "";
   if (g("comp-live-bl-users")) g("comp-live-bl-users").value = Array.isArray(bl.users) ? bl.users.join("\n") : "";
-  // 承载对话回填。未绑定时加 .live-chatid-unbound（警示色，走 --beilu-warning）——
-  //   没绑对话启动会被后端拒绝，这里先给出可见提示而不是等点了才报错。
-  const _showChatid = (cid) => {
+  // 承载对话回填：显式直播绑定优先；未显式绑定时显示后端解析出的陪伴 session 真值。
+  // 继承值只展示、不复制进 live/config.json，避免再造一份随后漂移的 chatid。
+  const _showChatid = (explicitCid, effective = {}) => {
     const el = g("comp-live-chatid");
     if (!el) return;
-    el.textContent = cid || "(未绑定)";
-    el.title = cid || "未绑定承载对话，启动时会被拒绝";
-    el.className = "live-chatid" + (cid ? "" : " live-chatid-unbound");
+    const cid = String(explicitCid || "").trim();
+    const inherited = !cid && effective?.source === "companion_session" ? String(effective.chatid || "").trim() : "";
+    el.textContent = cid || (inherited ? `跟随陪伴 · ${inherited}` : "(未显式绑定 · 等待陪伴运行)");
+    el.title = cid
+      ? "直播显式绑定的承载对话"
+      : (inherited ? "未显式绑定直播对话，当前跟随正在运行的陪伴承载对话" : "开始互动后自动跟随其承载对话，也可显式绑定一条 AIRP 对话");
+    el.className = "live-chatid" + ((cid || inherited) ? "" : " live-chatid-unbound");
   };
-  _showChatid(config.chatid);
+  _showChatid(config.chatid, carrier);
 
   // ── 绑定：每个控件只写自己那一个键（差异层） ──
   g("comp-live-enabled")?.addEventListener("change", e => _livePost({ enabled: e.target.checked }));
@@ -250,13 +256,20 @@ async function initCompanionLiveSettings() {
     _liveCfgPost({ platform: e.target.value });
     _liveRenderCreds(platforms, e.target.value, config); // 换平台=换凭据控件
   });
-  // 承载对话：点按钮把当前对话 id 写进配置（单源=配置；启动时后端只读它，前端不另传一份）
-  g("comp-live-bind-cur")?.addEventListener("click", () => {
+  // 承载对话：显式绑定才写 live 配置；写成功后再更新 UI，消除“乐观显示新值但后端仍是旧值”竞态。
+  g("comp-live-bind-cur")?.addEventListener("click", async () => {
     const cid = (typeof window._beiluGetChatId === "function" ? window._beiluGetChatId() : "") || "";
     if (!cid) { _liveMsg("当前没有打开的对话，请先打开一条对话再绑定", true); return; }
-    config.chatid = cid; _showChatid(cid); _liveCfgPost({ chatid: cid });
+    if (await _liveCfgPost({ chatid: cid })) { config.chatid = cid; _showChatid(cid); }
   });
-  g("comp-live-unbind")?.addEventListener("click", () => { config.chatid = ""; _showChatid(""); _liveCfgPost({ chatid: "" }); });
+  g("comp-live-unbind")?.addEventListener("click", async () => {
+    if (!(await _liveCfgPost({ chatid: "" }))) return;
+    config.chatid = "";
+    try {
+      const refreshed = await sendAction({ verb: "getData", target: "plugins:beilu-live", source: "web" });
+      _showChatid("", refreshed?.carrier || {});
+    } catch { _showChatid("", {}); }
+  });
 
   // 数值参数：change 即写（单位换算只在轮间隔一处）
   const numBind = (id, key, group) => g(id)?.addEventListener("change", e => {
@@ -290,7 +303,7 @@ async function initCompanionLiveSettings() {
   g("comp-live-start")?.addEventListener("click", async () => {
     _liveMsg("正在连接…");
     try {
-      // body 空：平台/房间/承载对话全走配置（单源）。后端 start 端点虽支持请求覆盖，前端不用那条路。
+      // body 空：平台/房间走配置；承载对话由后端单点解析“显式 live 绑定 > 陪伴运行 session”。
       const r = await sendAction({ verb: "startLive", target: "plugins:beilu-live", source: "web", payload: {} });
       if (r && r.success) { _liveMsg("已启动"); _liveRefreshStatus(); }
       else _liveMsg("启动失败: " + (r?.error || "未知原因"), true); // 后端诚实拒启的原因原样透出

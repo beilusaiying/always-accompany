@@ -93,6 +93,8 @@ export default {
       UpdateInfo: () => buildCharInfo(),
     },
     config: {
+      // 导入模板首次加载也需要执行 SetData({})，以沿用既有默认 AI 源初始化链。
+      loadPolicy: "always",
       /**
        * 获取数据
        * @returns {{ AIsource: any; chardata: chardata_t; }} 一个包含 AI 源和角色数据的对象。

@@ -231,6 +231,16 @@ console.log(`[beilu-cli] 已注册 ${executor.getToolList().length} 个工具`);
 
 const START_TIME = Date.now();
 let _wss = null;
+let _settingsWatcher = null;
+let _watchDebounce = null;
+let _acceptingToolCalls = true;
+let _shutdownPromise = null;
+const _servers = new Set();
+const _serverClosePromises = new Map();
+const _activeToolCalls = new Set();
+const WS_CLIENT_CLOSE_TIMEOUT_MS = 2000;
+const WS_CLIENT_TERMINATE_TIMEOUT_MS = 2000;
+const WSS_CLOSE_TIMEOUT_MS = 2000;
 
 function buildStatus() {
   return {
@@ -260,14 +270,16 @@ function broadcast(msg) {
 // watch 目录而非单文件：settings 若被「临时文件+rename」原子替换写，单文件 watch 会随旧 inode 失效
 // （Windows fs.watch 已知行为），目录级 watch 按 filename 过滤不受替换影响。
 if (SETTINGS_PATH) {
-  let _watchDebounce = null;
   const _settingsAbs = path.resolve(SETTINGS_PATH);
   const _settingsName = path.basename(_settingsAbs);
   try {
-    fs.watch(path.dirname(_settingsAbs), (_ev, filename) => {
+    _settingsWatcher = fs.watch(path.dirname(_settingsAbs), (_ev, filename) => {
       if (filename && filename !== _settingsName) return;
+      if (!_acceptingToolCalls) return;
       clearTimeout(_watchDebounce);
       _watchDebounce = setTimeout(() => {
+        _watchDebounce = null;
+        if (!_acceptingToolCalls) return;
         // 路径屏蔽随 settings 变更热刷新（用户在面板改「路径配置」→ 落盘 → 此处同步纵深）
         const { blocked, anchor } = readBlockedPathsUnion();
         setPathGuards(blocked, anchor);
@@ -293,24 +305,203 @@ function safeSend(ws, data) {
   catch (e) { console.warn(`[beilu-cli] 发送失败: ${e.message}`); return false; }
 }
 
+function beginServerClose(wss) {
+  const existing = _serverClosePromises.get(wss);
+  if (existing) return existing;
+  const closing = new Promise((resolve) => {
+    try {
+      wss.close((error) => {
+        if (error?.code === "ERR_SERVER_NOT_RUNNING") resolve({ closed: true, notListening: true });
+        else resolve(error ? { error: error.message } : { closed: true });
+      });
+    } catch (error) {
+      if (error?.code === "ERR_SERVER_NOT_RUNNING") resolve({ closed: true, notListening: true });
+      else resolve({ error: error?.message || String(error) });
+    }
+  });
+  _serverClosePromises.set(wss, closing);
+  return closing;
+}
+
+function waitForClientsClosed(clients, timeoutMs) {
+  const pending = new Set(clients.filter((ws) => ws.readyState !== WebSocket.CLOSED));
+  if (!pending.size) return Promise.resolve([]);
+  return new Promise((resolve) => {
+    let timer = null;
+    const listeners = new Map();
+    const finish = () => {
+      if (timer) clearTimeout(timer);
+      for (const [ws, listener] of listeners) ws.off("close", listener);
+      resolve([...pending].filter((ws) => ws.readyState !== WebSocket.CLOSED));
+    };
+    timer = setTimeout(finish, timeoutMs);
+    timer.unref?.();
+    for (const ws of pending) {
+      const listener = () => {
+        pending.delete(ws);
+        if (!pending.size) finish();
+      };
+      listeners.set(ws, listener);
+      ws.once("close", listener);
+    }
+  });
+}
+
+function settleWithin(promise, timeoutMs, timeoutError) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(result);
+    };
+    Promise.resolve(promise).then(
+      (value) => finish({ value }),
+      (error) => finish({ error: error?.message || String(error) }),
+    );
+    timer = setTimeout(() => finish({ error: timeoutError }), timeoutMs);
+    timer.unref?.();
+  });
+}
+
+async function closeWebSocketClients(servers) {
+  const clients = [...new Set(servers.flatMap((wss) => [...wss.clients]))];
+  const failures = [];
+  for (const ws of clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.close(1001, "server_shutdown"); }
+      catch (error) { failures.push(`client_close_failed: ${error.message}`); }
+    }
+  }
+  const afterClose = await waitForClientsClosed(clients, WS_CLIENT_CLOSE_TIMEOUT_MS);
+  for (const ws of afterClose) {
+    if (ws.readyState !== WebSocket.CLOSED) {
+      try { ws.terminate(); }
+      catch (error) { failures.push(`client_terminate_failed: ${error.message}`); }
+    }
+  }
+  const afterTerminate = await waitForClientsClosed(afterClose, WS_CLIENT_TERMINATE_TIMEOUT_MS);
+  if (afterTerminate.length) failures.push(`clients_not_closed_after_terminate: ${afterTerminate.length}`);
+  return { success: failures.length === 0, failures, remaining: afterTerminate.length };
+}
+
+/**
+ * CLI 子进程的唯一关停 owner。所有信号、stdin shutdown 和 EOF 均进入同一个幂等 promise。
+ * 顺序是协议的一部分：拒绝新调用 → 关 watcher/debounce → wss 停止接入 →
+ * abort 并等待全局 active tool promises → executor.dispose → 关闭/必要时 terminate clients → 等 wss close。
+ */
+function shutdown(reason = "shutdown") {
+  if (_shutdownPromise) return _shutdownPromise;
+  _acceptingToolCalls = false;
+  _shutdownPromise = (async () => {
+    console.log(`\n[beilu-cli] 正在关闭 (${reason})...`);
+    const errors = [];
+    const recordFailure = (stage, error) => {
+      const message = error?.message || String(error);
+      errors.push({ stage, error: message });
+      console.error(`[beilu-cli] 关停阶段失败 (${stage}): ${message}`);
+    };
+
+    if (_watchDebounce) {
+      clearTimeout(_watchDebounce);
+      _watchDebounce = null;
+    }
+    if (_settingsWatcher) {
+      try { _settingsWatcher.close(); }
+      catch (error) { recordFailure("settings_watcher", error); }
+      _settingsWatcher = null;
+    }
+
+    const servers = [..._servers];
+    const serverClosePromises = servers.map((wss) => {
+      try { return beginServerClose(wss); }
+      catch (error) {
+        recordFailure("wss_stop_accepting", error);
+        return Promise.resolve({ error: error?.message || String(error) });
+      }
+    });
+    try { unregisterDiscovery(); }
+    catch (error) { recordFailure("discovery_unregister", error); }
+
+    for (const call of _activeToolCalls) {
+      try {
+        if (!call.controller.signal.aborted) call.controller.abort("server_shutdown");
+      } catch (error) { recordFailure("active_tool_abort", error); }
+    }
+    try {
+      while (_activeToolCalls.size) {
+        await Promise.allSettled([..._activeToolCalls].map((call) => call.promise));
+      }
+    } catch (error) {
+      recordFailure("active_tool_wait", error);
+    }
+
+    try {
+      const disposeResult = await executor.dispose();
+      if (disposeResult?.success === false) {
+        recordFailure("executor_dispose", JSON.stringify(disposeResult.terminationFailures || []));
+      }
+    } catch (error) {
+      recordFailure("executor_dispose", error);
+    }
+
+    try {
+      const clientResult = await closeWebSocketClients(servers);
+      if (clientResult.success === false) recordFailure("ws_clients", clientResult.failures.join("; "));
+    } catch (error) {
+      recordFailure("ws_clients", error);
+    }
+
+    const wssClose = await settleWithin(Promise.all(serverClosePromises), WSS_CLOSE_TIMEOUT_MS, "wss_close_timeout");
+    if (wssClose.error) recordFailure("wss_close", wssClose.error);
+    else {
+      const closeErrors = wssClose.value.filter((result) => result?.error);
+      if (closeErrors.length) recordFailure("wss_close", closeErrors.map((entry) => entry.error).join("; "));
+    }
+    _wss = null;
+    try { process.stdin.pause(); }
+    catch (error) { recordFailure("stdin_pause", error); }
+    if (errors.length) process.exitCode = 1;
+    return { reason, success: errors.length === 0, errors };
+  })().catch((error) => {
+    // 阶段内已各自捕获；这里只保留最后一道进程级失败外显。
+    process.exitCode = 1;
+    try { process.stdin.pause(); } catch { /* 进程已失败，无更多可拆链资源 */ }
+    console.error(`[beilu-cli] 关停协调器失败: ${error?.stack || error}`);
+    return { reason, success: false, errors: [{ stage: "shutdown_coordinator", error: error?.message || String(error) }] };
+  });
+  return _shutdownPromise;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // WS 服务器（端口自增重试）
 // ═══════════════════════════════════════════════════════════════
 
 function startServer(port, attempt) {
   const wss = new WebSocketServer({ port, path: WS_PATH, host: "127.0.0.1" });
+  _servers.add(wss);
+  wss.once("close", () => _servers.delete(wss));
 
   wss.on("listening", () => {
+    if (!_acceptingToolCalls) {
+      void beginServerClose(wss);
+      return;
+    }
     _wss = wss;
     // ★ 端口确认绑定后才写发现文件（YonBan U2/D3：绝不广播未绑定端口）
     persistDiscovery(port);
     console.log(`[beilu-cli] WS 服务器已启动: ws://127.0.0.1:${port}${WS_PATH}`);
     console.log(`[beilu-cli] Token: ${TOKEN.slice(0, 8)}...`);
     console.log(`[beilu-cli] 等待本体连接...\n`);
-    setupGracefulExit(wss);
   });
 
   wss.on("connection", (ws, req) => {
+    if (!_acceptingToolCalls) {
+      ws.close(1012, "server_shutting_down");
+      return;
+    }
     const connectionId = `cli_ws_${crypto.randomUUID()}`;
     const activeToolCalls = new Map();
     // token 认证（与 YonBan 同：不匹配 close 4001，本体按 4001 退避重连）
@@ -368,6 +559,11 @@ function startServer(port, attempt) {
           // [窗口id 0726] 指令信封携带的窗口/线 id（后端 ideClient 传导层单点注入）→ 透传执行器池入口识别
           const chatid = typeof payload.chatid === "string" ? payload.chatid : "";
 
+          if (!_acceptingToolCalls) {
+            safeSend(ws, { type: "tool_result", id, payload: { id, success: false, error: "server_shutting_down" } });
+            return;
+          }
+
           if (!tool) {
             console.warn(`[beilu-cli] ← tool_call 缺少 tool 字段`);
             safeSend(ws, { type: "tool_result", id, payload: { id, success: false, error: "tool_call 缺少 tool 字段" } });
@@ -405,47 +601,52 @@ function startServer(port, attempt) {
           console.log(`[beilu-cli] ← ${tool}(${paramPreview.length > 120 ? paramPreview.slice(0, 100) + "..." : paramPreview})`);
           const t0 = startedAt.getTime();
           const lifecycleController = new AbortController();
-          activeToolCalls.set(id, lifecycleController);
-
-          try {
-            const result = await executor.execute({
-              id,
-              tool,
-              params,
-              traceId,
-              chatid,
-              transport,
-              connectionId,
-            }, {
-              signal: lifecycleController.signal,
-              onProgress: (progress) => {
-                if (activeToolCalls.get(id) !== lifecycleController) return;
-                safeSend(ws, {
-                  type: "tool_progress",
-                  id,
-                  payload: {
+          const callState = { id, controller: lifecycleController, promise: null };
+          activeToolCalls.set(id, callState);
+          _activeToolCalls.add(callState);
+          callState.promise = (async () => {
+            try {
+              const result = await executor.execute({
+                id,
+                tool,
+                params,
+                traceId,
+                chatid,
+                transport,
+                connectionId,
+              }, {
+                signal: lifecycleController.signal,
+                onProgress: (progress) => {
+                  if (activeToolCalls.get(id) !== callState) return;
+                  safeSend(ws, {
+                    type: "tool_progress",
                     id,
-                    tool,
-                    chatid: chatid || null,
-                    progress,
-                    occurredAt: new Date().toISOString(),
-                  },
-                });
-              },
-            });
-            const ms = Date.now() - t0;
-            result.duration = ms;
-            const ok = result.success !== false;
-            console.log(`[beilu-cli] → ${ok ? "✓" : "✗"} ${tool} (${ms}ms)${ok ? "" : " — " + (result.error || "").slice(0, 100)}`);
-            if (!ok) wbD("server", "toolCall:fail", false, `${tool}: ${(result.error || "").slice(0, 150)}`, { id, ms });
-            safeSend(ws, { type: "tool_result", id, payload: result });
-          } catch (e) {
-            const ms = Date.now() - t0;
-            wbD("server", "toolCall:exception", false, `${tool} 异常: ${e.message}`, { id, ms });
-            safeSend(ws, { type: "tool_result", id, payload: { id, success: false, error: `工具执行异常: ${e.message}`, duration: ms } });
-          } finally {
-            if (activeToolCalls.get(id) === lifecycleController) activeToolCalls.delete(id);
-          }
+                    payload: {
+                      id,
+                      tool,
+                      chatid: chatid || null,
+                      progress,
+                      occurredAt: new Date().toISOString(),
+                    },
+                  });
+                },
+              });
+              const ms = Date.now() - t0;
+              result.duration = ms;
+              const ok = result.success !== false;
+              console.log(`[beilu-cli] → ${ok ? "✓" : "✗"} ${tool} (${ms}ms)${ok ? "" : " — " + (result.error || "").slice(0, 100)}`);
+              if (!ok) wbD("server", "toolCall:fail", false, `${tool}: ${(result.error || "").slice(0, 150)}`, { id, ms });
+              safeSend(ws, { type: "tool_result", id, payload: result });
+            } catch (e) {
+              const ms = Date.now() - t0;
+              wbD("server", "toolCall:exception", false, `${tool} 异常: ${e.message}`, { id, ms });
+              safeSend(ws, { type: "tool_result", id, payload: { id, success: false, error: `工具执行异常: ${e.message}`, duration: ms } });
+            } finally {
+              if (activeToolCalls.get(id) === callState) activeToolCalls.delete(id);
+              _activeToolCalls.delete(callState);
+            }
+          })();
+          await callState.promise;
           break;
         }
 
@@ -475,46 +676,65 @@ function startServer(port, attempt) {
     });
 
     ws.on("close", (code, reason) => {
-      for (const controller of activeToolCalls.values()) {
-        if (!controller.signal.aborted) controller.abort("ws_close");
+      for (const call of activeToolCalls.values()) {
+        if (!call.controller.signal.aborted) call.controller.abort("ws_close");
       }
       console.log(`[beilu-cli] 本体断开连接 (code=${code}${reason ? ", reason=" + reason : ""})`);
     });
 
     ws.on("error", (err) => {
-      for (const controller of activeToolCalls.values()) {
-        if (!controller.signal.aborted) controller.abort("ws_error");
+      for (const call of activeToolCalls.values()) {
+        if (!call.controller.signal.aborted) call.controller.abort("ws_error");
       }
       console.error(`[beilu-cli] WS 连接错误: ${err.message}`);
     });
   });
 
   wss.on("error", (err) => {
+    if (!_acceptingToolCalls) return;
     if (err.code === "EADDRINUSE") {
       if (attempt < MAX_PORT_RETRIES) {
         const nextPort = port + 1;
         wbD("server", "port:retry", false, `端口 ${port} 被占用，尝试 ${nextPort}`, { attempt: attempt + 1, max: MAX_PORT_RETRIES });
-        wss.close();
+        void beginServerClose(wss);
         startServer(nextPort, attempt + 1);
       } else {
         console.error(`[beilu-cli] 端口 ${BASE_PORT}-${port} 全部被占用，${MAX_PORT_RETRIES} 次重试失败`);
-        process.exit(1);
+        process.exitCode = 1;
+        void shutdown("port_exhausted");
       }
     } else {
       console.error(`[beilu-cli] 服务器错误: ${err.message}`);
+      process.exitCode = 1;
+      void shutdown("server_error");
     }
   });
 }
 
-function setupGracefulExit(wss) {
-  function cleanup() {
-    console.log(`\n[beilu-cli] 正在关闭...`);
-    unregisterDiscovery();
-    wss.close();
-    process.exit(0);
-  }
-  process.on("SIGINT", cleanup);
-  process.on("SIGTERM", cleanup);
+function installShutdownInputs() {
+  let stdinBuffer = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk) => {
+    stdinBuffer += chunk;
+    const lines = stdinBuffer.split(/\r?\n/);
+    stdinBuffer = lines.pop() || "";
+    for (const line of lines) {
+      if (line.trim() === "shutdown") void shutdown("stdin_shutdown");
+    }
+  });
+  process.stdin.once("end", () => {
+    if (stdinBuffer.trim() === "shutdown") void shutdown("stdin_shutdown");
+    else void shutdown("stdin_eof");
+  });
+  process.stdin.once("error", (error) => {
+    console.error(`[beilu-cli] stdin 错误: ${error.message}`);
+    void shutdown("stdin_error");
+  });
+  process.once("SIGINT", () => { void shutdown("SIGINT"); });
+  process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
+  // spawn 子进程的 stdin 是 pipe；resume 后 EOF 才能成为父进程消失的关停信号。
+  process.stdin.resume();
 }
 
+installShutdownInputs();
 startServer(BASE_PORT, 0);

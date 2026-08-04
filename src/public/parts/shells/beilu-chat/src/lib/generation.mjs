@@ -30,6 +30,7 @@ import { findLastActive, findLastActiveIndex } from "../../../../../../yonban/co
 import { getYonbanConfigPath, loadJsonFileIfExists } from "../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"; // T048：group_worker per-user 持久化开关
 import { chatMetadatas, loadChat, saveChat } from "./chatStorage.mjs"; // chatMetadatas: [0724 只许前端关] loop 延迟注入 fire 时的会话在载守卫
 import { ideClient, formatToolResultsForInjection } from "../../../../../../yonban/core/transport/ideClient.mjs"; // T066：ideClient 迁 transport，改指 yonban 新位实现体（同 line 23/27 回切范式）
+import { resolveHistoryRewriteWorkerSettleTimeoutMs } from "../../../../../../yonban/core/transport/historyRewritePolicy.mjs";
 import { runCodeRoundTriggers } from "../../../../../../yonban/core/functions/notification/scheduler.mjs"; // T8·回切：改指 yonban 新位实现体
 import {
   BuildChatLogEntryFromCharReply,
@@ -67,6 +68,9 @@ export const generationStats = {
 // ============================================================
 const _autoContinueTimers = new Map();
 const _autoContinueCounters = new Map();
+// 回档/历史改写的生成栅栏。置位期间不得落 aborted partial、不得安排任何续轮，
+// 新生成入口也必须拒绝，直到在飞生命周期完全结算。
+const _historyRewriteChats = new Set();
 // P0-3：fuzzy_edit 连续失败熔断 —— AI 用错误 old_string 反复重试 fuzzy_edit 会无限续轮，
 //   浪费整轮对话。连续 N 次 fuzzy 匹配失败且无任何写入进展即提前停，提示改用 read_file 重读后再编辑。
 //   计数器自愈：任一非 fuzzy-失败的回合归零，无需在各终止点散落 delete。
@@ -170,6 +174,9 @@ export function forgetChatGenState(chatid) {
   cancelAutoContinue(chatid);        // clearTimeout + _autoContinueTimers.delete
   resetAutoContinueCounter(chatid);  // _autoContinueCounters + _fuzzyFailCounters
   _pendingUserInput.delete(chatid);
+  const _pendingWake = _pendingUserWakeTimers.get(chatid);
+  if (_pendingWake) clearTimeout(_pendingWake);
+  _pendingUserWakeTimers.delete(chatid);
   _loopStopSignals.delete(chatid);   // [0724 双停退出] 删会话清连续停止计数
   _pendingResultReady.delete(chatid); // 删会话清排队中的异步结果补唤醒
 }
@@ -186,7 +193,8 @@ setOnStopGeneration(cancelAutoContinue);
 
 // 多组并行 v4：gated 把「跑 GetReply」路由到 chat 所属组的常驻 worker（落法B 真并行）。
 // ★ 默认字节不变：仅当该 user 持久化开关 group_worker_enabled===true 且该 chat 已绑组才路由；否则原地 GetReply。
-//   动态 import → 默认路径不引入任何新静态依赖。任何异常都回退本地 GetReply（不阻断生成）。
+//   动态 import → 默认路径不引入任何新静态依赖。只有 main 明确证明“投递前未执行且无副作用”
+//   的错误才允许本地重跑；runner 一旦开始即 fail-closed，避免重复 AI/工具/文件副作用。
 //   worker 内工具调用的 pendingResults 由 runner consumePendingResults(chatid) 回传主进程（L89-93），
 //   auto-continue 续轮注入对 grouped chat 已生效（v4 §3.3 跨界队列已实现）。
 // 【红线·0731 凛倾拍板】「操作后自动继续」（系统配置域）与 <stopContinue/>（AI 任务域）是两个东西，禁止合流：
@@ -399,7 +407,14 @@ function scheduleLoopContinue(chatid, charId, delayMs) {
   _autoContinueTimers.set(chatid, timerId);
 }
 
-async function _getReplyMaybeGrouped(chatid, request, stream) {
+function _canRetryGroupedLocally(error) {
+  return error?.executionStarted === false
+    && error?.sideEffectsPossible === false
+    && error?.indeterminate === false
+    && error?.localRetryAllowed !== false;
+}
+
+async function _getReplyMaybeGrouped(chatid, request, stream, generationId) {
   // T048：按当前对话所属 user 读持久化开关（原 process.env 进程全局=不分用户+重启易失）。严格 ===true：缺失/怪值→OFF（默认字节不变）。
   const _gwCfg = loadJsonFileIfExists(getYonbanConfigPath(request.username), {});
   if (_gwCfg.group_worker_enabled === true) {
@@ -414,20 +429,59 @@ async function _getReplyMaybeGrouped(chatid, request, stream) {
         undefined,
         (chunk) => { if (chunk?.preview != null) stream.update({ content: chunk.preview, files: [] }); },
         stream.signal,
+        { generationId, allowedBridgeTypes: ["approval_add", "p1_service"] },
       );
       if (routed.routed) {
         // pendingResults 跨界回灌：worker 内工具结果（带 chatid）→ 主进程 ideClient，
         // 让下方 auto-continue（ideClient.pendingResults / consumePendingResults）续轮注入照常工作。
         const _pr = routed.result?.pendingResults;
         if (Array.isArray(_pr) && _pr.length) {
-          for (const r of _pr) ideClient.enqueuePendingResult(r); // 经单源入队=受会话感知截断（旧 .pendingResults.push 绕过上限=M-05 无界膨胀）
+          let _acceptedPendingCount = 0;
+          for (let _pendingIndex = 0; _pendingIndex < _pr.length; _pendingIndex++) {
+            const r = _pr[_pendingIndex];
+            // 经单源入队=受 owner 隔离与会话感知截断。回灌拒绝不是“没有 pending”，
+            // 必须显式终止本轮，防工具已执行但结果丢失后仍按纯文本正常续轮。
+            if (!ideClient.enqueuePendingResult(r)) {
+              const _enqueueError = new Error(
+                `group worker pending result rejected at index ${_pendingIndex}`,
+              );
+              _enqueueError.code = "E_GROUP_PENDING_RESULT_REJECTED";
+              _enqueueError.phase = "pending_result_reinject";
+              _enqueueError.executionStarted = true;
+              _enqueueError.sideEffectsPossible = true;
+              _enqueueError.indeterminate = false;
+              _enqueueError.details = {
+                index: _pendingIndex,
+                acceptedBeforeFailure: _acceptedPendingCount,
+                total: _pr.length,
+                tool: r?.tool || null,
+                chatid: r?.chatid || null,
+              };
+              throw _enqueueError;
+            }
+            _acceptedPendingCount++;
+          }
         }
         return routed.result;
       }
     } catch (e) {
-      // ★ 用户中止时不回退本地（否则一停止又重启一轮）；只有真错误才回退本地 GetReply。
+      // 用户中止不重跑；runner 已开始、transport 超时/fatal 或执行态不确定也一律不重跑。
       if (stream.signal?.aborted) throw e;
-      wbDetect(chatid, "generation", "groupWorker:route:fallback", false, e?.message || String(e), { name: e?.name });
+      if (!_canRetryGroupedLocally(e)) {
+        wbDetect(chatid, "generation", "groupWorker:route:failClosed", false, e?.message || String(e), {
+          code: e?.code,
+          phase: e?.phase,
+          executionStarted: e?.executionStarted,
+          sideEffectsPossible: e?.sideEffectsPossible,
+          indeterminate: e?.indeterminate,
+        });
+        throw e;
+      }
+      wbDetect(chatid, "generation", "groupWorker:route:fallback", false, e?.message || String(e), {
+        name: e?.name,
+        code: e?.code,
+        phase: e?.phase,
+      });
       console.error("[chat] 组 worker 路由失败，回退本地 GetReply:", e?.message);
       // #5：组 worker 降级回退本地生成 → 给用户一个轻量信号（对齐 auto_continue_fuse:384 的 toast 范式）。
       //   此前降级仅 dev 日志/backendMonitor，普通用户在对话 UI 完全无感。广播失败不影响主流程。
@@ -588,7 +642,10 @@ export async function executeGeneration(
         throw new Error(`[chat] char has no GetReply interface (char=${request.char_id})`);
       }
       const _wbAI = wbSpan(chatid, "generation", "GetReply", { char: request.char_id, retry: _retry });
-      result = await _getReplyMaybeGrouped(chatid, request, stream);
+      result = await _getReplyMaybeGrouped(chatid, request, stream, entryId);
+      // 某些服务源在 abort 后仍会正常 resolve。历史改写不能让这种迟到结果穿过 finalize
+      // 重新追加到已截断的 chatLog，因此信号一旦中止就强制走统一 AbortError 出口。
+      if (stream.signal.aborted) throw stream.signal.reason || Object.assign(new Error("Generation aborted"), { name: "AbortError" });
       _wbAI({ contentLen: (result?.content || "").length });
       // 有内容 → 正常
       if (result !== null && (result?.content || "").trim().length > 0) break;
@@ -676,7 +733,33 @@ export async function executeGeneration(
     wbTrace(chatid, "generation", "autocontinue:decide", { hasToolCall: _hasToolCall, hasPending: _hasPending, isError: _isError, isEmpty: _isEmpty, isAborted: _isAborted });
     // [0724 双停退出] 本轮不带停止符=AI 还在干活 → 连续停止计数清零（连续性定义在此单点维护）
     if (!_ext._stopContinue) _loopStopSignals.delete(chatid);
-    if (_ext._stopContinue || _isError) {
+    // [P0-A 2026-08-03] Smart 提案轮硬停：pending confirmation 存在（或提案登记失败 fail-closed）时，
+    //   本轮禁止一切自动续轮——tool/file/search/browser 四池不查、loop 不排（任务 MD P0-A 服务端要求3）。
+    //   ReplyHandler 提案硬门已拒绝本轮全部可变操作（池内不会有本轮新结果）；池中若有前几轮遗留结果，
+    //   照常注入落盘（诚实呈现，不静默丢），但绝不 schedule 续轮。确认通过后目标线的生成由
+    //   smart-confirmations/confirm 端点在【目标 chat】触发，与本源 chat 的续轮无关。
+    if (_ext._pendingConfirmation || _ext._pendingConfirmationError) {
+      _autoContinueCounters.delete(chatid);
+      _loopStopSignals.delete(chatid);
+      if (_hasPending) {
+        const _pendingResults = ideClient.consumePendingResults(chatid);
+        const _resultText = await _applySlashCommandRegex(formatToolResultsForInjection(_pendingResults), chatMetadata.username);
+        const _sysEntry = new chatLogEntry_t();
+        _sysEntry.role = "system";
+        _sysEntry.name = "IDE工具结果";
+        _sysEntry.content = _resultText;
+        if (!_sysEntry.extension) _sysEntry.extension = {};
+        _sysEntry.extension._opType = _pendingResults.some(r => r.tool === "_clone_results") ? "clone_result" : "ide_tool_result";
+        _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
+        _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
+        _sysEntry.time_stamp = new Date();
+        _sysEntry.is_generating = false;
+        await addChatLogEntry(chatid, _sysEntry);
+        await _flushPendingUserImages(chatid, _pendingResults);
+      }
+      wbTrace(chatid, "generation", "autocontinue:stop", { reason: "pending_confirmation", createFailed: !!_ext._pendingConfirmationError });
+      console.log(`[chat] ★ 自动继续: 停止 (Smart 提案待确认${_ext._pendingConfirmationError ? "·登记失败 fail-closed" : ""}，本轮不续轮不循环)`);
+    } else if (_ext._stopContinue || _isError) {
       _autoContinueCounters.delete(chatid);
       if (_hasPending) {
         const _pendingResults = ideClient.consumePendingResults(chatid);
@@ -973,7 +1056,31 @@ export async function executeGeneration(
   } catch (e) {
     // W66: 出错/中止时取消自动继续，防止无限重试
     cancelAutoContinue(chatid);
-    wbDetect(chatid, "generation", "executeGeneration:catch", false, e?.message || String(e), { name: e?.name });
+    // 名称 AbortError 不足以证明是历史改写：用户停止同样使用该名称。只认服务端栅栏状态
+    // + 沿 Stream→manager→Worker 原样传回的专用 code，避免把普通停止错当成可截断终态。
+    const _historyRewriteAbort = e?.code === "E_HISTORY_REWRITE_ABORT" && _historyRewriteChats.has(chatid);
+    if (!_historyRewriteAbort) {
+      wbDetect(chatid, "generation", "executeGeneration:catch", false, e?.message || String(e), { name: e?.name });
+    }
+    if (_historyRewriteAbort) {
+      // 回档是服务端历史改写，不是用户“保留已生成部分”的停止动作。placeholder 从未进入
+      // chatLog，只存在前端队列；按稳定 ID 发删除事件使其收敛，且不持久化 partial/aborted 条目。
+      generationStats.aborted++;
+      stream.done();
+      placeholderEntry.is_generating = false;
+      broadcastChatEvent(chatid, {
+        type: "message_deleted",
+        payload: {
+          index: Number.isInteger(request.reply_message_index) ? request.reply_message_index : -1,
+          messageId: request.reply_message_id || placeholderEntry.id,
+          reason: "history_rewrite",
+        },
+      });
+      wbTrace(chatid, "generation", "historyRewrite:placeholderConverged", {
+        messageId: request.reply_message_id || placeholderEntry.id,
+      });
+      return;
+    }
     if (e.name === "AbortError") {
       generationStats.aborted++;
       const _partial = stream.lastContent;
@@ -1057,10 +1164,124 @@ const _genPromises = new Map();
  *  单次注入的语义是「跟这条消息一起送到」，排队只该推迟消息，不该丢它的附加物。
  *  多条中途输入合并而非覆盖：ids 取并集、文本去重后换行拼接——两次都是用户真说过的话。 */
 const _pendingUserInput = new Map();
+// _releaseGenerationLock 的 0ms 用户补轮也必须可被历史改写取消，不能留下未登记的队列态。
+const _pendingUserWakeTimers = new Map();
 /** 异步结果到达时若本会话正在生成 → 排队（chatid→route context），本轮结束后补唤醒。
  *  与 _pendingUserInput 平行：triggerCharReply 非 userInitiated 重复触发会被静默忽略（:869），
  *  没有这条排队通道时生成中到达的工具/分身结果会丢唤醒、结果滞留池中等下一次任意生成。 */
 const _pendingResultReady = new Map();
+
+function _historyRewriteInProgressError(chatid) {
+  const error = new Error(`Chat history rewrite is in progress: ${chatid}`);
+  error.name = "HistoryRewriteError";
+  error.code = "E_HISTORY_REWRITE_IN_PROGRESS";
+  error.statusCode = 409;
+  return error;
+}
+
+function _historyRewriteAbortError(chatid) {
+  const error = new Error(`Chat generation aborted for history rewrite: ${chatid}`);
+  error.name = "AbortError";
+  error.code = "E_HISTORY_REWRITE_ABORT";
+  return error;
+}
+
+function _historyRewriteWorkerSettlementDeadlineMs(chatid) {
+  const username = chatMetadatas.get(chatid)?.username;
+  const configured = username
+    ? loadJsonFileIfExists(getYonbanConfigPath(username), {})?.advanced_limits?.history_rewrite_worker_settle_timeout_ms
+    : undefined;
+  return resolveHistoryRewriteWorkerSettleTimeoutMs(configured);
+}
+
+function _cancelQueuedGenerationState(chatid) {
+  cancelAutoContinue(chatid);
+  resetAutoContinueCounter(chatid);
+  _pendingUserInput.delete(chatid);
+  _pendingResultReady.delete(chatid);
+  _loopStopSignals.delete(chatid);
+  const wakeTimer = _pendingUserWakeTimers.get(chatid);
+  if (wakeTimer) clearTimeout(wakeTimer);
+  _pendingUserWakeTimers.delete(chatid);
+}
+
+/**
+ * 历史改写静默点：阻止新生成，取消该 chat 的自动续轮/排队态，中止在飞流并等待其 promise
+ * 完整结算。AbortError 在栅栏内只收敛前端 placeholder，不写 aborted partial。
+ */
+export async function quiesceGenerationForHistoryRewrite(chatid) {
+  if (typeof chatid !== "string" || !chatid) {
+    const error = new Error("chatid must be a non-empty string");
+    error.code = "E_INVALID_CHAT_ID";
+    error.statusCode = 400;
+    throw error;
+  }
+  _historyRewriteChats.add(chatid);
+  let abortedStreams = 0;
+  let hadInFlight = _generatingChats.has(chatid);
+  let workerSettlement = { settled: true, pendingCount: 0, forcedWorkerCount: 0 };
+  const abortReason = _historyRewriteAbortError(chatid);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    _cancelQueuedGenerationState(chatid);
+    _historyRewriteChats.delete(chatid);
+  };
+  try {
+    _cancelQueuedGenerationState(chatid);
+    abortedStreams += StreamManager.abortAll(chatid, abortReason);
+
+    // triggerCharReply 在占锁后、建立 _genPromises 前还有异步准备段。栅栏保持置位并等待
+    // _generatingChats 真正释放，避免只看 promise 的短窗口漏掉一轮迟到生成。
+    // [0804 D1§5 有界化] 原实现两处无期限：promise 未登记时 setTimeout(0) 空转、已登记时裸 await
+    //   ——任一准备/生成 await 悬挂 = 删除/回档永久等待。现 triggerCharReply 占锁即登记
+    //   preparation promise（空转分支理论不可达，保留为兜底），且整个等待受总 deadline 约束
+    //   （复用 history_rewrite_worker_settle_timeout_ms 同一配置域）；到期抛结构化
+    //   E_HISTORY_REWRITE_NOT_QUIESCED（catch → release 解除栅栏），本次删除/回档不执行，
+    //   绝不在生成未结算时动历史。
+    const _quiesceDeadlineMs = _historyRewriteWorkerSettlementDeadlineMs(chatid);
+    const _quiesceDeadlineAt = Date.now() + _quiesceDeadlineMs;
+    while (_generatingChats.has(chatid)) {
+      hadInFlight = true;
+      const _remainMs = _quiesceDeadlineAt - Date.now();
+      if (_remainMs <= 0) {
+        const _err = new Error(`历史改写静默超时（${_quiesceDeadlineMs}ms）：chatid=${chatid} 在飞生成未结算，本次删除/回档未执行`);
+        _err.code = "E_HISTORY_REWRITE_NOT_QUIESCED";
+        _err.statusCode = 409;
+        throw _err;
+      }
+      abortedStreams += StreamManager.abortAll(chatid, abortReason);
+      const inFlight = _genPromises.get(chatid);
+      const _tick = new Promise((resolve) => setTimeout(resolve, Math.min(_remainMs, 250)));
+      if (inFlight) {
+        try { await Promise.race([inFlight, _tick]); } catch { /* AbortError/旧生成失败均以锁释放为完成条件 */ }
+      } else {
+        await _tick;
+      }
+    }
+
+    // grouped 路径的公开 Promise 会在 abort 时快速 reject，但 Worker 仍可能在 GetReply/plugin finally
+    // 中继续写文件或产生桥副作用。只有 request_settled（或确认 terminate）才是资源终态。
+    const { quiesceChatWorkerRequests } = await import("./groupWorkerManager.mjs");
+    const workerDeadlineMs = _historyRewriteWorkerSettlementDeadlineMs(chatid);
+    workerSettlement = await quiesceChatWorkerRequests(chatid, {
+      deadlineMs: workerDeadlineMs,
+      terminationConfirmationDeadlineMs: workerDeadlineMs,
+    });
+    if (workerSettlement.pendingCount > 0) hadInFlight = true;
+
+    // 在飞 finally 可能尝试补排队；结算后再清一次，确保返回时该 chat 无续轮/唤醒残态。
+    _cancelQueuedGenerationState(chatid);
+    abortedStreams += StreamManager.abortAll(chatid, abortReason);
+    // 调用方必须在历史写操作（记忆 + chat）全部结束后 release；否则只静默到 memory
+    // 调用前，新生成可在截断后再次落盘，复活被回档的尾部。
+    return { quiesced: true, hadInFlight, abortedStreams, workerSettlement, release };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
 
 function _releaseGenerationLock(chatid, charname, genPromise) {
   _generatingChats.delete(chatid);
@@ -1073,13 +1294,16 @@ function _releaseGenerationLock(chatid, charname, genPromise) {
     _pendingUserInput.delete(chatid);
     if (!_autoContinueTimers.has(chatid)) {
       _userWakeScheduled = true;
-      setTimeout(() => {
+      const wakeTimer = setTimeout(() => {
+        _pendingUserWakeTimers.delete(chatid);
+        if (_historyRewriteChats.has(chatid)) return;
         triggerCharReply(chatid, charname, {
           userInitiated: true,
           singleInject: _pending.singleInject,
           onceInjectIds: _pending.onceInjectIds,
         }).catch(e => { console.warn("[generation] 自动续轮失败:", e?.message || e); });
       }, 0);
+      _pendingUserWakeTimers.set(chatid, wakeTimer);
     }
   }
   // 生成中到达的异步结果 → 本轮结束补唤醒。若已有用户中途输入，下一用户轮会前置消费结果，
@@ -1114,6 +1338,7 @@ function _releaseGenerationLock(chatid, charname, genPromise) {
  * @param {string} [options.sourceChannel] - 来源通道标识
  */
 export async function triggerCharReply(chatid, charname, options = {}) {
+  if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
   // 请求级去重：同一 chatid 正在生成时，忽略后续请求。
   // ★ A-竞态根修：check-then-add 必须在函数入口同步段（无 await 间隔）完成——原实现把去重
   //   检查放在下方 SEC-GC 的 `await import(v1_adapter)` 之后，两条并发 triggerCharReply(同 chatid)
@@ -1129,14 +1354,27 @@ export async function triggerCharReply(chatid, charname, options = {}) {
       const _mergedTxt = [...new Set([_prev?.singleInject, options.singleInject].filter(Boolean))].join("\n");
       _pendingUserInput.set(chatid, { singleInject: _mergedTxt, onceInjectIds: _mergedIds });
       console.log(`[chat] 中途输入排队: chatid=${chatid}（本轮结束后补发一轮，保序；携带单次注入 ${_mergedIds.length} 条+${_mergedTxt ? "临时文本" : "无文本"}）`);
+      return { accepted: false, queued: true, reason: "chat_busy" };
     } else {
       console.warn(
         `[chat] triggerCharReply: chatid=${chatid} 正在生成中，忽略重复请求`,
       );
     }
-    return;
+    return { accepted: false, queued: false, reason: "chat_busy" };
   }
   _generatingChats.add(chatid);
+  // [0804 D1§5 原子注册] 占锁即登记 preparation promise（与 regen 路径 :1640 的 _preparationPromise
+  //   同范式）：原实现到「后台执行」段才 _genPromises.set，中间 10+ 个 await 的准备段是
+  //   「锁在手、promise 未登记」窗口——历史改写静默点在该窗口只能 0ms 空转，任一准备 await
+  //   悬挂 = 删除/回档永久等待（RC-2 族第二个真·无限等待）。登记后静默点始终有可等待对象；
+  //   准备段所有出口（成功换真 promise / 8 处早退释放锁）都必须结算它（_settlePrep）。
+  let _prepResolve;
+  const _prepPromise = new Promise((r) => { _prepResolve = r; });
+  const _settlePrep = () => {
+    _prepResolve?.();
+    if (_genPromises.get(chatid) === _prepPromise) _genPromises.delete(chatid);
+  };
+  _genPromises.set(chatid, _prepPromise);
   if (options.userInitiated) resetAutoContinueCounter(chatid);
   generationStats.total++;
   generationStats.activeCount++;
@@ -1153,6 +1391,7 @@ export async function triggerCharReply(chatid, charname, options = {}) {
     if (generationStats.activeCount > _gcMax) {
       const _busy = generationStats.activeCount - 1; // 回滚前的在飞数（不含本次被拒的），用于消息展示
       _generatingChats.delete(chatid);
+      _settlePrep();
       generationStats.activeCount--;
       generationStats.total--; // 原上限检查在 total++ 前=被拒不计总；重排后 total 已+1，回滚保持"被拒不计"语义
       throw new Error(`AI 生成并发已达上限 (${_busy}/${_gcMax})，请稍后重试`);
@@ -1166,13 +1405,21 @@ export async function triggerCharReply(chatid, charname, options = {}) {
     chatMetadata = await loadChat(chatid);
   } catch (e) {
     _generatingChats.delete(chatid);
+    _settlePrep();
     generationStats.activeCount--;
     throw e;
   }
   if (!chatMetadata) {
     _generatingChats.delete(chatid);
+    _settlePrep();
     generationStats.activeCount--;
     throw new Error("Chat not found");
+  }
+  if (_historyRewriteChats.has(chatid)) {
+    _generatingChats.delete(chatid);
+    _settlePrep();
+    generationStats.activeCount--;
+    throw _historyRewriteInProgressError(chatid);
   }
 
   // E 机制统一（凛倾 2026-07-09「技术债务补齐+注意压缩功能」）：生成前置把 file_op 结果池
@@ -1268,13 +1515,21 @@ export async function triggerCharReply(chatid, charname, options = {}) {
     }
   }
 
+  if (_historyRewriteChats.has(chatid)) {
+    _generatingChats.delete(chatid);
+    _settlePrep();
+    generationStats.activeCount--;
+    throw _historyRewriteInProgressError(chatid);
+  }
+
   // 如果没有指定角色，取第一个角色
   if (!charname) {
     const chars = Object.keys(chatMetadata.LastTimeSlice.chars);
     if (chars.length === 0) {
       _generatingChats.delete(chatid);
+      _settlePrep();
       generationStats.activeCount--;
-      return;
+      return { accepted: false, queued: false, reason: "no_character" };
     }
     charname = chars[0];
   }
@@ -1282,6 +1537,7 @@ export async function triggerCharReply(chatid, charname, options = {}) {
   const char = chatMetadata.LastTimeSlice.chars[charname];
   if (!char) {
     _generatingChats.delete(chatid);
+    _settlePrep();
     generationStats.activeCount--;
     throw new Error("char not found");
   }
@@ -1296,6 +1552,7 @@ export async function triggerCharReply(chatid, charname, options = {}) {
     placeholder.time_stamp = new Date();
     const { info } =
       (await getPartDetails(chatMetadata.username, `chars/${charname}`)) || {};
+    if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
     placeholder.name = info?.name || charname;
     placeholder.avatar =
       info?.avatar || `/parts/chars:${encodeURIComponent(charname)}/image.png`;
@@ -1310,10 +1567,22 @@ export async function triggerCharReply(chatid, charname, options = {}) {
     // windowMode（20260726）：用户发送时所在窗口的模式，随请求下传至 getChatRequest → result.mode
     //   → resolveGenerationMode 第一优先级命中，不再回退磁盘 active_modes_map 反查。
     request = await getChatRequest(chatid, charname, { singleInject: options.singleInject, onceInjectIds: options.onceInjectIds, sourceChannel: options.sourceChannel, windowMode: options.windowMode });
+    if (_historyRewriteChats.has(chatid)) {
+      broadcastChatEvent(chatid, {
+        type: "message_deleted",
+        payload: { index: chatMetadata.chatLog.length, messageId: placeholder.id, reason: "history_rewrite" },
+      });
+      throw _historyRewriteInProgressError(chatid);
+    }
+    // 回复锚必须描述“这条 assistant 即将占据的位置”，不是上一条 user。
+    // placeholder 不进 chatLog，因此原始下标就是当前持久数组长度。
+    request.reply_message_id = placeholder.id;
+    request.reply_message_index = chatMetadata.chatLog.length;
     stream = StreamManager.create(chatid, placeholder.id);
     stream._startTime = Date.now();
   } catch (e) {
     _generatingChats.delete(chatid);
+    _settlePrep();
     generationStats.activeCount--;
     throw e;
   }
@@ -1324,7 +1593,19 @@ export async function triggerCharReply(chatid, charname, options = {}) {
   const _genP = executeGeneration(chatid, request, stream, placeholder, chatMetadata).finally(
     () => _releaseGenerationLock(chatid, charname, _genP),
   );
+  // [0804 D1§5] 真 promise 就位后结算 preparation promise：静默点等在 prep 上的 waiter 被唤醒、
+  //   重查循环拿到 _genP 继续等待——两段登记无缝衔接，全程无「锁在手、无可等待对象」窗口。
   _genPromises.set(chatid, _genP);
+  _prepResolve?.();
+  // 后台传导方（游戏陪伴/直播/桌宠）必须能区分“函数被调用”与“主生成器已受理”。
+  // completion 是本次真实生成的结算 Promise；放在对象属性中不会被 async 自动展开，旧调用方忽略
+  // 返回值时行为不变，新调用方可按 accepted/queued 诚实记账并在需要时等待本轮真正结束。
+  return { accepted: true, queued: false, completion: _genP, messageId: placeholder.id };
+}
+
+/** 只读查询某 chat 当前是否由主生成器持锁；直播等上游据此在取走候选前避让。 */
+export function isChatGenerating(chatid) {
+  return _generatingChats.has(chatid);
 }
 
 // ============================================================
@@ -1347,15 +1628,18 @@ export async function triggerCharReply(chatid, charname, options = {}) {
  * @returns {Promise<import('./models.mjs').chatLogEntry_t>} 切换/生成后的 entry
  */
 export async function modifyTimeLine(chatid, delta, absoluteIndex) {
+  if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
   StreamManager.abortAll(chatid);
 
   // BUG-1: abortAll 仅同步发出中止信号，旧生成的锁释放在其 .finally 微任务里，尚未执行。
   // 等旧生成真正结算(锁已释放)再继续，否则下方 _generatingChats.has 误判"正在生成中"跳过 regen。
   const _prevGen = _genPromises.get(chatid);
   if (_prevGen) { try { await _prevGen; } catch { /* 旧生成被中止而 reject 属预期，忽略 */ } }
+  if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
 
   const chatMetadata = await loadChat(chatid);
   if (!chatMetadata) throw new Error("Chat not found");
+  if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
   let newTimeLineIndex;
   if (absoluteIndex !== undefined && absoluteIndex !== null) {
     // 绝对索引模式（用于 iframe 内美化代码的 switchSwipe 调用）
@@ -1390,6 +1674,19 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
     let previousEntry = findLastActive(chatMetadata.chatLog) || chatMetadata.chatLog[chatMetadata.chatLog.length - 1];
     const { timeSlice } = previousEntry;
     const { greeting_type } = timeSlice;
+
+    // 时间线重生成从第一次修改内存 chatLog 前就注册生命周期。这个 preparation
+    // promise 填上“占 _generatingChats 锁→建立真正流 promise”的窗口，使回档静默点可等待。
+    if (_historyRewriteChats.has(chatid)) throw _historyRewriteInProgressError(chatid);
+    if (_generatingChats.has(chatid)) throw new Error(`chatid=${chatid} is already generating`);
+    _generatingChats.add(chatid);
+    generationStats.total++;
+    generationStats.activeCount++;
+    let _resolvePreparation;
+    const _preparationPromise = new Promise((resolve) => { _resolvePreparation = resolve; });
+    _genPromises.set(chatid, _preparationPromise);
+    let _generationHandedOff = false;
+    try {
 
     const newEntry = new chatLogEntry_t();
     newEntry.id = crypto.randomUUID();
@@ -1426,6 +1723,8 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
       try {
         const { charname } = timeSlice;
         const request = await getChatRequest(chatid, charname || undefined);
+        request.reply_message_id = newEntry.id;
+        request.reply_message_index = _replaceIdx;
         const char = charname ? timeSlice.chars[charname] : null;
 
         let result = null;
@@ -1479,14 +1778,12 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
         });
       }
       });
+      _releaseGenerationLock(chatid, timeSlice.charname, _preparationPromise);
+      _resolvePreparation();
+      _generationHandedOff = true;
     } else {
       // 普通回复（流式）
-      if (_generatingChats.has(chatid)) {
-        console.warn(`[chat] modifyTimeLine: chatid=${chatid} 正在生成中，跳过regen`);
-      } else {
-        _generatingChats.add(chatid);
-        generationStats.total++;
-        generationStats.activeCount++;
+      {
         // [债#6 修 0726] SEC-GC 并发上限：本 regen 路径原来只计数不检查=绕过上限（主路径
         //   triggerCharReply:978 有检查）。多窗口下每窗都能 regen，绕过后并发无天花板。
         //   判据/回滚与主路径逐字同构（activeCount 已含本次故用 > ；被拒不计 total）。
@@ -1497,8 +1794,6 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
           const _rgMax = _rgEnvMax > 0 ? _rgEnvMax : (_rgCfg.max || _rgV1c.GEN_CONCURRENCY_DEFAULT_MAX);
           if (generationStats.activeCount > _rgMax) {
             const _rgBusy = generationStats.activeCount - 1;
-            _generatingChats.delete(chatid);
-            generationStats.activeCount--;
             generationStats.total--;
             throw new Error(`AI 生成并发已达上限 (${_rgBusy}/${_rgMax})，请稍后重试`);
           }
@@ -1509,10 +1804,10 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
         let request, stream;
         try {
           request = await getChatRequest(chatid, charname);
+          request.reply_message_id = newEntry.id;
+          request.reply_message_index = _replaceIdx;
           stream = StreamManager.create(chatid, newEntry.id);
         } catch (e) {
-          _generatingChats.delete(chatid);
-          generationStats.activeCount--;
           throw e;
         }
         updateTypingStatus(chatid, charname, 1);
@@ -1520,6 +1815,14 @@ export async function modifyTimeLine(chatid, delta, absoluteIndex) {
           () => _releaseGenerationLock(chatid, charname, _regenP),
         );
         _genPromises.set(chatid, _regenP);
+        _resolvePreparation();
+        _generationHandedOff = true;
+      }
+    }
+    } finally {
+      if (!_generationHandedOff) {
+        _releaseGenerationLock(chatid, timeSlice.charname, _preparationPromise);
+        _resolvePreparation();
       }
     }
   } else {

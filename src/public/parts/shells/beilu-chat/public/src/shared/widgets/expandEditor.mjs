@@ -1,11 +1,11 @@
 /**
- * expandEditor.mjs — 通用 textarea 放大编辑器
+ * expandEditor.mjs — 全局唯一的通用放大编辑器
  *
  * 功能：
- * - 为所有带 data-expandable 属性的 textarea 添加放大按钮
- * - 点击放大按钮 → 打开 dialog modal → 全屏编辑
- * - 保存时将内容同步回原 textarea 并触发 input 事件
- * - 支持 Escape 关闭、点击遮罩关闭
+ * - 声明式入口：为 data-expandable textarea 的 expand-btn 绑定全屏编辑
+ * - 程序化入口：openExpandEditor({ title, value, readOnly, onSave, onClose })
+ * - 两类入口复用同一个 dialog；保存交给 adapter，取消/Escape/遮罩永不写源数据
+ * - 有未保存修改时确认关闭；只读会话隐藏保存按钮
  *
  * 依赖：
  * - HTML 中已有 <dialog id="expand-editor-modal"> 容器
@@ -24,9 +24,12 @@ let modalTitle = null;
 let saveBtn = null;
 /** @type {HTMLButtonElement|null} */
 let cancelBtn = null;
+let initialized = false;
+let observer = null;
+let saving = false;
 
-/** 当前正在编辑的源 textarea */
-let sourceTextarea = null;
+/** 当前唯一编辑会话；onClose 收到 { saved, value }，可区分保存与取消。 */
+let activeSession = null;
 
 /**
  * 初始化放大编辑器
@@ -43,6 +46,12 @@ export function initExpandEditor() {
     console.warn("[expandEditor] dialog 元素未找到，放大编辑器未初始化");
     return;
   }
+
+  if (initialized) {
+    bindExpandButtons();
+    return;
+  }
+  initialized = true;
 
   // 保存按钮
   saveBtn?.addEventListener("click", handleSave);
@@ -66,7 +75,7 @@ export function initExpandEditor() {
 
   // 使用 MutationObserver 监听 DOM 变化，自动绑定新增的 expand-btn（debounced）
   let _expandDebounce = 0;
-  const observer = new MutationObserver(() => {
+  observer = new MutationObserver(() => {
     clearTimeout(_expandDebounce);
     _expandDebounce = setTimeout(bindExpandButtons, 120);
   });
@@ -79,7 +88,7 @@ export function initExpandEditor() {
  * 绑定所有 .expand-btn 按钮的点击事件
  */
 function bindExpandButtons() {
-  document.querySelectorAll(".expand-btn:not([data-bound])").forEach((btn) => {
+  document.querySelectorAll(".expand-btn:not([data-bound]):not([data-expand-programmatic])").forEach((btn) => {
     btn.dataset.bound = "true";
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -91,65 +100,100 @@ function bindExpandButtons() {
       const textarea = container.querySelector("textarea[data-expandable]");
       if (!textarea) return;
 
-      openExpandEditor(textarea);
+      try {
+        openTextareaEditor(textarea);
+      } catch (error) {
+        console.error("[expandEditor] 打开放大编辑器失败:", error);
+        window._beiluToast?.(error.message || "放大编辑器打开失败", "error");
+      }
     });
   });
 }
 
 /**
- * 打开放大编辑器
+ * 兼容现有 data-expandable textarea 的声明式入口。
  * @param {HTMLTextAreaElement} textarea - 源 textarea 元素
  */
-function openExpandEditor(textarea) {
-  if (!modal || !modalTextarea) return;
-
-  sourceTextarea = textarea;
-
-  // 设置标题（优先用 data-expand-title，其次用 placeholder，最后用 id）
-  const title =
-    textarea.dataset.expandTitle ||
-    textarea.placeholder ||
-    textarea.id ||
-    "编辑";
-  if (modalTitle) modalTitle.textContent = title;
-
-  // 同步内容
-  modalTextarea.value = textarea.value;
-
-  // 同步只读状态（T034 泛化：disabled 的源框同样不可写回，放大框视同只读，非特判）
-  const _srcLocked = textarea.readOnly || textarea.disabled;
-  modalTextarea.readOnly = _srcLocked;
-  if (saveBtn) {
-    saveBtn.style.display = _srcLocked ? "none" : "";
-  }
-
-  // 打开 dialog
-  modal.showModal();
-
-  // 聚焦到 textarea 末尾
-  requestAnimationFrame(() => {
-    modalTextarea.focus();
-    modalTextarea.setSelectionRange(
-      modalTextarea.value.length,
-      modalTextarea.value.length,
-    );
+function openTextareaEditor(textarea) {
+  return openExpandEditor({
+    title: textarea.dataset.expandTitle || textarea.placeholder || textarea.id || "编辑",
+    value: textarea.value,
+    readOnly: textarea.readOnly || textarea.disabled,
+    onSave(value) {
+      textarea.value = value;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      textarea.dispatchEvent(new Event("change", { bubbles: true }));
+    },
   });
 }
 
 /**
- * 保存并关闭
+ * 程序化打开放大编辑器。adapter 只在用户点保存时执行；关闭路径只通知 onClose。
+ * @param {{title?: string, value?: unknown, readOnly?: boolean,
+ *   onSave?: (value: string) => (void|Promise<void>),
+ *   onClose?: (result: {saved: boolean, value: string}) => void}} options
+ * @returns {true}
  */
-function handleSave() {
-  if (!sourceTextarea || !modalTextarea) return;
+export function openExpandEditor(options = {}) {
+  if (!initialized) initExpandEditor();
+  if (!modal || !modalTextarea) {
+    throw new Error("放大编辑器 dialog 未初始化");
+  }
+  if (activeSession || modal.open) {
+    throw new Error("已有放大编辑会话正在进行，请先关闭当前窗口");
+  }
 
-  // 回写内容
-  sourceTextarea.value = modalTextarea.value;
+  const value = String(options.value ?? "");
+  const readOnly = options.readOnly === true;
+  activeSession = {
+    initialValue: value,
+    readOnly,
+    onSave: typeof options.onSave === "function" ? options.onSave : null,
+    onClose: typeof options.onClose === "function" ? options.onClose : null,
+  };
+  saving = false;
+  if (modalTitle) modalTitle.textContent = options.title || "编辑";
+  modalTextarea.value = value;
+  modalTextarea.readOnly = readOnly;
+  if (saveBtn) {
+    saveBtn.style.display = readOnly ? "none" : "";
+    saveBtn.disabled = false;
+  }
 
-  // 触发 input 和 change 事件，确保其他监听器感知到变化
-  sourceTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-  sourceTextarea.dispatchEvent(new Event("change", { bubbles: true }));
+  try {
+    modal.showModal();
+  } catch (error) {
+    activeSession = null;
+    modalTextarea.readOnly = false;
+    if (saveBtn) saveBtn.style.display = "";
+    throw error;
+  }
+  requestAnimationFrame(() => {
+    if (!activeSession || !modalTextarea) return;
+    modalTextarea.focus();
+    modalTextarea.setSelectionRange(modalTextarea.value.length, modalTextarea.value.length);
+  });
+  return true;
+}
 
-  handleClose();
+/** 保存由当前 adapter 处理；adapter 抛错时保留弹窗，禁止假保存。 */
+async function handleSave() {
+  const session = activeSession;
+  if (!session || !modalTextarea || session.readOnly || saving) return;
+  saving = true;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const value = modalTextarea.value;
+    await session.onSave?.(value);
+    finishClose(true, value);
+  } catch (error) {
+    console.error("[expandEditor] 保存失败，编辑窗口保持打开:", error);
+    window._beiluToast?.(error.message || "放大编辑保存失败", "error");
+    modalTextarea.focus();
+  } finally {
+    saving = false;
+    if (saveBtn && activeSession) saveBtn.disabled = false;
+  }
 }
 
 /**
@@ -157,12 +201,27 @@ function handleSave() {
  * 界面9: 有未保存改动时先确认，防 ✕/Esc/点遮罩误丢大段编辑内容。
  */
 async function handleClose() {
-  if (!modal) return;
+  const session = activeSession;
+  if (!modal || !modalTextarea || !session || saving) return;
   const dirty =
-    sourceTextarea &&
-    !modalTextarea.readOnly &&
-    modalTextarea.value !== sourceTextarea.value;
+    !session.readOnly && modalTextarea.value !== session.initialValue;
   if (dirty && !await beiluConfirm("有未保存的修改，确定不保存就关闭吗？")) return;
-  sourceTextarea = null;
+  finishClose(false, modalTextarea.value);
+}
+
+function finishClose(saved, value) {
+  const session = activeSession;
+  if (!session || !modal) return;
+  activeSession = null;
   modal.close();
+  modalTextarea.readOnly = false;
+  if (saveBtn) {
+    saveBtn.style.display = "";
+    saveBtn.disabled = false;
+  }
+  try {
+    session.onClose?.({ saved, value });
+  } catch (error) {
+    console.error("[expandEditor] onClose 回调失败:", error);
+  }
 }

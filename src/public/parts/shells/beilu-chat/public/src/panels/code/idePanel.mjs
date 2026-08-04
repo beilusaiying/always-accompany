@@ -92,14 +92,30 @@ export function initMenubar(ideMenubar) {
     }
   });
 
-  ideMenubar.querySelectorAll(".ide-menu-action").forEach((action) => {
+  ideMenubar.querySelectorAll(".ide-menu-action[data-action]").forEach((action) => {
+    action.setAttribute("role", "menuitem");
+    action.tabIndex = 0;
     action.addEventListener("click", () => {
       const act = action.dataset.action;
       if (openMenu) {
         openMenu.classList.add("hidden");
         openMenu = null;
       }
+      if (action.getAttribute("aria-disabled") === "true") {
+        const reason = action.dataset.disabledReason;
+        if (reason) showToast("warning", reason);
+        else {
+          console.warn(`[idePanel] aria-disabled 菜单项缺少 data-disabled-reason: ${act || "(unknown)"}`);
+          showToast("warning", "该操作当前不可用");
+        }
+        return;
+      }
       handleMenuAction(act);
+    });
+    action.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      action.click();
     });
   });
 }

@@ -1,0 +1,528 @@
+/*
+ * Beilu semantic design tokens.
+ *
+ * Source of truth flows in one direction:
+ * theme palette primitives -> semantic tokens -> legacy aliases/components.
+ * New semantic tokens never read legacy --beilu-* color names.
+ */
+
+:root {
+  /* Typography roles. User settings may override the three size tokens. */
+  --beilu-font-ui: system-ui, "Noto Sans CJK SC", "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+  --beilu-font-content: var(--beilu-font-ui);
+  --beilu-font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --beilu-font-display: var(--beilu-font-ui);
+  --beilu-font-size-ui: 16px;
+  --beilu-font-size-content: 14px;
+  --beilu-font-size-mono: 14px;
+  --beilu-line-height-ui: 1.45;
+  --beilu-line-height-content: 1.68;
+  --beilu-line-height-mono: 1.55;
+
+  /* Default palette primitives. theme-palettes.css is their only theme owner. */
+  --beilu-palette-backdrop: #0b0f17;
+  --beilu-palette-workspace: #121824;
+  --beilu-palette-panel: #182131;
+  --beilu-palette-raised: #202b3d;
+  --beilu-palette-floating: #202b3d;
+  --beilu-palette-modal: #182131;
+  --beilu-palette-input: #0f1622;
+  --beilu-palette-code: #0d141f;
+  --beilu-palette-inverse: #f3f5f7;
+  --beilu-palette-fg-primary: #f3f5f7;
+  --beilu-palette-fg-secondary: #c6ced8;
+  --beilu-palette-fg-muted: #aab5c2;
+  --beilu-palette-fg-disabled: #84909e;
+  --beilu-palette-fg-inverse: #20252b;
+  --beilu-palette-fg-on-accent: #11151a;
+  --beilu-palette-fg-on-accent-aux: var(--beilu-palette-fg-on-accent);
+  --beilu-palette-fg-accent: #e2b64f;
+  --beilu-palette-accent: #e2b64f;
+  --beilu-palette-accent-aux: #72a7dc;
+  --beilu-palette-accent-rgb: 226, 182, 79;
+  --beilu-palette-info: #65b7df;
+  --beilu-palette-success: #6bc48f;
+  --beilu-palette-warning: #f1c45a;
+  --beilu-palette-error: #ef7180;
+  --beilu-palette-fg-on-info: #11151a;
+  --beilu-palette-fg-on-success: #11151a;
+  --beilu-palette-fg-on-warning: #11151a;
+  --beilu-palette-fg-on-error: #11151a;
+  --beilu-palette-focus: #77cbe8;
+
+  /* Opaque content-bearing surfaces. Only backdrop may be transparent. */
+  --beilu-backdrop: var(--beilu-palette-backdrop);
+  --beilu-surface-workspace: var(--beilu-palette-workspace);
+  --beilu-surface-panel: var(--beilu-palette-panel);
+  --beilu-surface-raised: var(--beilu-palette-raised);
+  --beilu-surface-floating: var(--beilu-palette-floating);
+  --beilu-surface-modal: var(--beilu-palette-modal);
+  --beilu-surface-input: var(--beilu-palette-input);
+  --beilu-surface-code: var(--beilu-palette-code);
+  --beilu-surface-inverse: var(--beilu-palette-inverse);
+  --beilu-surface-message-user: var(--beilu-surface-raised);
+  --beilu-surface-message-bot: var(--beilu-surface-panel);
+
+  /* Neutral foreground roles. */
+  --beilu-fg-primary: var(--beilu-palette-fg-primary);
+  --beilu-fg-secondary: var(--beilu-palette-fg-secondary);
+  --beilu-fg-muted: var(--beilu-palette-fg-muted);
+  --beilu-fg-disabled: var(--beilu-palette-fg-disabled);
+  --beilu-fg-inverse: var(--beilu-palette-fg-inverse);
+  --beilu-fg-on-accent: var(--beilu-palette-fg-on-accent);
+  --beilu-fg-on-accent-aux: var(--beilu-palette-fg-on-accent-aux);
+  --beilu-fg-accent: var(--beilu-palette-fg-accent);
+
+  /* Theme identity, mode identity and stable semantic states. */
+  --beilu-theme-accent: var(--beilu-palette-accent);
+  --beilu-theme-accent-aux: var(--beilu-palette-accent-aux);
+  --beilu-mode-accent: var(--beilu-theme-accent);
+  --beilu-action-accent: var(--beilu-user-accent, var(--beilu-mode-accent, var(--beilu-theme-accent)));
+  --beilu-state-info: var(--beilu-palette-info);
+  --beilu-state-success: var(--beilu-palette-success);
+  --beilu-state-warning: var(--beilu-palette-warning);
+  --beilu-state-error: var(--beilu-palette-error);
+  --beilu-fg-on-info: var(--beilu-palette-fg-on-info);
+  --beilu-fg-on-success: var(--beilu-palette-fg-on-success);
+  --beilu-fg-on-warning: var(--beilu-palette-fg-on-warning);
+  --beilu-fg-on-error: var(--beilu-palette-fg-on-error);
+  --beilu-focus: var(--beilu-palette-focus);
+
+  /* Boundaries and interaction states stay opaque on content surfaces. */
+  --beilu-border-subtle: color-mix(in srgb, var(--beilu-fg-primary) 16%, var(--beilu-surface-workspace));
+  --beilu-border-default: color-mix(in srgb, var(--beilu-fg-primary) 25%, var(--beilu-surface-workspace));
+  --beilu-border-strong: color-mix(in srgb, var(--beilu-fg-primary) 44%, var(--beilu-surface-workspace));
+  --beilu-border-focus: var(--beilu-focus);
+  --beilu-selection: color-mix(in srgb, var(--beilu-action-accent) 26%, var(--beilu-surface-raised));
+  --beilu-selection-inactive: color-mix(in srgb, var(--beilu-fg-secondary) 18%, var(--beilu-surface-panel));
+  --beilu-hover: color-mix(in srgb, var(--beilu-action-accent) 10%, var(--beilu-surface-panel));
+  --beilu-active: color-mix(in srgb, var(--beilu-action-accent) 18%, var(--beilu-surface-raised));
+  --beilu-drop-target: var(--beilu-action-accent);
+
+  /* One timing registry for click, panel and view feedback. */
+  --beilu-motion-press: 100ms;
+  --beilu-motion-fast: 160ms;
+  --beilu-motion-panel: 220ms;
+  --beilu-motion-view: 300ms;
+  --beilu-motion-ambient: 12s;
+  --beilu-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --beilu-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --beilu-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Target sizes are consumed by the shared selectors below. */
+  --beilu-target-min: 24px;
+  --beilu-target-toolbar: 32px;
+  --beilu-target-control: 36px;
+  --beilu-target-primary: 40px;
+
+  /* Material and feedback appearance. Pro themes override appearance only. */
+  --beilu-radius-control: 6px;
+  --beilu-radius-panel: 10px;
+  --beilu-border-width: 1px;
+  --beilu-panel-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+  --beilu-panel-texture: none;
+  --beilu-backdrop-effect: none;
+  --beilu-identity-edge: var(--beilu-theme-accent);
+  --beilu-identity-edge-aux: var(--beilu-theme-accent-aux);
+  --beilu-identity-active-edge: var(--beilu-action-accent);
+  --beilu-feedback-press-surface: var(--beilu-active);
+  --beilu-feedback-press-border: var(--beilu-border-strong);
+  --beilu-feedback-press-shadow: inset 0 -2px 0 var(--beilu-identity-active-edge);
+  --beilu-feedback-selected-surface: var(--beilu-selection);
+  --beilu-feedback-selected-edge: var(--beilu-identity-active-edge);
+
+  /* Legacy compatibility: old names point to the new semantic contract. */
+  --beilu-bg-dark: var(--beilu-surface-workspace);
+  --beilu-bg-card: var(--beilu-surface-panel);
+  --beilu-modal-bg: var(--beilu-surface-modal);
+  --beilu-text-dim: var(--beilu-fg-secondary);
+  --beilu-muted: var(--beilu-fg-muted);
+  --beilu-accent: var(--beilu-theme-accent-aux);
+  --beilu-accent-text: var(--beilu-fg-on-accent-aux);
+  --beilu-bg-hover: var(--beilu-hover);
+  --beilu-user-msg-bg: var(--beilu-surface-message-user);
+  --beilu-bot-msg-bg: var(--beilu-surface-message-bot);
+  --beilu-amber: var(--beilu-action-accent);
+  --beilu-amber-text: var(--beilu-fg-on-accent);
+  --beilu-amber-fg: var(--beilu-fg-accent);
+  --beilu-info: var(--beilu-state-info);
+  --beilu-info-text: var(--beilu-fg-on-info);
+  --beilu-success: var(--beilu-state-success);
+  --beilu-success-text: var(--beilu-fg-on-success);
+  --beilu-warning: var(--beilu-state-warning);
+  --beilu-warning-text: var(--beilu-fg-on-warning);
+  --beilu-error: var(--beilu-state-error);
+  --beilu-error-text: var(--beilu-fg-on-error);
+  --beilu-amber-rgb: var(--beilu-palette-accent-rgb);
+  --beilu-amber-dark: color-mix(in srgb, var(--beilu-action-accent) 76%, black);
+  --beilu-amber-light: color-mix(in srgb, var(--beilu-action-accent) 68%, white);
+  --beilu-amber-3: color-mix(in srgb, var(--beilu-action-accent) 3%, transparent);
+  --beilu-amber-4: color-mix(in srgb, var(--beilu-action-accent) 4%, transparent);
+  --beilu-amber-5: color-mix(in srgb, var(--beilu-action-accent) 5%, transparent);
+  --beilu-amber-6: color-mix(in srgb, var(--beilu-action-accent) 6%, transparent);
+  --beilu-amber-8: color-mix(in srgb, var(--beilu-action-accent) 8%, transparent);
+  --beilu-amber-10: color-mix(in srgb, var(--beilu-action-accent) 10%, transparent);
+  --beilu-amber-12: color-mix(in srgb, var(--beilu-action-accent) 12%, transparent);
+  --beilu-amber-15: color-mix(in srgb, var(--beilu-action-accent) 15%, transparent);
+  --beilu-amber-18: color-mix(in srgb, var(--beilu-action-accent) 18%, transparent);
+  --beilu-amber-20: color-mix(in srgb, var(--beilu-action-accent) 20%, transparent);
+  --beilu-amber-22: color-mix(in srgb, var(--beilu-action-accent) 22%, transparent);
+  --beilu-amber-25: color-mix(in srgb, var(--beilu-action-accent) 25%, transparent);
+  --beilu-amber-30: color-mix(in srgb, var(--beilu-action-accent) 30%, transparent);
+  --beilu-amber-35: color-mix(in srgb, var(--beilu-action-accent) 35%, transparent);
+  --beilu-amber-40: color-mix(in srgb, var(--beilu-action-accent) 40%, transparent);
+  --beilu-amber-45: color-mix(in srgb, var(--beilu-action-accent) 45%, transparent);
+  --beilu-amber-50: color-mix(in srgb, var(--beilu-action-accent) 50%, transparent);
+  --beilu-amber-60: color-mix(in srgb, var(--beilu-action-accent) 60%, transparent);
+  --beilu-amber-70: color-mix(in srgb, var(--beilu-action-accent) 70%, transparent);
+  --beilu-amber-80: color-mix(in srgb, var(--beilu-action-accent) 80%, transparent);
+  --beilu-amber-90: color-mix(in srgb, var(--beilu-action-accent) 90%, transparent);
+}
+
+/*
+ * Re-resolve the complete action chain where the active-mode producer lives.
+ * Custom properties inherited from :root retain their computed value, so every
+ * action-dependent alias must be computed again on body. The root declarations
+ * remain the default for html pseudo-elements.
+ */
+body {
+  --beilu-action-accent: var(--beilu-user-accent, var(--beilu-mode-accent, var(--beilu-theme-accent)));
+  --beilu-selection: color-mix(in srgb, var(--beilu-action-accent) 26%, var(--beilu-surface-raised));
+  --beilu-hover: color-mix(in srgb, var(--beilu-action-accent) 10%, var(--beilu-surface-panel));
+  --beilu-active: color-mix(in srgb, var(--beilu-action-accent) 18%, var(--beilu-surface-raised));
+  --beilu-drop-target: var(--beilu-action-accent);
+  --beilu-bg-hover: var(--beilu-hover);
+
+  --beilu-amber: var(--beilu-action-accent);
+  --beilu-amber-text: var(--beilu-fg-on-accent);
+  --beilu-amber-dark: color-mix(in srgb, var(--beilu-action-accent) 76%, black);
+  --beilu-amber-light: color-mix(in srgb, var(--beilu-action-accent) 68%, white);
+  --beilu-amber-3: color-mix(in srgb, var(--beilu-action-accent) 3%, transparent);
+  --beilu-amber-4: color-mix(in srgb, var(--beilu-action-accent) 4%, transparent);
+  --beilu-amber-5: color-mix(in srgb, var(--beilu-action-accent) 5%, transparent);
+  --beilu-amber-6: color-mix(in srgb, var(--beilu-action-accent) 6%, transparent);
+  --beilu-amber-8: color-mix(in srgb, var(--beilu-action-accent) 8%, transparent);
+  --beilu-amber-10: color-mix(in srgb, var(--beilu-action-accent) 10%, transparent);
+  --beilu-amber-12: color-mix(in srgb, var(--beilu-action-accent) 12%, transparent);
+  --beilu-amber-15: color-mix(in srgb, var(--beilu-action-accent) 15%, transparent);
+  --beilu-amber-18: color-mix(in srgb, var(--beilu-action-accent) 18%, transparent);
+  --beilu-amber-20: color-mix(in srgb, var(--beilu-action-accent) 20%, transparent);
+  --beilu-amber-22: color-mix(in srgb, var(--beilu-action-accent) 22%, transparent);
+  --beilu-amber-25: color-mix(in srgb, var(--beilu-action-accent) 25%, transparent);
+  --beilu-amber-30: color-mix(in srgb, var(--beilu-action-accent) 30%, transparent);
+  --beilu-amber-35: color-mix(in srgb, var(--beilu-action-accent) 35%, transparent);
+  --beilu-amber-40: color-mix(in srgb, var(--beilu-action-accent) 40%, transparent);
+  --beilu-amber-45: color-mix(in srgb, var(--beilu-action-accent) 45%, transparent);
+  --beilu-amber-50: color-mix(in srgb, var(--beilu-action-accent) 50%, transparent);
+  --beilu-amber-60: color-mix(in srgb, var(--beilu-action-accent) 60%, transparent);
+  --beilu-amber-70: color-mix(in srgb, var(--beilu-action-accent) 70%, transparent);
+  --beilu-amber-80: color-mix(in srgb, var(--beilu-action-accent) 80%, transparent);
+  --beilu-amber-90: color-mix(in srgb, var(--beilu-action-accent) 90%, transparent);
+
+  --color-accent: var(--beilu-action-accent);
+  --color-accent-content: var(--beilu-fg-on-accent);
+  --a: from var(--beilu-action-accent) l c h;
+  --ac: from var(--beilu-fg-on-accent) l c h;
+}
+
+/* Pro themes own their identity feedback on html; original themes use mode identity. */
+html:not([data-beilu-enhanced]) > body {
+  --beilu-identity-active-edge: var(--beilu-action-accent);
+  --beilu-feedback-press-surface: var(--beilu-active);
+  --beilu-feedback-press-shadow: inset 0 -2px 0 var(--beilu-identity-active-edge);
+  --beilu-feedback-selected-surface: var(--beilu-selection);
+  --beilu-feedback-selected-edge: var(--beilu-identity-active-edge);
+}
+
+/*
+ * Semantic -> daisyUI compatibility bridge.
+ * v5 consumes complete --color-* values; legacy utility rules wrap the v4
+ * channel fragments in oklch(...). Neither bridge direction reads daisyUI.
+ */
+html[data-theme] {
+  /* Later, equal-specificity bridge overrides legacy per-theme declarations. */
+  --beilu-accent: var(--beilu-theme-accent-aux);
+  --beilu-accent-text: var(--beilu-fg-on-accent-aux);
+  --beilu-bg-hover: var(--beilu-hover);
+  --beilu-user-msg-bg: var(--beilu-surface-message-user);
+  --beilu-bot-msg-bg: var(--beilu-surface-message-bot);
+  --beilu-info-text: var(--beilu-fg-on-info);
+  --beilu-success-text: var(--beilu-fg-on-success);
+  --beilu-warning-text: var(--beilu-fg-on-warning);
+  --beilu-error-text: var(--beilu-fg-on-error);
+
+  --color-base-100: var(--beilu-surface-workspace);
+  --color-base-200: var(--beilu-surface-panel);
+  --color-base-300: var(--beilu-surface-raised);
+  --color-base-content: var(--beilu-fg-primary);
+  --color-primary: var(--beilu-theme-accent);
+  --color-primary-content: var(--beilu-fg-on-accent);
+  --color-secondary: var(--beilu-theme-accent-aux);
+  --color-secondary-content: var(--beilu-fg-on-accent-aux);
+  --color-accent: var(--beilu-action-accent);
+  --color-accent-content: var(--beilu-fg-on-accent);
+  --color-neutral: var(--beilu-surface-inverse);
+  --color-neutral-content: var(--beilu-fg-inverse);
+  --color-info: var(--beilu-state-info);
+  --color-info-content: var(--beilu-fg-on-info);
+  --color-success: var(--beilu-state-success);
+  --color-success-content: var(--beilu-fg-on-success);
+  --color-warning: var(--beilu-state-warning);
+  --color-warning-content: var(--beilu-fg-on-warning);
+  --color-error: var(--beilu-state-error);
+  --color-error-content: var(--beilu-fg-on-error);
+
+  --b1: from var(--beilu-surface-workspace) l c h;
+  --b2: from var(--beilu-surface-panel) l c h;
+  --b3: from var(--beilu-surface-raised) l c h;
+  --bc: from var(--beilu-fg-primary) l c h;
+  --p: from var(--beilu-theme-accent) l c h;
+  --pc: from var(--beilu-fg-on-accent) l c h;
+  --s: from var(--beilu-theme-accent-aux) l c h;
+  --sc: from var(--beilu-fg-on-accent-aux) l c h;
+  --a: from var(--beilu-action-accent) l c h;
+  --ac: from var(--beilu-fg-on-accent) l c h;
+  --n: from var(--beilu-surface-inverse) l c h;
+  --nc: from var(--beilu-fg-inverse) l c h;
+  --in: from var(--beilu-state-info) l c h;
+  --inc: from var(--beilu-fg-on-info) l c h;
+  --su: from var(--beilu-state-success) l c h;
+  --suc: from var(--beilu-fg-on-success) l c h;
+  --wa: from var(--beilu-state-warning) l c h;
+  --wac: from var(--beilu-fg-on-warning) l c h;
+  --er: from var(--beilu-state-error) l c h;
+  --erc: from var(--beilu-fg-on-error) l c h;
+}
+
+/* Base hit areas. Visual glyphs may remain smaller than their click target. */
+:where(button, .btn, [role="button"]) {
+  min-inline-size: var(--beilu-target-min);
+  min-block-size: var(--beilu-target-control);
+  transition-property: background-color, border-color, box-shadow, color, transform;
+  transition-duration: var(--beilu-motion-press);
+  transition-timing-function: var(--beilu-ease-standard);
+}
+
+:where(.btn-xs, .btn-sm, .btn-square, .top-tab, [role="tab"]) {
+  min-inline-size: var(--beilu-target-toolbar);
+  min-block-size: var(--beilu-target-toolbar);
+}
+
+:where(.btn-primary, [data-beilu-primary-action="true"]) {
+  min-block-size: var(--beilu-target-primary);
+}
+
+/* Native click/release keeps pointer cancellation; pointerdown is visual only. */
+:where(button, .btn, [role="button"]):not(.top-tab):not(.menu_button):not(.mode-option):not(.aux-menu-item):not(.beilu-cat-tab):not(:disabled):not([aria-disabled="true"]):active {
+  background-color: var(--beilu-feedback-press-surface);
+  border-color: var(--beilu-feedback-press-border);
+  box-shadow: var(--beilu-feedback-press-shadow);
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Dense navigation never scales: surface plus a stable edge carries the state. */
+:where(
+  .top-tab,
+  .menu_button,
+  .file-tree-item,
+  .activity-item,
+  .preset-item,
+  .mode-option,
+  .aux-menu-item,
+  .beilu-cat-tab,
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="treeitem"]
+) {
+  min-block-size: var(--beilu-target-toolbar);
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: var(--beilu-motion-press);
+  transition-timing-function: var(--beilu-ease-standard);
+}
+
+:where(
+  .top-tab,
+  .menu_button,
+  .file-tree-item,
+  .activity-item,
+  .preset-item,
+  .mode-option,
+  .aux-menu-item,
+  .beilu-cat-tab,
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="treeitem"]
+):not(:disabled):not([aria-disabled="true"]):active {
+  background-color: var(--beilu-feedback-press-surface);
+  border-color: var(--beilu-feedback-press-border);
+  box-shadow: inset 3px 0 0 var(--beilu-feedback-selected-edge);
+  transform: none;
+}
+
+:where(
+  .top-tab.top-tab-active,
+  .top-tab.active,
+  .top-tab[data-active="true"],
+  .menu_button.active,
+  .file-tree-item.active,
+  .activity-item.active,
+  .preset-item.active,
+  [role="tab"][aria-selected="true"],
+  [role="menuitem"][aria-current="true"],
+  [role="option"][aria-selected="true"],
+  [role="treeitem"][aria-selected="true"]
+) {
+  background-color: var(--beilu-feedback-selected-surface);
+  box-shadow: inset 3px 0 0 var(--beilu-feedback-selected-edge);
+}
+
+:where(button, .btn, .menu_button, .top-tab, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="treeitem"]):focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: 2px;
+}
+
+:where(button, .btn, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="treeitem"]):where(:disabled, [aria-disabled="true"]) {
+  color: var(--beilu-fg-disabled);
+  cursor: not-allowed;
+  transform: none;
+}
+
+:where(.drop-target, [data-drop-target="true"]) {
+  background-color: var(--beilu-selection);
+  outline: 2px solid var(--beilu-drop-target);
+  outline-offset: -2px;
+}
+
+/*
+ * Illustration contract. #bg1 is the illustration layer; only the chat canvas
+ * becomes transparent when it is active. Every content-bearing surface stays
+ * opaque and explicitly cancels the legacy blur chain from ui-modules.css.
+ * The shared html[data-theme] prefix covers both original and Pro themes.
+ */
+html[data-theme] body.has-bg-image #chat-container,
+html[data-theme] body.has-bg-image #chat-messages {
+  background-color: transparent;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image .chat-message .chat-bubble {
+  background-color: var(--beilu-surface-raised);
+  background-image: none;
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image #top-bar {
+  background-color: var(--beilu-surface-raised);
+  background-image: none;
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image :is(.left-panel, .right-panel, #right-panel) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image :is(
+  .floating-window,
+  .popover,
+  [popover],
+  .dropdown-content,
+  .model-selector-dropdown,
+  .ide-menu-dropdown,
+  .context-menu,
+  .tooltip-content,
+  .toast,
+  .drawer-side,
+  [role="menu"],
+  [role="listbox"]
+) {
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image :is(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .modal-box,
+  [role="dialog"]
+) {
+  background-color: var(--beilu-surface-modal);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea,
+  select,
+  .input,
+  .textarea,
+  .select
+) {
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image :is(
+  .file-editor,
+  .editor-section,
+  .code-editor,
+  .editor-textarea,
+  code,
+  pre
+) {
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme] body.has-bg-image .tooltip::before,
+html[data-theme] body.has-bg-image [role="tooltip"] {
+  background-color: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --beilu-motion-press: 0.01ms;
+    --beilu-motion-fast: 0.01ms;
+    --beilu-motion-panel: 0.01ms;
+    --beilu-motion-view: 0.01ms;
+    --beilu-motion-ambient: 0.01ms;
+  }
+
+  :where(button, .btn, .menu_button, .top-tab, .file-tree-item, .activity-item, .preset-item, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="treeitem"]) {
+    animation: none;
+    scroll-behavior: auto;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --beilu-backdrop: var(--beilu-palette-workspace);
+    --beilu-panel-texture: none;
+    --beilu-backdrop-effect: none;
+  }
+}

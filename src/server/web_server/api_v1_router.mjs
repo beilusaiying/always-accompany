@@ -10,6 +10,10 @@ import { config, save_config } from "../server.mjs";
 import { is_local_ip } from "../../scripts/ratelimit.mjs";
 import { readJsonSafe } from "../../scripts/safeJsonIO.mjs"; // T019：变量文件损坏→备份.corrupt.bak抛错，不再body直接覆盖清空
 import { nicerWriteFileSync } from "../../scripts/nicerWriteFile.mjs"; // [0716 断电安全] 原子写单源
+import {
+  prepareEditMessageRequest,
+  prepareEditOperationIdentity,
+} from "../../public/parts/shells/beilu-chat/src/lib/editMessageRequest.mjs";
 import * as v1 from "./v1_adapter.mjs";
 
 const router = express.Router();
@@ -27,6 +31,13 @@ async function _isChatOwner(chatModule, chatId, username) {
   let meta = metas.get(chatId);
   if (!meta) { try { await chatModule.loadChat(chatId); } catch { /* ignore */ } meta = metas.get(chatId); }
   return !!meta && meta.username === username;
+}
+
+function _parseNonNegativeInteger(value) {
+  if (typeof value === "number") return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 // 认证中间件:支持 Header `Authorization: Bearer xxx` 和 URL `?token=xxx`(WS 场景)
@@ -116,12 +127,18 @@ router.get("/chat/history/:chatId", requireApiKeyScope("chat:read"), asyncHandle
   const offset = parseInt(req.query.offset) || 0;
   // chatLogEntry_t[]：role / content / content_for_show / name / time_stamp / id
   // 用权威谓词 isActiveEntry（chatEntryUtils 单源）过滤已删+已隐藏消息
-  const fullLog = (chatMeta.chatLog || []).filter(isActiveEntry);
-  const messages = fullLog.slice(offset, offset + limit).map((m) => ({
-    role: m.role,
-    content: m.content_for_show || m.content || "",
-    name: m.name || null,
-    timestamp: m.time_stamp || null,
+  const fullLog = (chatMeta.chatLog || [])
+    .map((entry, indexHint) => ({ entry, indexHint }))
+    .filter(({ entry }) => isActiveEntry(entry));
+  const messages = fullLog.slice(offset, offset + limit).map(({ entry, indexHint }) => ({
+    id: entry.id,
+    // 可见数组经删除/隐藏过滤后会重排；只返回对应权威 chatLog 的原始 index hint，
+    // 任何写操作仍必须同时携带 id，不能把分页/可见序号当作消息身份。
+    indexHint,
+    role: entry.role,
+    content: entry.content_for_show || entry.content || "",
+    name: entry.name || null,
+    timestamp: entry.time_stamp || null,
   }));
   res.json({ chatId, total: fullLog.length, offset, limit, messages });
 }, "GET /v1/chat/history/:chatId"));
@@ -199,8 +216,8 @@ router.post("/chat/send", requireApiKeyScope("chat:send"), asyncHandler(async (r
   }
 
   try {
-    chatModule.registerChatUiSocket(chatId, mockWs);
-    await chatModule.addUserReply(chatId, { content: String(message), files: [] });
+    chatModule.registerChatUiSocket(chatId, mockWs, username);
+    await chatModule.addUserReply(chatId, { content: String(message), files: [] }, { expectedUsername: username });
     chatModule.triggerCharReply(chatId, charName, { sourceChannel: "api" }).catch((err) => {
       wbDetect(chatId, "api", "chat/send:trigger", false, err.message);
       if (stream) {
@@ -305,11 +322,10 @@ router.get("/characters/:name", requireApiKeyScope("characters:read"), asyncHand
 //   用户发 {_action:"xxx", ...} 透传到插件
 // ============================================================
 async function _loadSetDataActions() {
-  const { __projectRoot } = await import("../../yonban/core/functions/memory/storage_mod/storage.mjs"); // T8·回切：改指 yonban 新位实现体（T3e memory 已入住）
-  const path = await import("node:path");
-  const { pathToFileURL } = await import("node:url");
-  const setDataPath = path.join(__projectRoot, "src", "public", "parts", "plugins", "beilu-memory", "lib", "setDataActions.mjs");
-  return await import(pathToFileURL(setDataPath).href);
+  // [P0-C 2026-08-03] 悬空路径修复：plugins/beilu-memory/lib/setDataActions.mjs 在 T3e 迁移后
+  //   已不存在（实体在 yonban），原动态 import 必抛=全部 /v1/memory/* 端点 500 死链。
+  //   改直指 yonban 实现体（与 memory/index.mjs facade 同一 handleSetData，单源）。
+  return await import("../../yonban/core/functions/memory/handler/setDataActions.mjs");
 }
 
 router.post("/memory/action", requireApiKeyScope("memory:write"), asyncHandler(async (req, res) => {
@@ -413,39 +429,222 @@ router.get("/memory/file", requireApiKeyScope("memory:read"), asyncHandler(async
 
 router.post("/chat/branch", requireApiKeyScope("chat:send"), asyncHandler(async (req, res) => {
   const { username } = await getUserByReq(req);
-  const { chatId, messageIndex } = req.body || {};
-  if (!chatId || messageIndex === undefined) return res.status(400).json({ error: "missing chatId or messageIndex" });
+  const { chatId, messageId, messageIndex, wholeChat } = req.body || {};
+  const normalizedMessageId = typeof messageId === "string" ? messageId.trim() : "";
+  const wantsWholeChat = wholeChat === true;
+  if (!chatId) return res.status(400).json({ success: false, code: "E_BRANCH_CHAT_REQUIRED", error: "missing chatId" });
+  if ((normalizedMessageId && wantsWholeChat) || (!normalizedMessageId && !wantsWholeChat)) {
+    return res.status(400).json({
+      success: false,
+      code: normalizedMessageId ? "E_BRANCH_SELECTOR_AMBIGUOUS" : "E_BRANCH_SELECTOR_REQUIRED",
+      error: normalizedMessageId
+        ? "messageId and wholeChat=true are mutually exclusive"
+        : "a non-empty messageId or explicit wholeChat=true is required",
+    });
+  }
+  if (messageIndex != null && _parseNonNegativeInteger(messageIndex) == null) {
+    return res.status(400).json({ success: false, code: "E_BRANCH_INDEX_HINT_INVALID", error: "messageIndex must be a non-negative safe integer" });
+  }
   const safeChatId = confineSegment(chatId);
   const chatModule = await _getBeiluChat();
   if (!await _isChatOwner(chatModule, safeChatId, username)) return res.status(404).json({ error: "chat not found" });
-  const newChatId = await chatModule.branchChat(safeChatId, parseInt(messageIndex), username);
-  res.status(201).json({ success: true, newChatId });
+  try {
+    const newChatId = await chatModule.branchChat(safeChatId, {
+      ...(normalizedMessageId ? { messageId: normalizedMessageId } : {}),
+      ...(messageIndex != null ? { indexHint: _parseNonNegativeInteger(messageIndex) } : {}),
+      wholeChat: wantsWholeChat,
+    }, username);
+    res.status(201).json({ success: true, newChatId });
+  } catch (error) {
+    const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+    if (status >= 500) throw error;
+    return res.status(status).json({ success: false, code: error.code, error: error.message });
+  }
 }, "POST /v1/chat/branch"));
 
 router.put("/chat/message/:chatId/:index", requireApiKeyScope("chat:send"), asyncHandler(async (req, res) => {
   const { username } = await getUserByReq(req);
   const chatId = confineSegment(req.params.chatId);
-  const index = parseInt(req.params.index);
-  const { content } = req.body || {};
-  if (content === undefined) return res.status(400).json({ error: "missing content" });
+  const index = _parseNonNegativeInteger(req.params.index);
+  if (index == null) {
+    return res.status(400).json({
+      success: false,
+      applied: false,
+      chatCommitted: false,
+      status: "invalid_request",
+      revision: null,
+      derived: null,
+      code: "E_EDIT_INDEX_HINT_INVALID",
+      error: "invalid index hint",
+    });
+  }
+  const { content, messageId: rawMessageId, editOperationId } = req.body || {};
+  const messageId = typeof rawMessageId === "string" ? rawMessageId.trim() : "";
+  if (!messageId) {
+    return res.status(400).json({
+      success: false,
+      applied: false,
+      chatCommitted: false,
+      status: "invalid_request",
+      revision: null,
+      derived: null,
+      code: "E_EDIT_MESSAGE_ID_REQUIRED",
+      error: "missing messageId",
+    });
+  }
+  if (content === undefined) {
+    return res.status(400).json({
+      success: false,
+      applied: false,
+      chatCommitted: false,
+      status: "invalid_request",
+      revision: null,
+      derived: null,
+      messageId,
+      indexHint: index,
+      code: "E_EDIT_CONTENT_REQUIRED",
+      error: "missing content",
+    });
+  }
   const chatModule = await _getBeiluChat();
-  if (!await _isChatOwner(chatModule, chatId, username)) return res.status(404).json({ error: "chat not found" });
+  if (!await _isChatOwner(chatModule, chatId, username)) {
+    return res.status(404).json({
+      success: false,
+      applied: false,
+      chatCommitted: false,
+      status: "not_found",
+      revision: null,
+      derived: null,
+      messageId,
+      indexHint: index,
+      error: "chat not found",
+    });
+  }
   // [2026-08-01 批⑦疑#1] editMessage 第三参被 messageBuilder 按对象消费（result.content）。
   //   v1 API 层 content 可能是纯字符串——包装成 {content} 对象，对齐内部 endpoints.mjs:203
   //   addUserReply 的 {content} 包装范式。
   const _editPayload = typeof content === 'string' ? { content } : content;
-  await chatModule.editMessage(chatId, index, _editPayload);
-  res.json({ success: true });
+  try {
+    const preparedEdit = await prepareEditMessageRequest(username, _editPayload, editOperationId);
+    const result = await chatModule.editMessage(
+      chatId,
+      messageId,
+      index,
+      preparedEdit.content,
+      {
+        expectedUsername: username,
+        editOperationId: preparedEdit.editOperationId,
+        payloadFingerprint: preparedEdit.payloadFingerprint,
+      },
+    );
+    const responseStatus = result.applied
+      ? 200
+      : result.reason === "message_id_not_found" ? 404 : 409;
+    return res.status(responseStatus).json({
+      success: result.applied === true && result.chatCommitted === true,
+      applied: result.applied === true,
+      entry: result.entry,
+      reason: result.reason,
+      messageId: result.messageId,
+      index: result.index,
+      indexHint: result.indexHint,
+      chatCommitted: result.chatCommitted,
+      status: result.status,
+      revision: result.revision,
+      derived: result.derived,
+      warning: result.warning,
+      editOperationId: result.editOperationId,
+      payloadFingerprint: result.payloadFingerprint,
+      deduped: result.deduped === true,
+    });
+  } catch (error) {
+    const status = Number.isInteger(error?.statusCode)
+      ? error.statusCode
+      : /not found/i.test(error?.message || "") ? 404 : 500;
+    if (status >= 500) throw error;
+    return res.status(status).json({
+      success: false,
+      applied: false,
+      chatCommitted: error?.chatCommitted === true,
+      status: error?.status || "precommit_failed",
+      revision: null,
+      derived: null,
+      messageId,
+      indexHint: index,
+      code: error?.code,
+      error: error?.message || String(error),
+    });
+  }
 }, "PUT /v1/chat/message/:chatId/:index"));
+
+router.post("/chat/message/:chatId/:index/edit-operation/:operationId/reconcile", requireApiKeyScope("chat:send"), asyncHandler(async (req, res) => {
+  const { username } = await getUserByReq(req);
+  const chatId = confineSegment(req.params.chatId);
+  const index = _parseNonNegativeInteger(req.params.index);
+  const reconcileBody = req.body && typeof req.body === "object" ? req.body : {};
+  const messageId = typeof reconcileBody.messageId === "string" ? reconcileBody.messageId.trim() : "";
+  if (index == null || !messageId) {
+    return res.status(400).json({
+      success: false,
+      code: index == null ? "E_EDIT_INDEX_HINT_INVALID" : "E_EDIT_MESSAGE_ID_REQUIRED",
+      error: index == null ? "invalid index hint" : "missing messageId",
+    });
+  }
+  const chatModule = await _getBeiluChat();
+  if (!await _isChatOwner(chatModule, chatId, username)) {
+    return res.status(404).json({ error: "chat not found" });
+  }
+  try {
+    const identity = prepareEditOperationIdentity(reconcileBody.content, req.params.operationId);
+    const receipt = await chatModule.getEditOperationReceipt(
+      chatId,
+      messageId,
+      identity.editOperationId,
+      identity.payloadFingerprint,
+      { expectedUsername: username },
+    );
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        applied: false,
+        chatCommitted: false,
+        status: "not_found",
+        code: "E_EDIT_OPERATION_NOT_FOUND",
+        messageId,
+        indexHint: index,
+        editOperationId: req.params.operationId,
+        error: "edit operation not found",
+      });
+    }
+    return res.status(200).json({ success: true, ...receipt });
+  } catch (error) {
+    const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
+    if (status >= 500) throw error;
+    return res.status(status).json({
+      success: false,
+      applied: false,
+      chatCommitted: false,
+      status: "reconciliation_failed",
+      code: error?.code,
+      error: error?.message || String(error),
+    });
+  }
+}, "POST /v1/chat/message/:chatId/:index/edit-operation/:operationId/reconcile"));
 
 router.delete("/chat/message/:chatId/:index", requireApiKeyScope("chat:send"), asyncHandler(async (req, res) => {
   const { username } = await getUserByReq(req);
   const chatId = confineSegment(req.params.chatId);
-  const index = parseInt(req.params.index);
+  const index = _parseNonNegativeInteger(req.params.index);
+  if (index == null) return res.status(400).json({ success: false, error: "invalid index" });
+  const rawMessageId = req.query?.messageId ?? req.body?.messageId;
+  if (typeof rawMessageId !== "string" || !rawMessageId.trim()) {
+    return res.status(400).json({ success: false, error: "messageId is required" });
+  }
+  const messageId = rawMessageId.trim();
   const chatModule = await _getBeiluChat();
   if (!await _isChatOwner(chatModule, chatId, username)) return res.status(404).json({ error: "chat not found" });
-  await chatModule.deleteMessage(chatId, index);
-  res.json({ success: true });
+  const result = await chatModule.deleteMessage(chatId, index, { messageId, expectedUsername: username });
+  res.json({ success: result.applied, ...result });
 }, "DELETE /v1/chat/message/:chatId/:index"));
 
 router.delete("/chat/:chatId", requireApiKeyScope("chat:send"), requireConfirm(v1.DANGEROUS_OPS["chat/delete"]), asyncHandler(async (req, res) => {
@@ -453,8 +652,12 @@ router.delete("/chat/:chatId", requireApiKeyScope("chat:send"), requireConfirm(v
   const chatId = confineSegment(req.params.chatId);
   const chatModule = await _getBeiluChat();
   if (!await _isChatOwner(chatModule, chatId, username)) return res.status(404).json({ error: "chat not found" });
-  await chatModule.deleteChat([chatId], username);
-  res.json({ success: true });
+  const [result] = await chatModule.deleteChat([chatId], username);
+  if (result?.success !== true) {
+    const status = Number.isInteger(result?.statusCode) ? result.statusCode : 409;
+    return res.status(status).json({ success: false, ...result });
+  }
+  res.json({ success: true, ...result });
 }, "DELETE /v1/chat/:chatId"));
 
 // ============================================================
@@ -833,7 +1036,7 @@ export function registerV1Routes(app) {
     }
 
     try {
-      chatModule.registerChatUiSocket(chatId, ws);
+      chatModule.registerChatUiSocket(chatId, ws, username);
     } catch (e) {
       try { ws.send(JSON.stringify({ type: "error", message: "register failed: " + e.message })); } catch {}
       ws.close(1011);
@@ -872,7 +1075,7 @@ export function registerV1Routes(app) {
           : _sanitizeExternalInput(content, msg.sender);
         wbTrace(chatId, "api", "game/connect:send", { type: msg.type, len: content.length });
         try {
-          await chatModule.addUserReply(chatId, { content: wrapped, files: [] });
+          await chatModule.addUserReply(chatId, { content: wrapped, files: [] }, { expectedUsername: username });
           chatModule.triggerCharReply(chatId, msg.charName, { sourceChannel: "game_ws" }).catch((err) => {
             wbDetect(chatId, "api", "game/connect:trigger", false, err.message);
             try { ws.send(JSON.stringify({ type: "error", message: "AI trigger failed: " + err.message })); } catch {}

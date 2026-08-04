@@ -40,10 +40,6 @@
     <script type="module" src="/base.mjs"></script>
     <!-- FT4: morphdom 本地 vendor（UMD 单文件，挂 window.morphdom），供 StreamRenderer 流式正文增量 diff；加载失败时渲染回退整段 innerHTML -->
     <script src="./vendor/morphdom.min.js"></script>
-    <!-- Live2D 桌宠渲染三库（UMD，顺序必须 core→pixi→cubism4，挂 window.PIXI.live2d）；全本地 vendor，离线可用 -->
-    <script src="./vendor/live2dcubismcore.min.js"></script>
-    <script src="./vendor/pixi.min.js"></script>
-    <script src="./vendor/cubism4.min.js"></script>
     <link rel="stylesheet" href="./index.css" type="text/css" />
     <link rel="stylesheet" href="./css/editor.css" type="text/css" />
     <link rel="stylesheet" href="./css/memory-browser.css" type="text/css" />
@@ -60,18 +56,26 @@
     <link rel="stylesheet" href="./css/airp.css" type="text/css" />
     <!-- 直播接入(beilu-live)面板样式。插件自带样式独立成文件的惯例同 airp.css。 -->
     <link rel="stylesheet" href="./css/live.css" type="text/css" />
-    <script>
-      // 提前恢复弹窗背景/透明度设置，避免闪烁
-      (function(){
-        var bg = localStorage.getItem('beilu-modal-bg');
-        var op = localStorage.getItem('beilu-modal-opacity');
-        if (bg) document.documentElement.style.setProperty('--beilu-modal-bg', bg);
-        if (op) document.documentElement.style.setProperty('--beilu-modal-opacity', op);
-      })();
-    </script>
+    <!-- era 画布块样式（era v2；结构基调，创作色值全在画布数据内联）。惯例同 airp.css。 -->
+    <!-- Batch A：旧 CSS 先提供组件兼容，新语义层最后统一 palette、surface 与交互状态。 -->
+    <link rel="stylesheet" href="./css/design-tokens.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-palettes.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-skins-original.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-skins-pro-core.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-skins-pro-a.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-skins-pro-b.css" type="text/css" />
+    <link rel="stylesheet" href="./css/theme-skins-pro-c.css" type="text/css" />
   </head>
 
   <body class="flex flex-col h-screen h-dvh m-0 w-full">
+    <!-- 首屏必要装配加载态：静态首节点保证聊天/角色数据未就绪前不会先露出半成品界面。
+         只覆盖 index.mjs 的必要装配；后台扩展预加载继续由 readiness 卡片展示。 -->
+    <div id="app-boot-overlay" role="status" aria-live="polite" aria-busy="true">
+      <span id="app-boot-spinner" class="loading loading-spinner loading-lg text-warning" aria-hidden="true"></span>
+      <p id="app-boot-status">正在准备界面与角色卡…</p>
+      <button id="app-boot-retry" class="btn btn-sm btn-outline" type="button" hidden>刷新重试</button>
+    </div>
+
     <!-- ====== 背景图层（C3: 自定义聊天背景） ====== -->
     <div id="bg1"></div>
 
@@ -196,7 +200,7 @@
       <div id="mode-selector-panel" class="mode-selector-panel hidden">
         <div class="mode-selector-header">
           <span class="font-bold text-sm">切换模式</span>
-          <button id="mode-selector-close" class="btn btn-xs btn-ghost btn-square">✕</button>
+          <button id="mode-selector-close" class="btn btn-xs btn-ghost btn-square" aria-label="关闭模式选择器"><i data-ic="close" aria-hidden="true"></i></button>
         </div>
         <button class="mode-option" data-mode="smart"><i data-ic="star"></i> 全智能</button>
         <button class="mode-option" data-mode="chat"><i data-ic="drama"></i> AIRP</button>
@@ -228,33 +232,9 @@
     >
       <div class="flex items-center gap-2 flex-wrap">
         <span class="beilu-chat-api-banner-icon"><i data-ic="warning"></i></span>
-        <span class="beilu-chat-api-banner-text">尚未配置 AI 服务源，发送消息将无法获得回复。</span>
-        <button
-          class="beilu-chat-api-banner-link"
-          onclick="window.dispatchEvent(new CustomEvent('beilu:switchTab',{detail:'settings'}))"
-        >前往设置配置 →</button>
-        <button id="onboard-toggle" class="btn btn-xs btn-outline btn-warning">快速配置 ▾</button>
-        <button id="chat-api-warning-close" class="beilu-chat-api-banner-close">✕</button>
-      </div>
-      <!-- 内联快速配置表单（W29首次引导） -->
-      <div id="onboard-form" class="hidden mt-2 p-3 bg-base-200 rounded-lg space-y-2 text-sm">
-        <p class="text-xs text-base-content/60">beilu 是本地运行的AI陪伴系统，需要配置AI服务源才能使用。填写以下信息即可开始：</p>
-        <div class="flex items-center gap-2">
-          <label class="text-xs w-16 shrink-0">API地址</label>
-          <input id="onboard-url" type="text" class="input input-xs input-bordered flex-1" placeholder="https://api.openai.com/v1" />
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs w-16 shrink-0">API Key</label>
-          <input id="onboard-key" type="password" class="input input-xs input-bordered flex-1" placeholder="sk-..." />
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs w-16 shrink-0">模型</label>
-          <input id="onboard-model" type="text" list="onboard-model-list" class="input input-xs input-bordered flex-1" placeholder="填写或点右侧获取" />
-          <button id="onboard-fetch-models" class="btn btn-xs btn-ghost" title="从API获取可用模型列表">获取</button>
-          <datalist id="onboard-model-list"></datalist>
-        </div>
-        <button id="onboard-save" class="btn btn-xs btn-warning w-full">保存并开始使用</button>
-        <p class="text-xs text-base-content/40">本地运行，你的API Key只存在你自己的电脑上。</p>
+        <span id="chat-api-warning-text" class="beilu-chat-api-banner-text">正在检查 AI 服务源状态…</span>
+        <button id="chat-api-open-settings" class="beilu-chat-api-banner-link">打开 AI 服务源设置 →</button>
+        <button id="chat-api-warning-close" class="beilu-chat-api-banner-close" aria-label="关闭 AI 服务源警告"><i data-ic="close" aria-hidden="true"></i></button>
       </div>
     </div>
 
@@ -921,8 +901,9 @@
                   id="memory-ai-output-close"
                   class="memory-ai-output-close"
                   title="关闭"
+                  aria-label="关闭记忆 AI 输出"
                 >
-                  ×
+                  <i data-ic="close" aria-hidden="true"></i>
                 </button>
               </div>
               <div id="memory-ai-output-body" class="memory-ai-output-body">
@@ -943,7 +924,7 @@
                 <div class="ml-auto flex gap-1">
                   <button id="ide-approve-all" class="btn btn-success btn-xs">✓ 全部批准</button>
                   <button id="ide-reject-all" class="btn btn-error btn-outline btn-xs">✕ 全部拒绝</button>
-                  <button id="ide-approval-close" class="btn btn-ghost btn-xs" title="暂时关闭">✕</button>
+                  <button id="ide-approval-close" class="btn btn-ghost btn-xs" title="暂时关闭" aria-label="暂时关闭审批栏"><i data-ic="close" aria-hidden="true"></i></button>
                 </div>
               </div>
               <div id="ide-approval-list" class="max-h-40 overflow-y-auto space-y-0.5"></div>
@@ -1147,8 +1128,9 @@ Ctrl+Enter 发送"
                 class="ide-activity-btn"
                 data-ide-panel="conversations"
                 title="对话历史"
+                aria-label="打开 IDE 对话历史"
               >
-                <span class="ide-activity-icon">🗂️</span>
+                <span class="ide-activity-icon"><i data-ic="folder-open" aria-hidden="true"></i></span>
               </button>
               <!-- 任务时间线（任务N） -->
               <button
@@ -1907,6 +1889,7 @@ Ctrl+Enter 发送"
                     class="btn btn-xs btn-ghost"
                     data-i18n="chat.beiluChat.editorToolbar.save"
                     title="保存 (Ctrl+S)"
+                    aria-label="保存当前文件"
                     disabled
                   >
                     <i data-ic="save"></i>
@@ -1916,6 +1899,7 @@ Ctrl+Enter 发送"
                     class="btn btn-xs btn-ghost"
                     data-i18n="chat.beiluChat.editorToolbar.reload"
                     title="重新加载文件"
+                    aria-label="重新加载当前文件"
                     disabled
                   >
                     <i data-ic="refresh"></i>
@@ -1947,7 +1931,7 @@ Ctrl+Enter 发送"
               >
                 <div class="p-4 space-y-3">
                   <h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
-                    <span>🎛️</span> <span id="smd-title">子模式详情</span>
+                    <i data-ic="tune" aria-hidden="true"></i> <span id="smd-title">子模式详情</span>
                   </h3>
                   <p id="smd-placeholder" class="text-xs text-base-content/50 text-center py-8">未选择子模式。点击左侧子模式查看/编辑</p>
                 </div>
@@ -2027,7 +2011,7 @@ Ctrl+Enter 发送"
                   <!-- 系统状态 -->
                   <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
                     <p class="text-xs font-medium text-amber-700 mb-1">
-                      🖥️ 系统状态
+                      <i data-ic="window" aria-hidden="true"></i> 系统状态
                     </p>
                     <div id="monitor-status" class="text-xs space-y-0.5">
                       <div class="flex items-center justify-between">
@@ -2373,7 +2357,7 @@ Ctrl+Enter 发送"
                       data-expand-title="给记忆AI的要求"
                       placeholder="给记忆AI提要求..."
                     ></textarea>
-                    <button class="expand-btn" title="放大编辑">⛶</button>
+                    <button class="expand-btn" title="放大编辑" aria-label="放大编辑记忆 AI 要求"><i data-ic="fullscreen" aria-hidden="true"></i></button>
                     </div>
                     <button
                       id="mem-ai-send-btn"
@@ -2491,8 +2475,8 @@ Ctrl+Enter 发送"
                 <span class="work-badge hidden" data-badge="tasks"></span>
               </button>
               <!-- H 历史 -->
-              <button class="ide-activity-btn" data-work-panel="history" title="对话历史">
-                <span class="ide-activity-icon">🗂️</span>
+              <button class="ide-activity-btn" data-work-panel="history" title="对话历史" aria-label="打开工作模式对话历史">
+                <span class="ide-activity-icon"><i data-ic="folder-open" aria-hidden="true"></i></span>
               </button>
               <!-- K 工具箱 (合并 permissions + mcp + 环境工具) -->
               <button class="ide-activity-btn" data-work-panel="toolkit" title="工具箱">
@@ -2526,7 +2510,7 @@ Ctrl+Enter 发送"
               <div id="work-submode-detail" class="flex-1 overflow-auto" style="display:none">
                 <div class="p-4 space-y-3">
                   <h3 class="font-bold text-amber-700 text-sm flex items-center gap-2">
-                    <span>🎛️</span> <span id="work-smd-title">子模式详情</span>
+                    <i data-ic="tune" aria-hidden="true"></i> <span id="work-smd-title">子模式详情</span>
                   </h3>
                   <p id="work-smd-placeholder" class="text-xs text-base-content/50 text-center py-8">未选择子模式。点击左侧子模式查看/编辑</p>
                 </div>
@@ -2554,9 +2538,9 @@ Ctrl+Enter 发送"
             <!-- AIRP-T15: 窗口大小档位 (localStorage记忆) -->
             <div class="flex gap-1">
               <button class="btn btn-xs btn-ghost" id="editor-size-small" title="缩小窗口">–</button>
-              <button class="btn btn-xs btn-ghost" id="editor-size-normal" title="标准大小">□</button>
-              <button class="btn btn-xs btn-ghost" id="editor-size-full" title="全屏">▣</button>
-              <button class="btn btn-xs btn-ghost" id="editor-size-close" title="关闭">✕</button>
+              <button class="btn btn-xs btn-ghost" id="editor-size-normal" title="标准大小" aria-label="将编辑器恢复为标准大小"><i data-ic="window" aria-hidden="true"></i></button>
+              <button class="btn btn-xs btn-ghost" id="editor-size-full" title="全屏" aria-label="将编辑器切换为全屏"><i data-ic="fullscreen" aria-hidden="true"></i></button>
+              <button class="btn btn-xs btn-ghost" id="editor-size-close" title="关闭" aria-label="关闭编辑器"><i data-ic="close" aria-hidden="true"></i></button>
             </div>
           </div>
           <!-- Phase4B: 编辑内容区 — 3Tab精简 -->
@@ -2799,14 +2783,14 @@ Ctrl+Enter 发送"
                     <span class="block mb-1">消息关键词黑名单 (每行一个)</span>
                     <div class="relative expandable-container">
                       <textarea id="ui-msg-blacklist" class="textarea textarea-bordered textarea-sm w-full font-mono text-xs" rows="3" placeholder="不想看到的关键词" data-expandable data-expand-title="消息关键词黑名单"></textarea>
-                      <button class="expand-btn" data-expand-target="ui-msg-blacklist" title="放大编辑">⛶</button>
+                      <button class="expand-btn" data-expand-target="ui-msg-blacklist" title="放大编辑" aria-label="放大编辑消息关键词黑名单"><i data-ic="fullscreen" aria-hidden="true"></i></button>
                     </div>
                   </div>
                   <div class="text-xs block">
                     <span class="block mb-1">用户名黑名单 (每行一个)</span>
                     <div class="relative expandable-container">
                       <textarea id="ui-user-blacklist" class="textarea textarea-bordered textarea-sm w-full font-mono text-xs" rows="3" placeholder="要屏蔽的用户名" data-expandable data-expand-title="用户名黑名单"></textarea>
-                      <button class="expand-btn" data-expand-target="ui-user-blacklist" title="放大编辑">⛶</button>
+                      <button class="expand-btn" data-expand-target="ui-user-blacklist" title="放大编辑" aria-label="放大编辑用户名黑名单"><i data-ic="fullscreen" aria-hidden="true"></i></button>
                     </div>
                   </div>
                   <!-- 过滤模式（和正则的瞬时一样） -->
@@ -2935,7 +2919,7 @@ Ctrl+Enter 发送"
               <div class="space-y-3 mt-3">
                 <!-- FT-D4: CSP 开关（从「界面」组挪入开发者组,凛倾批注#8） -->
                 <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
-                  <p class="text-xs font-medium text-amber-700">🛡️ 内容安全策略 (CSP)</p>
+                  <p class="text-xs font-medium text-amber-700"><i data-ic="shield" aria-hidden="true"></i> 内容安全策略 (CSP)</p>
                   <label class="flex items-center justify-between text-xs">
                     <span>启用 CSP 响应头</span>
                     <input id="ui-csp-enabled" type="checkbox" class="toggle toggle-xs" />
@@ -2985,7 +2969,7 @@ Ctrl+Enter 发送"
                   </div>
                 </div>
                 <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
-                  <p class="text-xs font-medium text-amber-700 mb-1">🖥️ 系统状态</p>
+                  <p class="text-xs font-medium text-amber-700 mb-1"><i data-ic="window" aria-hidden="true"></i> 系统状态</p>
                   <div id="settings-monitor-status" class="text-xs space-y-0.5">
                     <div class="flex items-center justify-between">
                       <span class="text-base-content/60">beilu 服务</span>
@@ -3005,7 +2989,7 @@ Ctrl+Enter 发送"
                 </div>
                 <!-- 前端监控设置 -->
                 <div class="bg-base-300/50 rounded-lg p-2 space-y-1">
-                  <p class="text-xs font-medium text-amber-700 mb-1">⚙️ 前端监控设置</p>
+                  <p class="text-xs font-medium text-amber-700 mb-1"><i data-ic="settings" aria-hidden="true"></i> 前端监控设置</p>
                   <label class="flex items-center justify-between text-xs">
                     <span>后台插件轮询</span>
                     <input id="mon-poll-toggle" type="checkbox" class="toggle toggle-xs toggle-warning" checked />
@@ -3062,7 +3046,7 @@ Ctrl+Enter 发送"
             <div id="settings-sidebar-resize" class="ide-sidebar-resize"></div>
           </div>
           <!-- 弹窗关闭按钮 -->
-          <button id="settings-modal-close" class="settings-modal-close" title="关闭设置">✕</button>
+          <button id="settings-modal-close" class="settings-modal-close" title="关闭设置" aria-label="关闭设置"><i data-ic="close" aria-hidden="true"></i></button>
           <!-- EX-T3: 右下角 resize handle -->
           <div id="settings-resize-handle" class="editor-resize-handle" title="拖动调整大小"></div>
         </div></div>
@@ -3073,7 +3057,7 @@ Ctrl+Enter 发送"
           id="center-tab-bot"
           class="center-tab-content flex-1 hidden flex-col overflow-hidden"
         >
-          <div class="flex flex-1 min-h-0 overflow-hidden">
+          <div id="comp-layout" class="flex flex-1 min-h-0 overflow-hidden">
             <!-- 界面7: Bot活动栏 = BCSLO 功能向（拍板#8 按 Bot MD）；平台=[B]列表内动态 Tab -->
             <div id="bot-activity-bar" class="ide-activity-bar flex flex-col items-center shrink-0 overflow-y-auto" style="width:56px">
               <button class="ide-activity-btn ide-activity-active" data-bot-panel="list" title="Bot列表（平台+Bot选择）">
@@ -3260,7 +3244,7 @@ Ctrl+Enter 发送"
                             data-expandable
                             placeholder='{"OwnerUserName":"", "MaxMessageDepth":20, ...}'
                           ></textarea>
-                          <button class="expand-btn" title="放大编辑">⛶</button>
+                          <button class="expand-btn" title="放大编辑" aria-label="放大编辑 Discord 配置"><i data-ic="fullscreen" aria-hidden="true"></i></button>
                         </div>
                       </div>
                     </div>
@@ -3285,7 +3269,7 @@ Ctrl+Enter 发送"
                 <div class="collapse collapse-arrow bg-base-300/30 rounded-lg mb-2">
                   <input type="checkbox" />
                   <!-- title 复用折叠内首行说明同串(收起态也能看到;既有字典键) -->
-                  <div class="collapse-title text-sm font-bold" title="设定AI不可以输出的内容，违规会自动替换并警告AI">🛡️ 输出过滤规则</div>
+                  <div class="collapse-title text-sm font-bold" title="设定AI不可以输出的内容，违规会自动替换并警告AI"><i data-ic="shield" aria-hidden="true"></i> 输出过滤规则</div>
                   <div class="collapse-content px-2 pb-2">
                     <p class="text-xs text-base-content/50 mb-2">设定AI不可以输出的内容，违规会自动替换并警告AI</p>
                     <div id="output-filter-list" class="space-y-1 mb-2"></div>
@@ -3645,10 +3629,10 @@ Ctrl+Enter 发送"
             <div id="comp-nav-resize" class="w-1 shrink-0 cursor-col-resize bg-base-300/40 hover:bg-warning/50 transition-colors"></div>
 
             <!-- 右：设置中心 + 虚拟形象预览（三栏：左导航|中设置|右预览） -->
-            <div class="flex-1 flex min-w-0">
+            <div id="comp-workspace" class="flex-1 flex min-w-0">
 
               <!-- 中：设置列 -->
-              <div class="flex-1 flex flex-col min-w-0">
+              <div id="comp-settings-col" class="flex-1 flex flex-col min-w-0">
 
               <!-- 顶部标题条(纯说明——切换+隔离:运行控件已移右列运行区,中列=纯设置) -->
               <div class="shrink-0 flex items-center gap-4 px-5 py-3 border-b border-base-300 bg-base-200/40">
@@ -3659,7 +3643,7 @@ Ctrl+Enter 发送"
               </div>
 
               <!-- 可滚动设置区 -->
-              <div class="flex-1 overflow-y-auto p-5 space-y-4 max-w-[920px]">
+              <div id="comp-settings-scroll" class="comp-settings-scroll flex-1 overflow-y-auto p-5 space-y-4">
 
                 <!-- 运行状态面板（启动后显示，JS _pollCompanionStatus 控制 hidden） -->
                 <section id="comp-perception-stats" class="hidden card bg-base-200 shadow-sm border-l-4 border-success/60">
@@ -3764,7 +3748,7 @@ Ctrl+Enter 发送"
                 <section id="comp-seg-genconfig" class="seg card bg-base-200 shadow-sm" data-seg-group="comp-seg-bind">
                   <div class="card-body p-4 gap-3">
                     <div class="flex items-center gap-2"><span data-ic="sliders-horizontal" class="w-4 h-4 text-primary"></span><h3 class="font-bold text-sm">生成配置 · API 设置</h3>
-                      <span class="text-[11px] opacity-50">陪伴专属子模式 · 空字段=跟随承载对话 AIRP</span></div>
+                      <span class="text-[11px] opacity-50">默认直接复用承载对话 AIRP；仅启用后才覆盖</span></div>
                     <div class="flex items-center gap-3 flex-wrap text-xs">
                       <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="comp-sm-enabled" class="toggle toggle-xs toggle-warning" title="开=陪伴承载对话绑定此配置(预设在绑定时应用,参数每轮覆盖);关=完全跟随承载对话自身 AIRP 配置" /><span>启用陪伴专属配置</span></label>
                       <span id="comp-submode-hint" class="text-[10px] opacity-50"></span>
@@ -3774,8 +3758,8 @@ Ctrl+Enter 发送"
                     <div id="comp-sm-form" class="bg-base-300/30 rounded p-2 flex-col gap-2 text-xs" style="display:none">
                       <div class="grid grid-cols-3 gap-2">
                         <label class="form-control"><span class="label-text text-[11px] mb-1">绑定预设(绑定时应用,空=不切)</span><input type="text" id="comp-sm-preset" list="comp-sm-preset-list" class="input input-xs input-bordered" placeholder="输入或从候选选择" /><datalist id="comp-sm-preset-list"></datalist></label>
-                        <label class="form-control"><span class="label-text text-[11px] mb-1">绑定 API 源(空=不覆盖)</span><select id="comp-sm-api-source" class="select select-xs select-bordered"><option value="">(不覆盖)</option></select></label>
-                        <label class="form-control"><span class="label-text text-[11px] mb-1">绑定模型(空=API源默认)</span><select id="comp-sm-model" class="select select-xs select-bordered"><option value="">(使用 API 源默认模型)</option></select></label>
+                        <label class="form-control"><span class="label-text text-[11px] mb-1">绑定 API 源(空=跟随 AIRP)</span><select id="comp-sm-api-source" class="select select-xs select-bordered"><option value="">(跟随 AIRP / 角色 API 源)</option></select></label>
+                        <label class="form-control"><span class="label-text text-[11px] mb-1">绑定模型(空=跟随 AIRP)</span><select id="comp-sm-model" class="select select-xs select-bordered"><option value="">(跟随 AIRP / API 源默认模型)</option></select></label>
                       </div>
                       <!-- 后端每轮可覆盖键全量上前端(凛倾 0723"后端可操控的都在前端":getPromptHandler:303-304 三键此前缺口);选项集=enum_schema 后端单源+ENUM_FALLBACK 离线退化 -->
                       <div class="grid grid-cols-3 gap-2">
@@ -3950,6 +3934,7 @@ Ctrl+Enter 发送"
                       <label class="form-control"><span class="label-text text-xs mb-1">停留时间(秒,0=常驻)</span><input type="number" id="pet-bubble-dwell" class="input input-sm input-bordered" min="0" max="60" placeholder="读取中…" /></label>
                       <label class="form-control"><span class="label-text text-xs mb-1">圆角 <span class="label-text-alt text-[10px]" id="pet-radius-val">14px</span></span><input type="range" id="pet-bubble-radius" min="0" max="28" value="14" class="range range-xs range-warning" /></label>
                       <div class="form-control"><span class="label-text text-xs mb-1">横幅最大字数(0=不限)</span><input type="number" id="pet-banner-maxchars" class="input input-sm input-bordered" min="0" max="500" placeholder="读取中…" /></div>
+                      <div class="form-control"><span class="label-text text-xs mb-1">陪伴回答最大字数(0=不限)</span><input type="number" id="pet-companion-maxchars" class="input input-sm input-bordered" min="0" max="10000" placeholder="读取中…" /></div>
                     </div>
                     <div class="grid grid-cols-2 gap-3 items-center">
                       <label class="flex items-center gap-2 text-xs"><span class="flex-1">对话框底色 <span class="opacity-50" id="pet-color-mode">(跟随系统)</span></span><input type="color" id="pet-bubble-color" class="w-7 h-6 rounded border border-base-300" value="#fffcf5" /><button id="pet-bubble-color-reset" class="btn btn-xs btn-ghost" title="跟随系统浅色">↺</button></label>
@@ -4063,6 +4048,14 @@ Ctrl+Enter 发送"
                       <button id="pet-stt-probe" class="btn btn-xs btn-outline">找活麦</button>
                     </div>
                     <label class="flex items-center justify-between text-xs bg-base-300/40 rounded px-2 py-1.5" style="max-width:420px"><span>降噪+拾音（增益补偿+深度降噪+VAD）</span><input type="checkbox" id="pet-stt-denoise" class="toggle toggle-sm toggle-warning" checked /></label>
+                    <div class="grid grid-cols-2 gap-3 bg-base-300/30 rounded p-2">
+                      <div class="form-control col-span-2"><span class="label-text text-xs mb-1"><b>快速语音发送快捷键</b> <span class="opacity-50">按一次开始录音，再按一次结束、转写并自动发送</span></span><div class="join w-full"><input id="pet-stt-quick-hotkey" class="input input-sm input-bordered join-item flex-1 cursor-pointer" readonly placeholder="未设置" title="点击后直接按下你想用的组合键" /><button type="button" id="pet-stt-quick-capture" class="btn btn-sm btn-outline join-item">录入</button><button type="button" id="pet-stt-quick-clear" class="btn btn-sm btn-ghost join-item">关闭</button></div><span id="pet-stt-quick-hint" class="text-[10px] opacity-60 mt-1">点击“录入”，然后直接按新的组合键；不会偷偷改回默认键。</span></div>
+                      <label class="flex items-center justify-between text-xs col-span-2"><span><b>常开唤醒模式</b>（由桌宠持有麦克风；关闭即停止）</span><input type="checkbox" id="pet-stt-always" class="toggle toggle-sm toggle-warning" /></label>
+                      <label class="form-control col-span-2"><span class="label-text text-xs mb-1">唤醒词 <span class="opacity-50">逗号分隔，命中句首附近才发送</span></span><input id="pet-stt-wakewords" class="input input-sm input-bordered" placeholder="由后端配置回填" /></label>
+                      <label class="flex items-center justify-between text-xs col-span-2"><span>语音问题附带当下截图 <span class="opacity-50">快速/常开共用；同轮 requestId；仍受黑/白名单与安静模式约束</span></span><input type="checkbox" id="pet-stt-capture-question" class="toggle toggle-sm toggle-warning" /></label>
+                      <label class="form-control"><span class="label-text text-xs">静音收口(ms)</span><input type="number" id="pet-stt-silence-ms" class="input input-sm input-bordered" min="200" max="5000" /></label>
+                      <label class="form-control"><span class="label-text text-xs">语音电平门限</span><input type="number" id="pet-stt-peak" class="input input-sm input-bordered" min="0.001" max="1" step="0.001" /></label>
+                    </div>
                     <div class="text-[11px] opacity-55 bg-base-300/40 rounded px-2 py-1">虚拟麦(NVIDIA Broadcast/Voicemeeter)不供流时录到的是静音——「找活麦」逐设备探测底噪自动选电平最高的(建议边说话边点)。</div>
                     <div id="pet-stt-status" class="text-[10px] opacity-60"></div>
                   </div>
@@ -4091,7 +4084,7 @@ Ctrl+Enter 发送"
                       <span id="comp-freq-display" class="text-xs opacity-50 ml-auto"></span>
                     </div>
                     <div id="comp-chat-log" class="h-[420px] overflow-y-auto space-y-1 text-sm bg-base-100/40 rounded p-2">
-                      <p class="text-center opacity-50 text-xs py-4">启动陪伴后，AI 的观察和评论会显示在这里</p>
+                      <p class="text-center opacity-50 text-xs py-4">开始互动后，AI 的观察和评论会显示在这里</p>
                     </div>
                     <!-- 对话台输入(凛倾 2026-07-12"需要有对话台"):发进陪伴轮(gameCompanionSay→gameCompanionTouchMessage,
                          与桌宠触碰 send 同执行体);回应=主对话链落盘,上方对话区轮询显示。
@@ -4102,7 +4095,7 @@ Ctrl+Enter 发送"
                     <div id="comp-say-inject-row" class="hidden">
                       <textarea id="comp-say-inject" class="textarea textarea-bordered textarea-xs w-full font-mono text-xs" rows="2" placeholder="下次发送时附加的临时提示词，发送后自动清空..."></textarea>
                     </div>
-                    <div class="flex gap-2 items-center">
+                    <div class="comp-say-row flex gap-2 items-center">
                       <input type="text" id="comp-say-input" class="input input-sm input-bordered flex-1" placeholder="对贝露说…(Enter 发送,需陪伴运行中)" maxlength="500" />
                       <button id="comp-say-upload" class="btn btn-sm btn-outline" title="上传附件(随下一条消息发进陪伴对话)"><span data-ic="upload" class="w-3.5 h-3.5"></span></button>
                       <!-- 语音输入(凛倾 0722):点麦克风后端录音→再点停止转文字填入→点发送;链=STT插件 record 代理,含降噪+拾音 -->
@@ -4238,6 +4231,10 @@ Ctrl+Enter 发送"
                   <div id="comp-preview-box" class="comp-pet-preview rounded-xl relative flex items-end justify-center w-full" style="height:320px">
                     <span data-ic="sparkles" class="w-16 h-16 pb-4 opacity-20"></span>
                     <div id="live2d-host" class="absolute inset-0 pointer-events-none"></div>
+                    <div id="comp-renderer-state" class="hidden absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-base-300/80 p-4 text-center text-xs" role="status" aria-live="polite">
+                      <span id="comp-renderer-state-text">正在加载虚拟形象…</span>
+                      <button id="comp-renderer-retry" type="button" class="btn btn-xs btn-warning hidden">重试</button>
+                    </div>
                   </div>
                   <!-- 任务⑧:预览区高度可拖(手柄,持久化;320 只是初始值,拖动即改) -->
                   <div id="comp-preview-hresize" class="w-full h-1.5 mt-1 rounded cursor-row-resize bg-base-300/40 hover:bg-warning/50 transition-colors" title="拖动调整预览区高度"></div>
@@ -4256,8 +4253,8 @@ Ctrl+Enter 发送"
                     <!-- 桌宠客户端在线灯(getdata.petClientSeenAgoMs;审计C:此前桌宠没起,保存设置仍"成功"=假象) -->
                     <span class="flex items-center gap-1 text-[10px]" title="桌面桌宠(Electron)是否在线;离线时这里的设置会保存到后端,桌宠下次启动才生效"><span id="comp-pet-online-dot" class="w-2 h-2 rounded-full bg-base-content/25"></span><span id="comp-pet-online-text" class="opacity-50">桌宠:未知</span></span>
                     <div class="flex-1"></div>
-                    <button id="comp-start" class="btn btn-xs btn-success gap-1"><span data-ic="play" class="w-3.5 h-3.5"></span>启动桌宠</button>
-                    <button id="comp-stop" class="btn btn-xs btn-error btn-outline gap-1"><span data-ic="square" class="w-3.5 h-3.5"></span>停止</button>
+                    <button id="comp-start" class="btn btn-xs btn-success gap-1"><span data-ic="play" class="w-3.5 h-3.5"></span><span id="comp-start-label">开始互动</span></button>
+                    <button id="comp-stop" class="btn btn-xs btn-error btn-outline gap-1"><span data-ic="square" class="w-3.5 h-3.5"></span>停止互动</button>
                   </div>
                   <div class="grid grid-cols-2 gap-2 text-center text-[10px]">
                     <div class="bg-base-300/40 rounded px-1.5 py-1.5">
@@ -4287,7 +4284,7 @@ Ctrl+Enter 发送"
                     <span id="comp-preview-freq" class="text-[10px] opacity-50 ml-auto"></span>
                   </div>
                   <div id="comp-preview-chat" class="flex-1 overflow-y-auto space-y-1 text-xs min-h-[80px]">
-                    <p class="text-center opacity-50 text-[10px] py-4">启动陪伴后显示</p>
+                    <p class="text-center opacity-50 text-[10px] py-4">开始互动后显示</p>
                   </div>
                 </div>
               </div><!-- /右：虚拟形象预览列 -->
@@ -5001,9 +4998,9 @@ Ctrl+Enter 发送"
         </div>
         <div class="fw-controls">
           <button class="fw-ctrl-btn" id="pv-minimize" title="最小化">─</button>
-          <button class="fw-ctrl-btn" id="pv-maximize" title="最大化">□</button>
-          <button class="fw-ctrl-btn fw-ctrl-close" id="pv-close" title="关闭">
-            ×
+          <button class="fw-ctrl-btn" id="pv-maximize" title="最大化" aria-label="最大化提示词查看器"><i data-ic="fullscreen" aria-hidden="true"></i></button>
+          <button class="fw-ctrl-btn fw-ctrl-close" id="pv-close" title="关闭" aria-label="关闭提示词查看器">
+            <i data-ic="close" aria-hidden="true"></i>
           </button>
         </div>
       </div>
@@ -5074,7 +5071,7 @@ Ctrl+Enter 发送"
       <div class="floating-window-header" id="ws-header">
         <div class="fw-title"><span>🌐 联网设置</span></div>
         <div class="fw-controls">
-          <button class="fw-ctrl-btn fw-ctrl-close" id="ws-close" title="关闭">×</button>
+          <button class="fw-ctrl-btn fw-ctrl-close" id="ws-close" title="关闭" aria-label="关闭联网设置"><i data-ic="close" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="fw-body" id="ws-body" style="padding:10px 12px;"></div>
@@ -5086,7 +5083,7 @@ Ctrl+Enter 发送"
       <div class="floating-window-header" id="mem-io-header">
         <div class="fw-title"><span><i data-ic="package"></i> 记忆导入导出</span></div>
         <div class="fw-controls">
-          <button class="fw-ctrl-btn fw-ctrl-close" id="mem-io-close" title="关闭">×</button>
+          <button class="fw-ctrl-btn fw-ctrl-close" id="mem-io-close" title="关闭" aria-label="关闭记忆导入导出"><i data-ic="close" aria-hidden="true"></i></button>
         </div>
       </div>
       <div class="fw-body" style="padding:16px;overflow-y:auto;">
@@ -5170,26 +5167,6 @@ Ctrl+Enter 发送"
         50% {
           box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);
         }
-      }
-
-      /* 压缩按钮样式 */
-      .token-compress-btn {
-        background: none;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 4px;
-        color: inherit;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 2px 6px;
-        margin-left: 4px;
-        transition: background 0.2s;
-      }
-      .token-compress-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-      }
-      .token-compress-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
       }
 
       /* ---- MCP 管理面板 ---- */

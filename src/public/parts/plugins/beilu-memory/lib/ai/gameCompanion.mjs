@@ -45,17 +45,21 @@
  *   用户互动少时自动降低打扰频率，停止时立即清理定时器不留后台负担。
  */
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url"; // 主链模块(chatOps/generation)按 __pluginDir 相对路径动态 import 用
 
 import {
   __pluginDir,   // 解析 beilu-chat/src/lib 主链模块路径用 (= beilu-memory/)
+  __projectRoot,
   loadJsonFileIfExists,
   saveJsonFile,
   getEyeConfigPath,
   getGameCompanionConfigPath,
   getGcCaptureRequestPath,
 } from "../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"; // T8·回切：壳已删改指 yonban 新位（删壳漏网:存活件对已删件的lib内互引盲区）
+import { acquireInteractionLease, loadPetSettingsStore, releaseInteractionLease } from "../../../../../../yonban/core/functions/screenshot/injection_state.mjs";
+import { bindCompanionOutput, unbindCompanionOutput } from "../../../../../../yonban/core/functions/render/companionOutput.mjs";
 
 /** 活跃的游戏陪伴会话 Map<username, session>；同一用户只允许一个后台 runtime。 */
 const _sessions = new Map();
@@ -67,6 +71,20 @@ const DEFAULT_CONFIG = {
   silenceMultiplier: 1.5,         // 用户忽略时频率倍增
   closeMultiplier: 2.0,           // 用户关闭时频率倍增
 };
+
+/** 定时截图只是陪伴 session 的可选能力；0 表示不建 timer，不表示文字/语音陪伴不存在。 */
+function _armSessionTimer(session) {
+  if (session.timer) clearInterval(session.timer);
+  session.timer = null;
+  if (!(session.currentInterval > 0)) return;
+  session.timer = setInterval(() => {
+    if (!session.paused) {
+      _executeRound(session).catch((e) => {
+        console.error(`[gameCompanion] 执行定时轮失败 (${session.username}/${session.charName}):`, e.message);
+      });
+    }
+  }, session.currentInterval);
+}
 
 /**
  * 启动游戏陪伴
@@ -86,13 +104,9 @@ export function startGameCompanion(username, charName, options = {}) {
   const eyeConfigPath = getEyeConfigPath(username);
   const eyeConfig = loadJsonFileIfExists(eyeConfigPath) || {};
   const _gcFreq = Number(eyeConfig.captureFrequency);
-  const baseInterval = (Number.isFinite(_gcFreq) ? _gcFreq : 30) * 1000; // 秒→毫秒，默认30秒(与前端UI默认值一致;0=禁用)
-
-  // captureFrequency=0 → baseInterval=0 → 用户意图是禁用自动截图
-  if (baseInterval === 0 && !(options.interval > 0)) {
-    console.log(`[gameCompanion] captureFrequency=0，自动截图已禁用，不启动: ${label}`);
-    return { success: false, error: "自动截图已禁用 (captureFrequency=0)" };
-  }
+  // 缺键与 DEFAULT_EYE_CONFIG 同语义=0。旧代码在 raw 文件缺键时另造 30 秒默认，造成
+  // 设置页显示“关闭”而 runtime 实际会截；现在 0 仅关闭定时截图，文字/语音 session 仍可启动。
+  const baseInterval = (Number.isFinite(_gcFreq) ? Math.max(0, _gcFreq) : 0) * 1000;
 
   // 陪伴轮一律走主对话链(P 系列已删,凛倾 2026-07-16):无承载对话=轮次无处落盘,诚实拒启不静默空转。
   if (!options.chatid) {
@@ -103,7 +117,7 @@ export function startGameCompanion(username, charName, options = {}) {
   const gcConfigPath = getGameCompanionConfigPath(username);
   const gcConfig = loadJsonFileIfExists(gcConfigPath) || {};
 
-  const _resolvedInterval = options.interval ?? baseInterval ?? DEFAULT_CONFIG.baseInterval;
+  const _resolvedInterval = options.interval > 0 ? options.interval : baseInterval;
   const session = {
     id: `gc_${Date.now().toString(36)}`,
     username,
@@ -130,22 +144,26 @@ export function startGameCompanion(username, charName, options = {}) {
                       // lastRoundAt/lastMessageAt)且 _syncFreqFromConfig/userAction 会 clear 并重设 timer 引用。
                       // 闸门收口在 _executeRound 入口(单点),在途轮未结束时新触发直接跳过本次(串行化,不叠轮)。
     timer: null,
+    captureChain: Promise.resolve(), // 每用户截图请求串行化：标记文件只有一个权威槽，禁止定时轮与语音轮互相覆盖 requestId
     chatid: options.chatid,  // 承载对话(启动已强校验非空):陪伴轮的落盘/生成/前端显示全锚定这条对话
+    petLeaseId: null, // 互动桌宠租约(D5 §2.1/§2.2):随 session 同寿命,不落盘;stop/Unload release
   };
 
-  // 启动定时循环
-  session.timer = setInterval(() => {
-    if (!session.paused) {
-      _executeRound(session).catch((e) => {
-        console.error(`[gameCompanion] 执行轮次失败 (${label}):`, e.message);
-      });
-    }
-  }, session.currentInterval);
-
   _sessions.set(key, session);
-  console.log(`[gameCompanion] 已启动: ${label}, 间隔=${Math.round(session.currentInterval / 1000)}秒`);
+  const _pet = loadPetSettingsStore(__projectRoot);
+  bindCompanionOutput(username, session.chatid, charName, [_pet.emotionTag, _pet.motionTag, _pet.orbMessageTag]);
+  // 互动对桌宠的临时要求=运行时 lease(替代 0804 iter6 的 petAutoEnabledByInteraction 持久化标记):
+  //   acquire 触发 PetLifecycle owner(screenshot/main.mjs)按 effectiveDesired=explicit||lease 拉起;
+  //   显式 petEnabled 不被改写——停止互动只 release 本 lease,原开的桌宠仍在、原关的会停,重启无 lease 不遗留。
+  //   options.petLease===false = 用户选「只互动」(D5 §2.2 可选偏好),session 照常,不申请桌宠。
+  if (options.petLease !== false) {
+    try { session.petLeaseId = acquireInteractionLease(username, session.chatid); }
+    catch (e) { console.warn(`[gameCompanion] 互动桌宠租约申请失败(session 不受影响): ${e.message}`); }
+  }
+  _armSessionTimer(session);
+  console.log(`[gameCompanion] 已启动: ${label}, 定时截图=${session.currentInterval > 0 ? Math.round(session.currentInterval / 1000) + "秒" : "关闭"}, 桌宠租约=${session.petLeaseId || "(未申请)"}`);
 
-  return { success: true, sessionId: session.id };
+  return { success: true, sessionId: session.id, chatid: session.chatid, autoCapture: session.currentInterval > 0, petLeaseId: session.petLeaseId };
 }
 
 /**
@@ -163,9 +181,17 @@ export function stopGameCompanion(username, _charName) {
 
   if (session.timer) clearInterval(session.timer);
   _sessions.delete(key);
-  console.log(`[gameCompanion] 已停止: ${session.username}/${session.charName}, 共${session.roundCount}轮`);
+  unbindCompanionOutput(username, session.chatid);
+  // 只撤回本次互动的临时桌宠要求(release 幂等:显式关闭接管已 revoke 时返回 false 无害);
+  // 用户显式开启的桌宠不经此路——effectiveDesired 仍为 true,owner 不会停它。
+  let _leaseReleased = false;
+  if (session.petLeaseId) {
+    try { _leaseReleased = releaseInteractionLease(session.petLeaseId); }
+    catch (e) { console.warn(`[gameCompanion] 互动桌宠租约释放异常: ${e.message}`); }
+  }
+  console.log(`[gameCompanion] 已停止: ${session.username}/${session.charName}, 共${session.roundCount}轮, 租约释放=${_leaseReleased}`);
 
-  return { success: true, rounds: session.roundCount };
+  return { success: true, rounds: session.roundCount, petLeaseReleased: _leaseReleased };
 }
 
 /**
@@ -193,6 +219,7 @@ export function getGameCompanionStatus(username, _charName) {
     lastRoundAt: session.lastRoundAt,
     consecutiveIgnores: session.consecutiveIgnores,
     paused: session.paused,
+    petLeaseId: session.petLeaseId, // 互动桌宠租约(null=只互动/已被显式关闭接管吊销)
   };
 }
 
@@ -236,16 +263,7 @@ export function gameCompanionUserAction(username, _charName, action) {
   }
 
   // 重建定时器（新频率）
-  if (action !== "pause" && session.timer) {
-    clearInterval(session.timer);
-    session.timer = setInterval(() => {
-      if (!session.paused) {
-        _executeRound(session).catch((e) => {
-          console.error(`[gameCompanion] 执行轮次失败 (${session.username}/${session.charName}):`, e.message);
-        });
-      }
-    }, session.currentInterval);
-  }
+  if (action !== "pause") _armSessionTimer(session);
 
   console.log(
     `[gameCompanion] 用户动作: ${action}, 新间隔=${Math.round(session.currentInterval / 1000)}秒, 忽略次数=${session.consecutiveIgnores}`,
@@ -263,20 +281,24 @@ export function gameCompanionUserAction(username, _charName, action) {
  * 0725 对话台对齐主输入条:extra.files=附件([{name,mime_type,dataBase64}],随本轮 addUserReply.files
  * 进承载对话,消费与截图附件同链);extra.singleInject=单次注入(透传 triggerCharReply.singleInject,
  * 与主聊天 POST_message 同消费点,一次性不落盘)。纯附件无文本也可发(与主输入条语义一致)。
- * @returns {boolean} 是否已触发
+ * @returns {Promise<{success:boolean, accepted?:boolean, queued?:boolean, error?:string}>} 主链是否真实受理/排队
  */
-export function gameCompanionTouchMessage(username, text, extra = {}) {
+export async function gameCompanionTouchMessage(username, text, extra = {}) {
   const t = typeof text === "string" ? text.trim() : "";
   const _exFiles = Array.isArray(extra.files) ? extra.files.filter(f => f && typeof f.dataBase64 === "string" && f.dataBase64) : [];
-  if (!t && !_exFiles.length) return false;
+  if (!t && !_exFiles.length) return { success: false, code: "E_COMPANION_EMPTY_MESSAGE", error: "空消息" };
   const session = _sessions.get(username);
   if (session && !session.paused) {
-      session.lastUserReply = Date.now(); // 触碰=用户主动交互,复位降频语义(同 reply)
-      _executeRound(session, {
+      try {
+        session.lastUserReply = Date.now(); // 触碰=用户主动交互,复位降频语义(同 reply)
+        const result = await _executeRound(session, {
         touchText: t,
         touchFiles: _exFiles,
         singleInject: typeof extra.singleInject === "string" ? extra.singleInject.trim() : "",
-      }).catch(async (e) => {
+        captureNow: extra.captureNow === true,
+        });
+        return { success: true, accepted: result?.accepted === true, queued: result?.queued === true, screenshot: result?.screenshot || "none" };
+      } catch (e) {
         console.error(`[gameCompanion] 触碰消息轮失败 (${session.username}/${session.charName}):`, e.message);
         // 回执可见(2026-07-10 审计C修):reason 气泡只覆盖"陪伴未运行"前置检查,轮内失败(AI 出错等)
         // 此前只 console=用户以为发出去了。经既有 orb 槽→桌宠轮询→气泡,同显示链零新面。
@@ -284,16 +306,31 @@ export function gameCompanionTouchMessage(username, text, extra = {}) {
           const _orbMod = await import("../../../../../../yonban/core/functions/screenshot/injection_state.mjs");
           if (_orbMod.setPendingOrbMessage) _orbMod.setPendingOrbMessage(username, `触碰消息发送失败: ${e.message}`);
         } catch { /* 回执失败不再级联 */ }
-      });
-      return true;
+        return { success: false, error: e.message };
+      }
   }
-  return false;
+  return session
+    ? { success: false, code: "E_COMPANION_PAUSED", error: "陪伴已暂停" }
+    : { success: false, code: "E_COMPANION_NOT_RUNNING", error: "陪伴未运行" };
+}
+
+/** 用户显式“立即截图并让伙伴评论”：复用同一轮 requestId 截图链，不再把 reply 动作冒充截图。 */
+export async function gameCompanionCaptureNow(username) {
+  const session = _sessions.get(username);
+  if (!session) return { success: false, error: "陪伴未运行" };
+  if (session.paused) return { success: false, error: "陪伴已暂停" };
+  try {
+    const result = await _executeRound(session, { captureNow: true, userInitiated: true });
+    return { success: true, accepted: result?.accepted === true, queued: result?.queued === true, screenshot: result?.screenshot || "none" };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 /**
  * 运行中对表 eye_config.captureFrequency(AI captureControl / 用户面板改频的运行时消费点):
  * 基频变了 → 更新 baseInterval、按原自适应倍率折算 currentInterval、重建定时器;
- * 改成 0 → 停止会话(与启动时 captureFrequency=0 不启动同语义)。
+ * 改成 0 → 只停止定时截图，保留文字/语音陪伴 session。
  * 只对 freqFromConfig 会话生效(options.interval 显式覆盖的会话不被 eye_config 抢写)。
  * @returns {boolean} true=会话已被停止(调用方应中止本轮)
  */
@@ -306,37 +343,74 @@ function _syncFreqFromConfig(session) {
     const _base = _freq * 1000;
     if (_base === session.baseInterval) return false;
     if (_base === 0) {
-      console.log(`[gameCompanion] captureFrequency 运行中被改为 0,停止: ${session.username}/${session.charName}`);
-      stopGameCompanion(session.username, session.charName);
-      return true;
+      session.baseInterval = 0;
+      session.currentInterval = 0;
+      _armSessionTimer(session);
+      console.log(`[gameCompanion] captureFrequency 运行中被改为 0,仅停止定时截图: ${session.username}/${session.charName}`);
+      return false;
     }
     const _ratio = session.baseInterval > 0 ? session.currentInterval / session.baseInterval : 1; // 保留忽略/关闭累计的降频倍率
     session.baseInterval = _base;
     session.currentInterval = Math.min(_base * _ratio, session.maxInterval);
-    if (session.timer) {
-      clearInterval(session.timer);
-      session.timer = setInterval(() => {
-        if (!session.paused) {
-          _executeRound(session).catch((e) => {
-            console.error(`[gameCompanion] 执行轮次失败 (${session.username}/${session.charName}):`, e.message);
-          });
-        }
-      }, session.currentInterval);
-    }
+    _armSessionTimer(session);
     console.log(`[gameCompanion] captureFrequency 运行中更新: 基频=${Math.round(_base / 1000)}秒, 当前=${Math.round(session.currentInterval / 1000)}秒`);
   } catch { /* 配置读失败保持现频 */ }
   return false;
+}
+
+/**
+ * 请求并只消费属于本轮 requestId 的截图。session.captureChain 将单文件请求槽串行化，
+ * 既不抢普通主动感知截图，也不让并发的语音/定时轮覆盖彼此的请求。
+ */
+async function _captureForRound(session) {
+  const previous = session.captureChain || Promise.resolve();
+  let release;
+  session.captureChain = new Promise((resolve) => { release = resolve; });
+  await previous;
+  const requestId = crypto.randomUUID();
+  const gcFlagPath = getGcCaptureRequestPath(session.username);
+  try {
+    const eye = await import("../../../../../../yonban/core/functions/screenshot/injection_state.mjs");
+    saveJsonFile(gcFlagPath, {
+      requestId,
+      requestedAt: Date.now(),
+      sessionId: session.id,
+      round: session.roundCount,
+    });
+    console.log(`[gameCompanion] 已请求截图 requestId=${requestId}`);
+
+    const rawEye = loadJsonFileIfExists(getEyeConfigPath(session.username)) || {};
+    let waitSec = Number(rawEye.gcShotWaitSec);
+    if (!Number.isFinite(waitSec)) waitSec = Number(eye.DEFAULT_EYE_CONFIG?.gcShotWaitSec) || 10;
+    waitSec = Math.max(0, Math.min(120, waitSec));
+    const waitStart = Date.now();
+    while (Date.now() - waitStart < waitSec * 1000) {
+      if (eye.hasPendingInjection(session.username, requestId)) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const shot = eye.consumePendingInjection(session.username, requestId);
+    return { shot, status: shot ? "attached" : "timeout_or_blocked", requestId };
+  } finally {
+    // 只删除仍属于本请求的标记；若外部恢复/替换了文件，不误删新所有者的数据。
+    try {
+      const current = loadJsonFileIfExists(gcFlagPath);
+      if (current?.requestId === requestId) fs.unlinkSync(gcFlagPath);
+    } catch { /* 标记已被移除 */ }
+    release();
+  }
 }
 
 async function _executeRound(session, opts = {}) {
   // 触碰轮判据=文本或附件任一存在(0725 对话台附件:纯附件消息也是用户主动交互,与 touchText 同轮语义——
   //   跳截图/不对表频率/必达;原 opts.touchText 真值判定会把纯附件轮误走定时轮路径→额外截图)
   const _isTouch = !!(opts.touchText || (Array.isArray(opts.touchFiles) && opts.touchFiles.length));
+  const _isInteractive = _isTouch || opts.userInitiated === true;
+  const _wantCapture = !_isTouch || opts.captureNow === true;
   // 重入闸(仅定时轮):单轮含等截图≤10s + 发起 AI 调用等多个 await,单轮耗时可能 > currentInterval;
   //   setInterval 到点仍会再触发 → 上一轮未完成时重入,并发交错读改写 session 计数/时刻字段,
   //   且 _syncFreqFromConfig/userAction 会 clear+重设 timer 引用。在途定时轮未结束时新定时轮直接跳过本次。
   //   触碰轮=用户主动交互,不受闸约束(必达,且跳过截图等待窗口极短),但仍以 inFlight 记账避免与定时轮叠算。
-  if (!_isTouch) {
+  if (!_isInteractive) {
     if (session.inFlight) {
       console.log(`[gameCompanion] 上一轮未完成,跳过本次定时触发 (${session.username}/${session.charName})`);
       return;
@@ -345,12 +419,12 @@ async function _executeRound(session, opts = {}) {
   }
   try {
   // 触碰轮=用户主动说话,不对表频率;定时轮先对表 eye_config(AI/用户运行中改频的生效点),已停止则中止
-  if (!_isTouch && _syncFreqFromConfig(session)) return;
+  if (!_isInteractive && _syncFreqFromConfig(session)) return;
   // 设计"不回复→降频(×1.5)"的真实 producer:上一轮发过消息(lastMessageAt)而用户至今未回复
   // → 视为一次忽略,复用 gameCompanionUserAction("ignore") 的规范降频+重排定时器逻辑(不另造)。
   // 用 lastIgnoredMessageAt 去重,确保同一条未回复消息只降频一次(不每轮重复降)。
   // (此前 consecutiveIgnores 只有 orb/桌面端 reply/ignore 能动,web 面板无 ignore producer → 自适应是死的。)
-  if (
+  if (!_isInteractive &&
     session.lastMessageAt &&
     session.lastMessageAt !== session.lastIgnoredMessageAt &&
     (!session.lastUserReply || session.lastUserReply < session.lastMessageAt)
@@ -364,45 +438,15 @@ async function _executeRound(session, opts = {}) {
   console.log(`[gameCompanion] 执行第${session.roundCount}轮 (${username}/${charName})`);
 
   try {
-    // 1. 触发截图（通过beilu-eye的inject机制）
-    //    这里直接调用eye的injection_state，假设Python eye进程在运行会自动截图
-    //    如果eye没在运行，跳过本轮
-    //    触碰消息轮(opts.touchText)=用户主动说话,跳过截图请求/等待/消费,纯文本进 AI。
-    const { hasPendingInjection, consumePendingInjection } = await import("../../../../../../yonban/core/functions/screenshot/injection_state.mjs"); // T8·回切：改指 yonban 新位实现体
-    if (_isTouch) {
-      console.log("[gameCompanion] 触碰消息轮(跳过截图)");
-    } else if (hasPendingInjection(username)) { // ★ J6：按 username 分区查本用户 pending
-      console.log("[gameCompanion] eye已有pending截图");
-    } else {
-      // 通知前端触发一次截图（通过写一个标记文件，前端轮询）
-      const gcFlagPath = getGcCaptureRequestPath(username); // T7 尾段收口：权威路径单点（写/删两用，与 endpoints 读方同源）
-      saveJsonFile(gcFlagPath, {
-        requestedAt: Date.now(),
-        sessionId: session.id,
-        round: session.roundCount,
-      });
-      console.log("[gameCompanion] 已请求截图");
-      // 等待截图到达(窗口秒数可配,A2 去硬编码 2026-07-13:eye_config.gcShotWaitSec 默认10=原值;
-      // 0=不等(本轮无图照常);等待步进 1s=检查粒度,非行为值不入配置)
-      let _waitSec = 10;
-      try {
-        const _wv = Number((loadJsonFileIfExists(getEyeConfigPath(username)) || {}).gcShotWaitSec);
-        if (Number.isFinite(_wv) && _wv >= 0 && _wv <= 120) _waitSec = _wv;
-      } catch { /* 读失败=默认 */ }
-      const waitStart = Date.now();
-      while (Date.now() - waitStart < _waitSec * 1000) {
-        if (hasPendingInjection(username)) break; // ★ J6：按 username 分区
-        await new Promise(r => setTimeout(r, 1000));
-      }
-      // 清理请求标记
-      try { fs.unlinkSync(gcFlagPath); } catch { /* ignore */ }
-    }
-
-    // 1b. 消费 pending 截图 → 附图给本轮 AI(2026-07-09 断链修:此前只 hasPending 判存在,从不消费、
-    //     从不附图——AI 在陪伴轮次从未见过截图。consume=单次注入语义,与前端 active 轮询互斥(先到先得,
-    //     injection_state 单槽,同一张图只进一路)。mime 按 base64 头判(同 eye.mjs:252 范式)。
+    // 1. 定时轮默认取图；文字/语音轮仅在 captureNow=true 时取图。截图必须带 requestId，
+    //    只由本轮精确消费；安全门拒绝/桌宠离线/超时均诚实降级为纯文字。
     let _gcShot = null;
-    if (!_isTouch) { try { _gcShot = consumePendingInjection(username); } catch { /* 无图:纯文本轮 */ } }
+    let _screenshotStatus = "not_requested";
+    if (_wantCapture) {
+      const captured = await _captureForRound(session);
+      _gcShot = captured.shot;
+      _screenshotStatus = captured.status;
+    }
 
     // ── T1 对话锁定(凛倾 2026-06-16"对话锁定到一个对话文件……角色卡选择,对话选择-对话"):
     //    陪伴轮走主对话链全量管线【唯一路径】(P 系列/aiRunner 临时轮已删,凛倾 2026-07-16
@@ -449,6 +493,7 @@ async function _executeRound(session, opts = {}) {
             } catch (e2) { console.warn("[gameCompanion] 触碰附件解码失败,已跳过:", f && f.name, e2.message); }
           }
         }
+        let _addedUserEntry = false;
         if (_userText || _files.length) {
           // extension.gameCompanionShot=【截图轮】产者标记(T4 防膨胀):历史修剪只认此标记;
           //   用户对话台附件不打标=trimEntryFiles 永不剥它(用户数据零波及)
@@ -457,6 +502,7 @@ async function _executeRound(session, opts = {}) {
             files: _files,
             extension: _hasShotFile ? { gameCompanionShot: true } : {},
           });
+          _addedUserEntry = true;
           // T4 防膨胀(凛倾 tasks#12):截图 files 随陪伴轮在绑定对话累积(chat json 存 file:hash 引用+
           // files 库 blob)。保最近 N 条截图轮的附件,更旧剥引用(条目文字仍在=占位);blob 回收=
           // beilu-chat files.mjs cleanFiles 既有每小时孤儿 GC。N 单源=eye_config.gcShotKeepN,
@@ -470,28 +516,36 @@ async function _executeRound(session, opts = {}) {
             } catch (e) { console.warn("[gameCompanion] 截图历史修剪失败(不影响本轮):", e.message); }
           }
         }
-        // 主链回复由 ReplyHandler 异步落盘,本函数拿不到完成回调;lastMessageAt 以触发时刻近似
-        // (消费点=顶部"无回复→降频"判据,精度要求=分钟级间隔,触发≈回复时刻误差可忽略)。
-        session.lastMessageAt = Date.now();
+        // 纯截图轮若截图被安全门拒绝/桌宠离线/超时，没有任何新用户内容，不得对旧上下文空触发一轮。
+        if (!_addedUserEntry) return { accepted: false, queued: false, screenshot: _screenshotStatus, reason: "no_user_content" };
         // singleInject 透传(0725 对话台快速注入):与主聊天 POST_message→triggerCharReply 同消费点,一次性不落盘
-        _gen.triggerCharReply(session.chatid, undefined, { userInitiated: _isTouch, sourceChannel: "gameCompanion", ...(opts.singleInject ? { singleInject: opts.singleInject } : {}) }).catch((e) => {
-          console.warn(`[gameCompanion] 主链生成触发失败(第${session.roundCount}轮):`, e.message);
-        });
-        return; // 主链已接管本轮
+        // 所有陪伴轮都已经 addUserReply 落盘，故在主生成锁语义里都是“用户输入”；忙时必须排队而非静默忽略。
+        // session.charName 是启动时由 bindChar + 承载对话契约解析出的权威角色。陪伴调用方已经知道
+        // 要由谁回复，就不能再丢成 undefined 让主生成器从对话第一角色猜；多角色对话会猜错，
+        // 历史空壳对话则直接 no_character。对话自身仍必须真实挂载该角色，generation 会继续
+        // 以 char not found 诚实拒绝，角色修复职责由 ensureBotChat 的绑定不变量承担。
+        const trigger = await _gen.triggerCharReply(session.chatid, session.charName, { userInitiated: true, sourceChannel: "gameCompanion", ...(opts.singleInject ? { singleInject: opts.singleInject } : {}) });
+        if (!trigger?.accepted && !trigger?.queued) throw new Error(`主生成器未接受陪伴轮: ${trigger?.reason || "unknown"}`);
+        session.lastMessageAt = Date.now();
+        // 定时轮的 inFlight 与真实生成同寿命；用户文字/语音入口只等“已接收”，不把 HTTP/IPC 卡几十秒。
+        if (!_isInteractive && trigger.accepted && trigger.completion) await trigger.completion;
+        return { ...trigger, screenshot: _screenshotStatus };
       } catch (e) {
         // 主链模块不可达(部署形态异常):本轮跳过并留痕。aiRunner 临时轮降级已删
         // (P 系列/记忆预设不再搬进陪伴,凛倾 2026-07-16;临时轮不落对话文件=失忆,历史病灶不复活)。
         console.error(`[gameCompanion] 主链管线不可达,本轮跳过:`, e.message);
+        throw e;
       }
     }
 
   } catch (e) {
     console.error(`[gameCompanion] 第${session.roundCount}轮执行失败:`, e.message);
+    throw e;
   }
   } finally {
     // 释放重入闸(仅定时轮记账过);触碰轮不设闸,但统一清零无副作用(false→false)。
     // 判据与入口同源 _isTouch(0725:纯附件触碰轮若此处仍按 touchText 判会误清定时轮的闸——加锁/放锁必须同判据)
-    if (!_isTouch) session.inFlight = false;
+    if (!_isInteractive) session.inFlight = false;
   }
 }
 
@@ -510,6 +564,9 @@ async function _executeRound(session, opts = {}) {
 export function stopAllSessions() {
   for (const [key, session] of _sessions) {
     if (session.timer) clearInterval(session.timer);
+    unbindCompanionOutput(session.username, session.chatid);
+    // Unload 路径同样撤回互动租约(D5 §2.1:lease 随 start/stop/Unload 变化),防插件退场后遗留意愿
+    if (session.petLeaseId) { try { releaseInteractionLease(session.petLeaseId); } catch { /* ignore */ } }
     console.log(`[gameCompanion] 进程退出，停止: ${key}`);
   }
   _sessions.clear();

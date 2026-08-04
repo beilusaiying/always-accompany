@@ -28,6 +28,7 @@ import {
   initApiConfig,
   loadApiConfig,
 } from "./src/panels/settings/apiConfig.mjs"; // 6c尾·根级散件归位
+import { restoreStoredThemeState } from "./src/panels/settings/settingsSlots.mjs";
 import {
   charList,
   initializeChat,
@@ -69,9 +70,15 @@ import {
   getQueue,
 } from "./src/shared/render/virtualQueue.mjs";
 import { initExtendMenuW28 } from "./src/shared/layout/extendMenuW28.mjs";
+import { initReadinessBanner } from "./src/shared/widgets/readinessBanner.mjs"; // [D5 §2.4] 首屏 readiness 消费(遮罩+后台扩展卡,失败开放防锁死)
 import { wbTrace, wbDetect } from "./src/shared/widgets/whitebox.mjs";
 import { installDiagProbes } from "./src/shared/state/diagProbes.mjs"; // 0716 死标签接线：dom/perf 常驻探针
-import { initLive2dRenderer } from "./src/shared/companion/live2dRenderer.mjs";
+import { ensureLive2dVendorRuntime } from "./src/shared/companion/live2dRuntimeLoader.mjs";
+import {
+  configureCompanionRendererLoader,
+  refreshCompanionRendererSettings,
+  setCompanionRendererState,
+} from "./src/panels/companion/companion.mjs";
 import { escapeHtml, showToast, getCurrentCharId, waitForCharIdReady } from "./src/panels/airp/utils.mjs"; // P2续: 共享工具基座抽出；D1 收口:fallbackToast 死降级已删(toast 实现单源 scripts/toast.mjs)
 import { handleNewChat, handleManageChats, handleBatchDelete, handleRegenerate } from "./src/panels/airp/chatmgmt.mjs"; // P2续: 会话管理 cluster 抽出
 // 2A injprompt: 右栏列表面板 HTML 从未存在(纠察坐实), phantom 闭包已删。INJ 编辑走编辑界面 Tab4（layout.mjs beilu:openEditorTab "inj-edit"）。
@@ -99,6 +106,68 @@ import { getPresetData, fetchModels, applyPresetData, loadPresetData } from "./s
 // 初始化
 // ============================================================
 
+let _companionRendererState = "idle";
+let _companionRendererPromise = null;
+
+// 静态首屏遮罩的唯一生命周期出口：init 成功才移除；顶层异常转为可见失败态并提供刷新。
+// 各懒加载扩展不在此门内，避免后台预加载拖住基础聊天界面。
+function settleBootOverlay(error = null) {
+  const overlay = document.getElementById("app-boot-overlay");
+  if (!overlay) return;
+  if (!error) {
+    overlay.remove();
+    return;
+  }
+  overlay.dataset.state = "failed";
+  overlay.setAttribute("aria-busy", "false");
+  const spinner = document.getElementById("app-boot-spinner");
+  const status = document.getElementById("app-boot-status");
+  const retry = document.getElementById("app-boot-retry");
+  if (spinner) spinner.hidden = true;
+  if (status) status.textContent = `界面初始化失败：${error?.message || error}`;
+  if (retry) {
+    retry.hidden = false;
+    retry.addEventListener("click", () => window.location.reload(), { once: true });
+  }
+}
+
+// Companion 渲染器的唯一创建 owner。首次激活才 dynamic import，并发激活/重试/模型切换
+// 全部复用同一 Promise，避免重复读字典、创建 PIXI.Application 或丢掉初始化期间的选择。
+function ensureCompanionRenderer() {
+  if (_companionRendererState === "ready" && _companionRendererPromise) return _companionRendererPromise;
+  if (_companionRendererPromise) return _companionRendererPromise;
+
+  _companionRendererState = "loading";
+  setCompanionRendererState("loading");
+  _companionRendererPromise = import("./src/shared/companion/live2dRenderer.mjs")
+    .then(async ({ initLive2dRenderer }) => {
+      const ok = await initLive2dRenderer({ ensureVendorRuntime: ensureLive2dVendorRuntime });
+      if (!ok || !window.beiluLive2d?.ready?.()) throw new Error("虚拟形象渲染器未进入 ready 状态");
+      refreshCompanionRendererSettings();
+      _companionRendererState = "ready";
+      setCompanionRendererState("ready");
+      return window.beiluLive2d;
+    })
+    .catch((error) => {
+      _companionRendererState = "idle";
+      _companionRendererPromise = null;
+      setCompanionRendererState("error", error);
+      throw error;
+    });
+  return _companionRendererPromise;
+}
+
+configureCompanionRendererLoader(ensureCompanionRenderer);
+
+window.addEventListener("beilu:tab-activated", (event) => {
+  if (event.detail !== "companion") return;
+  startEyeActivePoll();
+  ensureCompanionRenderer().catch((error) => {
+    console.error("[live2d] Companion 渲染器初始化失败:", error);
+    window._reportError?.(`[live2d] Companion 渲染器初始化失败: ${error?.message || error}`, error?.stack);
+  });
+});
+
 async function init() {
   console.log(
     "[beilu-chat][DIAG] ===== init() 开始 =====",
@@ -107,9 +176,16 @@ async function init() {
     "href:",
     window.location.href,
   );
-  applyTheme();
-  const _enhancedTheme = storage.get(KEYS.BEILU_ENHANCED_THEME);
-  if (_enhancedTheme) document.documentElement.dataset.beiluEnhanced = _enhancedTheme;
+  try {
+    await applyTheme();
+  } catch (e) {
+    console.error("[beilu-chat] 主题初始化失败（继续加载 UI）:", e);
+  }
+  try {
+    restoreStoredThemeState();
+  } catch (e) {
+    console.error("[beilu-chat] Beilu 主题状态恢复失败（继续加载 UI）:", e);
+  }
 
   // 初始化 ST 兼容层（EventBus + Globals + CDN 预加载）
   try {
@@ -182,13 +258,6 @@ async function init() {
     installDiagProbes();
   } catch (e) {
     console.warn("[beilu-chat] installDiagProbes 失败（非致命）:", e.message);
-  }
-
-  // Live2D 桌宠渲染核心（挂 companion tab 的 #live2d-host 桌宠预览位，订阅 WS 表情/消息事件；库未加载或模型缺失时静默退化）
-  try {
-    await initLive2dRenderer();
-  } catch (e) {
-    console.warn("[live2d]", e);
   }
 
   // 字体比例控制已在 initLayout() → initFeatureControls() 中初始化，不再重复调用
@@ -555,6 +624,15 @@ async function init() {
   // 前端不再轮询，避免与后端重复触发
   console.log("[beilu-chat] 文件操作结果自动继续由后端控制（前端轮询已禁用）");
 
+  // [D5 §2.4] 首屏 readiness 消费：launcher 现在 shellReady 就开浏览器，本模块把后端阶段真值
+  // 渲染给用户（chatInteractive 未成立=输入软遮罩「正在准备基础聊天…」；后台预加载/失败扩展
+  // =右下可折叠卡+重试）。失败开放：readiness 不可达/旧后端 → 立即解除，绝不因观测面锁死输入。
+  try {
+    initReadinessBanner();
+  } catch (e) {
+    console.warn("[beilu-chat] initReadinessBanner 失败（非致命）:", e.message);
+  }
+
   console.log(
     "[beilu-chat] Shell 已加载 — Phase 4 三栏布局 + 聊天 + 预设 + API 配置 + dataTable 记忆编辑器 + 正则编辑器 + 文件浏览器 + 提示词查看器 + 记忆AI输出面板 + 记忆AI预设交互",
   );
@@ -607,4 +685,14 @@ async function loadPresetDataWithRetry() {
 
 
 
-init();
+init()
+  .then(() => {
+    settleBootOverlay();
+    document.body.dataset.beiluBootReady = "1";
+    window.dispatchEvent(new CustomEvent("beilu:boot-ready"));
+  })
+  .catch((error) => {
+    console.error("[beilu-chat] 顶层初始化中断:", error);
+    window._reportError?.(`[beilu-chat] 顶层初始化中断: ${error?.message || error}`, error?.stack);
+    settleBootOverlay(error);
+  });

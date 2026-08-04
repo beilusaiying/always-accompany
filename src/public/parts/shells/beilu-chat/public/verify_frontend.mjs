@@ -21,6 +21,13 @@ console.log('\n=== 1. JS文件语法检查 ===');
 const jsFiles = [
   'index.mjs', 'src/shared/layout/layout.mjs', 'src/shared/transport/endpoints.mjs',
   'src/shared/layout/extendMenuW28.mjs', 'src/panels/work/workPanel.mjs', 'src/panels/settings/settingsSlots.mjs',
+  // 2026-08-03 settingsSlots 拆分：slot 实现迁 slots/*.mjs，DOM ID 引用检查覆盖随迁（门面已无 getElementById）
+  'src/panels/settings/slots/langSlot.mjs', 'src/panels/settings/slots/uiSlot.mjs',
+  'src/panels/settings/slots/accountSlot.mjs', 'src/panels/settings/slots/remoteSlot.mjs',
+  'src/panels/settings/slots/pluginListSlot.mjs', 'src/panels/settings/slots/apiSlot.mjs',
+  'src/panels/settings/slots/monitorSlot.mjs', 'src/panels/settings/slots/toggleSlot.mjs',
+  'src/panels/settings/slots/fakeSendSlot.mjs', 'src/panels/settings/slots/sysinfoSlot.mjs',
+  'src/panels/settings/slots/injectTextsSlot.mjs',
   'src/shared/widgets/backendMonitor.mjs', 'src/shared/widgets/tokenProgressBar.mjs',
   'src/panels/editors/worldbookEditor.mjs', 'src/panels/editors/regexEditor.mjs',
   'src/panels/memory/memoryPresetChat.mjs', 'src/panels/memory/dataTable.mjs', 'src/panels/memory/memoryBrowser.mjs',

@@ -22,6 +22,7 @@ import { storage, KEYS } from "../../shared/state/storage.mjs";
 import { showToast } from "../../../../../../../scripts/toast.mjs";
 import { beiluConfirm, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs";
 import { enableDragAutoScroll } from "../../shared/widgets/dragAutoScroll.mjs"; // 0722：拖拽排序中 wheel 被浏览器抑制→边缘自动滚动
+import { initHorizontalSplitPane } from "../../shared/widgets/splitPane.mjs";
 import { recordImportHistory } from "./importExport.mjs"; // T033：预设导入成功上报集中历史
 import { classifyPresetName, PRESET_CATEGORIES, PRESET_CATEGORY_LABELS } from "../airp/preset.mjs"; // [0713 单源化] 预设分类判定唯一实现（含 bucket 权威链）；[0716] 分类集合/标签同源
 // openInjEditor浮窗已删除，INJ统一到编辑界面Tab4
@@ -241,7 +242,7 @@ async function _loadPresetPanel() {
         <!-- 搜索 -->
         <input id="pp-search" class="input input-xs input-bordered w-full" placeholder="搜索条目..." />
         <!-- 主体: 条目列表 + 拖拽分隔条 + 详情 -->
-        <div class="flex" style="flex:1;min-height:0;">
+        <div id="pp-split-pane" class="flex" style="flex:1;min-height:0;">
           <div id="pp-entry-list" class="flex flex-col gap-0.5 overflow-y-auto pr-1" style="width:45%;"></div>
           <div id="pp-split" class="flex-none bg-base-content/10 hover:bg-warning/50 rounded mx-1" style="width:5px;cursor:col-resize;touch-action:none;" title="拖动调整宽度"></div>
           <div id="pp-entry-detail" class="flex-1 overflow-y-auto pl-1 min-w-0">
@@ -256,31 +257,20 @@ async function _loadPresetPanel() {
       </div>
     `;
 
-    // 分栏拖拽: #pp-split 左右拖动调整列表/详情宽度比,持久化到 storage(15%~80% 夹取)
+    // 分栏拖拽：迁入共享比例 splitter；预设编辑仍沿用原 45% / 15~80% / 同一 storage key。
     {
       const splitEl = container.querySelector('#pp-split');
       const listEl = container.querySelector('#pp-entry-list');
-      const savedW = parseFloat(storage.get(KEYS.BEILU_PRESET_SPLIT));
-      if (savedW >= 15 && savedW <= 80) listEl.style.width = savedW + '%';
       enableDragAutoScroll(listEl); // 0722：长列表拖拽排序可越过可视区（wheel 在 DnD 中被浏览器抑制）
-      splitEl.addEventListener('pointerdown', (ev) => {
-        ev.preventDefault();
-        splitEl.setPointerCapture(ev.pointerId);
-        const wrap = splitEl.parentElement;
-        const onMove = (e) => {
-          const rect = wrap.getBoundingClientRect();
-          const pct = Math.min(80, Math.max(15, (e.clientX - rect.left) / rect.width * 100));
-          listEl.style.width = pct.toFixed(1) + '%';
-        };
-        const onUp = () => {
-          splitEl.removeEventListener('pointermove', onMove);
-          splitEl.removeEventListener('pointerup', onUp);
-          splitEl.removeEventListener('pointercancel', onUp);
-          storage.set(KEYS.BEILU_PRESET_SPLIT, parseFloat(listEl.style.width).toFixed(1));
-        };
-        splitEl.addEventListener('pointermove', onMove);
-        splitEl.addEventListener('pointerup', onUp);
-        splitEl.addEventListener('pointercancel', onUp);
+      initHorizontalSplitPane({
+        container: container.querySelector('#pp-split-pane'),
+        primary: listEl,
+        handle: splitEl,
+        storageKey: KEYS.BEILU_PRESET_SPLIT,
+        defaultPercent: 45,
+        minPercent: 15,
+        maxPercent: 80,
+        keyboardStep: 5,
       });
     }
 
@@ -928,17 +918,40 @@ async function _loadInjPanel() {
   //   宏每轮展开出不同值（工具 job 总账 115k 字符/轮）坐在缓存前缀区 → Anthropic 累积前缀哈希从宏处
   //   失配 → 全部历史缓存连坐 → 命中≈0（凛倾 50 条消息全程 0 缓存）。1.6 万字正文里一个宏人眼看不见，
   //   必须机制检测：弹窗警告 + 列表徽标 + 详情页标行号。
-  let volatileMacros = [];
+  let volatileMacros = []; // 旧后端兼容；新后端以 cacheStablePrefixMacros allowlist 为权威
+  let cacheStablePrefixMacros = null;
+  let cacheStablePrefixMacroPatterns = [];
+  let cachePromptMacroExpressionPattern = null;
   let _volWarnSig = ""; // 弹窗节流：同一批违规只弹一次，恢复正常后归零
   // 违规判据：启用 && depth>=1（上方）&& 正文含清单宏。返回 [{macro, line}]（行号=标出宏位置）。
   const _volHits = (e) => {
     const hits = [];
     if (e?.enabled === false || (Number(e?.depth) || 0) < 1) return hits;
     const c = String(e?.content || "");
-    for (const m of volatileMacros) {
-      const needle = `{{${m}}}`;
-      for (let i = c.indexOf(needle); i >= 0; i = c.indexOf(needle, i + 1)) {
-        hits.push({ macro: m, line: c.slice(0, i).split("\n").length });
+    if (Array.isArray(cacheStablePrefixMacros)) {
+      const safe = new Set(cacheStablePrefixMacros.map((m) => String(m).toLowerCase()));
+      const safePatterns = cacheStablePrefixMacroPatterns.flatMap((source) => {
+        try { return [new RegExp(String(source), "i")]; } catch { return []; }
+      });
+      let expressionRe;
+      try {
+        expressionRe = new RegExp(cachePromptMacroExpressionPattern || String.raw`\{\{\s*([\s\S]*?)\}\}`, "g");
+      } catch {
+        expressionRe = /\{\{\s*([\s\S]*?)\}\}/g;
+      }
+      for (const match of c.matchAll(expressionRe)) {
+        const expression = String(match[1] || "").trim();
+        // 内层/单花括号可能代表嵌套动态宏或 JSON 参数；不允许被 pick/comment 等宽 pattern 放行。
+        if (!expression || (!/[{}]/.test(expression) && (safe.has(expression.toLowerCase()) || safePatterns.some((pattern) => pattern.test(expression))))) continue;
+        hits.push({ macro: expression, line: c.slice(0, match.index).split("\n").length });
+      }
+    } else {
+      // 兼容尚未下发 allowlist 的旧后端；运行时真正安全仍由后端 getPrompt 最终约束。
+      for (const m of volatileMacros) {
+        const needle = `{{${m}}}`;
+        for (let i = c.indexOf(needle); i >= 0; i = c.indexOf(needle, i + 1)) {
+          hits.push({ macro: m, line: c.slice(0, i).split("\n").length });
+        }
       }
     }
     return hits;
@@ -967,6 +980,9 @@ async function _loadInjPanel() {
     if (Array.isArray(d.injection_automode_meta?.aliases)) metaAliases = d.injection_automode_meta.aliases;
     if (Array.isArray(d.injection_automode_meta?.special) && d.injection_automode_meta.special.length) metaSpecial = d.injection_automode_meta.special;
     volatileMacros = Array.isArray(d.volatile_macros) ? d.volatile_macros : []; // [0731] 判据随每次 load 刷新（后端单源）
+    cacheStablePrefixMacros = Array.isArray(d.cache_stable_prefix_macros) ? d.cache_stable_prefix_macros : null;
+    cacheStablePrefixMacroPatterns = Array.isArray(d.cache_stable_prefix_macro_patterns) ? d.cache_stable_prefix_macro_patterns : [];
+    cachePromptMacroExpressionPattern = typeof d.cache_prompt_macro_expression_pattern === "string" ? d.cache_prompt_macro_expression_pattern : null;
     effectiveById = {};
     for (const g of (Array.isArray(d.injection_effective) ? d.injection_effective : [])) {
       effectiveById[g.id] = { on: g.on, note: g.reason ? (REASON_NOTE[g.reason] || g.reason) : "" };
@@ -1147,9 +1163,9 @@ async function _loadInjPanel() {
       if (_viol.length) {
         warnEl.innerHTML = `
           <div class="rounded border border-error/60 bg-error/10 p-2 text-[10px] leading-relaxed">
-            <div class="font-bold text-error">🚨 ${_viol.length} 条「上方（聊天记录之前）」条目正文含每轮变化的动态宏 —— 提示词缓存从宏处起整体失效！</div>
+            <div class="font-bold text-error">🚨 ${_viol.length} 条「上方（聊天记录之前）」条目正文含缓存前缀不安全宏 —— 宏值变化会让其后的提示词缓存整体失效！</div>
             ${_viol.map((v) => `<div class="mt-0.5"><code class="cursor-pointer underline inj-vol-jump" data-inj="${_escHtml(v.e.id)}">${_escHtml(v.e.id)}</code>：${v.hits.map((h) => `<code>{{${_escHtml(h.macro)}}}</code> @ 行 ${h.line}`).join('、')}</div>`).join('')}
-            <div class="mt-0.5 opacity-70">修法：把这些宏移到 depth=0「下方」数据条目（如 INJ-1-write-code-data）。上方只放固定内容（{{user}}/{{mcp_runtime_json}} 等不常变的可留）。</div>
+            <div class="mt-0.5 opacity-70">修法：把这些宏移到 depth=0「下方」数据条目。上方只放字节静态正文、{{ide_tools}} 静态 schema，以及按请求身份分区的 {{user}}/{{char}}。</div>
           </div>`;
         warnEl.querySelectorAll('.inj-vol-jump').forEach((el) => el.addEventListener('click', () => {
           selectedId = el.dataset.inj; renderList(); renderDetail(entries.find((x) => x.id === el.dataset.inj));
@@ -1444,7 +1460,9 @@ async function _openCharEditDialog(charKey, details, onSaved) {
       // 在对话列表里显示已删角色。记忆默认保留（deleteMemory 不传）。
       // 原 raw DELETE delete-char/${key} {deleteChats} → 门面 deleteChar（payload._key 进 URL，deleteChats 进 body）；
       //   门面 200 返回解析体（success:false+failedPaths 分支保留）；HTTP !ok 由门面抛错走 catch（generic toast）。
-      const data = await sendAction({ verb: "deleteChar", target: "shells:chat", source: "web", payload: { _key: charKey, deleteChats: true, deleteWorldbook: true, deleteMemory: true } }) || {};
+      // [D1 §4 修文案/代码矛盾] :1457 文案与本注释均承诺「记忆保留」，原实现却传 deleteMemory:true 删记忆
+      //   = 用户可见欺骗（凛倾「删除要可恢复」）。deleteMemory 不传→后端第4步 falsy 跳过=保留记忆，与文案一致。
+      const data = await sendAction({ verb: "deleteChar", target: "shells:chat", source: "web", payload: { _key: charKey, deleteChats: true, deleteWorldbook: true } }) || {};
       // 删除未彻底：后端返回 success:false + failedPaths → 失败回报，不清前端状态、不关闭，便于重试
       if (data.success === false) {
         const paths = Array.isArray(data.failedPaths)

@@ -1,0 +1,16 @@
+{
+  "id": "beilu-p1-runtime-v2",
+  "stdioService": "p1v2-stdio",
+  "cluster": {
+    "id": "beilu-p1-cluster-v2",
+    "services": [
+      { "name": "tokenize", "script": "tokenize_service.py", "port": 13151, "envPort": "P1_TOK_PORT" },
+      { "name": "vector", "script": "vector_service.py", "port": 13152, "envPort": "P1_VEC_PORT" },
+      { "name": "llmtok", "script": "llmtok_service.py", "port": 13153, "envPort": "P1_LLMTOK_PORT" }
+    ]
+  },
+  "memorySourcePolicy": {
+    "nonRecallRootDirs": ["vocab", "p1_experiment_log", "p1_runs"],
+    "nonRecallRootFiles": ["tasks.json", "promoted_experience.json", "p1_novelty_usage.json"]
+  }
+}

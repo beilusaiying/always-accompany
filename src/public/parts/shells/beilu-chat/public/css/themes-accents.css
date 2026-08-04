@@ -5,16 +5,8 @@
 /* 顶栏relative定位（面板absolute依赖） */
 #top-bar { position: relative; }
 
-/* 模式颜色标签 */
-#mode-selector-btn[data-active-mode="chat"]  { color: var(--beilu-amber); }
-#mode-selector-btn[data-active-mode="smart"] { color: var(--beilu-amber); }
-#mode-selector-btn[data-active-mode="files"] { color: var(--beilu-amber); }
-#mode-selector-btn[data-active-mode="work"]  { color: var(--beilu-amber); }
-#mode-selector-btn[data-active-mode="memory"] { color: var(--beilu-amber); }
-/* 界面1挑刺修复: 扩展模式补色（与主模式同机制） */
-#mode-selector-btn[data-active-mode="bot"]       { color: var(--beilu-mode-bot); }
-#mode-selector-btn[data-active-mode="companion"] { color: var(--beilu-mode-companion); }
-#mode-selector-btn[data-active-mode="helper"]    { color: var(--beilu-mode-helper); }
+/* 模式颜色标签：body[data-active-tab] 只生产 --beilu-mode-accent。 */
+#mode-selector-btn[data-active-mode] { color: var(--beilu-mode-accent); }
 
 /* 模式选择面板 */
 .mode-selector-panel {
@@ -27,55 +19,58 @@
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 64px);
   overflow-y: auto;
-  background: var(--beilu-bg-card);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
-  border-radius: 12px;
+  background: var(--beilu-surface-floating);
+  border: var(--beilu-border-width) solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
   padding: 12px;
   min-width: 200px;
-  box-shadow: 0 8px 24px var(--beilu-shadow-15);
+  box-shadow: var(--beilu-panel-shadow);
+  color: var(--beilu-fg-primary);
 }
 .mode-selector-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 0.75rem;
-  opacity: 0.6;
+  color: var(--beilu-fg-secondary);
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  border-bottom: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 .mode-panel-close {
-  background: none;
-  border: none;
+  background: transparent;
+  border: var(--beilu-border-width) solid transparent;
+  color: var(--beilu-fg-muted);
   cursor: pointer;
-  opacity: 0.5;
-  font-size: 0.8rem;
+  min-inline-size: var(--beilu-target-toolbar);
+  min-block-size: var(--beilu-target-toolbar);
 }
-.mode-panel-close:hover { opacity: 1; }
+.mode-panel-close:hover { background: var(--beilu-hover); color: var(--beilu-fg-primary); }
 .mode-option {
   display: block;
   width: 100%;
   text-align: left;
   padding: 8px 12px;
   border: none;
-  background: none;
-  border-radius: 8px;
+  background: transparent;
+  border-radius: var(--beilu-radius-control);
   cursor: pointer;
   font-size: 0.85rem;
-  color: var(--color-base-content);
-  transition: background 0.15s;
+  color: var(--beilu-fg-primary);
+  transition: background-color var(--beilu-motion-fast) var(--beilu-ease-standard);
 }
-.mode-option:hover { background: color-mix(in oklch, var(--color-base-content) 8%, transparent); }
+.mode-option:hover { background: var(--beilu-hover); }
 .mode-option-active {
-  background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+  background: var(--beilu-selection);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
   font-weight: 600;
 }
 .mode-selector-desc {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  border-top: var(--beilu-border-width) solid var(--beilu-border-subtle);
   font-size: 0.7rem;
-  opacity: 0.5;
+  color: var(--beilu-fg-muted);
   min-height: 1.2em;
 }
 
@@ -83,7 +78,7 @@
 .mode-selector-divider {
   margin: 4px 8px;
   border: none;
-  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  border-top: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 
 /* 重做界面1: #task-card 任务进度卡只在 code(files)/work 模式显示（凛倾拍板#6「只在相关模式显示」）。
@@ -100,12 +95,12 @@ body:not([data-active-tab="files"]):not([data-active-tab="work"]) #task-card {
 .token-indicator-dot {
   font-size: 0.6rem;
   cursor: pointer;
-  transition: color 0.3s;
+  transition: color var(--beilu-motion-fast) var(--beilu-ease-standard);
   padding: 2px 4px;
 }
-.token-indicator-dot.token-green { color: var(--beilu-success); }
-.token-indicator-dot.token-yellow { color: var(--beilu-warning); }
-.token-indicator-dot.token-red { color: var(--beilu-error); }
+.token-indicator-dot.token-green { color: var(--beilu-state-success); }
+.token-indicator-dot.token-yellow { color: var(--beilu-state-warning); }
+.token-indicator-dot.token-red { color: var(--beilu-state-error); }
 
 /* Phase4A 复原: Token 展开面板(进度条+按钮族收纳处,点圆点展开) */
 #token-indicator-slot { position: relative; }
@@ -114,11 +109,12 @@ body:not([data-active-tab="files"]):not([data-active-tab="work"]) #task-card {
   top: calc(100% + 8px);
   right: 0;
   z-index: 50;
-  background: var(--beilu-bg-card);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
-  border-radius: 10px;
+  background: var(--beilu-surface-floating);
+  border: var(--beilu-border-width) solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
   padding: 8px 10px;
-  box-shadow: 0 8px 24px var(--beilu-shadow-15);
+  box-shadow: var(--beilu-panel-shadow);
+  color: var(--beilu-fg-primary);
   min-width: 260px;
   max-width: calc(100vw - 16px);
 }
@@ -132,12 +128,13 @@ body:not([data-active-tab="files"]):not([data-active-tab="work"]) #task-card {
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 64px);
   overflow-y: auto;
-  background: var(--beilu-bg-card);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
-  border-radius: 10px;
+  background: var(--beilu-surface-floating);
+  border: var(--beilu-border-width) solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
   padding: 6px;
   min-width: 160px;
-  box-shadow: 0 8px 24px var(--beilu-shadow-15);
+  box-shadow: var(--beilu-panel-shadow);
+  color: var(--beilu-fg-primary);
 }
 .aux-menu-item {
   display: block;
@@ -145,20 +142,20 @@ body:not([data-active-tab="files"]):not([data-active-tab="work"]) #task-card {
   text-align: left;
   padding: 7px 12px;
   border: none;
-  background: none;
-  border-radius: 6px;
+  background: transparent;
+  border-radius: var(--beilu-radius-control);
   cursor: pointer;
   font-size: 0.8rem;
-  color: var(--color-base-content);
-  transition: background 0.15s;
+  color: var(--beilu-fg-primary);
+  transition: background-color var(--beilu-motion-fast) var(--beilu-ease-standard);
 }
-.aux-menu-item:hover { background: color-mix(in oklch, var(--color-base-content) 8%, transparent); }
+.aux-menu-item:hover { background: var(--beilu-hover); }
 /* 帮助模式开启时"帮助教程"菜单项亮起(模式开关需要可见状态, 凛倾0715 MSG#9) */
-.aux-menu-item.active { background: color-mix(in oklch, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+.aux-menu-item.active { background: var(--beilu-selection); color: var(--beilu-fg-primary); box-shadow: inset 3px 0 0 var(--beilu-state-warning); }
 .aux-menu-divider {
   margin: 4px 8px;
   border: none;
-  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+  border-top: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 
 /* Bot面板填满 */
@@ -172,11 +169,11 @@ body:not([data-active-tab="files"]):not([data-active-tab="work"]) #task-card {
 }
 /* 对比度C1（框架级单规则）：原生 <option>/<optgroup> 弹层由 OS 代理绘制，不继承控件的半透明底，
    无背景规则时回退系统浅灰底+继承浅色文字≈1.5:1 不可读（全库 60+ 原生 select 同根）。
-   背景必须不透明（oklch(var(--b1)) 无 alpha），变量随 data-theme 翻转，dark/light 一条覆盖。 */
+   背景必须不透明，变量随 data-theme 翻转，dark/light 一条覆盖。 */
 select option,
 select optgroup {
-  background: var(--color-base-100);
-  color: var(--color-base-content);
+  background: var(--beilu-surface-floating);
+  color: var(--beilu-fg-primary);
 }
 
 /* ═══ DATA-IC ICON SYSTEM ═══ 单色图标：CSS mask 本地 SVG，继承 currentColor
@@ -194,7 +191,7 @@ select optgroup {
 }
 
 /* --- unicode 字形图标（本身单色，覆写掉 mask） --- */
-[data-ic="check"]::before, [data-ic="cross"]::before, [data-ic="play"]::before, [data-ic="square"]::before, [data-ic="dot"]::before, [data-ic="circle-o"]::before, [data-ic="arrow-down"]::before, [data-ic="arrow-right"]::before, [data-ic="close"]::before, [data-ic="ban"]::before, [data-ic="one"]::before { background: none; -webkit-mask-image: none; mask-image: none; }
+[data-ic="check"]::before, [data-ic="cross"]::before, [data-ic="play"]::before, [data-ic="square"]::before, [data-ic="dot"]::before, [data-ic="circle-o"]::before, [data-ic="arrow-down"]::before, [data-ic="arrow-right"]::before, [data-ic="ban"]::before, [data-ic="one"]::before { background: none; -webkit-mask-image: none; mask-image: none; }
 [data-ic="check"]::before { content: "✓"; }
 [data-ic="cross"]::before { content: "✗"; }
 [data-ic="play"]::before { content: "▶"; }
@@ -203,7 +200,6 @@ select optgroup {
 [data-ic="circle-o"]::before { content: "○"; }
 [data-ic="arrow-down"]::before { content: "▾"; }
 [data-ic="arrow-right"]::before { content: "▸"; }
-[data-ic="close"]::before { content: "✕"; }
 [data-ic="ban"]::before { content: "⊘"; }
 [data-ic="one"]::before { content: "①"; }
 
@@ -212,6 +208,8 @@ select optgroup {
 [data-ic="alarm"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__alarm.svg"); }
 [data-ic="anchor"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__anchor.svg"); }
 [data-ic="antenna"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__access-point.svg"); }
+[data-ic="archive"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__package-variant.svg"); }
+[data-ic="arrow-down-to-line"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__download.svg"); }
 [data-ic="backpack"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__bag-personal-outline.svg"); }
 [data-ic="bell"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__bell-outline.svg"); }
 [data-ic="book"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__book-open.svg"); }
@@ -228,7 +226,9 @@ select optgroup {
 [data-ic="chart"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__chart-bar.svg"); }
 [data-ic="clipboard"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__document-list.svg"); }
 [data-ic="clock"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__clock-outline.svg"); }
+[data-ic="close"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__close.svg"); }
 [data-ic="code"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__document-code.svg"); }
+[data-ic="copy"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__files.svg"); }
 [data-ic="crane"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__crane.svg"); }
 [data-ic="crystal-ball"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__crystal-ball.svg"); }
 [data-ic="cursor"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__cursor-default.svg"); }
@@ -248,12 +248,14 @@ select optgroup {
 [data-ic="flask"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__flask-outline.svg"); }
 [data-ic="folder"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__folder-outline.svg"); }
 [data-ic="folder-open"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__folder-open-outline.svg"); }
+[data-ic="folder-up"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__folder-open-outline.svg"); }
 [data-ic="folders"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__folder-multiple-outline.svg"); }
 [data-ic="fullscreen"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__fullscreen.svg"); }
 [data-ic="gamepad"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__gamepad.svg"); }
 [data-ic="gamepad-2"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__gamepad.svg"); }
 [data-ic="heart"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__heart-outline.svg"); }
 [data-ic="help"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__help-circle-outline.svg"); }
+[data-ic="history"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__clock-outline.svg"); }
 [data-ic="home"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__home.svg"); }
 [data-ic="hourglass"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__hourglass.svg"); }
 [data-ic="image"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__image-outline.svg"); }
@@ -271,6 +273,8 @@ select optgroup {
 [data-ic="medal"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__medal-outline.svg"); }
 [data-ic="message"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__chat-outline.svg"); }
 [data-ic="message-circle"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__chat-outline.svg"); }
+[data-ic="message-square"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__chat-outline.svg"); }
+[data-ic="mic"]::before { --ic: url("/parts/shells:beilu-chat/icons/material-symbols__mic.svg"); }
 [data-ic="microscope"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__microscope.svg"); }
 [data-ic="moon"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__weather-night.svg"); }
 [data-ic="mute"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__volume-off.svg"); }
@@ -286,6 +290,7 @@ select optgroup {
 [data-ic="puzzle"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__puzzle-outline.svg"); }
 [data-ic="python"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__language-python.svg"); }
 [data-ic="refresh"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__refresh.svg"); }
+[data-ic="repeat"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__refresh.svg"); }
 [data-ic="ribbon"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__ribbon.svg"); }
 [data-ic="rocket"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__rocket-launch-outline.svg"); }
 [data-ic="rotate-ccw"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__restore.svg"); }
@@ -294,7 +299,9 @@ select optgroup {
 [data-ic="scan-eye"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__magnify-scan.svg"); }
 [data-ic="scissors"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__content-cut.svg"); }
 [data-ic="script"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__script-text-outline.svg"); }
+[data-ic="scroll-text"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__script-text-outline.svg"); }
 [data-ic="search"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__magnify.svg"); }
+[data-ic="send"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__send.svg"); }
 [data-ic="settings"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__cog.svg"); }
 [data-ic="shield"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__shield-check-outline.svg"); }
 [data-ic="shuffle"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__shuffle-variant.svg"); }
@@ -312,6 +319,7 @@ select optgroup {
 [data-ic="syringe"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__needle.svg"); }
 [data-ic="target"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__target.svg"); }
 [data-ic="telegram"]::before { --ic: url("/parts/shells:beilu-chat/icons/simple-icons__telegram.svg"); }
+[data-ic="terminal"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__document-code.svg"); }
 [data-ic="thought"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__thought-bubble-outline.svg"); }
 [data-ic="toolbox"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__toolbox.svg"); }
 [data-ic="trash"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__trash-can-outline.svg"); }
@@ -328,167 +336,106 @@ select optgroup {
 [data-ic="wecom"]::before { --ic: url("/parts/shells:beilu-chat/icons/arcticons__wecom.svg"); }
 [data-ic="window"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__window-maximize.svg"); }
 [data-ic="wrench"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__wrench.svg"); }
+[data-ic="x"]::before { --ic: url("/parts/shells:beilu-chat/icons/line-md__close.svg"); }
 [data-ic="x-twitter"]::before { --ic: url("/parts/shells:beilu-chat/icons/simple-icons__x.svg"); }
 [data-ic="zap"]::before { --ic: url("/parts/shells:beilu-chat/icons/mdi__flash.svg"); }
 
 /* ============================================================
-   按钮物理反馈 + 消息入场动画
-   ============================================================ */
-.btn {
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-.btn:hover {
-  transform: scale(1.02);
-}
-.btn:active {
-  transform: scale(0.98);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn, .btn:hover, .btn:active { transition: none; transform: none; }
-}
-
-/* ============================================================
-   小字amber对比度增强 (WCAG AAA ≥7:1)
-   12px以下amber文字自动换到 on-base 可读档 --beilu-amber-fg（默认主题=提亮 #e0b030，
-   其余主题=per-theme accent；勿用 on-accent 反色的 amber-text）
+   小字 amber 兼容类前景收敛
+   12px以下旧 amber 工具类统一转到已审计的 semantic foreground。
    ============================================================ */
 .text-xs[style*="--beilu-amber"],
 .text-xs .text-amber-700,
 [style*="font-size:0.6"][style*="amber"],
 [style*="font-size:0.65"][style*="amber"],
 [style*="font-size:0.7rem"][style*="amber"] {
-  color: var(--beilu-amber-fg) !important;
+  color: var(--beilu-fg-accent) !important;
 }
 
 /* ============================================================
    4 模式视觉差异化 — accent 色覆盖
    ============================================================
-   通过 body[data-active-tab] 选择器覆盖 :root 中 --beilu-amber 系列变量。
+   body[data-active-tab] 只覆盖 --beilu-mode-accent，palette、状态色和
+   旧变量桥接继续由 design-tokens.css 单向生产。
    switchTab() 在 layout.mjs L396 设置 document.body.dataset.activeTab = tabName。
-
-   chat (AIRP) — 默认 amber #d4a017（:root 已定义，不需要覆盖）
-   smart (全智能) — 紫色 #8b5cf6（参考 Claude.ai 品牌色）
-   files (IDE)  — 蓝色 #007ACC（参考 VS Code）
-   work (工作)  — 翠绿 #10b981（参考生产力工具）
    ============================================================ */
-
-/* 2026-07-10 对比度根修：原 dark/light 共用一套淡色 accent（#a78bfa/#c4b5fd 系）→
-   light 底上淡字淡框不可见。拆分支：dark 保亮色系；light 换同色相深档（on 白底 ≥5:1）。
-   --beilu-amber-fg 是 body 级覆盖，不能靠 html 的主题跟随继承（custom property 继承的是已替换 var() 的计算值）。 */
-
-/* --- 全智能模式：紫色 accent（仅dark/light默认主题下生效） --- */
-html[data-theme="dark"] body[data-active-tab="smart"] {
-  --beilu-amber: #a78bfa;
-  --beilu-amber-text: #1e1040;
-  --beilu-amber-fg: #c4b5fd;
-  --beilu-amber-dark: #7c3aed;
-  --beilu-amber-light: #ddd6fe;
-  --beilu-amber-rgb: 167, 139, 250;
-  --beilu-secondary: #c4b5fd;
-  --beilu-tertiary: #ddd6fe;
-}
-html[data-theme="light"] body[data-active-tab="smart"] {
-  --beilu-amber: #7c3aed;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-fg: #7c3aed;
-  --beilu-amber-dark: #5b21b6;
-  --beilu-amber-light: #c4b5fd;
-  --beilu-amber-rgb: 124, 58, 237;
-  --beilu-secondary: #6d28d9;
-  --beilu-tertiary: #8b5cf6;
+body[data-active-tab="chat"] {
+  --beilu-mode-accent: var(--beilu-theme-accent);
 }
 
-/* --- IDE 模式：蓝色 accent（仅dark/light默认主题） --- */
-html[data-theme="dark"] body[data-active-tab="files"],
-html[data-theme="dark"] body[data-active-tab="memory"] {
-  --beilu-amber: #42a5f5;
-  --beilu-amber-text: #08243a;
-  --beilu-amber-fg: #90caf9;
-  --beilu-amber-dark: #1976d2;
-  --beilu-amber-light: #bbdefb;
-  --beilu-amber-rgb: 66, 165, 245;
-  --beilu-secondary: #64b5f6;
-  --beilu-tertiary: #90caf9;
-}
-html[data-theme="light"] body[data-active-tab="files"],
-html[data-theme="light"] body[data-active-tab="memory"] {
-  --beilu-amber: #1565c0;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-fg: #1565c0;
-  --beilu-amber-dark: #0d47a1;
-  --beilu-amber-light: #90caf9;
-  --beilu-amber-rgb: 21, 101, 192;
-  --beilu-secondary: #1976d2;
-  --beilu-tertiary: #42a5f5;
+body[data-active-tab="smart"] {
+  --beilu-mode-accent: var(--beilu-theme-accent-aux);
 }
 
-/* --- 工作模式：翠绿 accent（仅dark/light默认主题） --- */
-html[data-theme="dark"] body[data-active-tab="work"] {
-  --beilu-amber: #10b981;
-  --beilu-amber-text: #052e1e;
-  --beilu-amber-fg: #34d399;
-  --beilu-amber-dark: #059669;
-  --beilu-amber-light: #6ee7b7;
-  --beilu-amber-rgb: 16, 185, 129;
-  --beilu-secondary: #6ee7b7;
-  --beilu-tertiary: #34d399;
+body[data-active-tab="files"],
+body[data-active-tab="memory"] {
+  --beilu-mode-accent: var(--beilu-state-info);
 }
-html[data-theme="light"] body[data-active-tab="work"] {
-  --beilu-amber: #047857;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-fg: #047857;
-  --beilu-amber-dark: #065f46;
-  --beilu-amber-light: #6ee7b7;
-  --beilu-amber-rgb: 4, 120, 87;
-  --beilu-secondary: #059669;
-  --beilu-tertiary: #10b981;
+
+body[data-active-tab="work"] {
+  --beilu-mode-accent: var(--beilu-state-success);
+}
+
+body[data-active-tab="bot"] {
+  --beilu-mode-accent: var(--beilu-state-info);
+}
+
+body[data-active-tab="companion"] {
+  --beilu-mode-accent: var(--beilu-state-warning);
+}
+
+body[data-active-tab="helper"] {
+  --beilu-mode-accent: var(--beilu-fg-secondary);
 }
 
 /* ================================================================
    统一主题面板
    ================================================================ */
 .beilu-theme-panel {
-  background: color-mix(in oklch, var(--beilu-bg-card) 80%, transparent);
-  border: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
-  border-radius: 10px;
+  background: var(--beilu-surface-panel);
+  border: var(--beilu-border-width) solid var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
+  color: var(--beilu-fg-primary);
   overflow: hidden;
 }
 .beilu-theme-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 10px;
-  border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  border-bottom: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 .beilu-theme-tabs {
   display: flex; gap: 2px; padding: 3px 6px;
-  border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  border-bottom: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 .beilu-cat-tab {
-  padding: 4px 10px; border: none; border-radius: 5px;
-  background: transparent; color: oklch(var(--bc, 0.8 0 0) / 0.45);
+  padding: 4px 10px; border: var(--beilu-border-width) solid transparent; border-radius: var(--beilu-radius-control);
+  background: transparent; color: var(--beilu-fg-secondary);
   cursor: pointer; font-size: 0.7rem; white-space: nowrap;
-  transition: all 0.15s; position: relative;
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: var(--beilu-motion-fast);
+  transition-timing-function: var(--beilu-ease-standard);
+  position: relative;
 }
-.beilu-cat-tab:hover { color: oklch(var(--bc, 0.8 0 0)); background: color-mix(in oklch, var(--color-base-content) 4%, transparent); }
+.beilu-cat-tab:hover { color: var(--beilu-fg-primary); background: var(--beilu-hover); }
 .beilu-cat-tab.active {
-  color: var(--beilu-amber); background: var(--beilu-amber-8);
+  color: var(--beilu-fg-primary); background: var(--beilu-selection);
   font-weight: 500;
 }
 .beilu-cat-tab.active::after {
   content: ''; position: absolute; bottom: -3px; left: 25%; right: 25%;
-  height: 2px; background: var(--beilu-amber); border-radius: 1px;
+  height: 2px; background: var(--beilu-action-accent); border-radius: var(--beilu-radius-control);
 }
 .beilu-theme-actions {
   display: flex; gap: 3px; padding: 5px 6px;
-  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+  border-top: var(--beilu-border-width) solid var(--beilu-border-subtle);
 }
 .beilu-theme-empty {
   grid-column: 1 / -1; text-align: center; padding: 16px;
-  font-size: 0.7rem; color: oklch(var(--bc, 0.8 0 0) / 0.25);
+  font-size: 0.7rem; color: var(--beilu-fg-muted);
 }
 
 /* ================================================================
-   Theme grid — 5列，按钮自身渲染主题色
+   Theme grid — 5列，色点预览主题色
    ================================================================ */
 .beilu-theme-grid {
   display: grid; grid-template-columns: repeat(5, 1fr);
@@ -497,23 +444,26 @@ html[data-theme="light"] body[data-active-tab="work"] {
 }
 .beilu-theme-grid::-webkit-scrollbar { width: 4px; }
 .beilu-theme-grid::-webkit-scrollbar-track { background: transparent; }
-.beilu-theme-grid::-webkit-scrollbar-thumb { background: var(--beilu-amber-15); border-radius: 2px; }
+.beilu-theme-grid::-webkit-scrollbar-thumb { background: var(--beilu-border-strong); border-radius: var(--beilu-radius-control); }
 
 .theme-group-label {
   grid-column: 1 / -1;
   font-size: 0.6rem; padding: 2px 4px;
-  color: oklch(var(--bc, 0.8 0 0) / 0.3);
+  color: var(--beilu-fg-muted);
   letter-spacing: 0.5px;
 }
 
 .theme-btn {
   display: flex; flex-direction: column; align-items: center;
   gap: 2px; padding: 5px 3px 4px;
-  border: 2px solid transparent; border-radius: 6px;
+  border: 2px solid transparent; border-radius: var(--beilu-radius-control);
   cursor: pointer;
-  background: oklch(var(--b1, 0.2 0 0));
-  color: oklch(var(--bc, 0.9 0 0));
-  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+  background: var(--beilu-surface-raised);
+  color: var(--beilu-fg-primary);
+  min-block-size: var(--beilu-target-control);
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: var(--beilu-motion-fast);
+  transition-timing-function: var(--beilu-ease-standard);
   position: relative; overflow: hidden;
 }
 .theme-btn .theme-name {
@@ -527,396 +477,49 @@ html[data-theme="light"] body[data-active-tab="work"] {
   display: block; width: 7px; height: 7px; border-radius: 50%;
 }
 .theme-btn:hover {
-  transform: scale(1.04);
-  box-shadow: 0 2px 10px var(--beilu-shadow-30, rgba(0,0,0,0.30));
+  background: var(--beilu-hover);
+  border-color: var(--beilu-border-strong);
 }
 .theme-btn.active {
-  border-color: var(--beilu-amber);
-  box-shadow: 0 0 0 1px var(--beilu-amber);
+  border-color: var(--beilu-action-accent);
+  box-shadow: inset 3px 0 0 var(--beilu-action-accent);
 }
 .theme-btn.active::after {
   content: '\2713'; position: absolute; top: 1px; right: 2px;
   font-size: 0.5rem; line-height: 12px; text-align: center;
-  background: var(--beilu-amber);
-  color: var(--beilu-amber-text, #000);
+  background: var(--beilu-action-accent);
+  color: var(--beilu-fg-on-accent);
   width: 12px; height: 12px; border-radius: 50%;
 }
 
 /* ================================================================
-   beilu per-theme accent colors
-   Generated 2026-06-25 | ALL pass WCAG AA (>= 4.5:1)
+   Legacy palette and fixed per-theme decoration migrated.
+   theme-palettes.css is the sole 36-theme palette owner;
+   theme-skins-original.css is the sole original-theme material owner.
    ================================================================ */
-
-/* --- 暗色主题 (15) --- */
-
-/* dark主题不覆盖——直接用:root的beilu品牌amber #d4a017 */
-html[data-theme="night"] {
-  --beilu-amber: #51EEFC;
-  --beilu-amber-text: #0a101e;
-  --beilu-amber-rgb: 81, 238, 252;
-  --beilu-secondary: #6b8db8;
-  --beilu-tertiary: #e5c07b;
-}
-html[data-theme="dim"] {
-  --beilu-amber: #d4b896;
-  --beilu-amber-text: #1a1408;
-  --beilu-amber-rgb: 212, 184, 150;
-  --beilu-secondary: #7aa2f7;
-  --beilu-tertiary: #98c379;
-}
-html[data-theme="nord"] {
-  --beilu-amber: #88c0d0;
-  --beilu-amber-text: #2e3440;
-  --beilu-amber-rgb: 136, 192, 208;
-  --beilu-secondary: #b48ead;
-  --beilu-tertiary: #a3be8c;
-}
-html[data-theme="dracula"] {
-  --beilu-amber: #ff79c6;
-  --beilu-amber-text: #1a0a16;
-  --beilu-amber-rgb: 255, 121, 198;
-  --beilu-secondary: #bd93f9;
-  --beilu-tertiary: #8be9fd;
-}
-html[data-theme="sunset"] {
-  --beilu-amber: #e8a065;
-  --beilu-amber-text: #1a1008;
-  --beilu-amber-rgb: 232, 160, 101;
-  --beilu-secondary: #e06c75;
-  --beilu-tertiary: #c678dd;
-}
-html[data-theme="abyss"] {
-  --beilu-amber: #d4a060;
-  --beilu-amber-text: #0a1520;
-  --beilu-amber-rgb: 212, 160, 96;
-  --beilu-secondary: #9b6ef0;
-  --beilu-tertiary: #2dd4bf;
-}
-html[data-theme="coffee"] {
-  --beilu-amber: #d4a574;
-  --beilu-amber-text: #1a1008;
-  --beilu-amber-rgb: 212, 165, 116;
-  --beilu-secondary: #f5e0c3;
-  --beilu-tertiary: #d0685e;
-}
-html[data-theme="synthwave"] {
-  --beilu-amber: #ff5c99;
-  --beilu-amber-text: #1a0818;
-  --beilu-amber-rgb: 255, 92, 153;
-  --beilu-secondary: #a855f7;
-  --beilu-tertiary: #7efaff;
-}
-html[data-theme="forest"] {
-  --beilu-amber: #8bc4a0;
-  --beilu-amber-text: #0a1a10;
-  --beilu-amber-rgb: 139, 196, 160;
-  --beilu-secondary: #a0845e;
-  --beilu-tertiary: #d08770;
-}
-html[data-theme="luxury"] {
-  --beilu-amber: #d4a54d;
-  --beilu-amber-text: #0a0804;
-  --beilu-amber-rgb: 212, 165, 77;
-  --beilu-secondary: #b84069;
-  --beilu-tertiary: #f5f5dc;
-}
-html[data-theme="business"] {
-  --beilu-amber: #80b0d8;
-  --beilu-amber-text: #0a1520;
-  --beilu-amber-rgb: 128, 176, 216;
-  --beilu-secondary: #94a3b8;
-  --beilu-tertiary: #14b8a6;
-}
-html[data-theme="black"] {
-  --beilu-amber: #b8a0d4;
-  --beilu-amber-text: #10081a;
-  --beilu-amber-rgb: 184, 160, 212;
-  --beilu-secondary: #8b97a8;
-  --beilu-tertiary: #c05060;
-}
-html[data-theme="halloween"] {
-  --beilu-amber: #e09050;
-  --beilu-amber-text: #1a0c04;
-  --beilu-amber-rgb: 224, 144, 80;
-  --beilu-secondary: #a855f7;
-  --beilu-tertiary: #e53e2e;
-}
-html[data-theme="aqua"] {
-  --beilu-amber: #d4a050;
-  --beilu-amber-text: #0a0e18;
-  --beilu-amber-rgb: 212, 160, 80;
-  --beilu-secondary: #e0806a;
-  --beilu-tertiary: #30d5c8;
-}
-
-/* --- 亮色主题 (20) --- */
-
-html[data-theme="light"] {
-  --beilu-amber: #8a5575;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 138, 85, 117;
-}
-html[data-theme="cupcake"] {
-  --beilu-amber: #8b5a7c;
-  --beilu-amber-text: #fff0f8;
-  --beilu-amber-rgb: 139, 90, 124;
-}
-html[data-theme="emerald"] {
-  --beilu-amber: #2a7568;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 42, 117, 104;
-}
-html[data-theme="corporate"] {
-  --beilu-amber: #5a6a8a;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 90, 106, 138;
-}
-html[data-theme="retro"] {
-  --beilu-amber: #904820;
-  --beilu-amber-text: #ece3ca;
-  --beilu-amber-rgb: 144, 72, 32;
-}
-html[data-theme="valentine"] {
-  --beilu-amber: #a04070;
-  --beilu-amber-text: #fff0f8;
-  --beilu-amber-rgb: 160, 64, 112;
-}
-html[data-theme="garden"] {
-  --beilu-amber: #486840;
-  --beilu-amber-text: #f0f0f0;
-  --beilu-amber-rgb: 72, 104, 64;
-}
-html[data-theme="pastel"] {
-  --beilu-amber: #955878;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 149, 88, 120;
-}
-html[data-theme="winter"] {
-  --beilu-amber: #5a6aaa;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 90, 106, 170;
-}
-html[data-theme="autumn"] {
-  --beilu-amber: #a0583a;
-  --beilu-amber-text: #f5f0ec;
-  --beilu-amber-rgb: 160, 88, 58;
-}
-html[data-theme="lofi"] {
-  --beilu-amber: #706050;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 112, 96, 80;
-}
-html[data-theme="silk"] {
-  --beilu-amber: #885840;
-  --beilu-amber-text: #faf5f0;
-  --beilu-amber-rgb: 136, 88, 64;
-}
-html[data-theme="caramellatte"] {
-  --beilu-amber: #8a5a30;
-  --beilu-amber-text: #fff5e8;
-  --beilu-amber-rgb: 138, 90, 48;
-}
-html[data-theme="bumblebee"] {
-  --beilu-amber: #8a6a20;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 138, 106, 32;
-}
-html[data-theme="cyberpunk"] {
-  --beilu-amber: #ff2975;
-  --beilu-amber-text: #1a0010;
-  --beilu-amber-rgb: 255, 41, 117;
-}
-html[data-theme="acid"] {
-  --beilu-amber: #9a30a0;
-  --beilu-amber-text: #f8f0fa;
-  --beilu-amber-rgb: 154, 48, 160;
-}
-html[data-theme="lemonade"] {
-  --beilu-amber: #3a7a50;
-  --beilu-amber-text: #f0fff5;
-  --beilu-amber-rgb: 58, 122, 80;
-}
-html[data-theme="wireframe"] {
-  --beilu-amber: #4a6080;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 74, 96, 128;
-}
-html[data-theme="cmyk"] {
-  --beilu-amber: #2080a0;
-  --beilu-amber-text: #ffffff;
-  --beilu-amber-rgb: 32, 128, 160;
-}
-html[data-theme="fantasy"] {
-  --beilu-amber: #7a3aaa;
-  --beilu-amber-text: #f5f0ff;
-  --beilu-amber-rgb: 122, 58, 170;
-}
-
 /* ============================================================
-   --beilu-amber-fg 主题跟随（2026-07-10 对比度根修）
-   per-theme accent 本身就按"在该主题背景上可读"选色（暗主题亮accent/亮主题深accent），
-   故 base 底上的强调文字直接用 accent 色。挂 html：data-theme 与 data-beilu-enhanced
-   均落 documentElement（settingsSlots.mjs:435），var() 在 html 上按 cascade 胜者解析。
-   dark 主题无 per-theme 覆盖（品牌 amber #d4a017 偏暗做小字略欠），文字沿用特调 #e0b030。
-   ============================================================ */
-html[data-theme], html[data-beilu-enhanced] {
-  --beilu-amber-fg: var(--beilu-amber);
-}
-html[data-theme="dark"]:not([data-beilu-enhanced]) {
-  --beilu-amber-fg: #e0b030;
-}
-
-/* ============================================================
-   Per-theme 视觉风格 — 弹窗/按钮光效（基于 O9/O10 设计方案）
-   每个暗色主题独立的 border-radius + box-shadow 氛围光
-   ============================================================ */
-
-/* --- Dracula: 柔和粉紫光效 --- */
-html[data-theme="dracula"] .settings-modal,
-html[data-theme="dracula"] .editor-modal,
-html[data-theme="dracula"] .floating-window {
-  border-color: rgba(189,147,249,0.22);
-  box-shadow: 0 4px 24px rgba(255,121,198,0.08), 0 0 1px rgba(189,147,249,0.15);
-  border-radius: 12px;
-}
-html[data-theme="dracula"] .btn-primary { box-shadow: 0 0 8px rgba(255,121,198,0.15); border-radius: 8px; }
-html[data-theme="dracula"] .char-card:hover { box-shadow: 0 0 12px rgba(255,121,198,0.1), 0 0 4px rgba(189,147,249,0.08); }
-
-/* --- Synthwave: 霓虹品红光效 --- */
-html[data-theme="synthwave"] .settings-modal,
-html[data-theme="synthwave"] .editor-modal,
-html[data-theme="synthwave"] .floating-window {
-  border-color: rgba(255,92,153,0.25);
-  box-shadow: 0 4px 24px rgba(255,92,153,0.1), 0 0 1px rgba(45,226,230,0.08);
-  border-radius: 10px;
-}
-html[data-theme="synthwave"] .btn-primary { box-shadow: 0 0 10px rgba(255,92,153,0.2); border-radius: 6px; }
-
-/* --- Halloween: 南瓜暖橙氛围光 --- */
-html[data-theme="halloween"] .settings-modal,
-html[data-theme="halloween"] .editor-modal,
-html[data-theme="halloween"] .floating-window {
-  border-color: rgba(224,144,80,0.25);
-  box-shadow: 0 4px 24px rgba(224,144,80,0.08), 0 0 1px rgba(144,46,187,0.06);
-  border-radius: 10px;
-}
-html[data-theme="halloween"] .btn-primary { box-shadow: 0 0 8px rgba(224,144,80,0.15); border-radius: 8px; }
-
-/* --- Dim: 暖柔光（克制） --- */
-html[data-theme="dim"] .settings-modal,
-html[data-theme="dim"] .editor-modal,
-html[data-theme="dim"] .floating-window {
-  border-color: rgba(212,184,150,0.15);
-  box-shadow: 0 2px 16px rgba(212,184,150,0.04);
-}
-html[data-theme="dim"] .btn-primary { box-shadow: 0 0 6px rgba(212,184,150,0.08); }
-
-/* --- Nord: 冷蓝微光 --- */
-html[data-theme="nord"] .settings-modal,
-html[data-theme="nord"] .editor-modal,
-html[data-theme="nord"] .floating-window {
-  border-color: rgba(136,192,208,0.15);
-  box-shadow: 0 2px 16px rgba(136,192,208,0.04);
-}
-html[data-theme="nord"] .btn-primary { box-shadow: 0 0 6px rgba(136,192,208,0.08); }
-
-/* --- Sunset: 暖橙余晖 --- */
-html[data-theme="sunset"] .settings-modal,
-html[data-theme="sunset"] .editor-modal,
-html[data-theme="sunset"] .floating-window {
-  border-color: rgba(232,160,101,0.2);
-  box-shadow: 0 4px 20px rgba(232,160,101,0.06);
-}
-html[data-theme="sunset"] .btn-primary { box-shadow: 0 0 8px rgba(232,160,101,0.12); }
-
-/* --- Coffee: 奶油暖光 --- */
-html[data-theme="coffee"] .settings-modal,
-html[data-theme="coffee"] .editor-modal,
-html[data-theme="coffee"] .floating-window {
-  border-color: rgba(212,165,116,0.18);
-  box-shadow: 0 2px 16px rgba(212,165,116,0.05);
-}
-html[data-theme="coffee"] .btn-primary { box-shadow: 0 0 6px rgba(212,165,116,0.1); }
-
-/* --- Forest: 萤火微光 --- */
-html[data-theme="forest"] .settings-modal,
-html[data-theme="forest"] .editor-modal,
-html[data-theme="forest"] .floating-window {
-  border-color: rgba(139,196,160,0.15);
-  box-shadow: 0 2px 16px rgba(139,196,160,0.04);
-}
-html[data-theme="forest"] .btn-primary { box-shadow: 0 0 6px rgba(139,196,160,0.08); }
-
-/* --- Luxury: 金色质感 --- */
-html[data-theme="luxury"] .settings-modal,
-html[data-theme="luxury"] .editor-modal,
-html[data-theme="luxury"] .floating-window {
-  border-color: rgba(212,165,77,0.2);
-  box-shadow: 0 4px 20px rgba(212,165,77,0.06);
-}
-html[data-theme="luxury"] .btn-primary { box-shadow: 0 0 8px rgba(212,165,77,0.12); }
-
-/* --- Business: 极简（几乎无光效） --- */
-html[data-theme="business"] .settings-modal,
-html[data-theme="business"] .editor-modal,
-html[data-theme="business"] .floating-window {
-  border-color: rgba(128,176,216,0.12);
-  box-shadow: none;
-}
-html[data-theme="business"] .btn-primary { box-shadow: none; }
-
-/* --- Black: 纯黑极简（仅细边框） --- */
-html[data-theme="black"] .settings-modal,
-html[data-theme="black"] .editor-modal,
-html[data-theme="black"] .floating-window {
-  border-color: rgba(184,160,212,0.1);
-  box-shadow: none;
-}
-html[data-theme="black"] .btn-primary { box-shadow: none; }
-
-/* --- Aqua: 水波纹柔光 --- */
-html[data-theme="aqua"] .settings-modal,
-html[data-theme="aqua"] .editor-modal,
-html[data-theme="aqua"] .floating-window {
-  border-color: rgba(212,160,80,0.15);
-  box-shadow: 0 2px 16px rgba(212,160,80,0.05);
-}
-html[data-theme="aqua"] .btn-primary { box-shadow: 0 0 6px rgba(212,160,80,0.08); }
-
-/* --- Abyss: 深渊暖金光(amber从浅蓝改为金琥珀，互补色区分度) --- */
-html[data-theme="abyss"] .settings-modal,
-html[data-theme="abyss"] .editor-modal,
-html[data-theme="abyss"] .floating-window {
-  border-color: rgba(212,160,96,0.12);
-  box-shadow: 0 2px 16px rgba(212,160,96,0.04);
-}
-html[data-theme="abyss"] .btn-primary { box-shadow: 0 0 6px rgba(212,160,96,0.08); }
-
-/* ============================================================
-   Tailwind amber 硬编码覆盖 — 统一重定向到 --beilu-amber CSS 变量
-   HTML 中 56 处 text-amber-*/bg-amber-*/border-amber-* 不跟随
+   Tailwind amber 兼容类 — 重定向到 semantic token
+   HTML 中的 text-amber / bg-amber / border-amber 工具类不跟随
    per-theme accent，此处统一接管让它们跟随主题切换。
    ============================================================ */
-.text-amber-400 { color: var(--beilu-amber-light) !important; }
-.text-amber-600 { color: var(--beilu-amber) !important; }
-.text-amber-700 { color: var(--beilu-amber) !important; }
-.bg-amber-700 { background-color: var(--beilu-amber-dark) !important; }
-.bg-amber-700\/20 { background-color: var(--beilu-amber-20) !important; }
-.bg-amber-900\/40 { background-color: var(--beilu-amber-40) !important; }
-.border-amber-600\/30 { border-color: var(--beilu-amber-30) !important; }
-.border-amber-700 { border-color: var(--beilu-amber) !important; }
-.border-amber-700\/40 { border-color: var(--beilu-amber-40) !important; }
-.border-amber-700\/50 { border-color: var(--beilu-amber-50) !important; }
-.hover\:text-amber-400:hover { color: var(--beilu-amber-light) !important; }
-.hover\:bg-amber-700:hover { background-color: var(--beilu-amber-dark) !important; }
-.hover\:border-amber-400\/60:hover { border-color: var(--beilu-amber-60) !important; }
-.hover\:text-white:hover { color: #1a1207 !important; }
-.bg-amber-900\/30 { background-color: var(--beilu-amber-30) !important; }
-.bg-amber-700\/10 { background-color: var(--beilu-amber-10) !important; }
-.border-amber-700\/20 { border-color: var(--beilu-amber-20) !important; }
-.hover\:bg-amber-800:hover { background-color: color-mix(in oklch, var(--beilu-amber-dark) 85%, black) !important; }
-.bg-amber-800 { background-color: color-mix(in oklch, var(--beilu-amber-dark) 85%, black) !important; }
-.bg-amber-900 { background-color: color-mix(in oklch, var(--beilu-amber-dark) 70%, black) !important; }
-.ring-amber-500 { --tw-ring-color: var(--beilu-amber) !important; }
-
-
+.text-amber-400 { color: var(--beilu-fg-accent) !important; }
+.text-amber-600 { color: var(--beilu-fg-accent) !important; }
+.text-amber-700 { color: var(--beilu-fg-accent) !important; }
+.bg-amber-700 { background-color: var(--beilu-action-accent) !important; }
+.bg-amber-700\/20 { background-color: var(--beilu-active) !important; }
+.bg-amber-900\/40 { background-color: var(--beilu-selection) !important; }
+.border-amber-600\/30 { border-color: var(--beilu-border-default) !important; }
+.border-amber-700 { border-color: var(--beilu-action-accent) !important; }
+.border-amber-700\/40 { border-color: var(--beilu-border-default) !important; }
+.border-amber-700\/50 { border-color: var(--beilu-border-strong) !important; }
+.hover\:text-amber-400:hover { color: var(--beilu-fg-accent) !important; }
+.hover\:bg-amber-700:hover { background-color: var(--beilu-action-accent) !important; }
+.hover\:border-amber-400\/60:hover { border-color: var(--beilu-border-strong) !important; }
+.hover\:text-white:hover { color: var(--beilu-fg-on-accent) !important; }
+.bg-amber-900\/30 { background-color: var(--beilu-selection) !important; }
+.bg-amber-700\/10 { background-color: var(--beilu-hover) !important; }
+.border-amber-700\/20 { border-color: var(--beilu-border-subtle) !important; }
+.hover\:bg-amber-800:hover { background-color: color-mix(in srgb, var(--beilu-action-accent) 85%, var(--beilu-surface-workspace)) !important; }
+.bg-amber-800 { background-color: color-mix(in srgb, var(--beilu-action-accent) 85%, var(--beilu-surface-workspace)) !important; }
+.bg-amber-900 { background-color: color-mix(in srgb, var(--beilu-action-accent) 70%, var(--beilu-surface-workspace)) !important; }
+.ring-amber-500 { --tw-ring-color: var(--beilu-focus) !important; }

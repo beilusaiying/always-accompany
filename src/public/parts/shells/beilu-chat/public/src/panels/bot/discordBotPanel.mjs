@@ -51,7 +51,7 @@ import { ENUM_FALLBACK } from "../../shared/state/enumFallback.mjs"; // 枚举�
 //   为何不复用 storage.mjs PERM_LEVEL_META（T011 IDE 权限单源）：二者语义集不同——
 //   IDE 是 L0-L4（5档：只读/安全写/基础/高级/完全信任），Bot 是 L0-L3（4档：只读/读/读写需审批/完整+命令），
 //   档数、每档 label 语义均不同，强行复用=授权语义错配（权限双源风险）。Bot 档位是独立语义，故独立单源。
-//   value=数字字符串，后端 replyHandler 按 OwnerPermissionLevel/DefaultPermissionLevel 数字消费（回填侧默认 3）。
+//   value=数字字符串，后端 replyHandler 按 OwnerPermissionLevel/DefaultPermissionLevel 数字消费（回填缺省走 _clampPermLevel 双档：owner=3 / default=1）。
 const DISCORD_PERM_LEVELS = [
   { value: "0", label: "L0 只读" },
   { value: "1", label: "L1 读" },
@@ -65,21 +65,22 @@ function _buildDiscordPermOptions() {
 }
 
 // C6 默认值/触发模式选项：镜像后端单源 scripts/botContentShared.mjs
-//   （withBotPermissionDefaults:164 默认 L3+"all"；checkBotTriggerAllowed:102 三模式语义）。
-//   前端仅镜像渲染，改默认/加模式只改后端再同步此处。
-//   凛倾 07-09「前后端默认分叉」纠偏：此前 populateVisualConfig 缺省落 ??3、readVisualConfig 缺省落 ||0
-//   ——同一个键读写两个默认，元素缺失时保存会把 L3 静默写成 L0。收成一个钳制函数 + 一个默认常量，
-//   populate/read/模板卡片三个消费点同源。
-const DISCORD_PERM_DEFAULT = 3;
+//   [P0-B 2026-08-03 fail-closed 同步] 后端默认已收紧：TriggerMode 缺省 "owner"、
+//   OwnerPermissionLevel 缺省 3、DefaultPermissionLevel 缺省 1（withBotPermissionDefaults）。
+//   前端仅镜像渲染，改默认/加模式只改后端再同步此处；原单常量 "all"+3 是改造前旧默认的 stale 副本
+//   （分身B 链路追踪确诊的前后端默认分叉），随后端收紧拆成 owner/default 两档。
+//   凛倾 07-09「前后端默认分叉」纠偏语义保留：populate/read/模板卡片消费同一钳制函数与同一默认。
+const DISCORD_OWNER_PERM_DEFAULT = 3;
+const DISCORD_DEFAULT_PERM_DEFAULT = 1;
 const DISCORD_TRIGGER_MODES = [
-  { value: "all", label: "所有人可触发（默认）" },
-  { value: "owner", label: "仅主用户" },
+  { value: "all", label: "所有人可触发" },
+  { value: "owner", label: "仅主用户（默认）" },
   { value: "whitelist", label: "主用户 + 白名单" },
 ];
-const DISCORD_TRIGGER_DEFAULT = "all";
-function _clampPermLevel(v) {
+const DISCORD_TRIGGER_DEFAULT = "owner";
+function _clampPermLevel(v, dflt = DISCORD_OWNER_PERM_DEFAULT) {
   const n = parseInt(v, 10);
-  return DISCORD_PERM_LEVELS.some((l) => Number(l.value) === n) ? n : DISCORD_PERM_DEFAULT;
+  return DISCORD_PERM_LEVELS.some((l) => Number(l.value) === n) ? n : dflt;
 }
 
 /**
@@ -491,14 +492,14 @@ export async function initDiscordBotPanel(deps) {
       else if (kind === "array") el.value = (Array.isArray(v) ? v : []).join(", ");
       else el.value = v ?? "";
     }
-    // ---- C6 字段（默认走 DISCORD_PERM_DEFAULT/_clampPermLevel 单源，与 readVisualConfig 同默认） ----
+    // ---- C6 字段（默认走 _clampPermLevel 双档单源，与 readVisualConfig/后端 fail-closed 默认同源） ----
     if (c6TriggerMode) c6TriggerMode.value = src.TriggerMode || DISCORD_TRIGGER_DEFAULT;
     if (c6AllowedIds)
       c6AllowedIds.value = (Array.isArray(src.AllowedUserIDs) ? src.AllowedUserIDs : []).join(", ");
     if (c6OwnerLevel)
-      c6OwnerLevel.value = String(_clampPermLevel(src.OwnerPermissionLevel));
+      c6OwnerLevel.value = String(_clampPermLevel(src.OwnerPermissionLevel, DISCORD_OWNER_PERM_DEFAULT));
     if (c6DefaultLevel)
-      c6DefaultLevel.value = String(_clampPermLevel(src.DefaultPermissionLevel));
+      c6DefaultLevel.value = String(_clampPermLevel(src.DefaultPermissionLevel, DISCORD_DEFAULT_PERM_DEFAULT));
   }
 
   /** 从可视化表单读取配置（含 C6 字段，写入 config.config）。
@@ -521,8 +522,8 @@ export async function initDiscordBotPanel(deps) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    cfg.OwnerPermissionLevel = _clampPermLevel(c6OwnerLevel?.value);
-    cfg.DefaultPermissionLevel = _clampPermLevel(c6DefaultLevel?.value);
+    cfg.OwnerPermissionLevel = _clampPermLevel(c6OwnerLevel?.value, DISCORD_OWNER_PERM_DEFAULT);
+    cfg.DefaultPermissionLevel = _clampPermLevel(c6DefaultLevel?.value, DISCORD_DEFAULT_PERM_DEFAULT);
     return cfg;
   }
 

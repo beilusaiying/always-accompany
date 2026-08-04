@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { getResDir } from "../p1/p1_resdir.mjs";  // P0-2 统一资源定位(env P1_RESOURCE_DIR > memory/p1_res > 旧运行位)
+import { getResDir } from "../p1/p1_resdir.mjs";  // P1 单一资源根
 const RES_DIR = getResDir();
 
 // IDE诊断路径框架(Gemini标注): 问题类别→排查步骤+激活术语+常见原因+避免建议

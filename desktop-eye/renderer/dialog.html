@@ -10,8 +10,8 @@ html, body {
 	width: 100%;
 	height: 100%;
 	font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
-	background: #fdf8f0;
-	color: #333;
+	background: #f8f6f1;
+	color: #26241f;
 	overflow: hidden;
 }
 
@@ -19,7 +19,9 @@ html, body {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	padding: 20px;
+	padding: 18px;
+	border: 1px solid #ded8cb;
+	border-radius: 14px;
 }
 
 /* 标题栏（可拖动） */
@@ -27,15 +29,15 @@ html, body {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-bottom: 8px;
+	margin-bottom: 2px;
 	-webkit-app-region: drag;
 	cursor: move;
 }
 
 .title-bar h3 {
-	font-size: 18px;
-	font-weight: 600;
-	color: #d4a017;
+	font-size: 17px;
+	font-weight: 700;
+	color: #29261f;
 	margin: 0;
 }
 
@@ -61,18 +63,19 @@ html, body {
 
 /* 提示文字 */
 .hint {
-	color: #888;
+	color: #777168;
 	font-size: 12px;
-	margin-bottom: 12px;
+	line-height: 1.5;
+	margin-bottom: 10px;
 }
 
 /* 截图预览区 */
 .preview-area {
 	flex: 1;
 	min-height: 0;
-	background: #f5f0e5;
-	border: 1px solid #e8d5a0;
-	border-radius: 8px;
+	background: #ece9e2;
+	border: 1px solid #d9d3c7;
+	border-radius: 12px;
 	overflow: hidden;
 	display: flex;
 	align-items: center;
@@ -87,13 +90,13 @@ html, body {
 
 /* 信息区 */
 .info-area {
-	background: #f5f0e5;
-	border: 1px solid #e8d5a0;
-	border-radius: 8px;
-	padding: 8px 12px;
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	padding: 7px 2px 0;
 	margin-top: 10px;
 	font-size: 12px;
-	color: #666;
+	color: #777168;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -106,22 +109,22 @@ html, body {
 
 .message-area textarea {
 	width: 100%;
-	height: 80px;
-	padding: 10px;
-	border: 2px solid #d4a017;
-	border-radius: 8px;
+	height: 76px;
+	padding: 11px 12px;
+	border: 1px solid #cfc8ba;
+	border-radius: 10px;
 	font-size: 14px;
 	font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-	background: #fff;
-	color: #333;
+	background: #fffefa;
+	color: #26241f;
 	resize: none;
 	outline: none;
 	transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .message-area textarea:focus {
-	border-color: #b8860b;
-	box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.15);
+	border-color: #c69008;
+	box-shadow: 0 0 0 3px rgba(198, 144, 8, 0.13);
 }
 
 .message-area textarea::placeholder {
@@ -131,22 +134,23 @@ html, body {
 /* 按钮区 — 三按钮 */
 .btn-row {
 	display: flex;
-	gap: 10px;
-	margin-top: 15px;
+	gap: 8px;
+	margin-top: 12px;
 }
 
 .btn {
 	flex: 1;
-	padding: 10px 16px;
-	border: none;
-	border-radius: 8px;
-	font-size: 14px;
-	font-weight: bold;
+	min-height: 42px;
+	padding: 9px 13px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	font-size: 13px;
+	font-weight: 650;
 	font-family: inherit;
 	cursor: pointer;
 	transition: transform 0.2s ease, opacity 0.2s ease;
 }
-.btn:hover {
+.btn:hover:not(:disabled) {
 	transform: translateY(-1px);
 }
 .btn:active {
@@ -154,31 +158,36 @@ html, body {
 }
 
 .btn-cancel {
-	background: #eee;
-	color: #999;
+	background: transparent;
+	border-color: #d8d2c7;
+	color: #6f6a61;
 }
 .btn-cancel:hover {
-	background: #e0e0e0;
-	color: #666;
+	background: #efede8;
+	color: #39362f;
 }
 
 .btn-secondary {
-	background: #e8d5a0;
-	color: #8b7355;
+	background: #f3ead2;
+	border-color: #e1c982;
+	color: #725810;
 }
 .btn-secondary:hover {
-	background: #dfc98e;
-	color: #7a6344;
+	background: #ede0bd;
+	color: #4f3c09;
 }
 
 .btn-primary {
-	background: #d4a017;
+	background: #c9960a;
 	color: #fff;
 }
 .btn-primary:hover {
-	background: #c4920f;
-	box-shadow: 0 2px 8px rgba(212, 160, 23, 0.3);
+	background: #b88706;
+	box-shadow: 0 3px 10px rgba(167, 120, 0, 0.22);
 }
+
+.btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
+.btn-mic { flex: 0 0 44px; padding: 0; font-size: 16px; }
 
 /* Toast 通知 */
 .toast {
@@ -205,12 +214,12 @@ html, body {
 <div class="container">
 	<!-- 标题栏 -->
 	<div class="title-bar">
-		<h3>✦ 分享给 AI</h3>
+		<h3>分享截图给 AI</h3>
 		<button class="close-btn" id="btn-close">×</button>
 	</div>
 
 	<!-- 提示 -->
-	<p class="hint" id="hint-text">已截图。输入文字发送给 AI，或直接分享截图。</p>
+	<p class="hint" id="hint-text">输入一句说明，或直接把截图作为一条视觉消息发送。</p>
 
 	<!-- 截图预览 -->
 	<div class="preview-area">
@@ -218,7 +227,7 @@ html, body {
 	</div>
 
 	<!-- 信息区 -->
-	<div class="info-area" id="info-area">📸 桌面截图</div>
+	<div class="info-area" id="info-area">桌面截图 · 正在读取…</div>
 
 	<!-- 输入框 -->
 	<div class="message-area">
@@ -227,10 +236,10 @@ html, body {
 
 	<!-- 按钮区:🎤语音输入(凛倾 0722) + 取消/仅分享/发送 -->
 	<div class="btn-row">
-		<button class="btn btn-secondary" id="btn-mic" style="flex:0 0 52px" title="语音输入(需 STT 服务运行)">🎤</button>
+		<button class="btn btn-secondary btn-mic" id="btn-mic" title="语音转文字（需 STT 服务运行）">🎤</button>
 		<button class="btn btn-cancel" id="btn-cancel">取消</button>
-		<button class="btn btn-secondary" id="btn-passive">仅分享</button>
-		<button class="btn btn-primary" id="btn-send">发送 ✦</button>
+		<button class="btn btn-secondary" id="btn-passive">直接发图</button>
+		<button class="btn btn-primary" id="btn-send">发送</button>
 	</div>
 </div>
 
@@ -248,8 +257,15 @@ html, body {
 	const btnCancel = document.getElementById('btn-cancel')
 	const btnClose = document.getElementById('btn-close')
 	const toastEl = document.getElementById('toast')
+	const btnMic = document.getElementById('btn-mic')
 
 	let imageDataUrl = null
+	let sending = false
+
+	function setSending(on) {
+		sending = !!on
+		for (const btn of [btnSend, btnPassive, btnCancel, btnMic]) if (btn) btn.disabled = sending
+	}
 
 	// Toast 通知
 	function showToast(msg, duration = 2000) {
@@ -262,16 +278,36 @@ html, body {
 	// 接收主进程传来的截图预览
 	window.desktopEye.onSetPreview((dataUrl) => {
 		imageDataUrl = dataUrl
-		previewImg.src = dataUrl
 
-		// 显示截图时间
+		// 显示真实编码、像素和估算字节，让压缩状态可见而不是藏在日志里。
 		const now = new Date()
 		const timeStr = now.toLocaleString('zh-CN', {
 			year: 'numeric', month: '2-digit', day: '2-digit',
 			hour: '2-digit', minute: '2-digit'
 		})
-		infoArea.textContent = '📸 桌面截图 · ' + timeStr
+		const base64 = String(dataUrl).split(',')[1] || ''
+		const kb = Math.max(1, Math.round(base64.length * 3 / 4 / 1024))
+		previewImg.onload = () => {
+			infoArea.textContent = `JPEG · ${previewImg.naturalWidth}×${previewImg.naturalHeight} · ${kb} KB · ${timeStr}`
+		}
+		previewImg.src = dataUrl
 	})
+
+	async function deliver(message) {
+		if (!imageDataUrl || sending) return
+		setSending(true)
+		hintText.textContent = '正在送入 AI 对话…'
+		try {
+			await window.desktopEye.sendScreenshot({ imageBase64: imageDataUrl, message, mode: 'active' })
+			showToast('截图已进入 AI 对话')
+			hintText.textContent = '已送达'
+			setTimeout(() => window.desktopEye.sendCancel(), 350)
+		} catch (error) {
+			hintText.textContent = '未送达，截图和输入已保留，可直接重试。'
+			showToast('发送失败：' + (error?.message || '插件接线不可用'), 5000)
+			setSending(false)
+		}
+	}
 
 	// 发送（主动模式 — 需要输入消息）
 	btnSend.addEventListener('click', () => {
@@ -284,27 +320,12 @@ html, body {
 			setTimeout(() => { messageInput.style.borderColor = '#d4a017' }, 2000)
 			return
 		}
-		showToast('✦ 已发送，等待回复...')
-		setTimeout(() => {
-			window.desktopEye.sendScreenshot({
-				imageBase64: imageDataUrl,
-				message: userMessage,
-				mode: 'active',
-			})
-		}, 500)
+		deliver(userMessage)
 	})
 
-	// 仅分享（被动模式 — 不需要输入消息）
+	// 直接发图也是主动视觉消息；旧 passive 只落 pending、不会进入 addUserReply，文案与行为相反。
 	btnPassive.addEventListener('click', () => {
-		if (!imageDataUrl) return
-		showToast('✦ 截图已分享')
-		setTimeout(() => {
-			window.desktopEye.sendScreenshot({
-				imageBase64: imageDataUrl,
-				message: '',
-				mode: 'passive',
-			})
-		}, 500)
+		deliver('')
 	})
 
 	// 取消
@@ -335,7 +356,6 @@ html, body {
 
 	// 语音输入(凛倾 0722 完整链):🎤开录→⏹停+转文字(主进程直连本机 STT 服务,降噪+拾音)
 	// →填输入框→用户点「发送 ✦」走既有截图注入链(/api/eye/inject)
-	const btnMic = document.getElementById('btn-mic')
 	if (btnMic && window.desktopEye.sttRecord) {
 		let rec = false
 		btnMic.addEventListener('click', () => window.desktopEye.sttRecord(rec ? 'stop' : 'start'))

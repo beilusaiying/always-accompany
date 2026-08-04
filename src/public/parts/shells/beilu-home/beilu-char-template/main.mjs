@@ -68,6 +68,8 @@ export default {
 
   interfaces: {
     config: {
+      // 首次角色加载也需要执行 SetData({})，以沿用既有默认 AI 源初始化链。
+      loadPolicy: "always",
       GetData: () => ({
         AIsource: AIsource?.filename || "",
         plugins: Object.keys(plugins),
@@ -309,21 +311,51 @@ export default {
 
         // 子模式/分身独立 API 源：prompt 带 sub_mode_api_source / api_source_override 时，本轮改用该源
         // （不改角色绑定的默认 AIsource）。此前 api_source_override 零消费端=子模式配的独立源永不生效。
-        // 全程 try/catch + 加载失败/未设回退默认源，零风险（不影响未配子模式源的常规路径）。
+        // [D3 0804] 加载失败不再无条件静默回退角色源：按 extension.sub_mode_fallback_policy 分支——
+        //   fail_closed（默认）=可见未发送错误（同上方"请先配置 AI 源"形制，零 StructCall）；
+        //   explicit_fallback=先试 sub_mode_fallback_source 再默认源，wbD 留痕 requested/actual。
+        //   （235734 病根：UI 声称"跟随全局默认源"，实际静默用角色 AIsource——三处权威不一致）
         let _effSource = AIsource;
+        const _smExt = prompt_struct.plugin_prompts?.["beilu-memory"]?.extension;
         const _smApiSrc =
-          prompt_struct.plugin_prompts?.["beilu-memory"]?.extension?.sub_mode_api_source ||
+          _smExt?.sub_mode_api_source ||
           prompt_struct.plugin_prompts?.["beilu-preset"]?.extension?.beilu_model_params?.api_source_override ||
           "";
         if (_smApiSrc && _smApiSrc !== AIsource?.filename) {
+          let _ovErr = "";
           try {
             const _ovSource = await loadPart(username, "serviceSources/AI/" + _smApiSrc);
             if (_ovSource?.StructCall) {
               _effSource = _ovSource;
               wbT(_wbCid, "orchestrator", "submode_source_override", { source: _smApiSrc });
-            }
+            } else _ovErr = "源无 StructCall";
           } catch (e) {
-            wbD(_wbCid, "orchestrator", "submode_source_override", false, "子模式 API 源加载失败，回退默认源", { source: _smApiSrc, err: e?.message });
+            _ovErr = e?.message || String(e);
+          }
+          if (_effSource === AIsource) {
+            const _fbPolicy = _smExt?.sub_mode_fallback_policy || "fail_closed";
+            const _fbName = _smExt?.sub_mode_fallback_source || "";
+            if (_fbPolicy === "explicit_fallback") {
+              if (_fbName && _fbName !== AIsource?.filename) {
+                try {
+                  const _fbSrc = await loadPart(username, "serviceSources/AI/" + _fbName);
+                  if (_fbSrc?.StructCall) _effSource = _fbSrc;
+                } catch { /* fallback 源也失败 → 落默认源（explicit_fallback 契约允许） */ }
+              }
+              wbD(_wbCid, "orchestrator", "submode_source_fallback", _effSource !== AIsource, "子模式源加载失败，explicit_fallback 生效", {
+                requested: _smApiSrc,
+                actual: _effSource !== AIsource ? _fbName : (AIsource?.filename || "(默认源)"),
+                err: _ovErr,
+              });
+            } else {
+              // fail_closed：本轮零请求，错误可见（不无提示改用角色绑定源=不伪造"子模式源在工作"）
+              wbD(_wbCid, "orchestrator", "submode_source_override", false, "子模式 API 源加载失败，fail_closed 未发送", { source: _smApiSrc, err: _ovErr });
+              return {
+                content:
+                  `子模式配置的 API 源「${_smApiSrc}」加载失败（${_ovErr}），本轮请求未发送。\n` +
+                  "请在子模式设置中修正 API 源，或把该子模式的「源失败策略」改为显式回退。",
+              };
+            }
           }
         }
         // N36 刀3：源与模型是原子覆盖单元——意图换源但未换成（加载失败/无 StructCall）时

@@ -482,6 +482,79 @@
           ]
         },
         {
+          "title": "按任务组合插件",
+          "file": "plugins/combinations.md",
+          "audience": [
+            "beginner",
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "直播接入 (beilu-live)",
+          "file": "plugins/live.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "CLI 工具后端 (beilu-cli)",
+          "file": "plugins/cli.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "系统信息 (beilu-sysinfo)",
+          "file": "plugins/sysinfo.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "日志与排错 (beilu-logger)",
+          "file": "plugins/logger.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "教程与视觉小说 (beilu-tutorial)",
+          "file": "plugins/tutorial.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "语义检索 (beilu-vectordb)",
+          "file": "plugins/vectordb.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "AIRP 场景渲染 (beilu-airp)",
+          "file": "plugins/airp.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "用户插件宿主 (beilu-plugin-host)",
+          "file": "plugins/plugin-host.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
           "title": "文件操作 (beilu-files)",
           "file": "plugins/files.md",
           "audience": [
@@ -655,6 +728,14 @@
           ]
         },
         {
+          "title": "可靠性契约、回档与发布边界",
+          "file": "developer/reliability-contracts.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
           "title": "插件开发",
           "file": "developer/plugin-dev.md",
           "audience": [
@@ -677,6 +758,14 @@
         {
           "title": "前言：摘要与总目录",
           "file": "p1-recall/preface.md",
+          "audience": [
+            "user",
+            "developer"
+          ]
+        },
+        {
+          "title": "当前生产合同：注意力、上下文与缓存",
+          "file": "p1-recall/ch7-current-runtime.md",
           "audience": [
             "user",
             "developer"

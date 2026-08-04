@@ -1062,31 +1062,47 @@ body.has-bg-image #chat-messages {
 .token-progress-container {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0;
   margin-left: 0.5rem;
-  padding: 0 0.5rem;
+  padding-inline-start: 0.5rem;
   height: 24px;
-  background-color: var(--beilu-shadow-10);
-  border-radius: 12px;
-  border: 1px solid var(--beilu-amber-15);
+  color: var(--beilu-fg-secondary);
+  background-color: var(--beilu-surface-raised);
+  border: var(--beilu-border-width) solid var(--beilu-border-subtle);
+  border-radius: var(--beilu-radius-panel);
+  overflow: hidden;
 }
 
 .token-progress-bar-wrapper {
   width: 80px;
   height: 6px;
-  background-color: rgba(255, 255, 255, 0.1);
+  margin-inline-end: 0.375rem;
+  background-color: var(--beilu-selection-inactive);
   border-radius: 3px;
   overflow: hidden;
   cursor: pointer;
   position: relative;
 }
 
+.token-progress-cache {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 0%;
+  opacity: 0.35;
+  background-color: var(--beilu-action-accent);
+  border-radius: inherit;
+  transition: width var(--beilu-motion-view) var(--beilu-ease-standard);
+}
+
 .token-progress-fill {
+  position: relative;
+  z-index: 1;
   height: 100%;
   width: 0%;
   transition:
-    width 0.3s ease,
-    background-color 0.3s ease;
+    width var(--beilu-motion-view) var(--beilu-ease-standard),
+    background-color var(--beilu-motion-view) var(--beilu-ease-standard);
   border-radius: 3px;
 }
 
@@ -1102,46 +1118,77 @@ body.has-bg-image #chat-messages {
 }
 
 .token-progress-text {
-  font-family: "Cascadia Code", "Fira Code", monospace;
+  margin-inline-end: 0.25rem;
+  font-family: var(--beilu-font-mono);
   font-size: 0.65rem;
-  color: var(--beilu-amber-70);
+  color: var(--beilu-fg-secondary);
   white-space: nowrap;
   user-select: none;
 }
 
 .token-compress-btn {
-  background: transparent;
+  align-self: stretch;
+  min-block-size: 0;
+  block-size: 100%;
+  min-inline-size: var(--beilu-target-min);
+  color: var(--beilu-fg-secondary);
+  background-color: transparent;
   border: none;
-  font-size: 0.8rem;
+  border-radius: 0;
+  font-size: 0.75rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 0 0.1rem;
-  opacity: 0.6;
+  padding: 0 0.375rem;
   transition:
-    opacity 0.2s,
-    transform 0.1s;
+    color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    background-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    border-color var(--beilu-motion-fast) var(--beilu-ease-standard),
+    box-shadow var(--beilu-motion-press) var(--beilu-ease-standard);
+}
+
+.token-compress-btn + .token-compress-btn {
+  border-inline-start: var(--beilu-border-width) solid var(--beilu-border-subtle);
+}
+
+.token-compress-btn [data-ic] {
+  font-size: 0.875rem;
 }
 
 .token-compress-btn:hover:not(:disabled) {
-  opacity: 1;
-  transform: scale(1.1);
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-hover);
+}
+
+.token-compress-btn:active:not(:disabled) {
+  color: var(--beilu-fg-primary);
+  background-color: var(--beilu-feedback-press-surface);
+  border-color: var(--beilu-feedback-press-border);
+  box-shadow: var(--beilu-feedback-press-shadow);
+  transform: none;
+}
+
+.token-compress-btn:focus-visible {
+  outline: 2px solid var(--beilu-border-focus);
+  outline-offset: -2px;
 }
 
 .token-compress-btn:disabled {
-  opacity: 0.3;
+  color: var(--beilu-fg-disabled);
   cursor: not-allowed;
 }
 
-/* 淡色主题适配 */
-[data-theme="light"] .token-progress-container {
-  background-color: var(--beilu-shadow-5);
-  border-color: var(--beilu-amber-20);
+.token-p1-btn {
+  font-size: 0.6875rem;
 }
 
-[data-theme="light"] .token-progress-bar-wrapper {
-  background-color: var(--beilu-shadow-8);
-}
+@media (prefers-reduced-motion: reduce) {
+  .token-progress-cache,
+  .token-progress-fill,
+  .token-compress-btn {
+    transition: none;
+  }
 
-[data-theme="light"] .token-progress-text {
-  color: rgba(139, 105, 20, 0.7);
+  .token-warning-glow {
+    animation: none;
+  }
 }
-

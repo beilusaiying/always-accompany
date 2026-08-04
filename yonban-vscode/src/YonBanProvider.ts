@@ -56,13 +56,20 @@
  */
 import * as vscode from "vscode";
 import { AuthService } from "./services/AuthService";
-import { ChatService } from "./services/ChatService";
+import { ChatService, isExactIdeRouteSnapshot } from "./services/ChatService";
+import type { IdeRouteSnapshot } from "./services/ChatService";
 import { ConnectionService } from "./services/ConnectionService";
 import type { ConsoleCapture } from "./services/ConsoleCapture";
 import { IdeWsServer } from "./services/IdeWsServer";
 import type { WebviewMessage } from "./types";
 import { DEFAULT_MODE, PROVIDER_TIMEOUT_MS, TOKEN_POLL_MS, MEMORY_POLL_MS, APPROVAL_POLL_MS, GROUP_POLL_MS, ERROR_CENTER_MAX } from "./constants"; // T003 默认模式单源 + 超时/轮询收口
 import { t } from "./i18n";
+
+const FILE_REFERENCE_LIST_PLACEHOLDER = "{fileReferences}";
+
+function renderFileReferencePrompt(template: string, refList: string): string {
+  return template.split(FILE_REFERENCE_LIST_PLACEHOLDER).join(refList);
+}
 
 // 点击按钮的成功「提醒」：handleMessage 未抛错=动作已执行 → 对这些 mutating 动作回一条 notify→前端 showToast。
 // 只列「改变了状态」的用户点击动作；纯 get*/只读 + 高频自动(saveUserState) 不提醒，避免刷屏。
@@ -72,8 +79,8 @@ const ACTION_NOTIFY: Record<string, string> = {
   connect: "正在连接后端…",
   sendMessage: "已发送", triggerReply: "已触发回复", stopGeneration: "已停止生成",
   newChat: "已新建对话", deleteChat: "已删除对话", editMessage: "已编辑消息",
-  deleteMessage: "已删除消息", hideMessage: "已切换隐藏", rollbackToMessage: "已回档",
-  compactContext: "已压缩上下文", switchModel: "已切换模型", switchApiSource: "已切换 API 源",
+  deleteMessage: "已删除消息", hideMessage: "已切换隐藏",
+  switchModel: "已切换模型", switchApiSource: "已切换 API 源",
   switchPreset: "已切换预设", createPreset: "已创建预设", duplicatePreset: "已复制预设",
   renamePreset: "已重命名预设", deletePreset: "已删除预设", toggleMemoryPreset: "已切换记忆预设",
   toggleInjectionPrompt: "已切换注入提示词", saveSubModes: "已保存子模式", setActiveSubMode: "已激活子模式",
@@ -134,15 +141,24 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /**
-   * 多开绑定（2026-07-26 多窗口 YonBan）：把 chatId 绑定到本窗口的 IDE 桥接端口。
-   * fire-and-forget：后端未升级/未连接时静默降级为单窗口旧行为（后端路由回退主连接），只留日志不打扰用户。
-   */
-  private _bindCurrentChat(chatId: string): void {
+  /** 多开绑定的唯一入口：完整身份 + 后端 success 才算绑定成功。 */
+  private async _bindCurrentChat(chatId: string): Promise<Record<string, unknown>> {
+    const normalizedChatId = typeof chatId === "string" ? chatId.trim() : "";
     const port = this._wsServer.port;
-    if (!chatId || !port) return;
-    this._chatService.bindIdeInstance(chatId, port).catch((err: unknown) => {
-      console.warn("[YonBan] bindIdeInstance 上报失败（后端未升级/未连接时可忽略）:", err instanceof Error ? err.message : String(err));
+    const instanceId = this._wsServer.instanceId;
+    if (!normalizedChatId || !Number.isInteger(port) || port <= 0 || typeof instanceId !== "string" || !instanceId.trim()) {
+      throw new Error("IDE 实例绑定身份无效（chatId/port/instanceId 必须完整）");
+    }
+    return this._chatService.bindIdeInstance(normalizedChatId, port, instanceId.trim());
+  }
+
+  /** 绑定失败必须用户可见；不写成功缓存，后续切换/发送/重连仍可重试。 */
+  private _reportIdeBindFailure(chatId: string, phase: string, err: unknown): void {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error(`[YonBan] ${phase} IDE 实例绑定失败 (chat=${chatId}):`, detail);
+    this.postMessage({
+      type: "operationError",
+      payload: { action: "bindIdeInstance", error: `${phase}：${detail}` },
     });
   }
 
@@ -230,10 +246,12 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
         try {
-          await this.handleMessage(message);
+          const outcome = await this.handleMessage(message);
           // 成功提醒：mutating 动作执行完（未抛错）→ 回 notify，前端 showToast「已X」。
           const _note = ACTION_NOTIFY[message?.type as string];
-          if (_note) this.postMessage({ type: "notify", payload: { message: _note } });
+          if (_note && outcome?.actionNotifyHandled !== true) {
+            this.postMessage({ type: "notify", payload: { message: _note } });
+          }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[YonBan] handleMessage 未捕获错误 (action=${message?.type}):`, msg);
@@ -379,8 +397,11 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       this.postMessage({ type: "serverNotice", payload: data });
     });
     this._chatService.onChatConnected(({ chatId, isReconnect }) => {
-      // 多开绑定：聊天 WS (重)连接即上报「本会话由本窗口实例服务」——覆盖后端重启丢内存绑定表的场景（幂等）
-      this._bindCurrentChat(chatId);
+      // EventEmitter 不等待异步监听器：WS 连接事实照常上报；IDE 绑定单独等待并显式报告失败。
+      // 这里不设置“已绑定”状态，失败后仍由下一次重连、切换或发送重试。
+      void this._bindCurrentChat(chatId).catch((err: unknown) => {
+        this._reportIdeBindFailure(chatId, isReconnect ? "聊天重连后绑定" : "聊天连接后绑定", err);
+      });
       this.postMessage({ type: "chatConnected", payload: { chatId, isReconnect } });
       if (isReconnect) {
         // H2: 重连 → 通知 webview 触发增量补拉（webview 持有本地消息数，回发 requestMissedMessages）
@@ -408,7 +429,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
    * 约束：调用者不需要 catch——resolveWebviewView 的 onDidReceiveMessage 已统一兜底
    *       operationError toast（见上方 try/catch 包裹）。
    */
-  public async handleMessage(message: WebviewMessage): Promise<void> {
+  public async handleMessage(message: WebviewMessage): Promise<{ actionNotifyHandled: true } | void> {
     switch (message.type) {
       case "connect":
         await this._connectionService.connect();
@@ -587,11 +608,19 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
         //   闸法：每次切换取递增代号，await 回来发现代号已过期 → 本次结果整段作废（不 post 不恢复 mode）。
         const _epoch = ++this._switchEpoch;
         try {
-          // WS 先连（不依赖 getInitialData 成功）：即使 initial-data 超时，WS 也已建立，
-          // chatService._currentChatId 已设置 → send 不会因 chatId 为 null 静默失败
+          // 先确认本窗口 IDE 身份绑定；失败时不改变 ChatService 当前 chat/WS 状态。
+          try {
+            await this._bindCurrentChat(chatId);
+          } catch (err: unknown) {
+            if (_epoch !== this._switchEpoch) break;
+            this._reportIdeBindFailure(chatId, "切换对话", err);
+            this.postMessage({
+              type: "chatInitialData",
+              payload: { error: err instanceof Error ? err.message : String(err), chatId },
+            });
+            break;
+          }
           this._chatService.connectChat(chatId);
-          // 多开绑定：切对话即上报（后端连接池据此把本会话 IDE 工具路由到本窗口）
-          this._bindCurrentChat(chatId);
           const data = await this._chatService.getInitialData(chatId);
           if (_epoch !== this._switchEpoch) break; // 期间又切了别的对话，晚到的旧数据不得盖新终态
           // 推 chatSwitched 让左 webview 调 applySwitchedChat（只更新 UI 不回发 switchChat = 防回环）。
@@ -632,29 +661,35 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
         };
         // chatService.currentChatId 优先；webview 传的 chatId 做 fallback（两个状态可能因 WS 断连不同步）
         let chatId = this._chatService.currentChatId;
+        let shouldRestoreChatConnection = false;
         if (!chatId && _wvChatId) {
-          // ChatService 丢失了 chatId（WS 断连后未恢复），用 webview 侧的恢复并重连 WS
+          // ChatService 丢失了 chatId（WS 断连后未恢复），先冻结 webview 身份，绑定成功后再恢复 WS。
           console.warn(`[YonBan] sendMessage: chatService.currentChatId 为空，用 webview 侧 chatId=${_wvChatId} 恢复`);
-          this._chatService.connectChat(_wvChatId);
-          this._bindCurrentChat(_wvChatId); // 多开绑定：恢复路径同样上报
           chatId = _wvChatId;
+          shouldRestoreChatConnection = true;
         }
         if (!chatId) {
           throw new Error("无法发送：未选择对话（请先选择角色和对话）");
         }
-        // 失败经抛 → 顶层兜底 operationError toast（不在此自吞）
+        // 每次发送前确认当前窗口身份仍绑定；后端重启/绑定漂移时不把 IDE 工具静默路由到其他实例。
+        await this._bindCurrentChat(chatId);
+        if (shouldRestoreChatConnection) this._chatService.connectChat(chatId);
+        // 绑定及后续失败统一抛给顶层 operationError，不在此静默降级。
         const _mode = this._modeFor(chatId);
         console.log(`[P0-9] sendMessage: chat=${chatId} mode=${_mode}`);
         await this._chatService.setActiveMode(_mode);
-        // ★ @文件引用：将引用路径附加到消息文本，AI会用read_file读取
-        // 07-09 收口审计：上限原写死 slice(0,5)（第 6 个起静默截断且不可调）→ 配置化 yonban.maxFileReferences
-        //   （default 由 package.json schema 供给，VSCode get() 未设置时自动返回 schema default=代码零字面量；≤0=不限制）
+        // ★ @文件引用：按配置的数量上限格式化路径，再由用户模板决定是否及如何附加提示。
+        // 配置默认值由 package.json schema 供给；≤0=不限制，空模板=不附加提示。
         let enrichedReply = reply;
         if (fileReferences && fileReferences.length > 0) {
-          const _refLimit = vscode.workspace.getConfiguration("yonban").get<number>("maxFileReferences");
+          const _config = vscode.workspace.getConfiguration("yonban");
+          const _refLimit = _config.get<number>("maxFileReferences");
           const _refs = (typeof _refLimit === "number" && _refLimit > 0) ? fileReferences.slice(0, _refLimit) : fileReferences;
           const refList = _refs.map((r) => `@${r}`).join(", ");
-          enrichedReply = reply + `\n\n[引用文件: ${refList} — 请用read_file读取这些文件]`;
+          const _template = _config.get<string>("fileReferencePromptTemplate");
+          if (typeof _template === "string" && _template.length > 0) {
+            enrichedReply = reply + renderFileReferencePrompt(_template, refList);
+          }
         }
         await this._chatService.sendMessage(chatId, enrichedReply, autoReply, files || []);
         // [0719 发送状态机·第三层] 显式成功信号：webview 发送按钮态改为事件驱动（删 3s 定时器），
@@ -668,7 +703,8 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
         const { charname } = (message.payload as { charname?: string }) ?? {};
         const chatId = this._chatService.currentChatId;
         if (!chatId) break;
-        // 失败经抛 → 顶层兜底 operationError toast（不在此自吞）
+        await this._bindCurrentChat(chatId);
+        // 绑定及触发失败统一抛给顶层 operationError，不在此静默降级。
         const _mode = this._modeFor(chatId);
         console.log(`[P0-9] triggerReply: chat=${chatId} mode=${_mode}`);
         await this._chatService.setActiveMode(_mode);
@@ -712,169 +748,312 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       }
 
       case "editMessage": {
-        const { index, content } = message.payload as {
-          index: number;
+        const { chatId, messageId, indexHint, content, editOperationId } = message.payload as {
+          chatId: string;
+          messageId: string;
+          indexHint: number;
           content: string;
+          editOperationId: string;
         };
-        const chatId = this._chatService.currentChatId;
-        if (!chatId) {
-          this.postMessage({ type: "operationError", payload: { action: "editMessage", error: "没有活跃的聊天" } });
-          break;
+        if (!chatId || !messageId || !Number.isSafeInteger(indexHint) || indexHint < 0
+          || typeof content !== "string" || !editOperationId) {
+          this.postMessage({
+            type: "editMessageResult",
+            payload: {
+              chatId, messageId, indexHint, editOperationId, success: false, applied: false,
+              error: "编辑消息身份无效，请刷新对话后重试",
+            },
+          });
+          return { actionNotifyHandled: true };
         }
         try {
-          await this._chatService.editMessage(chatId, index, content);
+          const result = await this._chatService.editMessage(
+            chatId,
+            indexHint,
+            messageId,
+            content,
+            editOperationId,
+          );
+          if (result.applied !== true || result.chatCommitted !== true) {
+            this.postMessage({
+              type: "editMessageResult",
+              payload: {
+                ...result, chatId, messageId, indexHint, editOperationId, success: false,
+                error: result.error || result.reason || "后端未提交编辑",
+              },
+            });
+            return { actionNotifyHandled: true };
+          }
+
+          this.postMessage({
+            type: "editMessageResult",
+            payload: { ...result, chatId, messageId, indexHint, editOperationId, success: true },
+          });
+          this.postMessage({ type: "notify", payload: { message: ACTION_NOTIFY.editMessage } });
+
+          const authoritativeEntryMissing = !result.entry || result.entry.id !== messageId;
+          if (result.status === "committed_derived_failed" || authoritativeEntryMissing) {
+            let warning = result.warning
+              || (authoritativeEntryMissing
+                ? "消息已提交，但响应缺少匹配的权威条目；正在刷新原对话。"
+                : "消息已提交，但同步或广播至少一项失败；正在刷新原对话。");
+            if (this._chatService.currentChatId === chatId) {
+              try {
+                const data = await this._chatService.getInitialData(chatId);
+                this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } });
+              } catch (refreshError: unknown) {
+                warning += ` 刷新失败：${refreshError instanceof Error ? refreshError.message : String(refreshError)}`;
+              }
+            }
+            this.postMessage({
+              type: "operationWarning",
+              payload: { action: "editMessage", warning, chatId, messageId },
+            });
+          }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error("[YonBan] 编辑消息失败:", msg);
-          this.postMessage({ type: "operationError", payload: { action: "editMessage", error: msg } });
+          this.postMessage({
+            type: "editMessageResult",
+            payload: { chatId, messageId, indexHint, editOperationId, success: false, applied: false, error: msg },
+          });
         }
-        break;
+        return { actionNotifyHandled: true };
       }
 
       case "deleteMessage": {
-        const { index } = message.payload as { index: number };
-        const chatId = this._chatService.currentChatId;
-        if (!chatId) {
-          this.postMessage({ type: "operationError", payload: { action: "deleteMessage", error: "没有活跃的聊天" } });
-          break;
+        const { chatId, messageId, indexHint } = message.payload as {
+          chatId: string;
+          messageId: string;
+          indexHint: number;
+        };
+        if (!chatId || !messageId || !Number.isInteger(indexHint) || indexHint < 0) {
+          throw new Error("删除消息身份无效，请刷新对话后重试");
         }
-        try {
-          await this._chatService.deleteMessage(chatId, index);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error("[YonBan] 删除消息失败:", msg);
-          this.postMessage({ type: "operationError", payload: { action: "deleteMessage", error: msg } });
+        const result = await this._chatService.deleteMessage(chatId, indexHint, messageId);
+        if (result.status === "committed_derived_failed") {
+          const successNote = ACTION_NOTIFY.deleteMessage;
+          if (successNote) this.postMessage({ type: "notify", payload: { message: successNote } });
+          this.postMessage({
+            type: "operationWarning",
+            payload: {
+              action: "deleteMessage",
+              warning: "消息已删除，但删除后的备份、摘要或同步等至少一项处理失败；恢复/同步能力可能受损，请刷新核对。",
+              derived: result.derived,
+            },
+          });
+          try {
+            const data = await this._chatService.getInitialData(chatId);
+            this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } });
+          } catch (refreshError: unknown) {
+            const detail = refreshError instanceof Error ? refreshError.message : String(refreshError);
+            console.error("[YonBan] 消息已删除，但删除后刷新核对失败:", detail);
+            this.postMessage({
+              type: "operationError",
+              payload: { action: "删除后刷新", error: `消息已删除，但无法刷新核对当前对话: ${detail}` },
+            });
+          }
+          return { actionNotifyHandled: true };
         }
         break;
       }
 
       case "hideMessage": {
-        const { index, hide } = message.payload as { index: number; hide: boolean };
-        const chatId = this._chatService.currentChatId;
-        if (!chatId) {
-          this.postMessage({ type: "operationError", payload: { action: "hideMessage", error: "没有活跃的聊天" } });
-          break;
+        const { chatId, messageId, indexHint, hide } = message.payload as {
+          chatId: string;
+          messageId: string;
+          indexHint: number;
+          hide: boolean;
+        };
+        if (!chatId || !messageId || !Number.isInteger(indexHint) || indexHint < 0 || typeof hide !== "boolean") {
+          throw new Error("隐藏消息身份无效，请刷新对话后重试");
+        }
+        const result = await this._chatService.hideMessage(chatId, indexHint, messageId, hide);
+        if (result.success !== true || result.applied !== true || result.partial === true) {
+          const reason = typeof result.error === "string"
+            ? result.error
+            : typeof result.code === "string" ? result.code : "后端未完整应用隐藏操作";
+          throw new Error(reason);
         }
         try {
-          await this._chatService.hideMessage(chatId, index, hide);
+          const data = await this._chatService.getInitialData(chatId);
+          this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } });
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.postMessage({ type: "operationError", payload: { action: "hideMessage", error: msg } });
+          const detail = err instanceof Error ? err.message : String(err);
+          this.postMessage({
+            type: "operationError",
+            payload: { action: "hideMessageRefresh", error: `隐藏已应用，但权威消息刷新失败：${detail}` },
+          });
         }
         break;
       }
 
       // ── 回档功能 ─────────────────────────────────
       // ★ P3 回档预览：只读查询文件层 Δ，供前端在确认前展示预览卡片。
-      // 预览失败不阻断回档——前端收到 previewError 时降级为纯文本确认。
+      // 预览失败时回传固定身份与错误；前端不允许缺少预览令牌的执行请求。
       case "previewRollback": {
-        const { index: previewIdx, afterCount } = message.payload as {
-          index: number;
+        const { chatId, anchorMessageId, targetIndex, afterCount } = message.payload as {
+          chatId: string;
+          anchorMessageId: string;
+          targetIndex: number;
           afterCount: number;
         };
-        const chatId = this._chatService.currentChatId;
-        if (!chatId) break;
-        try {
-          const diff = await this._chatService.getRollbackPreview(
-            chatId,
-            previewIdx,
-          );
+        const identity = { chatId, anchorMessageId, targetIndex, afterCount };
+        if (!chatId || !anchorMessageId || !Number.isInteger(targetIndex) || targetIndex < 0 || !Number.isInteger(afterCount) || afterCount < 0) {
           this.postMessage({
             type: "rollbackPreview",
-            payload: { index: previewIdx, afterCount, ...diff },
+            payload: { ...identity, success: false, previewError: "回档预览身份无效，请刷新对话后重试" },
+          });
+          break;
+        }
+        try {
+          await this._bindCurrentChat(chatId);
+          const diff = await this._chatService.getRollbackPreview(chatId, {
+            anchorMessageId,
+            targetIndex,
+            afterCount,
+          });
+          if (diff.success === true && (
+            !isExactIdeRouteSnapshot(diff.expectedIdeRoute)
+            || typeof diff.expectedIdeConnected !== "boolean"
+            || diff.expectedIdeConnected !== diff.expectedIdeRoute.connected
+          )) {
+            this.postMessage({
+              type: "rollbackPreview",
+              payload: {
+                ...identity,
+                success: false,
+                previewError: "后端回档预览缺少有效的 expectedIdeRoute 精确路由令牌",
+              },
+            });
+            break;
+          }
+          this.postMessage({
+            type: "rollbackPreview",
+            payload: { ...diff, ...identity },
           });
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           console.warn("[YonBan] 回档预览失败:", msg);
           this.postMessage({
             type: "rollbackPreview",
-            payload: { index: previewIdx, afterCount, previewError: msg },
+            payload: { ...identity, success: false, previewError: msg },
           });
         }
         break;
       }
 
       case "rollbackToMessage": {
-        const { index: rollbackIdx } = message.payload as { index: number };
-        const chatId = this._chatService.currentChatId;
-        if (!chatId) break;
+        const rollbackPayload = message.payload as {
+          chatId: string;
+          anchorMessageId: string;
+          targetIndex: number;
+          afterCount: number;
+          expectedIdeConnected: boolean;
+          expectedIdeRoute: IdeRouteSnapshot;
+          checkpointIds: string[];
+          tableSnapshotId: unknown;
+        };
+        const {
+          chatId,
+          anchorMessageId,
+          targetIndex,
+          afterCount,
+          expectedIdeConnected,
+          expectedIdeRoute,
+          checkpointIds,
+          tableSnapshotId,
+        } = rollbackPayload;
+        const identity = { chatId, anchorMessageId, targetIndex, afterCount };
+        const hasTableSnapshotId = Object.prototype.hasOwnProperty.call(rollbackPayload, "tableSnapshotId");
+        const hasExpectedIdeRoute = Object.prototype.hasOwnProperty.call(rollbackPayload, "expectedIdeRoute");
+        if (
+          !chatId ||
+          !anchorMessageId ||
+          !Number.isInteger(targetIndex) ||
+          targetIndex < 0 ||
+          !Number.isInteger(afterCount) ||
+          afterCount < 0 ||
+          typeof expectedIdeConnected !== "boolean" ||
+          !hasExpectedIdeRoute ||
+          !isExactIdeRouteSnapshot(expectedIdeRoute) ||
+          expectedIdeConnected !== expectedIdeRoute.connected ||
+          !Array.isArray(checkpointIds) ||
+          checkpointIds.some((id) => typeof id !== "string" || id.length === 0) ||
+          new Set(checkpointIds).size !== checkpointIds.length ||
+          (tableSnapshotId !== null && (typeof tableSnapshotId !== "string" || tableSnapshotId.length === 0)) ||
+          !hasTableSnapshotId
+        ) {
+          this.postMessage({
+            type: "rollbackResult",
+            payload: { ...identity, success: false, applied: false, error: "回档确认令牌无效，请重新预览" },
+          });
+          break;
+        }
         try {
-          // ★ P0-4 倒序+去谎报：先记忆/表格/文件回档，仅当后端 success 才删消息。
-          // 旧实现先删消息再回档+硬编码 success:true，文件回档失败时用户看不到，
-          // 消息删了但文件没还原 → 谎报。倒序保证任一层失败时完全不动(不删消息)。
-          let fileRollback: unknown = null;
-          let rollbackWarning: string | null = null;
-          let memResult: Record<string, unknown> | null = null;
+          await this._bindCurrentChat(chatId);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this._reportIdeBindFailure(chatId, "执行回档前", err);
+          this.postMessage({
+            type: "rollbackResult",
+            payload: { ...identity, success: false, applied: false, error: msg },
+          });
+          break;
+        }
+        let result: Record<string, unknown>;
+        try {
+          result = await this._chatService.rollbackToMessage(chatId, {
+            anchorMessageId,
+            targetIndex,
+            afterCount,
+            expectedIdeConnected,
+            expectedIdeRoute,
+            checkpointIds: [...checkpointIds],
+            tableSnapshotId,
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[YonBan] 回档响应未确认，执行状态未知:", msg);
+          let reconcileError: string | null = null;
           try {
-            memResult = await this._chatService.rollbackMemory(
-              chatId,
-              rollbackIdx,
-            );
-            fileRollback = memResult?.fileRollback ?? null;
-            console.log("[YonBan] 记忆/文件回档结果:", memResult);
-          } catch (memErr) {
-            rollbackWarning =
-              memErr instanceof Error ? memErr.message : String(memErr);
-            console.warn("[YonBan] 记忆/文件回档请求失败:", rollbackWarning);
-            // 请求本身失败 = 完全不动，如实报告，不删消息
-            this.postMessage({
-              type: "rollbackResult",
-              payload: {
-                success: false,
-                deleted: 0,
-                fileRollback: null,
-                rollbackWarning:
-                  "回档失败，已保持原状（未删对话/未改文件/未动数据）: " +
-                  rollbackWarning,
-              },
-            });
-            break;
+            const data = await this._chatService.getInitialData(chatId);
+            this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } });
+          } catch (reloadErr: unknown) {
+            reconcileError = reloadErr instanceof Error ? reloadErr.message : String(reloadErr);
           }
-          // 后端去谎报：success===false = 文件层或表格层失败 → 完全不动
-          if (memResult && memResult.success === false) {
-            const failMsg =
-              (memResult.warning as string) ||
-              (memResult.fileError as string) ||
-              (memResult.error as string) ||
-              "未知错误";
-            console.error("[YonBan] 记忆/文件回档失败:", failMsg);
-            this.postMessage({
-              type: "rollbackResult",
-              payload: {
-                success: false,
-                deleted: 0,
-                fileRollback,
-                rollbackWarning:
-                  "回档失败，已保持原状（未删对话/未改文件/未动数据）: " +
-                  failMsg,
-              },
-            });
-            break;
-          }
-          // 回档成功（含"无快照=纯对话回档"）→ 才删对话消息
-          const result = await this._chatService.rollbackToMessage(
-            chatId,
-            rollbackIdx,
-          );
           this.postMessage({
             type: "rollbackResult",
             payload: {
-              success: true,
-              deleted: result.deleted,
-              fileRollback,
-              rollbackWarning,
+              ...identity,
+              success: false,
+              indeterminate: true,
+              error: `回档响应未确认，执行状态未知：${msg}`,
+              reconcileRequested: true,
+              ...(reconcileError ? { reconcileError } : {}),
             },
           });
-          // 回档后重新加载聊天数据
-          const data = await this._chatService.getInitialData(chatId);
-          this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } }); // [多窗时序 0726] 带归属 id（与 switchChat/_refreshChatInitialData 同约）
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error("[YonBan] 回档失败:", msg);
-          this.postMessage({
-            type: "rollbackResult",
-            payload: { success: false, error: msg },
-          });
+          break;
+        }
+        this.postMessage({
+          type: "rollbackResult",
+          payload: { ...result, ...identity },
+        });
+        // 只按后端显式终态判断是否可能已改变消息；不以 deleted 等计数字段推断成功。
+        if (
+          (result.success === true && result.applied === true && result.partial !== true) ||
+          result.partial === true
+        ) {
+          try {
+            const data = await this._chatService.getInitialData(chatId);
+            this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } });
+          } catch (reloadErr: unknown) {
+            const detail = reloadErr instanceof Error ? reloadErr.message : String(reloadErr);
+            this.postMessage({
+              type: "operationError",
+              payload: { action: "rollbackRefresh", error: `回档结果已返回，但权威消息刷新失败：${detail}` },
+            });
+          }
         }
         break;
       }
@@ -950,13 +1129,26 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
             const result = await this._chatService.smartCleanChat(chatId, cpPayload.keepRecent as number);
             this.postMessage({ type: "compactResult", payload: { ...result, action: "smartCleanChat" } });
           } else if (cpAction === "deleteMessages") {
-            const chatId = (cpPayload.chatId as string) || this._chatService.currentChatId || "";
-            await this._chatService.deleteMessageRange(
+            const chatId = typeof cpPayload.chatId === "string" ? cpPayload.chatId.trim() : "";
+            const anchorMessageId = typeof cpPayload.anchorMessageId === "string" ? cpPayload.anchorMessageId.trim() : "";
+            if (!chatId || !anchorMessageId) {
+              throw new Error("范围删除缺少冻结的 chatId 或 anchorMessageId，已拒绝按索引执行");
+            }
+            const result = await this._chatService.deleteMessageRange(
               chatId,
+              anchorMessageId,
               cpPayload.startIndex as number,
               cpPayload.endIndex as number,
             );
-            this.postMessage({ type: "compactResult", payload: { success: true, action: "deleteMessages" } });
+            const failureDetail = result.success === true && result.applied === true && result.partial !== true
+              ? null
+              : typeof result.error === "string" ? result.error
+              : typeof result.reason === "string" ? result.reason
+              : "后端未完整应用范围删除";
+            this.postMessage({
+              type: "compactResult",
+              payload: { ...result, ...(failureDetail ? { error: failureDetail } : {}), action: "deleteMessages" },
+            });
           } else if (cpAction === "hideCloneMessages") {
             const chatId = (cpPayload.chatId as string) || this._chatService.currentChatId || "";
             const result = await this._chatService.hideCloneMessages(chatId);
@@ -969,7 +1161,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
           const msg = err instanceof Error ? err.message : String(err);
           this.postMessage({
             type: "compactResult",
-            payload: { error: msg },
+            payload: { success: false, error: msg, action: cpAction },
           });
         }
         break;

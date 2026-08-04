@@ -26,11 +26,19 @@
  *   3. 用户手动开启基础版（autoMode=manual 且 enabled）→ 变体禁用
  *   变体判定=末尾 -(code|chat|work) 且基础版 id 实际存在（INJ-1-write-code 无 INJ-1-write=非变体）。
  *
- * 【影响范围】纯函数+进程内注册表，无 IO。消费方：getPromptHandler / getDataHandler /
+ * 【影响范围】识别/选择部分=纯函数+进程内注册表，无 IO。消费方：getPromptHandler / getDataHandler /
  *   setDataActions / runner（注册钩）；前端经 getData payload 间接消费（浏览器不 import 本文件）。
+ *   [D3 0804 locale] 新增 (id,version,locale) 内容解析器 resolveInjectionContentForLocales：
+ *   惰性读 __pluginDir/inj_locales/{locale}.json（每 locale 首访一次+进程缓存，负缓存防每轮 IO），
+ *   zh 用户走零 IO 快路径。传导链：user.locales(账号级) → requestBuilder:68 result.locales →
+ *   buildPromptStruct → getPromptHandler arg.locales → 本解析器 → INJ 条目正文。
  */
 
-import { isValidModeId, listModeIds, resolveGenerationMode } from "./storage.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+
+import { isValidModeId, listModeIds, resolveGenerationMode, __pluginDir } from "./storage.mjs";
 import { ideClient } from "../../../transport/ideClient.mjs";
 
 // ============================================================
@@ -208,6 +216,114 @@ function _mutexDisabled(list, ctx) {
  *   reason ∈ null(生效) | disabled | scope_mismatch | unknown_automode | platform_mismatch |
  *   variant_ide_off | variant_manual_base | base_overridden；once=本轮单次注入命中
  */
+// ============================================================
+// (id, version, locale) 内容解析：条目正文按用户语言选择 locale 等义覆盖
+// ============================================================
+//
+// 【为什么存在】新用户重大 bug 根因：INJ「英文化」曾是大幅删减重写（identifier/门控仍成功 →
+//   基础功能在、示例/引导/code/work 能力死）。本解析器把「翻译」收成机制：条目 content=中文原文
+//   即默认语言（beilu 自研覆盖式 i18n 范式，凛倾 2026-07-15 定案——外语是差量覆盖不是替换删减）；
+//   外语文本住独立差量文件 inj_locales/{locale}.json，不进模板条目、不进用户副本（零膨胀零迁移）。
+//
+// 【安全契约（分工 MD §0.4）】用户副本只在「未改写、同 id/version/content hash」时 locale 覆盖——
+//   机器化=差量记录携带 zh_sha256，与条目当前 content 的 sha256 精确匹配才覆盖：
+//   用户改写过条目 → hash 不匹配 → 自动退回用户文本；模板 zh 修订而翻译未跟 → 同样退回新 zh
+//   （过期翻译永不注入=「翻译=删减」回归通道被 hash 闸死）。等义门禁（结构指纹/字数阈值/宏集合）
+//   在写入侧 inj_locale_check.mjs 校验，本解析器只做运行时选择。
+//
+// 【差量文件形状】{ "entries": { "<id>": { "version": 1, "zh_sha256": "<64hex>", "content": "..." } } }
+//   可用语言 = 目录下 {locale}.json 文件名集合。宏占位符 {{...}} 必须原样保留在翻译文本中
+//   （宏替换在解析结果上照跑，volatileMacros 缓存安全语义不变——覆盖是确定性替换，前缀稳定）。
+
+const _injLocalesDir = path.join(__pluginDir, "inj_locales");
+const _injLocaleCache = new Map(); // locale → entries 对象 | null（负缓存：文件缺失/损坏不重试 IO）
+let _injLocaleAvailable = null; // 目录下可用 locale 文件名集合（惰性一次）
+
+/** 测试/热更用：清空 locale 差量缓存（下次访问重新扫盘）。 */
+export function clearInjLocaleCache() {
+  _injLocaleCache.clear();
+  _injLocaleAvailable = null;
+}
+
+function _availableInjLocales(dirOverride) {
+  if (dirOverride) {
+    // 依赖注入路径（单测用）：不污染进程缓存
+    try {
+      return fs.readdirSync(dirOverride).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+    } catch { return []; }
+  }
+  if (_injLocaleAvailable === null) {
+    try {
+      _injLocaleAvailable = fs.readdirSync(_injLocalesDir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+    } catch { _injLocaleAvailable = []; } // 目录不存在=零可用语言（翻译未落地的优雅退化，非错误）
+  }
+  return _injLocaleAvailable;
+}
+
+/**
+ * 从用户首选 locales 里选最佳可用差量语言。语义照 scripts/locale.mjs getLocalizedInfo /
+ * i18n_core.getbestlocale 单源范式（完全匹配 → 语言前缀 → 前缀-变体），**差异**：全 miss 返回
+ * null 而非首键/en-UK 兜底——INJ 的默认语言是条目原文中文，不是差量文件里的任意语言。
+ * （不直接 import i18n_core：其顶层含 exec/virtual-console 副作用，拉进 storage 域=启动环风险；
+ *   locale.mjs getLocalizedInfo 的「miss 取首键」兜底与本域语义不符，故 20 行私有实现+锚注释。）
+ * @param {string[]} available - 可用 locale 文件名集合
+ * @param {string[]} locales - 用户首选 locale 列表（user.locales，如 ["en-US","zh-CN"]）
+ * @returns {string|null}
+ */
+export function bestInjLocale(available, locales) {
+  if (!Array.isArray(available) || available.length === 0) return null;
+  const set = new Set(available);
+  for (const pref of locales ?? []) {
+    if (typeof pref !== "string" || !pref) continue;
+    if (set.has(pref)) return pref;
+    const prefix = pref.split("-")[0];
+    if (set.has(prefix)) return prefix;
+    const variant = available.find((l) => l.startsWith(prefix + "-"));
+    if (variant) return variant;
+  }
+  return null;
+}
+
+function _loadInjLocale(locale, dirOverride) {
+  if (dirOverride) {
+    try { return JSON.parse(fs.readFileSync(path.join(dirOverride, locale + ".json"), "utf8"))?.entries || null; }
+    catch { return null; }
+  }
+  if (!_injLocaleCache.has(locale)) {
+    let entries = null;
+    try { entries = JSON.parse(fs.readFileSync(path.join(_injLocalesDir, locale + ".json"), "utf8"))?.entries || null; }
+    catch { entries = null; } // 损坏/缺失=该语言零覆盖（退回 zh 原文），不抛不阻断生成链
+    _injLocaleCache.set(locale, entries);
+  }
+  return _injLocaleCache.get(locale);
+}
+
+/**
+ * INJ 条目正文的 locale 解析（生成链消费入口）。
+ * 快路径：无 locales / 首选即中文 / 无差量语言可用 → 原文直返（zh 用户零成本零行为变化）。
+ * 覆盖条件（全部满足才用翻译）：最佳匹配语言的差量文件含该 id + zh_sha256 与条目当前
+ * content 的 sha256 精确相等（未改写+翻译未过期）。任何不满足 → 条目原文（覆盖不是删减，
+ * 缺翻译=诚实降级到完整中文，绝不注入删减文本）。
+ * @param {{id?:string, content?:string}} entry - injection_prompts 条目（用户副本真值）
+ * @param {string[]} [locales] - 用户首选 locale（arg.locales，账号级）
+ * @param {{dir?:string}} [opts] - dir=差量目录覆盖（单测依赖注入；生产不传）
+ * @returns {string} 解析后的正文
+ */
+export function resolveInjectionContentForLocales(entry, locales, opts) {
+  const content = String(entry?.content ?? "");
+  if (!entry?.id || !content || !Array.isArray(locales) || locales.length === 0) return content;
+  const first = String(locales[0] || "");
+  if (first.startsWith("zh")) return content; // 快路径：中文用户（默认语言=原文）零 IO
+  const dirOverride = opts?.dir;
+  const best = bestInjLocale(_availableInjLocales(dirOverride), locales);
+  if (!best || best.startsWith("zh")) return content;
+  const rec = _loadInjLocale(best, dirOverride)?.[entry.id];
+  if (!rec || typeof rec.content !== "string" || !rec.content) return content;
+  const liveSha = crypto.createHash("sha256").update(content, "utf8").digest("hex");
+  if (rec.zh_sha256 !== liveSha) return content; // 用户改写 / 翻译过期 → 退回条目真值，hash 闸单源
+  return rec.content;
+}
+
 export function resolveEffectiveInjections(entries, ctx) {
   const list = Array.isArray(entries) ? entries : [];
   const accepted = acceptedScopes(ctx);

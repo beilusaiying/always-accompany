@@ -116,6 +116,15 @@
       "icon": "plug",
       "children": [
         { "title": "Plugin Overview", "file": "plugins/overview.md", "audience": ["user", "developer"] },
+        { "title": "Plugin Combinations", "file": "plugins/combinations.md", "audience": ["beginner", "user", "developer"] },
+        { "title": "Live Input (beilu-live)", "file": "plugins/live.md", "audience": ["user", "developer"] },
+        { "title": "CLI Tool Backend (beilu-cli)", "file": "plugins/cli.md", "audience": ["user", "developer"] },
+        { "title": "System Information (beilu-sysinfo)", "file": "plugins/sysinfo.md", "audience": ["user", "developer"] },
+        { "title": "Logger (beilu-logger)", "file": "plugins/logger.md", "audience": ["user", "developer"] },
+        { "title": "Tutorial / Visual Novel (beilu-tutorial)", "file": "plugins/tutorial.md", "audience": ["user", "developer"] },
+        { "title": "Semantic Search (beilu-vectordb)", "file": "plugins/vectordb.md", "audience": ["user", "developer"] },
+        { "title": "AIRP Scene Rendering (beilu-airp)", "file": "plugins/airp.md", "audience": ["user", "developer"] },
+        { "title": "User Plugin Host (beilu-plugin-host)", "file": "plugins/plugin-host.md", "audience": ["user", "developer"] },
         { "title": "File Operations (beilu-files)", "file": "plugins/files.md", "audience": ["user", "developer"] },
         { "title": "Screen Awareness (beilu-eye)", "file": "plugins/eye.md", "audience": ["user"] },
         { "title": "Web Search (beilu-web)", "file": "plugins/web.md", "audience": ["user"] },
@@ -123,7 +132,9 @@
         { "title": "Variable System (beilu-mvu)", "file": "plugins/mvu.md", "audience": ["developer"] },
         { "title": "Script Engine", "file": "plugins/scripts.md", "audience": ["developer"] },
         { "title": "Browser Automation (beilu-browser)", "file": "plugins/browser.md", "audience": ["user", "developer"] },
-        { "title": "Platform Reach (beilu-reach)", "file": "plugins/reach.md", "audience": ["user", "developer"] }
+        { "title": "Platform Reach (beilu-reach)", "file": "plugins/reach.md", "audience": ["user", "developer"] },
+        { "title": "Speech-to-Text (beilu-stt)", "file": "plugins/stt.md", "audience": ["user"] },
+        { "title": "AI PPT (beilu-ppt)", "file": "plugins/ppt.md", "audience": ["user"] }
       ]
     },
     {
@@ -150,6 +161,7 @@
       "children": [
         { "title": "System Architecture", "file": "developer/architecture.md", "audience": ["developer"] },
         { "title": "Message Pipeline", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "Reliability, Rollback & Release Boundaries", "file": "developer/reliability-contracts.md", "audience": ["user", "developer"] },
         { "title": "Plugin Development", "file": "developer/plugin-dev.md", "audience": ["developer"] },
         { "title": "API Endpoint Reference", "file": "developer/api-reference.md", "audience": ["developer"] }
       ]
@@ -159,6 +171,7 @@
       "icon": "brain",
       "children": [
         { "title": "Preface: Summary & Table of Contents", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "Current Production Contract: Attention, Context & Caching", "file": "p1-recall/ch7-current-runtime.md", "audience": ["user", "developer"] },
         { "title": "Chapter 1: Design Philosophy & Concepts", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
         { "title": "Chapter 2: Architecture & Processing Flow", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
         { "title": "Chapter 3: Algorithm Design & Formal Description", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },

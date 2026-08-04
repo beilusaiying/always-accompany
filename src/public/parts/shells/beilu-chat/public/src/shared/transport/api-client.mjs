@@ -42,6 +42,81 @@ const _diag = () => (_diagInst ??= createDiag("api"));
 
 const DEFAULT_TIMEOUT_MS = DEFAULTS.request.timeoutMs;
 
+const API_ERROR_FIELDS = Object.freeze([
+	"success", "error", "errorId", "code", "partpath", "retryable",
+	"retryAfterMs", "failureCount", "lastCause",
+	// 跨存储回档 409 仍是失败响应，但其 body 描述已发生的部分写入与恢复边界；
+	// 必须挂到 Error 供 catch 分支精确展示，不得因 HTTP 失败语义丢失。
+	"applied", "partial", "confirmed", "safetyRollbackError", "failedFiles",
+	"memory", "chat", "completed", "noOp", "warning", "fileError",
+	"indeterminate", "pending", "summaryLeaseCompletion", "memoryArchive",
+]);
+
+const STRUCTURED_API_RESULT_FIELDS = Object.freeze([
+	...API_ERROR_FIELDS,
+	"message", "status", "reason", "derived",
+]);
+
+function isPlainRecord(value) {
+	return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * 将 apiFetch 抛出的 Error 或普通 API result 归一为同一业务结构。
+ * payload 是 HTTP body 权威；显式 Error/result 字段只补 payload 缺口。
+ */
+export function normalizeStructuredApiResult(value) {
+	const source = isPlainRecord(value) ? value : {};
+	const payload = isPlainRecord(source.payload) ? source.payload : {};
+	const normalized = { ...payload };
+	for (const field of STRUCTURED_API_RESULT_FIELDS) {
+		if (field === "status" && Number.isInteger(source.status)) continue;
+		if (!Object.prototype.hasOwnProperty.call(normalized, field) &&
+			Object.prototype.hasOwnProperty.call(source, field)) {
+			normalized[field] = source[field];
+		}
+	}
+	// Error.status 是 HTTP 状态；payload.status 可能是业务阶段。分字段保留，禁止相互覆盖。
+	if (Number.isInteger(source.status)) normalized.httpStatus = source.status;
+	if (typeof source.statusText === "string") normalized.httpStatusText = source.statusText;
+	if (source.retryAfter != null && normalized.retryAfter == null) normalized.retryAfter = source.retryAfter;
+	return normalized;
+}
+
+function errorText(value) {
+	if (typeof value === "string") return value;
+	if (value == null) return "";
+	try { return JSON.stringify(value); } catch { return String(value); }
+}
+
+async function makeApiResponseError(resp, method, url) {
+	let payload = null;
+	let responseText = "";
+	try {
+		const contentType = resp.headers.get("content-type") || "";
+		if (contentType.includes("json")) payload = await resp.clone().json();
+		else responseText = (await resp.clone().text()).trim();
+	} catch { /* 响应体无法解析时仍保留 HTTP status/statusText */ }
+
+	const backendMessage = payload && typeof payload === "object"
+		? (payload.error ?? payload.message ?? payload.code)
+		: null;
+	const detail = errorText(backendMessage) || responseText || `${resp.status} ${resp.statusText}`.trim();
+	const error = new Error(`[apiFetch] ${method} ${url} 失败: ${detail}`);
+	error.name = "ApiError";
+	error.status = resp.status;
+	error.statusText = resp.statusText;
+	error.response = resp;
+	error.payload = payload;
+	error.retryAfter = resp.headers.get("Retry-After");
+	if (payload && typeof payload === "object") {
+		for (const field of API_ERROR_FIELDS) {
+			if (Object.prototype.hasOwnProperty.call(payload, field)) error[field] = payload[field];
+		}
+	}
+	return error;
+}
+
 // HTTP 并发限流（全局单源）：浏览器同源限制 6 连接（含 2 WS），HTTP 最多同时 4 个，多的排队。
 // 所有前端 HTTP 请求（sendAction/callApi/直接 apiFetch）统一经此限流，
 // 防 char-changed/mode-switched/tab 切换等事件扇出 18+ 监听者各自独立发 HTTP 堵死连接池。
@@ -107,16 +182,16 @@ async function _apiFetchInner(url, opts = {}) {
 	// 401 → 登录跳转（单一权威，避免各处各写 401 处理）
 	if (resp.status === 401) {
 		_diag().warn(`${method} ${url} → 401（将跳登录）`);
+		const error = await makeApiResponseError(resp, method, url);
 		try { if (typeof window !== "undefined" && !location.pathname.includes("/login")) location.href = "/login"; } catch { /* 跳转失败不掩盖 401 */ }
-		throw new Error(`[apiFetch] 401 未认证: ${method} ${url}`);
+		throw error;
 	}
 	_diag().debug(`${method} ${url} → ${resp.status} (${(performance.now() - _t0).toFixed(0)}ms)`);
 	if (raw) return resp;
 	if (!resp.ok) {
-		let _msg = `${resp.status} ${resp.statusText}`;
-		try { const _j = await resp.clone().json(); if (_j && _j.error) _msg = _j.error; } catch { /* 非 json 错误体，保留状态码 */ }
-		_diag().warn(`${method} ${url} → ${resp.status}:`, _msg);
-		throw new Error(`[apiFetch] ${method} ${url} 失败: ${_msg}`);
+		const error = await makeApiResponseError(resp, method, url);
+		_diag().warn(`${method} ${url} → ${resp.status}:`, error.message);
+		throw error;
 	}
 	const _ct = resp.headers.get("content-type") || "";
 	return _ct.includes("application/json") ? resp.json() : resp.text();

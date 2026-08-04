@@ -15,7 +15,10 @@ export const TOOL_RUNTIME_DEFAULTS = Object.freeze({
   long_running_after_ms: 15000,
   notify_long_running: true,
   notify_stalled: true,
-  notify_completed: true,
+  // [0803 凛倾「一个ide工作,通知十多次」] 成功终态默认静默：通知只留给需要用户注意的信号
+  //   （失败/停滞/长运行/审批）；每个工具成功都弹=一次任务 N 个工具 N 条噪声。全量成功记录
+  //   在操作历史面板恒可查，不靠通知。用户显式开启（面板勾选=写显式 true）仍尊重。
+  notify_completed: false,
   notify_failed: true,
   auto_continue_late_results: true,
   late_result_continue_delay_ms: 1000,
@@ -114,7 +117,8 @@ export function normalizeToolRuntimeConfig(raw = {}) {
     ),
     notify_long_running: source.notify_long_running !== false,
     notify_stalled: source.notify_stalled !== false,
-    notify_completed: source.notify_completed !== false,
+    // [0803] 与新默认(false)同向：缺省关，显式 true 才开（原 `!== false` 缺省当开=噪声默认）
+    notify_completed: source.notify_completed === true,
     notify_failed: source.notify_failed !== false,
     auto_continue_late_results: source.auto_continue_late_results !== false,
     late_result_continue_delay_ms: _boundedInt(

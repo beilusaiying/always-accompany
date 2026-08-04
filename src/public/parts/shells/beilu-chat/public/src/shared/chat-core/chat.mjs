@@ -23,7 +23,7 @@
  *       → displayRegex.mjs(loadDisplayRules) → storage.mjs(storage/KEYS)
  */
 import { showToastI18n, showToast } from "../../../../../../scripts/toast.mjs";
-import { getPartList } from "../../../../../../scripts/parts.mjs";
+import { getAllDefaultPartsByType, getPartList } from "../../../../../../scripts/parts.mjs";
 import { ensureNotifyPermission } from "../../../../../../scripts/desktopNotify.mjs";
 
 import { loadDisplayRules, loadAirpCaps } from "../render/displayRegex.mjs";
@@ -234,7 +234,48 @@ async function resolveChatIdForChar(charName, hashChatId) {
   if (!charName) {
     const _nonBot = chats.filter(c => !(c.customName || "").startsWith(BOT_CHAT_SYMBOL));
     if (hashChatId && _nonBot.some(c => (c.chatid || c.id) === hashChatId)) return hashChatId;
-    return _nonBot[0]?.chatid || _nonBot[0]?.id || "";
+    if (_nonBot.length) return _nonBot[0]?.chatid || _nonBot[0]?.id || "";
+    // [0804 根因修·新用户默认角色] 全新用户（无角色、无任何对话）原实现直接返回空态；
+    //   之后虽补过“取角色列表第一张”，但目录枚举顺序不是默认角色契约。权威改为用户配置
+    //   defaultParts.chars（由新用户模板登记官方默认卡），旧用户没有该字段才兼容首张卡。
+    //   已登记的默认卡若未实际安装必须显式失败，禁止静默改选另一张卡掩盖发布物缺件。
+    try {
+      // “接口成功返回空列表”和“接口读取失败”是两个状态：前者才代表旧用户没有配置；
+      // 后者可能是认证/网络波动，必须保留失败态，不能误选目录第一张并伪装初始化成功。
+      const _defaults = await getAllDefaultPartsByType("chars");
+      const _configuredDefault = Array.isArray(_defaults)
+        ? (_defaults.find(n => typeof n === "string" && n && !n.startsWith("_")) || "")
+        : "";
+      const _allChars = await getPartList("chars");
+      const _availableChars = Array.isArray(_allChars)
+        ? _allChars.filter(n => typeof n === "string" && n && !n.startsWith("_"))
+        : [];
+      if (_configuredDefault && !_availableChars.includes(_configuredDefault)) {
+        throw new Error(`用户默认角色“${_configuredDefault}”未安装，请检查新用户模板或发布物同步`);
+      }
+      const _targetChar = _configuredDefault || _availableChars[0] || "";
+      if (_targetChar) {
+        const resp = await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: _targetChar } });
+        const _modeChats = resp?.modeChats;
+        const _requiredModes = ["chat", "smart", "code", "work"];
+        const _missingModes = _requiredModes.filter(mode => typeof _modeChats?.[mode] !== "string" || !_modeChats[mode]);
+        if (resp?.success !== true || _missingModes.length) {
+          throw new Error(`默认角色四模式对话未完整建立${_missingModes.length ? `（缺少 ${_missingModes.join("/")}）` : ""}`);
+        }
+        if (typeof window._beiluSetCharName !== "function") {
+          throw new Error("当前角色提交入口未就绪");
+        }
+        // 后端四模式事务 ACK 完整后再提交本地角色，避免“角色已切换、对话创建失败”的假成功。
+        window._beiluSetCharName(_targetChar);
+        const cid = _modeChats.chat;
+        console.log(`[beilu-chat] 新用户自动选中默认角色「${_targetChar}」，chat=${cid}`);
+        return cid;
+      }
+    } catch (e) {
+      console.error("[beilu-chat] 新用户默认角色自动选中失败（保留空态）:", e?.message);
+      showToast?.("error", `默认角色初始化失败：${e?.message || e}`, 8000);
+    }
+    return "";
   }
 
   // 规则1：hash 指向的聊天确属当前角色 → 采纳
@@ -245,7 +286,18 @@ async function resolveChatIdForChar(charName, hashChatId) {
 
   // 规则2：当前角色自己最近的聊天
   const mine = chats.find(c => chatBelongsToChar(c, charName));
-  if (mine) return mine.chatid || mine.id;
+  if (mine) {
+    // [0804 根因修] 原实现「找到任一角色对话即 return」把规则3 的四模式补齐永久短路：
+    //   半成品角色（历史绑卡循环中断只剩 1 条线）reload 多少次都停在 1 条，切模式 tab 直接
+    //   撞死坐标（E 现场实证）。补齐走服务端幂等公用机制：四线健全时零新建（指针+对话实存
+    //   即保留现值），只有缺线才补——不改变本函数「打开最近对话」的返回语义。失败不阻断打开。
+    try {
+      await sendAction({ verb: "ensureModeChats", target: "shells:chat", source: "web", payload: { charname: charName } });
+    } catch (e) {
+      console.warn(`[beilu-chat] 角色「${charName}」四模式健全性补齐失败（不阻断打开）:`, e?.message);
+    }
+    return mine.chatid || mine.id;
+  }
 
   // 规则3：当前角色无聊天 → 服务端 ensureModeChatsForChar 建四窗口对话（chat/smart/code/work）
   // [0802 四窗口对话收口] 原实现只建 1 条 → 默认角色卡首次使用时被四窗共用。改走服务端单点
@@ -258,18 +310,9 @@ async function resolveChatIdForChar(charName, hashChatId) {
       return chatModeId;
     }
   } catch (e) {
-    console.warn("[beilu-chat] 建四窗口对话失败，回退单建:", e.message);
-    // 回退：单建一条（兼容服务端未更新的场景）
-    try {
-      const newD = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-      const newId = newD.chatid || newD.id;
-      if (newId) {
-        await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: newId }, payload: { charname: charName } });
-        return newId;
-      }
-    } catch (fallbackErr) {
-      console.warn("[beilu-chat] 回退单建也失败:", fallbackErr.message);
-    }
+    // 不能回退成单条绑定对话：那会重新引入四个模式共用同一聊天的根因。
+    console.warn("[beilu-chat] 建四窗口对话失败，保留空态等待用户重试:", e.message);
+    showToast?.("error", `角色「${charName}」的模式对话未建全：${e?.message || e}`, 6000);
   }
   return "";
 }
@@ -451,16 +494,15 @@ export async function initializeChat() {
           chatid = resp?.modeChats?.chat || null;
           if (chatid) console.log(`[beilu-chat] 已为角色「${_initChar}」建四窗口对话，chat=${chatid}`);
         } catch (e) {
-          console.warn("[beilu-chat] 建四窗口对话失败，回退单建:", e.message);
+          // 不能以单建+绑卡兜底，否则当前角色又会得到可被四模式复用的共享对话。
+          console.warn("[beilu-chat] 建四窗口对话失败，保留空态等待用户重试:", e.message);
+          showToast?.("error", `角色「${_initChar}」的模式对话未建全：${e?.message || e}`, 6000);
         }
       }
-      // 回退/无角色：单建空白对话
-      if (!chatid) {
+      // 无角色时可以单建空白对话；有角色但四线未建全时不得回退成共享线。
+      if (!chatid && !_initChar) {
         const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
         chatid = newData.chatid || newData.id;
-        if (chatid && _initChar) {
-          await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: chatid }, payload: { charname: _initChar } });
-        }
       }
       if (chatid) {
         window.location.hash = chatid;
@@ -675,13 +717,29 @@ export async function switchCharacterScope(chatid, charNameHint, opts = {}) {
   //   lineManager 静态环，同 _beiluGetWinEl 范式）；lineManager 未加载时桥不存在＝无窗口＝不拦。
   const _winLock = (() => { try { return window._beiluCurWinLocked?.(); } catch { return null; } })();
   if (_winLock && _winLock.chatid !== chatid) {
-    // 被挡住的切换必须可见：否则用户点了没反应、链路上也查不到是谁挡的（静默拒绝＝新的"点了没反应"）
-    wbTrace("window", "switchBlocked", { boundTo: _winLock.chatid?.substring?.(0, 8), want: chatid?.substring?.(0, 8) });
-    // [T7] 拦截进错误追踪（console.error → backendMonitor pushError 现成管线）：
-    //   wbTrace 只进运行时日志，错误追踪面板对被拒操作恒显"无错误"=排查断链（0727 实证）
-    console.error(`[拦截] 切换被拒：当前窗口已绑定「${_winLock.label}」(${_winLock.chatid?.substring?.(0, 8)})，目标 ${chatid?.substring?.(0, 8)} 不予切换`);
-    showToast?.("warning", `这个窗口已绑定「${_winLock.label}」，不能在这里切换对话或角色卡。请先切回主窗口（活动栏 #1）。`, 5000);
-    return;
+    // [0804 根因修·副窗口报废] 拒绝前先验绑定对话是否仍存在：锁的意义是保护「窗口正在显示的
+    //   那条对话不被顶掉」（凛倾 0727 设计，保留）；但绑定对话已被删（外部删文件/其他端删除）时
+    //   锁失去保护对象——继续拦截 = 该窗口既打不开又切不走也不能改绑，永久报废（用户实证）。
+    //   死绑定 → 摘线（_beiluDropLine 自带「当前窗口先回 home 再摘」的统一提交）+ 放行本次切换。
+    //   列表取不到（启动窗口期）时不放行：宁可保持锁语义，不误摘活线。
+    let _boundAlive = true;
+    try {
+      const _chk = await sendAction({ verb: "getChatList", target: "shells:chat", source: "web" });
+      if (Array.isArray(_chk)) _boundAlive = _chk.some(c => (c.chatid || c.id) === _winLock.chatid);
+    } catch { /* 存活性未知 → 按活处理，保持原锁行为 */ }
+    if (_boundAlive) {
+      // 被挡住的切换必须可见：否则用户点了没反应、链路上也查不到是谁挡的（静默拒绝＝新的"点了没反应"）
+      wbTrace("window", "switchBlocked", { boundTo: _winLock.chatid?.substring?.(0, 8), want: chatid?.substring?.(0, 8) });
+      // [T7] 拦截进错误追踪（console.error → backendMonitor pushError 现成管线）：
+      //   wbTrace 只进运行时日志，错误追踪面板对被拒操作恒显"无错误"=排查断链（0727 实证）
+      console.error(`[拦截] 切换被拒：当前窗口已绑定「${_winLock.label}」(${_winLock.chatid?.substring?.(0, 8)})，目标 ${chatid?.substring?.(0, 8)} 不予切换`);
+      showToast?.("warning", `这个窗口已绑定「${_winLock.label}」，不能在这里切换对话或角色卡。请先切回主窗口（活动栏 #1）。`, 5000);
+      return;
+    }
+    wbTrace("window", "switchUnblockedDeadBinding", { boundTo: _winLock.chatid?.substring?.(0, 8), want: chatid?.substring?.(0, 8) });
+    console.warn(`[窗口自愈] 绑定对话「${_winLock.label}」(${_winLock.chatid?.substring?.(0, 8)}) 已不存在，释放该窗口并继续切换到 ${chatid?.substring?.(0, 8)}`);
+    showToast?.("info", `窗口绑定的对话「${_winLock.label}」已不存在，已释放该窗口并切换到目标对话。`, 5000);
+    try { window._beiluDropLine?.(_winLock.chatid); } catch { /* 摘线失败不阻断切换 */ }
   }
   // [系统病型审计 0713·A-NEW-2] gen 取点前移到首个 await 之前：原在 resolve 之后 ++，
   //   慢的旧调用 resolve 回来才领号=领到"最新"号，反把先完成的新调用判旧——代号失去时序语义。
@@ -727,73 +785,9 @@ export async function switchCharacterScope(chatid, charNameHint, opts = {}) {
     markModeActiveChat(mode, _isoCharName, chatid);
   } catch { /* 非致命：模式 key 写入失败不阻断切卡 */ }
 
-  // [MO-INIT] 多模式聊天文件初始化：首次切到新角色时，为其他模式组也创建独立聊天文件。
-  //   触发条件：其他模式组的 localStorage key 为空（从未分配过 chatId）。
-  //   这确保创建/导入角色卡后，4 个独立 key（chat/smart/code/work）都有各自的聊天文件，
-  //   切换模式时不会复用同一个聊天（凛倾 0628「角色卡都需要创建4个对话」+0706「4个模式就是现在前端的4个模式」）。
-  //   原 chat+smart 共享 beilu-chat-chatid 已拆（MODE_CHATID_KEYS 加 smart 键后下方共享去重自然失效）；
-  //   旧用户 smart 线为空=首切时懒建补线，旧对话留在 chat 线不迁移。
-  try {
-    const { MODE_CHATID_KEYS: _modeKeys, getCurrentMode: _getMode, getModeChatIdKey: _getKey } = await import("../../panels/feature/featureControls.mjs");
-    const _curMode = _getMode();
-    // 需要角色名来绑定新聊天——优先 charNameHint，备选 localStorage
-    const _charName = charNameHint || storage.get(KEYS.BEILU_LAST_CHAR) || "";
-    // [MO-INIT-V3] per-character key：每个角色在每个模式有独立的 chatId 存储。
-    //   key 格式 `beilu-{mode}-chatid:{charName}`，切角色后不会互相覆盖。
-    const _seenModes = new Set();
-    _seenModes.add(_curMode);
-    const _toCreate = [];
-    for (const [mode] of Object.entries(_modeKeys || {})) {
-      if (_seenModes.has(mode)) continue;
-      // chat 和 smart 共享同一 base key，去重
-      if (_modeKeys[mode] === _modeKeys[_curMode]) { _seenModes.add(mode); continue; }
-      _seenModes.add(mode);
-      const perCharKey = _getKey(mode, _charName);
-      if (!perCharKey) continue;
-      const existingId = storage.get(perCharKey);
-      if (existingId && existingId !== chatid) continue;
-      _toCreate.push({ mode, key: perCharKey });
-    }
-    if (_toCreate.length > 0 && _charName) {
-      // ★ [0727 切换卡顿根因修] 这里**不能 await**。
-      //   MO-INIT 做的是「给**其他**模式预建对话」，与「把用户切到目标对话」零因果依赖，
-      //   但原来它 await 在主链上，挡在下面的 WS 重连(步骤2) / getInitialData(步骤3) / 渲染 前面。
-      //   最坏情况正是用户最常触发的那个：新拉一条线（新角色卡的新对话）→ 该卡在其余 3 个模式下
-      //   全无记录 → 一次点击先串跑 3 组「POST new + POST bindChar」，全部回来才开始真正的切换，
-      //   界面上就是「点下去变暗、然后什么都不发生」。
-      //   原注释「MO-INIT 非致命：不阻断切卡主流程」只说对了一半——它不阻断*正确性*（每个任务
-      //   自带 try/catch），但实打实阻断*时序*。改为后台补齐：主链立刻往下走。
-      void Promise.all(_toCreate.map(async ({ mode: _m, key: targetKey }) => {
-        try {
-          // T6b批7：POST /new + POST /:chatId/char → sendAction shells:chat#new / #bindCharToChat。!ok 门面抛错走 catch（原 !newRes.ok return → catch return，等价：不建该模式聊天）。
-          const newData = await sendAction({ verb: "new", target: "shells:chat", source: "web" });
-          const newChatId = newData.chatid;
-          if (!newChatId) return;
-          await sendAction({ verb: "bindCharToChat", target: "shells:chat", source: "web", scope: { chatId: newChatId }, payload: { charname: _charName } });
-          // 在用指针 + CONV_META mode 标记全走 conversationManager 单源写点（含守卫+广播）。
-          // 失败即冒泡外层 catch 诚实放弃本模式懒建——禁 catch 里 storage.set 直写兜底：
-          // 直写绕收口（无广播/无服务端双写）会制造半标记脏指针（在用徽章错乱同型病）。
-          const { markModeActiveChat, loadConvMeta, saveConvMeta } = await import("./conversationManager.mjs");
-          markModeActiveChat(_m, _charName, newChatId);
-          const _meta = loadConvMeta();
-          _meta[newChatId] = { lastActive: Date.now(), mode: _m };
-          saveConvMeta(_meta);
-          // 服务端 chat_modes 双写（0712 权威上移配套）：漏写=懒建对话换窗口徽标/过滤全丢。
-          // 动态 import 对齐本函数内 featureControls 同款防环范式；fire-and-forget 不阻断懒建。
-          import("../transport/api-client.mjs")
-            .then((m) => m.setChatMode(newChatId, _m))
-            .then((r) => { if (r && !r.ok) console.warn(`[切卡免刷][MO-INIT] ${_m} 模式标记服务端持久失败:`, r.message); })
-            .catch(() => { /* 非致命 */ });
-          console.log(`[切卡免刷][MO-INIT] 为 ${_m}/${_charName} 创建聊天 ${newChatId.substring(0, 8)}…`);
-        } catch (e) {
-          console.warn(`[切卡免刷][MO-INIT] 为 ${_m}/${_charName} 创建聊天失败（非致命）:`, e.message);
-        }
-      })).catch((e) => {
-        // 不 await 了，外层 try/catch 兜不到它 → 自带兜底，避免 unhandledrejection
-        console.warn("[切卡免刷][MO-INIT] 后台补齐异常（不影响本次切换）:", e?.message || e);
-      });
-    }
-  } catch { /* MO-INIT 非致命：不阻断切卡主流程 */ }
+  // 四模式对话只能由服务端 ensureModeChatsForChar 创建和写入 mode_active_chats。
+  // 旧实现以 localStorage 缺键为依据后台 new+bind，既绕过服务端幂等锁，也会在多窗口
+  // 或缓存被清除时重复建线并制造孤儿对话。前端现在只消费服务端 getChatList 的映射。
 
   // 2. WS 重连到新 chat（initializeWebSocket 有 if(ws)return 守卫，必须显式 reconnect）
   try {
@@ -905,7 +899,13 @@ export async function switchCharacterScope(chatid, charNameHint, opts = {}) {
       const { setFileExplorerRoot } = await import("../../panels/code/fileExplorer.mjs");
       await setFileExplorerRoot(_cardRoot);
     }
-  } catch { /* 非致命，不阻断切卡 */ }
+  } catch (err) {
+    // 切卡本身可继续，但角色保存过的根无效/无法落盘时必须让用户知道；否则该坏根会在
+    // 下次切卡、IDE 反向同步或未绑组 worker 中重复传导。
+    const message = err?.message || String(err);
+    console.warn("[切卡免刷] 角色工作区根未能应用:", message);
+    showToast(`该角色的工作区无法恢复：${message}。请在文件面板重新选择目录。`, "warning");
+  }
 
   console.debug("[切卡免刷] switchCharacterScope 完成 →", chatid?.substring?.(0, 8));
 }

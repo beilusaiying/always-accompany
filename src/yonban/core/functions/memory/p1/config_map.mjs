@@ -17,18 +17,20 @@ const num = (v, lo, hi) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : undefined;
 };
+const enumValue = (v, allowed) => allowed.includes(String(v)) ? String(v) : undefined;
 
 // config 键(camelCase, 前端面板/config.json) → [目标 PARAMS 对象, 键, 钳制]
 const MAP = [
-  ['contextMessages',   P0, 'CONTEXT_COUNT',     v => num(v, 0, 20)], // 复用 py 服务既有键
+  ['contextMessages',   P0, 'CONTEXT_COUNT',     v => num(v, 0, 5)], // 服务/UI 契约: 默认5条 user，可配0..5
   ['dataCount',         P0, 'DATA_COUNT',        v => num(v, 0, 20)],
   ['shortSegmentChars', P0, 'SHORT_SENT_MIN',    v => num(v, 2, 50)],
+  ['copyJaccardThreshold', P0, 'COPY_JACCARD_THRESHOLD', v => num(v, 0, 1)],
   ['inputMaxWords',     P0, 'MAX_WORDS',         v => num(v, 20, 500)],
   ['truncHeadRatio',    P0, 'TRUNC_HEAD_RATIO',  v => num(v, 0.1, 0.9)],
-  ['aiOutputCount',     P0, 'AI_OUTPUT_COUNT',   v => num(v, 0, 5)],
   ['concFloor',         P1, 'CONC_FLOOR',        v => num(v, 1, 5)],
   ['enConcFloor',       P1, 'EN_CONC_FLOOR',     v => num(v, 1, 5)],
   ['enFreqHigh',        P1, 'EN_FREQ_HIGH',      v => num(v, 0, 99999999)],
+  ['englishPosBackend', P1, 'EN_POS_BACKEND',    v => enumValue(v, ['wordnet', 'stanza', 'none'])],
   ['swowTopK',          P2, 'SWOW_TOPK',         v => num(v, 1, 30)],
   ['swowMinSupZh',      P2, 'SWOW_MIN_SUPPORT_ZH', v => num(v, 1, 5)],
   ['cnTopK',            P2, 'CN_TOPK',           v => num(v, 1, 50)],
@@ -45,9 +47,13 @@ const MAP = [
   ['shortInputChars',  P4, 'SHORT_INPUT_CHARS', v => num(v, 1, 100)],
   ['hitsDivisor',      P4, 'HITS_DIVISOR',      v => num(v, 2, 100)],
   ['oovBonus',         P4, 'OOV_BONUS',         v => num(v, 0, 3)],
+  ['exactAnchorBonus', P4, 'EXACT_ANCHOR_BONUS', v => num(v, 0, 5)],
+  ['timeMatchBonus',   P4, 'TIME_MATCH_BONUS',   v => num(v, 0, 5)],
+  ['recordTopBonus',   P4, 'RECORD_TOP_BONUS',   v => num(v, 0, 5)],
+  ['recordImportanceWeight', P4, 'RECORD_IMPORTANCE_WEIGHT', v => num(v, 0, 5)],
   ['anchorTopN',       P4, 'ANCHOR_TOPN',       v => num(v, 5, 100)],
   ['topBonusN',        P4, 'TOP_BONUS_N',       v => num(v, 1, 50)],
-  ['nbDedupCosDiff',   P4, 'NB_DEDUP_COS_DIFF', v => num(v, 0, 0.5)],
+  ['nbDedupThreshold', P4, 'NB_DEDUP_THRESH',   v => num(v, 0, 1)],
   ['emotionBonusW',    P3, 'EMOTION_BONUS_W',   v => num(v, 0, 2)],
   ['domainBonusW',     P3, 'DOMAIN_BONUS_W',    v => num(v, 0, 2)],
   ['poolStrengthW',    P3, 'POOL_STRENGTH_W',   v => num(v, 0, 2)],
@@ -57,8 +63,8 @@ const MAP = [
   ['wnDualFloor',     P3, 'WN_DUAL_FLOOR',     v => num(v, 0, 1)],
 ];
 
-// EN_FREQ_HIGH/AI_OUTPUT_COUNT 目前是模块级 const 非 PARAMS 键——applyConfig 前先在各节点补挂,
-// 见 node0/node1 的 PARAMS 补丁(缺键时本函数跳过并计入 skipped,白盒可见不静默)
+// EN_FREQ_HIGH 目前是模块级 const 非 PARAMS 键——applyConfig 前先在 node1 PARAMS 补挂；
+// 缺键时本函数跳过并计入 skipped，白盒可见不静默。
 
 export function applyConfig(cfg = {}) {
   const applied = {}, skipped = [];

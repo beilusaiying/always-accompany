@@ -6,7 +6,8 @@
  *     → sendAction plugins:beilu-memory#getData 桥（payload={char_id,viewMode}，username 桥 session 盖章；T2批2 迁移，原 GET config/getdata 直连退役）
  *       （注：POST setdata {_action:"getTables"} 是后端缓存失效动作非取数，setDataActions:890——20260706 传导链核后注释校准）
  *     → 渲染标签页 #0-#9（或更多）+ 当前表格网格（列头 + 数据行）
- *   单元格点击 → contenteditable 内联编辑 → 失焦 → isDirty=true
+ *   单元格点击 → input 单行快编（Enter/Tab/Escape）→ 失焦提交；放大按钮/F2
+ *     → 全局 openExpandEditor adapter → 保存仅回写打开时的 table.id+row+col 并 markDirty
  *   列头点击 → 编辑列名 → 增删列按钮
  *   表格名双击 → 编辑表格名
  *   规则区点击 → 编辑 insert/update/delete 规则（控制 AI 何时写表）
@@ -29,6 +30,7 @@
  *   → shared/transport/api-client.mjs（本模块直接 fetch，绕过 apiFetch；diagLogger 上报调试信息）
  *   → shared/state/diagLogger.mjs createDiag("memory")（表格操作调试日志）
  *   → shared/widgets/beiluDialog.mjs beiluPrompt（增加表格/列名输入）
+ *   → shared/widgets/expandEditor.mjs openExpandEditor（单元格复用全局全屏编辑窗口）
  *   → shared/widgets/whitebox.mjs wbDetect（保存失败时白盒上报）
  *   ← memoryPresetChat.mjs / layout.mjs（记忆 Tab 内"表格"视图时调用 initDataTable）
  *
@@ -46,6 +48,7 @@ import { sendAction } from "../../shared/transport/sendAction.mjs"; // T2批23�
 import { wbDetect } from "../../shared/widgets/whitebox.mjs";
 import { escapeHtml, whenVisible } from "../../shared/state/utils.mjs"; // 收口: 原本地副本漏转义 ' (属性单引号上下文不安全)→改用权威 utils.escapeHtml(全5字符)；whenVisible=0718 可见性门控
 import { beiluPrompt, beiluConfirm } from "../../shared/widgets/beiluDialog.mjs";
+import { openExpandEditor } from "../../shared/widgets/expandEditor.mjs";
 const diag = createDiag("memory");
 
 // ===== 状态 =====
@@ -946,7 +949,7 @@ function startColumnNameEdit(th, nameSpan, colIdx) {
     }
   };
 
-  input.addEventListener("blur", finishEdit);
+  input.addEventListener("blur", () => finishEdit());
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1044,7 +1047,7 @@ function startTableNameEdit() {
     }
   };
 
-  input.addEventListener("blur", finishEdit);
+  input.addEventListener("blur", () => finishEdit());
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1091,7 +1094,7 @@ function startRuleEdit(ruleSpan, ruleKey) {
     }
   };
 
-  input.addEventListener("blur", finishEdit);
+  input.addEventListener("blur", () => finishEdit());
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1138,15 +1141,29 @@ function startCellEdit(td, rowIdx, colIdx) {
   const input = document.createElement("input");
   input.type = "text";
   input.style.cssText =
-    "width:100%;padding:0.2rem 0.3rem;font-size:0.8rem;border:1.5px solid var(--beilu-amber);border-radius:0.2rem;background:rgba(0,0,0,0.15);color:inherit;outline:none;box-sizing:border-box;";
+    "width:100%;padding:0.2rem 2rem 0.2rem 0.3rem;font-size:0.8rem;border:1.5px solid var(--beilu-amber);border-radius:0.2rem;background:rgba(0,0,0,0.15);color:inherit;outline:none;box-sizing:border-box;";
   input.value = currentValue;
+  const editor = document.createElement("div");
+  editor.className = "expandable-container";
+  editor.style.width = "100%";
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "expand-btn";
+  expandBtn.dataset.expandProgrammatic = "true";
+  expandBtn.title = "放大编辑（F2）";
+  expandBtn.setAttribute("aria-label", "放大编辑当前单元格");
+  expandBtn.textContent = "⛶";
   td.textContent = "";
-  td.appendChild(input);
+  editor.append(input, expandBtn);
+  td.appendChild(editor);
   input.focus();
   input.select();
 
-  const finishEdit = () => {
-    const newValue = input.value;
+  let expandOpen = false;
+  let finished = false;
+  const finishEdit = (newValue = input.value) => {
+    if (expandOpen || finished) return;
+    finished = true;
     td.classList.remove("dt-cell-editing");
     td.textContent = newValue;
     td.title = newValue || "(空，点击编辑)";
@@ -1163,8 +1180,58 @@ function startCellEdit(td, rowIdx, colIdx) {
     }
   };
 
-  input.addEventListener("blur", finishEdit);
+  const openExpanded = () => {
+    if (finished || expandOpen) return;
+    expandOpen = true;
+    const tableId = table.id;
+    const rowRef = table.rows[rowIdx];
+    try {
+      openExpandEditor({
+        title: `表格 #${tableId} · 第 ${rowIdx} 行 · ${table.columns[colIdx] || `第 ${colIdx} 列`}`,
+        value: input.value,
+        onSave(value) {
+          const liveTable = tables.find((candidate) => candidate === table);
+          const targetIsCurrent = liveTable?.id === tableId &&
+            Array.isArray(liveTable.rows) && liveTable.rows[rowIdx] === rowRef &&
+            Array.isArray(liveTable.columns) && colIdx >= 0 && colIdx < liveTable.columns.length;
+          if (!targetIsCurrent) {
+            const message = `放大编辑目标表格 #${tableId} 已重载或失效，未写入任何单元格`;
+            setStatus(message);
+            throw new Error(message);
+          }
+          expandOpen = false;
+          input.value = value;
+          finishEdit(value);
+        },
+        onClose({ saved }) {
+          expandOpen = false;
+          if (!saved && input.isConnected) {
+            requestAnimationFrame(() => input.focus());
+          }
+        },
+      });
+    } catch (error) {
+      expandOpen = false;
+      setStatus(`放大编辑打开失败: ${error.message}`);
+      window._beiluToast?.(error.message || "放大编辑打开失败", "error");
+      input.focus();
+    }
+  };
+
+  input.addEventListener("blur", () => finishEdit());
+  // 防止按下按钮先触发 input.blur；showModal 导致的 blur 由 expandOpen 门控。
+  expandBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  expandBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openExpanded();
+  });
   input.addEventListener("keydown", (e) => {
+    if (e.key === "F2") {
+      e.preventDefault();
+      openExpanded();
+      return;
+    }
     if (e.key === "Enter") {
       e.preventDefault();
       input.blur();

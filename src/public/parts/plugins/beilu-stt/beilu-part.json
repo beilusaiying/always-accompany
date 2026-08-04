@@ -1,4 +1,5 @@
 {
   "type": "plugins",
-  "dirname": "beilu-stt"
+  "dirname": "beilu-stt",
+  "configContract": "none"
 }

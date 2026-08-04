@@ -69,10 +69,17 @@ import {
 import { currentGitCommit } from "../autoupdate.mjs";
 import { __dirname } from "../base.mjs";
 import { confineSegment, getDeployMode, confinePath } from "../../yonban/core/functions/security/path_confine.mjs";
-// R5 路径单源：beilu-files-settings.json 的 node 侧路径由 storage.getFilesSettingsPath() 统一供给，
-//   删除本文件旧的 __dirname 上溯本地推导（原 _FILES_SETTINGS_PATH），消除三头巧合对齐。
-//   方向 server → yonban/memory 无环（本文件已依赖 yonban 侧 path_confine / screenshot injection_state）。
-import { getFilesSettingsPath } from "../../yonban/core/functions/memory/storage_mod/storage.mjs";
+// [D6 §4 2026-08-04] settings 单写者收口：本文件不再自行 read/parse/write
+//   beilu-files-settings.json（原 _readCommandGate/_writeCommandGate/_writeCommandRules 私有
+//   整文档 RMW 是 B1 三写者之一），改为 filesSettingsStore 薄 adapter（versioned+CAS+跨入口锁+
+//   损坏 fail-closed）。方向 server → yonban/security 无环（本文件已依赖 yonban 侧 path_confine）。
+import {
+  getCommandGateView as _storeCommandGateView,
+  patchCommandGate as _storePatchCommandGate,
+  getSettingsHealth as _storeSettingsHealth,
+  listCorruptBackups as _storeListCorruptBackups,
+  repair as _storeRepairSettings,
+} from "../../yonban/core/functions/security/filesSettingsStore.mjs";
 import path from "node:path";
 import { processIPCCommand } from "../ipc_server/index.mjs";
 import {
@@ -118,6 +125,8 @@ import {
   getEyeProcessState,
   getPendingStatus,
   getPetClientSeenAgoMs,
+  getPetEffectiveDesired,
+  getPetRuntimeState,
   hasPendingInjection,
   hasPendingOrbMessage,
   listScreenshotHistory,
@@ -135,6 +144,7 @@ import {
   setPendingInjection,
   setPendingOrbMessage,
 } from "../../yonban/core/functions/screenshot/injection_state.mjs"; // T8·回切：改指 yonban 新位实现体
+import { getCompanionOutputSince } from "../../yonban/core/functions/render/companionOutput.mjs";
 
 // beilu-plugin-host — 用户级插件注册表（共享状态单例）
 import {
@@ -144,70 +154,52 @@ import {
   validateToken as validatePluginToken,
 } from "../../public/parts/plugins/beilu-plugin-host/plugin_registry.mjs";
 
-// ---- SEC-T11：命令执行闸（commandGate）配置文件读写 ----
-//   权威源：<项目根>/data/beilu-files-settings.json 的 commandGate 段
-//   （与 ideClient.mjs _loadCommandGateConfig 读的同一文件同一字段；本处只读写该 JSON，不碰 ideClient/beilu-files 代码）。
+// ---- SEC-T11 → [D6 §4 2026-08-04] 命令执行闸（commandGate）配置读写：filesSettingsStore 薄 adapter ----
+//   权威源不变：<项目根>/data/beilu-files-settings.json 的 commandGate 段；但读写全部经单写者 store
+//   （原 _writeCommandGate/_writeCommandRules 各自 read→parse→writeFile 整文档 = B1 三写者竞争丢字段，
+//   且损坏时以 {} 重建覆盖损坏现场——两病一并根除：CAS+锁在 store，损坏 fail-closed 拒写等显式 repair）。
 //   安全默认：allowChannelBExec=false（前端/分身通道命令类工具不即时执行）。
-//   R5：路径改由 storage.getFilesSettingsPath() 单源供给（函数内取值，不在模块顶层求值，避免加载顺序耦合）。
-// 0714 扩展：端点原只暴露 allowChannelBExec，failClosedUnknown 一直可读但零 UI 承载。现两字段读写。
-//   ⚠ capabilities 不在此处：能力授权单源 = per-user command_config.json（get/setCommandConfig 动作，
-//   UI=workPanel/权限面板同链），本端点只管 commandGate 段的两个真全局行为开关，不做第二能力存储。
+//   ⚠ capabilities 不在此处：能力授权单源 = per-user command_config.json（get/setCommandConfig 动作），
+//   本端点只管 commandGate 段的行为开关与清单，不做第二能力存储。
 async function _readCommandGate() {
-  const _FILES_SETTINGS_PATH = getFilesSettingsPath();
-  try {
-    const raw = await fs.promises.readFile(_FILES_SETTINGS_PATH, "utf-8");
-    const j = JSON.parse(raw);
-    const g = (j && typeof j.commandGate === "object" && j.commandGate) ? j.commandGate : {};
-    return {
-      allowChannelBExec: g.allowChannelBExec === true,
-      failClosedUnknown: g.failClosedUnknown !== false,
-    };
-  } catch {
-    return { allowChannelBExec: false, failClosedUnknown: true };
-  }
-}
-// 写 commandGate 段（部分字段更新）：合并到既有 settings（保留 workspaceRoot 等其它字段），原子覆盖整文件。
-async function _writeCommandGate(patch) {
-  const _FILES_SETTINGS_PATH = getFilesSettingsPath();
-  let j = {};
-  try {
-    const raw = await fs.promises.readFile(_FILES_SETTINGS_PATH, "utf-8");
-    j = JSON.parse(raw) || {};
-  } catch { /* 文件不存在/损坏 → 从空对象重建 */ }
-  if (!j || typeof j !== "object") j = {};
-  if (!j.commandGate || typeof j.commandGate !== "object") j.commandGate = {};
-  if (typeof patch.allowChannelBExec === "boolean") j.commandGate.allowChannelBExec = patch.allowChannelBExec;
-  if (typeof patch.failClosedUnknown === "boolean") j.commandGate.failClosedUnknown = patch.failClosedUnknown;
-  await fs.promises.mkdir(path.dirname(_FILES_SETTINGS_PATH), { recursive: true });
-  await fs.promises.writeFile(_FILES_SETTINGS_PATH, JSON.stringify(j, null, 2), "utf-8");
+  const view = _storeCommandGateView();
+  const g = view.commandGate || {};
   return {
-    allowChannelBExec: j.commandGate.allowChannelBExec === true,
-    failClosedUnknown: j.commandGate.failClosedUnknown !== false,
+    allowChannelBExec: g.allowChannelBExec === true,
+    failClosedUnknown: g.failClosedUnknown !== false,
+    settingsHealth: view.health,
+    settingsRevision: view.revision,
   };
 }
-// 0715 硬编码改选项：写 commandGate 段的黑/灰名单+git push 远程白名单（读侧 = commandGate.mjs _loadCommandRules 同文件同段）。
+// 写 commandGate 段（部分字段更新）：经 store.patchCommandGate 单一 mutate（保留其它字段由锁+CAS 保证）。
+async function _writeCommandGate(patch, ownerUsername) {
+  const r = await _storePatchCommandGate(ownerUsername, (gate) => {
+    if (typeof patch.allowChannelBExec === "boolean") gate.allowChannelBExec = patch.allowChannelBExec;
+    if (typeof patch.failClosedUnknown === "boolean") gate.failClosedUnknown = patch.failClosedUnknown;
+  });
+  const view = _storeCommandGateView();
+  const g = view.commandGate || {};
+  return {
+    allowChannelBExec: g.allowChannelBExec === true,
+    failClosedUnknown: g.failClosedUnknown !== false,
+    settingsRevision: r.revision,
+  };
+}
+// 0715 硬编码改选项：写 commandGate 段的黑/灰名单+git push 远程白名单（读侧 = commandGate.mjs 同段）。
 // patch 各键三态：undefined=不动 / null=删除覆盖(恢复代码默认) / 数组=整体覆盖。校验在路由层已做。
-async function _writeCommandRules(patch) {
-  const _FILES_SETTINGS_PATH = getFilesSettingsPath();
-  let j = {};
-  try {
-    const raw = await fs.promises.readFile(_FILES_SETTINGS_PATH, "utf-8");
-    j = JSON.parse(raw) || {};
-  } catch { /* 文件不存在/损坏 → 从空对象重建 */ }
-  if (!j || typeof j !== "object") j = {};
-  if (!j.commandGate || typeof j.commandGate !== "object") j.commandGate = {};
-  for (const key of ["blacklist", "graylist", "gitPushAllowedRemotes"]) {
-    if (patch[key] === undefined) continue;
-    if (patch[key] === null) delete j.commandGate[key];
-    else j.commandGate[key] = patch[key];
-  }
-  // 0715 总开关（rulesEnabled）：黑/灰名单整体启停。true=删键回默认（缺省即启用），false=落盘停用。
-  if (typeof patch.rulesEnabled === "boolean") {
-    if (patch.rulesEnabled) delete j.commandGate.rulesEnabled;
-    else j.commandGate.rulesEnabled = false;
-  }
-  await fs.promises.mkdir(path.dirname(_FILES_SETTINGS_PATH), { recursive: true });
-  await fs.promises.writeFile(_FILES_SETTINGS_PATH, JSON.stringify(j, null, 2), "utf-8");
+async function _writeCommandRules(patch, ownerUsername) {
+  await _storePatchCommandGate(ownerUsername, (gate) => {
+    for (const key of ["blacklist", "graylist", "gitPushAllowedRemotes"]) {
+      if (patch[key] === undefined) continue;
+      if (patch[key] === null) delete gate[key];
+      else gate[key] = patch[key];
+    }
+    // 0715 总开关（rulesEnabled）：true=删键回默认（缺省即启用），false=落盘停用。
+    if (typeof patch.rulesEnabled === "boolean") {
+      if (patch.rulesEnabled) delete gate.rulesEnabled;
+      else gate.rulesEnabled = false;
+    }
+  });
 }
 
 // ---- SEC-R4：正则 ReDoS 护栏配置读取（只读，供安全中心展示） ----
@@ -402,6 +394,20 @@ export async function registerEndpoints(router) {
   router.get("/api/test/unhandledRejection", async (req, res) => {
     Promise.reject(skip_report(new Error("test error")));
     return res.status(200).json({ message: "hell yeah!" });
+  });
+  // [D5 §2.4 2026-08-04] liveness 与 readiness 分离:/api/ping 只回答"transport 活着"(语义不变,下方),
+  // 本端点回答"能不能用"——阶段/shellReady/后台预加载明细/当前 user 的 chatInteractive。
+  // 消费者:启动器 Open-BrowserWhenReady(等 shellReady 才开浏览器)、前端首屏("正在准备基础聊天…"/
+  // "正在后台准备 N 个扩展"+失败 Part 名称)。非本机且未认证=最小快照(不暴露 Part 明细/用户维度)。
+  router.get("/api/readiness", cors(), async (req, res) => {
+    const { getReadinessSnapshot, getReadinessSnapshotMinimal } = await import("../readiness.mjs");
+    const is_local_ip = is_local_ip_from_req(req);
+    let authed = false;
+    try { authed = is_local_ip || (await auth_request(req, res)); } catch { authed = false; }
+    if (!authed) return res.status(200).json(getReadinessSnapshotMinimal());
+    let username = null;
+    try { ({ username } = await getUserByReq(req)); } catch { /* 未登录:无 per-user 维度 */ }
+    return res.status(200).json(getReadinessSnapshot(username));
   });
   router.get("/api/ping", cors(), async (req, res) => {
     const is_local_ip = is_local_ip_from_req(req);
@@ -666,11 +672,24 @@ export async function registerEndpoints(router) {
       //   发起浏览器（含其同源全部标签，cookie 浏览器级共享）无缝续会话；其他设备走 401→登录页兜底链。
       //   owner 改他人不重签（发起者自己的会话没变）。
       if (result.success && !ownerRenamingOther) {
-        const tokens = await reissueSessionTokens(req, newUsername.trim());
-        if (tokens) {
-          const cookieOptions = getSecureCookieOptions(req);
-          res.cookie("accessToken", tokens.accessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION });
-          res.cookie("refreshToken", tokens.refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION });
+        try {
+          const tokens = await reissueSessionTokens(req, newUsername.trim());
+          if (tokens) {
+            const cookieOptions = getSecureCookieOptions(req);
+            res.cookie("accessToken", tokens.accessToken, { ...cookieOptions, maxAge: ACCESS_TOKEN_EXPIRY_DURATION });
+            res.cookie("refreshToken", tokens.refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_EXPIRY_DURATION });
+            result.sessionReissued = true;
+          } else {
+            result.sessionReissued = false;
+            result.requiresLogin = true;
+            result.sessionWarning = "Username was renamed, but this session could not be reissued. Please sign in with the new username.";
+          }
+        } catch (sessionError) {
+          // 改名事务已经严格提交，cookie 重签是独立尾部；不得把它抛成通用 500，令用户误以为改名未发生。
+          result.sessionReissued = false;
+          result.requiresLogin = true;
+          result.sessionWarning = "Username was renamed, but this session could not be reissued. Please sign in with the new username.";
+          result.sessionError = sessionError?.message || String(sessionError);
         }
       }
       res.status(result.success ? 200 : 400).json(result);
@@ -792,6 +811,8 @@ export async function registerEndpoints(router) {
         .status(400)
         .json({ success: false, error: "Part path is required." });
     await loadPart(username, normalized);
+    // [D5 §2.4] 手动重试成功 → readiness 注册表 degraded 摘除(只更新已在册条目,普通懒加载不进表)
+    try { (await import("../readiness.mjs")).markPartPreloadRecovered(username, normalized); } catch { /* 注册表不可用不阻断 */ }
     res.status(200).json({
       success: true,
       message: `Part ${normalized} loaded successfully.`,
@@ -965,7 +986,7 @@ export async function registerEndpoints(router) {
       if (_resolvedUser === null) {
         return res.status(403).json({ error: "Invalid or missing pet token" });
       }
-      const { image, message, mode, window_title } = req.body || {};
+      const { image, message, mode, window_title, request_id } = req.body || {};
       const injectUser = _resolvedUser; // 丢弃 payload 的 username，用令牌反解的 user（安全核心）
       if (!image) {
         return res.status(400).json({ error: "Missing image field" });
@@ -1042,6 +1063,7 @@ export async function registerEndpoints(router) {
           message: message || "",
           mode: _effectiveMode,
           windowTitle: window_title || "",
+          requestId: typeof request_id === "string" ? request_id : "",
           ttlMs: _injectTtlMs, // FT5 A-③: 用户 injectionTtlMs（0 → injection_state 走兜底默认 60s）
         }, injectUser); // ★ J6：按 username 分区，截图客户端 body 带 username 时定向，缺失落兜底键
       }
@@ -1056,6 +1078,10 @@ export async function registerEndpoints(router) {
       }
       res.status(200).json({
         success: true,
+        // 安静模式的“归档成功”不等于“已注入 AI”。客户端据此结束该 requestId，
+        // 陪伴轮则通过 exact pending 缺失诚实得到 timeout_or_blocked，而不是把归档冒充附图。
+        blocked: _perceptionMode === "quiet",
+        reason: _perceptionMode === "quiet" ? "quiet_mode" : undefined,
         message: _perceptionMode === "quiet"
           ? "截图已归档（安静模式，不发送给 AI）"
           : "截图已接收，将在下次 AI 回复时注入",
@@ -1171,15 +1197,22 @@ export async function registerEndpoints(router) {
     //   → 返回 captureRequested。beilu_eye.py poll() 见真即调 auto_capture_and_send()（接断点③）。
     //   写入方（gameCompanion）负责 unlink，本路由只读不删（幂等：截图前请求标记可能被多次轮询读到）。
     let _gdCaptureRequested = false;
+    let _gdCaptureRequestId = "";
     if (_gdUser) {
       try {
         const { getGcCaptureRequestPath } = await import("../../yonban/core/functions/memory/storage_mod/storage.mjs"); // T7 尾段收口：权威路径单点（server 层动态引先例=api_v1_router webhooks；__dirname=项目根与 getUserDataDir 同锚）
-        _gdCaptureRequested = fs.existsSync(getGcCaptureRequestPath(_gdUser));
+        const _reqPath = getGcCaptureRequestPath(_gdUser);
+        _gdCaptureRequested = fs.existsSync(_reqPath);
+        if (_gdCaptureRequested) {
+          const _reqData = JSON.parse(fs.readFileSync(_reqPath, "utf-8"));
+          _gdCaptureRequestId = typeof _reqData?.requestId === "string" ? _reqData.requestId : "";
+        }
       } catch { /* 读不到当作无请求 */ }
     }
     res.status(200).json({
       hasPending: hasPendingInjection(_gdUser),
       captureRequested: _gdCaptureRequested,
+      captureRequestId: _gdCaptureRequestId,
       eyeStatus: processState.status,
       eyeError: processState.error,
       desktopEyeDir: processState.desktopEyeDir,
@@ -1213,6 +1246,7 @@ export async function registerEndpoints(router) {
           image: data.image,
           message: data.message || "",
           mode: data.mode || "passive",
+          requestId: typeof data.requestId === "string" ? data.requestId : "",
           ttlMs: _sdTtlMs,
         }, _sdUser);
         return res.status(200).json({ success: true });
@@ -1294,6 +1328,20 @@ export async function registerEndpoints(router) {
       res.status(200).json({ hasPending: true, ...data });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 陪伴纯正文流：非破坏性按 seq 增量读取，同一个 payload 同时供 Electron 桌宠与 Web 面板。
+  // pet-token 反解 username，保证只读本用户当前 companion session 的流。
+  router.get("/api/eye/companion-stream", async (req, res) => {
+    try {
+      if (!is_local_ip_from_req(req)) return res.status(403).json({ error: "Only localhost access allowed" });
+      const username = _resolveOrbUser(req, res);
+      if (username === undefined) return;
+      const data = getCompanionOutputSince(username, Number(req.query?.since) || 0);
+      return res.status(200).json(data ? { hasUpdate: true, ...data } : { hasUpdate: false });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
   });
 
@@ -1450,8 +1498,39 @@ export async function registerEndpoints(router) {
       if (!text) return res.status(400).json({ error: "Missing text" });
       const _gcUrl = new URL("../../public/parts/plugins/beilu-memory/lib/ai/gameCompanion.mjs", import.meta.url).href;
       const _gcMod = await import(_gcUrl);
-      const ok = _gcMod.gameCompanionTouchMessage(_pmUser, text);
-      res.status(200).json(ok ? { success: true } : { success: false, reason: "陪伴未运行(触碰发送需要陪伴会话上下文)" });
+      let result = await _gcMod.gameCompanionTouchMessage(_pmUser, text, { captureNow: req.body?.captureNow === true });
+      // Live2D/快捷语音是直接入口：服务重启后 runtime session 会消失，但用户的角色绑定仍在盘上。
+      // 首条桌宠消息若仅缺 session，按 game_companion_config.bindChar 重建同一专门陪伴对话，再重放本条；
+      // 不猜“当前角色”也不挑第一张卡——未绑定时明确要求用户选择，保持角色主权。
+      if (result?.code === "E_COMPANION_NOT_RUNNING") {
+        const _storage = await import("../../yonban/core/functions/memory/storage_mod/storage.mjs");
+        const _gcCfg = _storage.loadJsonFileIfExists(_storage.getGameCompanionConfigPath(_pmUser)) || {};
+        const _boundChar = typeof _gcCfg.bindChar === "string" ? _gcCfg.bindChar.trim() : "";
+        if (!_boundChar) {
+          return res.status(409).json({
+            success: false,
+            code: "E_COMPANION_CHAR_NOT_BOUND",
+            error: "快速语音需要陪伴角色：请先在陪伴启动绑定中选择角色",
+          });
+        }
+        const _charDir = path.join(__dirname, "data", "users", _pmUser, "chars", _boundChar);
+        if (!fs.existsSync(_charDir)) {
+          return res.status(409).json({
+            success: false,
+            code: "E_COMPANION_BOUND_CHAR_NOT_FOUND",
+            error: `陪伴绑定角色不存在：${_boundChar}，请重新选择`,
+          });
+        }
+        const _actions = await import("../../yonban/core/functions/memory/handler/setDataActions.mjs");
+        const _started = await _actions.handleSetData({ _action: "startGameCompanion" }, { username: _pmUser, char_id: _boundChar });
+        const _running = _gcMod.getGameCompanionStatus(_pmUser)?.running === true;
+        if (!_started?.success && !_running) {
+          return res.status(409).json({ success: false, code: "E_COMPANION_AUTO_START_FAILED", error: _started?.error || "陪伴会话自动启动失败" });
+        }
+        result = await _gcMod.gameCompanionTouchMessage(_pmUser, text, { captureNow: req.body?.captureNow === true });
+        if (result?.success) result = { ...result, autoStarted: true };
+      }
+      res.status(200).json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
   const _userImagesRoot = () => path.join(__dirname, "desktop-eye", "user-images");
@@ -1609,7 +1688,14 @@ export async function registerEndpoints(router) {
       // ?raw=1 → 只回盘上显式键(Electron 对账用:分辨"用户设过/默认",替代旧"值≠默认"启发式——
       //   该启发式在用户把值改回默认时误判并触发 Electron 旧值回灌,2026-07-09 确诊)。缺省=默认合并全量(web 面板回填用)。
       if (req.query && req.query.raw) return res.status(200).json(loadPetSettingsStoreRaw(__dirname));
-      res.status(200).json(loadPetSettingsStore(__dirname));
+      // [D5 2026-08-04] 非 raw 响应附加运行时计算字段(非设置,不进 raw/不落盘):
+      //   petEffectiveDesired=显式开关||互动租约(Electron 退出判据消费,desktop-eye _syncPetSettingsFromBeilu);
+      //   petRuntime=PetLifecycle 镜像快照(web 面板显示分项真值)。PET_SYNC_KEYS 不含这俩键,不扰动 Electron 基线对账。
+      res.status(200).json({
+        ...loadPetSettingsStore(__dirname),
+        petEffectiveDesired: getPetEffectiveDesired(__dirname),
+        petRuntime: getPetRuntimeState(),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -2576,10 +2662,16 @@ export async function registerEndpoints(router) {
       if (failClosedUnknown !== undefined && typeof failClosedUnknown !== "boolean") {
         return res.status(400).json({ success: false, error: "failClosedUnknown 必须为布尔值" });
       }
-      const out = await _writeCommandGate({ allowChannelBExec, failClosedUnknown });
+      const { username } = await getUserByReq(req);
+      const out = await _writeCommandGate({ allowChannelBExec, failClosedUnknown }, username);
       res.json({ success: true, ...out });
     } catch (err) {
-      res.status(500).json({ success: false, error: err.message });
+      // [D6 §4] 损坏 fail-closed / CAS 冲突等 typed 错误原样透出（错误是诊断面，不折叠成 500 泛话）
+      const code = err?.code;
+      if (code === "E_FILES_SETTINGS_CORRUPT" || code === "E_FILES_SETTINGS_UNREADABLE") {
+        return res.status(409).json({ success: false, code, error: err.message, settingsHealth: _storeSettingsHealth() });
+      }
+      res.status(500).json({ success: false, code, error: err.message });
     }
   });
 
@@ -2632,18 +2724,54 @@ export async function registerEndpoints(router) {
             ...(e.enabled === false ? { enabled: false } : {}),
             ...(typeof e.forced === "boolean" ? { forced: e.forced } : {}),
           }));
+      const { username } = await getUserByReq(req);
       await _writeCommandRules({
         blacklist: _norm(blacklist),
         graylist: _norm(graylist),
         gitPushAllowedRemotes: (gitPushAllowedRemotes === undefined || gitPushAllowedRemotes === null)
           ? gitPushAllowedRemotes : gitPushAllowedRemotes.map((r) => r.trim()),
         rulesEnabled,
-      });
+      }, username);
       // 回读 live 真值（读写同源验证：从 commandGate 读侧函数返回，不回显请求体）
       const { getCommandRulesReadable } = await import("../../yonban/core/functions/security/commandGate.mjs");
       res.json({ success: true, ...getCommandRulesReadable() });
     } catch (err) {
+      const code = err?.code;
+      if (code === "E_FILES_SETTINGS_CORRUPT" || code === "E_FILES_SETTINGS_UNREADABLE") {
+        return res.status(409).json({ success: false, code, error: err.message, settingsHealth: _storeSettingsHealth() });
+      }
+      res.status(500).json({ success: false, code, error: err.message });
+    }
+  });
+
+  // ---- [D6 §4 2026-08-04] settings 健康与显式修复（filesSettingsStore 单写者的诊断/恢复面）----
+  //   health：任何认证用户可见（损坏必须可见，不能伪装"默认设置已生效"）；含损坏备份清单供 repair 选源。
+  router.get("/api/security/files-settings/health", authenticate, async (req, res) => {
+    try {
+      const health = _storeSettingsHealth();
+      res.json({
+        success: true,
+        settingsHealth: health,
+        backups: _storeListCorruptBackups(),
+        ...(health ? {} : { revision: _readCommandGate ? (await _readCommandGate()).settingsRevision : null }),
+      });
+    } catch (err) {
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+  //   repair：owner 显式动作。body = { replacement: <完整文档> } | { fromBackup: "<已列出的备份名>" }
+  //   | { revalidate: true }（外部工具已手工修好原文件时重新严格读）。成功 readback 才清健康故障。
+  router.post("/api/security/files-settings/repair", requireOwner, async (req, res) => {
+    try {
+      const { username } = await getUserByReq(req);
+      const { replacement, fromBackup, revalidate } = req.body || {};
+      if (replacement === undefined && fromBackup === undefined && revalidate !== true) {
+        return res.status(400).json({ success: false, error: "需要 replacement / fromBackup / revalidate 之一" });
+      }
+      const out = await _storeRepairSettings({ username }, { replacement, fromBackup, revalidate });
+      res.json({ success: true, ...out, settingsHealth: _storeSettingsHealth() });
+    } catch (err) {
+      res.status(err?.code ? 400 : 500).json({ success: false, code: err?.code, error: err.message, settingsHealth: _storeSettingsHealth() });
     }
   });
 

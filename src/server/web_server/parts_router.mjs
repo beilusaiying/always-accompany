@@ -15,6 +15,66 @@ export { getPartRouter, deletePartRouter } from './parts_router_registry.mjs'
 export const PartsRouter = express.Router()
 // Regex to match /(api|ws|virtual_files)/parts/<partpath>/<apipath> where partpath may contain colons
 const partsAPIregex = /^\/(api|ws|virtual_files)\/parts\/([^/]+)/
+
+// 这些错误表示当前加载能力暂不可用（退避/熔断/协调占用/超时），
+// HTTP 层统一映射 503；其余加载错误保持 500 且传导原 code/message。
+const PART_LOAD_UNAVAILABLE_CODES = new Set([
+	'E_PART_LOAD_BACKOFF',
+	'E_PART_LOAD_BLOCKED',
+	'E_PART_LOAD_CIRCUIT',
+	'E_PART_LOAD_BUSY',
+	'E_PART_LOAD_COORDINATION',
+	'E_PART_LOAD_CANCELLED',
+	'E_PART_LOAD_REVISION_CHANGED',
+	'E_PART_LOAD_TIMEOUT',
+	'E_PART_LIFECYCLE_TIMEOUT',
+	'E_PART_USER_QUIESCING',
+	'E_PART_USER_QUIESCE_TIMEOUT',
+	'ECONNREFUSED',
+	'ECONNRESET',
+	'ETIMEDOUT',
+	'EAI_AGAIN',
+	'ENETUNREACH',
+	'EHOSTUNREACH',
+	'EPIPE',
+	'UND_ERR_CONNECT_TIMEOUT',
+])
+
+/** 纯协议转换：保留 loader 的结构字段，不用统一 500 覆盖真实原因。 */
+export function serializePartLoadHttpError(error, partpath) {
+	const code = typeof error?.code === 'string' && error.code ? error.code : 'E_PART_LOAD_FAILED'
+	const unavailable = error?.retryable === true || error?.classification === 'transient' ||
+		PART_LOAD_UNAVAILABLE_CODES.has(code) || /(?:BACKOFF|CIRCUIT|TIMEOUT)/.test(code)
+	const retryAfterMsValue = error?.retryAfterMs == null ? NaN : Number(error.retryAfterMs)
+	const retryAfterMs = Number.isFinite(retryAfterMsValue) && retryAfterMsValue >= 0
+		? Math.ceil(retryAfterMsValue)
+		: null
+	const failureCountValue = error?.failureCount == null ? NaN : Number(error.failureCount)
+	const failureCount = Number.isFinite(failureCountValue) && failureCountValue >= 0
+		? Math.trunc(failureCountValue)
+		: null
+	const message = error?.message || String(error)
+	const body = {
+		success: false,
+		code,
+		partpath,
+		message,
+	}
+	if (unavailable) {
+		Object.assign(body, {
+			retryable: error?.retryable !== false,
+			retryAfterMs,
+			failureCount,
+			lastCause: error?.lastCause ?? null,
+		})
+	}
+	return {
+		status: unavailable ? 503 : 500,
+		retryAfterSeconds: retryAfterMs == null ? null : Math.max(1, Math.ceil(retryAfterMs / 1000)),
+		body,
+	}
+}
+
 PartsRouter.use(async (req, res, next) => {
 	const match = partsAPIregex.exec(req.path)
 	if (!match) return next()
@@ -51,14 +111,27 @@ PartsRouter.use(async (req, res, next) => {
 		return res.status(403).json({ success: false, message: '仅实例 owner 可修改该插件的安全敏感配置' })
 	}
 
-	// Load the part
-	await loadPart(username, partpath).catch(e => {
-		console.error(`Failed to load part ${partpath} for user ${username}:`, e)
-	})
+	// 请求已被明确识别为本 part 的 API。加载失败必须在这里终止并反馈真实原因；
+	// 旧代码 catch 后 next()，会把 Init/Load/SetData 的失败伪装成“接口不存在”的 404。
+	try {
+		await loadPart(username, partpath)
+	}
+	catch (error) {
+		console.error(`Failed to load part ${partpath} for user ${username}:`, error)
+		const failure = serializePartLoadHttpError(error, partpath)
+		if (failure.retryAfterSeconds != null) res.set('Retry-After', String(failure.retryAfterSeconds))
+		return res.status(failure.status).json(failure.body)
+	}
 
 	const partRouter = peekPartRouter(username, partpath)
 	if (partRouter)
 		return partRouter(req, res, next)
-	return next()
+	// 成功完成生命周期却没有注册本请求的路由，属于该 part 的明确缺口，不能泄漏到其他全局路由。
+	return res.status(404).json({
+		success: false,
+		code: 'E_PART_ROUTE_UNAVAILABLE',
+		partpath,
+		message: '部件已加载，但没有注册此请求对应的路由',
+	})
 })
 // （getPartRouter/deletePartRouter/用户删除改名清扫 已下沉 parts_router_registry.mjs，见顶部 re-export）

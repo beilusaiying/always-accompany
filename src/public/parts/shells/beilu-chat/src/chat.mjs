@@ -34,12 +34,14 @@ export * from "./lib/generation.mjs";
 export * from "./lib/requestBuilder.mjs";
 
 // 内部使用（非纯 re-export）的符号显式导入：events 注册 / facade 初始化 / registerChatUiSocket 包装依赖。
-import { registerChatUiSocket as _registerChatUiSocket, setChatMetadatasProvider } from "./lib/broadcast.mjs";
+import { registerChatUiSocket as _registerChatUiSocket } from "./lib/broadcast.mjs";
 import {
   getChatMetadatas,
   saveChat,
   initializeChatMetadatas,
+  handleBeforeUserDeleted,
   handleAfterUserDeleted,
+  handleUserDeletionAborted,
   handleAfterUserRenamed,
 } from "./lib/chatStorage.mjs";
 
@@ -49,10 +51,6 @@ import {
 
 initializeChatMetadatas();
 
-// 注入 chatMetadatas 提供器——让 broadcastAllChatUi 在首个 WS 连接前就能解析 owner→chat 映射。
-// 修复：插件初始化阶段的 emitAll 广播因 _getChatMetadatas 为 null 而全部 E_OWNER 失败。
-setChatMetadatasProvider(getChatMetadatas);
-
 // K13：装配白盒 broadcaster（核心层 server/whitebox.mjs ← 壳层 broadcastChatEvent）。
 // 这是 whitebox→前端面板的注入边：wb_trace 经此广播到 websocket.mjs → backendMonitor 面板。
 setBroadcaster(broadcastChatEvent);
@@ -61,7 +59,9 @@ setBroadcaster(broadcastChatEvent);
 // 事件处理器注册
 // ============================================================
 
+events.on("BeforeUserDeleted", handleBeforeUserDeleted);
 events.on("AfterUserDeleted", handleAfterUserDeleted);
+events.on("UserDeletionAborted", handleUserDeletionAborted);
 events.on("AfterUserRenamed", handleAfterUserRenamed);
 
 // ============================================================

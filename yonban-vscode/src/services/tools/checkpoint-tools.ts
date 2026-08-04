@@ -37,16 +37,55 @@ import { FileCheckpoint } from "../FileCheckpoint";
 import { revealAndHighlight, locateLineByAnchor } from "../EditorReveal";
 import { getIdeOperationLog, resolveWorkspacePath } from "../tool-infra";
 
+function requireNonEmptyString(
+  params: Record<string, unknown>,
+  key: string,
+): string {
+  const value = params[key];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("缺少或无效的 " + key + " 参数");
+  }
+  return value;
+}
+
+function requireNonNegativeInteger(
+  params: Record<string, unknown>,
+  key: string,
+): number {
+  const value = params[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    throw new Error(key + " 必须是有限非负整数");
+  }
+  return value;
+}
+
+function optionalStringArray(
+  params: Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const value = params[key];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new Error(key + " 必须是非空字符串数组");
+  }
+  if (new Set(value).size !== value.length) {
+    throw new Error(key + " 不能包含重复项");
+  }
+  return [...value];
+}
+
 export async function checkpointStart(
   params: Record<string, unknown>,
   checkpoint: FileCheckpoint,
 ): Promise<unknown> {
-  const id = params.id as string;
-  const chatId = (params.chatId as string) || "";
-  const messageIndex = (params.messageIndex as number) ?? -1;
+  const id = requireNonEmptyString(params, "id");
+  const chatId = requireNonEmptyString(params, "chatId");
+  const messageIndex = requireNonNegativeInteger(params, "messageIndex");
+  const messageId = params.messageId === undefined
+    ? undefined
+    : requireNonEmptyString(params, "messageId");
   const deferred = !!params.deferred;
-  if (!id) throw new Error("缺少 id 参数");
-  checkpoint.start(id, chatId, messageIndex, deferred);
+  checkpoint.start(id, chatId, messageIndex, deferred, messageId);
   return { success: true, id };
 }
 
@@ -56,8 +95,7 @@ export async function checkpointCommit(
 ): Promise<unknown> {
   const id = params.id as string;
   if (!id) throw new Error("缺少 id 参数");
-  checkpoint.commit(id);
-  return { success: true, id };
+  return { id, ...checkpoint.commit(id) };
 }
 
 export async function checkpointRevert(
@@ -73,10 +111,10 @@ export async function checkpointRevertToMessage(
   params: Record<string, unknown>,
   checkpoint: FileCheckpoint,
 ): Promise<unknown> {
-  const chatId = (params.chatId as string) || "";
-  const targetIndex = params.targetIndex as number;
-  if (targetIndex === undefined) throw new Error("缺少 targetIndex 参数");
-  return checkpoint.revertToMessage(chatId, targetIndex);
+  const chatId = requireNonEmptyString(params, "chatId");
+  const targetIndex = requireNonNegativeInteger(params, "targetIndex");
+  const expectedCheckpointIds = optionalStringArray(params, "expectedCheckpointIds");
+  return checkpoint.revertToMessage(chatId, targetIndex, expectedCheckpointIds);
 }
 
 /** 只读：预览回档到 targetIndex 会还原/删除哪些文件，不改任何状态 */
@@ -84,10 +122,10 @@ export async function checkpointRevertDiff(
   params: Record<string, unknown>,
   checkpoint: FileCheckpoint,
 ): Promise<unknown> {
-  const chatId = (params.chatId as string) || "";
-  const targetIndex = params.targetIndex as number;
-  if (targetIndex === undefined) throw new Error("缺少 targetIndex 参数");
-  return checkpoint.getRevertToMessageDiff(chatId, targetIndex);
+  const chatId = requireNonEmptyString(params, "chatId");
+  const targetIndex = requireNonNegativeInteger(params, "targetIndex");
+  const expectedCheckpointIds = optionalStringArray(params, "expectedCheckpointIds");
+  return checkpoint.getRevertToMessageDiff(chatId, targetIndex, expectedCheckpointIds);
 }
 
 export async function checkpointList(

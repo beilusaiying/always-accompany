@@ -16,6 +16,7 @@
  * 使用效果：用户点击右上角设置齿轮打开弹窗，切到各 Tab 时按需加载内容；首次使用时展示引导步骤
  */
 import { escapeHtml } from "../../shared/state/utils.mjs";
+import { ensureSessionIdentity } from "../../shared/state/sessionIdentity.mjs";
 import { beiluConfirm, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs";
 import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b：出向统一门面（memory 通配 outputFilter / server:eye·security·apikey·ping 专用路由）
 import { storage, KEYS } from "../../shared/state/storage.mjs";
@@ -175,6 +176,80 @@ function _toggleSettingsModal(which, forceOpen) {
     overlay.classList.add("hidden");
   }
 }
+
+// 所有「去配置 API」入口只走这一条导航：打开设置弹窗并切到既有 AI 服务源页。
+// 不复制字段、协议或保存链，避免“快速配置”与完整配置漂移。
+function _openApiSettings() {
+  _toggleSettingsModal("settings", true);
+  document.querySelector('.settings-activity-bar [data-settings-section="api"]')?.click();
+}
+
+const _FIRST_RUN_USER_KEY = "beiluNewUser";
+
+function _readFirstRunUserMarker() {
+  // 旧版本 localStorage 布尔值没有用户归属，无法安全迁移到当前账号；只清理，不消费。
+  try {
+    if (localStorage.getItem(_FIRST_RUN_USER_KEY) !== null) {
+      localStorage.removeItem(_FIRST_RUN_USER_KEY);
+      console.warn("[settings] 已清理无账号归属的旧版新用户引导标志");
+    }
+  } catch { /* localStorage 不可用不影响 session marker */ }
+  let raw = "";
+  try { raw = sessionStorage.getItem(_FIRST_RUN_USER_KEY) || ""; } catch { return null; }
+  if (!raw) return null;
+  try {
+    const marker = JSON.parse(raw);
+    const username = typeof marker?.username === "string" ? marker.username.trim() : "";
+    if (marker?.version !== 1 || !username) throw new Error("marker contract invalid");
+    return { raw, username };
+  } catch (error) {
+    try { sessionStorage.removeItem(_FIRST_RUN_USER_KEY); } catch {}
+    window._reportError?.(`[settings] 新用户语言标志无效，已拒绝消费: ${error?.message || error}`);
+    return null;
+  }
+}
+
+// 新用户语言入口复用既有设置页，不复制语言列表、切换或保存逻辑。
+// 只有 marker 的注册用户名与 /api/whoami 的可信当前身份一致，才允许消费本标签页的一次性信号。
+async function _openFirstRunLanguageSettings() {
+  const marker = _readFirstRunUserMarker();
+  if (!marker) return;
+  let identity;
+  try {
+    identity = await ensureSessionIdentity();
+  } catch (error) {
+    window._reportError?.(`[settings] 无法确认新用户语言引导所属账号，保留标志供下次重试: ${error?.message || error}`);
+    return;
+  }
+  if (identity?.username !== marker.username) return;
+  const languageButton = document.querySelector('.settings-activity-bar [data-settings-section="language"]');
+  const languageSection = document.querySelector('#settings-content .settings-section[data-section="language"]');
+  if (!languageButton || !languageSection) {
+    window._reportError?.("[settings] 新用户语言入口未就绪，保留首次引导标志供下次重试");
+    return;
+  }
+  _toggleSettingsModal("settings", true);
+  languageButton.click();
+  // 只有真实打开现有语言设置后才消费一次性信号；初始化中断时不会假完成。
+  try {
+    if (sessionStorage.getItem(_FIRST_RUN_USER_KEY) === marker.raw) {
+      sessionStorage.removeItem(_FIRST_RUN_USER_KEY);
+    }
+  } catch { /* 页面已完成引导，存储不可用无需伪造二次成功 */ }
+}
+
+function _queueFirstRunLanguageSettings() {
+  if (!_readFirstRunUserMarker()) return;
+  if (document.body?.dataset.beiluBootReady === "1") {
+    void _openFirstRunLanguageSettings();
+    return;
+  }
+  // initLayout 会早于聊天壳必要装配完成；等顶层 init 成功且遮罩撤下后再展示。
+  // 若初始化失败不会触发该事件，首次引导标志会保留到刷新重试。
+  window.addEventListener("beilu:boot-ready", () => { void _openFirstRunLanguageSettings(); }, { once: true });
+}
+
+window.addEventListener("beilu:openApiSettings", _openApiSettings);
 
 function _initSettingsModals() {
   // ST-T2: 启动时应用已保存的显示选项 (背景由 backgroundSettings.mjs 自管,FT-B3)
@@ -367,8 +442,7 @@ function _initSettingsModals() {
 
   // FT-D3: AIRP 右栏「完整 API 设置」跳转 → 设置弹窗 AI 服务源节
   document.getElementById("airp-open-api-settings")?.addEventListener("click", () => {
-    _toggleSettingsModal("settings", true);
-    document.querySelector('.settings-activity-bar [data-settings-section="api"]')?.click();
+    _openApiSettings();
   });
 
   document.querySelectorAll("[data-settings-section]").forEach((btn) => {
@@ -758,25 +832,36 @@ function _applyDisplayToggles() {
 // ============================================================
 
 const _GUIDE_KEY = KEYS.BEILU_FIRST_RUN_GUIDE_DONE;
+let _guideApiCheckInFlight = false;
+
+async function _completeFirstRunGuideIfApiConfigured() {
+  if (storage.get(_GUIDE_KEY) === "1" || _guideApiCheckInFlight) return;
+  _guideApiCheckInFlight = true;
+  try {
+    const setup = await sendAction({ verb: "getAISetupStatus", target: "shells:serviceSourceManage", source: "web" });
+    if (setup?.configured === true) {
+      storage.set(_GUIDE_KEY, "1");
+      document.getElementById("first-run-guide-card")?.remove();
+    }
+  } catch (error) {
+    // 状态读失败不标记完成，避免把空壳或离线错误伪装为已配置。
+    window._reportError?.(`[settings] AI setup status: ${error?.message || error}`, error?.stack);
+  } finally {
+    _guideApiCheckInFlight = false;
+  }
+}
 
 function _initFirstRunGuide() {
-  // 凛倾 0716：新用户（注册时 login 页写 beiluNewUser 标志）首次进入自动打开「设置→语言」，只出现一次；
-  // 老用户登录不写标志故不触发。语言 slot 本体见 settingsSlots.mjs initLanguageSlot（覆盖式 i18n 消费方）。
-  if (localStorage.getItem("beiluNewUser") === "1") {
-    localStorage.removeItem("beiluNewUser");
-    setTimeout(() => {
-      _toggleSettingsModal("settings", true);
-      document.querySelector('.settings-activity-bar [data-settings-section="language"]')?.click();
-    }, 600);
-  }
+  // 新用户先选择界面语言；必须等必要首屏装配完成、启动遮罩撤下后再打开。
+  _queueFirstRunLanguageSettings();
   if (storage.get(_GUIDE_KEY) === "1") return;
   const chatContainer = document.getElementById("chat-container");
   if (!chatContainer || document.getElementById("first-run-guide-card")) return;
-  // 检测是否已有可用 API（api-url 由 apiConfig.mjs 启动回填；延迟检测等它先跑）
-  setTimeout(() => {
+  // 只依据后端默认绑定和落盘配置判断；表单里有 URL 或源目录存在均不能代表可生成。
+  setTimeout(async () => {
     if (storage.get(_GUIDE_KEY) === "1") return;
-    const hasApi = !!(document.getElementById("api-url")?.value || "").trim();
-    if (hasApi) { storage.set(_GUIDE_KEY, "1"); return; } // 已配过=老用户，不打扰
+    await _completeFirstRunGuideIfApiConfigured();
+    if (storage.get(_GUIDE_KEY) === "1") return;
     const card = document.createElement("div");
     card.id = "first-run-guide-card";
     card.className = "mx-auto mt-3 mb-1 max-w-xl w-full rounded-xl border bg-base-200/70 p-4 space-y-2 text-sm shrink-0";
@@ -800,8 +885,7 @@ function _initFirstRunGuide() {
     const done = () => { storage.set(_GUIDE_KEY, "1"); card.remove(); };
     card.querySelector("#frg-close")?.addEventListener("click", done);
     card.querySelector("#frg-api")?.addEventListener("click", () => {
-      _toggleSettingsModal("settings", true);
-      document.querySelector('.settings-activity-bar [data-settings-section="api"]')?.click();
+      _openApiSettings();
     });
     card.querySelector("#frg-persona")?.addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("beilu:openEditorTab", { detail: "persona-edit" }));
@@ -810,6 +894,8 @@ function _initFirstRunGuide() {
       document.getElementById("header-char-name")?.click();
     });
   }, 1500);
+
+  window.addEventListener("resource:api-changed", () => { void _completeFirstRunGuideIfApiConfigured(); }, { once: true });
 }
 
 // ============================================================

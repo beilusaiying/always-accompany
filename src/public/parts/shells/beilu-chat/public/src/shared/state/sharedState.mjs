@@ -117,9 +117,14 @@ export function setModel(name) {
 }
 
 // ============================================================
-// username（登录身份单一读点：服务端在页面 HTML meta 注入，避免异步请求）
+// username —— ⚠ 非 authority 显示读点（D6 §1 2026-08-04 降级定性）。
 // [合并批 0714] 原 cardsPanel/taskCard/taskItemPanel/pipelinePanel 四处 _getUsername 手抄副本
 //   + index.mjs/memoryBrowser 两处内联同构读法（meta → window._beiluUsername → ""），收口本处。
+// [D6 §1] 全树无 meta[name="beilu-username"] / window._beiluUsername 生产者（假契约，E 现场
+//   _default 冲突实证）——本函数恒返 "" 属正常。它只可用于本地显示/去重键，
+//   【禁止】进入任何请求 payload 当身份字段（后端身份唯一权威=认证会话 scope.user，
+//   桥 yonban_bridge 强制②盖章）。需要认证用户名的前端逻辑走
+//   shared/state/sessionIdentity.mjs（/api/whoami 服务端权威 + epoch 代际）。
 // ============================================================
 
 export function getUsername() {

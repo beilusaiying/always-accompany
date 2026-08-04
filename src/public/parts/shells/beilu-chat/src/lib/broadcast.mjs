@@ -17,11 +17,15 @@ import { createBufferedSyncPreviewUpdater, generateDiff } from "../stream.mjs";
 import { wbTrace, wbDetect } from "../../../../../../server/whitebox.mjs";
 // v4 簇②：跨 chat 广播按 groupId 过滤。groupRegistry 仅依赖 auth/json_loader，与 broadcast 无环。
 import { getGroupIdByChatId, getGroupChatIds } from "./groupRegistry.mjs";
+// 用户级广播的 owner 索引属于服务端持久化层，不属于 chat.mjs 的前端壳装配。
+// chatStorage 不静态依赖 broadcast（仅在少量清理点动态 import），因此这里单向读取不会形成初始化环。
+import { getChatMetadatas, initializeChatMetadatas } from "./chatStorage.mjs";
 // 跨 isolate 收口（isolateBridge）：worker isolate 内本模块的 chatUiSockets 恒空（isolate 隔离单例），
 // 四个广播出口在 worker 中统一改走桥上行、由主进程的真实注册表代发；主 isolate 加载时自注册回放处理器。
 // isolate 判定内化在本系统内部——调用方（replyHandler/beilu-files 等插件链）零改动。桥零依赖，无环。
 import { isWorkerIsolate, publishFromWorker, registerBridgeHandler } from "../../../../../../yonban/core/transport/isolateBridge.mjs";
 import { createDiag } from "../../../../../../server/diagLogger.mjs";
+import { publishCompanionOutput } from "../../../../../../yonban/core/functions/render/companionOutput.mjs";
 
 // 诊断 stream 模块常驻埋点（0716 死标记接线）：流生命周期/背压丢弃/WS发送失败按需可见。
 // 纯 console 输出，不经 broadcastChatEvent（与 :16 的 wb* 禁令不同源，无递归风险）。
@@ -46,12 +50,28 @@ export function setOnStopGeneration(fn) { _onStopGeneration = fn; }
 let _webhookDispatcher = null;
 export function setWebhookDispatcher(fn) { _webhookDispatcher = fn; }
 
-// v4 簇②：注入式拿到 chatid→{username} 索引（复用 registerChatUiSocket 已收的 getChatMetadatas，
-// 避免静态 import chatStorage 触发循环初始化）。用于把 sourceChatId 解析到 username 再查组。
-let _getChatMetadatas = null;
-/** 启动时注入 chatMetadatas 提供器——让 broadcastAllChatUi 在首个 WS 连接前就能解析 owner 索引。
- *  与 registerChatUiSocket 内的赋值等价但时序更早（chat.mjs 初始化阶段），消除插件早期广播的 E_OWNER。 */
+// v4 簇②：owner 索引由本模块直接读取；可选 setter 仅保留给旧壳的兼容调用，
+// 不再是广播正确性的前置条件。首次 owner-scoped 广播才进行一次启动扫描，避免模块 import 时做 IO。
+let _getChatMetadatas = getChatMetadatas;
+let _ownerIndexInitialized = false;
 export function setChatMetadatasProvider(fn) { if (typeof fn === "function") _getChatMetadatas = fn; }
+
+function _readOwnerIndex() {
+  if (!_ownerIndexInitialized) {
+    try {
+      initializeChatMetadatas();
+      _ownerIndexInitialized = true;
+    } catch (e) {
+      console.warn("[broadcast] 初始化用户级广播 owner 索引失败:", e?.message || e);
+      return null;
+    }
+  }
+  try { return (_getChatMetadatas || getChatMetadatas)(); }
+  catch (e) {
+    console.warn("[broadcast] 读取用户级广播 owner 索引失败:", e?.message || e);
+    return null;
+  }
+}
 
 // ============================================================
 // StreamManager — 流式生成任务管理
@@ -67,6 +87,22 @@ export function setChatMetadatasProvider(fn) { if (typeof fn === "function") _ge
  * 影响：activeStreams Map 变更 / broadcastStats 计数 / 实时 emotion_changed·motion_triggered 广播
  */
 const activeStreams = new Map();
+
+function _streamAbortError(reason = "User Aborted") {
+  if (reason instanceof Error) return reason;
+  if (reason && typeof reason === "object") {
+    const error = new Error(
+      (typeof reason.message === "string" && reason.message) || "User Aborted",
+    );
+    error.name = (typeof reason.name === "string" && reason.name) || "AbortError";
+    if (typeof reason.code === "string" && reason.code) error.code = reason.code;
+    return error;
+  }
+  const error = new Error(typeof reason === "string" && reason ? reason : "User Aborted");
+  error.name = "AbortError";
+  return error;
+}
+
 export const StreamManager = {
   create(chatId, messageId) {
     const streamId = crypto.randomUUID();
@@ -75,6 +111,7 @@ export const StreamManager = {
     const context = {
       chatId,
       messageId,
+      username: _readOwnerIndex()?.get(chatId)?.username || "",
       lastMessage: { content: "", files: [] },
       lastEmotion: "", // ★ Live2D 关联：上次广播的情感，变化才发（防 30fps 重发）
       lastMotion: "",  // ★ Live2D 关联：上次广播的动作组名，变化才发（同 emotion 去重范式）
@@ -95,6 +132,14 @@ export const StreamManager = {
           type: "stream_update",
           payload: { messageId, slices },
         });
+        // 陪伴输出不是第二套生成：从同一 preview 全量快照投影纯正文，再广播/存给 Web 与桌宠。
+        // content 优先（源层思维链分离后的 AI 正文）；投影器仍会兜底剥 reasoning/操作标签。
+        const _companion = publishCompanionOutput(context.username, chatId, {
+          messageId,
+          phase: "stream",
+          rawText: newMessage?.content || newMessage?.content_for_show || "",
+        });
+        if (_companion) broadcastChatEvent(chatId, { type: "companion_stream", payload: _companion });
       }
       // ★ Live2D 关联（实时 emotion producer）：从 raw content 检测 <emotion> 标签，变化即广播。
       //   必须用 newMessage.content（raw，含标签）——generateDiff/前端走 content_for_show 已剥 <emotion>。
@@ -148,8 +193,7 @@ export const StreamManager = {
 
       abort(reason = "User Aborted") {
         if (context.controller.signal.aborted) return;
-        const error = new Error(reason);
-        error.name = "AbortError";
+        const error = _streamAbortError(reason);
         context.controller.abort(error);
         // 计数与 set 成员单源绑定：仅当真删掉在飞流才减（Set.delete 返回 true）。
         // 防 abort()+done()(finalizeEntry) 对同一流二次递减致 activeStreams 下溢为负。
@@ -174,13 +218,12 @@ export const StreamManager = {
     return false;
   },
 
-  abortAll(chatId) {
+  abortAll(chatId, reason = "User Aborted") {
     const toDelete = [];
     for (const [id, ctx] of activeStreams)
       if (ctx.chatId === chatId) {
         if (ctx.controller.signal.aborted) continue;
-        const error = new Error("User Aborted");
-        error.name = "AbortError";
+        const error = _streamAbortError(reason);
         ctx.controller.abort(error);
         toDelete.push(id);
       }
@@ -258,16 +301,19 @@ export function broadcastAllChatUi(event, username) {
   const payload = JSON.stringify(event);
   // #181: 传 username 时只推给该用户的 chatId（多用户隔离），不传则全推（Bot 全局事件等）
   const ownerScoped = typeof username === "string" && username.length > 0;
-  const metas = ownerScoped && _getChatMetadatas ? (() => { try { return _getChatMetadatas(); } catch { return null; } })() : null;
+  const metas = ownerScoped ? _readOwnerIndex() : null;
   // owner 已给却没有 owner→chat 索引时必须零发送；否则”用户级”会退化成全用户广播。
   // 例外：启动阶段 _getChatMetadatas 尚未注入且无任何 WS 连接时，广播无接收者 = 等价成功（不报 E_OWNER）。
   if (ownerScoped && !metas) {
     if (chatUiSockets.size === 0) return true;
     return false;
   }
+  let unknownSocketOwner = false;
   for (const [cid, sockets] of chatUiSockets.entries()) {
     if (ownerScoped) {
-      try { if (metas.get(cid)?.username !== username) continue; } catch { /* metadata miss → 跳过 */ }
+      const owner = metas.get(cid)?.username;
+      if (!owner) { unknownSocketOwner = true; continue; }
+      if (owner !== username) continue;
     }
     for (const ws of sockets) {
       if (ws.readyState !== ws.OPEN) continue;
@@ -275,7 +321,8 @@ export function broadcastAllChatUi(event, username) {
       try { ws.send(payload); } catch { /* 静默 */ }
     }
   }
-  return true;
+  // 有已连接 socket 却无法得到其 owner 时，不能把“安全跳过”伪装成已投递。
+  return !unknownSocketOwner;
 }
 
 /**
@@ -313,6 +360,22 @@ export function broadcastChatEvent(chatid, event) {
       continue;
     }
     try { ws.send(message); } catch (e) { broadcastStats.wsSendErrors++; diag.warn("ws.send 失败:", event.type, "chat:", chatid, e?.message, "累计:", broadcastStats.wsSendErrors); }
+  }
+
+  // stream_start / message_replaced 是陪伴流的开始与最终权威收口。先发原主链事件，再发同源
+  // companion_stream；递归调用只处理 companion_stream 类型，不会再次进入本块。
+  if (event.type === "stream_start" || (
+    event.type === "message_replaced" && event.payload?.entry?.is_generating === false && event.payload?.entry?.role !== "user"
+  )) {
+    const _username = _readOwnerIndex()?.get(chatid)?.username || "";
+    const _entry = event.payload?.entry;
+    const _companion = publishCompanionOutput(_username, chatid, {
+      messageId: event.payload?.messageId || _entry?.id || "",
+      phase: event.type === "stream_start" ? "start" : "final",
+      rawText: event.type === "stream_start" ? "" : (_entry?.extension?._companion_visible_text || _entry?.content_for_show || _entry?.content || ""),
+      charName: _entry?.name || "",
+    });
+    if (_companion) broadcastChatEvent(chatid, { type: "companion_stream", payload: _companion });
   }
 
   // EXT-WH: Webhook 出站推送挂点 —— 仅在 AI 回复完成的终态触发。
@@ -588,11 +651,42 @@ export function registerChatUiSocket(
 // worker 上行的广播事件在此落到主进程真实 chatUiSockets/webhook。回放跑在主 isolate，
 // isWorkerIsolate=false → 不会再次改道，无递归。
 if (!isWorkerIsolate) {
-  registerBridgeHandler("broadcast", (p) => {
+  registerBridgeHandler("broadcast", (p, _reportedChatid, trustedContext) => {
+    if (!trustedContext?.chatid || !trustedContext?.username) {
+      console.warn("[broadcast] 拒绝缺少可信 parent context 的 worker 广播");
+      return false;
+    }
     const a = Array.isArray(p?.args) ? p.args : [];
-    if (p?.fn === "chatEvent") broadcastChatEvent(a[0], a[1]);
-    else if (p?.fn === "allChatUi") broadcastAllChatUi(a[0], a[1]);
-    else if (p?.fn === "crossChatEvent") broadcastCrossChatEvent(a[0], a[1], a[2]);
-    else if (p?.fn === "userActiveChat") broadcastUserActiveChat(a[0], a[1]);
+    if (p?.fn === "chatEvent") {
+      if (a[0] != null && a[0] !== trustedContext.chatid) {
+        console.warn("[broadcast] 拒绝 worker chatEvent payload 与可信 chatid 不匹配");
+        return false;
+      }
+      return broadcastChatEvent(trustedContext.chatid, a[1]);
+    }
+    if (p?.fn === "allChatUi") {
+      if (a[1] != null && a[1] !== trustedContext.username) {
+        console.warn("[broadcast] 拒绝 worker allChatUi payload 与可信 owner 不匹配");
+        return false;
+      }
+      return broadcastAllChatUi(a[0], trustedContext.username);
+    }
+    if (p?.fn === "crossChatEvent") {
+      if ((a[0] != null && a[0] !== trustedContext.chatid)
+        || (a[2] != null && a[2] !== trustedContext.username)) {
+        console.warn("[broadcast] 拒绝 worker crossChatEvent payload 与可信 parent 不匹配");
+        return false;
+      }
+      return broadcastCrossChatEvent(trustedContext.chatid, a[1], trustedContext.username);
+    }
+    if (p?.fn === "userActiveChat") {
+      if (a[0] != null && a[0] !== trustedContext.chatid) {
+        console.warn("[broadcast] 拒绝 worker userActiveChat payload 与可信 chatid 不匹配");
+        return false;
+      }
+      return broadcastUserActiveChat(trustedContext.chatid, a[1]);
+    }
+    console.warn("[broadcast] 拒绝未知 worker 广播函数:", p?.fn);
+    return false;
   });
 }

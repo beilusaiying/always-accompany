@@ -17,14 +17,14 @@
  *   → sendAction.mjs(plugins:beilu-p1-selfdriven 通配+getData 注册段)
  *   → shells/p1/service/p1_server.py（runP1/updateConfig/getStats/listVocabs/atSearch/*UserVocab/
  *     *P9Prompts/getRunLogInfo/getRunLog）
- *   → 用户插拔词库消费方 = 服务 pipeline/p1_pool.py mode:user 子路由（热更新）
+ *   → 用户插拔词库消费方 = Node stdio 每请求读取 → node2 user_vocab token/phrase 热插拔
  *
  * [0731 真机验收二次返工·002骂点] "子模式是什么你照着搬运一下就行啊,预设那边也可以搬运过来" +
  *   "做个复制按钮会死啊" + "抄代码做个放大功能会死啊" + "点击不了,查了不了" + 三次返工终版
  *   "把这两个恶心的垃圾给我删除...仿照code的子模式做前端,也就是完整的编辑前端"：
  *   P9 面板=就地完整编辑区（loadP1P9Panel）：①子模式实体区照 companion.mjs 陪伴单实体范式
  *   （getSubModes/saveSubModes 单源，参数只写 model_params 蛇形键=getPromptHandler 每轮生效载体；
- *   绑定/解绑当前对话走 setActiveSubMode active_sub_modes_map 链）；②提示词区就地编辑绑定预设条目
+ *   绑定经角色归属校验的所选对话走 activateSubMode，解绑走 expectedId compare-delete）；②提示词区就地编辑绑定预设条目
  *   （getDataForPreset / updatePresetConfig update_entry 等，与预设面板 settings/panels.mjs 同一契约），
  *   零跳转；放大编辑复用全局 expandEditor.mjs（data-expandable/expand-btn 挂法，MutationObserver
  *   自动接管，零额外接线）；复制按钮写剪贴板（clipboard 写法同 companion.mjs:514-517）。
@@ -36,18 +36,326 @@
  */
 import { sendAction } from "../../shared/transport/sendAction.mjs";
 import { applyParamSchemaToInputs, setParamSchema, setEnumSchema } from "../../shared/state/paramSchemaCache.mjs"; // 限值/枚举后端单源（同 companion/subModePanel 范式）
-import { getPartList } from "../../../../../../scripts/parts.mjs"; // 快速测试角色卡下拉单源（同 lineManager/backup.mjs 范式，0731 002"这个需要绑定角色卡啊,不去切换角色卡怎么测试?"）
+import { chatBelongsToChar } from "../../shared/state/utils.mjs";
+import { KEYS } from "../../shared/state/storage.mjs";
+import { initHorizontalSplitPane } from "../../shared/widgets/splitPane.mjs";
+import { getPartList } from "../../../../../../scripts/parts.mjs";
 
 const _P1 = "plugins:beilu-p1-selfdriven";
+const _P1_CONFIG_CHANGED_EVENT = "beilu:p1-config-changed";
 
-// [0801] P1 服务进程探测: GET /health 无鉴权无数据,只判在不在——在了才加载面板数据,不在显示离线态不爆红
-async function _p1ProbeService() {
-  try {
-    const r = await fetch("/api/parts/shells:p1/health", { signal: AbortSignal.timeout(3000) });
-    return r.ok;
-  } catch { return false; }
+// P1 的 HTTP 壳会用 200 携带业务层 success:false。前端所有 P1 动作必须在
+// 同一边界校验该层，不能让某个按钮把“传输成功”误显示成“业务成功”。
+async function _p1Action(verb, payload) {
+  const result = await sendAction({ verb, target: _P1, source: "web", ...(payload === undefined ? {} : { payload }) });
+  if (result?.success === false) {
+    const error = new Error(result.error || `P1 ${verb} 执行失败`);
+    error.code = result.code || "E_P1_ACTION_FAILED";
+    error.result = result;
+    throw error;
+  }
+  return result;
 }
+
 const _esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/**
+ * P1 主结果成功时，runLog 的主写与后续清理可能独立失败。这里只映射公开 issue，
+ * 不改写 result.success/outcome/召回数据，也不读取可能含绝对路径的 path 字段。
+ */
+export function getP1RunLogIssues(result) {
+  const runLog = result?.runLog;
+  if (runLog?.enabled !== true) return [];
+  const issues = [];
+  const seen = new Set();
+  const addIssue = ({ severity, kind, written, stage, code, message, file }) => {
+    const normalizedSeverity = severity === "warning" ? "warning" : severity === "error" ? "error" : "";
+    const normalizedCode = String(code ?? "").trim();
+    if (!normalizedSeverity || !normalizedCode) return;
+    const normalizedMessage = String(message ?? "").trim() || "P1 run log operation failed";
+    const normalizedFile = String(file ?? "").trim() || null;
+    const key = `${normalizedSeverity}\0${normalizedCode}\0${normalizedMessage}\0${normalizedFile || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    issues.push({
+      component: "runLog",
+      severity: normalizedSeverity,
+      kind,
+      written,
+      stage: stage || null,
+      code: normalizedCode,
+      message: normalizedMessage,
+      file: normalizedFile,
+    });
+  };
+  if (runLog.written === false && String(runLog.code).startsWith("E_")) {
+    addIssue({
+      severity: "error",
+      kind: "write",
+      written: false,
+      stage: "write",
+      code: runLog.code,
+      message: String(runLog.error ?? "").trim() || "P1 run log write failed",
+      file: runLog.file,
+    });
+  }
+  for (const [severity, bucket] of [
+    ["error", runLog?.diagnostics?.errors],
+    ["warning", runLog?.diagnostics?.warnings],
+  ]) {
+    for (const diagnostic of Array.isArray(bucket) ? bucket : []) {
+      const stage = String(diagnostic?.stage ?? "diagnostic").trim() || "diagnostic";
+      const exception = String(diagnostic?.exception ?? "").trim();
+      addIssue({
+        severity,
+        kind: "diagnostic",
+        written: runLog.written === true,
+        stage,
+        code: diagnostic?.code,
+        message: String(diagnostic?.message ?? diagnostic?.error ?? "").trim()
+          || `${exception ? `${exception}: ` : ""}P1 run log ${stage} failed`,
+        file: diagnostic?.file ?? runLog.file,
+      });
+    }
+  }
+  return issues;
+}
+
+/**
+ * P1 当前窗口作用域读口。
+ * lineManager 负责决定 code 多窗口还是本体普通对话；快速测试也允许用户显式选择
+ * 角色卡、对话文件和记忆模式，但“一键使用当前窗口”仍以这里的完整绑定包为权威。
+ */
+function _p1CurrentBinding() {
+  if (typeof window._beiluCurWinBinding !== "function") {
+    const error = new Error("当前窗口绑定 producer 未就绪");
+    error.code = "E_P1_WINDOW_BINDING_MISSING";
+    throw error;
+  }
+  const raw = window._beiluCurWinBinding();
+  const binding = {
+    chatId: String(raw?.chatId || "").trim(),
+    charName: String(raw?.charName || "").trim(),
+    mode: String(raw?.mode || "").trim(),
+    multiWindow: raw?.multiWindow,
+  };
+  const missing = [];
+  if (!binding.chatId) missing.push("chatId");
+  if (!binding.charName) missing.push("charName");
+  if (!binding.mode) missing.push("mode");
+  if (typeof binding.multiWindow !== "boolean") missing.push("multiWindow");
+  if (missing.length) {
+    const error = new Error(`当前窗口绑定不完整，缺少: ${missing.join(", ")}`);
+    error.code = "E_P1_WINDOW_BINDING_INCOMPLETE";
+    error.binding = binding;
+    throw error;
+  }
+  return Object.freeze(binding);
+}
+
+function _p1QuickSnapshot(container) {
+  const inputRaw = container.querySelector("#p1run-test-input")?.value ?? "";
+  let binding = null;
+  let bindingError = null;
+  const scopeSource = container._p1QuickScopeMode === "manual" ? "manual" : "current";
+  if (scopeSource === "manual") {
+    const charName = String(container.querySelector("#p1run-test-char")?.value || "").trim();
+    const chatId = String(container.querySelector("#p1run-test-chat")?.value || "").trim();
+    const mode = String(container.querySelector("#p1run-test-mode")?.value || "").trim();
+    const selectedChat = (container._p1QuickChats || []).find((chat) => String(chat?.chatid || chat?.id || "") === chatId);
+    const missing = [];
+    if (!charName) missing.push("角色卡");
+    if (!chatId) missing.push("对话文件");
+    if (!mode) missing.push("模式");
+    if (chatId && !selectedChat) missing.push("对话文件有效性");
+    if (selectedChat && !chatBelongsToChar(selectedChat, charName)) missing.push("对话归属");
+    if (missing.length) {
+      bindingError = new Error(`手动测试目标不完整：${missing.join("、")}`);
+      bindingError.code = "E_P1_MANUAL_SCOPE_INCOMPLETE";
+    } else {
+      binding = { chatId, charName, mode, multiWindow: false };
+    }
+  } else {
+    try { binding = _p1CurrentBinding(); }
+    catch (error) { bindingError = error; }
+  }
+  return {
+    inputRaw,
+    input: inputRaw.trim(),
+    mode: binding?.mode || "",
+    charName: binding?.charName || "",
+    chatid: binding?.chatId || "",
+    multiWindow: binding?.multiWindow,
+    scopeSource,
+    bindingError,
+  };
+}
+
+function _p1RenderBinding(container, snapshot = _p1QuickSnapshot(container)) {
+  const box = container.querySelector("#p1run-test-binding");
+  if (!box) return;
+  const manual = snapshot.scopeSource === "manual";
+  if (snapshot.bindingError) {
+    box.innerHTML = `<span class="text-error">${manual ? "手动测试目标" : "当前窗口作用域"}不可用：${_esc(snapshot.bindingError?.message || snapshot.bindingError)}</span>`;
+    return;
+  }
+  box.innerHTML = `<span class="opacity-60">${manual ? "手动测试目标" : "当前窗口作用域"}:</span>
+    <span class="badge badge-xs badge-ghost">角色 ${_esc(snapshot.charName)}</span>
+    <span class="badge badge-xs badge-ghost">对话 ${_esc(snapshot.chatid)}</span>
+    <span class="badge badge-xs badge-ghost">模式 ${_esc(snapshot.mode)}</span>
+    <span class="badge badge-xs ${manual || snapshot.multiWindow ? "badge-info" : "badge-ghost"}">${manual ? "手动选择" : snapshot.multiWindow ? "code 当前可见窗口" : "本体当前对话"}</span>`;
+}
+
+function _p1QuickIsCurrent(container, ticket, snapshot) {
+  if (container._p1QuickTestTicket !== ticket) return false;
+  const current = _p1QuickSnapshot(container);
+  return current.inputRaw === snapshot.inputRaw
+    && current.mode === snapshot.mode
+    && current.charName === snapshot.charName
+    && current.chatid === snapshot.chatid
+    && current.multiWindow === snapshot.multiWindow
+    && current.scopeSource === snapshot.scopeSource
+    && !current.bindingError && !snapshot.bindingError;
+}
+
+function _p1QuickChatId(chat) {
+  return String(chat?.chatid || chat?.id || "").trim();
+}
+
+function _p1QuickChatMode(chat, fallback = "chat") {
+  const raw = String(chat?.mode || chat?.activeMode || fallback || "chat").trim().toLowerCase();
+  if (raw === "ide" || raw === "files") return "code";
+  if (raw === "smart" || raw === "airp") return "chat";
+  return ["chat", "code", "work"].includes(raw) ? raw : "chat";
+}
+
+function _p1QuickChatLabel(chat) {
+  const id = _p1QuickChatId(chat);
+  const title = String(chat?.customName || chat?.title || chat?.name || chat?.firstUserMessage || id || "对话").trim();
+  const shortTitle = title.length > 38 ? `${title.slice(0, 38)}…` : title;
+  const shortId = id.length > 12 ? `${id.slice(0, 12)}…` : id;
+  return `${shortTitle}${shortId && !title.includes(id) ? ` · ${shortId}` : ""}`;
+}
+
+/**
+ * P1 面板共用的“角色卡 + 对话”目录读口。
+ * 角色清单以 parts 为主、对话归属反推为辅；对话清单读取失败则不能证明 chatId 有效，直接失败。
+ * 快速测试与 P9 绑定必须复用这一份目录，禁止各自散写另一套角色/对话解析。
+ */
+async function _p1LoadScopeCatalog(currentChar = "") {
+  const [charResult, chatResult] = await Promise.allSettled([
+    getPartList("chars"),
+    sendAction({ verb: "getChatList", target: "shells:chat", source: "web" }),
+  ]);
+  if (chatResult.status === "rejected") throw chatResult.reason;
+  const chats = Array.isArray(chatResult.value) ? chatResult.value : [];
+  const inferredChars = new Set();
+  for (const chat of chats) {
+    if (chat?.primaryCharName) inferredChars.add(String(chat.primaryCharName));
+    for (const name of Array.isArray(chat?.chars) ? chat.chars : []) if (name) inferredChars.add(String(name));
+  }
+  const listedChars = charResult.status === "fulfilled" && Array.isArray(charResult.value) ? charResult.value : [];
+  const chars = [...new Set([...listedChars, ...inferredChars, currentChar])]
+    .map((name) => String(name || "").trim())
+    .filter((name) => name && name !== "_global")
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+  return { chars, chats, charListFailed: charResult.status === "rejected" };
+}
+
+function _p1RenderQuickChats(container, preferredChatId = "") {
+  const charSelect = container.querySelector("#p1run-test-char");
+  const chatSelect = container.querySelector("#p1run-test-chat");
+  const modeSelect = container.querySelector("#p1run-test-mode");
+  if (!charSelect || !chatSelect || !modeSelect) return;
+  const charName = charSelect.value;
+  const chats = (container._p1QuickChats || []).filter((chat) => chatBelongsToChar(chat, charName));
+  const keep = preferredChatId || chatSelect.value;
+  chatSelect.innerHTML = "";
+  for (const chat of chats) {
+    const id = _p1QuickChatId(chat);
+    if (!id) continue;
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = _p1QuickChatLabel(chat);
+    option.title = `${option.textContent} (${id})`;
+    option.dataset.mode = _p1QuickChatMode(chat);
+    chatSelect.appendChild(option);
+  }
+  if (keep && chats.some((chat) => _p1QuickChatId(chat) === keep)) chatSelect.value = keep;
+  const selected = chats.find((chat) => _p1QuickChatId(chat) === chatSelect.value);
+  if (selected) modeSelect.value = _p1QuickChatMode(selected, modeSelect.value);
+  chatSelect.disabled = chats.length === 0;
+  const status = container.querySelector("#p1run-test-target-status");
+  if (status) status.textContent = chats.length ? `${chats.length} 个可用对话` : "该角色没有可用于测试的对话文件";
+}
+
+function _p1SyncQuickControlsToCurrent(container) {
+  let current;
+  try { current = _p1CurrentBinding(); } catch (_) { return; }
+  const charSelect = container.querySelector("#p1run-test-char");
+  const modeSelect = container.querySelector("#p1run-test-mode");
+  if (charSelect && [...charSelect.options].some((option) => option.value === current.charName)) {
+    charSelect.value = current.charName;
+    _p1RenderQuickChats(container, current.chatId);
+  }
+  if (modeSelect) modeSelect.value = _p1QuickChatMode({ mode: current.mode });
+}
+
+async function _p1LoadQuickTargets(container) {
+  const charSelect = container.querySelector("#p1run-test-char");
+  const chatSelect = container.querySelector("#p1run-test-chat");
+  const refreshBtn = container.querySelector("#p1run-test-refresh");
+  const status = container.querySelector("#p1run-test-target-status");
+  if (!charSelect || !chatSelect) return;
+  const loadTicket = (container._p1QuickTargetTicket || 0) + 1;
+  container._p1QuickTargetTicket = loadTicket;
+  charSelect.disabled = true;
+  chatSelect.disabled = true;
+  if (refreshBtn) refreshBtn.disabled = true;
+  if (status) status.textContent = "正在加载角色卡与对话文件…";
+  const previousChar = charSelect.value;
+  const previousChat = chatSelect.value;
+  let current = null;
+  try { current = _p1CurrentBinding(); } catch (_) { /* 手动选择仍可用 */ }
+  try {
+    const catalog = await _p1LoadScopeCatalog(current?.charName || "");
+    if (container._p1QuickTargetTicket !== loadTicket || !container.isConnected) return;
+    const { chars, chats } = catalog;
+    container._p1QuickChats = chats;
+    charSelect.innerHTML = "";
+    for (const name of chars) {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      charSelect.appendChild(option);
+    }
+    const wantedChar = previousChar || current?.charName || chars[0] || "";
+    if (chars.includes(wantedChar)) charSelect.value = wantedChar;
+    _p1RenderQuickChats(container, previousChat || current?.chatId || "");
+    if (!current && chatSelect.options.length > 0) container._p1QuickScopeMode = "manual";
+    if (container._p1QuickScopeMode !== "manual") _p1SyncQuickControlsToCurrent(container);
+    if (catalog.charListFailed && status) status.textContent += "；角色清单读取失败，已从对话反推";
+  } catch (error) {
+    container._p1QuickChats = [];
+    chatSelect.innerHTML = "";
+    if (status) status.textContent = `目标列表加载失败：${error?.message || error}`;
+  } finally {
+    if (container._p1QuickTargetTicket === loadTicket) {
+      charSelect.disabled = charSelect.options.length === 0;
+      chatSelect.disabled = chatSelect.options.length === 0;
+      if (refreshBtn) refreshBtn.disabled = false;
+      _p1RenderBinding(container);
+    }
+  }
+}
+
+function _p1InvalidateQuickTest(container) {
+  container._p1QuickTestTicket = (container._p1QuickTestTicket || 0) + 1;
+  const out = container.querySelector("#p1run-test-out");
+  if (!out) return;
+  out.innerHTML = "";
+  delete out.dataset.p1QuickState;
+}
 
 // ═══════════════════ 面板1：运行 / 测试 ═══════════════════
 
@@ -57,15 +365,23 @@ export async function loadP1RunPanel(container) {
   container.innerHTML = `<div class="p-3 text-xs space-y-3" id="p1run-root">
     <div class="card bg-base-200/40 p-3" id="p1run-status"><span class="opacity-50">状态加载中...</span></div>
     <div class="card bg-base-200/40 p-3">
-      <div class="font-bold mb-2">🚦 各模式 P1 开关 <span class="opacity-50 font-normal">（自驱动=本地召回管线；AI P1=大模型检索降级路。写入用户覆盖层，下一轮对话生效；与上方"启用 P1 召回"是两层：这里是模式级路由，上面是插件级总闸）</span></div>
+      <div class="font-bold mb-2">🚦 各模式 P1 路由 <span class="opacity-50 font-normal">（自驱动召回与 AI P1 最多启用一个，也可全部关闭；写入用户覆盖层，下一轮对话生效。与上方"启用 P1 召回"是两层：这里是模式级路由，上面是插件级总闸）</span></div>
       <div id="p1run-modeov" class="text-[11px]"><span class="opacity-50">加载中...</span></div>
     </div>
     <div class="card bg-base-200/40 p-3">
-      <div class="font-bold mb-2">⚡ 快速测试 <span class="opacity-50 font-normal">（直调召回管线，不注入对话）</span></div>
+      <div class="font-bold mb-2">⚡ 快速测试 <span class="opacity-50 font-normal">（直调召回管线，可选角色卡与对话文件，不注入对话）</span></div>
+      <div class="grid grid-cols-1 md:grid-cols-[minmax(8rem,0.75fr)_minmax(12rem,1.5fr)_7rem_auto] gap-2 items-end mb-1">
+        <label class="flex flex-col gap-0.5"><span class="opacity-60">角色卡</span><select id="p1run-test-char" class="select select-xs select-bordered w-full"><option>加载中…</option></select></label>
+        <label class="flex flex-col gap-0.5"><span class="opacity-60">对话文件</span><select id="p1run-test-chat" class="select select-xs select-bordered w-full"><option>加载中…</option></select></label>
+        <label class="flex flex-col gap-0.5"><span class="opacity-60">记忆模式</span><select id="p1run-test-mode" class="select select-xs select-bordered w-full"><option value="chat">chat</option><option value="code">code</option><option value="work">work</option></select></label>
+        <div class="flex gap-1">
+          <button id="p1run-test-current" class="btn btn-xs" title="取消手动选择，重新跟随当前可见窗口">使用当前窗口</button>
+          <button id="p1run-test-refresh" class="btn btn-xs btn-ghost" title="刷新角色卡与对话文件"><i data-ic="refresh"></i></button>
+        </div>
+      </div>
+      <div id="p1run-test-target-status" class="mb-1 text-[10px] opacity-55"></div>
+      <div id="p1run-test-binding" class="mb-2 flex flex-wrap gap-1 items-center text-[11px]"></div>
       <div class="flex gap-2 items-center mb-2 flex-wrap">
-        <select id="p1run-test-mode" class="select select-xs select-bordered" title="召回模式"><option>chat</option><option>code</option><option>work</option><option>airp</option></select>
-        <select id="p1run-test-char" class="select select-xs select-bordered max-w-40" title="记忆按角色卡隔离：选哪张卡就测哪张卡的记忆池"><option value="">（加载角色卡...）</option></select>
-        <select id="p1run-test-chat" class="select select-xs select-bordered max-w-48" title="可选：带上某个对话文件的最近消息作为上下文（更接近真实召回场景）"><option value="">不带对话历史</option></select>
         <input id="p1run-test-input" type="text" class="input input-xs input-bordered flex-1 min-w-40" placeholder="输入一句话，立即查看 P1 召回结果" />
         <button id="p1run-test-btn" class="btn btn-xs btn-primary">运行召回</button>
       </div>
@@ -85,28 +401,71 @@ export async function loadP1RunPanel(container) {
   </div>`;
   container.querySelector("#p1run-test-btn").addEventListener("click", () => _p1QuickTest(container));
   container.querySelector("#p1run-test-input").addEventListener("keydown", (e) => { if (e.key === "Enter") _p1QuickTest(container); });
+  container.querySelector("#p1run-test-input").addEventListener("input", () => _p1InvalidateQuickTest(container));
   container.querySelector("#p1run-save").addEventListener("click", () => _p1SaveParams(container));
-  container.querySelector("#p1run-test-char").addEventListener("change", () => _p1FillChatSelect(container));
-  _p1FillTestSelectors(container); // 角色卡/对话文件下拉填充（异步不阻塞面板首屏）
-  // [0801] 先探测 P1 服务进程是否在线再加载数据（凛倾："检测进程，而不是按时间提醒"）
-  // 服务没起时 getData/getRunLogInfo 必爆红；探测 health 只需 GET 无鉴权无数据，失败=离线态显示，不爆红
-  const _online = await _p1ProbeService();
-  if (_online) {
-    _p1RefreshRunLog(container);
-    await _p1RefreshRun(container);
-  } else {
-    const box = container.querySelector("#p1run-status");
-    if (box) box.innerHTML = `<span class="opacity-50">P1 召回服务未运行</span> <button class="btn btn-xs btn-ghost" id="p1run-probe-retry">检测服务</button>`;
-    box?.querySelector("#p1run-probe-retry")?.addEventListener("click", async () => {
-      box.innerHTML = '<span class="opacity-50">检测中...</span>';
-      if (await _p1ProbeService()) { _p1RefreshRunLog(container); await _p1RefreshRun(container); }
-      else box.innerHTML = '<span class="opacity-50">P1 服务仍未运行（手动启动后点击重试）</span> <button class="btn btn-xs btn-ghost" onclick="this.parentElement.querySelector(\'#p1run-probe-retry\')?.click()">重试</button>';
+  container._p1QuickScopeMode = "current";
+  const syncManualTarget = async () => {
+    _p1InvalidateQuickTest(container);
+    _p1RenderBinding(container);
+    const entries = container.querySelector("#p1run-log-entries");
+    if (entries) entries.innerHTML = "";
+    await _p1RefreshRunLog(container);
+  };
+  container.querySelector("#p1run-test-char").addEventListener("change", () => {
+    container._p1QuickScopeMode = "manual";
+    _p1RenderQuickChats(container);
+    void syncManualTarget();
+  });
+  container.querySelector("#p1run-test-chat").addEventListener("change", (event) => {
+    container._p1QuickScopeMode = "manual";
+    const mode = event.target.selectedOptions?.[0]?.dataset?.mode;
+    if (mode) container.querySelector("#p1run-test-mode").value = mode;
+    void syncManualTarget();
+  });
+  container.querySelector("#p1run-test-mode").addEventListener("change", () => {
+    container._p1QuickScopeMode = "manual";
+    void syncManualTarget();
+  });
+  container.querySelector("#p1run-test-current").addEventListener("click", () => {
+    container._p1QuickScopeMode = "current";
+    _p1SyncQuickControlsToCurrent(container);
+    void syncManualTarget();
+  });
+  container.querySelector("#p1run-test-refresh").addEventListener("click", async () => {
+    await _p1LoadQuickTargets(container);
+    await syncManualTarget();
+  });
+  const syncWindowScope = async () => {
+    if (!container.isConnected) return;
+    if (container._p1QuickScopeMode !== "manual") _p1SyncQuickControlsToCurrent(container);
+    _p1InvalidateQuickTest(container);
+    _p1RenderBinding(container);
+    const entries = container.querySelector("#p1run-log-entries");
+    if (entries) entries.innerHTML = "";
+    await _p1RefreshRunLog(container);
+  };
+  let scopeSyncQueued = false;
+  const scheduleWindowScopeSync = () => {
+    if (scopeSyncQueued) return;
+    scopeSyncQueued = true;
+    queueMicrotask(() => {
+      scopeSyncQueued = false;
+      void syncWindowScope();
     });
-    const _offMsg = '<span class="opacity-40">服务未运行，启动后点击上方「检测服务」</span>';
-    const _modeOv = container.querySelector("#p1run-modeov"); if (_modeOv) _modeOv.innerHTML = _offMsg;
-    const _logInfo = container.querySelector("#p1run-log-info"); if (_logInfo) _logInfo.innerHTML = _offMsg;
-    const _params = container.querySelector("#p1run-params"); if (_params) _params.innerHTML = _offMsg;
+  };
+  // 当前作用域是运行时绑定，窗口/模式/角色/本体对话改变时同步刷新；
+  // 请求票据会丢弃旧作用域回包，不把 A 窗口日志渲染到 B 窗口。
+  // hash/mode 事件位于原生切换中途（hash 已换、角色还未提交），不在那个边沿发请求。
+  // character-switched / char-changed 是本体切换收尾，window-switched 是 lineManager 完整绑定包切换。
+  for (const eventName of ["beilu:window-switched", "character-switched", "beilu:char-changed"]) {
+    window.addEventListener(eventName, scheduleWindowScopeSync);
   }
+  _p1RenderBinding(container);
+  await _p1LoadQuickTargets(container);
+  // 受认证 getData 是面板真实入口，也会经 serviceRuntime 单飞确保服务就绪；
+  // 不再用只读 health 抢先短路，否则冷启动时面板会永远停在“请手动启动”。
+  await _p1RefreshRun(container);
+  await _p1RefreshRunLog(container);
 }
 
 // ── 运行记录卡片（0731 002"每次输出都需要进行文件记录...前端加上记录文件位置,点击打开"）──
@@ -116,8 +475,22 @@ async function _p1RefreshRunLog(container) {
   const info = container.querySelector("#p1run-log-info");
   const filesBox = container.querySelector("#p1run-log-files");
   if (!info || !filesBox) return;
+  const requestId = (container._p1RunLogRequestId || 0) + 1;
+  container._p1RunLogRequestId = requestId;
+  const snapshot = _p1QuickSnapshot(container);
+  const { charName, mode, chatid, multiWindow, bindingError } = snapshot;
+  _p1RenderBinding(container, snapshot);
+  if (bindingError) {
+    _p1RunLogError(container, info, bindingError?.message || bindingError);
+    filesBox.innerHTML = "";
+    return;
+  }
   try {
-    const r = await sendAction({ verb: "getRunLogInfo", target: _P1, source: "web" });
+    const r = await _p1Action("getRunLogInfo", { charName, mode, chatId: chatid });
+    const current = _p1QuickSnapshot(container);
+    if (container._p1RunLogRequestId !== requestId
+        || current.charName !== charName || current.mode !== mode || current.chatid !== chatid
+        || current.multiWindow !== multiWindow || current.bindingError) return;
     if (!r?.success) { _p1RunLogError(container, info, r?.error || "读取失败"); return; }
     const latest = r.files?.[0]?.file || "";
     info.innerHTML = `
@@ -135,7 +508,14 @@ async function _p1RefreshRunLog(container) {
       `<button class="btn btn-xs btn-ghost" data-runlogfile="${_esc(f.file)}" title="${_esc(f.file)}">${_esc(f.file.slice(8, 18))} <span class="opacity-50">(${(f.size / 1024).toFixed(1)}KB)</span></button>`).join("")
       || '<span class="opacity-50">暂无记录文件（有召回运行后自动生成）</span>';
     filesBox.querySelectorAll("[data-runlogfile]").forEach((btn) => btn.addEventListener("click", () => _p1OpenRunLog(container, btn.dataset.runlogfile, 0)));
-  } catch (e) { _p1RunLogError(container, info, e?.message || e); }
+  } catch (e) {
+    const current = _p1QuickSnapshot(container);
+    if (container._p1RunLogRequestId === requestId
+        && current.charName === charName && current.mode === mode && current.chatid === chatid
+        && current.multiWindow === multiWindow && !current.bindingError) {
+      _p1RunLogError(container, info, e?.message || e);
+    }
+  }
 }
 
 // 失败态带重试按钮：P1 服务是独立进程+薄壳自愈拉起（shells/p1 main.mjs ensureServiceRunning），
@@ -149,8 +529,17 @@ async function _p1OpenRunLog(container, file, offset) {
   const box = container.querySelector("#p1run-log-entries");
   if (!box) return;
   box.innerHTML = '<span class="opacity-50">加载记录中...</span>';
+  const snapshot = _p1QuickSnapshot(container);
+  const { charName, mode, chatid, multiWindow, bindingError } = snapshot;
+  if (bindingError) {
+    box.innerHTML = `<span class="text-error">${_esc(bindingError?.message || bindingError)}</span>`;
+    return;
+  }
   try {
-    const r = await sendAction({ verb: "getRunLog", target: _P1, source: "web", payload: { file, offset } });
+    const r = await _p1Action("getRunLog", { file, offset, charName, mode, chatId: chatid });
+    const current = _p1QuickSnapshot(container);
+    if (current.charName !== charName || current.mode !== mode || current.chatid !== chatid
+        || current.multiWindow !== multiWindow || current.bindingError) return;
     if (!r?.success) { box.innerHTML = `<span class="text-error">${_esc(r?.error || "加载失败")}</span>`; return; }
     const srcLabel = { bridge: "对话", "panel-test": "面板测试" };
     box.innerHTML = `<div class="font-bold mb-1">${_esc(file)} <span class="opacity-50 font-normal">（共 ${r.total} 条，最新在前，第 ${r.total ? r.offset + 1 : 0}-${Math.min(r.offset + r.limit, r.total)} 条）</span></div>` +
@@ -162,6 +551,7 @@ async function _p1OpenRunLog(container, file, offset) {
               <span class="badge badge-xs badge-ghost">${_esc(srcLabel[en.source] || en.source || "?")}</span>
               <span class="badge badge-xs badge-ghost">${_esc(en.mode || "?")}</span>
               ${en.char ? `<span class="badge badge-xs badge-ghost">${_esc(en.char)}</span>` : ""}
+              ${en.chatId ? `<span class="badge badge-xs badge-ghost">${_esc(en.chatId)}</span>` : ""}
               <span class="badge badge-xs badge-ghost">${_esc(en.ms)}ms</span>
               ${en.success ? "" : '<span class="badge badge-xs badge-error">失败</span>'}
             </div>
@@ -182,65 +572,84 @@ async function _p1OpenRunLog(container, file, offset) {
     box.querySelector('[data-runlogpage="newer"]')?.addEventListener("click", () => _p1OpenRunLog(container, file, Math.max(0, offset - r.limit)));
     box.querySelector('[data-runlogpage="older"]')?.addEventListener("click", () => _p1OpenRunLog(container, file, offset + r.limit));
     box.querySelector('[data-runlogpage="close"]')?.addEventListener("click", () => { box.innerHTML = ""; });
-  } catch (e) { box.innerHTML = `<span class="text-error">${_esc(e?.message || e)}</span>`; }
-}
-
-// ── 快速测试角色卡+对话文件选择（0731 002："这个需要绑定角色卡啊,不去切换角色卡怎么测试?"+"还要可以选择对话文件"）──
-// 角色卡=getPartList('chars') 全量单源（同 lineManager openLinePicker：不用 charList——那是"当前对话里的角色"）；
-// 对话文件=getChatList 按所选角色过滤（item.chars 含该角色），选中后运行时拉该对话尾部消息作 chatHistory。
-let _p1ChatListCache = null;
-async function _p1FillTestSelectors(container) {
-  const charSel = container.querySelector("#p1run-test-char");
-  if (!charSel) return;
-  try {
-    const chars = (await getPartList("chars")).filter((c) => c !== "_global");
-    const active = window._beiluGetCharName?.() || "";
-    charSel.innerHTML = '<option value="">（无角色·仅锚点链）</option>' +
-      chars.map((c) => `<option value="${_esc(c)}" ${c === active ? "selected" : ""}>${_esc(c)}</option>`).join("");
   } catch (e) {
-    charSel.innerHTML = '<option value="">（角色列表加载失败）</option>';
-    console.warn("[p1panel] 角色卡列表加载失败:", e?.message || e);
+    const current = _p1QuickSnapshot(container);
+    if (current.charName === charName && current.mode === mode && current.chatid === chatid
+        && current.multiWindow === multiWindow && !current.bindingError) {
+      box.innerHTML = `<span class="text-error">${_esc(e?.message || e)}</span>`;
+    }
   }
-  await _p1FillChatSelect(container);
 }
 
-async function _p1FillChatSelect(container) {
-  const chatSel = container.querySelector("#p1run-test-chat");
-  const char = container.querySelector("#p1run-test-char")?.value || "";
-  if (!chatSel) return;
-  if (!char) { chatSel.innerHTML = '<option value="">不带对话历史</option>'; return; }
-  try {
-    if (!_p1ChatListCache) _p1ChatListCache = await sendAction({ verb: "getChatList", target: "shells:chat", source: "web" });
-    const chats = (Array.isArray(_p1ChatListCache) ? _p1ChatListCache : [])
-      .filter((c) => (Array.isArray(c?.chars) ? c.chars : [c?.chars]).includes(char));
-    chatSel.innerHTML = '<option value="">不带对话历史</option>' +
-      chats.map((c) => {
-        const label = (c.lastMessageContent || c.chatid || "").toString().slice(0, 24) || c.chatid;
-        return `<option value="${_esc(c.chatid)}">${_esc(label)}</option>`;
-      }).join("");
-  } catch (e) { console.warn("[p1panel] 对话列表加载失败:", e?.message || e); }
-}
-
-// 按 chatid 拉对话尾部消息作 chatHistory（服务端既有端点 GET /:chatid/log，start 负数=尾部 slice）
+// 按当前窗口绑定 chatId 拉对话尾部消息作 chatHistory（start 负数=尾部 slice）。
 async function _p1FetchChatTail(chatid, n) {
-  try {
-    const res = await fetch(`/api/parts/shells:chat/${encodeURIComponent(chatid)}/log?start=-${n}`);
-    if (!res.ok) return [];
-    const log = await res.json();
-    return (Array.isArray(log) ? log : [])
-      .map((m) => ({ role: m.role || (m.name ? "assistant" : "user"), content: String(m.content ?? m.text ?? "") }))
-      .filter((m) => m.content);
-  } catch (e) {
-    console.warn("[p1panel] 对话历史拉取失败（改为不带历史继续）:", e?.message || e);
-    return [];
+  if (n <= 0) return [];
+  const res = await fetch(`/api/parts/shells:chat/${encodeURIComponent(chatid)}/log?start=-${n}`);
+  if (!res.ok) throw new Error(`对话历史读取失败（HTTP ${res.status}）`);
+  const log = await res.json();
+  if (!Array.isArray(log)) throw new Error("对话历史响应格式错误（应为消息数组）");
+  return log
+    .map((m) => ({ role: m.role || (m.name ? "assistant" : "user"), content: String(m.content ?? m.text ?? "") }))
+    .filter((m) => m.content);
+}
+
+// 后端按 user 角色取最近 N 条；前端必须确保传入的尾部里确实包含 N 条 user。
+// 不能用 N×2 猜一问一答，因为工具消息、多段 assistant 和隐藏消息都会打破交替假设。
+async function _p1FetchRecentUserContext(chatid, userCount) {
+  if (userCount <= 0) return [];
+  const maxTail = 200;
+  let tailSize = Math.min(maxTail, Math.max(10, userCount * 2));
+  while (true) {
+    const history = await _p1FetchChatTail(chatid, tailSize);
+    const userSeen = history.filter((m) => m.role === "user").length;
+    if (userSeen >= userCount || history.length < tailSize || tailSize >= maxTail) return history;
+    tailSize = Math.min(maxTail, tailSize * 2);
   }
 }
 
 let _p1Meta = [];
 let _p1Config = {}; // getData 平铺配置快照（快速测试等按配置驱动，禁前端硬编码条数/上限）
+
+function _p1MetaOptions(meta) {
+  if (!Array.isArray(meta?.options)) return [];
+  return meta.options.map((option) => {
+    if (option && typeof option === "object") {
+      const value = option.value ?? option.id ?? "";
+      return { value: String(value), label: String(option.label ?? value) };
+    }
+    return { value: String(option), label: String(option) };
+  });
+}
+
+function _p1RenderParamControl(meta, value) {
+  const title = _esc(meta.desc);
+  const key = _esc(meta.key);
+  const common = `data-p1key="${key}" data-p1type="${_esc(meta.type)}"`;
+  const labelOpen = `<label class="flex items-center justify-between gap-1 bg-base-100/60 rounded px-2 py-1" title="${title}"><span>${_esc(meta.label)}</span>`;
+  if (meta.type === "toggle") {
+    return `${labelOpen}<input type="checkbox" class="toggle toggle-xs" ${common} ${value ? "checked" : ""}/></label>`;
+  }
+  if (meta.type === "number") {
+    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : "";
+    return `${labelOpen}<input type="number" class="input input-xs input-bordered w-24" ${common} value="${_esc(numericValue)}" ${meta.min != null ? `min="${_esc(meta.min)}"` : ""} ${meta.max != null ? `max="${_esc(meta.max)}"` : ""} ${meta.step != null ? `step="${_esc(meta.step)}"` : ""}/></label>`;
+  }
+  if (meta.type === "select") {
+    const options = _p1MetaOptions(meta);
+    return `${labelOpen}<select class="select select-xs select-bordered w-28" ${common}>${options.map((option) =>
+      `<option value="${_esc(option.value)}" ${String(value ?? "") === option.value ? "selected" : ""}>${_esc(option.label)}</option>`).join("")}</select></label>`;
+  }
+  if (meta.type === "text") {
+    return `${labelOpen}<input type="text" class="input input-xs input-bordered w-36" ${common} value="${_esc(value)}"/></label>`;
+  }
+  return `<div class="bg-error/10 text-error rounded px-2 py-1" title="${title}">${_esc(meta.label || meta.key)}：不支持的控件类型 ${_esc(meta.type)}</div>`;
+}
+
 async function _p1RefreshRun(container) {
+  const requestId = (container._p1RunRequestId || 0) + 1;
+  container._p1RunRequestId = requestId;
   try {
-    const d = await sendAction({ verb: "getData", target: _P1, source: "web" });
+    const d = await _p1Action("getData");
+    if (container._p1RunRequestId !== requestId) return;
     _p1Meta = Array.isArray(d?.meta) ? d.meta : [];
     _p1Config = d && typeof d === "object" ? d : {};
     const st = d?.stats || {};
@@ -248,7 +657,12 @@ async function _p1RefreshRun(container) {
     if (box) box.innerHTML = `
       <div class="flex flex-wrap gap-2 items-center">
         <label class="flex items-center gap-1"><input type="checkbox" id="p1run-enabled" class="toggle toggle-xs" ${d.enabled ? "checked" : ""}/><b>启用 P1 召回</b></label>
-        <span class="badge badge-sm ${st.pipelineLoaded ? "badge-success" : "badge-ghost"}">管线${st.pipelineLoaded ? "已加载" : "未加载"}</span>
+        ${/* [0804 根因修·P1 假绿] 主状态色只认 readyForRecall——pipelineLoaded=true 但 readyForRecall=false
+             会同时成立（管线模块已加载但资源 warmup 未过，E 现场 DomainWords stale 即此态），原实现拿
+             pipelineLoaded 画绿=假绿（「第二次打开像生效」的产地）。只有 readyForRecall 才允许绿；
+             pipelineLoaded 降为旁边诊断字段，不承担成功主视觉。*/""}
+        <span class="badge badge-sm ${st.readyForRecall ? "badge-success" : "badge-warning"}">${st.readyForRecall ? "可召回" : "未就绪"}</span>
+        <span class="badge badge-xs badge-ghost" title="管线模块是否已加载（≠可召回：资源 warmup 未过时仍显示已加载）">管线${st.pipelineLoaded ? "已加载" : "未加载"}</span>
         <span class="badge badge-sm badge-ghost">最近 ${st.lastRunMs != null ? st.lastRunMs + "ms" : "—"}</span>
         <span class="badge badge-sm badge-ghost">运行中 ${st.activeRuns ?? 0}</span>
         <span class="badge badge-sm badge-ghost">空闲卸载 ${st.idleUnloadMinutes ?? "—"}min</span>
@@ -271,11 +685,11 @@ async function _p1RefreshRun(container) {
       } catch (e) { console.warn("[p1panel] 单次注入排队失败:", e?.message || e); }
     });
     box?.querySelector("#p1run-clear")?.addEventListener("click", async () => {
-      try { await sendAction({ verb: "unloadCaches", target: _P1, source: "web" }); await _p1RefreshRun(container); } catch { /* sendAction 已统一报错 */ }
+      try { await _p1Action("unloadCaches"); await _p1RefreshRun(container); } catch { /* _p1Action 已统一报错 */ }
     });
     box?.querySelector("#p1run-refresh")?.addEventListener("click", () => { _p1RefreshRun(container); _p1RefreshRunLog(container); }); // 刷新=全面板（含运行记录卡片：P1 服务冷启动期首拉失败后由此恢复）
     box?.querySelector("#p1run-enabled")?.addEventListener("change", async (e) => {
-      try { await sendAction({ verb: "updateConfig", target: _P1, source: "web", payload: { enabled: e.target.checked } }); } catch { /* 已报错 */ }
+      try { await _p1Action("updateConfig", { enabled: e.target.checked }); } catch { /* 已报错 */ }
     });
     // 参数区：按 meta.group 分组渲染（跳过 enabled——状态条已有）
     const pWrap = container.querySelector("#p1run-params");
@@ -289,121 +703,353 @@ async function _p1RefreshRun(container) {
       let html = "";
       for (const [g, items] of groups) {
         html += `<div class="col-span-full text-[10px] opacity-50 border-b border-base-300/40 pb-0.5 mt-1">${_esc(g)}</div>`;
-        for (const m of items) {
-          const v = d[m.key];
-          html += m.type === "toggle"
-            ? `<label class="flex items-center justify-between gap-1 bg-base-100/60 rounded px-2 py-1" title="${_esc(m.desc)}"><span>${_esc(m.label)}</span><input type="checkbox" class="toggle toggle-xs" data-p1key="${_esc(m.key)}" ${v ? "checked" : ""}/></label>`
-            : `<label class="flex items-center justify-between gap-1 bg-base-100/60 rounded px-2 py-1" title="${_esc(m.desc)}"><span>${_esc(m.label)}</span><input type="number" class="input input-xs input-bordered w-20" data-p1key="${_esc(m.key)}" value="${_esc(v)}" ${m.min != null ? `min="${m.min}"` : ""} ${m.max != null ? `max="${m.max}"` : ""} ${m.step != null ? `step="${m.step}"` : ""}/></label>`;
-        }
+        for (const m of items) html += _p1RenderParamControl(m, d[m.key]);
       }
       pWrap.innerHTML = html || '<span class="opacity-50">插件未返回 meta</span>';
     }
   } catch (e) {
+    if (container._p1RunRequestId !== requestId) return;
     const box = container.querySelector("#p1run-status");
-    if (box) box.innerHTML = `<span class="text-error">状态加载失败: ${_esc(e?.message || e)}</span>`;
+    if (box) {
+      box.innerHTML = `<span class="text-error">状态加载失败: ${_esc(e?.message || e)}</span> <button class="btn btn-xs btn-ghost" id="p1run-refresh-retry">重试</button>`;
+      box.querySelector("#p1run-refresh-retry")?.addEventListener("click", () => _p1RefreshRun(container));
+    }
   }
   _p1RefreshModeOverrides(container);
 }
 
-// per-mode P1 开关（0731 T2）：读写 beilu-memory 的 mode_feature_overrides 用户覆盖层。
+// per-mode P1 互斥路由：读写 beilu-memory 的 mode_feature_overrides 用户覆盖层。
 // 注意 target 是 plugins:beilu-memory（mode 级路由门在 memory 侧），不是本插件（插件 enabled 是另一层总闸）。
-// 生效值由后端单源下发（声明默认 ⊕ 用户覆盖），前端纯渲染零硬编码。
+// 生效值由后端单源下发（声明默认 ⊕ 用户覆盖 ⊕ XOR 归一化），前端只渲染和提交用户选择。
 async function _p1RefreshModeOverrides(container) {
   const box = container.querySelector("#p1run-modeov");
   if (!box) return;
+  const requestId = (container._p1ModeOverridesRequestId || 0) + 1;
+  container._p1ModeOverridesRequestId = requestId;
   try {
     const r = await sendAction({ verb: "getModeFeatureOverrides", target: "plugins:beilu-memory", source: "web" });
+    if (container._p1ModeOverridesRequestId !== requestId) return;
     const effAll = r?.effective || {};
-    box.innerHTML = `<table class="table table-xs"><thead><tr><th>模式</th><th>自驱动召回</th><th>AI P1</th></tr></thead><tbody>${
+    box.innerHTML = `<table class="table table-xs"><thead><tr><th>模式</th><th>自驱动召回（10）</th><th>AI P1（01）</th></tr></thead><tbody>${
       Object.keys(effAll).map((m) => {
         const eff = effAll[m] || {};
         return `<tr><td>${_esc(m)}</td>
-          <td><input type="checkbox" class="toggle toggle-xs" data-mfov="${_esc(m)}:selfDriven" ${eff.selfDriven ? "checked" : ""}/></td>
-          <td><input type="checkbox" class="toggle toggle-xs" data-mfov="${_esc(m)}:aiP1" ${eff.aiP1 ? "checked" : ""}/></td></tr>`;
+          <td><input type="checkbox" class="toggle toggle-xs" data-mfov-mode="${_esc(m)}" data-mfov-route="selfDriven" ${eff.selfDriven ? "checked" : ""}/></td>
+          <td><input type="checkbox" class="toggle toggle-xs" data-mfov-mode="${_esc(m)}" data-mfov-route="aiP1" ${eff.aiP1 ? "checked" : ""}/></td></tr>`;
       }).join("")}</tbody></table>`;
-    box.querySelectorAll("[data-mfov]").forEach((el) => el.addEventListener("change", async (e) => {
-      const [mode, key] = el.dataset.mfov.split(":");
+    box.querySelectorAll("[data-mfov-route]").forEach((el) => el.addEventListener("change", async () => {
+      const mode = el.dataset.mfovMode;
+      const rowInputs = [...(el.closest("tr")?.querySelectorAll("[data-mfov-route]") || [])];
+      const selfInput = rowInputs.find((input) => input.dataset.mfovRoute === "selfDriven");
+      const aiInput = rowInputs.find((input) => input.dataset.mfovRoute === "aiP1");
+      if (el.checked) {
+        if (el.dataset.mfovRoute === "selfDriven" && aiInput) aiInput.checked = false;
+        if (el.dataset.mfovRoute === "aiP1" && selfInput) selfInput.checked = false;
+      }
+      const selfDriven = !!selfInput?.checked;
+      const aiP1 = !!aiInput?.checked;
+      rowInputs.forEach((input) => { input.disabled = true; });
       try {
-        await sendAction({ verb: "saveModeFeatureOverride", target: "plugins:beilu-memory", source: "web", payload: { mode, lib: "p1", [key]: e.target.checked } });
+        await sendAction({
+          verb: "saveModeFeatureOverride",
+          target: "plugins:beilu-memory",
+          source: "web",
+          payload: { mode, lib: "p1", selfDriven, aiP1 },
+        });
+        _p1RefreshModeOverrides(container);
       } catch { /* sendAction 已统一报错；失败时刷新回真值 */ _p1RefreshModeOverrides(container); }
     }));
   } catch (e) {
+    if (container._p1ModeOverridesRequestId !== requestId) return;
     box.innerHTML = `<span class="text-error">开关读取失败: ${_esc(e?.message || e)}</span>`;
   }
 }
 
 async function _p1SaveParams(container) {
   const patch = {};
-  container.querySelectorAll("[data-p1key]").forEach((el) => {
-    patch[el.dataset.p1key] = el.type === "checkbox" ? el.checked : Number(el.value);
-  });
   const msg = container.querySelector("#p1run-save-msg");
+  const metaByKey = new Map(_p1Meta.map((meta) => [String(meta.key), meta]));
+  for (const el of container.querySelectorAll("[data-p1key]")) {
+    const key = el.dataset.p1key;
+    const meta = metaByKey.get(key);
+    if (!meta) { if (msg) msg.textContent = `保存失败: 参数 ${key} 缺少 meta`; return; }
+    if (meta.type === "toggle") {
+      patch[key] = !!el.checked;
+    } else if (meta.type === "number") {
+      const raw = String(el.value ?? "").trim();
+      const value = raw === "" ? Number.NaN : Number(raw);
+      if (!Number.isFinite(value)) { if (msg) msg.textContent = `保存失败: ${meta.label || key} 必须是有限数`; return; }
+      patch[key] = value;
+    } else if (meta.type === "select") {
+      const allowed = _p1MetaOptions(meta).map((option) => option.value);
+      if (!allowed.includes(el.value)) { if (msg) msg.textContent = `保存失败: ${meta.label || key} 不是后端下发的可选值`; return; }
+      patch[key] = el.value;
+    } else if (meta.type === "text") {
+      patch[key] = el.value;
+    } else {
+      if (msg) msg.textContent = `保存失败: ${meta.label || key} 的控件类型 ${meta.type} 不受支持`;
+      return;
+    }
+  }
   try {
-    await sendAction({ verb: "updateConfig", target: _P1, source: "web", payload: patch });
+    const result = await _p1Action("updateConfig", patch);
+    if (result?.success === false) throw new Error(result.error || "后端拒绝保存参数");
+    if (!result?.config || typeof result.config !== "object" || Array.isArray(result.config)) {
+      throw new Error("后端未返回生效配置，无法确认保存结果");
+    }
+    // 后端回包是用户 overlay 与服务配置合成后的真实生效值；禁止把提交 patch 乐观写入运行缓存。
+    _p1Config = { ...result.config };
+    window.dispatchEvent(new CustomEvent(_P1_CONFIG_CHANGED_EVENT, { detail: { config: result.config } }));
+    await _p1RefreshRun(container);
     if (msg) msg.textContent = "已保存（写盘生效）";
   } catch (e) { if (msg) msg.textContent = `保存失败: ${e?.message || e}`; }
 }
 
+function _p1WordBadges(words) {
+  return words.length ? words.map((word) => `<span class="badge badge-xs badge-ghost mr-0.5 mb-0.5">${_esc(typeof word === "object" ? word.word : word)}</span>`).join("") : '<span class="opacity-50">无</span>';
+}
+
+function _p1RenderNode1Units(node1) {
+  const units = Array.isArray(node1?.units) ? node1.units : [];
+  if (!units.length) return '<div class="pl-2 text-error">Node1 units 未返回</div>';
+  return units.map((unit) => {
+    const tokens = Array.isArray(unit.tokens) ? unit.tokens : [];
+    return `<div class="mt-1 rounded bg-base-100/50 p-1">
+      <div class="font-semibold">unit ${unit.index ?? "?"} · ${_esc(unit.type || "?")} · ${tokens.length} token</div>
+      ${tokens.length ? `<div class="overflow-x-auto"><table class="table table-xs"><thead><tr><th>词</th><th>最终 POS</th><th>POS 来源</th><th>分词器 POS</th><th>模型 POS / tag</th><th>Core POS</th><th>裁决</th></tr></thead><tbody>${tokens.map((token) => `<tr class="${token.filtered ? "opacity-60" : ""}">
+        <td>${_esc(token.word)}</td>
+        <td>${_esc(token.pos ?? "—")}${token.upos ? ` / ${_esc(token.upos)}` : ""}</td>
+        <td>${_esc(token.posSource ?? "—")}</td>
+        <td>${_esc(token.segmenterPos ?? "—")}</td>
+        <td>${_esc(token.modelPos ?? "—")} / ${_esc(token.modelTag ?? "—")}</td>
+        <td>${_esc(token.corePos ?? "—")}</td>
+        <td class="${token.filtered ? "text-warning" : "text-success"}">${token.filtered ? `过滤: ${_esc(token.reason ?? "未给原因")}` : `保留: ${_esc(token.keptBy ?? "未给依据")}`}</td>
+      </tr>`).join("")}</tbody></table></div>` : '<div class="opacity-50 pl-2">该单元没有 token</div>'}
+    </div>`;
+  }).join("");
+}
+
+function _p1RenderDiagnostics(items) {
+  if (!items.length) return '<div class="rounded border border-success/30 bg-success/10 px-2 py-1 text-success">输入回显、Node0、Node1 阶段契约已通过</div>';
+  return items.map((item) => `<div class="rounded border ${item.level === "error" ? "border-error/40 bg-error/10 text-error" : "border-warning/40 bg-warning/10 text-warning"} px-2 py-1 mb-1"><b>${item.stage}</b>：${_esc(item.message)}</div>`).join("");
+}
+
+function _p1Node2ResourceDiagnostics(recall, mechanisms) {
+  const badStatuses = new Set(["degraded", "unavailable", "error", "failed"]);
+  const node2 = recall?.node2 && typeof recall.node2 === "object" ? recall.node2 : null;
+  if (!node2) return [];
+  const status = String(node2.status || "").trim().toLowerCase();
+  const errors = Array.isArray(node2.errors) ? node2.errors : [];
+  if (!badStatuses.has(status) && !errors.length) return [];
+  const details = errors.map((error) => {
+    const source = [error?.mechanism, error?.resource].filter(Boolean).join("/");
+    return `${error?.code || "E_P1_NODE2_RESOURCE"}${source ? `[${source}]` : ""}: ${error?.message || error}`;
+  });
+  for (const mechanism of mechanisms) {
+    const status = String(mechanism?.status || "").trim().toLowerCase();
+    const errors = Array.isArray(mechanism?.errors) ? mechanism.errors : [];
+    const note = String(mechanism?.note || "").trim();
+    // mechanisms 只作 node2 一级状态的明细；是否提升为显眼诊断只由 trace.recall.node2 裁决。
+    const stableCodeInNote = /\bE_P1_[A-Z0-9_]+\b/.test(note);
+    if (!badStatuses.has(status) && !errors.length && !stableCodeInNote) continue;
+    const detail = errors.map((error) => `${error?.code || "E_P1_NODE2_RESOURCE"}: ${error?.message || error}`).join("; ") || note;
+    details.push(`${mechanism?.name || mechanism?.mechanism || "unknown"}[${status || "degraded"}]${detail ? `: ${detail}` : ""}`);
+  }
+  return [{
+    level: status === "error" || status === "failed" ? "error" : "warning",
+    stage: "Node2 资源状态",
+    message: `${status || "degraded"}${details.length ? ` · ${details.join("; ")}` : ""}`,
+  }];
+}
+
+// 存储诊断是用户判断“为什么没有召回到记忆”的一级结果，不能只藏在底部 whitebox 文本。
+function _p1RenderStorageDiagnostics(items) {
+  if (!Array.isArray(items)) {
+    return '<div class="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-warning"><b>🗄️ 存储读取诊断</b>：服务未返回 storageDiagnostics，无法确认存储读取状态</div>';
+  }
+  if (!items.length) {
+    return '<div class="rounded border border-success/30 bg-success/10 px-2 py-1 text-success"><b>🗄️ 存储读取诊断</b>：未发现存储读取异常</div>';
+  }
+  const hasError = items.some((item) => item?.kind === "error");
+  return `<div class="rounded border ${hasError ? "border-error/50 bg-error/10 text-error" : "border-warning/50 bg-warning/10 text-warning"} px-2 py-2">
+    <div class="font-bold mb-1">🗄️ 存储读取诊断（${items.length}）</div>
+    ${items.map((item) => `<div class="rounded bg-base-100/50 px-2 py-1 mb-1 last:mb-0">
+      <b>${_esc(item?.code || "P1_STORAGE_DIAGNOSTIC")}</b>
+      <span class="badge badge-xs badge-ghost ml-1">${_esc(item?.kind || "unknown")}</span>
+      <div>${_esc(item?.message || "存储读取异常")}</div>
+      <div class="opacity-70 break-all">${_esc(item?.path || ".")}</div>
+    </div>`).join("")}
+  </div>`;
+}
+
 async function _p1QuickTest(container) {
-  const input = container.querySelector("#p1run-test-input")?.value?.trim();
-  const mode = container.querySelector("#p1run-test-mode")?.value || "chat";
+  const ticket = (container._p1QuickTestTicket || 0) + 1;
+  container._p1QuickTestTicket = ticket;
+  const snapshot = _p1QuickSnapshot(container);
+  const { input, mode, charName, chatid, multiWindow, bindingError } = snapshot;
   const out = container.querySelector("#p1run-test-out");
-  if (!input) { if (out) out.textContent = "请输入测试文本"; return; }
-  if (out) out.innerHTML = '<span class="opacity-50">召回中...</span>';
+  _p1RenderBinding(container, snapshot);
+  if (bindingError) {
+    if (out) {
+      out.dataset.p1QuickState = "error";
+      out.innerHTML = `<span class="text-error">无法提交 P1 请求：${_esc(bindingError?.message || bindingError)}</span>`;
+    }
+    return;
+  }
+  if (!input) {
+    if (out) { delete out.dataset.p1QuickState; out.textContent = "请输入测试文本"; }
+    return;
+  }
+  if (out) {
+    out.dataset.p1QuickState = "loading";
+    out.innerHTML = '<span class="opacity-50">召回中...</span>';
+  }
   const t0 = Date.now();
   try {
-    // 角色卡级隔离（底部功能层.txt）：角色卡从下拉取（0731 002 骂点修复——不再绑死当前对话活跃卡）；
-    // 对话文件选中时带该对话尾部消息作 chatHistory（contextMessages 上限 5，多拉两条给过滤余量）。
-    const charName = container.querySelector("#p1run-test-char")?.value || "";
-    const chatid = container.querySelector("#p1run-test-chat")?.value || "";
-    // 尾巴条数=2×contextMessages（后端配置单源；×2=一问一答交替下保证凑足 N 条 user 消息，管线自会截取）
-    const _ctxN = Number(_p1Config.contextMessages) || 5;
-    const chatHistory = chatid ? await _p1FetchChatTail(chatid, _ctxN * 2) : [];
-    // source:"panel-test"=运行记录来源标注（服务端 _append_run_log 记档用；生产线 p1Bridge 不带=bridge）
-    const r = await sendAction({ verb: "runP1", target: _P1, source: "web", payload: { inputText: input, chatHistory, mode, charName, source: "panel-test" } });
+    // 0 是合法配置，不能用 || 改写；仅在配置缺失/非法时回到框架默认最近 5 条 user。
+    const configuredContext = Number(_p1Config.contextMessages);
+    const contextMessages = Number.isFinite(configuredContext) && configuredContext >= 0 ? Math.trunc(configuredContext) : 5;
+    let chatHistory = [];
+    if (contextMessages > 0) {
+      try {
+        chatHistory = await _p1FetchRecentUserContext(chatid, contextMessages);
+      } catch (e) {
+        if (_p1QuickIsCurrent(container, ticket, snapshot) && out) {
+          out.dataset.p1QuickState = "error";
+          out.innerHTML = `<span class="text-error">对话历史加载失败，本次快测已中止: ${_esc(e?.message || e)}</span>`;
+        }
+        return;
+      }
+    }
+    if (!_p1QuickIsCurrent(container, ticket, snapshot)) return;
+    const r = await _p1Action("runP1", {
+      inputText: input,
+      chatHistory,
+      historyChatId: chatid,
+      mode,
+      activeMode: mode,
+      charName,
+      chatId: chatid,
+      multiWindow,
+      source: "panel-test",
+      whitebox: true,
+    });
+    if (!_p1QuickIsCurrent(container, ticket, snapshot)) return;
     const ms = Date.now() - t0;
-    if (!r?.success) { if (out) out.innerHTML = `<span class="text-warning">${_esc(r?.error || "召回失败（插件未启用？）")}</span>`; return; }
-    const rec = r.trace?.recall || {};
-    const words = rec.inputWords || [];
-    const pool = rec.swowPool || [];
-    const scored = rec.scoredPool || [];
-    const anchors = rec.anchors || [];
-    const records = r.recalledRecords || [];
-    const mechs = rec.mechanisms || [];
-    const sp2 = rec.secondPassRemoved || [];
-    const blqD = rec.blqDropped || [];
-    const nbD = rec.nbDropped || [];
-    const wnD = rec.wnDropped || [];
-    const fr = rec.filterByReason || {};
-    const frStr = Object.entries(fr).map(([k,v]) => `${k}:${v}`).join(' ');
-    if (out) out.innerHTML = `
+    if (!r?.success) {
+      if (out) {
+        out.dataset.p1QuickState = "error";
+        out.innerHTML = `<span class="text-error">${_esc(r?.error || "召回失败（服务未返回原因）")}</span>`;
+      }
+      return;
+    }
+
+    const trace = r.trace && typeof r.trace === "object" ? r.trace : {};
+    const request = trace.request && typeof trace.request === "object" ? trace.request : null;
+    const node1 = trace.node1 && typeof trace.node1 === "object" ? trace.node1 : null;
+    const rec = trace.recall && typeof trace.recall === "object" ? trace.recall : null;
+    const node0Units = Array.isArray(request?.node0Units) ? request.node0Units : [];
+    const node1Units = Array.isArray(node1?.units) ? node1.units : [];
+    const keptFor = (types) => node1Units.filter((unit) => types.includes(unit.type)).flatMap((unit) => (unit.tokens || []).filter((token) => !token.filtered).map((token) => token.word));
+    const node1CurrentWords = keptFor(["user_current"]);
+    const currentInputWords = Array.isArray(rec?.currentInputWords) ? rec.currentInputWords : node1CurrentWords;
+    const contextWords = Array.isArray(rec?.contextWords) ? rec.contextWords : keptFor(["user_context"]);
+    const dataWords = Array.isArray(rec?.dataWords) ? rec.dataWords : keptFor(["data"]);
+    const pool = Array.isArray(rec?.swowPool) ? rec.swowPool : [];
+    const scored = Array.isArray(rec?.scoredPool) ? rec.scoredPool : [];
+    const anchors = Array.isArray(rec?.anchors) ? rec.anchors : [];
+    const records = Array.isArray(r.recalledRecords) ? r.recalledRecords : [];
+    const mechs = Array.isArray(rec?.mechanisms) ? rec.mechanisms : [];
+    const sp2 = Array.isArray(rec?.secondPassRemoved) ? rec.secondPassRemoved : [];
+    const blqD = Array.isArray(rec?.blqDropped) ? rec.blqDropped : [];
+    const nbD = Array.isArray(rec?.nbDropped) ? rec.nbDropped : [];
+    const wnD = Array.isArray(rec?.wnDropped) ? rec.wnDropped : [];
+    const idx = rec?.index || null;
+    const storageDiagnostics = Array.isArray(rec?.storageDiagnostics)
+      ? rec.storageDiagnostics
+      : (Array.isArray(r?.memory?.storageDiagnostics) ? r.memory.storageDiagnostics : null);
+    const fr = rec?.filterByReason && typeof rec.filterByReason === "object" ? rec.filterByReason : {};
+    const frStr = Object.entries(fr).map(([key, value]) => `${key}:${value}`).join(" ");
+    const diagnostics = [];
+    if (!request) diagnostics.push({ level: "error", stage: "请求回显", message: "缺少 trace.request，无法证明服务收到的输入" });
+    else if (String(request.inputText ?? "") !== input) diagnostics.push({ level: "error", stage: "请求回显", message: `服务回显与用户输入不一致（回显: ${String(request.inputText ?? "") || "空"}）` });
+    const node0Current = node0Units.find((unit) => unit?.type === "user_current");
+    if (request && !node0Current) diagnostics.push({ level: "error", stage: "Node0", message: "Node0 units 缺少 user_current" });
+    else if (node0Current && String(node0Current.raw ?? "") !== input) diagnostics.push({ level: "error", stage: "Node0", message: `user_current 原文与用户输入不一致（Node0: ${String(node0Current.raw ?? "") || "空"}）` });
+    if (!node1) diagnostics.push({ level: "error", stage: "Node1", message: "缺少 trace.node1，无法审计逐词 POS 与过滤原因" });
+    else if (!node1Units.some((unit) => unit?.type === "user_current")) diagnostics.push({ level: "error", stage: "Node1", message: "Node1 units 缺少 user_current" });
+    else if (!node1CurrentWords.length) diagnostics.push({ level: "error", stage: "Node1", message: "当前输入经过 Node1 后为 0 个保留 token；历史/Data 词不能冒充当前输入" });
+    else if (Array.isArray(rec?.currentInputWords) && JSON.stringify(rec.currentInputWords) !== JSON.stringify(node1CurrentWords)) diagnostics.push({ level: "error", stage: "Node1", message: "trace.recall.currentInputWords 与逐词 Node1 user_current 裁决不一致" });
+    if (!rec) diagnostics.push({ level: "error", stage: "Node2-4", message: "缺少 trace.recall，无法判断发散、审查与排序阶段" });
+    else if (!pool.length) diagnostics.push({ level: "warning", stage: "Node2", message: "发散池为 0；请检查 Node1 输入词和机制资源状态" });
+    else if (!scored.length) diagnostics.push({ level: "warning", stage: "Node3", message: "Node2 有候选，但 Node3 审查后 0 存活；请查看各淘汰原因" });
+    diagnostics.push(..._p1Node2ResourceDiagnostics(rec, mechs));
+    if (typeof r.whitebox !== "string" || !r.whitebox.trim()) diagnostics.push({ level: "warning", stage: "白盒", message: "请求已要求 whitebox=true，但响应未返回完整 whitebox" });
+
+    const node0Html = node0Units.length ? node0Units.map((unit) => `<div class="rounded bg-base-100/50 px-2 py-1 mt-1"><b>unit ${unit.index ?? "?"} · ${_esc(unit.type || "?")}</b> ${unit.excluded ? `<span class="text-warning">已排除: ${_esc(unit.excludeReason || "未给原因")}</span>` : '<span class="text-success">已进入</span>'}<div class="break-words opacity-80">${_esc(unit.raw ?? "") || "—"}</div></div>`).join("") : '<div class="text-error">Node0 units 未返回</div>';
+    const whiteboxText = typeof r.whitebox === "string" ? r.whitebox : "";
+    const runLogIssues = getP1RunLogIssues(r);
+    const runLogErrors = runLogIssues.filter((issue) => issue.severity === "error");
+    const runLogWarnings = runLogIssues.filter((issue) => issue.severity === "warning");
+    const renderRunLogIssues = (issues, tone, title) => issues.length ? `<div class="mb-2 rounded border border-${tone}/60 bg-${tone}/10 p-2 text-${tone}">
+      <div class="font-bold">⚠ ${title}（召回结果仍有效）</div>
+      ${issues.map((issue) => `<div class="mt-1"><span class="font-mono">${_esc(issue.code)}</span> · ${_esc(issue.message)}${issue.file ? ` · file: <span class="font-mono">${_esc(issue.file)}</span>` : ""}</div>`).join("")}
+    </div>` : "";
+    if (out) {
+      out.dataset.p1QuickState = "done";
+      out.innerHTML = `
+      ${renderRunLogIssues(runLogErrors, "error", r?.runLog?.written === true ? "记录已写入但清理错误" : "运行记录写入失败")}
+      ${renderRunLogIssues(runLogWarnings, "warning", "记录已写入但清理警告")}
       <div class="flex flex-wrap gap-1 mb-1">
         <span class="badge badge-sm badge-ghost">${ms}ms</span>
         <span class="badge badge-sm badge-ghost">角色 ${_esc(charName || "—")}</span>
         <span class="badge badge-sm badge-ghost">模式 ${_esc(mode)}</span>
+        <span class="badge badge-sm badge-ghost">历史 ${chatHistory.length}</span>
         <span class="badge badge-sm badge-ghost">记忆 ${records.length}</span>
+        ${idx ? `<span class="badge badge-sm ${idx.hit ? "badge-success" : "badge-warning"}">索引${idx.hit ? "命中" : "重建"} · ${_esc(idx.version || "—")}</span>` : ""}
       </div>
-      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">① 分词 (${rec.totalTokens || 0}→保留${words.length}, 过滤${rec.filteredCount || 0})</summary>
-        <div class="pl-2 text-[11px] opacity-80">过滤分布: ${frStr || '无'}</div>
-        <div class="pl-2">${_esc(words.join(" · ")) || "—"}</div>
+      <div class="mb-1">${_p1RenderDiagnostics(diagnostics)}</div>
+      <div class="mb-1">${_p1RenderStorageDiagnostics(storageDiagnostics)}</div>
+      <details open class="mt-1"><summary class="cursor-pointer font-bold text-xs">请求原始输入 / Node0 units (${node0Units.length})</summary>
+        <div class="pl-2 mt-1"><b>用户输入:</b> <span class="break-words">${_esc(input)}</span></div>
+        <div class="pl-2"><b>服务回显:</b> <span class="break-words">${_esc(request?.inputText ?? "") || "—"}</span></div>
+        <div class="pl-2 mt-1">${node0Html}</div>
       </details>
-      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">② 发散 原始池${rec.rawPoolCount || pool.length} → 二次过滤去${sp2.length} → 池${pool.length}</summary>
-        <div class="pl-2 text-[11px] opacity-80">机制: ${mechs.map(m => `${m.name}:${m.produced}${m.note ? '⚠'+m.note : ''}`).join(' | ') || '—'}</div>
-        ${sp2.length ? `<div class="pl-2 text-[11px] text-error">二次过滤: ${sp2.slice(0,20).map(x => x.word+'('+x.reason+')').join(' ')}</div>` : ''}
-        <div class="pl-2">${pool.length ? pool.slice(0, 50).map((w) => `<span class="badge badge-xs ${typeof w === 'object' && w?.resonance >= 2 ? 'badge-warning' : 'badge-ghost'} mr-0.5 mb-0.5" title="${typeof w === 'object' ? `来源:${(w.sources||[]).join('+')} str:${w.strength} via:${(w.via||[]).join(',')}` : ''}">${_esc(typeof w === 'object' ? w.word : w)}</span>`).join("") + (pool.length > 50 ? `<span class="opacity-50">…+${pool.length - 50}</span>` : "") : '—'}</div>
+      <details open class="mt-1"><summary class="cursor-pointer font-bold text-xs">① Node1 逐词 POS / 来源 / 过滤裁决 (${rec?.totalTokens ?? 0} token，过滤 ${rec?.filteredCount ?? 0})</summary>
+        <div class="pl-2 text-[11px] opacity-80">provider: ${_esc(JSON.stringify(node1?.provider ?? null))} · 过滤分布: ${_esc(frStr || "无")}</div>
+        <div class="pl-2 mt-1"><b>当前输入词 (${currentInputWords.length}):</b> ${_p1WordBadges(currentInputWords)}</div>
+        <div class="pl-2"><b>历史上下文词 (${contextWords.length}):</b> ${_p1WordBadges(contextWords)}</div>
+        <div class="pl-2"><b>Data 记忆词 (${dataWords.length}):</b> ${_p1WordBadges(dataWords)}</div>
+        <div class="pl-2">${_p1RenderNode1Units(node1)}</div>
       </details>
-      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">③ 审查 池${pool.length} → BLQ预筛去${blqD.filter(d=>d.reason==='blq_pre').length} → NB去${nbD.length} → WN去${wnD.length} → BLQ终筛去${blqD.filter(d=>d.reason==='blq_final').length} → 存活${scored.length} ${rec.nbAvailable ? '' : '⚠NB离线'}</summary>
-        ${blqD.length ? `<div class="pl-2 text-[11px] text-error">BLQ淘汰(${blqD.length}): ${blqD.slice(0,15).map(d => d.word+'='+d.score).join(' ')}</div>` : ''}
-        ${nbD.length ? `<div class="pl-2 text-[11px] text-error">NB丢弃(${nbD.length}): ${nbD.slice(0,15).map(d => d.word+'(cos='+d.cos+')').join(' ')}</div>` : ''}
-        ${wnD.length ? `<div class="pl-2 text-[11px] text-error">WN丢弃(${wnD.length}): ${wnD.slice(0,15).map(d => d.word+'(cos='+d.cos+',wn='+d.wn+')').join(' ')}</div>` : ''}
-        <div class="pl-2">${scored.length ? scored.slice(0, 30).map(s => `<span class="badge badge-xs ${s.resonance >= 2 ? 'badge-warning' : 'badge-success'} mr-0.5 mb-0.5" title="score:${s.score} cos:${s.cos??'-'} gold:${s.gold} [${(s.sources||[]).join('+')}]">${_esc(s.word)}</span>`).join("") + (scored.length > 30 ? `<span class="opacity-50">…+${scored.length - 30}</span>` : "") : '<span class="opacity-50">全部被过滤</span>'}</div>
+      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">② Node2 发散摘要：原始池 ${rec?.rawPoolCount ?? pool.length} → 二次过滤 ${sp2.length} → 池 ${pool.length}</summary>
+        <div class="pl-2 text-[11px] opacity-80">机制: ${_esc(mechs.map((mechanism) => `${mechanism.name}:${mechanism.produced}${mechanism.note ? ` ⚠${mechanism.note}` : ""}`).join(" | ") || "—")}</div>
+        ${sp2.length ? `<div class="pl-2 text-[11px] text-warning">二次过滤: ${_esc(sp2.slice(0, 20).map((item) => `${item.word}(${item.reason})`).join(" "))}</div>` : ""}
+        <div class="pl-2">${pool.length ? pool.slice(0, 50).map((item) => `<span class="badge badge-xs ${typeof item === "object" && item?.resonance >= 2 ? "badge-warning" : "badge-ghost"} mr-0.5 mb-0.5" title="${_esc(typeof item === "object" ? `来源:${(item.sources || []).join("+")} str:${item.strength} via:${(item.via || []).join(",")}` : "")}">${_esc(typeof item === "object" ? item.word : item)}</span>`).join("") + (pool.length > 50 ? `<span class="opacity-50">…+${pool.length - 50}</span>` : "") : '<span class="text-warning">Node2 未产出候选</span>'}</div>
       </details>
-      <div class="mt-1"><b>④ 锚点:</b> ${_esc(anchors.map((a) => (typeof a === "string" ? a : a?.word || "")).filter(Boolean).join(" · ")) || "—"}</div>
-      <details open class="mt-1"><summary class="cursor-pointer font-bold text-xs">⑤ 召回记忆 (${records.length}) — 匹配${rec.rankedCount || 0}条</summary>
-      ${records.map((x) => `<div class="bg-base-100/60 rounded px-2 py-1 mt-1"><span class="badge badge-xs badge-ghost mr-1">${_esc(x.layer || "?")}</span><span class="opacity-60">[${_esc((x.matchedTerms || []).slice(0, 6).join(","))}]</span> ${_esc(String(x.content || "").slice(0, 160))}</div>`).join("") || '<span class="opacity-50">无</span>'}
+      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">③ Node3 审查摘要：池 ${pool.length} → BLQ预筛 ${blqD.filter((item) => item.reason === "blq_pre").length} → NB ${nbD.length} → WN ${wnD.length} → BLQ终筛 ${blqD.filter((item) => item.reason === "blq_final").length} → 存活 ${scored.length} ${rec?.nbAvailable ? "" : "⚠NB离线"}</summary>
+        ${blqD.length ? `<div class="pl-2 text-[11px] text-warning">BLQ淘汰(${blqD.length}): ${_esc(blqD.slice(0, 15).map((item) => `${item.word}=${item.score}`).join(" "))}</div>` : ""}
+        ${nbD.length ? `<div class="pl-2 text-[11px] text-warning">NB丢弃(${nbD.length}): ${_esc(nbD.slice(0, 15).map((item) => `${item.word}(cos=${item.cos})`).join(" "))}</div>` : ""}
+        ${wnD.length ? `<div class="pl-2 text-[11px] text-warning">WN丢弃(${wnD.length}): ${_esc(wnD.slice(0, 15).map((item) => `${item.word}(cos=${item.cos},wn=${item.wn})`).join(" "))}</div>` : ""}
+        <div class="pl-2">${scored.length ? scored.slice(0, 30).map((item) => `<span class="badge badge-xs ${item.resonance >= 2 ? "badge-warning" : "badge-success"} mr-0.5 mb-0.5" title="${_esc(`score:${item.score} cos:${item.cos ?? "-"} gold:${item.gold} [${(item.sources || []).join("+")}]`)}">${_esc(item.word)}</span>`).join("") + (scored.length > 30 ? `<span class="opacity-50">…+${scored.length - 30}</span>` : "") : `<span class="${pool.length ? "text-warning" : "opacity-50"}">${pool.length ? "Node3 审查后没有存活候选" : "Node2 无候选，Node3 无输入"}</span>`}</div>
+      </details>
+      <details open class="mt-1"><summary class="cursor-pointer font-bold text-xs">④ Node4 排序 / 召回摘要：锚点 ${anchors.length} · 匹配 ${rec?.rankedCount ?? 0} · 记忆 ${records.length}</summary>
+        <div class="pl-2"><b>锚点:</b> ${_esc(anchors.map((anchor) => typeof anchor === "string" ? anchor : anchor?.word || anchor?.raw || "").filter(Boolean).join(" · ")) || "—"}</div>
+        ${idx ? `<div class="pl-2 text-[11px] opacity-80">索引作用域: ${_esc(idx.scope?.username || "—")} / ${_esc(idx.scope?.charName || "—")} / ${_esc(idx.scope?.mode || mode)} · Markdown ${idx.scope?.includeMarkdown ? "开" : "关"} · ${idx.docCount || 0}条 · 对话上下文${idx.chatContextBound ? "已关联" : "未关联"}</div>` : '<div class="pl-2 text-[11px] text-warning">索引诊断未返回</div>'}
+        ${records.map((record) => `<div class="bg-base-100/60 rounded px-2 py-1 mt-1"><span class="badge badge-xs badge-ghost mr-1">${_esc(record.layer || "?")}</span><span class="opacity-60">[${_esc((record.matchedTerms || []).slice(0, 6).join(","))}]</span> ${_esc(String(record.content || "").slice(0, 160))}</div>`).join("") || '<span class="opacity-50 pl-2">没有命中记忆记录</span>'}
+      </details>
+      <details class="mt-1"><summary class="cursor-pointer font-bold text-xs">完整 whitebox（Node0→Node4）</summary>
+        ${whiteboxText ? `<pre class="mt-1 p-2 rounded bg-base-300/30 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed">${_esc(whiteboxText)}</pre>` : '<div class="pl-2 text-warning">响应未返回完整 whitebox</div>'}
       </details>`;
-    _p1RefreshRunLog(container); // 本次测试已落一条运行记录：卡片跟随刷新（文件列表/最新文件）
-  } catch (e) { if (out) out.innerHTML = `<span class="text-error">召回异常: ${_esc(e?.message || e)}</span>`; }
+    }
+    if (!_p1QuickIsCurrent(container, ticket, snapshot)) return;
+    await _p1RefreshRunLog(container);
+  } catch (e) {
+    if (_p1QuickIsCurrent(container, ticket, snapshot) && out) {
+      out.dataset.p1QuickState = "error";
+      out.innerHTML = `<span class="text-error">召回异常: ${_esc(e?.message || e)}</span>`;
+    }
+  }
 }
 
 // ═══════════════════ 面板2：词库管理 ═══════════════════
@@ -423,7 +1069,7 @@ export async function loadP1VocabPanel(container) {
       <div id="p1vocab-at-hits" class="mt-1 text-[11px]"></div>
     </div>
     <div class="card bg-base-200/40 p-3">
-      <div class="font-bold mb-2">🔌 用户插拔词库 <span class="opacity-50 font-normal">（启停即插拔；召回池 30s 内热更新生效）</span></div>
+      <div class="font-bold mb-2">🔌 用户插拔词库 <span class="opacity-50 font-normal">（登录用户级共享；该用户的所有角色卡与对话互通，modes 控制在哪类记忆模式中参与召回）</span></div>
       <div id="p1vocab-user"><span class="opacity-50">加载中...</span></div>
       <div class="mt-2"><button id="p1vocab-new" class="btn btn-xs btn-primary">＋ 新建 / 编辑词库</button></div>
       <div id="p1vocab-editor" class="mt-2 hidden">
@@ -452,7 +1098,7 @@ export async function loadP1VocabPanel(container) {
 
 async function _p1RefreshVocabs(container) {
   try {
-    const r = await sendAction({ verb: "listVocabs", target: _P1, source: "web" });
+    const r = await _p1Action("listVocabs");
     // AT 词库行可点击浏览（0731 002骂点"点击不了,查了不了"）：点行→展开该模式维度列表（atBrowse 无 dim）
     // →点维度→分页词条（atBrowse 带 dim，每页50，复用 atSearch 同款 mtime 缓存，见插件 main.mjs atBrowse action）。
     const atBox = container.querySelector("#p1vocab-at");
@@ -468,15 +1114,27 @@ async function _p1RefreshVocabs(container) {
           : `<tr><td title="${_esc(u.file)}">${_esc(u.name)}</td><td>${_esc((u.modes || []).join(","))}</td><td>${u.entryCount}</td><td><input type="checkbox" class="toggle toggle-xs" data-vtoggle="${_esc(u.file)}" ${u.enabled ? "checked" : ""}/></td><td><button class="btn btn-xs btn-ghost" data-vedit="${_esc(u.file)}">编辑</button><button class="btn btn-xs btn-ghost text-error" data-vdel="${_esc(u.file)}">删除</button></td></tr>`).join("")}</tbody></table>`
       : '<span class="opacity-50">暂无用户词库。新建后启用，召回池自动多一路 mode:user 扩展。</span>';
     uBox?.querySelectorAll("[data-vtoggle]").forEach((el) => el.addEventListener("change", async (e) => {
-      try { await sendAction({ verb: "toggleUserVocab", target: _P1, source: "web", payload: { file: el.dataset.vtoggle, enabled: e.target.checked } }); } catch { /* 已报错 */ }
+      const requested = e.target.checked;
+      try {
+        const result = await _p1Action("toggleUserVocab", { file: el.dataset.vtoggle, enabled: requested });
+        if (result?.cacheInvalidated === false) window._beiluToast?.(result.cacheWarning || "词库状态已落盘，但召回缓存尚未确认刷新", "warning");
+      }
+      catch (error) {
+        e.target.checked = !requested;
+        window._beiluToast?.(`词库启停失败: ${error?.message || error}`, "error");
+      }
     }));
     uBox?.querySelectorAll("[data-vdel]").forEach((el) => el.addEventListener("click", async () => {
       if (!confirm(`删除词库 ${el.dataset.vdel}？`)) return;
-      try { await sendAction({ verb: "deleteUserVocab", target: _P1, source: "web", payload: { file: el.dataset.vdel } }); await _p1RefreshVocabs(container); } catch { /* 已报错 */ }
+      try {
+        const result = await _p1Action("deleteUserVocab", { file: el.dataset.vdel });
+        if (result?.cacheInvalidated === false) window._beiluToast?.(result.cacheWarning || "词库已删除，但召回缓存尚未确认刷新", "warning");
+        await _p1RefreshVocabs(container);
+      } catch { /* 已报错 */ }
     }));
     uBox?.querySelectorAll("[data-vedit]").forEach((el) => el.addEventListener("click", async () => {
       try {
-        const g = await sendAction({ verb: "getUserVocab", target: _P1, source: "web", payload: { file: el.dataset.vedit } });
+        const g = await _p1Action("getUserVocab", { file: el.dataset.vedit });
         if (!g?.success) return;
         container.querySelector("#p1vocab-editor").classList.remove("hidden");
         container.querySelector("#p1vocab-ed-file").value = g.file;
@@ -500,7 +1158,7 @@ async function _p1AtToggleRow(container, mode) {
   const body = detailRow.querySelector("[data-atbody]");
   if (body) body.innerHTML = '<span class="opacity-50">加载维度中（首次需解析词库文件）...</span>';
   try {
-    const r = await sendAction({ verb: "atBrowse", target: _P1, source: "web", payload: { mode } });
+    const r = await _p1Action("atBrowse", { mode });
     if (!r?.success) { if (body) body.innerHTML = `<span class="text-error">${_esc(r?.error || "加载失败")}</span>`; return; }
     if (body) body.innerHTML = `<div class="opacity-50 mb-1">共 ${r.dims.length} 个维度，点击浏览词条：</div>
       <div class="flex flex-wrap gap-1 max-h-32 overflow-y-auto">${r.dims.map((d) => `<button class="btn btn-xs btn-ghost" data-atdim="${_esc(d.dim)}">${_esc(d.dim)} <span class="opacity-50">(${d.count})</span></button>`).join("")}</div>
@@ -518,7 +1176,7 @@ async function _p1AtLoadDim(container, mode, dim, offset) {
   try {
     // limit 单源=后端 atBrowseLimitDefault（getData 平铺配置，_p1Config 快照）；未拉到时用同值兜底，零行为变化
     const _limit = Number(_p1Config.atBrowseLimitDefault) || 50;
-    const r = await sendAction({ verb: "atBrowse", target: _P1, source: "web", payload: { mode, dim, offset, limit: _limit } });
+    const r = await _p1Action("atBrowse", { mode, dim, offset, limit: _limit });
     if (!r?.success) { termsBox.innerHTML = `<span class="text-error">${_esc(r?.error || "加载失败")}</span>`; return; }
     const { entries, total, limit } = r;
     termsBox.innerHTML = `<div class="font-bold mb-1">${_esc(dim)}（共 ${total} 词，第 ${offset + 1}-${Math.min(offset + limit, total)} 条）</div>` +
@@ -539,7 +1197,7 @@ async function _p1AtSearch(container) {
   if (!q) { if (box) box.innerHTML = '<span class="opacity-50">请输入搜索词</span>'; return; }
   if (box) box.innerHTML = '<span class="opacity-50">搜索中（首次需解析词库文件）...</span>';
   try {
-    const r = await sendAction({ verb: "atSearch", target: _P1, source: "web", payload: { mode, q } });
+    const r = await _p1Action("atSearch", { mode, q });
     if (box) box.innerHTML = r?.success
       ? (r.hits.length ? r.hits.map((h) => `<span class="badge badge-sm badge-ghost mr-1 mb-1" title="维度: ${_esc(h.dim)}">${_esc(h.term)}</span>`).join("") + (r.truncated ? '<span class="opacity-50">（已截断50条）</span>' : "")
         : '<span class="opacity-50">无匹配术语</span>')
@@ -554,8 +1212,10 @@ async function _p1SaveVocab(container) {
   try { content = JSON.parse(container.querySelector("#p1vocab-ed-content").value); }
   catch (e) { if (msg) msg.textContent = `JSON 格式错误: ${e.message}`; return; }
   try {
-    const r = await sendAction({ verb: "saveUserVocab", target: _P1, source: "web", payload: { file, content } });
-    if (msg) msg.textContent = r?.success ? `已保存（${r.entryCount} 词条；30s 内召回生效）` : `保存失败: ${r?.error}`;
+    const r = await _p1Action("saveUserVocab", { file, content });
+    if (msg) msg.textContent = r?.cacheInvalidated === false
+      ? `已保存（${r.entryCount} 词条），但召回缓存未确认刷新：${r.cacheWarning || "请稍后重试"}`
+      : `已保存（${r.entryCount} 词条；下一次召回立即读取）`;
     if (r?.success) await _p1RefreshVocabs(container);
   } catch (e) { if (msg) msg.textContent = `保存失败: ${e?.message || e}`; }
 }
@@ -568,7 +1228,8 @@ async function _p1SaveVocab(container) {
 //   ① 子模式实体区（照 companion.mjs 单实体范式 :1614-1718）：缺失即注册（append→saveSubModes，
 //      后端 _ensureSubModePresetsFor 幂等补建同名预设；默认预设已随播种存在时跳过）；参数只写
 //      model_params 蛇形键（getPromptHandler:299-336 每轮生效载体，空=删键不覆盖、0 合法）；
-//      绑定=setActiveSubMode{id,chatId} 写 active_sub_modes_map[当前对话]（chat 组子模式刻意
+//      绑定=activateSubMode{id,chatId} 受控对齐 chat 模式后写 active_sub_modes_map[所选对话]（目标优先跟随当前窗口，
+//      无法证明时由用户从同一角色归属清单显式选择；chat 组子模式刻意
 //      不进 code/work 选择器——subModePanel:940-944 组过滤，本面板即其唯一管理 UI）。
 //   ② 提示词区：就地编辑绑定预设条目，与预设面板同一数据契约（getDataForPreset 读 /
 //      updatePresetConfig{_target_preset, update_entry|toggle_entry|add_entry|delete_entry|
@@ -592,13 +1253,214 @@ let _p9ModelReq = 0;  // 模型下拉竞态票据（同 companion._soModelReq）
 let _p9Entries = [];  // 绑定预设条目工作副本
 let _p9EntrySel = null;
 
+function _p9ChatCharName(chat) {
+  return String(chat?.primaryCharName || "").trim();
+}
+
+function _p9ChatBelongsToPrimaryChar(chat, charName) {
+  const expected = String(charName || "").trim();
+  return !!expected && _p9ChatCharName(chat) === expected;
+}
+
+// P9 的实体 modeGroup 固定为 chat。这里使用服务端 getChatList 下发的原始 mode / usedByModes
+// 证明该对话确属 chat 组，不复用快速测试的 smart→chat 等展示归一，避免写入一个真实消费不到的 map。
+function _p9ChatSupportsChatGroup(chat) {
+  const storedMode = String(chat?.mode || "").trim().toLowerCase();
+  const usedByModes = Array.isArray(chat?.usedByModes)
+    ? chat.usedByModes.map((mode) => String(mode || "").trim().toLowerCase())
+    : [];
+  return storedMode === "chat" || usedByModes.includes("chat");
+}
+
+function _p9TargetSnapshot(container) {
+  const charName = String(container.querySelector("#p9-sm-target-char")?.value || "").trim();
+  const chatId = String(container.querySelector("#p9-sm-target-chat")?.value || "").trim();
+  const selectedChat = (container._p9TargetChats || []).find((chat) => _p1QuickChatId(chat) === chatId);
+  const missing = [];
+  if (!charName) missing.push("角色卡");
+  if (!chatId) missing.push("对话 ID");
+  if (chatId && !selectedChat) missing.push("对话有效性");
+  if (selectedChat && !_p9ChatBelongsToPrimaryChar(selectedChat, charName)) missing.push("对话归属");
+  if (selectedChat && !_p9ChatSupportsChatGroup(selectedChat)) missing.push("聊天组归属");
+  return {
+    charName,
+    chatId,
+    chat: selectedChat || null,
+    mode: selectedChat ? "chat" : "",
+    error: missing.length ? new Error(`绑定目标不完整：${missing.join("、")}`) : null,
+  };
+}
+
+function _p9SetTargetStatus(container, message, tone = "") {
+  const status = container.querySelector("#p9-sm-target-status");
+  if (!status) return;
+  const warning = container._p9CatalogWarning ? `；${container._p9CatalogWarning}` : "";
+  status.className = `text-[10px] ${tone === "error" ? "text-error" : tone === "warning" ? "text-warning" : "opacity-60"}`;
+  status.textContent = `${message}${warning}`;
+}
+
+function _p9RenderTargetChats(container, preferredChatId = "") {
+  const charSelect = container.querySelector("#p9-sm-target-char");
+  const chatSelect = container.querySelector("#p9-sm-target-chat");
+  if (!charSelect || !chatSelect) return;
+  const charName = String(charSelect.value || "").trim();
+  const chats = (container._p9TargetChats || []).filter((chat) => _p9ChatBelongsToPrimaryChar(chat, charName) && _p9ChatSupportsChatGroup(chat));
+  chatSelect.innerHTML = '<option value="">请选择对话 ID…</option>';
+  for (const chat of chats) {
+    const id = _p1QuickChatId(chat);
+    if (!id) continue;
+    const option = document.createElement("option");
+    const title = String(chat?.customName || chat?.title || chat?.name || chat?.firstUserMessage || "对话").trim();
+    const storedMode = String(chat?.mode || "").trim() || "未分类";
+    const usedBy = Array.isArray(chat?.usedByModes) && chat.usedByModes.length ? ` / 在用:${chat.usedByModes.join(",")}` : "";
+    option.value = id;
+    option.textContent = `${title} · ${id} · ${storedMode}${usedBy}`;
+    option.title = `${charName} / ${id} / chat 组（存储分类:${storedMode}${usedBy}）`;
+    chatSelect.appendChild(option);
+  }
+  if (preferredChatId && chats.some((chat) => _p1QuickChatId(chat) === preferredChatId)) {
+    chatSelect.value = preferredChatId;
+  }
+  chatSelect.disabled = !charName || chats.length === 0;
+}
+
+/**
+ * P9 是配置面板，不是 code 对话窗口本身：先采纳 lineManager 完整绑定；没有活动线时，
+ * 只允许采用“当前 hash/主窗口 chatId 在服务端清单中存在且能反查角色”的目标。
+ * 不能证明当前对话时只预选已知角色，不猜第一条对话，由用户显式选择 ID。
+ */
+function _p9ResolveCurrentTarget(container) {
+  const chats = container._p9TargetChats || [];
+  let strict = null;
+  let strictError = null;
+  try { strict = _p1CurrentBinding(); } catch (error) { strictError = error; }
+  const observedBinding = strict || strictError?.binding || null;
+  const observedMode = String(observedBinding?.mode || "").trim().toLowerCase();
+  // lineManager 已明确当前是 code/work/smart，或明确是多窗口但绑定尚未齐全时，主 hash 可能仍停在
+  // 另一条旧 chat 线。此时禁止把 hash 伪装成“当前窗口”；仅保留角色预选，要求用户显式选 chat。
+  const hashFallbackBlocked = observedBinding?.multiWindow === true || (!!observedMode && observedMode !== "chat");
+  const candidates = [];
+  if (strict?.chatId && String(strict.mode || "").trim().toLowerCase() === "chat") {
+    candidates.push({ id: strict.chatId, source: "本体当前聊天" });
+  }
+  if (!hashFallbackBlocked) {
+    try {
+      const id = String(window._beiluGetChatId?.() || "").trim();
+      if (id) candidates.push({ id, source: "本体当前对话" });
+    } catch { /* hash 未就绪 */ }
+  }
+  const seen = new Set();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    const chat = chats.find((item) => _p1QuickChatId(item) === candidate.id);
+    const charName = _p9ChatCharName(chat);
+    if (!chat || !charName || !_p9ChatBelongsToPrimaryChar(chat, charName) || !_p9ChatSupportsChatGroup(chat)) continue;
+    return { charName, chatId: candidate.id, source: candidate.source };
+  }
+  const knownChars = [];
+  if (observedBinding?.charName) knownChars.push(observedBinding.charName);
+  try { knownChars.push(String(window._beiluGetCharName?.() || "").trim()); } catch { /* 未就绪 */ }
+  try { knownChars.push(String(window._beiluGetCharId?.() || "").trim()); } catch { /* 未就绪 */ }
+  const available = new Set([...container.querySelectorAll("#p9-sm-target-char option")].map((option) => option.value));
+  const charName = knownChars.find((name) => name && available.has(name)) || "";
+  return { charName, chatId: "", source: "" };
+}
+
+async function _p9UseCurrentTarget(container) {
+  const charSelect = container.querySelector("#p9-sm-target-char");
+  if (!charSelect) return;
+  container._p9TargetMode = "current";
+  const target = _p9ResolveCurrentTarget(container);
+  if (target.charName && [...charSelect.options].some((option) => option.value === target.charName)) {
+    charSelect.value = target.charName;
+  } else charSelect.value = "";
+  _p9RenderTargetChats(container, target.chatId);
+  if (target.chatId) {
+    _p9SetTargetStatus(container, `已自动识别：${target.source}；可手动改选角色卡与对话 ID`);
+  } else if (target.charName) {
+    _p9SetTargetStatus(container, `已识别角色卡「${target.charName}」，当前对话无法从窗口绑定中证明，请手动选择对话 ID`, "warning");
+  } else {
+    _p9SetTargetStatus(container, "当前窗口没有可验证的角色/对话绑定，请手动选择角色卡与对话 ID", "warning");
+  }
+  await _p9RefreshBindStatus(container);
+}
+
+async function _p9LoadTargets(container) {
+  const charSelect = container.querySelector("#p9-sm-target-char");
+  const chatSelect = container.querySelector("#p9-sm-target-chat");
+  const refresh = container.querySelector("#p9-sm-target-refresh");
+  if (!charSelect || !chatSelect) return;
+  const ticket = (container._p9TargetTicket || 0) + 1;
+  container._p9TargetTicket = ticket;
+  const previousChar = charSelect.value;
+  const previousChat = chatSelect.value;
+  charSelect.disabled = true;
+  chatSelect.disabled = true;
+  if (refresh) refresh.disabled = true;
+  _p9SetTargetStatus(container, "正在加载角色卡与对话清单…");
+  try {
+    const catalog = await _p1LoadScopeCatalog("");
+    if (container._p9TargetTicket !== ticket || !container.isConnected) return;
+    container._p9TargetChats = catalog.chats.filter(_p9ChatSupportsChatGroup);
+    container._p9CatalogWarning = catalog.charListFailed ? "角色清单读取失败，已从对话归属反推" : "";
+    charSelect.innerHTML = '<option value="">请选择角色卡…</option>';
+    for (const name of catalog.chars) {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      charSelect.appendChild(option);
+    }
+    if (container._p9TargetMode === "manual" && catalog.chars.includes(previousChar)) {
+      charSelect.value = previousChar;
+      _p9RenderTargetChats(container, previousChat);
+      _p9SetTargetStatus(container, "已保留手动选择；修改角色卡或对话 ID 后会重新读取绑定状态");
+      await _p9RefreshBindStatus(container);
+    } else {
+      await _p9UseCurrentTarget(container);
+    }
+  } catch (error) {
+    container._p9TargetChats = [];
+    container._p9CatalogWarning = "";
+    charSelect.innerHTML = '<option value="">角色清单不可用</option>';
+    chatSelect.innerHTML = '<option value="">对话清单不可用</option>';
+    _p9SetTargetStatus(container, `绑定目标加载失败：${error?.message || error}`, "error");
+    const bindStatus = container.querySelector("#p9-sm-status");
+    if (bindStatus) bindStatus.innerHTML = '<span class="text-error">无法读取对话清单，绑定操作已禁用</span>';
+    for (const button of [container.querySelector("#p9-sm-bind"), container.querySelector("#p9-sm-unbind")]) {
+      if (button) button.disabled = true;
+    }
+  } finally {
+    if (container._p9TargetTicket === ticket) {
+      charSelect.disabled = charSelect.options.length <= 1;
+      chatSelect.disabled = chatSelect.options.length <= 1;
+      if (refresh) refresh.disabled = false;
+    }
+  }
+}
+
 export async function loadP1P9Panel(container) {
-  if (container._loaded) return;
+  if (container._loaded) {
+    if (container._p9CatalogDirty) {
+      container._p9CatalogDirty = false;
+      await _p9LoadTargets(container);
+    }
+    return;
+  }
   container._loaded = true;
   container.innerHTML = `<div class="p-3 text-xs space-y-3" id="p1p9-root">
     <div class="card bg-base-200/40 p-3">
       <div class="font-bold mb-2">⚙️ P9 子模式配置 <span class="opacity-50 font-normal">（聊天组子模式；参数每轮生效，预设在绑定对话时应用）</span></div>
       <div id="p9-sm-status" class="mb-2 text-[11px]"><span class="opacity-50">加载中...</span></div>
+      <div class="mb-3 p-2 rounded border border-base-300/40 bg-base-100/30">
+        <div class="font-semibold mb-1">绑定目标 <span class="opacity-50 font-normal">（优先自动识别；无法证明当前窗口时由用户选择）</span></div>
+        <div class="grid grid-cols-1 md:grid-cols-[minmax(8rem,0.75fr)_minmax(14rem,1.6fr)_auto] gap-2 items-end">
+          <label class="flex flex-col gap-0.5"><span class="opacity-60">角色卡</span><select id="p9-sm-target-char" class="select select-xs select-bordered w-full"><option>加载中…</option></select></label>
+          <label class="flex flex-col gap-0.5"><span class="opacity-60">对话 ID</span><select id="p9-sm-target-chat" class="select select-xs select-bordered w-full"><option>加载中…</option></select></label>
+          <div class="flex gap-1"><button id="p9-sm-target-current" class="btn btn-xs">使用当前窗口</button><button id="p9-sm-target-refresh" class="btn btn-xs btn-ghost" title="刷新角色卡与对话清单"><i data-ic="refresh"></i></button></div>
+        </div>
+        <div id="p9-sm-target-status" class="mt-1 text-[10px] opacity-60">加载中...</div>
+      </div>
       <div id="p9-sm-form" class="grid grid-cols-2 md:grid-cols-3 gap-2 hidden">
         <label class="flex flex-col gap-0.5"><span class="opacity-60">描述</span><input id="p9-sm-desc" type="text" class="input input-xs input-bordered" /></label>
         <label class="flex flex-col gap-0.5"><span class="opacity-60">绑定预设</span><input id="p9-sm-preset" type="text" list="p9-sm-preset-list" class="input input-xs input-bordered" placeholder="${_P9_SM_ID}" /><datalist id="p9-sm-preset-list"></datalist></label>
@@ -616,45 +1478,94 @@ export async function loadP1P9Panel(container) {
       </div>
       <div class="mt-2 flex gap-2 items-center flex-wrap">
         <button id="p9-sm-save" class="btn btn-xs btn-primary">保存配置</button>
-        <button id="p9-sm-bind" class="btn btn-xs">绑定当前对话</button>
-        <button id="p9-sm-unbind" class="btn btn-xs btn-ghost">解绑</button>
+        <button id="p9-sm-bind" class="btn btn-xs">绑定所选对话</button>
+        <button id="p9-sm-unbind" class="btn btn-xs btn-ghost">解绑所选对话</button>
         <span id="p9-sm-msg" class="opacity-60"></span>
       </div>
     </div>
     <div class="card bg-base-200/40 p-3">
       <div class="font-bold mb-2">📝 提示词编辑 <span class="opacity-50 font-normal">（就地编辑绑定预设条目，与预设面板同一数据源）</span></div>
-      <div class="flex border border-base-300/40 rounded" style="min-height:200px;max-height:440px;">
-        <div id="p9-pr-list" class="w-44 shrink-0 border-r border-base-300/30 overflow-y-auto"></div>
+      <div id="p9-pr-split-pane" class="flex border border-base-300/40 rounded" style="min-height:200px;max-height:440px;">
+        <div id="p9-pr-list" class="shrink-0 border-r border-base-300/30 overflow-y-auto" style="width:34%;"></div>
+        <div id="p9-pr-split" class="flex-none bg-base-content/10 hover:bg-warning/50 rounded mx-1" style="width:5px;cursor:col-resize;touch-action:none;" title="拖动调整条目列表与编辑区宽度"></div>
         <div id="p9-pr-editor" class="flex-1 overflow-y-auto p-2 min-w-0"><div class="text-center opacity-40 py-8">未选择条目。从左侧列表选择后在此编辑</div></div>
       </div>
       <div class="mt-2 flex gap-2 items-center"><button id="p9-pr-add" class="btn btn-xs btn-outline">＋ 添加条目</button><button id="p9-pr-refresh" class="btn btn-xs btn-ghost">刷新</button><button id="p9-pr-restore" class="btn btn-xs btn-warning btn-outline">恢复默认预设</button><span id="p9-pr-msg" class="opacity-60"></span></div>
     </div>
   </div>`;
+  initHorizontalSplitPane({
+    container: container.querySelector("#p9-pr-split-pane"),
+    primary: container.querySelector("#p9-pr-list"),
+    handle: container.querySelector("#p9-pr-split"),
+    storageKey: KEYS.BEILU_P9_PRESET_SPLIT,
+    defaultPercent: 34,
+    minPercent: 18,
+    maxPercent: 72,
+    keyboardStep: 5,
+  });
   container.querySelector("#p9-sm-save").addEventListener("click", () => _p9SaveEntity(container));
   container.querySelector("#p9-sm-bind").addEventListener("click", () => _p9Bind(container, true));
   container.querySelector("#p9-sm-unbind").addEventListener("click", () => _p9Bind(container, false));
+  container._p9TargetMode = "current";
+  container.querySelector("#p9-sm-target-char").addEventListener("change", () => {
+    container._p9TargetMode = "manual";
+    _p9RenderTargetChats(container);
+    _p9SetTargetStatus(container, "已切换为手动目标，请选择对话 ID");
+    void _p9RefreshBindStatus(container);
+  });
+  container.querySelector("#p9-sm-target-chat").addEventListener("change", () => {
+    container._p9TargetMode = "manual";
+    _p9SetTargetStatus(container, "已使用手动选择的角色卡与对话 ID");
+    void _p9RefreshBindStatus(container);
+  });
+  container.querySelector("#p9-sm-target-current").addEventListener("click", () => { void _p9UseCurrentTarget(container); });
+  container.querySelector("#p9-sm-target-refresh").addEventListener("click", () => { void _p9LoadTargets(container); });
+  let targetSyncQueued = false;
+  const scheduleTargetSync = () => {
+    if (targetSyncQueued || container._p9TargetMode === "manual") return;
+    targetSyncQueued = true;
+    queueMicrotask(() => {
+      targetSyncQueued = false;
+      if (container.isConnected && container._p9TargetMode !== "manual") void _p9UseCurrentTarget(container);
+    });
+  };
+  for (const eventName of ["beilu:window-switched", "character-switched", "beilu:char-changed"]) {
+    window.addEventListener(eventName, scheduleTargetSync);
+  }
+  let catalogRefreshTimer = null;
+  window.addEventListener("beilu:chat-list-changed", () => {
+    if (catalogRefreshTimer) clearTimeout(catalogRefreshTimer);
+    catalogRefreshTimer = setTimeout(() => {
+      catalogRefreshTimer = null;
+      if (!container.isConnected) return;
+      if (container.classList.contains("hidden")) {
+        container._p9CatalogDirty = true;
+        return;
+      }
+      void _p9LoadTargets(container);
+    }, 300);
+  });
   container.querySelector("#p9-sm-api").addEventListener("change", (e) => _p9FillModels(container, e.target.value, ""));
   container.querySelector("#p9-pr-add").addEventListener("click", () => _p9AddEntry(container));
   container.querySelector("#p9-pr-refresh").addEventListener("click", () => _p9LoadEntries(container));
   container.querySelector("#p9-pr-restore")?.addEventListener("click", async () => {
     const msg = container.querySelector("#p9-pr-msg");
+    const presetName = _p9PresetName();
+    if (!confirm(`恢复预设「${presetName}」的核心默认内容？\n\n当前自定义修改会被覆盖。`)) return;
     try {
-      const check = await sendAction({ verb: "setData", target: "plugins:beilu-p1-selfdriven", source: "web", payload: { _action: "resetP9Prompts" } });
-      if (check?.action === "confirm_required") {
-        if (!check.hasUserCopy) { if (msg) msg.textContent = check.message; return; }
-        if (!confirm(check.message)) return;
-        const result = await sendAction({ verb: "setData", target: "plugins:beilu-p1-selfdriven", source: "web", payload: { _action: "resetP9Prompts", confirm: true } });
-        if (result?.restored) {
-          window._beiluToast?.("P9 预设已从核心默认件恢复", "success");
-          await _p9LoadEntries(container);
-        } else { if (msg) msg.textContent = result?.message || "恢复失败"; }
-      }
+      if (msg) msg.textContent = "正在恢复默认预设...";
+      const result = await sendAction({ verb: "updatePresetConfig", target: "plugins:beilu-preset", source: "web", payload: { restore_preset: { name: presetName } } });
+      if (result?.success === false) throw new Error(result.error || result.message || "恢复失败");
+      if (!result?.restored) { if (msg) msg.textContent = result?.message || "后端未确认预设已恢复"; return; }
+      if (msg) msg.textContent = result.message || "已从核心默认件恢复";
+      window._beiluToast?.(result.message || "P9 预设已从核心默认件恢复", "success");
+      await _p9LoadEntries(container);
     } catch (e) { if (msg) msg.textContent = `恢复失败: ${e?.message || e}`; }
   });
   const ok = await _p9EnsureEntity(container);
   if (!ok) return; // 后端不可达：状态行已显示错误，不渲染半态表单
   await _p9FillForm(container);
-  _p9RefreshBindStatus(container);
+  await _p9LoadTargets(container);
   _p9LoadEntries(container);
 }
 
@@ -672,7 +1583,7 @@ async function _p9EnsureEntity(container) {
       _p9Entity = { id: _P9_SM_ID, label: "P9 词库维护", desc: "根据最近对话与记忆维护 P1 插拔词库", modeGroup: "chat", presetName: _P9_SM_ID, model_params: {} };
       _p9All = [..._p9All, _p9Entity];
       const saved = await sendAction({ verb: "saveSubModes", target: "plugins:beilu-memory", source: "web", payload: { sub_modes: _p9All } });
-      if (saved?.success === false) throw new Error(saved?.error || "子模式注册失败");
+      if (saved?.success !== true) throw new Error(saved?.error || "子模式注册未获得成功确认");
     }
     return true;
   } catch (e) {
@@ -789,47 +1700,108 @@ async function _p9SaveEntity(container) {
   if (peV === "on") mp.prefill_enabled = true; else if (peV === "off") mp.prefill_enabled = false; else delete mp.prefill_enabled;
   try {
     const saved = await sendAction({ verb: "saveSubModes", target: "plugins:beilu-memory", source: "web", payload: { sub_modes: _p9All } });
-    if (saved?.success === false) throw new Error(saved?.error || "保存失败");
+    if (saved?.success !== true) throw new Error(saved?.error || "保存未获得成功确认");
     if (msg) msg.textContent = "已保存（参数下轮生效；预设在绑定对话时应用）";
     _p9LoadEntries(container); // presetName 可能改了：提示词区跟随新绑定预设
   } catch (e) { if (msg) msg.textContent = `保存失败: ${e?.message || e}`; }
 }
 
-// 绑定状态回显：读 active_sub_modes_map[当前对话]（setActiveSubMode 空 payload=纯读，companion :1632 同法）
+// 绑定状态回显：读 active_sub_modes_map[所选对话]（setActiveSubMode 空 payload=纯读，companion :1632 同法）
 async function _p9RefreshBindStatus(container) {
   const st = container.querySelector("#p9-sm-status");
   if (!st) return;
-  const cid = (typeof window._beiluCurWinChatId === "function" ? window._beiluCurWinChatId() : "") || "";
-  if (!cid) { st.innerHTML = '<span class="opacity-60">当前无对话窗口——先打开对话再绑定（绑定后该对话生成走 P9 预设与参数）</span>'; return; }
+  const ticket = (container._p9BindStatusTicket || 0) + 1;
+  container._p9BindStatusTicket = ticket;
+  const target = _p9TargetSnapshot(container);
+  for (const button of [container.querySelector("#p9-sm-bind"), container.querySelector("#p9-sm-unbind")]) {
+    if (button) button.disabled = !!target.error || !!container._p9MutationPromise;
+  }
+  if (target.error) {
+    st.innerHTML = `<span class="text-warning">${_esc(target.error.message)}；请选择后再绑定</span>`;
+    return;
+  }
   try {
     const r = await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: {} });
-    const act = r?.active_sub_modes_map?.[cid] || "";
-    st.innerHTML = act === _P9_SM_ID
-      ? '<span class="badge badge-sm badge-success">已绑定当前对话</span> <span class="opacity-60">该对话生成使用 P9 预设与参数</span>'
-      : (act
-        ? `<span class="opacity-60">当前对话绑定的是「${_esc(act)}」——点「绑定当前对话」改绑 P9</span>`
-        : '<span class="opacity-60">当前对话未绑定子模式——点「绑定当前对话」启用 P9</span>');
-  } catch (e) { st.innerHTML = `<span class="text-error">绑定状态读取失败: ${_esc(e?.message || e)}</span>`; }
+    if (container._p9BindStatusTicket !== ticket || !container.isConnected) return;
+    const current = _p9TargetSnapshot(container);
+    if (current.error || current.chatId !== target.chatId || current.charName !== target.charName) return;
+    if (r?.success !== true || !r?.active_sub_modes_map || typeof r.active_sub_modes_map !== "object") {
+      throw new Error(r?.error || "后端未返回完整绑定状态");
+    }
+    const act = r?.active_sub_modes_map?.[target.chatId] || "";
+    if (act === _P9_SM_ID) {
+      st.innerHTML = `<span class="badge badge-sm badge-success">已绑定所选对话</span> <span class="opacity-60">${_esc(target.charName)} / ${_esc(target.chatId)} 每轮使用 P9 参数；预设以绑定操作回执和当前预设显示为准</span>`;
+    } else if (act) {
+      const boundEntity = _p9All.find((item) => item?.id === act);
+      const boundGroup = String(boundEntity?.modeGroup || "").trim();
+      st.innerHTML = !boundEntity
+        ? `<span class="text-warning">所选对话已有来源不可验证的子模式「${_esc(act)}」，不会覆盖</span>`
+        : boundGroup !== "chat"
+          ? `<span class="text-warning">所选对话已由 ${_esc(boundGroup || "code")} 组子模式「${_esc(act)}」占用；为防丢失别组绑定，请先在对应模式解除</span>`
+          : `<span class="opacity-60">所选对话绑定的是「${_esc(act)}」——点「绑定所选对话」可在 chat 组内改绑 P9</span>`;
+    } else {
+      st.innerHTML = '<span class="opacity-60">所选对话未绑定子模式——点「绑定所选对话」启用 P9</span>';
+    }
+  } catch (e) {
+    if (container._p9BindStatusTicket === ticket && container.isConnected) st.innerHTML = `<span class="text-error">绑定状态读取失败: ${_esc(e?.message || e)}</span>`;
+  }
 }
 
-// 绑定/解绑当前对话（companion._soSyncActivation 同链）：解绑只清自己的 id，不动他方写入（防越权覆盖）
+// 绑定/解绑所选对话（companion._soSyncActivation 同链）：解绑只清自己的 id，不动他方写入（防越权覆盖）
 async function _p9Bind(container, on) {
+  if (container._p9MutationPromise) return container._p9MutationPromise;
   const msg = container.querySelector("#p9-sm-msg");
-  const cid = (typeof window._beiluCurWinChatId === "function" ? window._beiluCurWinChatId() : "") || "";
-  if (!cid) { if (msg) msg.textContent = "无当前对话窗口，无法绑定"; return; }
-  try {
-    if (on) {
-      await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: _P9_SM_ID, chatId: cid } });
-      if (msg) msg.textContent = "已绑定（预设即刻应用，参数每轮生效）";
-    } else {
-      const r = await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: {} });
-      const act = r?.active_sub_modes_map?.[cid] || "";
-      if (act !== _P9_SM_ID) { if (msg) msg.textContent = act ? `当前对话绑定的是「${act}」，不动他方绑定` : "当前对话本就未绑定"; _p9RefreshBindStatus(container); return; }
-      await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: { clear: true, chatId: cid } });
-      if (msg) msg.textContent = "已解绑（回该对话原预设）";
+  const target = _p9TargetSnapshot(container);
+  if (target.error) { if (msg) msg.textContent = `${target.error.message}；请先选择角色卡与对话 ID`; return; }
+  const controls = ["#p9-sm-bind", "#p9-sm-unbind", "#p9-sm-target-char", "#p9-sm-target-chat", "#p9-sm-target-current", "#p9-sm-target-refresh"]
+    .map((selector) => container.querySelector(selector)).filter(Boolean);
+  for (const control of controls) control.disabled = true;
+  const operation = (async () => {
+    try {
+      if (on) {
+        // P9 固定属于 chat 组；统一走 activateSubMode，让后端在写 map 前按目标实体受控切换
+        // 所选对话的生成模式。这样手动选择的 chat 候选不依赖前端 shell 徽标与 memory mode 恰好同步。
+        const result = await sendAction({ verb: "activateSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: _P9_SM_ID, chatId: target.chatId, charName: target.charName } });
+        if (result?.success !== true) throw new Error(result?.error || "后端未返回绑定成功回执");
+        if (result?.active_sub_modes_map?.[target.chatId] !== _P9_SM_ID) throw new Error("后端回执与所选对话的实际绑定不一致");
+        const modeNote = result?.mode_switched === true ? "；所选对话已切换到聊天模式" : "";
+        if (msg) msg.textContent = result?.preset_applied === true
+          ? `已绑定 ${target.charName} / ${target.chatId}（预设已确认应用，参数每轮生效${modeNote}）`
+          : `已绑定 ${target.charName} / ${target.chatId}${modeNote}，但预设未确认应用；请检查当前预设`;
+      } else {
+        const cleared = await sendAction({ verb: "setActiveSubMode", target: "plugins:beilu-memory", source: "web", payload: {
+          clear: true,
+          expectedId: _P9_SM_ID,
+          chatId: target.chatId,
+          charName: target.charName,
+        } });
+        if (cleared?.success !== true || typeof cleared?.cleared !== "boolean" || typeof cleared?.conflict !== "boolean") {
+          throw new Error(cleared?.error || "后端未返回完整解绑回执");
+        }
+        if (cleared?.conflict) {
+          if (msg) msg.textContent = cleared.actual_sub_mode
+            ? `所选对话现已绑定「${cleared.actual_sub_mode}」，未删除他方绑定`
+            : "绑定已变化，未执行删除";
+        } else if (!cleared?.cleared) {
+          if (msg) msg.textContent = "所选对话本就未绑定 P9";
+        } else if (cleared?.active_sub_modes_map?.[target.chatId] === _P9_SM_ID) {
+          throw new Error("解绑回执与 active_sub_modes_map 不一致");
+        } else if (msg) {
+          msg.textContent = `已解绑 ${target.charName} / ${target.chatId}；当前预设保持不变`;
+        }
+      }
+    } catch (e) {
+      if (msg) msg.textContent = `绑定操作失败: ${e?.message || e}`;
     }
-  } catch (e) { if (msg) msg.textContent = `绑定操作失败: ${e?.message || e}`; }
-  _p9RefreshBindStatus(container);
+  })();
+  container._p9MutationPromise = operation;
+  try {
+    await operation;
+  } finally {
+    if (container._p9MutationPromise === operation) container._p9MutationPromise = null;
+    for (const control of controls) control.disabled = false;
+    await _p9RefreshBindStatus(container);
+  }
 }
 
 // ── 提示词区：绑定预设条目就地编辑（与预设面板 settings/panels.mjs 同一契约） ──

@@ -34,7 +34,7 @@
  *   本文件自身无 IO 副作用；副作用全在节点 handler 内。异常收敛为 E_INVOKE 错误 result（不外抛，
  *   边上不留未捕获 Promise）。
  */
-import { wbSpan } from "../../../server/whitebox.mjs";
+import { wbSpan, runWithAmbientChatId } from "../../../server/whitebox.mjs";
 import { registry } from "./registry.mjs";
 import { resolveScope } from "./scopeResolver.mjs";
 import { remoteInvoke, subprocessInvoke } from "../transport/index.mjs";
@@ -67,15 +67,25 @@ export async function dispatch(msg) {
 	if (!fn && entry.transport === "local")
 		return fail("E_NODE", `${msg?.target}.${msg?.verb} 未注册`);
 
-	const context = await resolveScope(msg?.scope);                   // ② scope→context（card→user→default 写死那层）
+	const scopeContext = await resolveScope(msg?.scope);              // ② scope→context（card→user→default 写死那层）
+	// source 是入口服务端盖章的请求事实，必须晚于 scope 合并并再次冻结，防 scope/payload 冒充来源。
+	const context = Object.freeze({ ...scopeContext, dispatchSource: msg?.source });
+	if (entry.transport !== "local" && entry.transport !== "subprocess" && entry.transport !== "remote")
+		return fail("E_TRANSPORT", `未知 transport: ${entry.transport}`);
 	try {
-		let result;
-		switch (entry.transport) {                                      // ③ 选通道（边的物理类型，节点属性）
-			case "local":      result = await fn(msg.payload, context); break;
-			case "subprocess": result = await subprocessInvoke(entry, msg, context); break;
-			case "remote":     result = await remoteInvoke(entry, msg, context); break;
-			default:           return fail("E_TRANSPORT", `未知 transport: ${entry.transport}`);
-		}
+		// ALS ambient chatid 装配（凛倾 0804 批准）：原本只有 generation 回合体包 runWithAmbientChatId，
+		// SetData/GetData 等派发路径上插件打的 wbD/wbT(null,…) 因 _cid=null 不广播、前端实时面板看不到
+		// （只能走 /api/v1/monitor/whitebox 环读出）。dispatch 是所有节点派发唯一入口，在边上单点装配：
+		// 带 scope.chatId 的派发内，全部下游 null-cid 白盒事件自动映射到该 chat 的前端面板。
+		// chatId 缺省（falsy）时 runWithAmbientChatId 直通 fn() 并继承外层 ALS——嵌套派发不丢回合归属。
+		// 信任级与 :59 wbSpan 同源（scope.chatId 由入口盖章）；ALS 只用于观测映射，不进任何授权判定。
+		const result = await runWithAmbientChatId(msg?.scope?.chatId ?? null, async () => {
+			switch (entry.transport) {                                    // ③ 选通道（边的物理类型，节点属性）
+				case "local":      return await fn(msg.payload, context);
+				case "subprocess": return await subprocessInvoke(entry, msg, context);
+				case "remote":     return await remoteInvoke(entry, msg, context);
+			}
+		});
 		end({ ok: result?.ok !== false });
 		return result;
 	} catch (e) {

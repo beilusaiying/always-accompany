@@ -1,0 +1,200 @@
+/*
+ * Shared Pro-theme contract.
+ * Individual Pro files may change material/shape/identity appearance tokens,
+ * but press timing and interaction state behavior remain in design-tokens.css.
+ */
+
+html[data-beilu-enhanced] {
+  isolation: isolate;
+}
+
+html[data-beilu-enhanced] > body {
+  position: relative;
+  z-index: 1;
+}
+
+/* Theme atmosphere lives behind all interactive content. */
+html[data-beilu-enhanced]::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  background: var(--beilu-backdrop-effect);
+  transition-property: opacity;
+  transition-duration: var(--beilu-motion-view);
+  transition-timing-function: var(--beilu-ease-exit);
+}
+
+/* Workspaces are solid even when an illustration is present behind the app. */
+html[data-beilu-enhanced] :where(
+  #main-content,
+  #chat-container,
+  #chat-messages,
+  .chat-workspace,
+  .file-tree,
+  .file-explorer,
+  .file-editor,
+  .editor-section,
+  .plugin-panel
+) {
+  background-color: var(--beilu-surface-workspace);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced] :where(
+  .left-panel,
+  #right-panel,
+  .panel,
+  .card,
+  .settings-panel,
+  .editor-panel,
+  .work-panel
+) {
+  background-color: var(--beilu-surface-panel);
+  background-image: var(--beilu-panel-texture);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  background-image: none;
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+/* Floating and modal content never borrow contrast from the page below. */
+html[data-beilu-enhanced] :where(
+  .floating-window,
+  .popover,
+  [popover],
+  .dropdown-content,
+  .model-selector-dropdown,
+  .ide-menu-dropdown,
+  .context-menu,
+  .tooltip-content,
+  .toast,
+  .drawer-side,
+  [role="menu"],
+  [role="listbox"]
+) {
+  background-color: var(--beilu-surface-floating);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced] :where(.tooltip::before, [role="tooltip"]) {
+  background-color: var(--beilu-surface-floating);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced] :where(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .modal-box,
+  [role="dialog"]
+) {
+  background-color: var(--beilu-surface-modal);
+  border-color: var(--beilu-border-strong);
+  color: var(--beilu-fg-primary);
+  box-shadow: var(--beilu-panel-shadow);
+}
+
+html[data-beilu-enhanced] :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea,
+  select,
+  .input,
+  .textarea,
+  .select
+) {
+  background-color: var(--beilu-surface-input);
+  border-color: var(--beilu-border-default);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced] :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  textarea
+)::placeholder {
+  color: var(--beilu-fg-secondary);
+}
+
+html[data-beilu-enhanced] :where(code, pre, .code-editor, .editor-textarea) {
+  background-color: var(--beilu-surface-code);
+  color: var(--beilu-fg-primary);
+}
+
+/* Muted and disabled remain solid foreground colors, never parent opacity. */
+html[data-beilu-enhanced] :where(.text-muted, .secondary-text, [data-tone="muted"]) {
+  color: var(--beilu-fg-muted);
+}
+
+html[data-beilu-enhanced] :where(:disabled, [aria-disabled="true"]) {
+  color: var(--beilu-fg-disabled);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-beilu-enhanced]::before,
+  html[data-beilu-enhanced]::after {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-beilu-enhanced]::before,
+  html[data-beilu-enhanced]::after {
+    background: none;
+    opacity: 0;
+  }
+
+  html[data-beilu-enhanced] :where(
+    .left-panel,
+    #right-panel,
+    #main-content,
+    #chat-container,
+    #chat-messages,
+    .chat-workspace,
+    .file-tree,
+    .file-explorer,
+    .file-editor,
+    .editor-section,
+    .plugin-panel,
+    #top-bar,
+    .panel,
+    .card,
+    .settings-panel,
+    .editor-panel,
+    .work-panel,
+    .floating-window,
+    .popover,
+    [popover],
+    .dropdown-content,
+    .model-selector-dropdown,
+    .ide-menu-dropdown,
+    .context-menu,
+    .tooltip-content,
+    [role="tooltip"],
+    .toast,
+    .drawer-side,
+    .settings-modal,
+    .editor-modal,
+    .fp-modal,
+    .expand-editor-modal,
+    .modal-box,
+    [role="menu"],
+    [role="listbox"],
+    [role="dialog"]
+  ) {
+    background-image: none;
+  }
+
+  html[data-beilu-enhanced] .tooltip::before {
+    background-image: none;
+  }
+}

@@ -26,8 +26,8 @@
       "enabled": true,
       "config": {
         "selfDriven": true,
-        "aiP1": true,
-        "_note_selfDriven": "[0730 002拍板投入使用] chat/code/work三模式开启selfDriven。内存由beilu-p1-selfdriven插件生命周期管理。work词库AT_work 2436词+CN倒排+CFN框架62K词。双门:selfDriven=mode级路由;插件enabled=用户级开关。"
+        "aiP1": false,
+        "_note_selfDriven": "[0803 互斥收口] work 默认使用 10 自驱动召回；AI P1 为独立的 01 备选路由，二者只允许单选，不双跑、不互相降级。work 词库、CN 倒排与 CFN 框架仍由自驱动插件按生命周期加载。"
       }
     },
     "websearch": {

@@ -145,7 +145,46 @@ async function renderIdeInstances() {
       `<span style="font-size:0.55rem;opacity:0.7;" title="${manual} 条为用户手动指定（＋号选的，不会被自动上报覆盖），其余为窗口打开对话时自动上报">${lines} 条线${manual ? `（${manual} 手动）` : ""}</span>` +
       `</div>`;
   }
+  // [D6 §2.4 2026-08-04] IDE 候选根确认（原后端 status→setWorkspaceRoot 无 owner 自动直写已删）：
+  //   IDE 宣称的工作区根只是候选，用户在此显式确认后才写入本窗口工作区根。
+  //   两步链：getIdeRootCandidate（拿候选+本窗口 live 路由快照）→ confirmIdeWorkspaceRoot
+  //   （expectedIdeRoute 精确同代际校验，重连/换窗后旧快照会被后端拒绝=E_WORKSPACE_ROOT_IDE_ROUTE）。
+  html += `
+    <div style="display:flex;align-items:center;gap:6px;padding:3px 6px;margin-top:2px;">
+      <button id="ide-confirm-root-btn" class="btn btn-xs btn-ghost" style="font-size:0.6rem;color:var(--beilu-amber);"
+        title="IDE 宣称的根只是候选（不再自动写入）；点此把本窗口所绑 IDE 的工作区根确认为本窗口工作区根">
+        <i data-ic="folder"></i> 确认 IDE 根为本窗口工作区
+      </button>
+    </div>`;
   box.innerHTML = html;
+  box.querySelector("#ide-confirm-root-btn")?.addEventListener("click", _confirmIdeRootForCurrentWindow);
+}
+
+async function _confirmIdeRootForCurrentWindow() {
+  try {
+    const res = await sendAction({ verb: "getIdeRootCandidate", target: "plugins:beilu-files", source: "web", payload: {} });
+    const r = res?._result;
+    if (!r?.success) throw new Error(r?.error || "候选根读取失败");
+    if (!r.connected || !r.candidate) {
+      showToast("warning", "本窗口未绑定在线 IDE 或该 IDE 未打开工作区文件夹，无候选根可确认");
+      return;
+    }
+    if (r.currentRoot && String(r.currentRoot).replace(/\\/g, "/") === String(r.candidate).replace(/\\/g, "/")) {
+      showToast("info", "本窗口工作区根已是该 IDE 根，无需确认");
+      return;
+    }
+    if (!confirm(`将本窗口工作区根设为 IDE 工作区？\n\n候选: ${r.candidate}\n当前: ${r.currentRoot || "(默认玩耍空间)"}\n\n确认后 AI 文件操作沙箱切到该目录。`)) return;
+    const c = await sendAction({
+      verb: "confirmIdeWorkspaceRoot", target: "plugins:beilu-files", source: "web",
+      payload: { rootPath: r.candidate, expectedIdeRoute: r.route },
+    });
+    const cr = c?._result;
+    if (!cr?.ok) throw new Error(`[${cr?.code || "E"}] ${cr?.error || "确认失败"}`);
+    showToast("success", `IDE 根已确认: ${cr.effectiveRoot}`);
+    renderIdeInstances();
+  } catch (e) {
+    showToast("error", "IDE 根确认失败: " + (e?.message || e));
+  }
 }
 
 function renderConnCards() {

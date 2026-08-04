@@ -1,0 +1,651 @@
+/*
+ * Pro-C identity skin: Madoka five-color contract.
+ * theme-palettes.css is the only five-color producer. This file only bridges
+ * legacy consumers and maps identity, memory, file, error and help semantics.
+ */
+
+:is(
+  html[data-beilu-enhanced="madoka"],
+  button[data-enhanced-pick="madoka"]
+) {
+  /* Installed-family preference only; no font asset is bundled by this skin. */
+  --beilu-font-runes: "MadokaRunes", var(--beilu-font-ui);
+}
+
+/* The settings card previews all five roles with color plus geometry. */
+button[data-enhanced-pick="madoka"] {
+  background-color: var(--beilu-surface-raised);
+}
+
+button[data-enhanced-pick="madoka"] .theme-name::after {
+  margin-inline-start: 0.5em;
+  pointer-events: none;
+  content: "CONTRACT";
+  color: var(--beilu-madoka-violet);
+  font-family: var(--beilu-font-runes);
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch] {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 0;
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch="pink"] {
+  background-color: var(--beilu-madoka-pink);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg) scale(0.88);
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch="violet"] {
+  background-color: var(--beilu-madoka-violet);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch="gold"] {
+  background-color: var(--beilu-madoka-gold);
+  -webkit-mask-image:
+    radial-gradient(circle at 50% 24%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 76% 50%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 50% 76%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 24% 50%, #000 0 27%, transparent 29%);
+  mask-image:
+    radial-gradient(circle at 50% 24%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 76% 50%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 50% 76%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 24% 50%, #000 0 27%, transparent 29%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch="red"] {
+  background-color: var(--beilu-madoka-red);
+  background-image: linear-gradient(
+    90deg,
+    transparent 36%,
+    color-mix(in srgb, var(--beilu-madoka-red) 48%, var(--beilu-fg-primary)) 36% 64%,
+    transparent 64%
+  );
+  border-radius: 50% / 18%;
+  transform: scaleX(0.56);
+}
+
+button[data-enhanced-pick="madoka"] .theme-dots [data-swatch="blue"] {
+  background-color: var(--beilu-madoka-blue);
+  border-radius: 50%;
+  clip-path: polygon(
+    50% 0,
+    100% 0,
+    100% 34%,
+    76% 50%,
+    100% 66%,
+    100% 100%,
+    0 100%,
+    0 0
+  );
+}
+
+button[data-enhanced-pick="madoka"].active {
+  background-color: var(--beilu-surface-raised);
+  border-color: var(--beilu-madoka-pink);
+  box-shadow:
+    inset 3px 0 0 var(--beilu-madoka-pink),
+    inset -2px 0 0 var(--beilu-madoka-violet);
+  transform: none;
+}
+
+button[data-enhanced-pick="madoka"].active::after {
+  background-color: var(--beilu-madoka-pink);
+  box-shadow: 0 0 0 1px var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] {
+  color-scheme: light;
+  --beilu-radius-control: 0.5rem 0.2rem 0.5rem 0.2rem;
+  --beilu-radius-panel: 0.8rem 0.25rem 0.8rem 0.25rem;
+  --beilu-border-width: 1px;
+  --beilu-identity-edge: var(--beilu-madoka-pink);
+  --beilu-identity-edge-aux: var(--beilu-madoka-violet);
+  --beilu-identity-active-edge: var(--beilu-madoka-pink);
+
+  /* Madoka-only legacy bridges; palette remains the color source of truth. */
+  --beilu-user-bar: var(--beilu-madoka-pink);
+  --beilu-bot-bar: var(--beilu-madoka-violet);
+  --tp-yellow: var(--beilu-madoka-gold);
+
+  --beilu-feedback-press-surface: color-mix(
+    in srgb,
+    var(--beilu-madoka-pink) 14%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-press-border: var(--beilu-madoka-pink);
+  --beilu-feedback-press-shadow:
+    inset 3px 0 0 var(--beilu-madoka-violet),
+    inset 0 -2px 0 var(--beilu-madoka-pink);
+  --beilu-feedback-selected-surface: color-mix(
+    in srgb,
+    var(--beilu-madoka-pink) 9%,
+    var(--beilu-surface-raised)
+  );
+  --beilu-feedback-selected-edge: var(--beilu-madoka-pink);
+  --beilu-panel-shadow:
+    0 12px 28px color-mix(in srgb, var(--beilu-fg-primary) 12%, transparent),
+    inset 0 0 0 1px var(--beilu-border-subtle);
+  --beilu-panel-texture:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--beilu-madoka-pink) 7%, transparent) 0 0.35rem,
+      transparent 0.35rem 1.4rem
+    );
+  --beilu-backdrop-effect:
+    radial-gradient(
+      circle at 14% 18%,
+      color-mix(in srgb, var(--beilu-madoka-pink) 12%, transparent),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 84% 72%,
+      color-mix(in srgb, var(--beilu-madoka-blue) 10%, transparent),
+      transparent 30%
+    );
+}
+
+/* One centered ribbon, painted on the existing top bar without a new layer. */
+html[data-beilu-enhanced="madoka"] #top-bar {
+  background-color: var(--beilu-surface-raised);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--beilu-madoka-pink) 30%, transparent) 7%,
+    var(--beilu-madoka-pink) 13% 27%,
+    var(--beilu-madoka-violet) 30% 47%,
+    var(--beilu-madoka-gold) 50% 59%,
+    var(--beilu-madoka-red) 62% 77%,
+    var(--beilu-madoka-blue) 80% 90%,
+    color-mix(in srgb, var(--beilu-madoka-blue) 30%, transparent) 94%,
+    transparent 100%
+  );
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: min(72%, 46rem) 3px;
+  border-color: var(--beilu-border-default);
+}
+
+/* Opaque page, panel, floating and modal material. */
+html[data-beilu-enhanced="madoka"] .left-panel {
+  background-color: var(--beilu-surface-panel);
+  border-inline-start: 3px solid var(--beilu-madoka-pink);
+  border-radius: var(--beilu-radius-panel);
+}
+
+html[data-beilu-enhanced="madoka"] #right-panel {
+  background-color: var(--beilu-surface-panel);
+  border-inline-end: 3px solid var(--beilu-madoka-violet);
+  border-radius: var(--beilu-radius-panel);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  .panel,
+  .card,
+  .settings-panel,
+  .work-panel,
+  .beilu-theme-panel,
+  .file-explorer-shell,
+  .file-search-results-panel
+) {
+  background-color: var(--beilu-surface-panel);
+  border-color: var(--beilu-border-default);
+  border-radius: var(--beilu-radius-panel);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  .floating-window,
+  [popover],
+  .model-selector-dropdown,
+  .ide-menu-dropdown,
+  .file-context-menu,
+  .drawer-side
+) {
+  background-color: var(--beilu-surface-floating);
+  border-block-start: 2px solid var(--beilu-madoka-violet);
+  border-radius: var(--beilu-radius-panel);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  .settings-modal,
+  .editor-modal,
+  .fp-modal,
+  .expand-editor-modal,
+  .preset-modal,
+  .modal-box,
+  [role="dialog"]
+) {
+  background-color: var(--beilu-surface-modal);
+  border-block-start: 2px solid var(--beilu-madoka-pink);
+  border-radius: var(--beilu-radius-panel);
+}
+
+/* The preset overlay is a backdrop, not a glass layer; its modal stays opaque above it. */
+html[data-beilu-enhanced="madoka"] #preset-overlay {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Real headers carry identity; ordinary tags and badges only keep geometry. */
+html[data-beilu-enhanced="madoka"] :is(
+  .floating-window-header,
+  .mode-selector-header,
+  .beilu-theme-header,
+  .settings-section > h3,
+  .file-explorer-title
+) {
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-identity-edge) 7%,
+    var(--beilu-surface-raised)
+  );
+  border-inline-start: 3px solid var(--beilu-identity-edge);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced="madoka"] .floating-window-header {
+  border-inline-start-color: var(--beilu-identity-edge-aux);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  .btn:not(.token-compress-btn),
+  button:not(.token-compress-btn),
+  .tag,
+  .badge
+) {
+  border-radius: var(--beilu-radius-control);
+}
+
+/* Chat role data remains the owner; the skin only bridges bars and surfaces. */
+html[data-beilu-enhanced="madoka"] .chat-message[data-role="user"] .chat-bubble {
+  background-color: var(--beilu-surface-message-user);
+  border-left: 0;
+  border-inline-start: 3px solid var(--beilu-user-bar);
+}
+
+html[data-beilu-enhanced="madoka"] .chat-message:not([data-role="user"]) .chat-bubble {
+  background-color: var(--beilu-surface-message-bot);
+  border-left: 0;
+  border-inline-start: 3px solid var(--beilu-bot-bar);
+}
+
+html[data-beilu-enhanced="madoka"] .chat-input-wrapper {
+  background-color: var(--beilu-surface-panel);
+  border-color: var(--beilu-madoka-violet);
+  box-shadow:
+    0 2px 12px color-mix(in srgb, var(--beilu-fg-primary) 10%, transparent),
+    inset 3px 0 0 var(--beilu-madoka-violet);
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--beilu-motion-fast);
+  transition-timing-function: var(--beilu-ease-standard);
+}
+
+html[data-beilu-enhanced="madoka"] .chat-input-wrapper:focus-within {
+  border-color: var(--beilu-border-focus);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--beilu-border-focus) 24%, transparent),
+    inset 3px 0 0 var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  #message-input,
+  .chat-input-textarea
+) {
+  background-color: var(--beilu-surface-input);
+  color: var(--beilu-fg-primary);
+}
+
+/* Generic selected state: pink waterdrop plus stable identity edges. */
+html[data-beilu-enhanced="madoka"] :is(
+  .top-tab.top-tab-active,
+  .settings-activity-btn.settings-activity-active,
+  .ide-editor-tab.ide-tab-active,
+  .editor-tab.active,
+  .beilu-cat-tab.active,
+  [role="tab"][aria-selected="true"],
+  [role="option"][aria-selected="true"]
+) {
+  position: relative;
+  background-color: var(--beilu-feedback-selected-surface);
+  box-shadow:
+    inset 3px 0 0 var(--beilu-madoka-pink),
+    inset 0 -1px 0 var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  .top-tab.top-tab-active,
+  .settings-activity-btn.settings-activity-active,
+  .ide-editor-tab.ide-tab-active,
+  .editor-tab.active,
+  .beilu-cat-tab.active,
+  [role="tab"][aria-selected="true"],
+  [role="option"][aria-selected="true"]
+)::after {
+  position: absolute;
+  inset: auto;
+  inset-block-start: 50%;
+  inset-inline-start: 0.18rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  pointer-events: none;
+  content: "";
+  background-color: var(--beilu-madoka-pink);
+  border: 1px solid var(--beilu-surface-panel);
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 0 0 1px var(--beilu-madoka-violet);
+  transform: translateY(-50%) rotate(-45deg);
+  animation: beilu-madoka-seal 180ms var(--beilu-ease-enter) 1;
+}
+
+/* Replace the legacy amber bar instead of stacking it under the Madoka waterdrop. */
+html[data-beilu-enhanced="madoka"] .settings-activity-btn.settings-activity-active::before {
+  content: none;
+}
+
+/* Memory and P1 navigation use a violet diamond, not generic selection. */
+html[data-beilu-enhanced="madoka"] #mem-activity-bar [data-mem-panel].ide-activity-active {
+  position: relative;
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-madoka-violet) 11%,
+    var(--beilu-surface-raised)
+  );
+  box-shadow: inset 3px 0 0 var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] #mem-activity-bar [data-mem-panel].ide-activity-active::before {
+  content: none;
+}
+
+html[data-beilu-enhanced="madoka"] #mem-activity-bar [data-mem-panel].ide-activity-active::after {
+  position: absolute;
+  inset: auto;
+  inset-block-start: 50%;
+  inset-inline-start: 0.22rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  pointer-events: none;
+  content: "";
+  background-color: var(--beilu-madoka-violet);
+  border: 1px solid var(--beilu-surface-panel);
+  box-shadow: 0 0 0 1px var(--beilu-madoka-pink);
+  transform: translateY(-50%) rotate(45deg);
+  animation: beilu-madoka-seal 180ms var(--beilu-ease-enter) 1;
+}
+
+/* File tree selection is the blue notched circle. */
+html[data-beilu-enhanced="madoka"] .file-tree-item.active {
+  position: relative;
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-madoka-blue) 10%,
+    var(--beilu-surface-panel)
+  );
+  border-left: var(--beilu-border-width) solid transparent;
+  border-inline-start: 3px solid var(--beilu-madoka-blue);
+  box-shadow: inset 3px 0 0 var(--beilu-madoka-blue);
+}
+
+html[data-beilu-enhanced="madoka"] .file-tree-item.active::after {
+  position: absolute;
+  inset: auto;
+  inset-block-start: 50%;
+  inset-inline-start: 0.14rem;
+  width: 0.36rem;
+  height: 0.36rem;
+  pointer-events: none;
+  content: "";
+  background-color: var(--beilu-madoka-blue);
+  border-radius: 50%;
+  clip-path: polygon(
+    50% 0,
+    100% 0,
+    100% 34%,
+    76% 50%,
+    100% 66%,
+    100% 100%,
+    0 100%,
+    0 0
+  );
+  box-shadow: 0 0 0 1px var(--beilu-surface-panel);
+  transform: translateY(-50%);
+  animation: beilu-madoka-seal 180ms var(--beilu-ease-enter) 1;
+}
+
+/* Pressed is a transient action state, even when the control remains selected. */
+html[data-beilu-enhanced="madoka"] :is(
+  .top-tab,
+  .settings-activity-btn,
+  .ide-editor-tab,
+  .editor-tab,
+  .beilu-cat-tab,
+  :where(#mem-activity-bar) [data-mem-panel],
+  .file-tree-item,
+  [role="tab"],
+  [role="option"]
+):not(:disabled):not([aria-disabled="true"]):active {
+  background-color: var(--beilu-feedback-press-surface);
+  border-color: var(--beilu-feedback-press-border);
+  box-shadow: var(--beilu-feedback-press-shadow);
+  transform: none;
+}
+
+/* File/navigation surfaces stay opaque and own the blue information edge. */
+html[data-beilu-enhanced="madoka"] #center-tab-files :is(
+  .ide-sidebar-panel,
+  .file-explorer-shell,
+  .file-tree
+) {
+  background-color: var(--beilu-surface-workspace);
+  border-inline-start: 3px solid var(--beilu-madoka-blue);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  #file-editor-area,
+  .file-editor-workspace,
+  .file-preview-pane,
+  .file-editor-binary
+) {
+  background-color: var(--beilu-surface-code);
+  border-inline-start-color: var(--beilu-madoka-blue);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced="madoka"] .file-editor-workspace {
+  border-inline-start: 3px solid var(--beilu-madoka-blue);
+}
+
+html[data-beilu-enhanced="madoka"] .file-editor-statusbar {
+  background-color: var(--beilu-surface-raised);
+  border-block-start: 1px solid var(--beilu-madoka-blue);
+  color: var(--beilu-fg-secondary);
+}
+
+html[data-beilu-enhanced="madoka"] #file-editor-textarea {
+  background-color: var(--beilu-surface-code);
+  border: 1px solid var(--beilu-madoka-blue);
+  color: var(--beilu-fg-primary);
+}
+
+/* Memory AI panel and title use violet identity and one short runtime rune. */
+html[data-beilu-enhanced="madoka"] .memory-ai-output-panel {
+  background-color: var(--beilu-surface-panel);
+  border-block-start: 2px solid var(--beilu-madoka-violet);
+  border-inline-start: 3px solid var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-header {
+  background-color: color-mix(
+    in srgb,
+    var(--beilu-madoka-violet) 8%,
+    var(--beilu-surface-raised)
+  );
+  border-block-end-color: var(--beilu-madoka-violet);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-title {
+  color: var(--beilu-madoka-violet);
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-title::after {
+  margin-inline-start: 0.55em;
+  pointer-events: none;
+  content: "MEMORIA";
+  color: var(--beilu-madoka-pink);
+  font-family: var(--beilu-font-runes);
+  font-size: 0.62em;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-body,
+html[data-beilu-enhanced="madoka"] .memory-ai-output-entry {
+  background-color: var(--beilu-surface-panel);
+  color: var(--beilu-fg-primary);
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-close {
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--beilu-motion-press);
+  transition-timing-function: var(--beilu-ease-standard);
+}
+
+/* Busy, invalid and error consume only explicit runtime states. */
+html[data-beilu-enhanced="madoka"] [aria-busy="true"] {
+  border-color: var(--beilu-madoka-violet);
+  box-shadow:
+    inset 3px 0 0 var(--beilu-madoka-violet),
+    inset 6px 0 0 var(--beilu-madoka-pink);
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-status.status-running {
+  color: var(--beilu-madoka-violet);
+  border-inline-start: 2px solid var(--beilu-madoka-pink);
+  padding-inline-start: 0.35em;
+}
+
+html[data-beilu-enhanced="madoka"] .memory-ai-output-status.status-error {
+  border-inline-start: 2px solid var(--beilu-madoka-red);
+  color: var(--beilu-state-error);
+  padding-inline-start: 0.35em;
+}
+
+html[data-beilu-enhanced="madoka"] .status.status-error {
+  background-color: var(--beilu-madoka-red);
+  border-color: var(--beilu-madoka-red);
+  /* Override legacy animate-ping: state arrival is one-shot, not perpetual alarm. */
+  animation: beilu-madoka-seal 180ms var(--beilu-ease-enter) 1;
+}
+
+/* Gold is reserved for real help, tutorial and warning consumers. */
+html[data-beilu-enhanced="madoka"] :is(
+  [data-aux="tutorial-play"],
+  [data-settings-section="tutorial-dev"],
+  .beilu-chat-api-banner,
+  #ide-approval-dock
+) {
+  border-inline-start: 3px solid var(--beilu-madoka-gold);
+}
+
+html[data-beilu-enhanced="madoka"] :is(
+  [data-aux="tutorial-play"]
+)::after {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-inline-start: 0.45em;
+  flex: none;
+  content: "";
+  background-color: var(--beilu-madoka-gold);
+  -webkit-mask-image:
+    radial-gradient(circle at 50% 24%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 76% 50%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 50% 76%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 24% 50%, #000 0 27%, transparent 29%);
+  mask-image:
+    radial-gradient(circle at 50% 24%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 76% 50%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 50% 76%, #000 0 27%, transparent 29%),
+    radial-gradient(circle at 24% 50%, #000 0 27%, transparent 29%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+html[data-beilu-enhanced="madoka"] .text-warning {
+  color: var(--beilu-state-warning);
+}
+
+html[data-beilu-enhanced="madoka"] .status.status-warning {
+  background-color: var(--beilu-madoka-gold);
+  border-color: var(--beilu-madoka-gold);
+  /* Override legacy animate-pulse while keeping an immediate state-change cue. */
+  animation: beilu-madoka-seal 180ms var(--beilu-ease-enter) 1;
+}
+
+html[data-beilu-enhanced="madoka"] :is(progress, .progress) {
+  accent-color: var(--beilu-madoka-pink);
+  border-inline-start: 2px solid var(--beilu-madoka-blue);
+}
+
+@keyframes beilu-madoka-seal {
+  from {
+    filter: saturate(0.72);
+  }
+  to {
+    filter: saturate(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-beilu-enhanced="madoka"] *,
+  html[data-beilu-enhanced="madoka"] *::before,
+  html[data-beilu-enhanced="madoka"] *::after {
+    /* Accessibility preference is the final motion owner, including utility animations. */
+    animation: none !important;
+    transition-duration: 0s !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-beilu-enhanced="madoka"] {
+    --beilu-panel-texture: none;
+    --beilu-backdrop-effect: none;
+  }
+
+  html[data-beilu-enhanced="madoka"] #top-bar,
+  html[data-beilu-enhanced="madoka"] :is(
+    .panel,
+    .card,
+    .settings-panel,
+    .beilu-theme-panel,
+    .editor-panel,
+    .work-panel,
+    .left-panel,
+    #right-panel,
+    .file-tree,
+    .file-explorer-shell,
+    .file-editor-workspace,
+    .floating-window,
+    [popover],
+    .model-selector-dropdown,
+    .ide-menu-dropdown,
+    .file-context-menu,
+    .settings-modal,
+    .editor-modal,
+    .fp-modal,
+    .expand-editor-modal,
+    .preset-modal,
+    .modal-box,
+    [role="dialog"]
+  ) {
+    background-image: none;
+  }
+}

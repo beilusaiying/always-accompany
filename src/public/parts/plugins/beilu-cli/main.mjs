@@ -26,7 +26,8 @@ import info from "./info.json" with { type: "json" };
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { on_shutdown } from "npm:on-shutdown";
 
 import { createDiag } from "../../../../server/diagLogger.mjs";
 import { setDefaultPart } from "../../../../server/parts_loader.mjs";
@@ -154,6 +155,8 @@ function _createProcessOwner(child, config, intent) {
     listeningSeen: false,
     healthSettled: false,
     healthPollTimer: null,
+    shutdownSent: false,
+    stdinError: null,
     stdoutTail: "",
     closePromise: new Promise((resolve) => { resolveClose = resolve; }),
     healthPromise: new Promise((resolve, reject) => {
@@ -300,25 +303,72 @@ async function _stopOwner(owner, reason, timeoutMs = PROCESS_STOP_TIMEOUT_MS) {
   if (!owner || owner.closed) return { stopped: true, already: true };
   owner.expectedStopReason = reason;
   _clearOwnerHealthWatch(owner);
-  try {
-    owner.child.kill();
-  } catch (error) {
-    owner.error = owner.error || error;
+  if (!owner.shutdownSent) {
+    owner.shutdownSent = true;
+    const stdin = owner.child.stdin;
+    if (stdin && !stdin.destroyed && stdin.writable) {
+      stdin.once("error", (error) => { owner.stdinError = error; });
+      try { stdin.end("shutdown\n"); }
+      catch (error) { owner.stdinError = error; }
+    } else {
+      owner.stdinError = new Error("cli_shutdown_stdin_unavailable");
+    }
   }
 
   try {
     await _waitWithTimeout(owner.closePromise, timeoutMs, "process_stop_timeout");
-    return { stopped: true, generation: owner.generation };
+    const cleanExit = owner.exitCode === 0 && owner.exitSignal == null;
+    return {
+      stopped: true,
+      generation: owner.generation,
+      graceful: cleanExit,
+      exitCode: owner.exitCode,
+      signal: owner.exitSignal,
+      ...(!cleanExit ? { error: `cli_shutdown_exit_${owner.exitCode ?? "unknown"}${owner.exitSignal ? `_signal_${owner.exitSignal}` : ""}` } : {}),
+      ...(owner.stdinError ? { protocolError: owner.stdinError.message } : {}),
+    };
   } catch (error) {
     if (_isCurrentOwner(owner)) {
       _lifecycleState = "stop_timeout";
       _lastLifecycleError = error.message;
     }
+    const pid = owner.child.pid || null;
+    let forceError = null;
+    if (process.platform === "win32" && pid) {
+      forceError = await new Promise((resolve) => {
+        execFile(
+          "taskkill.exe",
+          ["/PID", String(pid), "/T", "/F"],
+          { timeout: PROCESS_STOP_TIMEOUT_MS, windowsHide: true },
+          (taskkillError) => resolve(taskkillError || null),
+        );
+      });
+    } else {
+      try { owner.child.kill("SIGKILL"); }
+      catch (killError) { forceError = killError; }
+    }
+
+    try {
+      await _waitWithTimeout(owner.closePromise, PROCESS_STOP_TIMEOUT_MS, "process_force_stop_timeout");
+    } catch (closeError) {
+      forceError = forceError || closeError;
+    }
+
+    const stopped = owner.closed;
+    if (!stopped && _isCurrentOwner(owner)) {
+      _lifecycleState = "stop_timeout";
+      _lastLifecycleError = forceError?.message || "process_force_stop_timeout";
+    }
     return {
-      stopped: false,
-      error: error.message,
+      stopped,
+      forced: true,
+      graceful: false,
+      error: forceError?.message || (stopped ? "process_stop_timeout_forced" : "process_force_stop_timeout"),
       generation: owner.generation,
-      pid: owner.child.pid || null,
+      pid,
+      exitCode: owner.exitCode,
+      signal: owner.exitSignal,
+      ...(owner.stdinError ? { protocolError: owner.stdinError.message } : {}),
     };
   }
 }
@@ -330,7 +380,7 @@ async function _parkCli(yonbanCount) {
   _cancelRestartTimer();
   const owner = _cliOwner;
   const result = await _stopOwner(owner, "mutex-park");
-  if (!result.stopped) {
+  if (!result.stopped || result.graceful !== true) {
     diag.warn("CLI 让位停机超时", { yonbanCount, ...result });
     return result;
   }
@@ -545,7 +595,8 @@ async function startCli({ intent = "start" } = {}) {
 
   try {
     const child = spawn("node", spawnArgs, {
-      stdio: ["ignore", "pipe", "pipe"],
+      // stdin pipe 是父子进程的内部关停协议：所有 stop 先发 shutdown+EOF，超时才强制终止。
+      stdio: ["pipe", "pipe", "pipe"],
       detached: false,
       windowsHide: true,
       // [0723] hintTexts 经 env 注入 CLI 子进程(禁硬编码单源):hints.mjs 读 BEILU_CLI_HINT_TEXTS 覆盖默认。
@@ -651,7 +702,8 @@ async function stopCli() {
   }
   _lifecycleState = "stopping";
   const result = await _stopOwner(owner, "manual-stop");
-  if (result.stopped) diag.log("CLI 后端已停止", { generation: owner.generation });
+  if (result.stopped && result.graceful === true) diag.log("CLI 后端已 graceful 停止", { generation: owner.generation });
+  else diag.warn("CLI 后端停止未完成 graceful 契约", result);
   return result;
 }
 
@@ -663,7 +715,7 @@ async function restartCli() {
   if (previousOwner) {
     _lifecycleState = "stopping";
     const stopResult = await _stopOwner(previousOwner, "restart");
-    if (!stopResult.stopped) return stopResult;
+    if (!stopResult.stopped || stopResult.graceful !== true) return stopResult;
   }
   _crashTimes = []; // 手动 restart=用户已介入,清熔断窗口重新计数
   return startCli({ intent: "manual-restart" });
@@ -701,6 +753,17 @@ function getCliStatus() {
     uptime: _startedAt ? Math.floor((Date.now() - _startedAt) / 1000) : 0,
   };
 }
+
+function _shutdownPluginCli() {
+  _unloading = true;
+  _stopMutexTimer();
+  _cancelRestartTimer();
+  _cancelRecoveryTimer({ reset: true });
+  return _serializeLifecycle(() => stopCli());
+}
+
+// 本体进程关停与 Part Unload 共用同一条串行 stop 链，避免绕过子进程 graceful protocol。
+on_shutdown(() => _shutdownPluginCli());
 
 const pluginExport = {
   info,
@@ -836,13 +899,9 @@ const pluginExport = {
 
   async Unload() {
     diag.log("Unload");
-    _unloading = true;
     // 配对拆链：起了 timer 就要拆（Unload 后本模块态作废，留着 interval 会对着空 _cliProcess 空转，
     //   重载后还会再起第二个）。
-    _stopMutexTimer();
-    _cancelRestartTimer();
-    _cancelRecoveryTimer({ reset: true });
-    await _serializeLifecycle(() => stopCli());
+    await _shutdownPluginCli();
   },
 };
 

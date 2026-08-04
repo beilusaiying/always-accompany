@@ -103,13 +103,13 @@ Concurrency correctness is ensured by three types of in-process locks: table sav
 
 ## 4.3 Memory Processing Pipeline
 
-The memory processing pipeline consists of a set of archival/maintenance presets numbered P2 through P6, corresponding to the human memory encoding-consolidation process from short-term to long-term. A core fact must be stated upfront: among these presets, P3 through P6 are disabled by default, and actual production archival is handled by mechanical archival logic (automatic archival trigger checks and end-of-day archival flow); P2 is the only preset that automatically participates in the archival flow.
+The memory processing pipeline includes archival/maintenance presets P2 through P6. A current fact must come first: production archival is handled by mechanical threshold checks and the end-of-day flow, while the background P2 callback has been stopped. The manual button still calls triggerP2Summary, but the function returns early when trigger=manual_button. P2 is therefore not a working automatic or manual summarization path at present. P3 through P6 remain disabled by default or require individual verification.
 
 ### 4.3.1 Preset Responsibilities and Default States
 
 | Preset | Name | Default state | Trigger timing | Responsibility | Corresponding human memory stage (post-hoc) |
 |------|------|--------|----------|------|------------------------------|
-| P2 | Table summary/archival | Enabled | Temporary memory table exceeds threshold | Reads archived temporary memory data; adds a refined summary to the event summary table | Short-term to long-term encoding consolidation |
+| P2 | Table summary/archival | Configurable, not automatic | Current manual trigger has a known issue | Intended to read archived temporary memory and add a refined event summary | Short-term to long-term encoding consolidation |
 | P3 | Daily summary | Disabled | Manual | Consolidates the day's summaries; generates a daily summary and executes end-of-day archival | Sleep-phase memory consolidation |
 | P4 | Hot-to-warm transfer | Disabled | Manual | Reviews the hot layer; calculates transfer scope by rules and archives (user profile is never moved) | Working memory to episodic memory migration |
 | P5 | Monthly summary/archival | Disabled | Manual/automatic | Consolidates over-age daily summaries from the warm layer into monthly summaries and moves them to the cold layer | Episodic to semantic memory monthly consolidation |
@@ -140,11 +140,11 @@ End-of-day archival is a multi-step process that executes in sequence: merge the
 
 The warm-to-cold migration details are: at most once per day, gated by a date stamp; migrated by entire monthly directories; uses copy-then-delete rather than atomic rename (to accommodate cross-volume scenarios; engineering records note this method may not be atomic but does not lose data); after migration, the cold-layer yearly index and warm-layer monthly index are updated, and empty directories are cleaned up.
 
-### 4.3.4 P2 Trigger Path
+### 4.3.4 Current P2 Trigger State
 
-The complete trigger path of P2 is: the automatic archival trigger check, upon detecting that the temporary memory table row count exceeds the threshold, first executes physical archival to write temporary memory to disk as a warm-layer batch file, then asynchronously triggers P2 summarization; internally, P2 summarization first performs a safety-fallback re-archival to ensure disk persistence, then reloads memory data (at which point the temporary memory table has been cleared), and finally runs the P2 preset to perform table edits and write the refined summary into the event summary table.
+Since 2026-08, the automatic archive check performs mechanical archival only and no longer invokes P2 asynchronously. The UI button still enters triggerP2Summary, but the current function returns early when it sees trigger=manual_button. This is a known chain defect, not a working “click to run” path.
 
-The warm-layer batch files produced by P2 archival can be retrieved by subsequent recall searches. The system also has a maintenance-layer preset that runs silently every few turns, responsible for reading the current month's conversations, calibrating the multi-axis weights used by divergence, and outputting weight and co-occurrence boost files. Its output is used preferentially by the divergence stage; this maintenance layer has no direct invocation relationship with the P2-through-P6 archival pipeline.
+Warm-layer batches produced by mechanical archival remain searchable. After repair, P2 is intended to read that persisted material and write a refined event summary; until the trigger chain is fixed and verified, intended responsibility must not be presented as current behavior. A separate maintenance preset calibrates divergence weights and has no direct invocation relationship with the P2-through-P6 pipeline.
 
 ---
 

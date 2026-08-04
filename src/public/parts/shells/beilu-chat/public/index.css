@@ -105,10 +105,9 @@
   /* T028c 侧条分色（user 暖琥珀 / bot 冷蓝，深底档） */
   --beilu-user-bar: #d4a017;
   --beilu-bot-bar: #5a9bd4;
-  /* 弹窗背景色（跟随主题，用户可在设置中调节） */
+  /* 弹窗背景色保持实体；插图透明度只由聊天背景系统管理。 */
   --beilu-modal-bg: var(--color-base-200);
   --beilu-modal-overlay: rgba(0, 0, 0, 0.92);
-  --beilu-modal-opacity: 1;
   /* 面板语义色（弹窗/时间线/进度条等动态面板共用） */
   --beilu-shadow-2: rgba(0, 0, 0, 0.02);
   --beilu-shadow-3: rgba(0, 0, 0, 0.03);
@@ -219,6 +218,31 @@
   --beilu-work-gradient: linear-gradient(90deg, #2563eb, #7c3aed);
   /* 通用边框 */
   --beilu-border-light: #ccc;
+}
+
+/* 首屏必要装配遮罩。旋转动画复用 daisyUI loading-spinner；这里只负责生命周期和层级。 */
+#app-boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-critical);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  color: var(--color-base-content);
+  background: var(--color-base-100);
+  text-align: center;
+}
+
+#app-boot-overlay[data-state="failed"] {
+  color: var(--color-error);
+}
+
+#app-boot-overlay[hidden],
+#app-boot-overlay [hidden] {
+  display: none;
 }
 
 /* P0-C11: 字体渲染优化 */
@@ -1196,7 +1220,6 @@ input[type="checkbox"].checkbox:checked {
   width: min(90vw, 900px);
   height: min(85vh, 700px);
   background: var(--beilu-modal-bg);
-  opacity: var(--beilu-modal-opacity);
   border: 1px solid var(--beilu-border-subtle);
   border-radius: 12px;
   box-shadow: 0 20px 60px var(--beilu-shadow-60);
@@ -1254,7 +1277,6 @@ input[type="checkbox"].checkbox:checked {
 
 .char-modal {
   background: var(--beilu-modal-bg);
-  opacity: var(--beilu-modal-opacity);
   border: 1px solid var(--color-base-300);
   border-radius: 16px;
   width: 90vw;

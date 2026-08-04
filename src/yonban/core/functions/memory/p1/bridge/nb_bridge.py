@@ -12,10 +12,9 @@ import sys, io, json, os
 sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8-sig")  # -sig: 容 BOM(0801确诊)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-DERIVED = os.environ.get("P1V2_DERIVED") or (
-    os.path.join(os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived")
-    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "..", "p1_res", "p1v2_derived"))
-    else r"<local-dev-path>")
+DERIVED = os.environ.get("P1V2_DERIVED") or os.path.join(
+    os.environ.get("P1_RESOURCE_DIR") or os.path.join(os.path.dirname(__file__), "..", "resources"),
+    "p1v2_derived")
 W_PATH = os.path.join(DERIVED, "nb_words.txt")
 V_PATH = os.path.join(DERIVED, "nb_vec_int8.npy")
 

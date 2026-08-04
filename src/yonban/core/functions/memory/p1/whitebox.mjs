@@ -8,6 +8,8 @@
 // node2-4 段的渲染在 pipeline.mjs renderFullWhitebox(唯一调用方),两处拼成全链报告
 export function renderNode01(node0Result, node1Result) {
   const L = [];
+  const posChain = t => `final=${t.pos ?? '-'} source=${t.posSource ?? '-'} segmenter=${t.segmenterPos ?? '-'} model=${t.modelPos ?? '-'} modelTag=${t.modelTag ?? '-'} core=${t.corePos ?? '-'}${t.upos ? ` upos=${t.upos}` : ''}`;
+  const resourceValue = value => (value && typeof value === 'object' ? JSON.stringify(value) : String(value));
   L.push('══════════ 白盒报告 node0→node1 ══════════');
 
   L.push('── 召回单元 ──');
@@ -17,6 +19,10 @@ export function renderNode01(node0Result, node1Result) {
   });
 
   const toks = node1Result.contextTokens;
+  L.push('── 词性裁决(全量来源) ──');
+  for (const t of toks) {
+    L.push(`  ${t.filtered ? '✗' : '✓'} ${t.word}  ${posChain(t)}`);
+  }
   L.push('── 保留词 ──');
   for (const t of toks.filter(t => !t.filtered)) {
     const extra = t.lang === 'zh'
@@ -25,13 +31,14 @@ export function renderNode01(node0Result, node1Result) {
     L.push(`  ✓ ${t.word}  [${t.lang}/${t.pos}${t.oov ? '/OOV' : ''}] u${t.unit} 留因=${t.keptBy} ${extra}`);
   }
   L.push('── 滤除词(按层) ──');
-  for (const reason of ['stop', 'bcc', 'conc', 'pos', 'punct', 'time', 'frag', 'colloq']) {
+  for (const reason of ['stop', 'bcc', 'conc', 'pos', 'frq', 'punct', 'time', 'frag', 'path', 'colloq']) {
     const group = toks.filter(t => t.filtered && t.reason === reason);
     if (!group.length) continue;
     const detail = group.map(t => {
       if (reason === 'bcc') return `${t.word}(${t.bccFreq})`;
       if (reason === 'conc') return `${t.word}(${t.conc})`;
-      if (reason === 'pos') return `${t.word}(${t.pos})`;
+      if (reason === 'pos') return `${t.word}(${posChain(t)})`;
+      if (reason === 'frq') return `${t.word}(${t.ecdictFrq})`;
       return t.word;
     });
     L.push(`  ✗ ${reason}: ${detail.join(' ')}`);
@@ -46,6 +53,8 @@ export function renderNode01(node0Result, node1Result) {
     L.push('  ' + node1Result.truncation.map(t => `u${t.unit} 丢弃${t.dropped}词`).join('  '));
   }
   L.push(`── 环境 ── 分词=${node1Result.provider.segmenter} 词性=${node1Result.provider.pos} hanlp=${node1Result.provider.hanlp}`);
-  L.push(`资源: ${Object.entries(node1Result.resources).map(([k, v]) => `${k}=${v}`).join(' ')}`);
+  const ec = node1Result.resources?.ecdict ?? node1Result.provider?.ecdict ?? null;
+  L.push(`ECDICT: ${ec ? `status=${ec.status} enabled=${ec.enabled} available=${ec.available} threshold=${ec.threshold} entries=${ec.entries} why=${ec.why ?? '-'}` : 'status=unreported'}`);
+  L.push(`资源: ${Object.entries(node1Result.resources ?? {}).map(([k, v]) => `${k}=${resourceValue(v)}`).join(' ')}`);
   return L.join('\n');
 }

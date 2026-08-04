@@ -76,6 +76,8 @@ interface Checkpoint {
   timestamp: string;
   chatId: string;
   messageIndex: number;
+  /** 关联消息的稳定 ID；messageIndex 仅作为旧数据/排序兼容字段 */
+  messageId?: string;
   /** 被修改文件的原始快照 */
   snapshots: FileSnapshot[];
   /** AI 的操作记录（溯源用） */
@@ -159,14 +161,26 @@ export class FileCheckpoint {
    * @param messageIndex 关联的消息索引（回档时按此比较 > targetIndex）
    * @param deferred true=审批路径（不抢占、不 auto-commit），false=即时路径
    */
-  start(id: string, chatId: string, messageIndex: number, deferred = false): void {
+  start(
+    id: string,
+    chatId: string,
+    messageIndex: number,
+    deferred = false,
+    messageId?: string,
+  ): void {
     // deferred（审批路径）：只登记检查点，不抢占全局 _activeId，也不 auto-commit 既有活跃检查点。
     // 原因：审批写操作会在用户稍后批准时才执行，期间可能有其他轮 start。若此处设 _activeId 或
     // auto-commit，会导致挂起的审批检查点被劫持/提前提交，批准的写快照落错检查点 → 回档丢文件。
     // 审批写靠 ToolExecutor 钉住的显式 _checkpointId 落快照（见 _resolveTargetId）。
     if (!deferred && this._activeId && this._activeId !== id) {
       // 非审批路径：如果已有别的活跃检查点，先提交
-      this.commit(this._activeId);
+      const previousActiveId = this._activeId;
+      const commitResult = this.commit(previousActiveId);
+      if (!commitResult.success) {
+        throw new Error(
+          `无法开始检查点 ${id}：旧检查点 ${previousActiveId} 提交失败：${commitResult.error || "未知错误"}`,
+        );
+      }
     }
 
     // 创建新检查点（已存在则保留，避免重复 start 清空快照）
@@ -176,6 +190,7 @@ export class FileCheckpoint {
         timestamp: new Date().toISOString(),
         chatId,
         messageIndex,
+        messageId,
         snapshots: [],
         operations: [],
         committed: false,
@@ -238,15 +253,19 @@ export class FileCheckpoint {
     let originalContent: string | null = null;
 
     try {
-      if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+      if (fs.existsSync(absPath)) {
+        const stat = fs.statSync(absPath);
+        if (!stat.isFile()) {
+          throw new Error("目标已存在但不是普通文件");
+        }
         existed = true;
         // 二进制安全：读为 Buffer 再 base64，避免 utf-8 把非文本字节替换成 U+FFFD
         originalContent = fs.readFileSync(absPath).toString("base64");
       }
     } catch (err: unknown) {
-      // T021 留痕 + T019 同族风险注记：文件实存但不可读（被锁/权限）时被记为 existed=false——
-      // 之后 revert 会按"原不存在"把它删除=误删被锁文件。本批只留痕；fail-safe 改造登记 T019 差集。
-      console.warn(`[FileCheckpoint] 快照读取失败（实存文件将被记为不存在，revert 有误删风险）: ${absPath}`, err instanceof Error ? err.message : String(err));
+      const reason = err instanceof Error ? err.message : String(err);
+      // 写前快照不是可选日志：无法证明原文件内容时必须阻断写入，不能伪装成“原文件不存在”。
+      throw new Error(`无法为写操作创建安全快照: ${absPath}: ${reason}`);
     }
 
     checkpoint.snapshots.push({
@@ -286,17 +305,26 @@ export class FileCheckpoint {
    * 影响：committed=true + 清 _activeId(如果是当前活跃) + saveToDisk 持久化到 .beilu/checkpoints/
    * 约束：commit 后的检查点不再接受 snapshotBeforeWrite/recordOperation
    */
-  commit(id: string): void {
+  commit(id: string): { success: boolean; persisted: boolean; error?: string; warning?: string } {
     const checkpoint = this._checkpoints.get(id);
-    if (!checkpoint) return;
-    checkpoint.committed = true;
-    if (this._activeId === id) {
-      this._activeId = null;
+    if (!checkpoint) {
+      return { success: false, persisted: false, error: `检查点不存在: ${id}` };
     }
-    this.saveToDisk(checkpoint);
+    const previousCommitted = checkpoint.committed;
+    const wasActive = this._activeId === id;
+    // saveToDisk 需要把 committed=true 写入记录；若保存失败，下方恢复内存事务前状态。
+    checkpoint.committed = true;
+    const persistence = this.saveToDisk(checkpoint);
+    if (!persistence.success) {
+      checkpoint.committed = previousCommitted;
+      if (wasActive) this._activeId = id;
+      return persistence;
+    }
+    if (wasActive) this._activeId = null;
     console.log(
       `[FileCheckpoint] 已提交: ${id} (${checkpoint.snapshots.length}个文件, ${checkpoint.operations.length}个操作)`,
     );
+    return persistence;
   }
 
   /**
@@ -332,7 +360,10 @@ export class FileCheckpoint {
 
     for (const snapshot of checkpoint.snapshots) {
       try {
-        if (snapshot.existed && snapshot.originalContent !== null) {
+        if (snapshot.existed) {
+          if (typeof snapshot.originalContent !== "string") {
+            throw new Error("检查点损坏：原文件存在但快照内容缺失");
+          }
           // 文件原来存在 → 恢复原始内容
           const dir = path.dirname(snapshot.absPath);
           if (!fs.existsSync(dir)) {
@@ -364,13 +395,20 @@ export class FileCheckpoint {
       }
     }
 
-    this.deleteFromDisk(id);
-    this._checkpoints.delete(id);
-    // 清理悬空指针：若被回档的检查点恰是当前活跃/钉住目标，置空，避免后续 snapshotBeforeWrite 取到已删检查点而静默丢快照
-    if (this._activeId === id) this._activeId = null;
-    if (this._pinnedId === id) this._pinnedId = null;
+    // 只有所有文件恢复成功且持久化记录也删除成功，才消费该检查点。
+    // 失败时保留记录，让重试从同一个完整快照重新执行，不会跳过失败点走向中间态。
+    if (errors.length === 0) {
+      const deleteError = this.deleteFromDisk(id);
+      if (deleteError) errors.push(deleteError);
+    }
+    if (errors.length === 0) {
+      this._checkpoints.delete(id);
+      // 清理悬空指针：若被回档的检查点恰是当前活跃/钉住目标，置空，避免后续 snapshotBeforeWrite 取到已删检查点而静默丢快照
+      if (this._activeId === id) this._activeId = null;
+      if (this._pinnedId === id) this._pinnedId = null;
+    }
     console.log(
-      `[FileCheckpoint] 回档完成: ${id} (恢复${restored}个, 删除${deleted}个, 错误${errors.length}个)`,
+      `[FileCheckpoint] 回档${errors.length === 0 ? "完成" : "失败并保留检查点"}: ${id} (恢复${restored}个, 删除${deleted}个, 错误${errors.length}个)`,
     );
 
     return { success: errors.length === 0, restored, deleted, errors, failedFiles };
@@ -415,6 +453,25 @@ export class FileCheckpoint {
     return candidates[0];
   }
 
+  /** 回档选择与排序的单一权威，preview / execute 必须复用，避免集合或顺序漂移。 */
+  private _selectRollbackCheckpoints(chatId: string, targetIndex: number): Checkpoint[] {
+    const selected = Array.from(this._checkpoints.values()).filter(
+      (cp) => cp.chatId === chatId && cp.messageIndex > targetIndex,
+    );
+    selected.sort(
+      (a, b) =>
+        b.messageIndex - a.messageIndex ||
+        b.seq - a.seq ||
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() ||
+        (a.id === b.id ? 0 : a.id < b.id ? 1 : -1),
+    );
+    return selected;
+  }
+
+  private static _sameCheckpointIds(actual: string[], expected: string[]): boolean {
+    return actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+  }
+
   /**
    * 回档到指定消息：恢复 messageIndex > targetIndex 的所有检查点（R6 回档链路核心）。
    *
@@ -427,45 +484,57 @@ export class FileCheckpoint {
   revertToMessage(
     chatId: string,
     targetIndex: number,
+    expectedCheckpointIds?: string[],
   ): {
     success: boolean;
+    partial: boolean;
+    checkpointSetDrift: boolean;
+    attempted: number;
+    reverted: number;
     checkpointsReverted: number;
     totalRestored: number;
     totalDeleted: number;
     errors: string[];
     failedFiles: string[];
+    checkpointIds: string[];
+    remainingCheckpointIds: string[];
   } {
-    // 找到 messageIndex > targetIndex 的所有检查点（从新到旧依次恢复）
-    const toRevert: Checkpoint[] = [];
-    for (const cp of this._checkpoints.values()) {
-      if (cp.chatId === chatId && cp.messageIndex > targetIndex) {
-        toRevert.push(cp);
-      }
+    const toRevert = this._selectRollbackCheckpoints(chatId, targetIndex);
+    const checkpointIds = toRevert.map((cp) => cp.id);
+    if (expectedCheckpointIds && !FileCheckpoint._sameCheckpointIds(checkpointIds, expectedCheckpointIds)) {
+      const error = "检查点集合已漂移；请重新预览后再回档";
+      return {
+        success: false,
+        partial: false,
+        checkpointSetDrift: true,
+        attempted: 0,
+        reverted: 0,
+        checkpointsReverted: 0,
+        totalRestored: 0,
+        totalDeleted: 0,
+        errors: [error],
+        failedFiles: [],
+        checkpointIds,
+        remainingCheckpointIds: checkpointIds,
+      };
     }
-    // 从最新的开始恢复（LIFO顺序）。messageIndex 平局时按 seq 降序（新→旧），
-    // 保证最旧的检查点最后 revert，其快照（最早原始态）最终落地——否则同一文件被多个
-    // 同 messageIndex 检查点快照时会停在中间态而非最原始态。
-    // seq 是单调创建序号：timestamp 毫秒级在同一轮连续 start 时会撞（撞则比较返 0、退化为 Map 插入序=最旧先 revert，结果错落中间态）。
-    // timestamp 作最终兜底，兼容无 seq 的旧持久化数据。
-    toRevert.sort(
-      (a, b) =>
-        b.messageIndex - a.messageIndex ||
-        b.seq - a.seq ||
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
 
     let totalRestored = 0;
     let totalDeleted = 0;
+    let attempted = 0;
+    let reverted = 0;
     const allErrors: string[] = [];
     const allFailedFiles: string[] = [];
 
     for (const cp of toRevert) {
+      attempted++;
       const result = this.revert(cp.id);
       totalRestored += result.restored;
       totalDeleted += result.deleted;
       allErrors.push(...result.errors);
       allFailedFiles.push(...result.failedFiles);
-      // revert() 已从内存/磁盘删除该检查点，此处无需重复 delete
+      if (!result.success) break;
+      reverted++;
     }
     // 清理悬空指针
     if (this._activeId && !this._checkpoints.has(this._activeId)) this._activeId = null;
@@ -473,52 +542,81 @@ export class FileCheckpoint {
 
     console.log(
       `[FileCheckpoint] revertToMessage: chatId=${chatId}, targetIdx=${targetIndex}, ` +
-        `reverted ${toRevert.length} checkpoints (restored ${totalRestored}, deleted ${totalDeleted})`,
+        `attempted ${attempted}, reverted ${reverted}/${toRevert.length} checkpoints (restored ${totalRestored}, deleted ${totalDeleted})`,
     );
 
+    const remainingCheckpointIds = this._selectRollbackCheckpoints(chatId, targetIndex).map((cp) => cp.id);
+    const success = allErrors.length === 0 && reverted === toRevert.length;
     return {
-      success: allErrors.length === 0,
-      checkpointsReverted: toRevert.length,
+      success,
+      partial: !success && (reverted > 0 || totalRestored > 0 || totalDeleted > 0),
+      checkpointSetDrift: false,
+      attempted,
+      reverted,
+      checkpointsReverted: reverted,
       totalRestored,
       totalDeleted,
       errors: allErrors,
       failedFiles: allFailedFiles,
+      checkpointIds,
+      remainingCheckpointIds,
     };
   }
 
   /**
    * 只读预览：若回档到 targetIndex，文件会发生什么变化。
    * 复用 revertToMessage 的检查点选择 + revert 的 existed 判定，但绝不写磁盘。
-   * - existed && originalContent!==null → 该文件会被「还原」(filesToRestore)
-   * - 否则(AI 新建)                    → 该文件会被「删除」(filesToDelete)
+   * - existed && originalContent 为字符串 → 该文件会被「还原」(filesToRestore)
+   * - existed=false                       → 该文件会被「删除」(filesToDelete)
+   * - existed=true 但内容缺失              → 检查点损坏，预览失败并阻断回档
    * 同一文件被多个检查点快照时，按 revert 实际执行顺序后写覆盖，与最终磁盘态一致。
    */
   getRevertToMessageDiff(
     chatId: string,
     targetIndex: number,
+    expectedCheckpointIds?: string[],
   ): {
+    success: boolean;
+    checkpointSetDrift: boolean;
+    error?: string;
     checkpointsToRevert: number;
+    checkpointIds: string[];
     filesToRestore: string[];
     filesToDelete: string[];
   } {
-    const toRevert: Checkpoint[] = [];
-    for (const cp of this._checkpoints.values()) {
-      if (cp.chatId === chatId && cp.messageIndex > targetIndex) {
-        toRevert.push(cp);
-      }
+    const toRevert = this._selectRollbackCheckpoints(chatId, targetIndex);
+    const checkpointIds = toRevert.map((cp) => cp.id);
+    if (expectedCheckpointIds && !FileCheckpoint._sameCheckpointIds(checkpointIds, expectedCheckpointIds)) {
+      return {
+        success: false,
+        checkpointSetDrift: true,
+        error: "检查点集合已漂移；请重新预览",
+        checkpointsToRevert: toRevert.length,
+        checkpointIds,
+        filesToRestore: [],
+        filesToDelete: [],
+      };
     }
-    // 与 revertToMessage 同序（seq 主、timestamp 兜底），保证预览的 last-write-wins 判定与实际回档落地一致
-    toRevert.sort(
-      (a, b) =>
-        b.messageIndex - a.messageIndex ||
-        b.seq - a.seq ||
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
+
+    const corruptSnapshots = toRevert
+      .flatMap((cp) => cp.snapshots)
+      .filter((snapshot) => snapshot.existed && typeof snapshot.originalContent !== "string");
+    if (corruptSnapshots.length > 0) {
+      return {
+        success: false,
+        checkpointSetDrift: false,
+        error: `检查点损坏：${corruptSnapshots.length} 个原文件缺少快照内容，请勿执行回档`,
+        checkpointsToRevert: toRevert.length,
+        checkpointIds,
+        filesToRestore: [],
+        filesToDelete: [],
+      };
+    }
 
     const verdict = new Map<string, "restore" | "delete">();
     for (const cp of toRevert) {
       for (const snapshot of cp.snapshots) {
-        if (snapshot.existed && snapshot.originalContent !== null) {
+        if (snapshot.existed) {
           verdict.set(snapshot.absPath, "restore");
         } else {
           verdict.set(snapshot.absPath, "delete");
@@ -534,7 +632,10 @@ export class FileCheckpoint {
     }
 
     return {
+      success: true,
+      checkpointSetDrift: false,
       checkpointsToRevert: toRevert.length,
+      checkpointIds,
       filesToRestore,
       filesToDelete,
     };
@@ -585,8 +686,11 @@ export class FileCheckpoint {
 
     for (const snapshot of checkpoint.snapshots) {
       const rel = path.relative(this.getWorkspaceRoot(), snapshot.absPath).replace(/\\/g, "/");
-      const oldBuf = snapshot.existed && snapshot.originalContent !== null
-        ? decode(snapshot.originalContent, snapshot.encoding)
+      if (snapshot.existed && typeof snapshot.originalContent !== "string") {
+        throw new Error(`检查点损坏：原文件存在但快照内容缺失: ${snapshot.absPath}`);
+      }
+      const oldBuf = snapshot.existed
+        ? decode(snapshot.originalContent as string, snapshot.encoding)
         : Buffer.alloc(0);
       let newBuf = Buffer.alloc(0);
       let deletedNow = false;
@@ -689,6 +793,7 @@ export class FileCheckpoint {
     timestamp: string;
     chatId: string;
     messageIndex: number;
+    messageId?: string;
     fileCount: number;
     opCount: number;
     committed: boolean;
@@ -698,6 +803,7 @@ export class FileCheckpoint {
       timestamp: cp.timestamp,
       chatId: cp.chatId,
       messageIndex: cp.messageIndex,
+      messageId: cp.messageId,
       fileCount: cp.snapshots.length,
       opCount: cp.operations.length,
       committed: cp.committed,
@@ -742,8 +848,12 @@ export class FileCheckpoint {
 
   // ---- 持久化 ----
 
-  private saveToDisk(checkpoint: Checkpoint): void {
-    if (!this._persistDir) return;
+  private saveToDisk(
+    checkpoint: Checkpoint,
+  ): { success: boolean; persisted: boolean; error?: string; warning?: string } {
+    if (!this._persistDir) {
+      return { success: true, persisted: false, warning: "当前为纯内存检查点模式，未持久化到磁盘" };
+    }
     try {
       const safeId = checkpoint.id.replace(/[<>:"/\\|?*]/g, "_");
       const filePath = path.join(this._persistDir, `${safeId}.json`);
@@ -752,6 +862,7 @@ export class FileCheckpoint {
         timestamp: checkpoint.timestamp,
         chatId: checkpoint.chatId,
         messageIndex: checkpoint.messageIndex,
+        messageId: checkpoint.messageId,
         committed: checkpoint.committed,
         seq: checkpoint.seq,
         operations: checkpoint.operations,
@@ -766,18 +877,26 @@ export class FileCheckpoint {
       const tmpPath = `${filePath}.tmp_${process.pid}`;
       fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
       fs.renameSync(tmpPath, filePath);
-    } catch (e) {
-      console.warn(`[FileCheckpoint] 持久化写入失败: ${e}`);
+      return { success: true, persisted: true };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.warn(`[FileCheckpoint] 持久化写入失败: ${error}`);
+      return { success: false, persisted: false, error: `检查点持久化失败: ${error}` };
     }
   }
 
-  private deleteFromDisk(id: string): void {
-    if (!this._persistDir) return;
+  private deleteFromDisk(id: string): string | null {
+    if (!this._persistDir) return null;
     try {
       const safeId = id.replace(/[<>:"/\\|?*]/g, "_");
       const filePath = path.join(this._persistDir, `${safeId}.json`);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch { /* ignore */ }
+      return null;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[FileCheckpoint] 删除持久化检查点失败: ${id}: ${message}`);
+      return `删除持久化检查点失败: ${id}: ${message}`;
+    }
   }
 
   private loadFromDisk(): void {
@@ -794,6 +913,7 @@ export class FileCheckpoint {
             timestamp: data.timestamp,
             chatId: data.chatId || "",
             messageIndex: data.messageIndex ?? -1,
+            messageId: typeof data.messageId === "string" ? data.messageId : undefined,
             committed: data.committed ?? true,
             // 旧持久化无 seq → 0（平局回退 timestamp，与旧行为一致，不退化）
             seq: typeof data.seq === "number" ? data.seq : 0,

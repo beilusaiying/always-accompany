@@ -120,21 +120,41 @@ function Get-BeiluPort {
 	return $port
 }
 
-# 后台轮询 /api/ping，服务就绪后自动打开浏览器。
+# 后台轮询 /api/readiness，shellReady=true（页面可打开可登录）才自动打开浏览器。
+# [D5 §2.4 2026-08-04] 原判据 /api/ping=200 只是 transport liveness——server 随后仍在做部件加载，
+# 浏览器先开=黑屏窗口（01 §P1-3 实测 24-29s）。现等 shellReady；全量预加载已转后台不再阻塞基础聊天。
+# 兼容：旧后端无 /api/readiness（404 抛错）时，连续多次 ping 可达仍 readiness 不可达 → 回退旧 ping 判据。
 # 仅 keepalive 首启动调用一次，重启循环不重开（防每次 131 重启都弹新窗口）。
 function Open-BrowserWhenReady {
 	param([int]$Port = 1314)
 	Start-Job -ScriptBlock {
 		param($p)
 		$elapsed = 0
+		$pingOkButNoReadiness = 0
 		# 600s: a first-run dependency install often exceeds 2 minutes; a 120s polling window gave up
 		# before the server was ready, so the browser never auto-opened (timing pitfall).
 		while ($elapsed -lt 600) {
 			try {
-				$r = Invoke-WebRequest -Uri "http://localhost:$p/api/ping" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-				if ($r.StatusCode -eq 200) { Start-Process "http://localhost:$p"; return }
+				$r = Invoke-WebRequest -Uri "http://localhost:$p/api/readiness" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+				if ($r.StatusCode -eq 200) {
+					$j = $null
+					try { $j = $r.Content | ConvertFrom-Json } catch {}
+					if ($j -and $j.shellReady) { Start-Process "http://localhost:$p"; return }
+					$pingOkButNoReadiness = 0  # readiness 端点在但未就绪：继续等真实 shellReady
+				}
 			}
-			catch {}
+			catch {
+				# readiness 不可达：可能服务未起，也可能是旧后端（无此端点 404）。用 ping 区分：
+				# ping 连续 5 次 200 而 readiness 始终失败 → 旧后端，按旧判据打开。
+				try {
+					$r2 = Invoke-WebRequest -Uri "http://localhost:$p/api/ping" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+					if ($r2.StatusCode -eq 200) {
+						$pingOkButNoReadiness++
+						if ($pingOkButNoReadiness -ge 5) { Start-Process "http://localhost:$p"; return }
+					}
+				}
+				catch { $pingOkButNoReadiness = 0 }
+			}
 			Start-Sleep -Seconds 1
 			$elapsed++
 		}
@@ -168,52 +188,57 @@ function Start-Server {
 	deno run --allow-scripts --allow-all -c "$PROJECT_DIR/deno.json" @nmFlag --v8-flags="$v8Flags" "$PROJECT_DIR/src/server/index.mjs" @ServerArgs
 }
 
-# ── 用户配置数据保护 ─────────────────
-# git reset --hard / clean -fd 会清掉 src/ 下用户改过的 config_data.json；更新前备份、更新后恢复。
-function Backup-UserConfigData {
-	$backupDir = Join-Path $env:TEMP 'beilu-config-backup'
-	$cfgFiles = Get-ChildItem -Path (Join-Path $PROJECT_DIR 'src') -Filter 'config_data.json' -Recurse -ErrorAction SilentlyContinue
-	if ($cfgFiles.Count -gt 0) {
-		foreach ($f in $cfgFiles) {
-			$rel = $f.FullName.Substring($PROJECT_DIR.Length + 1)
-			$dest = Join-Path $backupDir $rel
-			New-Item -Path (Split-Path $dest -Parent) -ItemType Directory -Force | Out-Null
-			Copy-Item -Path $f.FullName -Destination $dest -Force
-		}
-		Write-Host "  [beilu] 已备份 $($cfgFiles.Count) 个用户配置 (config_data.json)" -ForegroundColor Green
+# ── 安全源码更新 ───────────────────────
+# 更新只允许 fast-forward，绝不 clean/reset；这样不会删除 P1/service/data、角色数据或用户安装的扩展。
+# .noupdate 仍是显式总开关。已跟踪本地改动会阻止更新，避免把开发/用户配置写成“看似成功”的覆盖。
+function Invoke-SafeGitUpdate {
+	if (Test-Path (Join-Path $PROJECT_DIR '.noupdate')) {
+		Write-Host "  [beilu] .noupdate 已启用，跳过源码更新" -ForegroundColor DarkYellow
+		return
 	}
-}
-function Restore-UserConfigData {
-	$backupDir = Join-Path $env:TEMP 'beilu-config-backup'
-	if (Test-Path $backupDir) {
-		$bakFiles = Get-ChildItem -Path $backupDir -Filter 'config_data.json' -Recurse -ErrorAction SilentlyContinue
-		foreach ($f in $bakFiles) {
-			$rel = $f.FullName.Substring($backupDir.Length + 1)
-			$dest = Join-Path $PROJECT_DIR $rel
-			New-Item -Path (Split-Path $dest -Parent) -ItemType Directory -Force | Out-Null
-			Copy-Item -Path $f.FullName -Destination $dest -Force
-		}
-		# 确保恢复的用户配置不被 git 跟踪（与原版一致）
-		git -C "$PROJECT_DIR" rm --cached --ignore-unmatch -r -- "**/config_data.json" 2>$null | Out-Null
-		Remove-Item -Path $backupDir -Recurse -Force -ErrorAction SilentlyContinue
-		if ($bakFiles.Count -gt 0) { Write-Host "  [beilu] 已恢复 $($bakFiles.Count) 个用户配置" -ForegroundColor Green }
+	if ((-not (Test-Path (Join-Path $PROJECT_DIR '.git'))) -or (-not (Get-Command git -ErrorAction SilentlyContinue))) {
+		return
+	}
+	$trackedChanges = git -C "$PROJECT_DIR" status --porcelain=v1 --untracked-files=no
+	if ($LASTEXITCODE -ne 0) {
+		Write-Warning "  [beilu] 无法读取 Git 工作区状态，已跳过源码更新"
+		return
+	}
+	if ($trackedChanges) {
+		Write-Warning "  [beilu] 检测到本地已跟踪改动，已跳过源码更新；不会覆盖本地文件"
+		return
+	}
+	git -C "$PROJECT_DIR" fetch origin main --quiet
+	if ($LASTEXITCODE -ne 0) {
+		Write-Warning "  [beilu] 无法获取远端更新，继续使用当前版本"
+		return
+	}
+	$local = git -C "$PROJECT_DIR" rev-parse HEAD
+	$remote = git -C "$PROJECT_DIR" rev-parse origin/main
+	if (($LASTEXITCODE -ne 0) -or (-not $local) -or (-not $remote)) {
+		Write-Warning "  [beilu] 无法确认版本，继续使用当前版本"
+		return
+	}
+	if ($local -eq $remote) { return }
+	$marker = Join-Path $PROJECT_DIR 'data\p1\.service-restart-required.json'
+	try {
+		New-Item -ItemType Directory -Path (Split-Path -Parent $marker) -Force | Out-Null
+		@{ reason = 'application-update'; targetCommit = $remote; createdAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json -Compress | Set-Content -LiteralPath $marker -Encoding UTF8
+	}
+	catch {
+		Write-Warning "  [beilu] 无法写入 P1 重启标记，已取消源码更新以保持版本一致: $($_.Exception.Message)"
+		return
+	}
+	Write-Host "  [beilu] 检测到新版本，执行 fast-forward 更新..." -ForegroundColor Cyan
+	git -C "$PROJECT_DIR" pull --ff-only origin main
+	if ($LASTEXITCODE -ne 0) {
+		Write-Warning "  [beilu] 更新未完成（可能与未跟踪用户文件冲突）；当前版本未被覆盖"
 	}
 }
 
-# 依赖安装 / 更新（数据保护 + deno install）。
-# ★ .noupdate 存在 → 跳过破坏性 git 更新（reset --hard/clean -fd 会清空所有未提交改动；
-#   开发/已改仓库必须放 .noupdate 自保）。无 .noupdate 才对 origin/main 硬同步（面向干净安装的用户）。
+# 依赖安装 / 更新（安全源码更新 + deno install）。
 function Invoke-InstallOrUpdate {
-	# .git 前置检查(对照酒馆 UpdateAndStart 学的):便携/解压安装无 .git,对非 git 目录跑
-	# clean/reset 会刷一串用户读不懂的 git 错误。无 .git = 跳过 git 更新段,只做依赖安装。
-	if ((-not (Test-Path (Join-Path $PROJECT_DIR '.noupdate'))) -and (Test-Path (Join-Path $PROJECT_DIR '.git')) -and (Get-Command git -ErrorAction SilentlyContinue)) {
-		Backup-UserConfigData
-		git -C "$PROJECT_DIR" config core.autocrlf false
-		git -C "$PROJECT_DIR" clean -fd
-		git -C "$PROJECT_DIR" reset --hard 'origin/main' 2>$null
-		Restore-UserConfigData
-		git -C "$PROJECT_DIR" gc --auto 2>$null
-	}
+	Invoke-SafeGitUpdate
 	New-Item -Path (Join-Path $PROJECT_DIR 'node_modules') -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
 	# 两段式安装 + 网络容错重试（最多 3 次，递增等待）。
 	# 第一段裸 install 装 package.json 清单；第二段 --entrypoint 爬入口静态图并缓存远程模块。
@@ -308,7 +333,8 @@ if ($openBrowser) {
 	Open-BrowserWhenReady -Port $beiluPort
 	# 反馈契约：等浏览器阶段此前零反馈——用户盯着日志不知道该等还是该动手。就绪判据+手动兜底
 	# 前置打印（轮询作业在后台 Job 里，无法向本控制台补打）。
-	Write-Host "  [beilu] 下方出现『服务器已启动』即就绪，浏览器会自动打开 http://localhost:$beiluPort" -ForegroundColor Cyan
+	# [D5] 判据=基础聊天壳就绪(shellReady)即开；扩展仍在后台准备，进入页面即可登录使用，无需等全部加载完。
+	Write-Host "  [beilu] 基础界面就绪后浏览器会自动打开 http://localhost:$beiluPort（扩展在后台继续准备，不必等待）" -ForegroundColor Cyan
 	Write-Host "  [beilu] 若就绪后约 30 秒浏览器仍未打开：手动在浏览器访问 http://localhost:$beiluPort（本窗口=服务本体，关窗即停）" -ForegroundColor Cyan
 	Write-Host "  [beilu] 在本窗口点选文字会暂停显示（标题出现『选择』），按 Esc 即恢复，服务不受影响" -ForegroundColor Cyan
 }

@@ -6,6 +6,7 @@
 		"worker-options"
 	],
 	"imports": {
+		"@beilu/": "./src/",
 		"npm:express": "npm:express@^5.1.0",
 		"npm:express-fileupload": "npm:express-fileupload@^1.5.0",
 		"npm:cookie-parser": "npm:cookie-parser@^1.4.0",

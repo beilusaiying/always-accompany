@@ -16,34 +16,59 @@
 	<style>
 		:root {
 			--bubble-alpha: 0.95;
-			--bubble-bg: rgba(255, 252, 245, var(--bubble-alpha));
-			--bubble-fg: #3a2c12;
-			--bubble-border: rgba(245, 197, 66, 0.55);
-			--bubble-name-color: #b8860b;
+			--bubble-bg: rgba(255, 253, 248, var(--bubble-alpha));
+			--bubble-fg: #302a22;
+			--bubble-border: rgba(181, 139, 58, 0.28);
+			--bubble-name-color: #a46f08;
+			--accent: #e8ad24;
+			--accent-deep: #bb7a08;
+			--muted: #83796c;
+			--surface: rgba(255,255,255,.68);
 		}
 		* { margin: 0; padding: 0; box-sizing: border-box; }
-		html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; user-select: none; font: 13px/1.5 "Microsoft YaHei", system-ui, sans-serif; }
-		#wrap { display: flex; flex-direction: column; gap: 3px; padding: 4px; }
-		#menubar { display: flex; gap: 2px; padding: 4px; background: var(--bubble-bg); border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.3), inset 0 0 0 1px var(--bubble-border); }
-		#menubar .tab { flex: 1; text-align: center; padding: 5px 8px; border-radius: 9px; cursor: pointer; color: var(--bubble-fg); white-space: nowrap; }
-		#menubar .tab:hover { background: rgba(245,197,66,.18); }
-		#menubar .tab.active { background: linear-gradient(180deg,#f5c542,#dfa62a); color: #4a3608; font-weight: 700; }
-		.panel { display: none; padding: 9px 11px; background: var(--bubble-bg); border-radius: 12px; color: var(--bubble-fg); box-shadow: 0 4px 14px rgba(0,0,0,.3), inset 0 0 0 1px var(--bubble-border); }
+		html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; user-select: none; font: 12px/1.5 "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
+		body { padding: 4px; }
+		#wrap { display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(145deg,rgba(255,255,255,.97),var(--bubble-bg)); border: 1px solid var(--bubble-border); border-radius: 16px; box-shadow: 0 10px 32px rgba(46,35,18,.22), 0 2px 7px rgba(46,35,18,.09); backdrop-filter: blur(18px) saturate(1.08); }
+		#menubar { display: flex; align-items: center; gap: 2px; min-height: 38px; padding: 5px 6px 4px; background: rgba(255,255,255,.3); border-bottom: 1px solid rgba(117,92,48,.09); }
+		#menubar .tab { position: relative; flex: 1; text-align: center; padding: 6px 2px; border-radius: 8px; cursor: pointer; color: #696158; white-space: nowrap; transition: color .16s ease, background .16s ease, transform .16s ease; }
+		#menubar .tab:hover { color: var(--accent-deep); background: rgba(232,173,36,.08); }
+		#menubar .tab:active { transform: translateY(1px); }
+		#menubar .tab.active { color: #7e5200; background: rgba(232,173,36,.14); font-weight: 700; box-shadow: inset 0 0 0 1px rgba(213,145,13,.08); }
+		#menubar .tab.active::after { content:""; position:absolute; left:30%; right:30%; bottom:2px; height:2px; border-radius:2px; background:var(--accent); }
+		#menu-close { flex: 0 0 28px; width: 28px; height: 28px; margin-left: 2px; padding: 0; border-radius: 50%; font-size: 14px; color: #8d8378; }
+		#menu-close:hover { color:#7d381f; background:rgba(187,72,29,.1); }
+		.panel { display: none; padding: 10px 11px 11px; color: var(--bubble-fg); }
 		.panel.show { display: block; }
-		.row { display: flex; align-items: center; gap: 7px; margin: 5px 0; }
+		.row { display: flex; align-items: center; gap: 7px; margin: 6px 0; }
 		label { min-width: 58px; color: var(--bubble-name-color); font-weight: 700; font-size: 12px; }
 		input[type=range] { flex: 1; accent-color: #dfa62a; }
-		input[type=text] { flex: 1; border: 1px solid rgba(245,197,66,.5); border-radius: 8px; padding: 4px 9px; font: inherit; background: rgba(255,255,255,.78); outline: none; color: var(--bubble-fg); }
-		input[type=text]:focus { border-color: #d9a531; }
-		select { flex: 1; border: 1px solid rgba(245,197,66,.5); border-radius: 8px; padding: 3px 6px; font: inherit; font-size: 12px; background: rgba(255,255,255,.78); color: var(--bubble-fg); outline: none; }
-		button { border: none; border-radius: 8px; padding: 4px 11px; font: inherit; font-size: 12px; background: linear-gradient(180deg,#f5c542,#dfa62a); color: #4a3608; font-weight: 700; cursor: pointer; }
-		button.ghost { background: rgba(245,197,66,.15); color: var(--bubble-fg); font-weight: 400; }
-		button.ghost.on { background: rgba(245,197,66,.4); font-weight: 700; }
-		.item { padding: 6px 8px; border-radius: 8px; cursor: pointer; }
-		.item:hover { background: rgba(245,197,66,.18); }
-		.hint { font-size: 11px; color: rgba(184,134,11,.85); margin-top: 3px; }
+		input[type=text] { flex: 1; min-width: 0; border: 1px solid rgba(181,139,58,.26); border-radius: 9px; padding: 6px 9px; font: inherit; background: var(--surface); outline: none; color: var(--bubble-fg); }
+		input[type=text]:focus { border-color: rgba(207,139,9,.62); box-shadow: 0 0 0 3px rgba(232,173,36,.1); }
+		select { flex: 1; border: 1px solid rgba(181,139,58,.26); border-radius: 9px; padding: 5px 7px; font: inherit; font-size: 12px; background: var(--surface); color: var(--bubble-fg); outline: none; }
+		button { border: none; border-radius: 9px; padding: 5px 11px; font: inherit; font-size: 12px; background: linear-gradient(145deg,#efbd43,#dc9417); color: #4b3308; font-weight: 700; cursor: pointer; transition: transform .13s ease, filter .13s ease, background .13s ease; }
+		button:hover { filter: brightness(1.035); }
+		button:active { transform: translateY(1px); }
+		button.ghost { background: rgba(126,103,65,.075); color: var(--bubble-fg); font-weight: 500; }
+		button.ghost:hover { background: rgba(232,173,36,.13); }
+		button.ghost.on { background: rgba(232,173,36,.2); color:#805600; font-weight: 700; }
+		.item { padding: 8px 9px; border-radius: 9px; cursor: pointer; color:#554d43; transition:background .15s ease,color .15s ease; }
+		.item:hover { background: rgba(232,173,36,.1); color:#805600; }
+		.hint { font-size: 10px; color: var(--muted); margin-top: 5px; }
 		#model-list { display: flex; flex-wrap: wrap; gap: 5px; max-height: 96px; overflow-y: auto; }
 		.val { min-width: 44px; text-align: right; font-size: 12px; color: var(--bubble-name-color); }
+		#p-chat { padding-top: 9px; }
+		#chat-replies { display:none; max-height:136px; overflow-y:auto; margin:0 1px 8px; padding:3px; white-space:pre-wrap; word-break:break-word; scrollbar-width:thin; }
+		#chat-replies > div { margin:0 0 6px auto; padding:7px 9px; border-radius:10px 10px 3px 10px; background:rgba(232,173,36,.10); color:#51483e; box-shadow:inset 0 0 0 1px rgba(181,139,58,.08); }
+		#p-chat .composer { gap:4px; margin:0; padding:4px; border:1px solid rgba(181,139,58,.25); border-radius:12px; background:rgba(255,255,255,.72); box-shadow:0 3px 12px rgba(69,50,19,.055); }
+		#chat-input { height:31px; padding:4px 7px; border:0; background:transparent; box-shadow:none; }
+		#chat-input:focus { border:0; box-shadow:none; }
+		#chat-input::placeholder { color:#999087; }
+		#chat-mic { display:grid; place-items:center; flex:0 0 31px; width:31px; height:31px; padding:0; border-radius:9px; color:#756650; background:rgba(232,173,36,.10); }
+		#chat-mic svg { width:15px; height:15px; }
+		#chat-mic.on { color:#fff8ec; background:linear-gradient(145deg,#d86643,#b8442d); box-shadow:0 0 0 3px rgba(196,69,40,.11); }
+		#chat-send { flex:0 0 48px; height:31px; padding:0 9px; border-radius:9px; box-shadow:0 3px 8px rgba(190,121,9,.16); }
+		#chat-hint { display:flex; align-items:center; gap:5px; min-height:16px; margin:5px 3px 0; }
+		#chat-hint::before { content:""; flex:0 0 5px; width:5px; height:5px; border-radius:50%; background:rgba(164,111,8,.42); }
 	</style>
 </head>
 <body>
@@ -58,8 +83,8 @@
 		</div>
 		<div class="panel show" id="p-chat">
 			<!-- T9(凛倾 0722):AI 回应直接显示在本对话框(与气泡同源),不再只指望下方气泡 -->
-			<div id="chat-replies" style="display:none; max-height:130px; overflow-y:auto; font-size:12px; line-height:1.5; padding:4px 6px; margin-bottom:6px; border-radius:8px; background:rgba(245,197,66,.08); white-space:pre-wrap; word-break:break-word;"></div>
-			<div class="row"><input type="text" id="chat-input" placeholder="想说什么…(Enter 发送)" maxlength="500"><button class="ghost" id="chat-mic" title="语音输入(需 STT 服务运行)">🎤</button><button id="chat-send">发送</button></div>
+			<div id="chat-replies"></div>
+			<div class="row composer"><input type="text" id="chat-input" placeholder="问问贝露…" maxlength="500"><button class="ghost" id="chat-mic" aria-label="快速语音" title="快速语音：点一次开始，再点一次结束并自动发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6"></path></svg></button><button id="chat-send">发送</button></div>
 			<div class="hint" id="chat-hint">回应会显示在这里和下方气泡</div>
 		</div>
 		<div class="panel" id="p-look">
@@ -90,7 +115,7 @@
 		const act = (action, value) => window.desktopEye && window.desktopEye.petMenuAction(action, value);
 		// 标签切换 + 面板高度变化上报(主进程按内容收缩窗高)
 		const tabs = document.querySelectorAll('#menubar .tab');
-		function _reportH() { requestAnimationFrame(() => act('resize', document.getElementById('wrap').scrollHeight + 2)); }
+		function _reportH() { requestAnimationFrame(() => act('resize', document.getElementById('wrap').scrollHeight + 8)); }
 		tabs.forEach((t) => { t.onclick = () => {
 			tabs.forEach((x) => x.classList.remove('active'));
 			document.querySelectorAll('.panel').forEach((p) => p.classList.remove('show'));
@@ -125,19 +150,23 @@
 		}
 		$('chat-send').onclick = _send;
 		$('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') _send(); e.stopPropagation(); });
-		// 语音输入(凛倾 0722 完整链):🎤开录→⏹停+转文字(主进程直连本机 STT 服务,降噪+拾音)→填输入框→点发送走既有 chat-send 链
+		// 快速语音发送：🎤开录→⏹停→主进程转文字→自动发进 pet-message；与全局快捷键共用状态机。
 		(() => {
 			const mic = $('chat-mic');
-			if (!mic || !window.desktopEye || !window.desktopEye.sttRecord) return;
-			let rec = false;
-			mic.onclick = () => window.desktopEye.sttRecord(rec ? 'stop' : 'start');
-			window.desktopEye.onSttResult((r) => {
+			if (!mic || !window.desktopEye || !window.desktopEye.quickVoiceToggle) return;
+			const MIC_IDLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0M12 17v4M9 21h6"></path></svg>';
+			const MIC_STOP = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
+			const MIC_BUSY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8" opacity=".2"></circle><path d="M20 12a8 8 0 0 0-8-8"></path></svg>';
+			mic.onclick = () => window.desktopEye.quickVoiceToggle();
+			window.desktopEye.onQuickVoiceStatus((r) => {
 				const hint = $('chat-hint');
-				if (r.phase === 'starting') { if (hint) hint.textContent = r.note || 'STT 服务启动中…'; }
-				else if (r.phase === 'recording') { rec = true; mic.textContent = '⏹'; mic.classList.add('on'); if (hint) hint.textContent = '录音中…再点⏹结束(' + (r.device || '默认设备') + ')'; }
-				else if (r.phase === 'transcribing') { rec = false; mic.textContent = '…'; if (hint) hint.textContent = '转文字中…'; }
-				else if (r.phase === 'done') { mic.textContent = '🎤'; mic.classList.remove('on'); const ipt = $('chat-input'); if (ipt && r.text) { ipt.value = (ipt.value ? ipt.value + ' ' : '') + r.text; act('draft', ipt.value); } if (hint) hint.textContent = r.text ? '已转文字,点「发送」' : '未识别到语音'; }
-				else if (r.phase === 'error') { rec = false; mic.textContent = '🎤'; mic.classList.remove('on'); if (hint) hint.textContent = '语音失败: ' + (r.error || ''); }
+				if (r.phase === 'starting') { mic.innerHTML = MIC_BUSY; if (hint) hint.textContent = r.note || 'STT 服务启动中…'; }
+				else if (r.phase === 'recording') { mic.innerHTML = MIC_STOP; mic.classList.add('on'); if (hint) hint.textContent = '录音中…再点一次结束并发送 · ' + (r.device || '默认设备'); }
+				else if (r.phase === 'transcribing') { mic.innerHTML = MIC_BUSY; if (hint) hint.textContent = r.note || '转文字中…'; }
+				else if (r.phase === 'sending') { mic.innerHTML = MIC_BUSY; if (hint) hint.textContent = r.note || '正在发送…'; }
+				else if (r.phase === 'sent') { mic.innerHTML = MIC_IDLE; mic.classList.remove('on'); if (hint) hint.textContent = r.text ? '已自动发送：' + r.text : '已自动发送'; }
+				else if (r.phase === 'error') { mic.innerHTML = MIC_IDLE; mic.classList.remove('on'); if (hint) hint.textContent = '语音失败：' + (r.error || ''); }
+				else if (r.phase === 'idle') { mic.innerHTML = MIC_IDLE; mic.classList.remove('on'); }
 			});
 		})();
 		// 草稿实时上报主进程(凛倾 2026-07-13"3做":blur 自关不再丢字,重开经 pet-menu-init.chatDraft 恢复)
@@ -198,6 +227,10 @@
 				$('passthrough').textContent = cfg.passthrough ? '开' : '关';
 				$('passthrough').classList.toggle('on', !!cfg.passthrough);
 				if (typeof cfg.chatDraft === 'string' && cfg.chatDraft && !$('chat-input').value) $('chat-input').value = cfg.chatDraft; // 恢复上次未发送草稿
+				$('chat-mic').title = cfg.quickVoiceHotkey
+					? '快速语音：' + cfg.quickVoiceHotkey + '（按一次开始，再按一次结束并自动发送）'
+					: '快速语音：点一次开始，再点一次结束并自动发送（全局快捷键未启用）';
+				if (cfg.quickVoicePhase === 'recording') { $('chat-mic').innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>'; $('chat-mic').classList.add('on'); $('chat-hint').textContent = '录音中…再点一次结束并发送'; }
 				_reportH();
 			});
 		}

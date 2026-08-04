@@ -150,6 +150,7 @@
       "children": [
         { "title": "システムアーキテクチャ", "file": "developer/architecture.md", "audience": ["developer"] },
         { "title": "メッセージパイプライン", "file": "developer/message-pipeline.md", "audience": ["developer"] },
+        { "title": "信頼性・ロールバック・リリース境界", "file": "developer/reliability-contracts.md", "audience": ["user", "developer"] },
         { "title": "プラグイン開発", "file": "developer/plugin-dev.md", "audience": ["developer"] },
         { "title": "API エンドポイントリファレンス", "file": "developer/api-reference.md", "audience": ["developer"] }
       ]
@@ -159,6 +160,7 @@
       "icon": "brain",
       "children": [
         { "title": "まえがき：概要と総目次", "file": "p1-recall/preface.md", "audience": ["user", "developer"] },
+        { "title": "現在の本番契約：注意・コンテキスト・キャッシュ", "file": "p1-recall/ch7-current-runtime.md", "audience": ["user", "developer"] },
         { "title": "第1章 設計理念とコンセプト体系", "file": "p1-recall/ch1-concepts.md", "audience": ["user", "developer"] },
         { "title": "第2章 システムアーキテクチャと処理フロー", "file": "p1-recall/ch2-architecture.md", "audience": ["developer"] },
         { "title": "第3章 アルゴリズム設計と形式的記述", "file": "p1-recall/ch3-algorithms.md", "audience": ["developer"] },

@@ -247,20 +247,45 @@ function autoresize_frames() {
 }
 
 /**
+ * 将全局主题偏好解析为可写入 data-theme 的实际主题。
+ * 空值、auto 与历史损坏值 "null" 跟随系统；其他显式主题原样保留。
+ * 本函数不修改 DOM 或存储。
+ * @param {unknown} raw - 原始主题偏好。
+ * @param {boolean} [prefersDark] - 可注入的系统深色偏好，便于无 DOM 验证。
+ * @returns {string}
+ */
+export function resolveGlobalThemePreference(raw, prefersDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches === true) {
+	const normalized = typeof raw === 'string' ? raw.trim() : ''
+	if (!normalized || normalized === 'auto' || normalized.toLowerCase() === 'null')
+		return prefersDark ? 'dark' : 'light'
+
+	return normalized
+}
+
+/**
  * 内部核心函数：将主题应用到 DOM 元素并更新内部状态。
  * 此函数不处理本地存储清理逻辑，仅负责应用。
  * @param {string} theme - 目标主题名称。
  * @returns {void}
  */
 function applyThemeToDOM(theme) {
-	let resolvedTheme = theme
-	if (resolvedTheme === 'auto' || !resolvedTheme)
-		resolvedTheme = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
+	const rawTheme = typeof theme === 'string' ? theme.trim() : ''
+	const isCorruptNull = rawTheme.toLowerCase() === 'null'
+	const themePreference = !rawTheme || isCorruptNull ? null : rawTheme
+	const resolvedTheme = resolveGlobalThemePreference(themePreference)
 
-	if (theme === theme_now && document.documentElement.getAttribute('data-theme') === resolvedTheme) return
+	if (isCorruptNull) {
+		console.warn('[theme] 检测到损坏的全局主题值 "null"，已清理并改为跟随系统')
+		localStorage.removeItem(STORAGE_KEY_THEME)
+	}
+	else if (themePreference)
+		localStorage.setItem(STORAGE_KEY_THEME, themePreference)
+	else if (theme !== null && theme !== undefined)
+		localStorage.removeItem(STORAGE_KEY_THEME)
 
-	theme_now = theme
-	localStorage.setItem(STORAGE_KEY_THEME, theme)
+	if (themePreference === theme_now && document.documentElement.getAttribute('data-theme') === resolvedTheme) return
+
+	theme_now = themePreference
 
 	if (document.documentElement.getAttribute('data-theme') !== resolvedTheme)
 		document.documentElement.dataset.theme = resolvedTheme
@@ -290,12 +315,12 @@ export async function applyTheme() {
 
 	if (customCss) injectCustomStyle(customCss)
 
-	setTheme(storedTheme)
+	await setTheme(storedTheme)
 
 	svgInliner(document)
 	setInterval(themeHeartbeat, 1000)
 
-	if (customUrl) try {
+	if (customUrl) void (async () => {
 		const res = await fetch(customUrl)
 		if (!res.ok) throw new Error(`Fetch error: ${res.status}`)
 		const data = await res.json()
@@ -305,10 +330,9 @@ export async function applyTheme() {
 			localStorage.setItem(STORAGE_KEY_CUSTOM_CSS, newCss)
 			injectCustomStyle(newCss)
 		}
-	}
-	catch (e) {
+	})().catch(e => {
 		console.warn(`Failed to update custom theme from ${customUrl}:`, e)
-	}
+	})
 }
 
 /**

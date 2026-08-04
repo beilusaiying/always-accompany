@@ -68,7 +68,25 @@ def _safe_log(message: str) -> None:
         pass
 
 
-def _ensure_resources():
+def _set_warmup_progress(stage: str, completed: int, total: int = 5) -> None:
+    """Publish first-boot resource progress through the existing warmup snapshot."""
+    global _warmup_state
+    if _warmup_state.get("state") != "warming":
+        return
+    safe_total = max(1, int(total))
+    safe_completed = max(0, min(int(completed), safe_total))
+    _warmup_state = {
+        **_warmup_state,
+        "progress": {
+            "stage": str(stage),
+            "completed": safe_completed,
+            "total": safe_total,
+            "percent": round(safe_completed * 100 / safe_total),
+        },
+    }
+
+
+def _ensure_resources(report_progress=None):
     """大文件自解压，并生成运行时有界加载的派生索引。
 
     ConceptNet 原件是 22MB/128MB 单行 JSON 对象，禁止运行时整表 JSON.parse。
@@ -77,7 +95,15 @@ def _ensure_resources():
     cfg = get_config()
     res_root = Path(cfg.get("resourceDir") or "")
     derived = res_root / "p1v2_derived"
+    total_steps = 5
+
+    def report(stage: str, completed: int) -> None:
+        if callable(report_progress):
+            report_progress(stage, completed, total_steps)
+
+    report("检查首启资源", 0)
     if not derived.is_dir():
+        report("P1 资源目录不存在", total_steps)
         return
     import zipfile
     _UNPACK = [
@@ -85,12 +111,15 @@ def _ensure_resources():
         {"target": "userdict_domain_full.txt", "zips": ["userdict_domain_full.zip"], "merge": False},
         {"target": "conceptnet_en.json", "zips": ["conceptnet_en.zip"], "merge": False},
     ]
-    for item in _UNPACK:
+    for index, item in enumerate(_UNPACK, start=1):
         target = derived / item["target"]
+        report(f"检查 {item['target']}", index - 1)
         if target.exists() and target.stat().st_size > 0:
+            report(f"{item['target']} 已就绪", index)
             continue
         zips = [derived / z for z in item["zips"]]
         if not all(z.exists() for z in zips):
+            report(f"{item['target']} 压缩包缺失", index)
             continue
         total_mb = sum(z.stat().st_size for z in zips) // 1048576
         _safe_log(f"[p1_server] 首次启动解压: {item['target']}（{len(zips)} 个 zip, {total_mb}MB 压缩）...")
@@ -105,12 +134,15 @@ def _ensure_resources():
                 with zipfile.ZipFile(zips[0], "r") as zf:
                     zf.extractall(derived)
             _safe_log(f"[p1_server] ✓ {item['target']} ({target.stat().st_size // 1048576}MB)")
+            report(f"{item['target']} 已就绪", index)
         except Exception as e:
             _safe_log(f"[p1_server] ✗ {item['target']} 解压失败: {e}")
             if target.exists():
                 target.unlink()
+            report(f"{item['target']} 解压失败", index)
 
     conceptnet_sources = [derived / "conceptnet_zh.json", derived / "conceptnet_en.json"]
+    report("校验 ConceptNet 分片", 3)
     if all(path.is_file() for path in conceptnet_sources):
         import subprocess
         import sys
@@ -125,6 +157,7 @@ def _ensure_resources():
         if built.returncode != 0:
             raise RuntimeError(f"ConceptNet 分片构建失败: {(built.stderr or built.stdout)[-2000:]}")
         _safe_log("[p1_server] ConceptNet 分片契约已就绪")
+    report("ConceptNet 分片已就绪", 4)
 
     # DomainWordsDict 的 455 万有效词只允许部署期生成确定性分片。运行时 loader
     # 仅验证 manifest 并按查询词加载一个 shard；绝不能在首个 work 请求里同步扫 68 个源文件。
@@ -133,6 +166,7 @@ def _ensure_resources():
     #   改为恒调 ensure 入口：有效→毫秒级快返；缺失→构建；stale/损坏→原子重建（备份旁移）。
     #   stale 判定与重建逻辑单源在 resources2.mjs（与 loader 校验同一实现），python 侧零第二实现。
     domain_source = res_root / "DomainWordsDict"
+    report("校验 DomainWords 分片", 4)
     if domain_source.is_dir():
         import subprocess
         builder = P1_ROOT / "bridge" / "build_domainwords_shards.mjs"
@@ -146,6 +180,7 @@ def _ensure_resources():
         if built.returncode != 0:
             raise RuntimeError(f"DomainWords 分片构建失败: {(built.stderr or built.stdout)[-2000:]}")
         _safe_log(f"[p1_server] DomainWords 分片契约已就绪: {built.stdout.strip()[-1000:]}")
+    report("P1 首启资源已就绪", total_steps)
 _started_at = time.time()
 _pipeline_mod = None
 _pipeline_err: str | None = None
@@ -966,8 +1001,12 @@ async def _perform_recall_warmup(engine: str, cfg: dict[str, Any]) -> dict[str, 
         "state": "warming", "engine": engine,
         "startedAt": int(started * 1000), "finishedAt": None, "ms": None,
         "error": None, "code": None, "resources": None,
+        "progress": {"stage": "等待首启资源", "completed": 0, "total": 5, "percent": 0},
     }
     try:
+        # 首启解压/分片可持续数分钟；必须在已监听 HTTP 后、现有 warmup 单飞内运行，
+        # 让 getData 先返回 cold/warming 快照，而不是把整个面板请求堵在 Python 进程启动前。
+        await asyncio.to_thread(_ensure_resources, _set_warmup_progress)
         if engine == "node":
             if not _cluster_autostart:
                 raise _warmup_exception("P1 cluster autostart is disabled", "E_P1_CLUSTER_AUTOSTART_OFF")
@@ -1006,6 +1045,7 @@ async def _perform_recall_warmup(engine: str, cfg: dict[str, Any]) -> dict[str, 
             "startedAt": int(started * 1000), "finishedAt": int(finished * 1000),
             "ms": round((finished - started) * 1000, 1),
             "error": None, "code": None, "resources": resources,
+            "progress": {"stage": "P1 召回已就绪", "completed": 5, "total": 5, "percent": 100},
         }
         return await asyncio.to_thread(_warmup_snapshot, engine)
     except Exception as error:  # noqa: BLE001 — failed 必须成为可观察状态并回到调用方
@@ -1017,6 +1057,7 @@ async def _perform_recall_warmup(engine: str, cfg: dict[str, Any]) -> dict[str, 
             "error": f"{type(error).__name__}: {error}",
             "code": getattr(error, "code", "E_P1_WARMUP_FAILED"),
             "resources": getattr(error, "details", None),
+            "progress": _warmup_state.get("progress"),
         }
         raise
 
@@ -1038,7 +1079,7 @@ async def _ensure_recall_warmup(engine: str, cfg: dict[str, Any]) -> dict[str, A
             _warmup_task = task
             task_engine = engine
         try:
-            await task
+            await asyncio.shield(task)
         except Exception:
             if task_engine == engine:
                 raise
@@ -2264,7 +2305,6 @@ if __name__ == "__main__":
     parser.add_argument("--no-cluster", action="store_true", help="不自动启动集群服务")
     args = parser.parse_args()
     _cluster_autostart = not args.no_cluster
-    _ensure_resources()
     import uvicorn  # noqa: PLC0415
     port = args.port or int(get_config()["port"])
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info")

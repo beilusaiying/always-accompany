@@ -18,6 +18,11 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_ES.md">Español</a> · Français · <a href="README_PT.md">Português</a></p>
 
+> [!NOTE]
+> **Note de développement :** L'essentiel de ce projet a été réalisé par une seule personne en environ trois mois, puis près d'un mois a été consacré à l'optimisation des algorithmes. En raison de ce cycle de développement court et du large périmètre fonctionnel, la structure du projet, les fonctions de base et le traitement des cas limites peuvent encore être instables ou incomplets. Certaines fonctions de base ont été mises en œuvre avec l'aide de l'IA, tandis que l'auteur a personnellement planifié et dirigé les cadres, algorithmes et choix de conception essentiels des fonctions complexes ; la maturité varie donc selon les modules. Les revues manuelles, les ajustements et l'optimisation technique se poursuivront. Si vous rencontrez un bug, merci de fournir les étapes de reproduction et les journaux.
+>
+> **Suite prévue :** Aucun nouveau plugin ni domaine fonctionnel ne sera ajouté. Le travail se concentrera sur la réduction du cœur, la diminution du couplage et le transfert progressif des fonctions séparables vers la couche des plugins. Le projet complétera un protocole de plugins détaillé et stable avant d'engager l'optimisation technique du framework et une refactorisation progressive. Les tests, la documentation et le processus de contribution seront également améliorés afin que davantage de développeurs puissent comprendre, étendre et rejoindre le projet.
+
 ---
 
 ## Qu'est-ce qu'il sait faire tout de suite ?

@@ -18,6 +18,11 @@
 
 <p align="center">English · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · <a href="README_DE.md">Deutsch</a> · <a href="README_ES.md">Español</a> · <a href="README_FR.md">Français</a> · <a href="README_PT.md">Português</a></p>
 
+> [!NOTE]
+> **Development note:** Most of this project was built by one person in about three months, followed by roughly one month focused on algorithm optimization. Given the short development cycle and broad feature scope, the current project structure, basic features, and edge-case handling may still be unstable or incomplete. AI assisted with some basic features, while the author personally planned and directed the frameworks, algorithms, and key designs for complex features, so maturity varies across modules. Manual review, fine-tuning, and engineering improvements will continue. If you encounter a bug, please provide reproduction steps and logs.
+>
+> **What comes next:** New plugins and feature areas will no longer be added. Work will focus on reducing the core, lowering coupling, and gradually moving separable features into the plugin layer. The project will complete a detailed, stable plugin protocol before framework-level engineering optimization and incremental refactoring, while also improving tests, documentation, and contribution workflows so more developers can understand, extend, and contribute to it.
+
 ---
 
 ## What can it do right now?

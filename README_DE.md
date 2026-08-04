@@ -18,6 +18,11 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · Deutsch · <a href="README_ES.md">Español</a> · <a href="README_FR.md">Français</a> · <a href="README_PT.md">Português</a></p>
 
+> [!NOTE]
+> **Entwicklungshinweis:** Der Großteil dieses Projekts wurde von einer Person in etwa drei Monaten fertiggestellt; anschließend wurde rund ein Monat gezielt in die Optimierung der Algorithmen investiert. Wegen der kurzen Entwicklungszeit und des großen Funktionsumfangs können Projektstruktur, Grundfunktionen und die Behandlung von Randfällen derzeit noch instabil oder unvollständig sein. Einige Grundfunktionen wurden mit KI-Unterstützung umgesetzt, während der Autor Rahmen, Algorithmen und zentrale Entwürfe komplexer Funktionen selbst geplant und angeleitet hat. Daher unterscheiden sich die Reifegrade der Module. Manuelle Prüfung, Feinabstimmung und technische Optimierung werden fortgesetzt. Bitte geben Sie bei Fehlern Reproduktionsschritte und Protokolle an.
+>
+> **Nächste Schritte:** Neue Plugins und Funktionsbereiche werden nicht mehr hinzugefügt. Der Schwerpunkt liegt künftig auf der Verkleinerung des Kerns, der Verringerung von Kopplungen und der schrittweisen Verlagerung trennbarer Funktionen in die Plugin-Ebene. Das Projekt wird ein detailliertes, stabiles Plugin-Protokoll vervollständigen und anschließend das Framework technisch optimieren und schrittweise refaktorieren. Gleichzeitig werden Tests, Dokumentation und Beitragsabläufe verbessert, damit mehr Entwickler das Projekt verstehen, erweitern und daran mitwirken können.
+
 ---
 
 ## Was kann es direkt tun?

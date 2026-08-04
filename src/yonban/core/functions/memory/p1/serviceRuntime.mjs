@@ -144,6 +144,10 @@ async function _spawnServiceProcess() {
 		throw _spawnAttemptError('spawn-not-created', '当前运行时不支持 Deno.Command', { retryable: true })
 	}
 	await _ensurePythonDeps()
+	// 首次启动 storage/p1 和 data/p1 可能不存在（.gitignore 排除），P1 服务读写都依赖这两个目录
+	for (const dir of [RUNTIME_ROOT, STORAGE_ROOT]) {
+		try { const { mkdirSync } = await import('node:fs'); mkdirSync(dir, { recursive: true }) } catch { /* best effort */ }
+	}
 
 	// Windows 下 Deno.ChildProcess.unref() 只解除事件循环等待；短命 Deno 调用进程
 	// 退出时仍可能带走它直接创建的 Python，Python 来不及执行 cluster 回收，留下

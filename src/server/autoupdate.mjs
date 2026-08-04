@@ -114,7 +114,9 @@ export function enableAutoUpdate() {
 	}
 	console.log(`[自动更新] 已启用（当前 ${currentGitCommit?.slice(0, 7) || '?'}，每 ${CHECK_INTERVAL_MS / 60000} 分钟检查）`)
 	_timer = setInterval(checkAndUpdate, CHECK_INTERVAL_MS)
-	_initialCheckTimer = setTimeout(checkAndUpdate, 30000) // 启动 30s 后首次检查
+	// 首检延迟 120s：P1 首次启动需 pip install（~60s）+ spawn + health，30s 太短会
+	// 在 P1 还在装依赖时触发重启（E_P1_SHUTTING_DOWN），导致 P1 永远起不来。
+	_initialCheckTimer = setTimeout(checkAndUpdate, 120000)
 }
 
 export function disableAutoUpdate() {

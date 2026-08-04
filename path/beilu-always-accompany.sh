@@ -2,7 +2,7 @@
 # beilu-always-accompany launcher (bash) — mirrors beilu-always-accompany.ps1
 # Ensure deno is available, install/update deps when needed, then run the server.
 # 依赖安装/更新在清单核对不全（package.json dependencies 逐项对 node_modules）或显式 'init' 时触发；
-# .noupdate 存在则跳过破坏性 git 更新。
+# .noupdate 存在则跳过安全源码更新。
 # deno pinned to the local copy. Exit code 131 = "graceful restart requested" by the server.
 
 PROJECT_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd -P)"
@@ -104,44 +104,56 @@ start_server() {
 	deno run --allow-scripts --allow-all -c "$PROJECT_DIR/deno.json" $BEILU_NM_FLAG --v8-flags="$_v8flags" "$PROJECT_DIR/src/server/index.mjs" "$@"
 }
 
-# ── 用户配置数据保护 ──────────────
-# git reset --hard / clean -fd 会清掉 src/ 下用户改过的 config_data.json；更新前备份、更新后恢复。
-backup_user_config() {
-	_bak="${TMPDIR:-/tmp}/beilu-config-backup"
-	rm -rf "$_bak"; _n=0
-	while IFS= read -r _f; do
-		_rel="${_f#"$PROJECT_DIR"/}"
-		mkdir -p "$_bak/$(dirname "$_rel")"
-		cp -f "$_f" "$_bak/$_rel" && _n=$((_n + 1))
-	done < <(find "$PROJECT_DIR/src" -name config_data.json 2>/dev/null)
-	[ "$_n" -gt 0 ] && echo "  [beilu] 已备份 $_n 个用户配置 (config_data.json)"
-}
-restore_user_config() {
-	_bak="${TMPDIR:-/tmp}/beilu-config-backup"
-	[ -d "$_bak" ] || return 0
-	_n=0
-	while IFS= read -r _f; do
-		_rel="${_f#"$_bak"/}"
-		mkdir -p "$PROJECT_DIR/$(dirname "$_rel")"
-		cp -f "$_f" "$PROJECT_DIR/$_rel" && _n=$((_n + 1))
-	done < <(find "$_bak" -name config_data.json 2>/dev/null)
-	git -C "$PROJECT_DIR" rm --cached --ignore-unmatch -r -- "**/config_data.json" >/dev/null 2>&1 || true
-	rm -rf "$_bak"
-	[ "$_n" -gt 0 ] && echo "  [beilu] 已恢复 $_n 个用户配置"
+# ── 安全源码更新 ───────────────────────
+# 与 Windows 启动链保持同一契约：只允许 fast-forward，不执行 clean/reset；
+# 网络失败、分叉或已跟踪文件被修改时保留当前版本，用户未跟踪数据不参与更新覆盖。
+safe_git_update() {
+	if [ -f "$PROJECT_DIR/.noupdate" ]; then
+		echo "  [beilu] .noupdate 已启用，跳过源码更新"
+		return 0
+	fi
+	if [ ! -d "$PROJECT_DIR/.git" ] || ! command -v git >/dev/null 2>&1; then
+		return 0
+	fi
+
+	if ! _tracked_changes=$(git -C "$PROJECT_DIR" status --porcelain=v1 --untracked-files=no); then
+		echo "  [beilu] 警告：无法读取 Git 工作区状态，已跳过源码更新" >&2
+		return 0
+	fi
+	if [ -n "$_tracked_changes" ]; then
+		echo "  [beilu] 警告：检测到本地已跟踪改动，已跳过更新；不会覆盖本地文件" >&2
+		return 0
+	fi
+	if ! git -C "$PROJECT_DIR" fetch origin main --quiet; then
+		echo "  [beilu] 警告：无法获取远端更新，继续使用当前版本" >&2
+		return 0
+	fi
+	if ! _local=$(git -C "$PROJECT_DIR" rev-parse HEAD) || ! _remote=$(git -C "$PROJECT_DIR" rev-parse origin/main); then
+		echo "  [beilu] 警告：无法确认版本，继续使用当前版本" >&2
+		return 0
+	fi
+	[ "$_local" = "$_remote" ] && return 0
+
+	_marker="$PROJECT_DIR/data/p1/.service-restart-required.json"
+	_marker_tmp="${_marker}.tmp"
+	_created_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+	if ! mkdir -p "$(dirname "$_marker")" ||
+		! printf '{"reason":"application-update","targetCommit":"%s","createdAt":"%s"}\n' "$_remote" "$_created_at" > "$_marker_tmp" ||
+		! mv -f "$_marker_tmp" "$_marker"; then
+		rm -f "$_marker_tmp"
+		echo "  [beilu] 警告：无法写入 P1 重启标记，已取消源码更新以保持版本一致" >&2
+		return 0
+	fi
+
+	echo "  [beilu] 检测到新版本，执行 fast-forward 更新..."
+	if ! git -C "$PROJECT_DIR" pull --ff-only origin main; then
+		echo "  [beilu] 警告：更新未完成（可能与未跟踪用户文件冲突）；当前版本未被覆盖" >&2
+	fi
 }
 
-# 依赖安装 / 更新（数据保护 + deno install）。
-# ★ .noupdate 存在 → 跳过破坏性 git 更新（reset --hard/clean -fd 清空未提交改动；开发/已改仓库必放 .noupdate）。
+# 依赖安装 / 更新（安全源码更新 + deno install）。
 install_or_update() {
-	# .git 前置检查:便携/解压安装无 .git,对非 git 目录跑 clean/reset 只会刷用户读不懂的错。
-	if [ ! -f "$PROJECT_DIR/.noupdate" ] && [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1; then
-		backup_user_config
-		git -C "$PROJECT_DIR" config core.autocrlf false
-		git -C "$PROJECT_DIR" clean -fd
-		git -C "$PROJECT_DIR" reset --hard "origin/main" 2>/dev/null
-		restore_user_config
-		git -C "$PROJECT_DIR" gc --auto 2>/dev/null || true
-	fi
+	safe_git_update
 	mkdir -p "$PROJECT_DIR/node_modules"
 	# 两段式安装 + 网络容错重试（最多 3 次，递增等待）。
 	# 第一段裸 install 装 package.json 清单；第二段 --entrypoint 爬入口静态图并缓存远程模块。

@@ -258,3 +258,18 @@ Deno.test("settings single-writer source contract: no direct settings JSON write
 	assert.ok(plugin.includes("settingsStore.mutate"), "plugin persistence must go through store.mutate");
 	console.log("SETTINGS_SINGLE_WRITER source contract PASS");
 });
+
+Deno.test("file explorer breadcrumb switches root before reading", () => {
+	const source = fs.readFileSync(
+		path.join(_repoRoot, "src/public/parts/shells/beilu-chat/public/src/panels/code/fileExplorer.mjs"),
+		"utf-8",
+	);
+	const breadcrumbStart = source.indexOf('querySelectorAll(".file-root-crumb[data-root-path]")');
+	const pickerStart = source.indexOf("data-root-action=\"pick\"", breadcrumbStart);
+	assert.ok(breadcrumbStart >= 0 && pickerStart > breadcrumbStart, "breadcrumb handler must exist");
+	const handler = source.slice(breadcrumbStart, pickerStart);
+	assert.match(handler, /setFileExplorerRoot\(crumb\.dataset\.rootPath, originChatId\)/,
+		"ancestor breadcrumbs must establish the new authoritative root");
+	assert.doesNotMatch(handler, /\bhandleGoToPath\(|\bopenFileInEditor\(|_action:\s*["']readFile["']/,
+		"ancestor breadcrumbs must not probe outside the old root or reinterpret directories as files");
+});

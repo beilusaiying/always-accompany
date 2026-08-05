@@ -1108,7 +1108,18 @@ function bindTreeEvents() {
   });
 
   treeContainer.querySelectorAll(".file-root-crumb[data-root-path]").forEach((crumb) => {
-    crumb.addEventListener("click", () => handleGoToPath(crumb.dataset.rootPath));
+    // 面包屑包含当前工作区的祖先；不能先拿旧 root 调 listDir，否则祖先必被
+    // containment 拒绝，随后 handleGoToPath 还会把目录误当文件触发 readFile。
+    // 用户点击面包屑的意图明确是切换目录，直接走既有权威 setWorkspaceRoot 链。
+    crumb.addEventListener("click", async () => {
+      const originChatId = freezeFileActionOriginChatId();
+      try {
+        await setFileExplorerRoot(crumb.dataset.rootPath, originChatId);
+      } catch (err) {
+        console.error("[fileExplorer] 面包屑切换工作区失败:", err);
+        window._reportError?.(`[fileExplorer] ${err.message}`, err.stack);
+      }
+    });
   });
   treeContainer.querySelector('.file-root-crumb[data-root-action="pick"]')?.addEventListener("click", async () => {
     const originChatId = freezeFileActionOriginChatId();

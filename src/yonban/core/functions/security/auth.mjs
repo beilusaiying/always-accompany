@@ -52,6 +52,32 @@ import { createDiag } from '../../../../server/diagLogger.mjs'
 // 诊断 auth 模块常驻埋点（0716 死标记接线）。铁律：任何埋点禁记 password/token 明文。
 const diag = createDiag('auth')
 
+// 2026-08-05：旧版“新的开始”把角色卡正文包成“不可信外部内容”。新版模板已移除，
+// 但老用户角色目录不带 .isdefault，常规模板同步不会覆盖它。这里只迁移字节级命中旧官方
+// 脚本的副本；任意用户修改都会改变哈希并被保留，角色数据/世界书/聊天记录均不参与。
+const LEGACY_SEED_CHAR_MAIN_SHA256 = '194114873c67a675799987721f73c650775d5c85b5e737f19239dd1643d374cb'
+const FIXED_SEED_CHAR_MAIN_SHA256 = 'd2253a266aea5999ddebeed43dec8efa770aa5df85846caa501091996c373ed2'
+
+function normalizedTextSha256(filePath) {
+	return crypto.createHash('sha256')
+		.update(fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n'))
+		.digest('hex')
+}
+
+function migrateKnownSeedCharacterRuntime(userdir, username) {
+	const target = path.join(userdir, 'chars', '新的开始', 'main.mjs')
+	if (!fs.existsSync(target) || normalizedTextSha256(target) !== LEGACY_SEED_CHAR_MAIN_SHA256)
+		return false
+
+	const template = path.join(__dirname, 'default', 'templates', 'user', 'chars', '新的开始', 'main.mjs')
+	if (!fs.existsSync(template) || normalizedTextSha256(template) !== FIXED_SEED_CHAR_MAIN_SHA256)
+		throw new Error('固定角色卡模板版本不匹配，已拒绝迁移存量脚本')
+
+	nicerWriteFileSync(target, fs.readFileSync(template))
+	wbTrace(null, 'auth', 'login:seed_char_runtime_migrated', { username, target })
+	return true
+}
+
 // argon2 运行时选择：优先 @node-rs/argon2（Rust FFI，快）；不可用时回退 npm:argon2（纯 JS）。
 // 实际 argon2 预热在 initAuth() 中完成（不再阻塞模块链接阶段）。
 const { hash, verify, Algorithm } = await import('npm:@node-rs/argon2').catch(async error => {
@@ -1725,6 +1751,13 @@ export async function login(username, password, deviceId = 'unknown', req) {
 	} catch (e) {
 		wbDetect(null, 'auth', 'login:template_copy_failed', false, '新用户初始化模板拷贝失败,用户环境可能残缺', { username, userdir, err: e?.message || String(e) })
 		console.error(`Failed to copy default user template for ${username}`, e)
+	}
+
+	try {
+		migrateKnownSeedCharacterRuntime(userdir, username)
+	} catch (e) {
+		wbDetect(null, 'auth', 'login:seed_char_runtime_migration_failed', false, '存量默认角色卡脚本迁移失败，已保留原文件', { username, err: e?.message || String(e) })
+		console.error(`Failed to migrate the default character runtime for ${username}`, e)
 	}
 
 	for (const subdir of ['settings']) try {

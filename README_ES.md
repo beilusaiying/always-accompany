@@ -18,6 +18,11 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README_CN.md">简体中文</a> · <a href="README_TW.md">繁體中文</a> · <a href="README_JA.md">日本語</a> · <a href="README_KO.md">한국어</a> · <a href="README_RU.md">Русский</a> · <a href="README_DE.md">Deutsch</a> · Español · <a href="README_FR.md">Français</a> · <a href="README_PT.md">Português</a></p>
 
+> [!NOTE]
+> **Nota de desarrollo:** La mayor parte de este proyecto fue creada por una sola persona en unos tres meses, seguidos de aproximadamente un mes dedicado a optimizar los algoritmos. Debido al breve ciclo de desarrollo y al amplio alcance funcional, la estructura del proyecto, las funciones básicas y el tratamiento de casos límite aún pueden ser inestables o estar incompletos. Algunas funciones básicas se implementaron con ayuda de IA, mientras que el autor planificó y dirigió personalmente los marcos, algoritmos y diseños clave de las funciones complejas; por ello, la madurez varía entre módulos. Continuarán la revisión manual, los ajustes y la optimización de ingeniería. Si encuentra un error, incluya los pasos para reproducirlo y los registros.
+>
+> **Próximos pasos:** Se dejarán de añadir nuevos plugins y áreas funcionales. El trabajo se centrará en reducir el núcleo, disminuir el acoplamiento y trasladar gradualmente las funciones separables a la capa de plugins. El proyecto completará un protocolo de plugins detallado y estable antes de emprender la optimización de ingeniería del framework y una refactorización gradual. También se mejorarán las pruebas, la documentación y el proceso de contribución para que más desarrolladores puedan entender, ampliar y participar en el proyecto.
+
 ---
 
 ## ¿Qué puede hacer directamente?

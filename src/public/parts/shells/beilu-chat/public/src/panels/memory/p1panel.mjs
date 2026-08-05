@@ -610,6 +610,42 @@ async function _p1FetchRecentUserContext(chatid, userCount) {
 let _p1Meta = [];
 let _p1Config = {}; // getData 平铺配置快照（快速测试等按配置驱动，禁前端硬编码条数/上限）
 
+function _p1WarmupProgressMarkup(warmup) {
+  const state = String(warmup?.state || "cold");
+  if (state !== "cold" && state !== "warming") return "";
+  const progress = warmup?.progress && typeof warmup.progress === "object" ? warmup.progress : {};
+  const percent = Math.max(0, Math.min(100, Number(progress.percent) || 0));
+  const completed = Math.max(0, Number(progress.completed) || 0);
+  const total = Math.max(1, Number(progress.total) || 5);
+  const stage = String(progress.stage || (state === "warming" ? "正在准备 P1 资源" : "正在启动 P1 服务"));
+  return `<div class="w-full flex items-center gap-2 text-[11px] text-warning" data-p1-warmup-progress>
+    <span>首启准备：${_esc(stage)}（${completed}/${total}）</span>
+    <progress class="progress progress-warning w-40" value="${percent}" max="100"></progress><span>${percent}%</span>
+  </div>`;
+}
+
+function _p1WarmupFailureMarkup(warmup) {
+  if (String(warmup?.state || "") !== "failed") return "";
+  return `<div class="w-full text-[11px] text-error">首启资源准备失败：${_esc(warmup.code || "E_P1_WARMUP_FAILED")} ${_esc(warmup.error || "请点击刷新重试")}</div>`;
+}
+
+function _p1ScheduleWarmupRefresh(container, warmup) {
+  if (container._p1WarmupTimer) clearTimeout(container._p1WarmupTimer);
+  const state = String(warmup?.state || "");
+  if (state !== "cold" && state !== "warming") {
+    container._p1WarmupPolls = 0;
+    container._p1WarmupTimer = null;
+    return;
+  }
+  const polls = Number(container._p1WarmupPolls || 0);
+  if (polls >= 180) return; // 首启资源准备最多观察 6 分钟，不产生永久轮询。
+  container._p1WarmupPolls = polls + 1;
+  container._p1WarmupTimer = setTimeout(() => {
+    container._p1WarmupTimer = null;
+    if (container.isConnected) void _p1RefreshRun(container);
+  }, 2000);
+}
+
 function _p1MetaOptions(meta) {
   if (!Array.isArray(meta?.options)) return [];
   return meta.options.map((option) => {
@@ -653,6 +689,8 @@ async function _p1RefreshRun(container) {
     _p1Meta = Array.isArray(d?.meta) ? d.meta : [];
     _p1Config = d && typeof d === "object" ? d : {};
     const st = d?.stats || {};
+    const warmup = d?.warmup && typeof d.warmup === "object" ? d.warmup : { state: "cold" };
+    container._p1LastWarmupState = String(warmup.state || "cold");
     const box = container.querySelector("#p1run-status");
     if (box) box.innerHTML = `
       <div class="flex flex-wrap gap-2 items-center">
@@ -670,7 +708,8 @@ async function _p1RefreshRun(container) {
         <button id="p1run-once" class="btn btn-xs" title="INJ-p1 条目被关闭时：排队让下一条消息单次注入 P1 结果（仅该轮）">单次注入下轮</button>
         <button id="p1run-clear" class="btn btn-xs">清缓存</button>
         <button id="p1run-refresh" class="btn btn-xs btn-ghost">刷新</button>
-      </div>`;
+      </div>${_p1WarmupProgressMarkup(warmup)}${_p1WarmupFailureMarkup(warmup)}`;
+    _p1ScheduleWarmupRefresh(container, warmup);
     box?.querySelector("#p1run-typing")?.addEventListener("change", (e) => {
       try { localStorage.setItem("beilu-typing-suggest-enabled", e.target.checked ? "true" : "false"); } catch { /* 私隐模式等存储失败静默 */ }
     });
@@ -711,7 +750,15 @@ async function _p1RefreshRun(container) {
     if (container._p1RunRequestId !== requestId) return;
     const box = container.querySelector("#p1run-status");
     if (box) {
-      box.innerHTML = `<span class="text-error">状态加载失败: ${_esc(e?.message || e)}</span> <button class="btn btn-xs btn-ghost" id="p1run-refresh-retry">重试</button>`;
+      const previous = String(container._p1LastWarmupState || "");
+      const stillPreparing = previous === "cold" || previous === "warming";
+      const completedButDisconnected = previous === "ready";
+      box.innerHTML = stillPreparing
+        ? `<span class="text-warning">P1 首启资源仍在准备，正在重新连接…</span> <button class="btn btn-xs btn-ghost" id="p1run-refresh-retry">立即重试</button>`
+        : completedButDisconnected
+          ? `<span class="text-error">P1 资源准备已完成，但服务仍无法连接：${_esc(e?.message || e)}</span> <button class="btn btn-xs btn-ghost" id="p1run-refresh-retry">重试</button>`
+          : `<span class="text-error">状态加载失败: ${_esc(e?.message || e)}</span> <button class="btn btn-xs btn-ghost" id="p1run-refresh-retry">重试</button>`;
+      if (stillPreparing) _p1ScheduleWarmupRefresh(container, { state: previous });
       box.querySelector("#p1run-refresh-retry")?.addEventListener("click", () => _p1RefreshRun(container));
     }
   }

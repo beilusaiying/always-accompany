@@ -3,11 +3,11 @@
   "base_locale": "zh-CN",
   "entries": {
     "INJ-2": {
-      "version": 1,
+      "version": 2,
       "locales": {
         "zh-CN": {
-          "sha256": "5c3c4e3faf3f33f5b7f40139d375706baf72a31aefe1c6c82219577387f88dd7",
-          "chars": 20027,
+          "sha256": "aac4c12eaa1176558abbf35dced61f3bd0473e99dc9d2796562d11097ff8a11d",
+          "chars": 20204,
           "lines": 460,
           "sections": [
             {

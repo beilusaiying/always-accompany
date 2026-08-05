@@ -520,7 +520,7 @@ export function getOwnerWorkspaceRoot(owner, chatId = null) {
 }
 
 // ============================================================
-// root / browse 统一政策（D6 §2.2 + §3：C 盘/系统卷/blocked 祖先五入口同拒）
+// root / browse 统一政策（项目根本体可用；盘根/系统敏感/blocked 祖先五入口同拒）
 // ============================================================
 
 function _projectRoot() {
@@ -543,16 +543,11 @@ function _isDriveRoot(p) {
   return /^[a-z]:$/i.test(_normKey(p)) || _normKey(p) === "";
 }
 
-function _systemDriveKey() {
-  const sd = (process.env.SystemDrive || "C:").replace(/\\/g, "/");
-  return _normKey(sd);
-}
-
 /**
  * 浏览/选根基（browseBases）：browsePolicy.browseBases（用户可配，store 内）优先；
- * 缺省 = 项目根 + 全部非系统盘固定盘符根（Windows）/ 用户主目录（POSIX）。
- * 系统盘（默认 C:）永不入基——"C:/ 永远拒"在此结构性成立，而装在 C 盘的部署仍经
- * 项目根基获得自己的玩耍空间（应用锚定例外，D6 §2.2 application base）。
+ * 缺省 = 项目根 + 全部可用固定盘符根（Windows）/ 用户主目录（POSIX）。
+ * C 盘只获得与其他盘相同的候选基资格；盘根不能成为工作区，Windows/Program Files/
+ * ProgramData/AppData/密钥目录和应用自身 data/src/.git 仍由统一政策链拒绝。
  */
 export function listBrowseBases() {
   const view = getWorkspaceView();
@@ -562,10 +557,8 @@ export function listBrowseBases() {
   if (configured && configured.length) return configured.map((b) => path.resolve(b));
   const bases = [_projectRoot()];
   if (process.platform === "win32") {
-    const sys = _systemDriveKey();
     for (let c = 65; c <= 90; c++) {
       const drive = `${String.fromCharCode(c)}:`;
-      if (_normKey(drive) === sys) continue;
       try {
         if (fs.existsSync(drive + "\\")) bases.push(drive + "\\");
       } catch { /* 盘符探测失败=不入基 */ }
@@ -637,16 +630,15 @@ function _resolvePolicyPath(requestedPath, { userBlockedPaths = [], allowCreateL
     if (!codes.allowDriveRoot) return _policyDeny(codes.system, `盘符根不可作为目标: ${requestedPath}`);
   }
 
-  // 基包含（浏览/选根都必须落在 browseBases 之下；系统盘不在基 → C:/ 域结构性拒绝）。
+  // 基包含（浏览/选根都必须落在 browseBases 之下；显式 browseBases 配置仍可继续收窄盘符）。
   const bases = listBrowseBases();
   const inBase = bases.some((b) => _isUnder(real, b));
   if (!inBase) return _policyDeny(codes.scope, `路径不在允许的浏览/工作区基内: ${requestedPath}`);
 
-  // 系统卷敏感目录 + 应用自身目录（项目根本体/data/src/.git）。
+  // 系统卷敏感目录 + 应用内部敏感目录（data/src/.git）；项目根本体可作为工作区/browse 目标。
   const sysHit = _hitsSystemSensitive(real);
   if (sysHit) return _policyDeny(codes.system, `安全策略：禁止访问系统/敏感目录 (${sysHit})`);
   const proot = _projectRoot();
-  if (_normKey(real) === _normKey(proot)) return _policyDeny(codes.system, "应用自身根目录不可作为目标");
   for (const d of _appSensitiveDirs()) {
     if (_isUnder(real, d)) return _policyDeny(codes.system, `应用数据/源码目录不可作为目标: ${requestedPath}`);
   }

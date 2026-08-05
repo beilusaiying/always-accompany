@@ -188,57 +188,64 @@ function Start-Server {
 	deno run --allow-scripts --allow-all -c "$PROJECT_DIR/deno.json" @nmFlag --v8-flags="$v8Flags" "$PROJECT_DIR/src/server/index.mjs" @ServerArgs
 }
 
-# ── 安全源码更新 ───────────────────────
-# 更新只允许 fast-forward，绝不 clean/reset；这样不会删除 P1/service/data、角色数据或用户安装的扩展。
-# .noupdate 仍是显式总开关。已跟踪本地改动会阻止更新，避免把开发/用户配置写成“看似成功”的覆盖。
-function Invoke-SafeGitUpdate {
+# 启动前源码检查与确认更新。更新只在这里发生，运行中的 server 不再拉取或重启。
+function Invoke-StartupUpdate {
+	$gitDir = Join-Path $PROJECT_DIR '.git'
+	if (-not (Test-Path $gitDir)) {
+		Write-Host '  [beilu] 非 Git 工作区，跳过启动前更新检查' -ForegroundColor DarkGray
+		return $true
+	}
 	if (Test-Path (Join-Path $PROJECT_DIR '.noupdate')) {
-		Write-Host "  [beilu] .noupdate 已启用，跳过源码更新" -ForegroundColor DarkYellow
-		return
+		Write-Host '  [beilu] 检测到 .noupdate，跳过启动前更新检查' -ForegroundColor DarkGray
+		return $true
 	}
-	if ((-not (Test-Path (Join-Path $PROJECT_DIR '.git'))) -or (-not (Get-Command git -ErrorAction SilentlyContinue))) {
-		return
-	}
-	$trackedChanges = git -C "$PROJECT_DIR" status --porcelain=v1 --untracked-files=no
+	$status = (& git -C $PROJECT_DIR status --porcelain=v1 --untracked-files=no 2>$null) -join "`n"
 	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 无法读取 Git 工作区状态，已跳过源码更新"
-		return
+		Write-Warning '  [beilu] 无法读取 Git 工作区，跳过更新以保护当前文件'
+		return $true
 	}
-	if ($trackedChanges) {
-		Write-Warning "  [beilu] 检测到本地已跟踪改动，已跳过源码更新；不会覆盖本地文件"
-		return
+	if ($status) {
+		Write-Warning '  [beilu] 检测到本地代码改动，跳过启动前更新（不会覆盖这些文件）'
+		return $true
 	}
-	git -C "$PROJECT_DIR" fetch origin main --quiet
+	Write-Host '  [beilu] 启动前检查公共仓库版本...' -ForegroundColor Cyan
+	& git -C $PROJECT_DIR fetch origin main --quiet 2>$null
 	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 无法获取远端更新，继续使用当前版本"
-		return
+		Write-Warning '  [beilu] 无法连接公共仓库，保持当前版本继续启动'
+		return $true
 	}
-	$local = git -C "$PROJECT_DIR" rev-parse HEAD
-	$remote = git -C "$PROJECT_DIR" rev-parse origin/main
-	if (($LASTEXITCODE -ne 0) -or (-not $local) -or (-not $remote)) {
-		Write-Warning "  [beilu] 无法确认版本，继续使用当前版本"
-		return
+	$local = (& git -C $PROJECT_DIR rev-parse HEAD 2>$null).Trim()
+	$remote = (& git -C $PROJECT_DIR rev-parse origin/main 2>$null).Trim()
+	if (-not $local -or -not $remote) {
+		Write-Warning '  [beilu] 无法确认版本，保持当前版本继续启动'
+		return $true
 	}
-	if ($local -eq $remote) { return }
-	$marker = Join-Path $PROJECT_DIR 'data\p1\.service-restart-required.json'
-	try {
-		New-Item -ItemType Directory -Path (Split-Path -Parent $marker) -Force | Out-Null
-		@{ reason = 'application-update'; targetCommit = $remote; createdAt = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json -Compress | Set-Content -LiteralPath $marker -Encoding UTF8
+	if ($local -eq $remote) {
+		Write-Host "  [beilu] 当前已是最新版本 ($($local.Substring(0,7)))" -ForegroundColor DarkGray
+		return $true
 	}
-	catch {
-		Write-Warning "  [beilu] 无法写入 P1 重启标记，已取消源码更新以保持版本一致: $($_.Exception.Message)"
-		return
-	}
-	Write-Host "  [beilu] 检测到新版本，执行 fast-forward 更新..." -ForegroundColor Cyan
-	git -C "$PROJECT_DIR" pull --ff-only origin main
+	& git -C $PROJECT_DIR merge-base --is-ancestor $local $remote 2>$null
 	if ($LASTEXITCODE -ne 0) {
-		Write-Warning "  [beilu] 更新未完成（可能与未跟踪用户文件冲突）；当前版本未被覆盖"
+		Write-Warning '  [beilu] 本地版本与公共仓库分叉或领先，跳过自动更新'
+		return $true
 	}
+	$answer = Read-Host "  [beilu] 发现新版本 $($remote.Substring(0,7))，启动前更新？[Y/N]"
+	if ($answer -notmatch '^(?i:y|yes)$') {
+		Write-Host '  [beilu] 已选择暂不更新，继续启动当前版本' -ForegroundColor Yellow
+		return $true
+	}
+	Write-Host '  [beilu] 正在安全快进更新（不会清理用户 data）...' -ForegroundColor Cyan
+	& git -C $PROJECT_DIR pull --ff-only origin main
+	if ($LASTEXITCODE -ne 0) {
+		Write-Error '  [beilu] 更新失败，已停止启动；请处理 Git 状态后重试'
+		return $false
+	}
+	Write-Host "  [beilu] 更新完成 ($($remote.Substring(0,7)))，现在启动新代码" -ForegroundColor Green
+	return $true
 }
 
-# 依赖安装 / 更新（安全源码更新 + deno install）。
+# 依赖安装；源码版本已在本次进程启动前完成检查。
 function Invoke-InstallOrUpdate {
-	Invoke-SafeGitUpdate
 	New-Item -Path (Join-Path $PROJECT_DIR 'node_modules') -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
 	# 两段式安装 + 网络容错重试（最多 3 次，递增等待）。
 	# 第一段裸 install 装 package.json 清单；第二段 --entrypoint 爬入口静态图并缓存远程模块。
@@ -313,6 +320,9 @@ function Get-MissingDeps {
 	}
 	return $missing
 }
+
+# 启动前先完成版本检查，随后才安装依赖并启动 Python/P1。
+if (-not (Invoke-StartupUpdate)) { exit 1 }
 
 # 启动信息（排障用，借鉴 SillyTavern "Node version: ..."）
 $denoVer = deno --version 2>$null | Select-Object -First 1

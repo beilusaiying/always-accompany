@@ -48,6 +48,7 @@ const START_WAIT_MS = _positiveNumber('P1_START_WAIT_MS', 10000)
 const START_POLL_MS = _positiveNumber('P1_START_POLL_MS', 250)
 const SPAWN_COOLDOWN_MS = _positiveNumber('P1_SPAWN_COOLDOWN_MS', 60000)
 const STOP_WAIT_MS = _positiveNumber('P1_STOP_WAIT_MS', 10000)
+const HOST_ORPHAN_GRACE_SEC = _positiveNumber('P1_HOST_ORPHAN_GRACE_SEC', 120)
 const START_RETRY_COUNT = _nonNegativeInteger('P1_START_RETRY_COUNT', 2)
 const MAX_START_ATTEMPTS = START_RETRY_COUNT + 1
 const AUTOSTART = (_env('P1_AUTOSTART') || 'on') !== 'off'
@@ -143,11 +144,13 @@ async function _spawnServiceProcess() {
 	if (!globalThis.Deno?.Command) {
 		throw _spawnAttemptError('spawn-not-created', '当前运行时不支持 Deno.Command', { retryable: true })
 	}
-	await _ensurePythonDeps()
 	// 首次启动 storage/p1 和 data/p1 可能不存在（.gitignore 排除），P1 服务读写都依赖这两个目录
 	for (const dir of [RUNTIME_ROOT, STORAGE_ROOT]) {
 		try { const { mkdirSync } = await import('node:fs'); mkdirSync(dir, { recursive: true }) } catch { /* best effort */ }
 	}
+	// 依赖标记也落在 RUNTIME_ROOT；必须先建立目录，否则首次安装成功后标记写入
+	// 会静默失败，导致每次重启都重新执行 pip install，首个 P1 请求再次被拖住。
+	await _ensurePythonDeps()
 
 	// Windows 下 Deno.ChildProcess.unref() 只解除事件循环等待；短命 Deno 调用进程
 	// 退出时仍可能带走它直接创建的 Python，Python 来不及执行 cluster 回收，留下
@@ -170,19 +173,23 @@ async function _spawnServiceProcess() {
 			"try { $process = Start-Process -FilePath 'python' -ArgumentList @('p1_server.py', '--port', $servicePort) -WorkingDirectory $serviceDir -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog } catch { $startError = $_; Write-P1BootstrapDiagnostic 'start-process' $startError; try { [IO.File]::WriteAllText($stderrLog, ($startError | Out-String), [Text.Encoding]::UTF8) } catch { Write-P1BootstrapDiagnostic 'write-service-stderr' $_ }; exit 41 }",
 			"try { [IO.File]::WriteAllText($resultFile, [string]$process.Id, [Text.Encoding]::ASCII) } catch { $pidError = $_; Write-P1BootstrapDiagnostic 'publish-pid' $pidError; try { [IO.File]::WriteAllText($stderrLog, ($pidError | Out-String), [Text.Encoding]::UTF8) } catch { Write-P1BootstrapDiagnostic 'write-service-stderr' $_ }; exit 42 }",
 		].join('; ')
-		let result
+		let bootstrapProcess
 		try {
-			result = await new globalThis.Deno.Command('powershell', {
+			bootstrapProcess = new globalThis.Deno.Command('powershell', {
 				args: ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', bootstrap],
 				env: p1ProcessEnv({
 					P1_SERVICE_BOOTSTRAP_DIR: SERVICE_DIR,
 					P1_SERVICE_PORT: String(P1_SERVICE_PORT),
 					P1_SERVICE_SPAWN_RESULT: spawnResultFile,
+					P1_HOST_PID: String(globalThis.Deno.pid),
+					P1_HOST_ORPHAN_GRACE_SEC: String(HOST_ORPHAN_GRACE_SEC),
 				}),
-				stdout: 'piped',
-				stderr: 'piped',
+				// 不再用 output() 等待管道 EOF：Start-Process 创建的长期 Python 可能继承
+				// bootstrap 管道句柄，使 PID 已发布、服务已监听时 output() 仍永久 pending。
+				stdout: 'null',
+				stderr: 'inherit',
 				stdin: 'null',
-			}).output()
+			}).spawn()
 		} catch (error) {
 			const retryable = _isProvablyNotCreatedCommandError(error)
 			throw _spawnAttemptError(
@@ -191,12 +198,49 @@ async function _spawnServiceProcess() {
 				{ retryable, cause: error },
 			)
 		}
+		const bootstrapStatus = bootstrapProcess.status
+			.then((result) => ({ settled: true, result }))
+			.catch((error) => ({ settled: true, error }))
+		const bootstrapOutcome = await Promise.race([
+			bootstrapStatus,
+			_sleep(START_WAIT_MS).then(() => ({ settled: false })),
+		])
 		let pidText = ''
 		try { pidText = (await globalThis.Deno.readTextFile(spawnResultFile)).trim() }
 		catch { /* failure handled below */ }
+		if (!bootstrapOutcome.settled) {
+			try { bootstrapProcess.kill() }
+			catch (error) {
+				console.warn(`[shells:p1] PowerShell bootstrap 超时后终止失败: ${error?.message || error}`)
+			}
+		}
 		try { await globalThis.Deno.remove(spawnResultFile) } catch { /* best effort */ }
 		const pid = Number(pidText)
-		if (result.success && Number.isInteger(pid) && pid > 0) return { pid, owner: 'powershell-start-process' }
+		if (Number.isInteger(pid) && pid > 0) {
+			if (!bootstrapOutcome.settled) {
+				console.warn(`[shells:p1] PowerShell bootstrap 在 ${START_WAIT_MS}ms 内未结算，但已发布 PID ${pid}；进入既有 health/PID ownership 确认`)
+			}
+			return { pid, owner: 'powershell-start-process' }
+		}
+		if (!bootstrapOutcome.settled) {
+			throw _spawnAttemptError(
+				'spawn-uncertain',
+				`PowerShell bootstrap 在 ${START_WAIT_MS}ms 内未结算且未发布有效 PID；已终止 bootstrap，不会自动重试`,
+				{
+					retryable: false,
+					owner: 'powershell-start-process',
+					bootstrapDiagnostic: `bootstrap-timeout=${START_WAIT_MS}ms, pid=${pidText || '(empty)'}`,
+				},
+			)
+		}
+		if (bootstrapOutcome.error) {
+			throw _spawnAttemptError(
+				'spawn-uncertain',
+				`PowerShell bootstrap 状态无法确认: ${bootstrapOutcome.error?.message || bootstrapOutcome.error}`,
+				{ retryable: false, cause: bootstrapOutcome.error, owner: 'powershell-start-process' },
+			)
+		}
+		const result = bootstrapOutcome.result
 		const bootstrapDiagnostic = _bootstrapDiagnostic(result)
 		// 只有尚未执行 Start-Process 的前置阶段（exit 40）能证明未创建进程。
 		// Start-Process 自身抛错（exit 41）也可能发生在 CreateProcess 之后，必须按不确定处理。
@@ -218,7 +262,11 @@ async function _spawnServiceProcess() {
 		child = new globalThis.Deno.Command('python', {
 			args: ['p1_server.py', '--port', String(P1_SERVICE_PORT)],
 			cwd: SERVICE_DIR,
-			env: p1ProcessEnv({ P1_SERVICE_PORT: String(P1_SERVICE_PORT) }),
+			env: p1ProcessEnv({
+				P1_SERVICE_PORT: String(P1_SERVICE_PORT),
+				P1_HOST_PID: String(globalThis.Deno.pid),
+				P1_HOST_ORPHAN_GRACE_SEC: String(HOST_ORPHAN_GRACE_SEC),
+			}),
 			stdout: 'null',
 			stderr: 'null',
 			stdin: 'null',

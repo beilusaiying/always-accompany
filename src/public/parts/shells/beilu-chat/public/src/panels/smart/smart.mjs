@@ -217,34 +217,79 @@ function _refreshSmartTaskCounters() {
 // T1: 从后端 runtime-params 恢复 per-char 的 API源/模型覆盖
 // ============================================================
 
-async function _restoreSmartApiOverrides() {
+function _projectSmartApiSources() {
+  const smartSrc = document.getElementById("smart-api-source");
+  const sourceInventory = document.getElementById("api-select");
+  if (!smartSrc || !sourceInventory) return;
+  const previous = smartSrc.value;
+  smartSrc.innerHTML = "";
+  for (const sourceOption of sourceInventory.options) {
+    const option = document.createElement("option");
+    option.value = sourceOption.value;
+    option.textContent = sourceOption.textContent;
+    smartSrc.appendChild(option);
+  }
+  // 库存投影只更新候选，不把 apiConfig 当前“编辑对象”当成 runtime 选中值。
+  // 原覆盖仍在库存中才暂存显示；最终选中值由 _restoreSmartApiOverrides 后端回读裁决。
+  smartSrc.value = Array.from(smartSrc.options).some((o) => o.value === previous) ? previous : "";
+}
+
+async function _populateSmartApiModels(sourceName, preferredModel = "", isStale = () => false) {
   const smartSrc = document.getElementById("smart-api-source");
   const smartModel = document.getElementById("smart-api-model");
-  if (!smartSrc && !smartModel) return;
+  if (!smartModel) return false;
+  let models = [];
+  if (sourceName) {
+    const getModels = window._beiluGetModelList;
+    if (typeof getModels === "function") {
+      models = await getModels(sourceName, { force: true });
+    }
+  }
+  if (isStale() || (smartSrc && smartSrc.value !== sourceName)) return false;
+  smartModel.innerHTML = "";
+  for (const modelName of (Array.isArray(models) ? models : [])) {
+    const option = document.createElement("option");
+    option.value = modelName;
+    option.textContent = modelName;
+    smartModel.appendChild(option);
+  }
+  // 只有后端覆盖仍属于“当前 SMART 源的实时模型库存”才回显；无效覆盖诚实清空。
+  smartModel.value = Array.from(smartModel.options).some((o) => o.value === preferredModel) ? preferredModel : "";
+  return true;
+}
+
+const _restoreSmartApiOverrides = latestOnly(async (isStale) => {
+  const smartSrc = document.getElementById("smart-api-source");
+  const smartModel = document.getElementById("smart-api-model");
+  if (!smartSrc && !smartModel) return false;
   const charName = getCharId();
-  if (!charName) return;
+  if (!charName) {
+    if (smartSrc) smartSrc.value = "";
+    await _populateSmartApiModels("", "", isStale);
+    return true;
+  }
   try {
     // 原 raw GET runtime-params + resp.ok 手检 → 复用 getRuntimeParams；!ok 由门面抛错走 catch（原 catch 静默不阻塞面板）
     const data = await sendAction({ verb: "getRuntimeParams", target: "plugins:beilu-preset", source: "web" });
+    if (isStale()) return false;
     const overrides = data.model_overrides_by_char;
-    if (!overrides || typeof overrides !== "object") return;
     // 查找匹配当前角色的覆盖项（键格式: "username/charName"）
     let match = null;
-    for (const key of Object.keys(overrides)) {
+    for (const key of Object.keys(overrides && typeof overrides === "object" ? overrides : {})) {
       if (key.endsWith("/" + charName)) { match = overrides[key]; break; }
     }
-    if (!match) return;
-    if (match.api_source && smartSrc) {
-      // 确认选项中有该值才设置
-      const hasOpt = Array.from(smartSrc.options).some(o => o.value === match.api_source);
-      if (hasOpt) smartSrc.value = match.api_source;
-    }
-    if (match.model && smartModel) {
-      const hasOpt = Array.from(smartModel.options).some(o => o.value === match.model);
-      if (hasOpt) smartModel.value = match.model;
-    }
-  } catch { /* 静默——恢复失败不阻塞面板 */ }
-}
+    const sourceName = match?.api_source && smartSrc && Array.from(smartSrc.options).some((o) => o.value === match.api_source)
+      ? match.api_source
+      : "";
+    if (smartSrc) smartSrc.value = sourceName;
+    if (isStale()) return false;
+    await _populateSmartApiModels(sourceName, match?.model || "", isStale);
+    return !isStale();
+  } catch {
+    // 回读失败不冒充成功；调用方可据 false 清除刚才未落盘的临时显示。
+    return false;
+  }
+});
 
 // ============================================================
 // Smart 右栏镜像同步 — 独立DOM的控件↔原 .right-panel-content 控件
@@ -252,8 +297,7 @@ async function _restoreSmartApiOverrides() {
 
 const SMART_MIRROR_PAIRS = [
   // [smart_id, original_id, type: checkbox|value|select]
-  ["smart-api-source",          "api-select",                "select"],
-  ["smart-api-model",           "api-model-select",          "select"],
+  // API source/model 不属于通用 UI 镜像：它们是 per-char runtime override，专用链在下方只写 runtime-params。
   ["smart-toggle-regex",        "toggle-regex",              "checkbox"],
   // smart-toggle-thinking-fold 镜像对已删（0714 收口）：思维链设定唯一入口 = 设置→AI服务源「思维链显示」
   ["smart-toggle-stream",       "toggle-stream-render",      "checkbox"],
@@ -287,30 +331,21 @@ function _setupSmartRightPanel() {
       smart.value = cur;
     }
   });
+  // 服务源候选可复用 apiConfig 的库存投影，但选中值仍由 runtime override 回读裁决。
+  _projectSmartApiSources();
+  void _restoreSmartApiOverrides();
   if (_smartMirrorBound) return;
   _smartMirrorBound = true;
   SMART_MIRROR_PAIRS.forEach(([smartId, origId, type]) => {
     const smart = document.getElementById(smartId);
     const orig = document.getElementById(origId);
     if (!smart || !orig) return;
-    // smart→原 同步 (触发原有持久化)
+    // 非 API 通用控件仍镜像原控件并触发其既有持久化。
     smart.addEventListener("change", () => {
       if (type === "checkbox") orig.checked = smart.checked;
       else orig.value = smart.value;
       orig.dispatchEvent(new Event("change", { bubbles: true }));
       orig.dispatchEvent(new Event("input", { bubbles: true }));
-      // T1: API源/模型选择持久化到后端 runtime-params（per-char覆盖）
-      if (smartId === "smart-api-source" && smart.value) {
-        window._beiluSyncRuntimeParams?.({ api_source: smart.value });
-        showToast("success", `AI源已切换: ${smart.value}`, 2000);
-      } else if (smartId === "smart-api-model" && smart.value) {
-        // ★ 走 setModel 收口同步两个 DOM（#api-model + #api-model-select）+ sharedState._model
-        // why: 通用镜像只写 #api-model-select，但 #api-model-select 的 change 是死路径（只 syncModelLabel 不调 setModel）
-        //   → apiConfig.handleSave 读 #api-model 时拿到旧值 → 保存覆写。走 setModel 收口堵住所有下游读取。
-        if (window._beiluSetModel) window._beiluSetModel(smart.value);
-        window._beiluSyncRuntimeParams?.({ model: smart.value });
-        showToast("success", `模型已切换: ${smart.value}`, 2000);
-      }
     });
     // 原→smart 反向同步 (原控件变更时更新 smart)
     orig.addEventListener("change", () => {
@@ -332,15 +367,59 @@ function _setupSmartRightPanel() {
     }
   });
 
-  // [0717 凛倾「每次点击都需要访问」]：点击展开模型下拉=触发原侧静默实时拉当前源列表；
-  //   列表未变 fetchModels 跳过重建（不收起展开中的下拉），变了经 MutationObserver 镜像过来
-  document.getElementById("smart-api-model")?.addEventListener("mousedown", () => {
-    const _fb = document.getElementById("api-fetch-models");
-    if (_fb) { _fb.dataset.silent = "1"; _fb.click(); }
+  const smartSrc = document.getElementById("smart-api-source");
+  const smartModel = document.getElementById("smart-api-model");
+  const sourceInventory = document.getElementById("api-select");
+
+  // API source/model 是 per-char runtime override：不写、不 dispatch apiConfig 的编辑控件。
+  smartSrc?.addEventListener("change", async () => {
+    const sourceName = smartSrc.value;
+    if (!sourceName) { void _restoreSmartApiOverrides(); return; }
+    const syncRuntime = window._beiluSyncRuntimeParams;
+    const ok = typeof syncRuntime === "function" && await syncRuntime({ api_source: sourceName });
+    if (ok) {
+      showToast("success", `AI源已切换: ${sourceName}`, 2000);
+    } else {
+      const restored = await _restoreSmartApiOverrides();
+      if (typeof syncRuntime !== "function") showToast("error", "运行时参数同步入口未就绪", 2000);
+      // 后端回读也失败时清除未确认的临时选择，不能把失败值留成“已生效”外观。
+      if (!restored) {
+        smartSrc.value = "";
+        await _populateSmartApiModels("", "");
+      }
+    }
   });
 
-  // T1: 切卡时恢复 smart 面板的 per-char API源/模型覆盖
-  window.addEventListener("beilu:char-changed", whenVisible("#center-tab-smart", () => _restoreSmartApiOverrides()));
+  smartModel?.addEventListener("change", async () => {
+    const modelName = smartModel.value;
+    if (!modelName) { void _restoreSmartApiOverrides(); return; }
+    const syncRuntime = window._beiluSyncRuntimeParams;
+    const ok = typeof syncRuntime === "function" && await syncRuntime({ model: modelName });
+    if (ok) {
+      showToast("success", `模型已切换: ${modelName}`, 2000);
+    } else {
+      const restored = await _restoreSmartApiOverrides();
+      if (typeof syncRuntime !== "function") showToast("error", "运行时参数同步入口未就绪", 2000);
+      if (!restored) smartModel.value = "";
+    }
+  });
+
+  // 原 apiConfig 列表只提供“有哪些源”；增删后重新投影库存并从 runtime 权威回读有效覆盖。
+  if (sourceInventory) {
+    new MutationObserver(() => {
+      _projectSmartApiSources();
+      void _restoreSmartApiOverrides();
+    }).observe(sourceInventory, { childList: true });
+  }
+
+  // 每次展开/刷新均按 SMART 当前 runtime 源实时取模型，不再点击 apiConfig 当前编辑源的按钮。
+  smartModel?.addEventListener("mousedown", () => {
+    void _populateSmartApiModels(smartSrc?.value || "", smartModel.value);
+  });
+
+  // 角色与 runtime 变化即使 SMART 当前隐藏也要回读；事件不是可重放状态。
+  window.addEventListener("beilu:char-changed", () => { void _restoreSmartApiOverrides(); });
+  window.addEventListener("beilu:runtime-params-changed", () => { void _restoreSmartApiOverrides(); });
 
   // 外部预设切换时同步 smart 面板的预设下拉选中值
   const _syncSmartPresetSel = (name) => {
@@ -354,7 +433,7 @@ function _setupSmartRightPanel() {
 
   // 刷新模型按钮
   document.getElementById("smart-api-fetch-models")?.addEventListener("click", () => {
-    document.getElementById("api-fetch-models")?.click();
+    void _populateSmartApiModels(smartSrc?.value || "", smartModel?.value || "");
   });
 
   // 截图 "完整管理" 跳转：已移至游戏陪伴面板(comp-seg-sense)，全智能右栏截图区已清理
@@ -391,7 +470,7 @@ function _setupSmartRightPanel() {
 
   // 截图状态读取：截图区已移至游戏陪伴面板，不再在全智能右栏刷新
   // T1: 恢复当前角色的 per-char API源/模型覆盖值
-  _restoreSmartApiOverrides();
+  void _restoreSmartApiOverrides();
 }
 
 // _refreshSmartEye 已删除：截图区移至游戏陪伴面板(comp-seg-sense)，全智能右栏截图DOM已清理

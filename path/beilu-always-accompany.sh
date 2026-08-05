@@ -104,56 +104,8 @@ start_server() {
 	deno run --allow-scripts --allow-all -c "$PROJECT_DIR/deno.json" $BEILU_NM_FLAG --v8-flags="$_v8flags" "$PROJECT_DIR/src/server/index.mjs" "$@"
 }
 
-# ── 安全源码更新 ───────────────────────
-# 与 Windows 启动链保持同一契约：只允许 fast-forward，不执行 clean/reset；
-# 网络失败、分叉或已跟踪文件被修改时保留当前版本，用户未跟踪数据不参与更新覆盖。
-safe_git_update() {
-	if [ -f "$PROJECT_DIR/.noupdate" ]; then
-		echo "  [beilu] .noupdate 已启用，跳过源码更新"
-		return 0
-	fi
-	if [ ! -d "$PROJECT_DIR/.git" ] || ! command -v git >/dev/null 2>&1; then
-		return 0
-	fi
-
-	if ! _tracked_changes=$(git -C "$PROJECT_DIR" status --porcelain=v1 --untracked-files=no); then
-		echo "  [beilu] 警告：无法读取 Git 工作区状态，已跳过源码更新" >&2
-		return 0
-	fi
-	if [ -n "$_tracked_changes" ]; then
-		echo "  [beilu] 警告：检测到本地已跟踪改动，已跳过更新；不会覆盖本地文件" >&2
-		return 0
-	fi
-	if ! git -C "$PROJECT_DIR" fetch origin main --quiet; then
-		echo "  [beilu] 警告：无法获取远端更新，继续使用当前版本" >&2
-		return 0
-	fi
-	if ! _local=$(git -C "$PROJECT_DIR" rev-parse HEAD) || ! _remote=$(git -C "$PROJECT_DIR" rev-parse origin/main); then
-		echo "  [beilu] 警告：无法确认版本，继续使用当前版本" >&2
-		return 0
-	fi
-	[ "$_local" = "$_remote" ] && return 0
-
-	_marker="$PROJECT_DIR/data/p1/.service-restart-required.json"
-	_marker_tmp="${_marker}.tmp"
-	_created_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-	if ! mkdir -p "$(dirname "$_marker")" ||
-		! printf '{"reason":"application-update","targetCommit":"%s","createdAt":"%s"}\n' "$_remote" "$_created_at" > "$_marker_tmp" ||
-		! mv -f "$_marker_tmp" "$_marker"; then
-		rm -f "$_marker_tmp"
-		echo "  [beilu] 警告：无法写入 P1 重启标记，已取消源码更新以保持版本一致" >&2
-		return 0
-	fi
-
-	echo "  [beilu] 检测到新版本，执行 fast-forward 更新..."
-	if ! git -C "$PROJECT_DIR" pull --ff-only origin main; then
-		echo "  [beilu] 警告：更新未完成（可能与未跟踪用户文件冲突）；当前版本未被覆盖" >&2
-	fi
-}
-
-# 依赖安装 / 更新（安全源码更新 + deno install）。
+# 依赖安装；源码版本检测与确认更新由运行中的 autoupdate.mjs 唯一负责。
 install_or_update() {
-	safe_git_update
 	mkdir -p "$PROJECT_DIR/node_modules"
 	# 两段式安装 + 网络容错重试（最多 3 次，递增等待）。
 	# 第一段裸 install 装 package.json 清单；第二段 --entrypoint 爬入口静态图并缓存远程模块。

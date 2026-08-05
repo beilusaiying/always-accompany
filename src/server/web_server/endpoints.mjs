@@ -66,7 +66,7 @@ import {
   verifyApiKey,
   verifyUserActionPassword,
 } from "../../yonban/core/functions/security/auth.mjs";
-import { currentGitCommit } from "../autoupdate.mjs";
+import { currentGitCommit, getUpdateStatus, startAvailableUpdate } from "../autoupdate.mjs";
 import { __dirname } from "../base.mjs";
 import { confineSegment, getDeployMode, confinePath } from "../../yonban/core/functions/security/path_confine.mjs";
 // [D6 §4 2026-08-04] settings 单写者收口：本文件不再自行 read/parse/write
@@ -428,6 +428,16 @@ export async function registerEndpoints(router) {
       hosturl_in_local_ip,
     });
   });
+
+  // 更新链读写分离：已认证用户可观察唯一服务端状态；只有 owner 能确认应用。
+  // POST 必须携带用户看到并确认的 expectedCommit，autoupdate 内会 fetch 后再做精确比对。
+  router.get("/api/update/status", authenticate, (req, res) => {
+    return res.status(200).json({ ...getUpdateStatus(), canApply: isOwner(req.user?.username) });
+  });
+  router.post("/api/update/apply", requireOwner, asyncHandler(async (req, res) => {
+    const result = startAvailableUpdate(req.body?.expectedCommit);
+    return res.status(result.accepted ? 202 : 409).json(result);
+  }));
 
   // beilu: PoW 端点已禁用（pow.mjs已删除）
   router.post("/api/pow/challenge", async (req, res) => {

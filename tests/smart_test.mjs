@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
@@ -13,10 +14,13 @@ import path from 'path';
     if (msg.type() === 'error') errors.push(`[ConsoleError] ${msg.text()}`);
   });
 
-  const screenshotDir = 'D:\\project\\beilu-与你之诗\\tests\\screenshots';
+  const screenshotDir = process.env.BEILU_TEST_SCREENSHOT_DIR
+    ? path.resolve(process.env.BEILU_TEST_SCREENSHOT_DIR)
+    : path.join(os.tmpdir(), 'beilu-tests', 'smart-screenshots');
   if (!fs.existsSync(screenshotDir)) {
     fs.mkdirSync(screenshotDir, { recursive: true });
   }
+  console.log(`截图目录: ${screenshotDir}`);
 
   console.log('访问 http://localhost:1314...');
   await page.goto('http://localhost:1314');

@@ -387,31 +387,7 @@ export async function init(start_config) {
 			})
 		if (starts.Base.Timers) startTimerHeartbeat()
 		if (starts.Base.Idle) idleManager.start()
-		// 自动更新检测（启动后延迟检查 GitHub 最新版本，有新版通知前端）
-		setTimeout(async () => {
-			try {
-				const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8'))
-				const localVer = pkg.version || '0.0.0'
-				const repo = 'beilusaiying/always-accompany'
-				const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-					headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'always-accompany' },
-					signal: AbortSignal.timeout(10000),
-				}).catch(() => null)
-				if (!res?.ok) return
-				const release = await res.json()
-				const remoteVer = release.tag_name?.replace(/^v/, '') || ''
-				if (remoteVer && remoteVer !== localVer) {
-					const { sendEventToAll } = await import('./web_server/event_dispatcher.mjs')
-					sendEventToAll('update-available', {
-						current: localVer,
-						latest: remoteVer,
-						url: release.html_url,
-						body: release.body?.slice(0, 500) || '',
-					})
-					console.log(`[更新] 发现新版本 ${remoteVer}（当前 ${localVer}），已通知前端`)
-				}
-			} catch (e) { /* 更新检测失败不影响启动 */ }
-		}, 15000)
+		// 更新检测与应用由 autoupdate.mjs 单一编排：本层不再另查 Release，避免双来源与假新版。
 		idleManager.onIdle(setDefaultStuff)
 		idleManager.onIdle(() => {
 			config.prelaunch ??= {}

@@ -72,6 +72,7 @@ import { activateSubMode as activateSubModeCore, deactivateSubMode as deactivate
 import { PARAM_SCHEMA, ENUM_SCHEMA } from "../../prompt/preset/engine/paramSchema.mjs";
 import { nicerWriteFileSync, renameSyncWithRetry } from "../../../../../scripts/nicerWriteFile.mjs"; // M3：央原子写(tmp+rename+D-09重试)，替裸 fs.writeFileSync 防半写损坏
 import { sanitizeFilename } from "../../../../../scripts/sanitizeName.mjs"; // 0716 轮子收口：文件名安全清洗共享原语
+import { modelsRequestFor } from "../../../../../public/pages/scripts/modelListRequest.mjs"; // 前后端共用纯契约：已保存源 generator → models 端点/响应形状
 import { safeUnlink } from "../../rollback/safeDelete.mjs"; // T8·回切：改指 yonban 新位实现体
 // inj 识别系统 2026-07-13：autoMode 写入校验单源（原零校验=垃圾值静默入库后在门控被拒无诊断面）
 import { isValidInjectionAutoMode } from "../storage_mod/injectionSystem.mjs";
@@ -2671,30 +2672,34 @@ export async function handleSetData(data, args, internalCapability = null) {
     }
 
     case "getModels": {
-      let url, key;
+      let url, key, generator = "", provider = "", requestSourceName = "";
       if (data.sourceName) {
         const _sn = String(data.sourceName);
+        requestSourceName = _sn;
         if (_sn.includes("..") || _sn.includes("/") || _sn.includes("\\") || path.basename(_sn) !== _sn) {
           return { success: false, error: "sourceName 包含非法字符" };
         }
         try {
           const sourcePath = path.join(__projectRoot, "data", "users", username, "serviceSources", "AI", _sn, "config.json");
-          if (fs.existsSync(sourcePath)) { const sourceData = loadJsonFile(sourcePath); url = sourceData.config?.url || sourceData.config?.base_url; key = sourceData.config?.apikey || sourceData.config?.key; }
+          if (fs.existsSync(sourcePath)) {
+            const sourceData = loadJsonFile(sourcePath);
+            const sourceConfig = sourceData.config || {};
+            generator = sourceData.generator || "";
+            provider = sourceConfig.convert_config?.provider || "";
+            url = sourceConfig.url || sourceConfig.base_url || sourceConfig.host;
+            key = sourceConfig.apikey || sourceConfig.key;
+          }
         } catch (e) { return { success: false, error: `读取源配置失败: ${e.message}` }; }
       } else if (data.apiConfig) { url = data.apiConfig.url; key = data.apiConfig.key; }
-      // 0714 边界 trim：历史落盘的脏 URL（前导空格，实证 claude 源 " http://…"）让下方
-      //   startsWith("http") 判假 → 强拼 https:// → new URL 必炸 → 自动模型请求全灭。
-      //   写点已同批 trim（applyToConfig/两面板），此处对存量数据做输入边界归一。
+      // 0714 边界 trim：历史落盘的脏 URL（前导空格，实证 claude 源 " http://…"）
+      //   会使模型端点规整失败；写点已同批 trim，此处对存量数据做输入边界归一。
       url = typeof url === "string" ? url.trim() : url;
       key = typeof key === "string" ? key.trim() : key;
       if (!url) return { success: false, error: "未找到 API URL" };
-      let modelsUrl = url;
+      const request = modelsRequestFor({ generator, provider }, url);
+      const modelsUrl = request.url;
       try {
-        if (!url.startsWith("http")) url = "https://" + url;
-        const urlObj = new URL(url);
-        if (urlObj.pathname.includes("/chat/completions")) urlObj.pathname = urlObj.pathname.replace(/\/chat\/completions.*$/, "/models");
-        else { let p = urlObj.pathname; if (p.endsWith("/")) p = p.slice(0, -1); urlObj.pathname = p.endsWith("/v1") ? p + "/models" : p + "/v1/models"; }
-        modelsUrl = urlObj.toString();
+        new URL(modelsUrl);
       } catch { return { success: false, error: "URL 格式无效" }; }
       try {
         const headers = { "Content-Type": "application/json" };
@@ -2711,12 +2716,11 @@ export async function handleSetData(data, args, internalCapability = null) {
         }
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
         const result = await response.json();
-        const models = result.data || result;
-        if (!Array.isArray(models)) throw new Error("响应不是模型数组");
-        return { success: true, models: models.map((m) => m.id).sort() };
+        const models = [...new Set(request.normalize(result))].sort();
+        return { success: true, models };
       } catch (e) {
         // T008：错误结构化含源名+脱敏URL（前端诊断面展示：用户能看到请求了哪个源、为什么失败）
-        const _sourceName = data.sourceName || "(未指定)";
+        const _sourceName = requestSourceName || "(临时配置)";
         const _reason = e.name === "AbortError" ? "请求超时（8s）" : e.message;
         return { success: false, error: `模型列表获取失败 [源: ${_sourceName}]: ${_reason}`, source: _sourceName, reason: _reason };
       }

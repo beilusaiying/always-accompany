@@ -424,7 +424,7 @@ const DEFAULT_WORKSPACE_ROOT = "ai玩耍空间";
 
 // [D6 §2.2 2026-08-04] 工作区根候选统一政策（取代旧 validateWorkspaceRoot/ensureWorkspaceRootExists
 //   的"只查存在性"校验）：settingsStore.resolveWorkspaceRootCandidate 单源——锚定 browseBases
-//   （系统盘不入基=C:/ 域结构性拒）、系统/应用敏感目录拒、blockedPaths deny-overrides
+//   （C 盘普通目录与其他盘同路）、系统/应用敏感目录拒、blockedPaths deny-overrides
 //   （祖先黑名单不再被"显式选根"覆盖）、链接逃逸物理域裁决、幽灵路径拒（一层可建，父链必真实）。
 //   2026-08-01 幽灵工作区案的"父目录必须真实存在"语义保留在政策内。
 //   返回 {ok:true, root:<canonical绝对路径>} 或 {ok:false, code:E_WORKSPACE_ROOT_*, error}；
@@ -2913,7 +2913,7 @@ function _makeUserData() {
     autoApproveList: true,
     allowExec: false,
     allowedPaths: [],
-    blockedPaths: ["C:/"],
+    blockedPaths: [],
     operationHistory: [],
     maxHistory: 100,
     pendingOperations: [],
@@ -3157,7 +3157,7 @@ function _applyPersistKey(target, key, val) {
 /**
  * 从磁盘加载持久化设置（破口B per-user 布局：{ _global:{workspaceRoot,workspaceRoots}, <username>:{...14项} }）。
  * 兼容旧单文件全局格式（顶层直接是键）：迁移 → workspaceRoot 进 _global，其余进 "_default" 桶（无 user 上下文的兜底）。
- * 老用户原全局配置因此落到 _default；具名用户首次访问得安全默认值（blockedPaths=["C:/"]/不可 exec），一次性重配即可。
+ * 老用户原全局配置因此落到 _default；具名用户首次访问使用当前安全默认（C 盘普通目录可选、exec 仍关闭）。
  */
 // [0804 根因修·B2 → D6 §4 完整版] 设置健康状态：单源=filesSettingsStore.getSettingsHealth
 //   （损坏/不可读的判定、.corrupt 备份、fail-closed 持续到显式 repair 全在 store）。
@@ -3172,15 +3172,15 @@ function _syncSettingsHealthFromStore() {
   return _settingsHealth;
 }
 function _applyFailClosedSecurityPosture() {
-  // 只压安全关键字段到最严（不动非安全的 UI/历史项）；损坏期禁自动批准/禁 exec/删除权限关，C 盘保持 blocked。
+  // 只压安全关键字段到最严（不动非安全的 UI/历史项）；损坏期统一安全闸已禁所有文件/root/browse，
+  // 此处不再注入 C:/ 黑名单，避免把故障期临时姿态误持久化成用户显式配置。
   _store("_default"); // 先确保无 user 上下文的兜底桶存在，再统一覆盖（含它）
   for (const s of _userStores.values()) {
     s.autoApprove = false;
     s.autoApproveRead = false;
     s.autoApproveList = false;
     s.allowExec = false;
-    if (!Array.isArray(s.blockedPaths)) s.blockedPaths = ["C:/"];
-    else if (!s.blockedPaths.some((p) => String(p).replace(/\\/g, "/").toUpperCase().startsWith("C:"))) s.blockedPaths.push("C:/");
+    if (!Array.isArray(s.blockedPaths)) s.blockedPaths = [];
     if (s.permissions) { s.permissions.file_write = false; s.permissions.file_delete = false; s.permissions.mcp = false; }
   }
 }
@@ -4713,6 +4713,9 @@ const pluginExport = {
         return _als.run({ username: args?.username || "_default" }, async () => { // 破口B: per-user 上下文（pluginData 透明路由）
         const _cid = args?.chatid || args?.chat_name?.replace("common_chat_", "") || null;
         wbT(_cid, "files", "ReplyHandler:enter", {});
+        // 每轮显式重置，避免同一 reply 对象再生成时沿用上轮的续轮信号。
+        // 只有结果已成功进入 pendingOpResults 后才置 true；审批中/失败均不续轮。
+        if (reply && typeof reply === "object") reply.pendingFileOps = false;
         if (!pluginData.enabled) {
           return false;
         }
@@ -4902,6 +4905,7 @@ const pluginExport = {
             timestamp: Date.now(),
             opCount: successOps.length,
           });
+          reply.pendingFileOps = true;
 
           wbT(_cid, "files", "fileop:success", { n: successOps.length });
           console.log(
@@ -4945,6 +4949,7 @@ const pluginExport = {
             timestamp: Date.now(),
             opCount: rejectedOps.length,
           });
+          reply.pendingFileOps = true;
           wbD(_cid, "files", "fileop:rejected", false, "文件操作被拒绝（沙箱/权限/黑名单）", { n: rejectedOps.length, reasons: rejectedOps.map((op) => op.error) });
           console.log(
             `[beilu-files] ReplyHandler: ${rejectedOps.length} 条操作被拒绝, 注入告知 AI + 映射前端面板`,

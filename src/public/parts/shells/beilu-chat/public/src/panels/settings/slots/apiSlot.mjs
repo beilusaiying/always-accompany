@@ -1,6 +1,6 @@
 // apiSlot.mjs — 设置面板·AI服务源管理 slot（自 settingsSlots.mjs 拆出，2026-08-03，内容逐字搬迁）
 // 注：API_BASE/SERVICE_TYPE 为 T2批1收口后的死常量（原文件即无消费点），原样保留不顺手删。
-import { escapeHtml, whenVisible } from "../../../shared/state/utils.mjs";
+import { escapeHtml } from "../../../shared/state/utils.mjs";
 import { sendAction } from "../../../shared/transport/sendAction.mjs";
 import { storage, KEYS } from "../../../shared/state/storage.mjs";
 import { beiluConfirm, beiluPrompt } from "../../../shared/widgets/beiluDialog.mjs";
@@ -200,8 +200,11 @@ export async function initApiSlot() {
       sel.innerHTML = apiSources.length === 0
         ? '<option value="">（无配置）</option>'
         : apiSources.map(n => `<option value="${escapeHtml(n)}" ${n === currentName ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('');
-      if (apiSources.length > 0 && !currentName) loadSource(apiSources[0]);
-    } catch (e) { showStatus('加载列表失败: ' + e.message, 'error'); }
+      return true;
+    } catch (e) {
+      showStatus('加载列表失败: ' + e.message, 'error');
+      return false;
+    }
   };
 
   const loadSource = async (name) => {
@@ -337,7 +340,8 @@ export async function initApiSlot() {
       //   后端按 URL :name 存文件从不改名（serviceSourceManage endpoints.mjs POST :39），config.name
       //   只是显示名（生成器 buildInfo v.name 消费），两者本就允许不同。漂移后 loadSource(不存在名)
       //   → select.value 落空=下拉空白，且后续保存/加载全按幽灵名 404。文件键恒=currentName 不动。
-      await loadList();
+      if (!await loadList())
+        throw new Error('保存已完成，但列表刷新失败；请重新打开 API 设置');
       if (currentName === sourceName && !await loadSource(sourceName))
         throw new Error('保存已完成，但界面刷新失败；请重新打开 API 设置');
       const usable = isApiSourceMarkedUsable(saveResult, sourceName);
@@ -353,8 +357,12 @@ export async function initApiSlot() {
       await sendAction({ verb: "deleteAISource", target: "shells:serviceSourceManage", source: "web", payload: { name: currentName } });
       showStatus('已删除', 'success');
       currentName = null;
-      await loadList();
-      if (apiSources.length > 0) loadSource(apiSources[0]); else clearForm();
+      if (!await loadList()) {
+        showStatus('删除已完成，但列表刷新失败；请重新打开 API 设置', 'error');
+        _emitApiChanged();
+        return;
+      }
+      if (apiSources.length > 0) await loadSource(apiSources[0]); else clearForm();
       _emitApiChanged();
     } catch (e) { showStatus('删除失败: ' + e.message, 'error'); }
   });
@@ -382,7 +390,8 @@ export async function initApiSlot() {
       const persisted = await sendAction({ verb: "getAISource", target: "shells:serviceSourceManage", source: "web", payload: { name: safeName } });
       assertApiSourceReadback(persisted, { generator: entry.generator, config: tmpl }, '创建');
       currentName = safeName;
-      await loadList();
+      if (!await loadList())
+        throw new Error('创建已完成，但列表刷新失败；请重新打开 API 设置');
       if (!await loadSource(safeName))
         throw new Error('创建已完成，但界面刷新失败；请重新打开 API 设置');
       const usable = isApiSourceMarkedUsable(saveResult, safeName);
@@ -438,6 +447,11 @@ export async function initApiSlot() {
           listEl.innerHTML = models.map(m => `<option value="${escapeHtml(m)}" ${m === current ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
           listEl.classList.remove('hidden');
         }
+        // 原生 select 在没有显式 current 时会视觉选中第一项，但不会触发 change；
+        // 保存读取的是独立 input，导致“看见已选模型、实际仍为空”。仅在 input 为空时
+        // 接受下拉当前项作为默认值，保留已有已存/手填模型，不创建第二状态源。
+        const modelInput = $('sa-api-model');
+        if (!modelInput.value.trim() && listEl.value) modelInput.value = listEl.value;
         if (!silent) showStatus(`找到 ${models.length} 个模型`, 'success');
       } else if (!silent) {
         listEl.classList.add('hidden');
@@ -456,14 +470,21 @@ export async function initApiSlot() {
   $('sa-api-model-list').addEventListener('mousedown', () => _saFetchModels({ silent: true }));
 
   syncChannelUI();
-  await loadList();
+  if (await loadList()) {
+    if (apiSources.length > 0) await loadSource(apiSources[0]);
+    else clearForm();
+  }
 
   // 根病2 单向同步修(步骤1,补 C4 消费边):外部(apiConfig 右栏/独立页/onboarding)改 API 源 → 重拉后端权威刷新本设置弹窗 #sa-api-*。
-  //   修前 settingsSlots 只 dispatch 不 listen=单向盲点。复用闭包内 loadList/loadSource,不新造数据源。initApiSlot 单次调(layout.mjs:795),无重复监听。
-  window.addEventListener('resource:api-changed', whenVisible('#center-tab-settings', () => {
+  //   resource 事件不是可重放状态，隐藏设置页时也必须消费；列表失败立即终止，不再拿旧 currentName 继续读。
+  //   当前源已被外部删除时改选权威列表首项；列表为空则清空表单。initApiSlot 单次调用，无重复监听。
+  window.addEventListener('resource:api-changed', async () => {
     if (_suppressApiReload) return; // 跳过本面板自身派发(步骤0自抑制)
-    loadList().then(() => { if (currentName) loadSource(currentName); });
-  }));
+    if (!await loadList()) return;
+    const nextName = currentName && apiSources.includes(currentName) ? currentName : (apiSources[0] || '');
+    if (nextName) await loadSource(nextName);
+    else clearForm();
+  });
 
   // 思维链设定唯一入口（凛倾 2026-07-14 收口；0720 硬化：内置 think/thinking 恒剥离恒显示——
   //   折叠开关与内置标签勾选均已删，剩折叠标题+自定义标签对两项可配）。

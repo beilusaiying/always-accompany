@@ -14,7 +14,7 @@
 //   走生成器自有 UI，不经此表。
 // ============================================================
 import { sendAction } from '../../shared/transport/sendAction.mjs'
-import { normalizeModelsUrl } from '../../shared/state/utils.mjs' // [合并批 0714] models 端点规整单源
+export { modelsRequestFor } from '/scripts/modelListRequest.mjs'
 
 // 面板级 URL 字段说明文案（属面板措辞非渠道数据；渠道数据一律后端下发）
 const URL_LABELS = {
@@ -117,24 +117,4 @@ async function _buildChannels() {
 		},
 	}
 	return _cache
-}
-
-/**
- * 「获取模型」请求形状按渠道分发：ollama 走 /api/tags（响应 {models:[{name}]}），
- * 其余按 OpenAI 惯例把 chat/completions 尾段换成 /models。normalize 统一产出 string[]。
- */
-export function modelsRequestFor(entry, urlValue) {
-	if (entry?.generator === 'ollama') {
-		const base = (urlValue || entry.defaultUrl || '').replace(/\/$/, '')
-		return {
-			url: `${base}/api/tags`,
-			normalize: (d) => (d?.models || []).map((m) => (typeof m === 'string' ? m : m?.name)).filter(Boolean),
-		}
-	}
-	return {
-		// [合并批 0714] 原弱版（只换 chat/completions 不补 /v1/models，base URL 输入会打错地址）
-		//   接 normalizeModelsUrl 单源；解析失败退回原样（行为=原式，失败在请求层可见）
-		url: normalizeModelsUrl(urlValue || '') || (urlValue || '').replace(/\/$/, ''),
-		normalize: (d) => (d?.data || d?.models || (Array.isArray(d) ? d : [])).map((m) => (typeof m === 'string' ? m : m?.id || m?.name)).filter(Boolean),
-	}
 }

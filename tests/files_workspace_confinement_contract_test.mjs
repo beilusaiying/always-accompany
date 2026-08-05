@@ -5,7 +5,7 @@
  *     （条目覆盖应用部署根祖先时，部署根内部不受该条目约束——部署位置事实≠用户选根覆盖）。
  *   · 整机浏览（gateBrowseListing）从"沙箱闸失败即旁路"改为受限 grant 模型：
  *     无 grant→E_BROWSE_GRANT_REQUIRED；grant owner-bound 短期；路径过统一政策
- *     （基包含/系统卷/blockedPaths），C 盘/系统 temp 目录不可列。
+ *     （基包含/敏感目录/blockedPaths），C 盘普通目录可列，系统/应用敏感目录仍拒。
  *   · fixture 从 os.tmpdir（系统盘）迁到仓库 tests/ 下（浏览/选根基内），与新政策自洽。
  */
 import assert from "node:assert/strict";
@@ -52,6 +52,11 @@ Deno.test("workspace confinement: trusted UI vs AI, physical escapes, deny-overr
   fs.writeFileSync(outsideFile, "outside");
   fs.writeFileSync(path.join(blockedDir, "blocked.txt"), "blocked");
   fs.writeFileSync(path.join(sensitiveDir, "id_rsa"), "sensitive");
+
+  let cOrdinary = null;
+  if (process.platform === "win32") {
+    cOrdinary = fs.mkdtempSync(path.join(os.homedir(), ".beilu_c_drive_confinement_"));
+  }
 
   const testUser = `confinement-${crypto.randomUUID()}`;
   await _filesAls.run(
@@ -141,6 +146,17 @@ Deno.test("workspace confinement: trusted UI vs AI, physical escapes, deny-overr
             assert.equal(browse.ok, true, `grant browse failed: ${JSON.stringify(browse)}`);
             assert.equal(browse.path, fs.realpathSync(outsideRoot));
 
+            if (cOrdinary) {
+              const cBrowse = gateBrowseListing(cOrdinary, grantId);
+              assert.equal(cBrowse.ok, true, `grant must allow ordinary C-drive directory: ${JSON.stringify(cBrowse)}`);
+              assert.equal(cBrowse.path, fs.realpathSync(cOrdinary));
+              pluginData.blockedPaths = ["C:/", path.parse(rootA).root];
+              const cBlocked = gateBrowseListing(cOrdinary, grantId);
+              expectDenied(cBlocked, "explicit C:/ block remains authoritative");
+              assert.equal(cBlocked.code, "E_BROWSE_BLOCKED");
+              pluginData.blockedPaths = [path.parse(rootA).root];
+            }
+
             // grant 不扩大路径：系统 temp（系统盘域/基外）仍拒；应用 data 目录仍拒
             if (process.platform === "win32" && !_repoRoot.toLowerCase().startsWith(os.tmpdir().slice(0, 2).toLowerCase())) {
               expectDenied(gateBrowseListing(os.tmpdir(), grantId), "grant must not open system temp");
@@ -213,5 +229,10 @@ Deno.test("workspace confinement: trusted UI vs AI, physical escapes, deny-overr
   const resolvedTemp = path.resolve(tempBase);
   assert.ok(resolvedTemp.startsWith(path.join(_repoRoot, "tests") + path.sep), "cleanup target must remain below repo tests dir");
   fs.rmSync(resolvedTemp, { recursive: true, force: true });
+  if (cOrdinary) {
+    const resolvedC = path.resolve(cOrdinary);
+    assert.ok(resolvedC.startsWith(path.resolve(os.homedir()) + path.sep), "C-drive cleanup target must remain below user home");
+    fs.rmSync(resolvedC, { recursive: true, force: true });
+  }
   console.log("FILES_WORKSPACE_CONFINEMENT PASS");
 });

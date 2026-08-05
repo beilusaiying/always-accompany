@@ -26,7 +26,9 @@
 /data
 /src/data
 /storage
-/desktop-eye/user-images
+/desktop-eye/user-images/*
+!/desktop-eye/user-images/贝露/
+!/desktop-eye/user-images/贝露/**
 
 # beilu 运行时目录（含 _ws_token 连接凭证与操作日志，禁入库）
 **/.beilu/
@@ -58,8 +60,7 @@ src/public/parts/plugins/beilu-worldbook/config_data.json
 /desktop-eye/package-lock.json
 /output
 
-# 本机截图原稿（README 使用的已整理副本在 imgs/screenshots）
-/图库
+# 公开 Markdown/README 展示图库，随公共发送版同步
 
 # 插件运行时数据（不被 git clean 删除）
 **/config_data.json

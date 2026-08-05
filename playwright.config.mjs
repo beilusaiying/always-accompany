@@ -1,6 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const TEST_DIR = '../beilu的工作日志和项目日志/新项目图和框架wiki/框架与测试预案';
+const TEST_DIR = fileURLToPath(new URL('./tests', import.meta.url));
+const ARTIFACT_DIR = process.env.BEILU_PLAYWRIGHT_ARTIFACT_DIR
+  ? path.resolve(process.env.BEILU_PLAYWRIGHT_ARTIFACT_DIR)
+  : path.join(os.tmpdir(), 'beilu-playwright');
 
 export default defineConfig({
   testDir: TEST_DIR,
@@ -11,8 +17,9 @@ export default defineConfig({
   workers: 1,
   reporter: [
     ['list'],
-    ['html', { outputFolder: `${TEST_DIR}/playwright-report`, open: 'never' }],
+    ['html', { outputFolder: path.join(ARTIFACT_DIR, 'report'), open: 'never' }],
   ],
+  outputDir: path.join(ARTIFACT_DIR, 'test-results'),
   use: {
     baseURL: 'http://localhost:1314',
     trace: 'on-first-retry',
@@ -34,7 +41,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  snapshotDir: `${TEST_DIR}/screenshots-baseline`,
+  snapshotDir: path.join(TEST_DIR, 'screenshots-baseline'),
   // 本版本 Playwright 仅支持 {arg}{ext}{projectName}{snapshotDir}{testFileDir}{testFileName}，无 {testFileStem}
   snapshotPathTemplate: '{snapshotDir}/{testFileName}/{arg}{ext}',
 });

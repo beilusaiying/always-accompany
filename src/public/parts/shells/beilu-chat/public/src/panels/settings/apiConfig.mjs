@@ -10,7 +10,6 @@ import { storage, KEYS } from "../../shared/state/storage.mjs" // 6c尾·根级�
 import { beiluChoice, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs" // 6c尾·根级散件归位; // T026: confirm→choice（删除去向询问）
 import { loadChannels } from "./apiChannels.mjs" // 0711 渠道下拉恢复：渠道表单源（后端 PROVIDER_META）
 import { assertApiSourceReadback, isApiSourceMarkedUsable } from "./apiSourceContract.mjs"
-import { whenVisible } from "../../shared/state/utils.mjs" // 0718 可见性门控
 
 // ============================================================
 // API 通信层（T6b：全走 sendAction 门面，verb=真动作，name/generator/data 进 payload）
@@ -207,8 +206,9 @@ export async function initApiConfig() {
 	apiNewBtn?.addEventListener('click', handleNew)
 
 	// 参与 resource:api-changed 事件契约：外部(设置弹窗 settingsSlots / layout)改 API 源 → 刷新本面板下拉，
-	//   补齐此前本面板既不派发也不监听 → 两套 CRUD 状态不同步(改一套另一套不刷新)的缺口。
-	window.addEventListener('resource:api-changed', whenVisible('#center-tab-settings', () => { if (!_suppressApiReload) loadApiConfig() }))
+	//   即使设置页当前隐藏也必须消费事件：resource 事件不是可重放状态，隐藏时丢弃会让下次打开仍显示旧库存。
+	//   本面板自身派发仍由同步抑制窗跳过，避免保存/删除/新建后重复重载。
+	window.addEventListener('resource:api-changed', () => { if (!_suppressApiReload) void loadApiConfig() })
 }
 
 // ============================================================

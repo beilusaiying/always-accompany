@@ -74,6 +74,18 @@ async function initPersonaSelector() {
       leftPersonaSelect.appendChild(opt);
     });
 
+    // 空人设时直接告诉用户唯一的新建入口；按钮做成整行，避免与折叠箭头挤在同一视觉角落。
+    if (leftPersonaDesc) {
+      leftPersonaDesc.placeholder = personas.length > 0
+        ? "选择人设后显示描述..."
+        : "暂无自定义人设；请前往「预设编辑 → 用户」新建。";
+    }
+    if (personaEditBtn) {
+      personaEditBtn.classList.add("w-full");
+      personaEditBtn.title = "前往「预设编辑 → 用户」管理或新建人设";
+      personaEditBtn.textContent = "管理 / 新建人设";
+    }
+
     // 设置当前值
     // 设置当前值，并主动向后端 apply 一次，确保人设真正生效
     const syncValue = async () => {

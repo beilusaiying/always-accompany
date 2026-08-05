@@ -3,6 +3,7 @@
  * 不需要 VSCode、不需要后端、不需要 WS——纯本地验证拆分后 42 个工具的链路完整性。
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import Module from "node:module";
@@ -10,8 +11,7 @@ import Module from "node:module";
 // ═══════════════════════════════════════════════════════════════
 // 1. 沙盒工作区
 // ═══════════════════════════════════════════════════════════════
-const SANDBOX = "C:/tmp/yonban_test_sandbox";
-if (fs.existsSync(SANDBOX)) fs.rmSync(SANDBOX, { recursive: true });
+const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "yonban-test-sandbox-"));
 fs.mkdirSync(path.join(SANDBOX, ".beilu"), { recursive: true });
 fs.writeFileSync(path.join(SANDBOX, "hello.js"), 'console.log("hello");\n');
 fs.writeFileSync(path.join(SANDBOX, "test.json"), '{"a":1}\n');
@@ -308,5 +308,6 @@ console.log(`\n═══ 结果：${pass} 通过 / ${fail} 失败 / ${skip} 跳�
 
 // 清理沙盒
 executor.disposeShellSession();
+fs.rmSync(SANDBOX, { recursive: true, force: true });
 
 if (fail > 0) process.exit(1);

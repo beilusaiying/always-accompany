@@ -1416,6 +1416,31 @@ export async function baseloadPart(username, partpath, {
 		throw e
 	})
 }
+
+const STARTUP_PRESET_PARTPATH = 'plugins/beilu-preset'
+
+/**
+ * 启动核心只来自用户现有默认配置：全部默认角色卡，以及已明确启用的 canonical 预设引擎。
+ * 不从已安装插件全集、显示名称或标签推断，避免引入第二套 priority/dependency 规则。
+ */
+function getStartupCorePartpaths(defaultParts) {
+	const corePartpaths = new Set()
+	for (const charname of defaultParts?.chars ?? [])
+		corePartpaths.add('chars/' + charname)
+	if (defaultParts?.plugins?.includes(path.basename(STARTUP_PRESET_PARTPATH)))
+		corePartpaths.add(STARTUP_PRESET_PARTPATH)
+	return corePartpaths
+}
+
+function throwStartupCoreFailures(username, results) {
+	const failures = results.filter(result => result.status === 'rejected').map(result => result.reason)
+	if (!failures.length) return
+	if (failures.length === 1) throw failures[0]
+	const error = new AggregateError(failures, `用户 ${username} 的 ${failures.length} 个启动核心部件加载失败`)
+	error.code = 'E_STARTUP_CORE_PARTS_FAILED'
+	throw error
+}
+
 /**
  * 浅加载所有的默认部件，以此实现默认部件的快速启动
  * @param {object | string} user - 用户对象或用户名。
@@ -1462,6 +1487,31 @@ export async function shallowLoadAllDefaultParts() {
  * @param {object | string} user - 用户对象或用户名。
  * @returns {Promise<void>}
  */
+async function fullLoadPartForUser(user, partpath, { critical = false } = {}) {
+	if (!fs.existsSync(GetPartPath(user.username, partpath) + '/main.mjs')) return
+	// [D5 §2.4] 预加载状态逐 Part 进 readiness 注册表：浏览器已先行打开(SHELL_READY),
+	// 「正在后台准备 N 个扩展/失败 Part 名称」由 /api/readiness 可观察,不再盲等。
+	reportPartPreloadState(user.username, partpath, 'loading')
+	try {
+		await loadPart(user.username, partpath, { username: user.username })
+		// 顺手预热详情缓存（parts_details_cache）：getAllCachedPartDetails 只回已缓存项，
+		// 不预热则插件列表等消费者对从未打开过的插件拿不到 info.json 文案（描述空白）。部件已在内存，此调用零重载成本。
+		await getPartDetails(user.username, partpath)
+		reportPartPreloadState(user.username, partpath, 'loaded')
+	}
+	catch (e) {
+		if (e?.suppressDuplicateNotification) {
+			wbTrace(null, "startup", "fullLoadAllParts:load_backoff", { username: user.username, partpath, retryAfterMs: e.retryAfterMs })
+			reportPartPreloadState(user.username, partpath, 'failed', e?.lastCause?.message || e?.message)
+		}
+		else {
+			wbDetect(null, "startup", "fullLoadAllParts:load_failed", false, "部件启动全量预加载失败", { username: user.username, partpath, critical, err: e?.message || String(e) })
+			reportPartPreloadState(user.username, partpath, 'failed', e?.message)
+		}
+		if (critical) throw e
+	}
+}
+
 async function fullLoadAllPartsForUser(user) {
 	if (Object(user) instanceof String) user = getUserByUsername(user)
 	const partpaths = new Set(getPartList(user.username, 'plugins').map(name => 'plugins/' + name))
@@ -1469,7 +1519,14 @@ async function fullLoadAllPartsForUser(user) {
 	for (const parent in defaultParts)
 		for (const child of defaultParts[parent] ?? [])
 			partpaths.add(parent + '/' + child)
-	wbTrace(null, "startup", "fullLoadAllParts:user", { username: user.username, count: partpaths.size })
+	const corePartpaths = getStartupCorePartpaths(defaultParts)
+	const backgroundPartpaths = [...partpaths].filter(partpath => !corePartpaths.has(partpath))
+	wbTrace(null, "startup", "fullLoadAllParts:user", {
+		username: user.username,
+		count: partpaths.size,
+		coreCount: corePartpaths.size,
+		backgroundCount: backgroundPartpaths.length,
+	})
 	// [0804 根因修·B3] 预加载覆盖面=已安装插件全集（getPartList 'plugins'），而 loadPart 经
 	//   plugins 容器 loadSubPart 会 setDefaultPart 自注册为默认插件——于是「用户未默认启用」的
 	//   已装插件被启动暖加载反向写回 defaultParts.plugins，覆盖用户意图（03 §九.4）。预加载是纯
@@ -1478,37 +1535,25 @@ async function fullLoadAllPartsForUser(user) {
 	const _pluginsBefore = Object.prototype.hasOwnProperty.call(user.defaultParts || {}, 'plugins')
 		? [...user.defaultParts.plugins]
 		: undefined
-	await Promise.allSettled([...partpaths].map(partpath => {
-		if (!fs.existsSync(GetPartPath(user.username, partpath) + '/main.mjs')) return Promise.resolve()
-		// [D5 §2.4] 预加载状态逐 Part 进 readiness 注册表：浏览器已先行打开(SHELL_READY),
-		// 「正在后台准备 N 个扩展/失败 Part 名称」由 /api/readiness 可观察,不再盲等。
-		reportPartPreloadState(user.username, partpath, 'loading')
-		return loadPart(user.username, partpath, { username: user.username })
-			// 顺手预热详情缓存（parts_details_cache）：getAllCachedPartDetails 只回已缓存项，
-			// 不预热则插件列表等消费者对从未打开过的插件拿不到 info.json 文案（描述空白）。部件已在内存，此调用零重载成本。
-			.then(() => getPartDetails(user.username, partpath))
-			.then(() => reportPartPreloadState(user.username, partpath, 'loaded'))
-			.catch(e => {
-				if (e?.suppressDuplicateNotification) {
-					wbTrace(null, "startup", "fullLoadAllParts:load_backoff", { username: user.username, partpath, retryAfterMs: e.retryAfterMs })
-					reportPartPreloadState(user.username, partpath, 'failed', e?.lastCause?.message || e?.message)
-					return
-				}
-				wbDetect(null, "startup", "fullLoadAllParts:load_failed", false, "部件启动全量预加载失败", { username: user.username, partpath, err: e?.message || String(e) })
-				reportPartPreloadState(user.username, partpath, 'failed', e?.message)
-			})
-	}))
-	// [0804 B3] 还原 plugins 默认清单到暖加载前快照（撤销 loadSubPart 自注册的越权写入）。
-	const _pluginsAfter = user.defaultParts?.plugins
-	const _changed = _pluginsBefore === undefined
-		? Array.isArray(_pluginsAfter) // 原本无 plugins 键，暖加载新增了 → 需撤销
-		: !Array.isArray(_pluginsAfter) || _pluginsBefore.length !== _pluginsAfter.length
-			|| _pluginsBefore.some((n, i) => n !== _pluginsAfter[i])
-	if (_changed) {
-		if (_pluginsBefore === undefined) { if (user.defaultParts) delete user.defaultParts.plugins }
-		else user.defaultParts.plugins = [..._pluginsBefore]
-		try { save_config() }
-		catch (e) { wbDetect(null, "startup", "fullLoadAllParts:defaultParts_restore_failed", false, "暖加载后还原 plugins 默认清单失败", { username: user.username, err: e?.message || String(e) }) }
+	try {
+		const coreLoadResults = await Promise.allSettled([...corePartpaths]
+			.map(partpath => fullLoadPartForUser(user, partpath, { critical: true })))
+		throwStartupCoreFailures(user.username, coreLoadResults)
+		await Promise.allSettled(backgroundPartpaths.map(partpath => fullLoadPartForUser(user, partpath)))
+	}
+	finally {
+		// [0804 B3] 还原 plugins 默认清单到暖加载前快照（撤销 loadSubPart 自注册的越权写入）。
+		const _pluginsAfter = user.defaultParts?.plugins
+		const _changed = _pluginsBefore === undefined
+			? Array.isArray(_pluginsAfter) // 原本无 plugins 键，暖加载新增了 → 需撤销
+			: !Array.isArray(_pluginsAfter) || _pluginsBefore.length !== _pluginsAfter.length
+				|| _pluginsBefore.some((n, i) => n !== _pluginsAfter[i])
+		if (_changed) {
+			if (_pluginsBefore === undefined) { if (user.defaultParts) delete user.defaultParts.plugins }
+			else user.defaultParts.plugins = [..._pluginsBefore]
+			try { save_config() }
+			catch (e) { wbDetect(null, "startup", "fullLoadAllParts:defaultParts_restore_failed", false, "暖加载后还原 plugins 默认清单失败", { username: user.username, err: e?.message || String(e) }) }
+		}
 	}
 }
 

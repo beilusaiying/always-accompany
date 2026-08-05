@@ -149,8 +149,15 @@ onServerEvent('account_deleted', () => {
 //      无有效基线可比，记了空值反而会在下次拿到真实值时误判为"变化"而误弹。
 //   4. 不自动刷新、不打断输入——只弹一条可自动消失的 toast，是否刷新交给用户。
 let _lastServerCommit = null
+let _expectedUpdateCommit = (() => { try { return sessionStorage.getItem('beilu-update-expected-commit') } catch { return null } })()
 onServerEvent('server-reconnected', ({ commitId } = {}) => {
 	if (!commitId) return // 无有效 commitId：静默（见上取舍 3）
+	if (_expectedUpdateCommit && commitId === _expectedUpdateCommit) {
+		_renderUpdateStatus({ phase: 'completed', progress: 100, message: '更新完成，服务已恢复连接', currentCommit: commitId })
+		showToast('success', '更新完成，服务已恢复连接', 8000)
+		_expectedUpdateCommit = null
+		try { sessionStorage.removeItem('beilu-update-expected-commit') } catch { }
+	}
 	if (_lastServerCommit === null) { _lastServerCommit = commitId; return } // 首连只记基线（取舍 2）
 	if (commitId !== _lastServerCommit) {
 		_lastServerCommit = commitId
@@ -159,11 +166,111 @@ onServerEvent('server-reconnected', ({ commitId } = {}) => {
 	// 同 commitId 的普通重连：不打扰（取舍 4）
 })
 
-// 自动更新已禁用 — 不再自动刷新页面
-// onServerEvent('server-updated', ...)
-// onServerEvent('page-modified', ...)
+// 更新 UI 只消费 autoupdate.mjs 的唯一状态。检测不会自动 pull；owner 明确点击后才应用。
+let _updatePanel = null
+let _canApplyUpdate = false
+let _updatePollTimer = null
+function _getUpdatePanel() {
+	if (_updatePanel) return _updatePanel
+	const panel = document.createElement('section')
+	panel.setAttribute('role', 'status')
+	panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:10020;width:min(390px,calc(100vw - 36px));padding:14px;border:1px solid #66809b;border-radius:10px;background:#26384a;color:#eef6ff;box-shadow:0 8px 28px #0007;font:14px/1.5 system-ui;display:none'
+	const title = document.createElement('strong')
+	title.textContent = '版本更新'
+	const text = document.createElement('div')
+	text.dataset.updateText = '1'
+	text.style.margin = '8px 0'
+	const progress = document.createElement('progress')
+	progress.dataset.updateProgress = '1'
+	progress.max = 100
+	progress.style.cssText = 'width:100%;height:12px'
+	const actions = document.createElement('div')
+	actions.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:10px'
+	const later = document.createElement('button')
+	later.type = 'button'
+	later.dataset.updateLater = '1'
+	later.textContent = '稍后'
+	later.addEventListener('click', () => { panel.style.display = 'none' })
+	const apply = document.createElement('button')
+	apply.type = 'button'
+	apply.dataset.updateApply = '1'
+	apply.textContent = '更新到新版本'
+	apply.addEventListener('click', async () => {
+		if (!_expectedUpdateCommit) return
+		try { sessionStorage.setItem('beilu-update-expected-commit', _expectedUpdateCommit) } catch { }
+		apply.disabled = true
+		_renderUpdateStatus({ phase: 'preflight', progress: 25, message: '正在提交更新确认…' })
+		try {
+			const response = await fetch('/api/update/apply', {
+				method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ expectedCommit: _expectedUpdateCommit }),
+			})
+			const result = await response.json().catch(() => ({}))
+			if (!response.ok || !result.accepted) throw new Error(result.message || `更新请求失败 (${response.status})`)
+			_renderUpdateStatus(result.status || { phase: 'preflight', progress: 30, message: result.message })
+		} catch (e) {
+			_renderUpdateStatus({ phase: 'failed', progress: 0, message: `${e.message}；可稍后重新检查` })
+		}
+	})
+	actions.append(later, apply)
+	panel.append(title, text, progress, actions)
+	document.body.append(panel)
+	_updatePanel = panel
+	return panel
+}
 
-console.log('[beilu] 前端基础模块已加载（SW禁用/Sentry禁用/自动更新禁用）')
+const _busyUpdatePhases = new Set(['checking', 'preflight', 'marker-written', 'pulling', 'verified', 'restart-scheduled'])
+function _renderUpdateStatus(status = {}) {
+	const panel = _getUpdatePanel()
+	let phase = status.phase || 'idle'
+	if (_expectedUpdateCommit && status.currentCommit === _expectedUpdateCommit && ['idle', 'up-to-date'].includes(phase)) {
+		phase = 'completed'
+		status = { ...status, phase, progress: 100, message: '更新完成，服务已恢复连接' }
+		_expectedUpdateCommit = null
+		try { sessionStorage.removeItem('beilu-update-expected-commit') } catch { }
+	}
+	if (typeof status.canApply === 'boolean') _canApplyUpdate = status.canApply
+	if (status.availableCommit) {
+		_expectedUpdateCommit = status.availableCommit
+		try { sessionStorage.setItem('beilu-update-expected-commit', _expectedUpdateCommit) } catch { }
+	}
+	const text = panel.querySelector('[data-update-text]')
+	const progress = panel.querySelector('[data-update-progress]')
+	const apply = panel.querySelector('[data-update-apply]')
+	const later = panel.querySelector('[data-update-later]')
+	text.textContent = `${status.message || '正在处理更新'}${phase === 'available' && !_canApplyUpdate ? '（仅实例管理员可执行更新）' : ''}`
+	progress.value = Number.isFinite(Number(status.progress)) ? Number(status.progress) : 0
+	apply.disabled = phase !== 'available'
+	apply.style.display = phase === 'available' && _canApplyUpdate ? '' : 'none'
+	later.style.display = _busyUpdatePhases.has(phase) ? 'none' : ''
+	panel.style.display = ['idle', 'up-to-date', 'disabled'].includes(phase) ? 'none' : 'block'
+	if (_busyUpdatePhases.has(phase)) _scheduleUpdatePoll()
+}
+
+function _scheduleUpdatePoll() {
+	if (_updatePollTimer) return
+	_updatePollTimer = setTimeout(async () => {
+		_updatePollTimer = null
+		try {
+			const response = await fetch('/api/update/status', { credentials: 'same-origin' })
+			if (response.ok) _renderUpdateStatus(await response.json())
+			else _scheduleUpdatePoll()
+		} catch { _scheduleUpdatePoll() }
+	}, 2000)
+}
+
+onServerEvent('update-available', _renderUpdateStatus)
+onServerEvent('update-progress', _renderUpdateStatus)
+onServerEvent('update-result', _renderUpdateStatus)
+
+// 事件可能在页面连接前发送，认证完成后从服务端唯一状态读回；401 仅表示尚未登录，不弹假错误。
+setTimeout(async () => {
+	try {
+		const response = await fetch('/api/update/status', { credentials: 'same-origin' })
+		if (response.ok) _renderUpdateStatus(await response.json())
+	} catch { /* WebSocket 事件或下次页面加载会恢复状态 */ }
+}, 1500)
+console.log('[beilu] 前端基础模块已加载（SW禁用/Sentry禁用/更新需用户确认）')
 
 /**
  * 基础目录。

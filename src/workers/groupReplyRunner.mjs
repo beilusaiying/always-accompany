@@ -49,6 +49,7 @@ const SERIALIZABLE_REPLY_FIELDS = Object.freeze([
   "extension",
   "logContextBefore",
   "logContextAfter",
+  "pendingFileOps",
 ]);
 
 function _replySerializationError(field, cause) {
@@ -203,8 +204,10 @@ export async function run(payload, ctx) {
     );
     // Y2 确诊修三点之二：读门与写端（ReplyHandler run(args.username)）同 username 桶——原无 ALS 读 _default 桶，
     // 数据+file 模式门双双错桶恒 false（分身Y2 STEP C/D 实测）。
-    reply.pendingFileOps = !!_files._filesAls.run({ username: payload.username }, () => _files.hasPendingOpResultsForSession?.(payload.chatid));
-  } catch (_foErr) { wbD(payload?.chatid ?? null, "group", "run:pendingFileOpsFail", false, _foErr?.message || String(_foErr), { chatid: payload?.chatid }); reply.pendingFileOps = false; }
+    // ReplyHandler 显式信号是本轮成败契约；Map peek 只补足 worker isolate 内已有待注入结果。
+    // 两者取 OR，禁止 Map 的 false 覆盖已成功入队的显式 true。
+    reply.pendingFileOps = !!reply.pendingFileOps || !!_files._filesAls.run({ username: payload.username }, () => _files.hasPendingOpResultsForSession?.(payload.chatid));
+  } catch (_foErr) { wbD(payload?.chatid ?? null, "group", "run:pendingFileOpsFail", false, _foErr?.message || String(_foErr), { chatid: payload?.chatid }); reply.pendingFileOps = !!reply.pendingFileOps; }
   // [0717 交叉债修] web_search 续轮池上报（债-C 同款病，与上方 pendingFileOps 同范式）：
   //   <needWebSearch> 结果写在本 worker isolate 的 aiRunner.pendingChatSearchResults，主进程
   //   generation 第三级池 peek 的是主进程模块实例=恒空 → worker 路由下搜索结果永不自动续轮

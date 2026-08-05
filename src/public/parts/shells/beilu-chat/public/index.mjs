@@ -3,8 +3,8 @@
  *   不管 API 请求封装（那是 api-client.mjs 的事），不管跨模块共享状态（那是 sharedState.mjs 的事）。
  *
  * 职责：
- *   1. 页面启动初始化 init()：主题 → ST兼容层 → 脚本加载 → i18n → 共享状态 → 三栏布局 →
- *      initializeChat(chat.mjs) → API配置 → 扩展菜单 → 预设/模型加载 → 各懒面板注册
+ *   1. 页面启动初始化 init()：主题 → ST兼容层 → 脚本加载 → i18n → 共享状态 →
+ *      initializeChat(chat.mjs) → 预设读回 → 三栏布局 → API配置 → 扩展菜单 → 各懒面板注册
  *   2. 切卡免刷后重绑「信息·可见」面板（世界书/表格/记忆浏览器）
  *   3. Tab 懒加载门控（helper/files/bot/subtabs 首次激活才 dynamic import）
  *   4. IDE 写操作审批 dock（轮询+WS推送+attention弹窗）
@@ -241,6 +241,21 @@ async function init() {
   // 共享状态初始化（从 DOM 读取初始值，之后 DOM 只用于显示）
   initSharedState();
 
+  console.log("[beilu-chat][DIAG] init: 即将调用 initializeChat...");
+  try {
+    await initializeChat();
+  } catch (e) {
+    console.error(
+      "[beilu-chat][DIAG] initializeChat 失败:",
+      e.message,
+      e.stack,
+    );
+  }
+  console.log("[beilu-chat][DIAG] init: initializeChat 完成");
+
+  // 等待现有聊天初始化返回后先读回当前预设；其余布局、设置与扩展装配不得抢占这条顺序链。
+  await loadPresetDataWithRetry();
+
   // 初始化三栏布局（折叠/选项卡交互）
   try {
     initLayout();
@@ -261,17 +276,6 @@ async function init() {
   }
 
   // 字体比例控制已在 initLayout() → initFeatureControls() 中初始化，不再重复调用
-  console.log("[beilu-chat][DIAG] init: 即将调用 initializeChat...");
-  try {
-    await initializeChat();
-  } catch (e) {
-    console.error(
-      "[beilu-chat][DIAG] initializeChat 失败:",
-      e.message,
-      e.stack,
-    );
-  }
-  console.log("[beilu-chat][DIAG] init: initializeChat 完成");
 
   // 初始化 API 配置模块
   try {
@@ -320,9 +324,6 @@ async function init() {
 
   // skill 临时注入·快速选择条(输入框下方 chip → 临时注入该卡说明书原文,复用单次注入线)
   // initSkillInjectBar() 调用已随 D6 整删（见顶部 import 区注释）
-
-  // 加载预设数据（面板默认打开预设 tab）— 带重试
-  await loadPresetDataWithRetry();
 
   // 加载 API 服务源配置（右栏下拉框）
   loadApiConfig();

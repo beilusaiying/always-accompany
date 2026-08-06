@@ -76,6 +76,10 @@ const _historyRewriteChats = new Set();
 //   计数器自愈：任一非 fuzzy-失败的回合归零，无需在各终止点散落 delete。
 const _fuzzyFailCounters = new Map();
 const FUZZY_FAIL_LIMIT = 3;
+// [0805 链接波动容忍] IDE 连续"全部工具失败=未连接"的轮数，按 chatid 记录。
+//   单轮 WS 波动（重连间隙恰好撞上工具执行）就熔断自动继续太敏感——连续 2 轮才判真断开。
+//   自愈：任一轮有成功结果归零；用户新消息（resetAutoContinueCounter）清零。
+const _disconnectedStreaks = new Map();
 const EMPTY_REPLY_MAX_RETRIES = 3;
 const EMPTY_REPLY_BASE_DELAY_MS = 3000;
 // [0724 只许前端关·002拍板] 错误轮/空响应轮/中止轮不再终结 loop 自动化（自动化唯一关闭出口=前端
@@ -96,6 +100,7 @@ export function cancelAutoContinue(chatid) {
 export function resetAutoContinueCounter(chatid) {
   _autoContinueCounters.delete(chatid);
   _fuzzyFailCounters.delete(chatid);
+  _disconnectedStreaks.delete(chatid);
 }
 
 /** [0724 只许前端关] 探测 chatid 是否有 pending 自动续轮 timer。
@@ -208,9 +213,19 @@ setOnStopGeneration(cancelAutoContinue);
 // 后端化为本文件回合末续轮时未跟迁）——现收口为后端单源：回合末续轮（ideToolCall/file_op 两处）
 // 与审批完成续轮（setDataActions._broadcastToolResultsReady）同门控同延迟。写口=SetData
 // "setAutoContinueConfig"（idePanel change 同步）。缺省 enabled=true/delay=0（未设置时行为与旧版全同）。
-export function getAutoContinueConfig(username) {
+// [T4 0805] mode 参数（可选）：mode==="work" 时优先读 yonban_config.work_auto_continue（work 面板
+//   独立配置，写口 setDataActions updateConfig 白名单），缺键回退 auto_continue；其他值/缺省
+//   读 auto_continue（零回归）。凛倾拍板方案B独立配置：「前端的话复用，储存单独拉线」。
+//   executeGeneration 内 11 处调用均传 request.extension?.activation?.mode || request.mode
+//   （activation.mode=resolveGenerationMode 单源解析值，自动续轮轮次无 windowMode 时由磁盘绑定兜底；
+//   裸 request.mode 只在用户带窗口发送时存在，作备料失败回退）；3 处 timer fire/工具结果通知路径
+//   （scheduleAutoContinue/notifyResultReady/scheduleLoopContinue）无窗口上下文，读全局。
+export function getAutoContinueConfig(username, mode) {
   let _ac = {};
-  try { _ac = loadJsonFileIfExists(getYonbanConfigPath(username), {}).auto_continue || {}; } catch { /* 读失败→默认 */ }
+  try {
+    const _cfg = loadJsonFileIfExists(getYonbanConfigPath(username), {});
+    _ac = (mode === "work" ? (_cfg.work_auto_continue || _cfg.auto_continue) : _cfg.auto_continue) || {};
+  } catch { /* 读失败→默认 */ }
   return {
     enabled: _ac.enabled !== false,
     delay_ms: Math.max(0, Math.min(30000, Number(_ac.delay_ms) || 0)),
@@ -678,7 +693,7 @@ export async function executeGeneration(
       //   （07-25 实证：#262 占位后停摆 46 分钟等 002 手动救）。对齐分支②(空 finalEntry)语义：
       //   loop 开启时垫底续轮，ERROR_LOOP_MIN_DELAY 下限防 API 故障期空转风暴；loop 关闭维持原停止行为。
       try {
-        const _loopCfgEmpty = getAutoContinueConfig(chatMetadata.username);
+        const _loopCfgEmpty = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
         if (_loopActive(_loopCfgEmpty)) scheduleLoopContinue(chatid, request.char_id, Math.max(_loopCfgEmpty.delay_ms, ERROR_LOOP_MIN_DELAY_MS));
       } catch (_lre) { console.warn("[chat] ★ 空回复路径 loop 续轮排定失败:", _lre?.message || _lre); }
       return;
@@ -788,7 +803,7 @@ export async function executeGeneration(
       // [0724 双停退出·002拍板] AI 停 loop 的唯一出口=连续 loop_stop_threshold 轮（默认2）都发
       //   <stopContinue/>：单发=结束任务轮 loop 照续；连发达阈=AI 真没事做，系统停 loop。
       //   检测在系统域（计数器），不靠 AI 自觉；0=关闭双停出口（只有用户关开关能停）。
-      const _loopCfgS = getAutoContinueConfig(chatMetadata.username);
+      const _loopCfgS = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
       if (!_ext._scheduleWakeup && _loopActive(_loopCfgS)) {
         if (_isError) {
           // [0724 只许前端关] 错误轮不再终结 loop（原 !_isError 排除=API 一次抖动/限流整条自动化
@@ -813,7 +828,7 @@ export async function executeGeneration(
       // [0724 只许前端关] 空响应/中止轮不再终结 loop：中止=用户停「当前这轮」（停整条自动化的唯一
       //   出口=前端开关+二次确认），空响应=上游抖动。垫延迟下限防快转空烧；regen 打断的中止由
       //   scheduleLoopContinue fire 时的在飞闸去重，不会双开。
-      const _loopCfgA = getAutoContinueConfig(chatMetadata.username);
+      const _loopCfgA = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
       if (!_ext._scheduleWakeup && _loopActive(_loopCfgA)) {
         scheduleLoopContinue(chatid, request.char_id, Math.max(_loopCfgA.delay_ms, ERROR_LOOP_MIN_DELAY_MS));
       }
@@ -823,10 +838,14 @@ export async function executeGeneration(
         const _resultText = await _applySlashCommandRegex(formatToolResultsForInjection(_pendingResults), chatMetadata.username); // [0723 slash_command 补线]
 
         // P0-8: 死循环熔断 — IDE未连接时全部失败则停止自动继续
-        const _allDisconnected = _pendingResults.every(
+        // [0805 链接波动容忍] 连续 2 轮全部失败才熔断：单轮 WS 重连波动不触发（自愈归零见 _disconnectedStreaks）
+        const _allDisconnectedThisTurn = _pendingResults.every(
           r => r.result && r.result.success === false &&
             (r.result.error || "").includes("未连接")
         );
+        const _disconnectedStreak = _allDisconnectedThisTurn ? (_disconnectedStreaks.get(chatid) || 0) + 1 : 0;
+        if (_disconnectedStreak > 0) _disconnectedStreaks.set(chatid, _disconnectedStreak); else _disconnectedStreaks.delete(chatid);
+        const _allDisconnected = _disconnectedStreak >= 2;
         const _count = (_autoContinueCounters.get(chatid) || 0) + 1;
         _autoContinueCounters.set(chatid, _count);
         // 代码轮次触发源：每轮经统一激活入口 dispatchActivation fire 已注册的 code_round 触发器。
@@ -841,7 +860,7 @@ export async function executeGeneration(
         if (_fuzzyFails > 0) _fuzzyFailCounters.set(chatid, _fuzzyFails); else _fuzzyFailCounters.delete(chatid);
         const _fuzzyFuse = _fuzzyFails >= FUZZY_FAIL_LIMIT;
         // [0726 容错修] 连续续轮轮数上限熔断（真实现 :711 腐烂注释承诺的 MAX；max_auto_rounds 可配 0=禁用）
-        const _acCfgFuse = getAutoContinueConfig(chatMetadata.username);
+        const _acCfgFuse = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
         const _roundsFuse = _acCfgFuse.max_auto_rounds > 0 && _count >= _acCfgFuse.max_auto_rounds;
         const _shouldStop = _allDisconnected || _fuzzyFuse || _roundsFuse;
 
@@ -890,7 +909,7 @@ export async function executeGeneration(
             });
           } catch { /* 广播失败不影响主流程 */ }
         } else {
-          const _acCfg = getAutoContinueConfig(chatMetadata.username);
+          const _acCfg = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
           if (!_acCfg.enabled) {
             _autoContinueCounters.delete(chatid);
             wbTrace(chatid, "generation", "autocontinue:stop", { reason: "user_disabled" });
@@ -923,7 +942,7 @@ export async function executeGeneration(
         if (_fileOpPending) {
           const _foCount = (_autoContinueCounters.get(chatid) || 0) + 1;
           _autoContinueCounters.set(chatid, _foCount);
-          const _acCfg2 = getAutoContinueConfig(chatMetadata.username);
+          const _acCfg2 = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
           if (_acCfg2.max_auto_rounds > 0 && _foCount >= _acCfg2.max_auto_rounds) {
             // [0726 容错修] 轮数熔断（与 ide 池同闸；本池无 system entry 落点，结果由兜底注入不丢）
             _autoContinueCounters.delete(chatid);
@@ -957,7 +976,7 @@ export async function executeGeneration(
           if (_wsPending) {
             const _wsCount = (_autoContinueCounters.get(chatid) || 0) + 1;
             _autoContinueCounters.set(chatid, _wsCount);
-            const _acCfg3 = getAutoContinueConfig(chatMetadata.username);
+            const _acCfg3 = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
             if (_acCfg3.max_auto_rounds > 0 && _wsCount >= _acCfg3.max_auto_rounds) {
               // [0726 容错修] 轮数熔断（与 ide 池同闸；搜索结果走隔轮兜底注入不丢）
               _autoContinueCounters.delete(chatid);
@@ -986,7 +1005,7 @@ export async function executeGeneration(
             if (_brPending) {
               const _brCount = (_autoContinueCounters.get(chatid) || 0) + 1;
               _autoContinueCounters.set(chatid, _brCount);
-              const _acCfg4 = getAutoContinueConfig(chatMetadata.username);
+              const _acCfg4 = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
               if (_acCfg4.max_auto_rounds > 0 && _brCount >= _acCfg4.max_auto_rounds) {
                 _autoContinueCounters.delete(chatid);
                 wbDetect(chatid, "generation", "autocontinue:fuse", false, "熔断 max_rounds(browser_op)", { count: _brCount });
@@ -1029,7 +1048,7 @@ export async function executeGeneration(
                 _orphanEntry.time_stamp = new Date();
                 _orphanEntry.is_generating = false;
                 await addChatLogEntry(chatid, _orphanEntry);
-                const _acCfgOrphan = getAutoContinueConfig(chatMetadata.username);
+                const _acCfgOrphan = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
                 if (_acCfgOrphan.enabled) {
                   const _count = (_autoContinueCounters.get(chatid) || 0) + 1;
                   _autoContinueCounters.set(chatid, _count);
@@ -1039,7 +1058,7 @@ export async function executeGeneration(
                 }
               } else {
               // Loop 自动继续：无工具结果时，若主开关+loop 均启用且有注入文本，排延迟注入续轮（单一实现见 scheduleLoopContinue）
-              const _loopCfg = getAutoContinueConfig(chatMetadata.username);
+              const _loopCfg = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
               if (_loopActive(_loopCfg)) {
                 scheduleLoopContinue(chatid, request.char_id, _loopCfg.delay_ms);
               } else {
@@ -1137,7 +1156,7 @@ export async function executeGeneration(
     //   此处只负责排 timer，守卫全在 scheduleLoopContinue fire 时（在载/在飞/开关三闸）：
     //   deleteChat·ws 卸载晚于上方 cancelAutoContinue 也没关系，fire 时在载闸兜底不产孤儿生成。
     try {
-      const _loopCfgE = getAutoContinueConfig(chatMetadata.username);
+      const _loopCfgE = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);
       if (_loopActive(_loopCfgE)) {
         scheduleLoopContinue(chatid, request.char_id, Math.max(_loopCfgE.delay_ms, ERROR_LOOP_MIN_DELAY_MS));
       }

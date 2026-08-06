@@ -4,8 +4,8 @@
  *
  * 链路：websocket.mjs handleBroadcastEvent → 本模块 handle* 系列 → virtualList 增删替换 → messageList.renderMessage
  *       流式链路：handleStreamUpdate → applySlice(stream.mjs) → streamRenderer.updateTarget → DOM 逐字渲染
- * 影响：操作 virtualList（appendItem/replaceItem；deleteItem 未使用——message_deleted 走 DOM
- *       display:none 直接隐藏，不摘除虚拟列表项，见 handleMessageDeleted）、操作 streamRenderer
+ * 影响：操作 virtualList（appendItem/replaceItem；deleteItem 用于批量回档 handleMessagesRangeDeleted
+ *       从队列真正删除；单条 message_deleted 仍走 DOM display:none 隐藏，见 handleMessageDeleted）、操作 streamRenderer
  *       （register/stop/updateTarget）、清空 MVU 变量（clearMessages）、广播 EventBus stream_token_received 事件
  * 相交：← websocket.mjs（所有 message_* / stream_* / timeline_info 事件分发到此）
  *       → virtualList.mjs（底层虚拟滚动列表，管数据分页 + DOM 回收）
@@ -970,12 +970,20 @@ export async function handleMessageReplaced(index, message, winId) {
       const logIdx = _w.virtualList.getChatLogIndexByQueueIndex(foundByIdQueueIdx);
       await _w.virtualList.replaceItem(logIdx, message);
     } else {
-      const shouldScroll =
-        _w.container.scrollTop >=
-        _w.container.scrollHeight -
-          _w.container.clientHeight -
-          20;
-      await _w.virtualList.appendItem(message, shouldScroll);
+      // [P1-3 0805] 防重复：index/id都找不到时，先按message.id查队列是否已有同id消息
+      //   （WS重复投递/竞态可能导致同一消息走两次message_replaced），存在则replace不append。
+      const _dupIdx = currentQueue.findIndex(item => item?.id === message.id);
+      if (_dupIdx >= 0) {
+        const _dupLogIdx = _w.virtualList.getChatLogIndexByQueueIndex(_dupIdx);
+        await _w.virtualList.replaceItem(_dupLogIdx >= 0 ? _dupLogIdx : _dupIdx, message);
+      } else {
+        const shouldScroll =
+          _w.container.scrollTop >=
+          _w.container.scrollHeight -
+            _w.container.clientHeight -
+            20;
+        await _w.virtualList.appendItem(message, shouldScroll);
+      }
     }
 
     // 消息完成时强制清除 typing indicator
@@ -1065,7 +1073,8 @@ export async function handleMessagesRangeDeleted(startIndex, count, messageIds, 
   const deletedMessageIds = Array.isArray(messageIds) && messageIds.length > 0
     ? new Set(messageIds)
     : null;
-  for (let j = 0; j < queue.length; j++) {
+  // 倒序遍历：先删后面的再删前面的，避免 deleteItem 内部调整后续元素键导致索引漂移
+  for (let j = queue.length - 1; j >= 0; j--) {
     const rawIdx = _w.virtualList.getChatLogIndexByQueueIndex(j);
     const logIndex = rawIdx >= 0 ? rawIdx + _ofs : -1;
     const item = queue[j];
@@ -1077,8 +1086,14 @@ export async function handleMessagesRangeDeleted(startIndex, count, messageIds, 
         _w.streamRenderer.stop(item.id);
         _w.streamingMessages.delete(item.id);
       }
-      const el = document.getElementById(item?.id);
-      if (el) el.style.display = "none";
+      // 从 queue 真正删除（替代只 DOM 隐藏），释放内存并保持队列与后端权威记录一致
+      // deleteItem 接受的是 rawIdx（内部局部绝对索引），不是 logIndex（rawIdx+_ofs）
+      if (rawIdx >= 0) {
+        await _w.virtualList.deleteItem(rawIdx);
+      } else {
+        const el = document.getElementById(item?.id);
+        if (el) el.style.display = "none";
+      }
     }
   }
 

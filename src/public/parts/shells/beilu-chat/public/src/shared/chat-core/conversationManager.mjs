@@ -49,6 +49,17 @@ const CONV_META_KEY = KEYS.BEILU_CONVERSATION_META;
 // 跨客户端 chat-list-changed 重渲染防抖句柄（300ms 合并高频）
 let _chatListChangedTimer = null;
 
+/** [P1-2 0805] 列表重渲染防抖单源：hashchange / beilu:mode-switched / beilu:conv-meta-changed /
+ *  beilu:chat-list-changed 四个高频事件源共用一个 300ms 防抖句柄，合并连发事件为一次重渲染
+ *  （用户发消息 → hash 变化 + chat-list-changed 常同帧到达，原来各自直调 = 一次交互多次全量渲染）。 */
+function _debouncedRenderConvList() {
+  if (_chatListChangedTimer) clearTimeout(_chatListChangedTimer);
+  _chatListChangedTimer = setTimeout(() => {
+    _chatListChangedTimer = null;
+    renderConversationList();
+  }, 300);
+}
+
 /** 模式过滤开关：false = 只显示当前模式的对话，true = 显示全部。
  *  持久化（反方审查 0712）：误标对话的找回入口就是「全部」开关，不持久=刷新即丢、找回动线断。 */
 let _showAllModes = storage.get(KEYS.BEILU_CONV_SHOW_ALL_MODES) === "true";
@@ -503,6 +514,41 @@ async function renderConversationList() {
   filteredChats.sort((a, b) => compareConvOrder(a, b, meta));
 
 
+  /** [P1-2 0805] 条目内容签名：覆盖会影响 buildConvItem 产出 DOM 的全部输入（名称/时间/预览/
+   *  置顶/收藏/模式/组标/在用标）。增量更新时签名一致才复用旧元素（保留事件绑定），
+   *  签名变化则重建——避免"只更新 className"式复用让改名/新消息预览/徽标停留在旧值。 */
+  function _convItemSig(chat) {
+    const id = chat.chatid || chat.id;
+    const cm = meta[id] || {};
+    const g = groupMap[id];
+    return [
+      chat.customName || cm.label || chat.firstUserMessage || "",
+      cm.lastActive || chat.lastMessageTime || "",
+      String(chat.lastMessageContent || "").slice(0, 60),
+      chat.lastMessageSender || "",
+      chat.pinned ? 1 : 0,
+      chat.starred ? 1 : 0,
+      chat.mode || "",
+      g ? `${g.projectName || g.groupId}:${g.role}` : "",
+      Array.isArray(chat.usedByModes) ? chat.usedByModes.join(",") : "",
+      chat.inUseCount || 0,
+    ].join("|");
+  }
+
+  /** [P1-2 0805] 增量挂载：已有同 id 元素且签名未变 → 复用（appendChild 移动即排序，事件绑定保留），
+   *  只刷新高亮/置顶 class；签名变化或新条目 → buildConvItem 重建。 */
+  function _appendConvItem(listEl, chat, existingMap) {
+    const id = chat.chatid || chat.id;
+    const el = existingMap.get(id);
+    if (el && el.dataset.sig === _convItemSig(chat)) {
+      el.className = `conv-item${id === currentId ? " conv-active" : ""}${chat.pinned ? " conv-pinned" : ""}`;
+      listEl.appendChild(el);
+    } else {
+      if (el) el.remove();
+      listEl.appendChild(buildConvItem(chat));
+    }
+  }
+
   /** 构建单个会话条目（每个挂载点各建一份，事件独立绑定） */
   function buildConvItem(chat) {
     const id = chat.chatid || chat.id;
@@ -543,6 +589,7 @@ async function renderConversationList() {
     const item = document.createElement("div");
     item.className = `conv-item${isActive ? " conv-active" : ""}${chat.pinned ? " conv-pinned" : ""}`;
     item.dataset.chatid = id;
+    item.dataset.sig = _convItemSig(chat); // [P1-2 0805] 增量更新复用判据，见 _appendConvItem
 
     // 构建 HTML：两行布局（名称行 + 预览行） + hover 显示的改名/删除按钮 [IDE-T2]
     item.innerHTML = `
@@ -626,8 +673,28 @@ async function renderConversationList() {
   }
 
   // 渲染到每个挂载点（各建独立 DOM + 事件）
+  // [P1-2 0805] keyed增量更新：按data-chatid复用已有DOM元素（签名未变才复用，见_appendConvItem），
+  //   不再全量innerHTML=""重建。全量重建成本=全量DOM重建+事件重绑，高频事件（发消息/摘要落盘）下卡顿。
   for (const listEl of listEls) {
-    listEl.innerHTML = "";
+    // 收集已有conv-item元素，按data-chatid索引
+    const _existing = new Map();
+    for (const _el of listEl.querySelectorAll(".conv-item[data-chatid]")) {
+      _existing.set(_el.dataset.chatid, _el);
+    }
+
+    // 收集本次渲染需要的所有chatid，删除不在新集合中的旧元素
+    const _neededIds = new Set();
+    for (const chat of pinnedItems) _neededIds.add(chat.chatid || chat.id);
+    for (const chat of starredItems) _neededIds.add(chat.chatid || chat.id);
+    for (const [, chats] of dateGroups) for (const chat of chats) _neededIds.add(chat.chatid || chat.id);
+    for (const [id, el] of _existing) {
+      if (!_neededIds.has(id)) { el.remove(); _existing.delete(id); }
+    }
+
+    // 清空listEl中非conv-item的内容（headerInfo/groupHeader/empty等，构建成本低），保留conv-item元素
+    for (const _child of Array.from(listEl.children)) {
+      if (!_child.classList.contains("conv-item")) _child.remove();
+    }
 
     // 角色卡名 + 对话数量 + 模式过滤切换
     if (currentCharName) {
@@ -666,19 +733,19 @@ async function renderConversationList() {
     }
 
     // 置顶分区（无 header，直接列在最前，保留原行为）
-    for (const chat of pinnedItems) listEl.appendChild(buildConvItem(chat));
+    for (const chat of pinnedItems) _appendConvItem(listEl, chat, _existing);
 
     // ⭐ Starred 分区置顶
     if (starredItems.length > 0) {
       listEl.appendChild(buildGroupHeader("收藏"));
-      for (const chat of starredItems) listEl.appendChild(buildConvItem(chat));
+      for (const chat of starredItems) _appendConvItem(listEl, chat, _existing);
     }
 
     // 日期分组 header（今天 / 昨天 / 具体日期），按时间从新到旧
     const orderedKeys = Array.from(dateGroups.keys());
     for (const key of orderedKeys) {
       listEl.appendChild(buildGroupHeader(key));
-      for (const chat of dateGroups.get(key)) listEl.appendChild(buildConvItem(chat));
+      for (const chat of dateGroups.get(key)) _appendConvItem(listEl, chat, _existing);
     }
   }
 }
@@ -1175,7 +1242,8 @@ export function initConversationManager() {
   // 初始渲染
   renderConversationList();
 
-  // 监听 hash 变化以更新高亮
+  // 监听 hash 变化以更新高亮。lastActive 立即落盘（数据不防抖），重渲染走 300ms 防抖单源
+  // （保留全量重建：hashchange 还承担排序更新+角色切换过滤，只改高亮曾导致发消息后列表不更新排序）。
   window.addEventListener("hashchange", () => {
     const meta = loadConvMeta();
     const id = getCurrentChatId();
@@ -1183,12 +1251,12 @@ export function initConversationManager() {
       meta[id].lastActive = Date.now();
       saveConvMeta(meta);
     }
-    renderConversationList();
+    _debouncedRenderConvList();
   });
 
   // E1: 监听模式切换事件，刷新对话列表（更新模式标签显示）
   window.addEventListener("beilu:mode-switched", () => {
-    renderConversationList();
+    _debouncedRenderConvList();
   });
 
   // [0713 病灶审计 C3] 角色就绪事件驱动重渲染：初始渲染时 charName 常未就绪（走"正在获取角色信息"占位），
@@ -1202,11 +1270,7 @@ export function initConversationManager() {
   // 后端按 username 经 sendEventToUser 推 chat-list-changed，websocket.mjs 桥成本事件。
   // 防抖 300ms：updateChatSummary 每次落盘都可能触发，合并高频避免抖动。
   window.addEventListener("beilu:chat-list-changed", () => {
-    if (_chatListChangedTimer) clearTimeout(_chatListChangedTimer);
-    _chatListChangedTimer = setTimeout(() => {
-      _chatListChangedTimer = null;
-      renderConversationList();
-    }, 300);
+    _debouncedRenderConvList();
   });
 
   // 根病3 修复：其他 UI（workPanel / index-chatmgmt）修改 meta 后广播此事件，
@@ -1215,6 +1279,6 @@ export function initConversationManager() {
   // （togglePin/toggleStar/commitRename 已各自 renderConversationList）。
   window.addEventListener("beilu:conv-meta-changed", () => {
     if (_selfMetaWrite) return;
-    renderConversationList();
+    _debouncedRenderConvList();
   });
 }

@@ -172,10 +172,21 @@ export function buildMessagesFromPromptStruct(prompt_struct, callConfig, configT
       // 文本类附件（含 .svg/image/svg+xml，isTextLikeFile 单源判据）不进图片兜底注入：
       // 它们已由 buildEntryAttachmentText 文本附件链全文注入，这里再转一份=双份污染上下文；
       // svg 走图片链还曾致 400（0727 事故）。本过滤对齐框架既有"svg=文本"概念。
-      const _imgFiles = _lastUserIdx >= 0
-        ? (_chatLog[_lastUserIdx].files || []).filter(
-            (f) => (f.mime_type || f.type || "").startsWith("image/") && f.buffer && !isTextLikeFile(f)
-          )
+      const _isEmbeddableImageFile = (f) =>
+        (f.mime_type || f.type || "").startsWith("image/") && f.buffer && !isTextLikeFile(f);
+      // [P2-2 0805] 图片源=本轮窗口（最后一条 user 起到末尾）内最近一条带图片附件的条目。
+      //   原来只读最后一条 user 的 files → 工具/插件在本轮生成的图片（如 beilu-ppt 把 PNG 预览
+      //   挂在回复气泡 reply.files）永远进不了视觉链，AI 审查 PPT 只能看字符画（凛倾 0805
+      //   「直接修PPT注入」）。窗口不越过最后一条 user → 历史图片不复发嵌入（零 token 复发
+      //   成本设计保留）；deepseek 等无视觉渠道由 providerPatch image_url 剥离兜底。
+      let _imgSrcIdx = -1;
+      if (_lastUserIdx >= 0) {
+        for (let _ii = _chatLog.length - 1; _ii >= _lastUserIdx; _ii--) {
+          if ((_chatLog[_ii].files || []).some(_isEmbeddableImageFile)) { _imgSrcIdx = _ii; break; }
+        }
+      }
+      const _imgFiles = _imgSrcIdx >= 0
+        ? (_chatLog[_imgSrcIdx].files || []).filter(_isEmbeddableImageFile)
         : [];
       if (_imgFiles.length > 0) {
         const _imgParts = [];

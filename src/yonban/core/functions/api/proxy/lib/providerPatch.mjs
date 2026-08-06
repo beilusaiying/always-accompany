@@ -270,6 +270,22 @@ export function patchBodyForDeepSeek(
     );
   }
 
+  // 4) image_url 剥离：DeepSeek 官方 API 无视觉能力，含 image_url 的请求整单 400。
+  //    剥离图片部件并留文本占位说明（可见降级，非静默吞掉）——凛倾 2026-08-05 拍板
+  //    「除了deepseek」：PPT/附件链的 PNG image_url 对其余渠道直发，deepseek 在此收口剥离。
+  //    门控=显式 provider 声明（非 URL 猜渠道），与本函数其余分支同一裁决域。
+  //    注意：body 是 requestBody 的浅拷贝，messages 内消息对象与原请求共享引用——
+  //    这里用 map+新对象重建被改的消息，不原地改 msg.content，避免污染上游持有的原始消息。
+  if (Array.isArray(body.messages)) {
+    body.messages = body.messages.map((msg) => {
+      if (!Array.isArray(msg?.content)) return msg;
+      if (!msg.content.some((part) => part?.type === "image_url")) return msg;
+      const stripped = msg.content.filter((part) => !(part && part.type === "image_url"));
+      stripped.push({ type: "text", text: "[附件: 图片（deepseek 不支持视觉，已转为文本说明）]" });
+      return { ...msg, content: stripped };
+    });
+  }
+
   console.log(
     `[proxy/patchBodyForDeepSeek] DeepSeek 预处理已应用: top_p=${body.top_p}, tools=${body.tools?.length ?? "无"}`,
   );

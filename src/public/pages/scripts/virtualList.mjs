@@ -134,19 +134,27 @@ export async function createVirtualList({
 		if (state.queue.length <= state.maxQueueSize) return
 		const viewportTop = container.scrollTop
 		const viewportBottom = viewportTop + container.clientHeight
-		let retainStart = state.startIndex
-		let retainEnd = state.startIndex + state.queue.length - 1
+		// 初始化为反向区间（start=最右、end=最左），Math.min/Math.max 扫描可见元素后才能真正收缩；
+		// 原来初始化为整个队列区间时 min/max 永远无法收缩 → pruneQueue 永不修剪 → queue/DOM 无界增长
+		let retainStart = state.startIndex + state.queue.length - 1
+		let retainEnd = state.startIndex
 
 		// 找到视口内的第一个和最后一个渲染元素
+		const containerRect = container.getBoundingClientRect()
+		let foundVisible = false
 		for (const [index, element] of state.renderedElements.entries()) {
 			const rect = element.getBoundingClientRect()
-			const elementTop = rect.top + container.scrollTop // 绝对位置
+			const elementTop = rect.top - containerRect.top + container.scrollTop // 修正坐标系：rect.top相对视口，container.scrollTop相对容器
 			const elementBottom = elementTop + rect.height
 			if (elementBottom > viewportTop && elementTop < viewportBottom) {
+				foundVisible = true
 				retainStart = Math.min(retainStart, index)
 				retainEnd = Math.max(retainEnd, index)
 			}
 		}
+
+		// 无可见元素时跳过裁剪（容器刚切换/DOM隐藏/高度为0时 retainStart>retainEnd 形成反向区间会误删整个队列）
+		if (!foundVisible) return
 
 		// 扩展保留范围以包括缓冲
 		retainStart = Math.max(state.startIndex, retainStart - state.bufferSize)

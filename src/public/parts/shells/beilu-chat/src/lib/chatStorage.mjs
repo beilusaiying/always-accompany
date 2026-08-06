@@ -838,6 +838,23 @@ function getSummaryFromMetadata(chatid, chatMetadata) {
   };
 }
 
+// [0805 压缩高耦合修复] chat-list-changed 广播合并：AI 自主压缩等批量落盘会连发 saveChat →
+//   updateChatSummary，摘要每次真变都即时广播 → 所有客户端反复重拉+全量重渲染列表（压缩后卡顿主源）。
+//   收口为按 username:chatid 的 trailing 合并（1.5s 静默窗）：风暴合并为一次广播；
+//   跨客户端预览同步（本体↔YonBan）保留，只是延迟 ≤1.5s——不整条砍掉广播（那会让另一端列表死掉）。
+const _chatListChangedCoalesce = new Map(); // key=`${username}:${chatid}` → timer
+function _coalescedChatListChanged(username, chatid) {
+  const key = `${username}:${chatid}`;
+  const prev = _chatListChangedCoalesce.get(key);
+  if (prev) clearTimeout(prev);
+  const t = setTimeout(() => {
+    _chatListChangedCoalesce.delete(key);
+    try { sendEventToUser(username, "chat-list-changed", { chatid }); } catch (e) { console.warn("[同步广播] chat-list-changed 推送失败(不阻塞落盘):", e?.message); }
+  }, 1500);
+  _chatListChangedCoalesce.set(key, t);
+  if (typeof t.unref === "function") t.unref(); // 挂起 timer 不阻塞进程退出
+}
+
 async function updateChatSummary(chatid, chatMetadata) {
   const { username } = chatMetadatas.get(chatid);
   if (!chatMetadata) chatMetadata = await loadChat(chatid);
@@ -866,7 +883,7 @@ async function updateChatSummary(chatid, chatMetadata) {
     prev.lastMessageContent !== summary?.lastMessageContent ||
     String(prev.lastMessageTime) !== String(summary?.lastMessageTime));
   if (changed) {
-    try { sendEventToUser(username, "chat-list-changed", { chatid }); } catch (e) { console.warn("[同步广播] chat-list-changed 推送失败(不阻塞落盘):", e?.message); }
+    _coalescedChatListChanged(username, chatid); // 合并广播，见上方 [0805 压缩高耦合修复]
   }
 }
 

@@ -1404,6 +1404,13 @@ async function handleBroadcastEvent(event, winId) {
       window._beiluToast?.("多组并行暂不可用，已切换本地生成（不影响本次回复）", "warning");
       break;
     }
+    case "reply_truncated": {
+      // 输出截断通知（generation.mjs finish_reason 非 stop/end_turn 时广播）。此前前端无 case → 落 default 被丢弃，
+      // 用户看到不完整回复时无任何提示。补 case 弹警告 toast 告知截断事实（对齐 auto_continue_fuse 范式）。
+      wbTrace("websocket", "reply_truncated", { finish_reason: payload?.finish_reason });
+      window._beiluToast?.(`AI回复被截断（${payload?.finish_reason || "未知原因"}），内容可能不完整`, "warning");
+      break;
+    }
     default:
       wbDetect("websocket", "default", false, "未知WS类型", { type });
       break;

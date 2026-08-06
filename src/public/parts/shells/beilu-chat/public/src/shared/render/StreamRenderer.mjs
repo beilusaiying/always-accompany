@@ -438,34 +438,47 @@ export class StreamRenderer {
               builtinProcessed,
               { role: state.role, charName: state.charName, messageDepth: state.messageDepth },
             );
-            let newHtml = await renderMarkdownAsString(
-              displayProcessed,
-              state.cache,
-            );
-            if (placeholders.size > 0) {
-              newHtml = restorePlaceholders(newHtml, placeholders);
-            }
-            // ★ FT4 §2.1：morphdom 增量 diff（childrenOnly + 富节点白名单），
-            //   替代每帧整段 innerHTML 重绘（销毁重建代码块/MathJax/选区/折叠态）。
-            //   morphdom 未加载（首帧无子节点 / vendor 加载失败）或抛错时，回退整段
-            //   innerHTML——保证流式不白屏（凛倾红线：回退分支必须保留）。
-            if (window.morphdom && contentEl.childNodes.length) {
-              try {
-                const tmp = document.createElement("div");
-                tmp.innerHTML = newHtml;
-                window.morphdom(contentEl, tmp, {
-                  childrenOnly: true,
-                  onBeforeElUpdated: protectRichNode,
-                });
-                wbDetect("streamRender", "morphdom", true, undefined, { id });
-              } catch (morphErr) {
-                // morphdom 失败 → 降级整段重绘，绝不白屏
-                contentEl.innerHTML = newHtml;
-                wbDetect("streamRender", "morphdom", false, morphErr?.message, { id });
-              }
+            // [0805 流式性能] 流式期纯文本渲染（零开销），落稿时完整 markdown 渲染。
+            //   流式每帧 markdown+正则+morphdom 全文加工是前端卡顿主源（长回复 CPU ~5-50ms/帧）；
+            //   改为流式期 textContent 直赋（<1ms），最终排版由 message_replaced →
+            //   replaceItem → messageList.renderMessage 落稿管线完成（权威渲染，本处 else 分支为
+            //   register 时已 is_generating=false 的补渲染兜底）。
+            //   is_generating 从 register 时传入的 message 对象获取（virtualQueue.mjs 两条注册路径均传 message）。
+            const isGenerating = state.message?.is_generating !== false;
+            if (isGenerating) {
+              // 流式期：纯文本 textContent 赋值，跳过 markdown/正则/morphdom
+              contentEl.textContent = displayProcessed;
             } else {
-              // 首帧 / morphdom 未加载 → 整段渲染（与原行为一致）
-              contentEl.innerHTML = newHtml;
+              // 落稿：完整 markdown 渲染 + morphdom diff
+              let newHtml = await renderMarkdownAsString(
+                displayProcessed,
+                state.cache,
+              );
+              if (placeholders.size > 0) {
+                newHtml = restorePlaceholders(newHtml, placeholders);
+              }
+              // ★ FT4 §2.1：morphdom 增量 diff（childrenOnly + 富节点白名单），
+              //   替代每帧整段 innerHTML 重绘（销毁重建代码块/MathJax/选区/折叠态）。
+              //   morphdom 未加载（首帧无子节点 / vendor 加载失败）或抛错时，回退整段
+              //   innerHTML——保证流式不白屏（凛倾红线：回退分支必须保留）。
+              if (window.morphdom && contentEl.childNodes.length) {
+                try {
+                  const tmp = document.createElement("div");
+                  tmp.innerHTML = newHtml;
+                  window.morphdom(contentEl, tmp, {
+                    childrenOnly: true,
+                    onBeforeElUpdated: protectRichNode,
+                  });
+                  wbDetect("streamRender", "morphdom", true, undefined, { id });
+                } catch (morphErr) {
+                  // morphdom 失败 → 降级整段重绘，绝不白屏
+                  contentEl.innerHTML = newHtml;
+                  wbDetect("streamRender", "morphdom", false, morphErr?.message, { id });
+                }
+              } else {
+                // 首帧 / morphdom 未加载 → 整段渲染（与原行为一致）
+                contentEl.innerHTML = newHtml;
+              }
             }
 
             if (cleanText.trim()) {

@@ -933,6 +933,21 @@ function _renderOverviewInPanel(container) {
           <span class="opacity-60" title="流水线/委派并行执行分身时的并发上限；0=无限多开，>0 按池限流">分身并发上限（0=无限）</span>
           <span class="opacity-40">加载中…</span>
         </div>
+        <!-- [T4 0805] work 模式自动继续设置（凛倾方案B独立配置：yonban_config.work_auto_continue）。
+             读写走 setAutoContinueConfig/getAutoContinueConfig verb 对（user 级 yonban_config，与消费端
+             generation.getAutoContinueConfig(username,"work") 同文件同键）；禁走 updateConfig——那写
+             per-char memory/_config.json，消费端读不到（读写不同源死配置）。缺 work 键时后端回退全局
+             auto_continue，UI 显示的即当前实际生效值。数据先行渲染，范式=_loadCloneConcurrency。 -->
+        <div id="work-auto-continue-row" class="mt-2 space-y-1" style="font-size:calc(var(--beilu-font-size, 14px)*0.72)">
+          <div class="flex items-center justify-between">
+            <span class="opacity-60" title="work 模式独立的操作后自动继续开关（不影响 code 面板设置）">自动继续（work 独立）</span>
+            <span class="opacity-40">加载中…</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="opacity-60" title="连续自动续轮上限熔断；0=不限">连续续轮上限（0=不限）</span>
+            <span class="opacity-40">—</span>
+          </div>
+        </div>
         <div id="work-diagnose-result" class="hidden mt-2 space-y-0.5 max-h-64 overflow-auto"></div>
       </div>
     </div>
@@ -959,6 +974,76 @@ function _renderOverviewInPanel(container) {
   // S1: work 模式健康诊断（diagnoseWorkMode 早在后端:2766，前端零入口——补按钮渲染 check 列表）
   container.querySelector("#work-diagnose")?.addEventListener("click", () => _runDiagnose());
   _loadCloneConcurrency(container); // [F3 接线 0714] 与 _loadWorkStats 等 _load* 家族并列的数据先行加载
+  _loadAutoContinue(container); // [T4 0805] work 模式自动继续设置行——数据先行渲染，同 _load* 家族
+}
+
+/**
+ * [T4 0805] work 模式自动继续设置行（凛倾方案B独立配置：「前端的话复用，储存单独拉线」）。
+ * 读=getAutoContinueConfig verb + mode:"work"（返回 work 生效值：work_auto_continue 覆盖、缺键回退全局，
+ *   与消费端 generation.getAutoContinueConfig(username,"work") 同一函数同一口径）；
+ * 写=setAutoContinueConfig verb + mode:"work"（写 yonban_config.work_auto_continue，全量覆写语义——
+ *   UI 未暴露的 delay/loop 字段随写回填当前生效值防半写，范式=idePanel:1082 同 verb 全字段发送）。
+ * 数据先行渲染：拿到值才连值渲染控件；读失败显示"读取失败"不留空框；保存失败回滚到最近确认值+toast。
+ */
+async function _loadAutoContinue(container) {
+  const row = container.querySelector("#work-auto-continue-row");
+  if (!row) return;
+  let _eff = null;
+  try {
+    const r = await sendAction({ verb: "getAutoContinueConfig", target: "plugins:beilu-memory", source: "web", payload: { mode: "work" } });
+    _eff = r?.auto_continue || null;
+  } catch { _eff = null; }
+  if (!row.isConnected) return; // 面板已重渲染/切走，本次结果作废
+  if (!_eff) {
+    for (const _ph of row.querySelectorAll(".opacity-40")) _ph.textContent = "读取失败";
+    return;
+  }
+  let _savedEnabled = _eff.enabled !== false;
+  let _savedMaxRounds = Math.max(0, parseInt(_eff.max_auto_rounds, 10) || 0);
+  // 全量覆写防半写：UI 只暴露 enabled/max_auto_rounds，其余字段回填当前生效值
+  const _save = async (enabled, maxRounds) => {
+    const r = await sendAction({
+      verb: "setAutoContinueConfig", target: "plugins:beilu-memory", source: "web",
+      payload: { mode: "work", enabled, max_auto_rounds: maxRounds, delay_ms: _eff.delay_ms, loop_enabled: _eff.loop_enabled, loop_inject_text: _eff.loop_inject_text, loop_stop_threshold: _eff.loop_stop_threshold },
+    });
+    if (!r?.success) throw new Error(r?.error || "后端未确认");
+  };
+  const _lines = row.children;
+  _lines[0].lastElementChild.outerHTML =
+    `<input type="checkbox" id="work-auto-continue-enabled" class="toggle toggle-xs" ${_savedEnabled ? "checked" : ""} />`;
+  _lines[1].lastElementChild.outerHTML =
+    `<input type="number" id="work-auto-continue-max-rounds" min="0" step="1" class="input input-xs input-bordered w-20" value="${_savedMaxRounds}" />`;
+  const _cb = row.querySelector("#work-auto-continue-enabled");
+  const _input = row.querySelector("#work-auto-continue-max-rounds");
+  _cb?.addEventListener("change", async () => {
+    const _enabled = _cb.checked;
+    try {
+      await _save(_enabled, _savedMaxRounds);
+      _savedEnabled = _enabled;
+      window._beiluToast?.(`work 自动继续已${_enabled ? "开启" : "关闭"}`, "success");
+    } catch (e) {
+      _cb.checked = !_enabled; // 回滚
+      window._beiluToast?.("自动继续设置保存失败：" + (e?.message || e), "error");
+    }
+  });
+  _input?.addEventListener("change", async () => {
+    const raw = _input.value.trim();
+    const n = parseInt(raw, 10);
+    if (raw === "" || !Number.isFinite(n) || n < 0) {
+      _input.value = String(_savedMaxRounds);
+      window._beiluToast?.("续轮上限需为 ≥0 的整数（0=不限），已恢复原值", "warning");
+      return;
+    }
+    _input.value = String(n);
+    try {
+      await _save(_cb?.checked ?? _savedEnabled, n);
+      _savedMaxRounds = n;
+      window._beiluToast?.(`连续续轮上限已设为 ${n === 0 ? "不限" : n}`, "success");
+    } catch (e) {
+      _input.value = String(_savedMaxRounds);
+      window._beiluToast?.("续轮上限保存失败：" + (e?.message || e), "error");
+    }
+  });
 }
 
 /**

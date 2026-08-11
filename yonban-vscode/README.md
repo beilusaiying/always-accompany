@@ -1,6 +1,6 @@
 # YonBan — beilu IDE Bridge
 
-将 [beilu-always-accompany](../beilu-always-accompany/) 后端与 VSCode/Cursor 连接，为 AI 提供 IDE 工具执行能力（42 个 IDE 工具 + 侧边栏聊天/管理面板）。
+将 [beilu-always-accompany](https://github.com/beilusaiying/always-accompany) 后端与 VSCode/Cursor 连接，为 AI 提供 IDE 工具执行能力（42 个 IDE 工具 + 侧边栏聊天/管理面板）。
 
 ---
 

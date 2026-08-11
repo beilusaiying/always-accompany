@@ -3,6 +3,10 @@
  *
  * 定义 iframe_events（6 个）和 tavern_events（ST 完整子集）
  * 从 polyfills.mjs generateEventConstantsScript 拆出
+ * 2026-08-07 对齐上游 JS-Slash-Runner event.ts 82 键（逐字）
+ * 上游: SillyTavern/.../JS-Slash-Runner/src/function/event.ts:181-264
+ * 怪值是上游原样: CHARACTER_DELETED='characterDeleted', GENERATION_AFTER_COMMANDS='GENERATION_AFTER_COMMANDS',
+ *   CHARACTER_MANAGEMENT_DROPDOWN='charManagementDropdown', SMOOTH_STREAM_TOKEN_RECEIVED 与 STREAM_TOKEN_RECEIVED 同值='stream_token_received'
  */
 
 export function generateEventConstantsScript() {
@@ -47,12 +51,12 @@ window.tavern_events = {
 	GROUP_CHAT_CREATED: 'group_chat_created',
 	CHAT_CREATED: 'chat_created',
 	CHARACTER_FIRST_MESSAGE_SELECTED: 'character_first_message_selected',
-	CHARACTER_DELETED: 'character_deleted',
+	CHARACTER_DELETED: 'characterDeleted', // 上游原样：驼峰值非 snake_case
 	CHARACTER_DUPLICATED: 'character_duplicated',
 	CHARACTER_PAGE_LOADED: 'character_page_loaded',
 	CHARACTER_GROUP_OVERLAY_STATE_CHANGE_BEFORE: 'character_group_overlay_state_change_before',
 	CHARACTER_GROUP_OVERLAY_STATE_CHANGE_AFTER: 'character_group_overlay_state_change_after',
-	SMOOTH_STREAM_TOKEN_RECEIVED: 'smooth_stream_token_received',
+	SMOOTH_STREAM_TOKEN_RECEIVED: 'stream_token_received', // 上游原样：与 STREAM_TOKEN_RECEIVED 同值（别名对）
 	FILE_ATTACHMENT_DELETED: 'file_attachment_deleted',
 	WORLDINFO_FORCE_ACTIVATE: 'worldinfo_force_activate',
 	OPEN_CHARACTER_LIBRARY: 'open_character_library',
@@ -62,6 +66,55 @@ window.tavern_events = {
 	GLOBAL_CONTEXT_MENU: 'global_context_menu',
 	TOOL_CALLS_PERFORMED: 'tool_calls_performed',
 	TOOL_CALLS_RENDERED: 'tool_calls_rendered',
+
+	/* ── 2026-08-07 补齐上游 82 键中缺失的 47 键 ── */
+	EXTRAS_CONNECTED: 'extras_connected',
+	MESSAGE_FILE_EMBEDDED: 'message_file_embedded',
+	MESSAGE_REASONING_EDITED: 'message_reasoning_edited',
+	MESSAGE_REASONING_DELETED: 'message_reasoning_deleted',
+	MESSAGE_SWIPE_DELETED: 'message_swipe_deleted',
+	MORE_MESSAGES_LOADED: 'more_messages_loaded',
+	GENERATION_AFTER_COMMANDS: 'GENERATION_AFTER_COMMANDS', // 上游原样：值全大写非 snake_case
+	SD_PROMPT_PROCESSING: 'sd_prompt_processing',
+	EXTENSIONS_FIRST_LOAD: 'extensions_first_load',
+	EXTENSION_SETTINGS_LOADED: 'extension_settings_loaded',
+	SETTINGS_LOADED: 'settings_loaded',
+	SETTINGS_UPDATED: 'settings_updated',
+	MOVABLE_PANELS_RESET: 'movable_panels_reset',
+	SETTINGS_LOADED_BEFORE: 'settings_loaded_before',
+	SETTINGS_LOADED_AFTER: 'settings_loaded_after',
+	CHATCOMPLETION_SOURCE_CHANGED: 'chatcompletion_source_changed',
+	CHATCOMPLETION_MODEL_CHANGED: 'chatcompletion_model_changed',
+	OAI_PRESET_CHANGED_BEFORE: 'oai_preset_changed_before',
+	OAI_PRESET_CHANGED_AFTER: 'oai_preset_changed_after',
+	OAI_PRESET_EXPORT_READY: 'oai_preset_export_ready',
+	OAI_PRESET_IMPORT_READY: 'oai_preset_import_ready',
+	WORLDINFO_SETTINGS_UPDATED: 'worldinfo_settings_updated',
+	CHARACTER_EDITOR_OPENED: 'character_editor_opened',
+	CHARACTER_EDITED: 'character_edited',
+	GENERATE_BEFORE_COMBINE_PROMPTS: 'generate_before_combine_prompts',
+	GENERATE_AFTER_COMBINE_PROMPTS: 'generate_after_combine_prompts',
+	CHARACTER_RENAMED: 'character_renamed',
+	CHARACTER_RENAMED_IN_PAST_CHAT: 'character_renamed_in_past_chat',
+	STREAM_TOKEN_RECEIVED: 'stream_token_received', // 上游原样：与 SMOOTH_STREAM_TOKEN_RECEIVED 同值（别名对）
+	STREAM_REASONING_DONE: 'stream_reasoning_done',
+	CONNECTION_PROFILE_LOADED: 'connection_profile_loaded',
+	CONNECTION_PROFILE_CREATED: 'connection_profile_created',
+	CONNECTION_PROFILE_DELETED: 'connection_profile_deleted',
+	CONNECTION_PROFILE_UPDATED: 'connection_profile_updated',
+	CHARACTER_MANAGEMENT_DROPDOWN: 'charManagementDropdown', // 上游原样：驼峰值非 snake_case
+	SECRET_WRITTEN: 'secret_written',
+	SECRET_DELETED: 'secret_deleted',
+	SECRET_ROTATED: 'secret_rotated',
+	SECRET_EDITED: 'secret_edited',
+	PRESET_CHANGED: 'preset_changed',
+	PRESET_DELETED: 'preset_deleted',
+	PRESET_RENAMED: 'preset_renamed',
+	PRESET_RENAMED_BEFORE: 'preset_renamed_before',
+	MAIN_API_CHANGED: 'main_api_changed',
+	WORLDINFO_ENTRIES_LOADED: 'worldinfo_entries_loaded',
+	WORLDINFO_SCAN_DONE: 'worldinfo_scan_done',
+	MEDIA_ATTACHMENT_DELETED: 'media_attachment_deleted',
 
 	/* ── beilu 专属事件常量（设计 渲染方案_设计.md §4.5）──
 	 * 这些是 beilu 框架规划的事件契约。常量先就位（让美化代码能写 eventOn(tavern_events.EMOTION_CHANGED, ...)

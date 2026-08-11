@@ -19,6 +19,16 @@ export function generateMVUPolyfillScript() {
 		BEFORE_MESSAGE_UPDATE: 'mag_before_message_update'
 	};
 
+	/* [0806] 不覆盖真实现守卫：本 shim 现在也注入卡内脚本 iframe（原先被 needsMVU 一刀切关掉），
+	   而那些卡可能自带完整 MVU bundle.js。判据=已有 Mvu 且带 parseMessage 函数（bundle 的标志），
+	   此时保持原样只补缺失字段，绝不整体替换——shim 顶掉真实现会让变量解析静默降级。 */
+	var existing = window.Mvu;
+	if (existing && typeof existing.parseMessage === 'function') {
+		if (!existing.events) existing.events = MVU_EVENTS;
+		if (window.initializeGlobal) window.initializeGlobal('Mvu', existing);
+		return;
+	}
+
 	window.Mvu = {
 		events: MVU_EVENTS,
 

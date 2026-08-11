@@ -203,6 +203,20 @@ export function generateLorebookAPIScript() {
 	};
 
 	/**
+	 * [0807 MVU断链修·断点2] 获取角色世界书（酒馆助手 lorebook.ts 契约形状 {primary, additional}）。
+	 * MVU bundle 的 getEnabledLorebookList()（MagVarUpdate variable_init.ts:222-237）靠本函数拿角色绑定书；
+	 * 此前 beilu 未实现 → bundle 内 TypeError 被其 try 吞（"获取角色主 lorebook 失败，忽略"）→
+	 * 书列表只剩 selected_global_lorebooks=[] → loadInitVarData 零书可读 → is_updated=false →
+	 * initCheck 提前 return（variable_init.ts:124）→ [InitVar] 变量永不初始化（变量管理器"暂无楼层变量数据"）。
+	 * additional 返回空数组：beilu 双开关模型无 ST 的 charLore.extraBooks 概念（如实降级，非省事）。
+	 * @returns {Promise<{primary: string|null, additional: string[]}>}
+	 */
+	window.getCharLorebooks = async function() {
+		var primary = await window.getCurrentCharPrimaryLorebook();
+		return { primary: primary || null, additional: [] };
+	};
+
+	/**
 	 * 获取世界书全局设置
 	 * T12：以下为 ST(SillyTavern) 世界书引擎专有参数概念。beilu-worldbook 后端架构不同，无
 	 * scan_depth/context_percentage/budget_cap/min_activations/max_recursion_steps 对应配置（已核后端 main.mjs 无这些字段）。

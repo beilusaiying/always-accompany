@@ -984,6 +984,16 @@ async function _p1QuickTest(container) {
     if (!_p1QuickIsCurrent(container, ticket, snapshot)) return;
     const ms = Date.now() - t0;
     if (!r?.success) {
+      // [0808下午 P1 冷启动 fail-fast 配套轮询] 服务预热中（E_P1_WARMING）＝可预期瞬态，不定格成
+      //   错误：显示预热态，4s 后自动重跑（ticket 守卫——用户改了输入/重新点测会作废本轮重试）。
+      if (r?.code === "E_P1_WARMING") {
+        if (out) {
+          out.dataset.p1QuickState = "loading";
+          out.innerHTML = '<span class="opacity-50">P1 冷启动预热中（服务重启后首跑需等三集群+词库加载）…将自动重试</span>';
+        }
+        setTimeout(() => { if (_p1QuickIsCurrent(container, ticket, snapshot)) _p1QuickTest(container); }, 4000);
+        return;
+      }
       if (out) {
         out.dataset.p1QuickState = "error";
         out.innerHTML = `<span class="text-error">${_esc(r?.error || "召回失败（服务未返回原因）")}</span>`;

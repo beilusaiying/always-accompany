@@ -23,7 +23,7 @@
  * 影响范围：
  *   DOM：首次调用 append 弹窗节点到 body，之后复用（hidden 控制）；
  *   剪贴板：复制操作写入系统剪贴板；
- *   注入：resolve({action:'inject'}) 交还调用方 messageInput.mjs，由其写 #message-input 并触发 input 事件。
+ *   注入：resolve({action:'inject'}) 交还调用方 messageInput.mjs，由其写 #send_textarea 并触发 input 事件。
  */
 
 import { storage } from "../state/storage.mjs";
@@ -434,7 +434,7 @@ function _collectText() {
  * 注入文本到 #user-input textarea
  */
 function _injectToInput(text) {
-  const textarea = document.getElementById('message-input');
+  const textarea = document.getElementById('send_textarea');
   if (!textarea) {
     window._beiluToast?.('未找到输入框', 'error');
     return;

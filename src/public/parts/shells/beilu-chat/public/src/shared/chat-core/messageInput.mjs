@@ -13,8 +13,8 @@
  * 链路：initializeMessageInput() 在 chat.mjs initializeChat() 末尾调用，完成输入框装配
  *       用户点击"发送" / Ctrl+Enter → sendMessage() → addUserReply(endpoints.mjs) → 后端收消息
  *       用户点击"上传" → fileInput.click → handleFilesSelect → SelectedFiles
- *       用户点击"语音转文字" → toggleVoiceRecording → record → transcribe → #message-input
- * 影响：写 SelectedFiles（模块级附件暂存）；调 addUserReply 发后端请求；清空 #message-input；
+ *       用户点击"语音转文字" → toggleVoiceRecording → record → transcribe → #send_textarea
+ * 影响：写 SelectedFiles（模块级附件暂存）；调 addUserReply 发后端请求；清空 #send_textarea；
  *       写 localStorage（草稿，通过 KEYS）；toast 提示（空消息/录音错误）
  * 相交：← chat.mjs（initializeMessageInput 调用）
  *       → endpoints.mjs（addUserReply: 发送消息到后端）
@@ -23,7 +23,7 @@
  *       → dragAndDrop.mjs（拖入文件支持）
  *
  * 点击后发生什么：
- *   发送按钮点击 / Ctrl+Enter → sendMessage()：取 #message-input 内容 + SelectedFiles → addUserReply()
+ *   发送按钮点击 / Ctrl+Enter → sendMessage()：取 #send_textarea 内容 + SelectedFiles → addUserReply()
  *     → 后端接收 → WS 推 stream_update → virtualQueue → StreamRenderer 开始流式渲染
  *   上传按钮点击 → 直接弹文件选择器
  *   录音按钮点击（首次）→ 请求麦克风权限 → 开始录音（按钮变红）
@@ -37,7 +37,7 @@ import { handleFilesSelect } from "./fileHandling.mjs" // 6c尾·根级散件归
 import { showOptimisticUserMessage, clearOptimisticUserMessage } from "../render/virtualQueue.mjs";
 
 import { addDragAndDropSupport } from "../widgets/dragAndDrop.mjs";
-import { switchModeTo } from "../../panels/feature/featureControls.mjs";
+import { switchModeTo, getCurrentMode } from "../../panels/feature/featureControls.mjs"; // [0808] getCurrentMode=window_mode 生产者改读窗口模式轴
 // 打字式联想（002 0731）：input 停顿→P1 轻量召回→联想词 chip；默认关，开关在 P1 运行/测试面板
 import { initTypingSuggest, onTypingInput } from "./typingSuggest.mjs";
 import { TAB_TO_MODE, MODE_BADGE } from "../state/modeTabMap.mjs"; // D3 收口：tab→mode 权威表（_TAB_TO_INPUT_MODE 派生源）；D2：快速命令词典派生源
@@ -49,7 +49,7 @@ import { wbTrace, wbDetect } from "../widgets/whitebox.mjs";
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
 import { layoutState, saveState } from "../layout/core.mjs"; // 布局态唯一权威（输入框定高与侧栏宽度同仓）
 
-const messageInputElement = document.getElementById("message-input");
+const messageInputElement = document.getElementById("send_textarea");
 const sendButtonElement = document.getElementById("send-button");
 const fileInputElement = document.getElementById("file-input");
 const attachmentPreviewContainer =
@@ -72,7 +72,7 @@ let _recordingStopDone = null;
 // ------------------------------------------------------------
 // 断点根因：input 事件仅 autoResizeTextarea 不落盘 → 刷新/切卡/切 tab 后 DOM 重建，草稿凭空丢；
 //   tab-activated 无差别清附件 → 同模式内切 tab 也丢附件。二者同属"用户已打字/已选但未发送"。
-// U01 草稿=全局单份：#message-input 是全模式共享的同一个 DOM 元素（单 id，smart/work/skillPicker 都引它，
+// U01 草稿=全局单份：#send_textarea 是全模式共享的同一个 DOM 元素（单 id，smart/work/skillPicker 都引它，
 //   模式切换不清空它）——共享框对应"单份草稿"，落 localStorage(KEYS.BEILU_CHAT_DRAFT) 纯字符串，
 //   刷新/切卡/切 tab 回来恢复；发送成功/命令消费后清。若强做"按模式分草稿"，共享框会与之打架
 //   （切模式框内仍是上一模式文本、restore 因框非空被跳过），故不分模式。
@@ -627,7 +627,7 @@ async function _showTranscribeResult(result, httpStatus) {
   const action = await showTranscriptPopup(result.segments || [], result.raw_text, result.meta);
 
   if (action.action === "inject" && action.text.trim()) {
-    const input = document.getElementById("message-input");
+    const input = document.getElementById("send_textarea");
     if (input) {
       input.value = action.text;
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -802,10 +802,13 @@ async function sendMessage() {
     _optimisticId = await showOptimisticUserMessage({ content: messageText, files: SelectedFiles });
   } catch (e) { /* 乐观气泡失败不阻断真实发送，降级为无占位 */ }
   try {
-    // [20260726] 窗口模式随请求上送：模式是窗口的运行时事实（TAB_TO_MODE 是 tab→mode 单一权威），
-    //   不该让后端去磁盘 active_modes_map 里反查——那张表两个窗口同时写会互相覆盖。
-    //   辅助视图（TAB_TO_MODE=null，如"记忆"tab）不带，后端维持原兜底。
-    const _winMode = TAB_TO_MODE[document.body.dataset.activeTab] || "";
+    // [20260726] 窗口模式随请求上送：模式是窗口的运行时事实，不该让后端去磁盘 active_modes_map
+    //   里反查——那张表两个窗口同时写会互相覆盖。
+    // [0808 改读窗口模式轴] 原读 TAB_TO_MODE[activeTab]（视图轴）：/mode 就地切换只改 _currentMode
+    //   不换 tab，视图轴值会把就地切换的模式覆盖回 tab 模式（就地切换在生成链静默失效的暗断）。
+    //   窗口模式轴 getCurrentMode()（per-window BEILU_ACTIVE_MODE 支撑）才是"本窗此刻的模式"；
+    //   视图轴仅作兜底（模块初始化极早期）。辅助视图差异由模式轴自身承载，后端非法值自会回退。
+    const _winMode = getCurrentMode() || TAB_TO_MODE[document.body.dataset.activeTab] || "";
     await addUserReply({ content: messageText, files: SelectedFiles }, singleInject, onceInjectIds, _winMode);
     messageInputElement.value = "";
     messageInputElement.style.height = "auto";

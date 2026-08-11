@@ -64,9 +64,27 @@ function rewriteEsmUrls(body) {
   // esm.run 完整 URL
   result = result.replace(/https:\/\/esm\.run\//g, "/esm-cache/");
 
-  // Node.js polyfill: "/node/buffer.mjs" → "/esm-cache/node/buffer.mjs"
+  // jsDelivr 根相对 ESM 引用："/npm/pkg@ver/+esm" → "/esm-cache/pkg@ver"
+  // 2026-08-08 根因修（"每次对话都 Markdown Load Error" 的真根因）：上游链 esm.sh→esm.run，
+  //   而 esm.run 实际命中 cdn.jsdelivr.net。esm.sh 对 d3(v3)/micromark/unist 等包失败时回退 esm.run，
+  //   jsDelivr 打包内容用**根相对** "/npm/dep@ver/+esm" 引子依赖——原四条重写规则无一覆盖此形态
+  //   （esm.sh 内部路径规则要求首段紧跟 @，"/npm/" 后是 "npm" 段不带 @ 故不匹配）→ "/npm/..." 原样
+  //   漏进浏览器 → 请求 localhost/npm/... 落全局 404（d3-timer/d3-ease/unist-util-is 等全族）→
+  //   markdownConvertor 整条 import 图 reject → markdown.mjs 兜底 → 每条消息 Markdown Load Error。
+  //   归一化回 esm.sh 形态（去 /npm/ 前缀与 /+esm 后缀，保留 pkg@ver），重回干净上游+缓存链。
+  //   兼容 esm.run 全 URL 规则已把 "https://esm.run/npm/..." 转成 "/esm-cache/npm/..." 的情形（可选前缀）。
+  //   注释头 "Original file: /npm/pkg/src/index.js"（无 /+esm）与 sourcemap "/sm/..." 均不匹配，安全。
   result = result.replace(
-    /(["'])\/node\/([a-zA-Z0-9_.-]+\.mjs)/g,
+    /(["'])(?:\/esm-cache)?\/npm\/(@?[^"'\s]+?)\/\+esm\b/g,
+    "$1/esm-cache/$2",
+  );
+
+  // Node.js polyfill: "/node/buffer.mjs" → "/esm-cache/node/buffer.mjs"
+  // 2026-08-08 根因修：原 [a-zA-Z0-9_.-]+ 不含斜杠 → 嵌套 polyfill 路径（"/node/fs/promises.mjs"、
+  //   "/node/util/types.mjs"）漏改，原样落到浏览器请求 /node/... 404（lisp/ruby 代码执行器
+  //   经 virtual-console/lips 依赖 node:fs/node:util，点"执行"即崩）。路径段允许斜杠即可覆盖嵌套。
+  result = result.replace(
+    /(["'])\/node\/([a-zA-Z0-9_./-]+\.mjs)/g,
     "$1/esm-cache/node/$2",
   );
 
@@ -377,10 +395,17 @@ export function registerEsmFallback(router) {
       return next();
     }
 
+    // jsDelivr 根相对路径兜底：/npm/pkg@ver/+esm → 归一化 /esm-cache/pkg@ver（与 rewriteEsmUrls 同规则）。
+    // 2026-08-08 根因修：万一 rewriteEsmUrls 漏网（如旧缓存内容未重写），浏览器直接请求 /npm/.../+esm 时
+    //   在此拦截重定向，而非落 404。去 /npm/ 前缀与 /+esm 后缀，回归干净 esm.sh 形态。
+    const npmEsm = p.match(/^\/npm\/(@?[^\s]+?)\/\+esm$/);
+    if (npmEsm) return res.redirect(302, "/esm-cache/" + npmEsm[1]);
+
     const looksLikeEsm =
       /^\/(?:@[a-zA-Z0-9_.-]+\/)?[a-zA-Z0-9_.-]+[@]/.test(p) ||
       q.includes("?target=") ||
-      /^\/node\/[a-zA-Z0-9_.-]+\.mjs$/.test(p);
+      // 2026-08-08 根因修：允许嵌套 node polyfill 路径（/node/fs/promises.mjs 等），与 rewriteEsmUrls 对齐
+      /^\/node\/[a-zA-Z0-9_./-]+\.mjs$/.test(p);
 
     if (looksLikeEsm) {
       const esmCacheUrl = "/esm-cache" + q.slice(q.indexOf(p));

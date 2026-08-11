@@ -18,6 +18,7 @@ import { getCurrentCharId } from "../airp/utils.mjs"; // 0716 收口：charId �
 import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b：出向统一门面（动态壳名/server list 走专用路由）
 import { initSidebarResize, layoutState, saveState } from "../../shared/layout/core.mjs"; // botActivePanel 面板记忆（凛倾07-11「侧栏没有记录上次操作」）
 import { storage, KEYS } from "../../shared/state/storage.mjs";
+import { createVisibilityPoller } from "../../shared/state/windowRuntime.mjs"; // [0808 机制] 前台/后台刷新分级单源
 
 // ============================================================
 // Bot模式活动栏
@@ -86,9 +87,12 @@ function initBotActivityBar() {
       dot.title = "有 Bot 运行中";
       listBtn.appendChild(dot);
     }
-    const refreshRunBadge = async () => {
+    const _botTabVisible = () => {
       const tabBot = document.getElementById("center-tab-bot");
-      if (!tabBot || tabBot.classList.contains("hidden")) return;
+      return !!(tabBot && !tabBot.classList.contains("hidden"));
+    };
+    const refreshRunBadge = async () => {
+      if (!_botTabVisible()) return; // 分段级二次防线（调度层已按可见性暂停，此处兜信号间隙）
       try {
         const { platformToShell } = await import("./discordBotPanel.mjs");
         const shell = platformToShell(storage.get(KEYS.BEILU_BOT_PLATFORM) || "discord");
@@ -98,8 +102,9 @@ function initBotActivityBar() {
         if (dot) dot.classList.toggle("hidden", !(Array.isArray(running) && running.length > 0));
       } catch { /* 后端未启动时保持隐藏 */ }
     };
-    setInterval(refreshRunBadge, 30000);
-    refreshRunBadge();
+    // [0808 windowRuntime 机制] 30s 角标轮询接可见性生命周期（原裸 setInterval 无 clearInterval、
+    //   隐藏时空转——治理清单 循环08 BUG 类；start 内含首拉，原手动 refreshRunBadge() 删除防双拉）
+    createVisibilityPoller({ tick: refreshRunBadge, intervalMs: 30000, visible: _botTabVisible, label: "botRunBadge" }).start();
   }
 
   // 初始化侧边栏拖拽

@@ -36,8 +36,6 @@ export * from "./lib/requestBuilder.mjs";
 // 内部使用（非纯 re-export）的符号显式导入：events 注册 / facade 初始化 / registerChatUiSocket 包装依赖。
 import { registerChatUiSocket as _registerChatUiSocket } from "./lib/broadcast.mjs";
 import {
-  getChatMetadatas,
-  saveChat,
   initializeChatMetadatas,
   handleBeforeUserDeleted,
   handleAfterUserDeleted,
@@ -65,10 +63,17 @@ events.on("UserDeletionAborted", handleUserDeletionAborted);
 events.on("AfterUserRenamed", handleAfterUserRenamed);
 
 // ============================================================
-// registerChatUiSocket — 注入 chatStorage 依赖，避免循环引用
+// registerChatUiSocket — 薄包装（deps 注入已退役）
 // ============================================================
 
-// 本地包装：注入 chatStorage 依赖避免循环引用。本地显式导出 shadow `export * from broadcast` 的同名。
+// [0808 收口] 原包装按 4 参注入 {getChatMetadatas, saveChat}（历史上 broadcast 不静态依赖 chatStorage
+//   时的防环手段）；broadcast.mjs 自 v4 簇② 起已模块级静态 import chatStorage（单向无环），deps 注入层
+//   退役，broadcast 签名收口为 (chatid, ws, username) 三参。本包装保留仅为 shadow
+//   `export * from broadcast` 的同名导出（api_v1_router 经 chatModule 调用的入口不变）。
+// ⚠ 0808 事故记录：收口时 broadcast 侧先改了三参、本包装层漏改——deps 对象串进 username 参数位 →
+//   ws dispatch 的 context.user 变成函数对象 → functions:memory/index.mjs:42 按「context.user=身份
+//   唯一权威」覆盖 args.username → 全线 path 收到 Object 报错 + 归属校验全拒（死循环风暴）。
+//   教训：改跨层签名必须 grep 全部调用方**含包装/re-export 层**（chat.mjs 本地同名 shadow 极易漏）。
 export function registerChatUiSocket(chatid, ws, username) {
-  _registerChatUiSocket(chatid, ws, { getChatMetadatas, saveChat }, username);
+  _registerChatUiSocket(chatid, ws, username);
 }

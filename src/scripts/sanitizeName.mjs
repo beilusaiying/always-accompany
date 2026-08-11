@@ -34,5 +34,8 @@
  */
 export function sanitizeFilename(name, fallback = "") {
 	const s = String(name ?? "").replace(/[\\/:*?"<>|]/g, "_").trim();
+	// [0806] 整段 "."/".." 是目录穿越/自引用段：import-char 等用本函数产目录名，
+	// 放行 ".." 会让 path.join(chars, "..") 写进上级目录——一律落 fallback。
+	if (s === "." || s === "..") return fallback;
 	return s || fallback;
 }

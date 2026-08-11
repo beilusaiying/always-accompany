@@ -221,7 +221,7 @@ function _maybeShowWorkWelcome() {
   });
 
   // 用户主动发送第一条消息后消失（监听发送按钮 / Ctrl+Enter）
-  const chatInput = document.getElementById("message-input");
+  const chatInput = document.getElementById("send_textarea");
   const sendBtn = document.getElementById("send-button");
   const onceDismiss = () => dismiss(true);
   sendBtn?.addEventListener("click", onceDismiss, { once: true });
@@ -238,7 +238,7 @@ function _maybeShowWorkWelcome() {
 
 // 填充对话输入框并自动发送（快速开始按钮）
 function _fillAndSendChat(text) {
-  const input = document.getElementById("message-input");
+  const input = document.getElementById("send_textarea");
   if (!input) {
     window._beiluToast?.("未找到输入框，请手动输入：" + text, "info");
     return;

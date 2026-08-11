@@ -22,6 +22,7 @@
  */
 
 import { createDiag } from "../shared/state/diagLogger.mjs";
+import { wbTrace } from "../shared/widgets/whitebox.mjs"; // [0806 可观测] iframe 注入面埋点，line="stcompat"
 import { generateEjsEngineScript } from "./ejsEngine.mjs";
 import { initVariableStore } from "./variableStore.mjs";
 
@@ -38,6 +39,7 @@ import { generateTavernHelperScript } from "./runtime/tavernHelper.mjs";
 import { generateUtilsScript } from "./runtime/utils.mjs";
 import { generateVariableSystemScript } from "./runtime/variableSystem.mjs";
 import { storage, KEYS } from "../shared/state/storage.mjs"; // R2: localStorage 集中
+import { getEventBus } from "../shared/state/eventBusCore.mjs"; // [0807 转接二期#6] 总线创建单源
 
 const diag = createDiag("stCompat");
 
@@ -243,7 +245,22 @@ export async function buildInjectionScript(options = {}) {
     charName = "Character",
   } = options;
 
-  if (!needsST && !needsMVU && !needsVue && !needsEJS) return "";
+  // [0806 开关解耦] 原 needsMVU 一个布尔同时管两件互不相干的事：①注入 Zod CDN ②注入 window.Mvu
+  //   polyfill。scriptRunner 为躲 Zod 版本冲突（卡内 MVU bundle.js 自带 Zod 4.x，注入 3.x 会
+  //   覆盖导致 .prefault() 不可用）只能整体 needsMVU:false，**连带把 window.Mvu 也关掉**——
+  //   而在真酒馆里 window.Mvu 由宿主（酒馆助手 function/global.ts）恒定提供，卡内脚本只管用，
+  //   于是脚本拿不到 Mvu → "开局面板脚本未启动"（0806 用户实报）。
+  //   拆成两个独立关注点，调用方按需各自决定；未显式传时跟随 needsMVU（旧调用方零行为变化）。
+  const needsZod = options.needsZod ?? needsMVU;
+  const needsMvuPolyfill = options.needsMvuPolyfill ?? needsMVU;
+  // [0806 可观测] 每个 iframe 到底拿到了哪几层——"面板脚本未启动"最常见的原因就是
+  //   window.Mvu 没注入（历史上被 needsMVU 一刀切关掉）。messageId=-1 表示脚本 iframe。
+  wbTrace("stcompat", "inject:layers", {
+    kind: messageId === -1 ? "script-iframe" : "message-iframe",
+    messageId, needsST, needsZod, needsMvuPolyfill, needsVue, needsEJS, charName,
+  });
+
+  if (!needsST && !needsZod && !needsMvuPolyfill && !needsVue && !needsEJS) return "";
 
   diag.time("buildInjectionScript");
   diag.log("开始构建注入脚本:", {
@@ -365,9 +382,11 @@ if (typeof window.YAML === 'undefined' && typeof window.jsyaml !== 'undefined') 
   // ============================================================
   // Layer 2: MVU 层
   // ============================================================
-  if (needsMVU) {
+  if (needsZod) {
     // ★ Zod CDN 注入：消息 iframe 中的内联代码可能使用 z.object()/z.boolean() 等
     // 通过 <script type="module"> 加载 Zod 4.x，与 scriptRunner 使用相同的 CDN
+    // [0806] 与下方 MVU polyfill 拆开：卡内脚本自带 MVU bundle.js（含 Zod 4.x）时要关掉本段
+    //   避免版本互覆，但 window.Mvu 仍须由宿主提供——两件事不再共用一个开关。
     inlineParts.push(`
 // ★ Zod 4.x CDN 加载（消息 iframe 用）
 (async function() {
@@ -388,9 +407,15 @@ if (typeof window.YAML === 'undefined' && typeof window.jsyaml !== 'undefined') 
 	}
 })();`);
 
-    // MVU polyfill（内联 shim）
+    diag.log("Layer 2a (Zod CDN) 构建完成");
+  }
+
+  // MVU polyfill（内联 shim）——与 Zod 注入独立门控。
+  // polyfill 自身带"已存在真实实现则不覆盖"守卫（见 mvuPolyfill.mjs），
+  // 所以卡内 bundle.js 无论先加载还是后加载都不会被 shim 顶掉。
+  if (needsMvuPolyfill) {
     inlineParts.push(generateMVUPolyfillScript());
-    diag.log("Layer 2 (MVU) 构建完成 — Zod CDN + MVU polyfill 已注入");
+    diag.log("Layer 2b (MVU polyfill) 构建完成 — window.Mvu 已提供");
   }
 
   // ============================================================
@@ -447,9 +472,8 @@ if (typeof window.YAML === 'undefined' && typeof window.jsyaml !== 'undefined') 
  */
 export function initSTCompat() {
   // 初始化父页面全局对象
-  if (!window.__beiluEventBus) {
-    window.__beiluEventBus = { _listeners: new Map() };
-  }
+  // [0807 转接二期#6] 手拼创建 → eventBusCore.getEventBus() 单源（形状/兜底修形收口）
+  getEventBus();
   if (!window.__beiluGlobals) {
     window.__beiluGlobals = {};
   }

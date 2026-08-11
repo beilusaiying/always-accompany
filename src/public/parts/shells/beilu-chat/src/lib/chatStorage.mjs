@@ -1211,6 +1211,14 @@ export async function deleteChat(chatids, username) {
         const _bc = await import("./broadcast.mjs");
         _bc.forgetChatTyping?.(chatid);
       } catch { /* broadcast 不可用不影响删除 */ }
+      // [0808 治理·清理链补漏] ⑤-b 本模块 _chatListChangedCoalesce 合并 timer（治理清单 循环08 #2：
+      //   1.5s 静默窗内删 cid → timer 到期仍向已删会话发 chat-list-changed 迟到广播）。
+      //   同文件私有 Map 直清：clearTimeout + delete，键形状与 _coalescedChatListChanged 同源。
+      {
+        const _clcKey = `${username}:${chatid}`;
+        const _clcTimer = _chatListChangedCoalesce.get(_clcKey);
+        if (_clcTimer) { clearTimeout(_clcTimer); _chatListChangedCoalesce.delete(_clcKey); }
+      }
       try {
         // ⑥ generation per-chatid 续轮/计数/排队态（防异常路径泄漏 + 防 timer 在已删会话 fire）。
         const _gen = await import("./generation.mjs");

@@ -42,6 +42,17 @@ import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
 let _cardController = null;
 // 去重：已展示/已终态处理过的 confirmationId:revision（重连重投影、广播重放不弹重复卡）
 const _seenConfirmations = new Map(); // `${id}:${rev}` → "shown" | "done"
+// [0808 治理·有生无灭修] 原 "done" 条目永久保留（长会话单调增长，治理清单 循环08 二节点名）。
+//   Map 按插入序滚动裁剪：超上限摘最老（同 checkpoint MAX=50 滚动范式）；重插同键先删后插保新鲜度。
+const _SEEN_CONFIRMATIONS_MAX = 200;
+function _rememberConfirmation(key, val) {
+  if (_seenConfirmations.has(key)) _seenConfirmations.delete(key);
+  _seenConfirmations.set(key, val);
+  while (_seenConfirmations.size > _SEEN_CONFIRMATIONS_MAX) {
+    const _oldest = _seenConfirmations.keys().next().value;
+    _seenConfirmations.delete(_oldest);
+  }
+}
 
 /**
  * FT-A1: 跨模式上下文引用构造器（全智能MD §四.3）
@@ -90,7 +101,7 @@ export function createTempConversation(confirmation) {
   }
   const area = document.getElementById("temp-conversation-area");
   if (!area) return null;
-  _seenConfirmations.set(dedupKey, "shown");
+  _rememberConfirmation(dedupKey, "shown");
 
   const targetMode = conf.targetMode === "code" ? "code" : "work";
   const modeIcon = targetMode === "work" ? '<i data-ic="clipboard"></i>' : '<i data-ic="code"></i>';
@@ -150,7 +161,7 @@ export function createTempConversation(confirmation) {
       area.innerHTML = "";
       _cardController = null;
       if (reason === "confirmed" || reason === "cancelled" || reason === "terminal") {
-        _seenConfirmations.set(dedupKey, "done");
+        _rememberConfirmation(dedupKey, "done");
       } else {
         // dismiss/replaced：仅收起，允许状态重投影再次展示
         _seenConfirmations.delete(dedupKey);

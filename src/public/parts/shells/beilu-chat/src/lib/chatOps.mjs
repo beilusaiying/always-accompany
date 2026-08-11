@@ -930,6 +930,50 @@ export async function getEditOperationReceipt(
   return _serializeEditReceiptResult(chatid, metadata, receipt, { expectedUsername });
 }
 
+/**
+ * [0808 MVU 写回链收口·凛倾拍板方案A] 按楼写 MVU 变量到后端持久层。
+ * why：MVU 前端生态（bundle initCheck/replaceMvuData→variableStore._vars.messages）此前是纯前端
+ *   终点，后端 chatLog/timeLines entry.extension.mvu_variables 无人写 → EJS 读侧（mvu_accumulated
+ *   累计自后端）恒空 → 门控全落 else"未知状态"（0808 凛倾真卡确诊=读写不同源）。
+ *   本函数=写回链后端段单源：chatLog 定位楼 + timeLines 各线同 id 条目同写（beilu 时间线=完整
+ *   chatLogEntry 各带 extension，chatLog 视图与线内条目可能非同引用，双写保同源）+ mutateChat
+ *   锁内落盘。变量结构不校验内容（MVU 数据=卡域，宿主只管道）。
+ * @param {string} chatid
+ * @param {number} index - 楼层 index（前端 stChat/setChatMessages 的 message_id 同序）
+ * @param {object} variables - 完整变量对象（含 stat_data 等，整体覆盖该楼 mvu_variables）
+ */
+export async function setMessageMvuVariables(chatid, index, variables) {
+  if (!Number.isSafeInteger(index) || index < 0)
+    throw _messageAnchorError("index must be a non-negative safe integer", "E_VARS_INDEX_INVALID");
+  if (!variables || typeof variables !== "object" || Array.isArray(variables))
+    throw _messageAnchorError("variables must be an object", "E_VARS_INVALID");
+  const transaction = await mutateChat(chatid, (candidate) => {
+    const entry = candidate.chatLog?.[index];
+    if (!entry) return { applied: false, index, reason: "index_out_of_range" };
+    entry.extension = entry.extension || {};
+    entry.extension.mvu_variables = variables;
+    // timeLines 同步：按条目 id 找各线同条目双写（视图与线可能非同引用）
+    const eid = entry.id;
+    let tlHits = 0;
+    if (eid && Array.isArray(candidate.timeLines)) {
+      for (const tl of candidate.timeLines) {
+        const arr = Array.isArray(tl) ? tl : [tl];
+        for (const te of arr) {
+          if (te && te.id === eid && te !== entry) {
+            te.extension = te.extension || {};
+            te.extension.mvu_variables = variables;
+            tlHits++;
+          }
+        }
+      }
+    }
+    return { applied: true, index, tlHits };
+  });
+  const out = transaction?.value ?? transaction; // mutateChat 返回 {..., value: mutator返回值}（:501 editMessage 同取法）
+  wbTrace(chatid, "chatOps", "setMessageMvuVariables", { index, applied: out?.applied, tlHits: out?.tlHits, keys: Object.keys(variables).length });
+  return out;
+}
+
 export async function editMessage(
   chatid,
   messageId,

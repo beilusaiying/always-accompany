@@ -58,7 +58,8 @@ export { disposeShellSession };
 const WRITE_TOOLS = new Set(["write_file", "replace_lines", "insert_at_line", "fuzzy_edit"]);
 const CONTEXT_ANCHOR_TOOLS = new Set(["replace_lines", "insert_at_line", "fuzzy_edit"]);
 const RUNTIME_POLICY_TOOLS = new Set([
-  "read_file", "search_files", "search_by_name", "run_command", "run_script",
+  "read_file", "search_files", "search_by_name", "goto_definition", "find_references",
+  "run_command", "run_script",
 ]);
 const INTERNAL_LINE_SCOPED_TOOLS = new Set([
   "write_file", "edit_xlsx", "replace_lines", "insert_at_line", "fuzzy_edit",
@@ -184,8 +185,8 @@ export class ToolExecutor {
       get_status: () => getStatus(),
 
       // ── 代码分析 ──
-      goto_definition: (p) => gotoDefinition(p),
-      find_references: (p) => findReferences(p),
+      goto_definition: (p, context) => gotoDefinition(p, searchFiles, context),
+      find_references: (p, context) => findReferences(p, searchFiles, context),
       get_project_summary: () => getProjectSummary(),
       ast_search: (p) => astSearch(p),
       smart_search: (p) => smartSearch(p, searchFiles),

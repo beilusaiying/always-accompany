@@ -42,6 +42,7 @@ import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b：出
 import { storage, KEYS } from "../../shared/state/storage.mjs"; // R2: localStorage 集中
 import { beiluConfirm, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs";
 import { createDiag } from "../../shared/state/diagLogger.mjs";
+import { onEventBus } from "../../shared/state/eventBusCore.mjs"; // [0807 转接二期#6] 总线订阅单源
 // 任务B多类型预览：md/代码高亮复用聊天同一条渲染管线（Shiki/KaTeX/Mermaid/sanitize 全在里面，零新依赖）。
 //   路径形式对齐 messageList.mjs:29 同款（URL 层上跳 clamp 到站点根 /scripts/）。
 import { renderMarkdownAsString } from "../../../../../../scripts/markdown.mjs";
@@ -953,11 +954,8 @@ async function renderFileTree(treePath, entries, originChatId = null) {
 function initPendingOpsAutoRefresh() {
   if (initPendingOpsAutoRefresh._initialized) return;
   initPendingOpsAutoRefresh._initialized = true;
-  const bus = window.__beiluEventBus;
-  if (!bus) return;
-  if (!bus._listeners) bus._listeners = new Map();
-  if (!bus._listeners.has("generation_ended")) bus._listeners.set("generation_ended", []);
-  bus._listeners.get("generation_ended").push(() => { loadPendingOps(); loadFileTree(rootPath); });
+  // [0807 转接二期#6] 手拼 push → eventBusCore.onEventBus 单源（原"bus 不存在就永久不挂"时序坑一并消除）
+  onEventBus("generation_ended", () => { loadPendingOps(); loadFileTree(rootPath); });
 }
 
 /** 拼接路径：正确处理 Windows 盘符根 (D:/) */
@@ -2446,7 +2444,7 @@ function showFileContextMenu(path, isDir, event) {
   items.push({ label: '<i data-ic="clipboard"></i> 复制路径', action: "copyPath" });
   // D4（凛倾 06-16「注入的话是直接复制路径到对话框」）：右键补「插入路径到对话框」，
   //   加选项不替换剪贴板功能。插入格式=超链接式 `[文件:名](路径) `，
-  //   插入 #message-input 光标处让 AI 据此读整份文件（file:isDir 才有意义，仅非目录显示）。
+  //   插入 #send_textarea 光标处让 AI 据此读整份文件（file:isDir 才有意义，仅非目录显示）。
   if (!isDir) items.push({ label: '<i data-ic="clipboard"></i> 插入路径到对话框', action: "insertPath" });
   items.push({ label: '<i data-ic="edit"></i> 重命名', action: "rename" });
   items.push({ label: "—", action: "divider" });
@@ -2524,9 +2522,9 @@ function showFileContextMenu(path, isDir, event) {
             break;
           case "insertPath": {
             // D4：复制路径直通对话框。insertLink 范式（源 skillPicker 已 0723 删，此处自包含）——
-            //   取 #message-input 光标 selectionStart/End，拼超链接式 `[文件:名](路径) ` 插入，
+            //   取 #send_textarea 光标 selectionStart/End，拼超链接式 `[文件:名](路径) ` 插入，
             //   focus+setSelectionRange 定位到插入尾，dispatch input 事件触发既有联动（草稿保存/高度自适应）。
-            const input = document.getElementById("message-input");
+            const input = document.getElementById("send_textarea");
             if (!input) { showToast("找不到对话框输入框", "error"); break; }
             const link = `[文件:${fileName}](${path}) `;
             const a = input.selectionStart ?? input.value.length;

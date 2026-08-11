@@ -323,6 +323,21 @@ export function formatToolResultsForInjection(results) {
             lines.push(`[matches_not_displayed] ${resultData.matches.length - _displayCount}`);
           }
         }
+        // ★ search_by_name 结果：producer 字段名是 results，不是 search_files 的 matches。
+        // 该字段此前无人消费；上方快照元数据又使 JSON 兜底不触发，命中路径因此静默丢失。
+        if (resultData.results && Array.isArray(resultData.results)) {
+          const _reportedPageCount = Number(resultData.pageCount);
+          const _displayCount = Number.isFinite(_reportedPageCount) && _reportedPageCount >= 0
+            ? Math.min(resultData.results.length, Math.round(_reportedPageCount))
+            : Math.min(resultData.results.length, 50);
+          for (const _r of resultData.results.slice(0, _displayCount)) {
+            const _path = _r.path || _r.file || _r.name || "";
+            lines.push(`  ${_path}${_r.size ? ` (${_r.size}B)` : ""}`);
+          }
+          if (resultData.results.length > _displayCount) {
+            lines.push(`[results_not_displayed] ${resultData.results.length - _displayCount}`);
+          }
+        }
         // ★ list_files结果：紧凑一行一个
         if (resultData.files && Array.isArray(resultData.files)) {
           for (const _f of resultData.files.slice(0, 50)) {

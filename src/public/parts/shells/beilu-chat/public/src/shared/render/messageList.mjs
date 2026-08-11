@@ -44,6 +44,7 @@ import {
   activateScriptsInElement,
   applyBuiltinProcessors,
   applyDisplayRules,
+  applyThinkingVisibilityBadge,
   detectContentType,
   extractThinkingContent,
   getThinkingFoldLabel,
@@ -722,13 +723,42 @@ export function extractStatusPlaceholder(text) {
  * @returns {Array<{type: 'markdown'|'full-html', content: string}>|null}
  *   返回分段数组，如果无需拆分则返回 null
  */
+// [0807 渲染借鉴 R1] markdown fence 围栏形态的前端代码块归一化（对齐酒馆助手代码块粒度渲染）。
+//   酒馆判定=pre 文本含 'html>'|'<head'|'<body'（is_frontend.ts）→ 单独 iframe；beilu 此前该形态
+//   落 markdown 分支显示为代码块文本（无 DOCTYPE 时），或被 detectContentType 全文兜底整消息进
+//   iframe（带 DOCTYPE 时围栏残渣一起进）。归一化=剥掉围栏让内容以裸 HTML 段进入既有
+//   splitMixedContent/detectContentType 链（沿三分支架构，不另起渲染路径）。
+//   与酒馆的刻意差异：限定 lang ∈ {html, htm, xml, 无标注}——酒馆不看 lang 只看内容，会把
+//   ```js 里贴的 <body> 示例代码也渲染（误伤讨论场景）；beilu 用户有代码讨论习惯，白名单收窄。
+function _normalizeFrontendFences(text) {
+  if (!text || typeof text !== "string" || !text.includes("```")) return text;
+  return text.replace(/```(html|htm|xml)?[ \t]*\n([\s\S]*?)\n?```/gi, (match, _lang, inner) => {
+    const isFrontendBlock = ["html>", "<head", "<body"].some((tag) => inner.includes(tag));
+    if (!isFrontendBlock) return match;
+    // 无 DOCTYPE 的前端块补文档包装——只有真 fence 前端块获得 DOCTYPE 形态，从而进入
+    // splitMixedContent/detectContentType 的**既有**判定（不扩全文 pattern：全文扫 <body>
+    // 会误伤 ```js 里贴的 HTML 示例字符串，本函数 lang 白名单+局部包装=双重收口）。
+    let doc = inner;
+    if (!/<!DOCTYPE/i.test(doc)) {
+      doc = /<html[\s>]/i.test(doc)
+        ? `<!DOCTYPE html>\n${doc}`
+        : `<!DOCTYPE html>\n<html>\n${doc}\n</html>`;
+    }
+    return `\n${doc}\n`;
+  });
+}
+
 function splitMixedContent(text) {
+  // [0807 R1 注] 曾试扩 pattern 到 <html>/<body> 形态——全文扫会误伤 ```js 代码块里贴的 HTML
+  //   示例字符串（提取测用例 4 实锤），已回滚。fence 前端块由 _normalizeFrontendFences 局部
+  //   补 DOCTYPE 包装后进入本函数**既有**判定，pattern 保持原样。
   const htmlDocPattern = /(<!DOCTYPE[\s\S]*?<\/html\s*>)/gi;
   const matches = [...text.matchAll(htmlDocPattern)];
 
   if (matches.length === 0) return null;
 
-  // 整个内容就是一个 HTML 文档 → 不拆分（<game_text> 场景）
+  // 整个内容就是一个 HTML 文档 → 不拆分（<game_text> 场景，落 detectContentType full-html 整消息路；
+  //   fence 归一化后的单块消息也走此守卫=整消息 iframe，行为正确）
   const trimmed = text.trim();
   if (
     matches.length === 1 &&
@@ -1351,8 +1381,14 @@ export async function renderMessage(message, renderContext) {
   const rawContent = replaceMacros(resolveRawMessageContent(message), message);
 
   // ★ 提取思维链内容（从正文中剥离，后续渲染到独立 UI 组件）
-  let { cleanText: thinkingCleanText, thinkingText } =
-    extractThinkingContent(rawContent);
+  // [2026-08-10 凛倾] 思维链提取/折叠只作用于 AI 消息：用户自己发的消息含 <thinking>/<beilu_thinking>/
+  //   自定义标签字面量（讨论、示例、转贴）不提取不折叠，原样显示——折叠语义=「AI 的思考过程」，
+  //   用户消息没有这层语义（凛倾 0810：「用户的xml标签别折叠…只是隐藏ai的不行吗」）。
+  const _skipThinkingExtract = message.role === "user";
+  let { cleanText: thinkingCleanText, thinkingText, hasBeiluThinking, hasOtherReasoning } =
+    _skipThinkingExtract
+      ? { cleanText: rawContent, thinkingText: "", hasBeiluThinking: false, hasOtherReasoning: false }
+      : extractThinkingContent(rawContent);
   wbTrace("messageList", "renderMessage.thinkingExtracted", { id: message?.id, rawLen: rawContent?.length, cleanLen: thinkingCleanText?.length, thinkingLen: thinkingText?.length });
 
   // ★ THINKING 诊断：追踪思维链提取后正文是否为空
@@ -1397,12 +1433,17 @@ export async function renderMessage(message, renderContext) {
           contentLen: message.content?.length,
         },
       );
-      const fallback = extractThinkingContent(message.content);
+      const fallback = _skipThinkingExtract
+        ? { cleanText: message.content, thinkingText: "", hasBeiluThinking: false, hasOtherReasoning: false }
+        : extractThinkingContent(message.content);
       thinkingCleanText = fallback.cleanText;
       // 保留已提取的思维链，不覆盖（content_for_show 中的更完整）
       if (!thinkingText && fallback.thinkingText) {
         thinkingText = fallback.thinkingText;
       }
+      // [2026-08-10 badge 诚实性] 回退路径来源标记并入（OR）：badge 需反映实际展示的思维链来源
+      hasBeiluThinking = hasBeiluThinking || fallback.hasBeiluThinking;
+      hasOtherReasoning = hasOtherReasoning || fallback.hasOtherReasoning;
       // ★ P0-3b：剥离 <content> 包裹标签
       if (thinkingCleanText) {
         thinkingCleanText = thinkingCleanText
@@ -1484,7 +1525,8 @@ export async function renderMessage(message, renderContext) {
   // 回退到 message.name（显示名）。scoped 正则的 boundCharName 是导入时的文件系统名，
   // 若用显示名匹配会导致 scoped 美化正则被跳过，XML 标签无法渲染。
   const charKeyForRegex = message.timeSlice?.charname || message.name || "";
-  const { text: displayProcessed, placeholders } = applyDisplayRules(
+  // [0807 R1] const→let：displayProcessed 在路由前经 _normalizeFrontendFences 重赋值（单点收口）
+  let { text: displayProcessed, placeholders } = applyDisplayRules(
     builtinProcessed,
     { role: messageRole, charName: charKeyForRegex, messageDepth: message.messageDepth || 0 },
   );
@@ -1532,6 +1574,10 @@ export async function renderMessage(message, renderContext) {
   // ★ 渲染深度修复：超出深度的消息，display regex 可能已生成完整 HTML 文档，
   //   不能直接用 renderMarkdownAsString 渲染（markdown 渲染器会吞掉 HTML 标签导致空白）。
   //   超出深度时，跳过 display regex 结果，改用原始文本渲染 markdown。
+  // [0807 渲染借鉴 R1] fence 围栏前端块归一化后再路由——重赋值单点收口：下游三消费
+  //   （splitMixedContent / detectContentType / markdown 渲染与 full-html iframe 输入）自动一致，
+  //   display regex 占位符（placeholders）不受影响（归一化只剥围栏不碰占位符）。
+  displayProcessed = _normalizeFrontendFences(displayProcessed);
   const segments = splitMixedContent(displayProcessed);
   let contentType;
   let renderedContent;
@@ -1770,6 +1816,8 @@ export async function renderMessage(message, renderContext) {
       ".thinking-toggle-content",
     );
     if (thinkingContentEl) thinkingContentEl.textContent = thinkingText;
+    // [2026-08-10] badge 与真实 AI 可见性一致：beilu_thinking「对 AI 隐藏」关=AI 可见，badge 不许撒谎
+    applyThinkingVisibilityBadge(thinkingEl, { hasBeiluThinking, hasOtherReasoning });
 
     // 绑定折叠/展开事件
     const toggleBtn = thinkingEl.querySelector(".thinking-toggle-btn");

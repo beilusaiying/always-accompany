@@ -1,8 +1,8 @@
 /**
  * code-tools.mjs — 代码分析工具（从 YonBan vscode-tools.ts 移植）
  * 纯 Node.js 的工具直接移植，VSCode 依赖的用 CLI 替代：
- * - gotoDefinition: ripgrep + ast-grep 静态分析
- * - findReferences: ripgrep 搜索
+ * - gotoDefinition: 复用流式 search_files + ast-grep 静态分析
+ * - findReferences: 复用流式 search_files 搜索，避免高频符号撑爆同步缓冲
  * - lintCode: node --check + eslint（去掉 LSP 层）
  * - getProjectSummary/smartSearch/astSearch/validateHtml: 原版就是纯 Node.js
  */
@@ -20,7 +20,7 @@ import {
 // gotoDefinition — CLI 替代：读文件取符号 + ripgrep 搜定义
 // ═══════════════════════════════════════════════════════════════
 
-export async function gotoDefinition(params) {
+export async function gotoDefinition(params, searchFilesFn, context = null) {
   const filePath = params.path;
   const line = params.line;
   const column = params.column || 1;
@@ -44,40 +44,33 @@ export async function gotoDefinition(params) {
 
     if (!symbol) return { success: false, message: "未找到可识别的符号" };
 
-    // 用 ripgrep 搜索定义模式
+    // 定义搜索复用 search_files 的流式 ripgrep + 有界快照链路。
+    // why: spawnSync 会先把全项目 JSON 收进固定缓冲，--max-count 又是每文件上限；
+    // 高频符号会在解析前直接 ENOBUFS，增大 maxBuffer 只会推迟同一失败模式。
+    if (typeof searchFilesFn !== "function") {
+      throw new Error("gotoDefinition 缺少 searchFilesFn");
+    }
     const defPatterns = [
       `function\\s+${symbol}\\b`,
       `(const|let|var|class)\\s+${symbol}\\b`,
       `export\\s+(default\\s+)?(function|class|const|let|var)\\s+${symbol}\\b`,
       `${symbol}\\s*[:=]\\s*(function|class|\\()`,
     ];
-    const pattern = defPatterns.join("|");
+    const searchResult = await searchFilesFn({
+      pattern: defPatterns.join("|"),
+      path: wsRoot,
+      filePattern: "*.{js,ts,mjs,cjs,tsx,jsx,mts,cts}",
+      maxResults: 10,
+    }, context);
 
-    const rgResult = cp.spawnSync("rg", [
-      "-n", "--json", "-e", pattern, wsRoot,
-      "--glob", "*.{js,ts,mjs,cjs,tsx,jsx,mts,cts}",
-      "--glob", "!node_modules", "--glob", "!dist", "--glob", "!.git",
-      "--max-count", "10",
-    ], { timeout: 10000, windowsHide: true, encoding: "utf-8" });
-
-    if (rgResult.error) return { success: false, error: "ripgrep 不可用" };
-
-    const definitions = [];
-    for (const jsonLine of (rgResult.stdout || "").split("\n")) {
-      if (!jsonLine.trim()) continue;
-      try {
-        const obj = JSON.parse(jsonLine);
-        if (obj.type !== "match") continue;
-        const d = obj.data;
-        const file = path.relative(wsRoot, d.path?.text || "").replace(/\\/g, "/");
-        definitions.push({
-          file,
-          line: (d.line_number || 1),
-          column: 1,
-          text: (d.lines?.text || "").trim().slice(0, 200),
-        });
-      } catch { /* skip malformed json lines */ }
-    }
+    const definitions = (Array.isArray(searchResult?.matches) ? searchResult.matches : [])
+      .slice(0, 10)
+      .map((match) => ({
+        file: match.file || "",
+        line: match.line || 1,
+        column: 1,
+        text: String(match.content || match.text || "").trim().slice(0, 200),
+      }));
 
     if (definitions.length === 0) {
       // fallback: try ast-grep
@@ -112,7 +105,7 @@ export async function gotoDefinition(params) {
 // findReferences — CLI 替代：ripgrep 搜索符号引用
 // ═══════════════════════════════════════════════════════════════
 
-export async function findReferences(params) {
+export async function findReferences(params, searchFilesFn, context = null) {
   const filePath = params.path;
   const line = params.line;
   const column = params.column || 1;
@@ -134,34 +127,33 @@ export async function findReferences(params) {
 
     if (!symbol) return { references: [], total: 0 };
 
-    const rgResult = cp.spawnSync("rg", [
-      "-n", "--json", "-w", symbol, wsRoot,
-      "--glob", "*.{js,ts,mjs,cjs,tsx,jsx,mts,cts,vue,svelte}",
-      "--glob", "!node_modules", "--glob", "!dist", "--glob", "!.git",
-      "--max-count", "200",
-    ], { timeout: 10000, windowsHide: true, encoding: "utf-8" });
-
-    if (rgResult.error) return { success: false, error: "ripgrep 不可用" };
-
-    const references = [];
-    for (const jsonLine of (rgResult.stdout || "").split("\n")) {
-      if (!jsonLine.trim()) continue;
-      try {
-        const obj = JSON.parse(jsonLine);
-        if (obj.type !== "match") continue;
-        const d = obj.data;
-        references.push({
-          file: path.relative(wsRoot, d.path?.text || "").replace(/\\/g, "/"),
-          line: d.line_number || 1,
-          column: 1,
-        });
-      } catch { /* skip */ }
+    if (typeof searchFilesFn !== "function") {
+      throw new Error("findReferences 缺少 searchFilesFn");
     }
+    const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchResult = await searchFilesFn({
+      // JS 标识符边界包含 $；直接用 \b 会漏掉 $name 一类合法符号。
+      pattern: `(^|[^A-Za-z0-9_$])${escapedSymbol}([^A-Za-z0-9_$]|$)`,
+      path: wsRoot,
+      filePattern: "*.{js,ts,mjs,cjs,tsx,jsx,mts,cts,vue,svelte}",
+      maxResults: REFERENCES_MAX,
+    }, context);
+    const matches = Array.isArray(searchResult?.matches) ? searchResult.matches : [];
+    const references = matches.slice(0, REFERENCES_MAX).map((match) => ({
+      file: match.file || "",
+      line: match.line || 1,
+      column: 1,
+    }));
+    const snapshotCount = Number.isFinite(Number(searchResult?.snapshotCount))
+      ? Number(searchResult.snapshotCount)
+      : references.length;
 
     return {
-      references: references.slice(0, REFERENCES_MAX),
-      total: references.length,
-      truncated: references.length > REFERENCES_MAX,
+      references,
+      total: snapshotCount,
+      truncated: searchResult?.complete === false
+        || searchResult?.nextCursor !== null
+        || snapshotCount > references.length,
     };
   } catch (e) {
     return { success: false, error: `引用查找失败: ${e?.message || String(e)}` };

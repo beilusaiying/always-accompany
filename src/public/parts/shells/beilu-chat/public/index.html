@@ -932,9 +932,15 @@
               <!-- 打字式联想栏（002 0731）：停顿防抖调 P1 召回，展示联想词 chip（点击插入）；默认隐藏，
                    开关在 P1「运行/测试」面板（storage: beilu-typing-suggest-enabled，默认关）。逻辑 typingSuggest.mjs -->
               <div id="typing-suggest-bar" class="typing-suggest-bar" style="display:none"></div>
-              <!-- 上半: 输入框 -->
+              <!-- [0807 酒馆对齐] 酒馆插件工具栏挂载条：st-host 把 #send_form 挂此（插件在内自建
+                   #qr--bar 注工具按钮，如 st-input-helper 的 **/""/「」 输入按钮）——位于输入框上方
+                   =对齐 ST 布局。静态节点不被任何面板重渲染清掉；空时 CSS :empty 零占位。 -->
+              <div id="st-host-sendform-dock" class="st-host-sendform-dock"></div>
+              <!-- 上半: 输入框。id=send_textarea 对齐 SillyTavern（0807 断点E 根修）：
+                   酒馆插件生态按 $("#send_textarea") 读写主输入框（官方模板契约）；原 message-input
+                   已全仓迁移（11 调用点），多窗口 _maskIds 不碰此 id（输入区=全模式共享单 DOM）。 -->
               <textarea
-                id="message-input"
+                id="send_textarea"
                 class="chat-input-textarea"
                 data-i18n="chat.chatArea.input"
                 placeholder="输入信息...
@@ -2730,6 +2736,14 @@ Ctrl+Enter 发送"
                    （后端 functions:hide#setReasoningTags，只存自定义标签对） -->
               <div class="divider text-xs opacity-40 mt-4">思维链显示</div>
               <p class="text-xs opacity-60">内置 &lt;think&gt;/&lt;thinking&gt; 恒生效：发给 AI 前必定剥离（AI 永远看不到），消息中恒显示折叠块（你永远看得到）</p>
+              <!-- 内置 beilu_thinking「对 AI 隐藏」开关（2026-08-10）：折叠块用户恒可见；开关只管发给 AI 前是否剥离。
+                   change 即保存 → reasoningTags.saveBeiluThinkingStrip → functions:hide#setReasoningTags（只带 beilu_thinking_strip）。
+                   默认 checked=开=剥离；打开设置面板时由 apiSlot 按后端 config.beilu_thinking_strip 回填真实状态。 -->
+              <div class="flex items-center gap-2 mt-2">
+                <input id="sa-beilu-thinking-strip" type="checkbox" class="toggle toggle-sm toggle-primary" checked />
+                <label for="sa-beilu-thinking-strip" class="text-xs opacity-70 cursor-pointer">beilu_thinking 对 AI 隐藏</label>
+              </div>
+              <p class="text-xs opacity-50 mt-1">开：发给 AI 前剥离（你仍可见折叠块）；关：不剥离，AI 与你都看得到</p>
               <label class="text-xs opacity-60 mt-2 block">思考折叠标题（消息中思维链折叠块显示的标题文字）</label>
               <div class="flex items-center gap-2 mt-1">
                 <!-- autocomplete/name 显式关：0720 实证浏览器把 API URL 历史自动填进本框,blur 触发 change 被持久化成折叠标题脏值 -->

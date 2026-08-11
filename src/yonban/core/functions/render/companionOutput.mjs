@@ -21,8 +21,13 @@ const HIDDEN_BLOCK_TAGS = [
 
 function _escape(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
+// [2026-08-10] 陪伴/桌宠投影是无折叠 UI 的纯文本面：beilu_thinking 恒剥离（不受「对 AI 隐藏」开关影响）。
+//   开关=关时 getReasoningTags 不再 push beilu_thinking（AI 上下文链保留供 AI 看），但此投影面若原样透出思维链
+//   会污染纯正文气泡——故用 stripReasoningTags 的 extraTags 参数在本调用点无条件追加剥离，与 bot 出站同策略。
+const _COMPANION_STRIP_EXTRA = [{ open: "<beilu_thinking>", close: "</beilu_thinking>" }];
+
 export function projectCompanionVisibleText(rawText, username, petTags = []) {
-  let text = stripReasoningTags(String(rawText || ""), username);
+  let text = stripReasoningTags(String(rawText || ""), username, _COMPANION_STRIP_EXTRA);
   const names = [...new Set([...HIDDEN_BLOCK_TAGS, ...petTags].filter((x) => typeof x === "string" && /^[\w\u4e00-\u9fff-]+$/.test(x)))];
   for (const name of names) {
     const n = _escape(name);

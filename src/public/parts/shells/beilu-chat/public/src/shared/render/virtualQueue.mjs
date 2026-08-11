@@ -33,6 +33,8 @@ import { disableSwipe, enableSwipe, renderMessage } from "./messageList.mjs";
 import { clearMessages } from "../../stCompat/variableStore.mjs";
 import { StreamRenderer } from "./StreamRenderer.mjs"; // [0727 多窗口] 每窗口 new 一个，不再是单例
 import { handleTypingStatus } from "./typingIndicator.mjs";
+import { getTimelineInfo, setTimelineInfo } from "../state/timelineState.mjs"; // [0807 §七#3] swipe 状态下沉叶子单源（本模块仍是唯一 producer）
+import { emitEventBus } from "../state/eventBusCore.mjs"; // [0807 转接二期#6] emit 单源叶子（await+可变引用语义收口）
 import { wbTrace, wbDetect } from "../widgets/whitebox.mjs";
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
 
@@ -185,11 +187,12 @@ export function containerFor(chatid) {
   return _W().container || document.getElementById("chat-messages");
 }
 let currentSwipableElement = null;
-let currentTimeLineInfo = { timeLineIndex: 0, timeLinesCount: 1 };
-// [0727 A11 开场白桥] 时间线信息的对外读口（单 producer=本模块，window 桥防 iframeRenderer↔本模块环）：
-//   iframeRenderer 把真实 swipe 数量/索引带进卡的 iframe（st.chat[0].swipes 补齐到真实条数），
-//   否则 ST 原生卡"改 swipe_id→saveChat"套路在 length 恒 1 的假数据上永远判"找不到索引"。
-window._beiluTimeLineInfo = () => currentTimeLineInfo;
+// [0807 §七#3] 时间线状态本体已下沉 timelineState.mjs 叶子（防 scriptRunner→本模块→websocket 三角环），
+//   本模块仍是唯一 producer（initializeVirtualQueue 初始 + handleTimelineInfo），读写经 get/setTimelineInfo。
+// [0727 A11 开场白桥] window 桥保留：iframeRenderer 把真实 swipe 数量/索引带进卡的 iframe
+//   （st.chat[0].swipes 补齐到真实条数），否则 ST 原生卡"改 swipe_id→saveChat"套路在
+//   length 恒 1 的假数据上永远判"找不到索引"。现改由叶子取值，桥的消费方无感。
+window._beiluTimeLineInfo = () => getTimelineInfo();
 const deletionListeners = [];
 
 // ★ 渲染深度修复：初始渲染时的总消息数（用于 renderMessage 的深度计算回退）
@@ -391,9 +394,10 @@ function updateLastCharMessageArrows() {
 
     const counter = document.createElement("span");
     counter.classList.add("swipe-counter");
-    counter.textContent = `${currentTimeLineInfo.timeLineIndex + 1}/${currentTimeLineInfo.timeLinesCount}`;
+    const _tlNow = getTimelineInfo();
+    counter.textContent = `${_tlNow.timeLineIndex + 1}/${_tlNow.timeLinesCount}`;
     counter.style.opacity =
-      currentTimeLineInfo.timeLinesCount > 1 ? "1" : "0.3";
+      _tlNow.timeLinesCount > 1 ? "1" : "0.3";
 
     const rightArrow = document.createElement("button");
     rightArrow.type = "button";
@@ -458,12 +462,12 @@ export async function initializeVirtualQueue(initialData) {
     const ownerChatId = _k;
     const ownerW = _W(ownerChatId);
 
-    // 初始化 timeline 信息（用于 swipe 计数器显示）
+    // 初始化 timeline 信息（用于 swipe 计数器显示；状态本体在 timelineState.mjs 叶子）
     if (initialData?.timeLineIndex !== undefined) {
-      currentTimeLineInfo = {
+      setTimelineInfo({
         timeLineIndex: initialData.timeLineIndex,
         timeLinesCount: initialData.timeLinesCount || 1,
-      };
+      });
     }
 
     if (ownerW.virtualList) ownerW.virtualList.destroy();
@@ -909,6 +913,8 @@ export async function handleMessageReplaced(index, message, winId) {
     // 此时直接作为新消息添加到列表底部
     if (itemState?.pendingRender) {
       itemState.pendingRender = false;
+      // [0811] 认领同时撤销 500ms 骨架屏定时器（与 stream 首帧路径同一不变量：认领者撤销竞争者）
+      if (itemState._skeletonTimer) { clearTimeout(itemState._skeletonTimer); itemState._skeletonTimer = null; }
       // ★ 关键：先停止 StreamRenderer，防止覆盖新渲染的内容
       _w.streamRenderer.stop(message.id);
       _w.streamingMessages.delete(message.id);
@@ -1220,10 +1226,7 @@ async function processMessageEventQueue(messageId) {
 export function handleTimelineInfo(info, winId) {
   const _w = _W(winId); // [多窗口] 按消息自带的窗口 id 取该窗口渲染上下文（参数传递，无全局交错）
   if (info) {
-    currentTimeLineInfo = {
-      timeLineIndex: info.timeLineIndex ?? 0,
-      timeLinesCount: info.timeLinesCount ?? 1,
-    };
+    setTimelineInfo(info); // [0807 §七#3] 写入叶子单源（swipe 计数器与 ST chat 写点同读此值）
     updateLastCharMessageArrows();
   }
 }
@@ -1253,13 +1256,21 @@ export async function handleStreamUpdate({ messageId, slices }, winId) {
     // 此时才将消息添加到列表（开始渲染）
     if (itemState.pendingRender) {
       wbTrace("virtualQueue", "handleStreamUpdate.firstFrame", { messageId });
+      // ★ [0811 双占位块竞态根修] 先同步认领（翻位+撤定时器）再 await：原先 await appendItem 之后
+      //   才置 pendingRender=false，而 500ms 骨架屏定时器（handleMessageAdded:865，回调不走
+      //   enqueueMessageEvent 队列）在 await 让出期间触发时读到 pendingRender 仍为 true → 二次
+      //   appendItem = 同一条消息两份"正在想"占位块，且多出的一份不在 chatLog 索引上、永远不被
+      //   message_replaced 的 replaceItem 替换 = 残留卡死（0811 双窗口实症）。
+      //   不变量：三条渲染路径（timer:868 / 本处 / replaced:915）谁认领谁先同步翻位并撤销竞争
+      //   定时器，翻位之后才允许出现第一个 await。
+      itemState.pendingRender = false;
+      if (itemState._skeletonTimer) { clearTimeout(itemState._skeletonTimer); itemState._skeletonTimer = null; }
       const shouldScroll =
         _w.container.scrollTop >=
         _w.container.scrollHeight -
           _w.container.clientHeight -
           20;
       await _w.virtualList.appendItem(itemState.messageData, shouldScroll);
-      itemState.pendingRender = false;
       // ★ Phase 1.2：注册到 streamRenderer 时传递 rawContent 和 mvuVariables
       // ★ T10：额外传 message（宏 replaceMacros 需要）+ role/charName/messageDepth（applyDisplayRules 需要），
       //   让流式帧能复用落稿同一套加工（宏/折叠/正则），消除流式↔落稿视觉跳变。字段就在 msg 手边，零成本。
@@ -1300,34 +1311,45 @@ export async function handleStreamUpdate({ messageId, slices }, winId) {
     _w.streamRenderer.updateTarget(messageId, itemState.messageData.content);
     wbTrace("virtualQueue", "handleStreamUpdate.updateTarget", { messageId, contentLen: itemState.messageData.content?.length });
 
-    // R1: 广播 STREAM_TOKEN_RECEIVED 到 EventBus,iframe 脚本可订阅做打字机/状态栏/嘴型同步等
-    //   payload: { messageId, slices, fullContent } — iframe 内用户代码自己 throttle / 过滤
-    _emitStreamTokenReceived(messageId, slices, itemState.messageData.content);
+    // 广播 STREAM_TOKEN_RECEIVED 到 EventBus,iframe 脚本可订阅做打字机/状态栏/嘴型同步等
+    //   payload 按酒馆助手契约=字符串(见 _emitStreamTokenReceived 头注释);增量计算需要上一帧全文
+    _emitStreamTokenReceived(messageId, slices, itemState.messageData.content, itemState._lastStreamEmitContent);
+    itemState._lastStreamEmitContent = itemState.messageData.content;
     wbTrace("virtualQueue", "handleStreamUpdate.emitToken", { messageId });
   });
 }
 
-// R1: 将 token 事件送到 __beiluEventBus,脚本 iframe 通过 eventOn(...) 订阅
-//   三个别名都触发,iframe 可选一个监听(对齐酒馆 iframe_events + 自定义短名):
-//     js_stream_token_received_fully         — 每帧完整文本 (fullContent 字段)
-//     js_stream_token_received_incrementally — 每帧增量 slices (slices 字段)
-//     stream_token_received                  — 通用短名 (含两者)
-//   payload 都是 {messageId, slices, fullContent}, iframe 端自行 throttle
-function _emitStreamTokenReceived(messageId, slices, fullContent) {
-  const bus = typeof window !== "undefined" ? window.__beiluEventBus : null;
-  if (!bus || !bus._listeners) return;
-  const names = [
-    "stream_token_received",
-    "js_stream_token_received_fully",
-    "js_stream_token_received_incrementally",
+// 将 token 事件送到 __beiluEventBus,脚本 iframe 通过 eventOn(...) 订阅
+// payload 逐字对齐酒馆助手契约(2026-08-07,契约表§七#2/§4.4;上游 JS-Slash-Runner event.ts:290-291
+//   + responseGenerator.ts:103-104 + ST 本体 emit(STREAM_TOKEN_RECEIVED, text)):
+//     stream_token_received                  — 累计全文 string(ST 本体同形,卡写 eventOn(...,t=>el.textContent=t) 直接可用)
+//     js_stream_token_received_fully         — (full_text: string, generation_id: string)
+//     js_stream_token_received_incrementally — (incremental_text: string, generation_id: string)
+//     beilu_stream_token_received            — beilu 方言别名,保留旧对象 {messageId, slices, fullContent}
+//       (改形状前已核:内部零消费者,别名只为按旧 R1 文档写的用户脚本留后路)
+// generation_id 映射:beilu 无独立 generation UUID,一次流式=一条消息,用 messageId 字符串充当。
+// 增量算法:上一帧全文是当前全文前缀→切尾;否则(流被重写/重置)整段当增量,不猜 diff。
+// [0807 转接二期#6] emit 改走 eventBusCore 单源（串行 await=ST 语义；原地同步循环删除）。
+//   流式帧序保证：上游酒馆 responseGenerator 对每帧逐个 await emit → 帧内 4 事件有序、帧间有序。
+//   本模块调用点在同步渲染路径不能 await → 用模块级 FIFO 链序列化：后一帧的 emit 排在前一帧
+//   全部监听器 resolve 之后（async 监听器慢时不丢序，只延迟），渲染链零阻塞。
+let _streamEmitChain = Promise.resolve();
+function _emitStreamTokenReceived(messageId, slices, fullContent, prevContent) {
+  if (typeof window === "undefined") return;
+  const text = String(fullContent ?? "");
+  const prev = String(prevContent ?? "");
+  const incremental = text.startsWith(prev) ? text.slice(prev.length) : text;
+  const genId = String(messageId);
+  const emits = [
+    ["stream_token_received", [text]],
+    ["js_stream_token_received_fully", [text, genId]],
+    ["js_stream_token_received_incrementally", [incremental, genId]],
+    ["beilu_stream_token_received", [{ messageId, slices, fullContent }]],
   ];
-  const data = { messageId, slices, fullContent };
-  for (const name of names) {
-    const listeners = bus._listeners.get(name);
-    if (!listeners || listeners.length === 0) continue;
-    listeners.slice().forEach((cb) => {
-      try { cb(data); }
+  _streamEmitChain = _streamEmitChain.then(async () => {
+    for (const [name, args] of emits) {
+      try { await emitEventBus(name, ...args); }
       catch (e) { console.error(`[${name} listener]`, e); wbDetect("virtualQueue", "_emitStreamTokenReceived", false, e?.message, { name, messageId }); }
-    });
-  }
+    }
+  });
 }

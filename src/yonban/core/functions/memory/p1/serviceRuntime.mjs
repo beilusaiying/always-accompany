@@ -44,7 +44,11 @@ const DEPS_MARKER = join(RUNTIME_ROOT, '.p1-deps-installed')
 const PROXY_TIMEOUT_MS = _positiveNumber('P1_PROXY_TIMEOUT_MS', 30000)
 const HEALTH_TIMEOUT_MS = _positiveNumber('P1_HEALTH_TIMEOUT_MS', 3000)
 const WARMUP_TIMEOUT_MS = _positiveNumber('P1_WARMUP_TIMEOUT_MS', 180000)
-const START_WAIT_MS = _positiveNumber('P1_START_WAIT_MS', 10000)
+// [0808下午 冷启动 fail-fast·凛倾拍板 a+d 的 d] 默认 10000 → 30000：python 侧进程冷启动（解释器
+//   + FastAPI 起服到 /health 可达）实测可 >10s，10s 必判 start-timeout(retryable=false) 且不再自动
+//   重试——P1 面板"点重启反而更起不来"的机制之一。预热(warmup)不在此窗内（已由 /runP1 fail-fast
+//   + E_P1_WARMING 轮询接管），本值只覆盖"进程起来、端口可达"。
+const START_WAIT_MS = _positiveNumber('P1_START_WAIT_MS', 30000)
 const START_POLL_MS = _positiveNumber('P1_START_POLL_MS', 250)
 const SPAWN_COOLDOWN_MS = _positiveNumber('P1_SPAWN_COOLDOWN_MS', 60000)
 const STOP_WAIT_MS = _positiveNumber('P1_STOP_WAIT_MS', 10000)

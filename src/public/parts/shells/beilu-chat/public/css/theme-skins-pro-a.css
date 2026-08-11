@@ -95,7 +95,7 @@ html[data-beilu-enhanced="cyberpunk"] :where(
 
 html[data-beilu-enhanced="cyberpunk"] :where(
   .btn,
-  #message-input,
+  #send_textarea,
   .fp-path-input
 ) {
   border-radius: var(--beilu-radius-control);
@@ -204,7 +204,7 @@ html[data-beilu-enhanced="night"] :where(
   border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge);
 }
 
-html[data-beilu-enhanced="night"] :where(.btn, #message-input, .fp-path-input) {
+html[data-beilu-enhanced="night"] :where(.btn, #send_textarea, .fp-path-input) {
   border-radius: var(--beilu-radius-control);
 }
 
@@ -294,7 +294,7 @@ html[data-beilu-enhanced="valentine"] :where(
   border-block-start: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge-aux);
 }
 
-html[data-beilu-enhanced="valentine"] :where(.btn, #message-input, .fp-path-input) {
+html[data-beilu-enhanced="valentine"] :where(.btn, #send_textarea, .fp-path-input) {
   border-radius: var(--beilu-radius-control);
 }
 
@@ -407,7 +407,7 @@ html[data-beilu-enhanced="bumblebee"] :where(
   border-inline-end: calc(var(--beilu-border-width) + var(--beilu-border-width)) solid var(--beilu-identity-edge-aux);
 }
 
-html[data-beilu-enhanced="bumblebee"] :where(.btn, #message-input, .fp-path-input) {
+html[data-beilu-enhanced="bumblebee"] :where(.btn, #send_textarea, .fp-path-input) {
   border-radius: var(--beilu-radius-control);
 }
 

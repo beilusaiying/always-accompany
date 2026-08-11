@@ -293,7 +293,7 @@
 
 /* (旧 .chat-input compact规则已删除 — 现在用 .chat-input-wrapper) */
 
-#chat-container.compact-chat #message-input {
+#chat-container.compact-chat #send_textarea {
   min-height: 3rem;
   max-height: 40vh;
   padding: 0.25rem 0.5rem;

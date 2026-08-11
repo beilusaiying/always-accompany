@@ -29,6 +29,11 @@ import { getMemoryDir, loadJsonFileIfExists, saveJsonFile, memoryCache } from ".
 
 const BUILTIN_THINK = { open: "<think>", close: "</think>" };
 const BUILTIN_THINKING = { open: "<thinking>", close: "</thinking>" };
+// [2026-08-10 内置思维链标签 beilu_thinking]：工作预设改名后的思维链标签。与 think/thinking 不同——
+//   它有「对 AI 隐藏」开关（beilu_thinking_strip，缺省=true=剥离）：开=发给 AI 前剥离（用户仍见折叠块），
+//   关=不剥离（AI 与用户都看得到）。折叠恒生效在前端，剥离与否由本文件 getReasoningTags 按开关条件 push。
+//   注意：与预设已在用的 beilu_think（不带 ing，volatileBoundary 缓存断点）是两个标签，互不相干。
+const BUILTIN_BEILU_THINKING = { open: "<beilu_thinking>", close: "</beilu_thinking>" };
 const REASONING_TAG_PAIRS = [BUILTIN_THINK, BUILTIN_THINKING];
 
 // T03: 用户思维链配置缓存（30秒TTL）— per-user 缓存整份 reasoning 配置（含内置开关+自定义标签）。
@@ -42,16 +47,20 @@ const _USER_TAGS_TTL = 30000;
  * 同步读取，30秒 per-user 缓存避免频繁IO。单源 = _config.json：
  *   - reasoning_tags: Array<{open,close}>  自定义标签（既有字段，向后兼容）
  *   - reasoning_builtin: { think?:boolean, thinking?:boolean }  内置标签临时禁用（缺省=启用）
+ *   - beilu_thinking_strip: boolean  内置 beilu_thinking「对 AI 隐藏」开关（缺省=true=剥离，false=不剥离）
  * @param {string} [username] 无归因时落 "_default"（单用户 local 自然命中本人）。
- * @returns {{ builtin:{think:boolean, thinking:boolean}, custom:Array<{open:string, close:string}> }}
+ * @returns {{ builtin:{think:boolean, thinking:boolean}, custom:Array<{open:string, close:string}>, beilu_thinking_strip:boolean }}
  */
 function _loadUserReasoningConfig(username) {
   const u = username || "_default";
   const now = Date.now();
   const cached = _userTagsCache.get(u);
   if (cached && (now - cached.time) < _USER_TAGS_TTL) return cached.config;
-  /** @type {{builtin:{think:boolean,thinking:boolean}, custom:Array<{open:string,close:string}>}} */
-  let result = { builtin: { think: true, thinking: true }, custom: [] };
+  // [2026-08-10] beilu_thinking_strip 聚合语义：缺省 true（剥离）；跨卡扫描时【任一卡显式 false 即整体 false】
+  //   （不剥离是用户在设置面板显式关闭「对 AI 隐藏」的动作，与既有 builtin「任一卡显式禁用即禁用」同构）。
+  //   写侧落 "_global" 卡，读侧跨卡命中同一份——只有被显式设 false 的卡触发不剥离，其余（含缺省）均剥离。
+  /** @type {{builtin:{think:boolean,thinking:boolean}, custom:Array<{open:string,close:string}>, beilu_thinking_strip:boolean}} */
+  let result = { builtin: { think: true, thinking: true }, custom: [], beilu_thinking_strip: true };
   try {
     const charsDir = path.join(import.meta.dirname, "..", "..", "..", "..", "..", "data", "users", u, "chars"); // T3b: hide/ 下 5 级到仓库根（原 api/proxy/lib 下 7 级）
     if (fs.existsSync(charsDir)) {
@@ -72,6 +81,8 @@ function _loadUserReasoningConfig(username) {
                 result.custom.push({ open: t.open, close: t.close });
             }
           }
+          // [2026-08-10] beilu_thinking「对 AI 隐藏」开关聚合：任一卡显式 false（用户关闭剥离）→ 整体不剥离。
+          if (cfg.beilu_thinking_strip === false) result.beilu_thinking_strip = false;
         } catch { /* ignore bad JSON */ }
       }
     }
@@ -91,8 +102,12 @@ export function getReasoningTags(usernameOrCfg) {
     ? usernameOrCfg
     : _loadUserReasoningConfig(usernameOrCfg);
   const tags = [];
-  // [0720 硬化] 内置标签无条件剥离（不再受 cfg.builtin 影响,object 传参路径同样硬化）
+  // [0720 硬化] 内置 think/thinking 无条件剥离（不再受 cfg.builtin 影响,object 传参路径同样硬化）
   tags.push(BUILTIN_THINK, BUILTIN_THINKING);
+  // [2026-08-10] beilu_thinking 条件剥离：受「对 AI 隐藏」开关控制，缺省=剥离。
+  //   cfg.beilu_thinking_strip !== false 即 push（undefined/缺省 → 剥离；显式 false → 不 push=AI 与用户都看得到）。
+  //   object 传参路径（测试/上游持有配置）同样生效：未带该字段时 undefined !== false = true = 剥离，与磁盘缺省一致。
+  if (cfg.beilu_thinking_strip !== false) tags.push(BUILTIN_BEILU_THINKING);
   if (Array.isArray(cfg.custom)) {
     for (const t of cfg.custom) if (t && t.open && t.close) tags.push({ open: t.open, close: t.close });
   }
@@ -109,13 +124,17 @@ export function getReasoningTags(usernameOrCfg) {
  * 【被谁消费】functions:hide#setReasoningTags verb（hide/index.mjs）→ 前端 extendMenuW28 思维链设置。
  * @param {string} username
  * @param {string} charName - 写落点卡（与 memory updateConfig 同定位；跨卡读侧扫描会命中）
- * @param {{reasoning_tags?:Array<{open:string,close:string}>, reasoning_builtin?:{think?:boolean,thinking?:boolean}}} patch
+ * @param {{reasoning_tags?:Array<{open:string,close:string}>, reasoning_builtin?:{think?:boolean,thinking?:boolean}, beilu_thinking_strip?:boolean}} patch
  * @returns {{success:boolean, config:object}}
  */
 export function setReasoningTags(username, charName, patch = {}) {
   const configPath = path.join(getMemoryDir(username, charName), "_config.json");
   const currentConfig = loadJsonFileIfExists(configPath, { enabled: true });
+  // [patch 语义硬约束] 每个字段「payload 有才写，无则保持盘上现值」——防调用方不带某字段时把盘上开关冲掉
+  //   （本项目 max_auto_rounds 0→999 全量覆写事故的同类防护）。saveReasoningTags 只带 reasoning_tags、
+  //   saveBeiluThinkingStrip 只带 beilu_thinking_strip，两条独立写路互不清对方的值。
   if (patch.reasoning_tags !== undefined) currentConfig.reasoning_tags = patch.reasoning_tags;
+  if (patch.beilu_thinking_strip !== undefined) currentConfig.beilu_thinking_strip = !!patch.beilu_thinking_strip;
   // [0720 硬化] reasoning_builtin 已废（内置恒剥离,凛倾硬性核心）——写侧顺手清存量键,
   //   YonBan getThinkingTags 等远程读侧读不到 false 自然恒真,零改动对齐。
   delete currentConfig.reasoning_builtin;

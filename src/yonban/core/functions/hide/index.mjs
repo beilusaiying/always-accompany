@@ -48,7 +48,9 @@ register("functions:hide", {
 			const _u = context?.user ?? payload?.username;
 			// charName 回退 "_global"=与 memory updateConfig 落卡三段回退（setDataActions:713）同锚——读侧跨卡扫描命中同一份
 			// [0720 硬化] reasoning_builtin 不再透传：内置 think/thinking 恒剥离（凛倾硬性核心）,写单点顺手清存量键
-			return { ok: true, data: setReasoningTags(_u, payload?.charName || "_global", { reasoning_tags: payload?.reasoning_tags }) };
+			// [2026-08-10] beilu_thinking_strip 透传：payload 无该字段时值为 undefined，setReasoningTags 按 patch 语义跳过不写盘
+			//   （保持盘上开关现值）；reasoning_tags 同理——只带一个字段的写路不会清掉另一个字段。
+			return { ok: true, data: setReasoningTags(_u, payload?.charName || "_global", { reasoning_tags: payload?.reasoning_tags, beilu_thinking_strip: payload?.beilu_thinking_strip }) };
 		},
 		async isHidden(payload, _context) {
 			return { ok: true, data: isHidden(payload?.entry) };

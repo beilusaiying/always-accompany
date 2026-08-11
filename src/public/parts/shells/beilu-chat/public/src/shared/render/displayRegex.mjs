@@ -240,8 +240,10 @@ function getThinkingTagList() {
 	// [0720 硬化] ①内置 thinking/think 恒在集合（凛倾硬性核心,存量脏镜像也被兜住）
 	//   ②过滤放宽为非空（原 /^[\w-]+$/ 静默丢中文等非 ASCII 标签=自定义标签「加了没效」断点）,
 	//   正则安全由 extractThinkingContent 构造处 escape 保证。
+	// [2026-08-10] ③内置 beilu_thinking 恒在折叠识别集：折叠恒生效与「对 AI 隐藏」开关无关
+	//   （开关只管后端是否发给 AI，折叠块用户永远看得到）。
 	const names = tags.split(',').map(t => t.trim()).filter(t => t.length > 0)
-	return [...new Set(['thinking', 'think', ...names])]
+	return [...new Set(['thinking', 'think', 'beilu_thinking', ...names])]
 }
 
 /**
@@ -298,7 +300,7 @@ function protectMarkdownCodeSegments(text) {
  *   - isComplete: 所有思维链标签是否已闭合（false = 流式中间状态）
  */
 export function extractThinkingContent(text) {
-	if (!text || typeof text !== 'string') return { cleanText: text || '', thinkingText: '', isComplete: true }
+	if (!text || typeof text !== 'string') return { cleanText: text || '', thinkingText: '', isComplete: true, hasBeiluThinking: false, hasOtherReasoning: false }
 
 	const strippedText = stripOuterCodeFence(text)
 	const { text: protectedText, restore } = protectMarkdownCodeSegments(strippedText)
@@ -306,6 +308,15 @@ export function extractThinkingContent(text) {
 	const tags = getThinkingTagList()
 	// [0720] 标签名 escape 后再拼正则：过滤已放宽到任意非空名（含中文）,防特殊字符破正则
 	const _esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+	// [2026-08-10 badge 诚实性] 检测本块思维链的来源标签（在 protectedText 上，已排除 markdown 代码段的字面量）：
+	//   hasBeiluThinking=含 <beilu_thinking>（受「对 AI 隐藏」开关控制，关时 AI 也看得到）；
+	//   hasOtherReasoning=含 think/thinking/自定义标签（恒剥离，AI 恒看不到）。
+	//   多标签内容在 extractThinkingContent 合并为单个 thinkingText、无法逐块归因，故只能给出块级来源标记，
+	//   渲染方 applyThinkingVisibilityBadge 据此 + 开关状态让 badge 与真实可见性一致（不撒谎）。
+	const hasBeiluThinking = /<beilu_thinking>/i.test(protectedText)
+	const _otherTags = tags.filter(t => t.toLowerCase() !== 'beilu_thinking')
+	const hasOtherReasoning = _otherTags.length > 0 &&
+		new RegExp(`(?:${_otherTags.map(t => `<${_esc(t)}>`).join('|')})`, 'i').test(protectedText)
 	const openAlt = tags.map(t => `<${_esc(t)}>`).join('|')
 	const closeAlt = tags.map(t => `<\\/${_esc(t)}>`).join('|')
 
@@ -357,7 +368,38 @@ export function extractThinkingContent(text) {
 	//   消费方 messageList/StreamRenderer 用 textContent 展示(无 XSS 面)。
 	thinkingText = restore(thinkingText)
 	wbTrace('displayRegex', 'extractThinkingContent', { inLen: text?.length, thinkingLen: thinkingText?.length, isComplete })
-	return { cleanText: restore(workingText).trim(), thinkingText, isComplete }
+	return { cleanText: restore(workingText).trim(), thinkingText, isComplete, hasBeiluThinking, hasOtherReasoning }
+}
+
+/**
+ * [2026-08-10] 让思维链折叠块 badge 与真实 AI 可见性一致（诚实性）。
+ * 折叠块 badge（message_view.html .thinking-toggle-badge）原写死「仅你可见 · AI 看不到」——但内置
+ *   beilu_thinking 有「对 AI 隐藏」开关，关时 beilu_thinking 内容 AI 实际看得到，badge 不能撒谎。
+ * 据开关状态（KEYS.BEILU_THINKING_STRIP 前端镜像）+ 块来源标记改 badge：
+ *   - 剥离开（缺省）/ 块不含 beilu_thinking → 「仅你可见 · AI 看不到」（真话；think/thinking/自定义均恒剥离）
+ *   - 关 且 块只含 beilu_thinking → 「AI 可见」
+ *   - 关 且 块同时含 beilu_thinking 与恒剥离标签（合并块无法逐块归因）→ 「部分内容 AI 可见」（诚实告警）
+ * think/thinking 块永远保持原文案（恒剥离，与开关无关）。文案为中文原文，i18n MutationObserver 自动翻译。
+ * @param {HTMLElement} thinkingEl .thinking-toggle 容器
+ * @param {{hasBeiluThinking?:boolean, hasOtherReasoning?:boolean}} meta extractThinkingContent 返回的来源标记
+ */
+export function applyThinkingVisibilityBadge(thinkingEl, meta) {
+	const badgeEl = thinkingEl?.querySelector?.('.thinking-toggle-badge')
+	if (!badgeEl) return
+	const { hasBeiluThinking = false, hasOtherReasoning = false } = meta || {}
+	// 开关：BEILU_THINKING_STRIP === '0' = 「对 AI 隐藏」关闭（不剥离=AI 可见）；其余（'1'/缺省）= 剥离
+	let stripOff = false
+	try { stripOff = storage.get(KEYS.BEILU_THINKING_STRIP) === '0' } catch { /* 读失败按默认剥离 */ }
+	let iconName = 'lock', txt = ' 仅你可见 · AI 看不到'
+	if (stripOff && hasBeiluThinking) {
+		if (hasOtherReasoning) { iconName = 'warning'; txt = ' 部分内容 AI 可见' }
+		else { iconName = 'eye'; txt = ' AI 可见' }
+	}
+	badgeEl.textContent = ''
+	const ic = document.createElement('i')
+	ic.setAttribute('data-ic', iconName)
+	badgeEl.appendChild(ic)
+	badgeEl.appendChild(document.createTextNode(txt))
 }
 
 /**

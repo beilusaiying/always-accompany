@@ -770,7 +770,11 @@ async function _loadPresetPanel() {
       const newName = await beiluPrompt('复制为：', currentPresetName + '_copy');
       if (!newName?.trim()) return;
       try {
-        await postApi({ duplicate_preset: { name: currentPresetName, newName: newName.trim() } });
+        // 后端 duplicate_preset 走 SetData 门面：{success:false} 被 facade 包成 {ok:true,data} 不抛错
+        //   （prompt/index.mjs setData:111）→ catch 不触发，须显式判 res.success 才能让重名/源缺失错误
+        //   前端可见（镜像同文件 #pp-export:842 既有 res.success 判错范式，非新范式）。
+        const res = await postApi({ duplicate_preset: { name: currentPresetName, newName: newName.trim() } });
+        if (!res?.success) { showToast("error", '复制失败: ' + (res?.error || '未知错误')); return; }
         _loadPresetPanel();
       } catch (e) { console.error('[layout] preset dup error:', e); window._reportError?.(`[layout] preset dup error: ${e.message}`); }
     });

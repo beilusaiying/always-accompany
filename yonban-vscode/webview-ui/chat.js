@@ -342,6 +342,9 @@ case "chatInitialData":
       case "runtimeParams":
         if (YB.onRuntimeParams) YB.onRuntimeParams(msg.payload);
         break;
+      case "tokenReminderConfig":
+        if (YB.onTokenReminderConfig) YB.onTokenReminderConfig(msg.payload);
+        break;
       case "regexRules":
         if (YB.onRegexRules) YB.onRegexRules(msg.payload);
         break;

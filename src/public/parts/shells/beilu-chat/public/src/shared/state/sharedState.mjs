@@ -39,7 +39,7 @@
 
 import { sendAction } from "../transport/sendAction.mjs"; // T6b批9：出向统一门面（verb=真动作）
 import { storage, KEYS } from "./storage.mjs"; // R2: localStorage 集中（行为镜像+集中key）
-import { normalizeModelsUrl } from "./utils.mjs"; // 0716 直连兜底：models 端点规整单一权威（与后端 getModels 同语义）
+import { modelsRequestFor } from "/scripts/modelListRequest.mjs"; // 无浏览器依赖的模型端点/响应形状单一契约
 
 let _charId = "";
 let _charName = "";
@@ -319,15 +319,18 @@ export async function getCachedModelList(sourceName, opts) {
     // Quiet 档（sendAction:884 凛倾拍板分级）：后台兜底读失败不弹 toast，进报错系统可见
     const src = await sendAction({ verb: "getAISourceQuiet", target: "shells:serviceSourceManage", source: "web", payload: { name: sourceName } });
     const cfg = src?.config || {};
-    const rawUrl = (cfg.url || cfg.base_url || "").trim();
+    const rawUrl = (cfg.url || cfg.base_url || cfg.host || "").trim();
     const key = (cfg.apikey || cfg.key || "").trim();
-    const modelsUrl = rawUrl ? normalizeModelsUrl(rawUrl) : null;
+    const request = rawUrl ? modelsRequestFor({
+      generator: src?.generator,
+      provider: cfg.convert_config?.provider || "",
+    }, rawUrl) : null;
+    const modelsUrl = request?.url;
     if (modelsUrl) {
       const res = await fetch(modelsUrl, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
       if (res.ok) {
         const d = await res.json();
-        const arr = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-        const models = [...new Set(arr.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean))].sort();
+        const models = [...new Set(request.normalize(d))].sort();
         if (models.length) {
           _modelListCache.set(sourceName, { models, time: Date.now() });
           return models;

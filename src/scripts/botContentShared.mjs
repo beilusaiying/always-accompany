@@ -17,6 +17,8 @@ import { getAllDefaultParts, getAnyPreferredDefaultPart, loadPart } from "../ser
 export const INTERNAL_PROTOCOL_TAG_PATTERNS = [
 	/<thinking>[\s\S]*?<\/thinking>/gi,
 	/<think>[\s\S]*?<\/think>/gi,
+	// [2026-08-10] beilu_thinking 内置思维链标签：bot 出站是无折叠 UI 的纯文本面，恒清洗（不受「对 AI 隐藏」开关影响）
+	/<beilu_thinking>[\s\S]*?<\/beilu_thinking>/gi,
 	/<tableEdit>[\s\S]*?<\/tableEdit>/gi,
 	/<memoryArchive>[\s\S]*?<\/memoryArchive>/gi,
 	/<memorySearch>[\s\S]*?<\/memorySearch>/gi,

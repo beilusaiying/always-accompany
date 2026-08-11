@@ -119,6 +119,7 @@ window.YB = (function () {
     fpMaxTokens: $("#fpMaxTokens"),
     fpWarnPct: $("#fpWarnPct"),
     fpDangerPct: $("#fpDangerPct"),
+    fpCleanMinPct: $("#fpCleanMinPct"),
     fpSaveBtn: $("#fpSaveBtn"),
     fpStatus: $("#fpStatus"),
     ideApprovalsPopup: $("#ideApprovalsPopup"),

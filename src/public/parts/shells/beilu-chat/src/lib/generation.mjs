@@ -22,6 +22,7 @@ import {
   broadcastChatEvent,
   broadcastUserActiveChat,
   setOnStopGeneration,
+  setOnUserStopGeneration,
   StreamManager,
   updateTypingStatus,
 } from "./broadcast.mjs";
@@ -86,6 +87,14 @@ const EMPTY_REPLY_BASE_DELAY_MS = 3000;
 //   开关+二次确认）。原"错误轮杀 loop 防 API 空烧"改为节流不改为终止：这些轮的 loop 续轮延迟
 //   垫此下限，API 持续故障时最快也只按此周期重试，不快转空烧。
 const ERROR_LOOP_MIN_DELAY_MS = 10000;
+// [0808 凛倾拍板·停止要真停] 用户点停止键的 per-chat 标记。0724「只许前端关」把停止键与自动化
+//   完全解耦后：①空闲期点停止，已排定的 Loop/续轮 timer 照样 fire=「完全停止不了」；
+//   ②catch(AbortError) 把用户停止与 API 异常同路径排 Loop 续轮=「Loop 无法区分用户停止/AI 自停」。
+//   现语义：用户停止 → 置本标记 + 取消 pending timer，scheduleLoopContinue/scheduleAutoContinue
+//   闸口识别后不再排自动续轮（自动化休眠）；用户再互动（新消息 resetAutoContinueCounter /
+//   审批 approval 续轮）即清除标记恢复。loop 开关配置(yonban_config.auto_continue)单源不动，
+//   开关仍是长期启停的唯一配置出口——本标记只表达「这一停到下次互动」的意图窗口。
+const _userStoppedChats = new Set();
 
 /** 取消指定 chatid 的自动继续定时器 */
 export function cancelAutoContinue(chatid) {
@@ -101,6 +110,22 @@ export function resetAutoContinueCounter(chatid) {
   _autoContinueCounters.delete(chatid);
   _fuzzyFailCounters.delete(chatid);
   _disconnectedStreaks.delete(chatid);
+  // [0808] 调用方全部是用户再互动语义（用户新消息 :1397 / 回档静默 _cancelQueuedGenerationState /
+  //   删会话 forgetChatGenState）→ 同点解除「用户停止」休眠标记。
+  _userStoppedChats.delete(chatid);
+}
+
+/** [0808 凛倾拍板·停止要真停] 用户停止键单一入口（broadcast ws stop_generation 经
+ *  setOnUserStopGeneration 注入调用）。标记须在调用方 abort 在飞流【之前】置位，
+ *  使 executeGeneration catch(AbortError) 及各续轮闸能识别「本轮是用户停止」。
+ *  空闲期（无在飞流）点停止时，cancelAutoContinue 清掉已排定的 Loop/续轮 timer——
+ *  否则 timer 照样 fire=「停不下来」。 */
+export function markUserStopGeneration(chatid) {
+  if (!chatid) return;
+  _userStoppedChats.add(chatid);
+  cancelAutoContinue(chatid);
+  wbTrace(chatid, "generation", "userStop:marked", {});
+  console.log(`[chat] ★ 用户停止：自动续轮/Loop 休眠，等待用户再互动 (chatid=${chatid})`);
 }
 
 /** [0724 只许前端关] 探测 chatid 是否有 pending 自动续轮 timer。
@@ -128,6 +153,13 @@ export function hasAutoContinueTimer(chatid) {
  * @param {string} [source="round_end"] - 触发源标识（仅日志/诊断用）
  */
 export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "round_end", readyContext = null) {
+  // [0808] 审批点击=用户再互动 → 解除用户停止休眠；其余自动源（回合末池/result_ready/
+  //   clone_async_done）在休眠期一律不排（用户停 vs AI 自停的识别闸之一）。
+  if (source === "approval") _userStoppedChats.delete(chatid);
+  else if (_userStoppedChats.has(chatid)) {
+    wbTrace(chatid, "generation", "autocontinue:suppressed_user_stop", { source });
+    return;
+  }
   cancelAutoContinue(chatid);
   const timerId = setTimeout(() => {
     if (_autoContinueTimers.get(chatid) !== timerId) return;
@@ -188,9 +220,11 @@ export function forgetChatGenState(chatid) {
 
 // 注册停止回调——现仅 broadcast ws.on("close") 全断 5s 卸载路径调用：卸载后 chatMetadata 置 null，
 //   残留 timer fire → triggerCharReply = 孤儿生成、工具结果不落盘（#79），必须取消。
-// [0724 只许前端关] stop_generation（用户点停止键）已不再走此回调——停止只停在飞流，
-//   不掐自动继续/Loop 自动化链（自动化唯一关闭出口=前端开关+二次确认）。
+// [0808 修订·凛倾拍板「停止要真停」] 0724「stop_generation 只停在飞流不掐自动化」被推翻：
+//   stop_generation 现经 setOnUserStopGeneration(markUserStopGeneration) 置用户停止标记+清 timer，
+//   自动化休眠至用户再互动；开关配置仍是长期启停的唯一配置出口（单源不动）。
 setOnStopGeneration(cancelAutoContinue);
+setOnUserStopGeneration(markUserStopGeneration);
 
 // ============================================================
 // executeGeneration — 流式生成核心
@@ -401,10 +435,18 @@ async function _injectLoopEntry(chatid, chatMetadata, loopCfg) {
 }
 
 function scheduleLoopContinue(chatid, charId, delayMs) {
+  // 闸0 [0808 凛倾拍板·停止要真停] 用户已按停止 → 不排 Loop。这是「用户选择停止」与
+  //   「AI 自停（自然结束/异常轮）」的识别点：异常轮照旧续（0724 语义保留），用户停止不续。
+  if (_userStoppedChats.has(chatid)) {
+    wbTrace(chatid, "generation", "loop:suppressed_user_stop", {});
+    return;
+  }
   cancelAutoContinue(chatid);
   const timerId = setTimeout(async () => {
     _autoContinueTimers.delete(chatid);
     try {
+      // 闸0' 用户停止发生在延迟窗内（排定后才点停止）：fire 时复查，不注入不触发
+      if (_userStoppedChats.has(chatid)) return;
       // 闸1 会话在载：deleteChat / ws 全断 5s 卸载后 chatMetadata=null → 不续，防孤儿生成(#79)
       const _meta = chatMetadatas.get(chatid)?.chatMetadata;
       if (!_meta) return;
@@ -1153,7 +1195,9 @@ export async function executeGeneration(
     }
     // [0724 只许前端关] 异常路径（AbortError=用户点停止/regen 打断，或 GetReply 抛错=API 故障）
     //   不再是 loop 断头路——原 catch 只 cancel 不再排，任何一次异常整条自动化静默死。
-    //   此处只负责排 timer，守卫全在 scheduleLoopContinue fire 时（在载/在飞/开关三闸）：
+    //   此处只负责排 timer，守卫全在 scheduleLoopContinue（[0808] 闸0 用户停止 + 在载/在飞/开关三闸）：
+    //   用户点停止的轮，broadcast 已先置 _userStoppedChats 标记 → 下方 scheduleLoopContinue 被闸0
+    //   压掉=用户停真停；API 异常轮标记不在 → 照旧续轮（区分「用户停」vs「AI 自停」的落点）。
     //   deleteChat·ws 卸载晚于上方 cancelAutoContinue 也没关系，fire 时在载闸兜底不产孤儿生成。
     try {
       const _loopCfgE = getAutoContinueConfig(chatMetadata.username, request.extension?.activation?.mode || request.mode);

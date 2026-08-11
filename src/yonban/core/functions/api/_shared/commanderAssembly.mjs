@@ -92,10 +92,20 @@ export function assembleCommanderMessages(presetExt, opts = {}) {
 		throw new TypeError('[commanderAssembly] opts.mapMsg 必填（provider 段形状映射）')
 	validateCommanderPreset(presetExt, opts.onWarn) // P-E：集中 schema 校验，异常只告警不 throw
 
-	const _before = presetExt?.beilu_preset_before || []
-	const _above = presetExt?.beilu_injection_above || []
-	const _below = presetExt?.beilu_injection_below || []
-	const _after = presetExt?.beilu_preset_after || []
+	// [0807 EJS 链收尾·凛倾"怎么控制实际内容输出"最后一环] 空 content 过滤：EJS 条件门控
+	//   （<% if(stat_data.x>=N){ %>…<% } %>）不满足时条目渲染成空串/纯空白——此前会以
+	//   {role, content:""} 空消息进 messages（发给 API=渣，部分渠道 400）。判据含 trim：
+	//   if 块不成立时 EJS 常留换行空白。系统段（extractSystem 分支）原有 .filter(Boolean)
+	//   只滤全空不滤空白，此处统一在段源头过滤=两分支同得干净零输出语义。
+	const _nonEmpty = (arr) => (arr || []).filter((m) => {
+		const c = m?.content
+		if (typeof c === 'string') return c.trim().length > 0
+		return !!c // 多模态数组等非字符串形态保留（由 provider 层自校验）
+	})
+	const _before = _nonEmpty(presetExt?.beilu_preset_before)
+	const _above = _nonEmpty(presetExt?.beilu_injection_above)
+	const _below = _nonEmpty(presetExt?.beilu_injection_below)
+	const _after = _nonEmpty(presetExt?.beilu_preset_after)
 
 	// 内容长度取值：默认 String 取 .length，Array（多模态 parts）取各 text 之和，其它 0。
 	const _len = typeof contentLen === 'function'

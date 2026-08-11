@@ -18,6 +18,7 @@
  */
 import { dispatch } from "../../core/dispatch/dispatcher.mjs";
 import { getModeDef } from "./runner.mjs";
+import { wbT } from "../../../server/wbStub.mjs"; // [0807 EJS 终步白盒] preset/worldbook 同款轻桩
 // 影子自包含 bootstrap：facade 注册靠 import 副作用，影子期零流量=服务进程不 import 它们，
 // 孪生必须自带依赖注册（否则 ModeDef 校验"未注册功能"必炸——沙盒第一跑实抓）。
 import "../../core/functions/memory/index.mjs";
@@ -37,6 +38,7 @@ export async function buildPromptStructShadow(args, mode, detail_level = 3) {
 
 	const result = {
 		char_id,
+		chatid: args?.extension?.activation?.chatid ?? args?.chatid,
 		username: args.username,
 		UserCharname, ReplyToCharname, Charname,
 		char_prompt: getSinglePartPrompt(),
@@ -157,6 +159,30 @@ export async function buildPromptStructShadow(args, mode, detail_level = 3) {
 				return plugins[name]?.interfaces?.chat?.TweakPrompt?.(args, result, result.plugin_prompts[name], detail_level);
 			}),
 		]);
+	}
+	// ── [0807 EJS 司令员链修复] EJS 渲染串行终步 ──
+	// why：EJS 依赖"全部内容已就位"（司令员四段在 dl=1 才产出），而轮内 Promise.all 并发使
+	//   EJS(dl=0) 与 preset Round3 时序不可靠、且四段产出前的轮次恒扑空。终步在三轮全部落定后
+	//   串行跑一次（EJS 内部 dl=0 才干活，签名同轮内直调）——零竞态、司令员/非司令员双正确；
+	//   轮内三次直调保留（渲染后模板已无 '<%'，重复扫描幂等）。part 缺席 → facade 报 ok:false，
+	//   只 warn 不阻断主链（"删了还能跑"）。fake-send 同链受益=提示词查看器同根因自动修。
+	try {
+		wbT(args?.chatid ?? null, "shadowBuild", "ejs_final:enter", { mode });
+		const _ejsFinal = await dispatch({
+			verb: "tweakPrompt", target: "functions:sandbox", source: `pipeline:${mode}`,
+			payload: { arg: args, prompt_struct: result, my_prompt: result.plugin_prompts["beilu-ejs"], detail_level: 0 },
+			scope: { chatId: args?.chatid ?? null, mode },
+		});
+		if (_ejsFinal?.ok === false) {
+			// [0807 白盒] 缺席/失败可见：实测时"终步到底跑没跑"直接看 ejs_final:* 三态
+			wbT(args?.chatid ?? null, "shadowBuild", "ejs_final:absent", { msg: _ejsFinal.error?.msg });
+			console.warn(`[shadowBuild] EJS 终步缺席/失败(不阻断): ${_ejsFinal.error?.msg}`);
+		} else {
+			wbT(args?.chatid ?? null, "shadowBuild", "ejs_final:done", {});
+		}
+	} catch (e) {
+		wbT(args?.chatid ?? null, "shadowBuild", "ejs_final:error", { msg: e?.message });
+		console.warn(`[shadowBuild] EJS 终步异常(不阻断): ${e?.message}`);
 	}
 	return result;
 }

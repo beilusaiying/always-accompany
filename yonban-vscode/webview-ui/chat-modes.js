@@ -101,12 +101,10 @@ var showToast = YB.showToast;
   // Token 进度条
   // ═══════════════════════════════════════════════════════
 
-  // 启动时加载保存的Token阈值
-  try {
-    var _saved = JSON.parse(localStorage.getItem("yb-token-settings") || "{}");
-    if (_saved.warnPct) state._warnPct = _saved.warnPct;
-    if (_saved.dangerPct) state._dangerPct = _saved.dangerPct;
-  } catch (_) { /* ignore */ }
+  // [0811 阈值单源收口] warn/danger 不再读 localStorage——真源=后端 token_reminder.thresholds
+  // （warning→警告线 / urgent→危险线），首次快照时经 getTokenReminder 拉取（onTokenSnapshot 触发）。
+  // 原 yb-token-settings 本地阈值与后端 thresholds 双源分叉（web 面板 50/70/85 vs YonBan 本地 70/90）已删，
+  // localStorage 仅保留 maxTokens 本地便利值。
 
   function startTokenPoll() {
     stopTokenPoll();
@@ -126,6 +124,8 @@ var showToast = YB.showToast;
   }
 
   function onTokenSnapshot(payload) {
+    // [0811 阈值单源] 首次快照时拉一次后端 token_reminder（bar 着色阈值+弹窗回显真源），一次性防轮询刷请求
+    if (!state._trFetched) { state._trFetched = true; vscode.postMessage({ type: "getTokenReminder" }); }
     if (!payload || !payload.available || !payload.snapshot) {
       // 常驻：无快照时不再隐藏整条，显示占位读数(对齐本体 token 条常驻)，避免「时有时无」。
       if (dom.tokenBar) dom.tokenBar.classList.remove("hidden");
@@ -2206,13 +2206,33 @@ var showToast = YB.showToast;
     if (dom.fpMaxContext && state.tokenTotal) {
       dom.fpMaxContext.value = state.tokenTotal;
     }
-    // 从 localStorage 读取自定义阈值
+    // 从 localStorage 读取本地便利值（0811 阈值单源后仅剩 maxTokens；warn/danger 真源=后端 thresholds）
     try {
       var saved = JSON.parse(localStorage.getItem("yb-token-settings") || "{}");
-      if (dom.fpWarnPct && saved.warnPct) dom.fpWarnPct.value = saved.warnPct;
-      if (dom.fpDangerPct && saved.dangerPct) dom.fpDangerPct.value = saved.dangerPct;
       if (dom.fpMaxTokens && saved.maxTokens) dom.fpMaxTokens.value = saved.maxTokens;
     } catch (_) { /* ignore */ }
+    // [0811] 清理阈值+警告/危险线：真源=后端 token_reminder（DEFAULT 合并后的生效值），异步回填 → onTokenReminderConfig
+    vscode.postMessage({ type: "getTokenReminder" });
+  }
+
+  /** [0811] Token提醒配置回填：后端生效值（DEFAULT 合并后）回显清理阈值 + 警告/危险线（阈值单源） */
+  function onTokenReminderConfig(tr) {
+    var dom = YB.dom;
+    if (!tr) return;
+    if (dom.fpCleanMinPct && tr.ai_clean_min_percent != null) {
+      dom.fpCleanMinPct.value = tr.ai_clean_min_percent;
+    }
+    // bar 着色阈值真源=thresholds（warning→警告线 / urgent→危险线）；数组留存供保存时克隆写回
+    if (Array.isArray(tr.thresholds)) {
+      state._tokenReminderThresholds = tr.thresholds;
+      for (var i = 0; i < tr.thresholds.length; i++) {
+        var t = tr.thresholds[i] || {};
+        if (t.level === "warning" && t.percent != null) state._warnPct = t.percent;
+        if (t.level === "urgent" && t.percent != null) state._dangerPct = t.percent;
+      }
+      if (dom.fpWarnPct && state._warnPct != null) dom.fpWarnPct.value = state._warnPct;
+      if (dom.fpDangerPct && state._dangerPct != null) dom.fpDangerPct.value = state._dangerPct;
+    }
   }
 
   /** 保存 Token 设置 */
@@ -2223,13 +2243,9 @@ var showToast = YB.showToast;
     var warnPct = dom.fpWarnPct ? parseInt(dom.fpWarnPct.value, 10) : 70;
     var dangerPct = dom.fpDangerPct ? parseInt(dom.fpDangerPct.value, 10) : 90;
 
-    // 保存到 localStorage (阈值)
+    // 保存到 localStorage（0811 阈值单源后仅存 maxTokens 本地便利值；warn/danger 已迁后端 token_reminder.thresholds）
     try {
-      localStorage.setItem("yb-token-settings", JSON.stringify({
-        warnPct: warnPct,
-        dangerPct: dangerPct,
-        maxTokens: maxTok || undefined,
-      }));
+      localStorage.setItem("yb-token-settings", JSON.stringify({ maxTokens: maxTok || undefined }));
     } catch (_) { /* ignore */ }
 
     // 保存 maxContext/maxTokens 到后端
@@ -2239,6 +2255,29 @@ var showToast = YB.showToast;
     if (Object.keys(params).length > 0) {
       if (state.currentChatId) params.chatId = state.currentChatId;
       vscode.postMessage({ type: "setRuntimeParams", payload: params });
+    }
+
+    // [0811] 清理阈值 + 警告/危险线 → 后端 token_reminder（真源，与本体 Token设置弹窗同一 updateConfig
+    // 合并写口，不覆盖旁字段）。空输入=不改动该项。
+    var trPatch = {};
+    if (dom.fpCleanMinPct && dom.fpCleanMinPct.value !== "") {
+      var cleanPct = parseInt(dom.fpCleanMinPct.value, 10);
+      if (isFinite(cleanPct)) trPatch.ai_clean_min_percent = Math.min(Math.max(cleanPct, 0), 99);
+    }
+    // 警告/危险线写回 thresholds：克隆后端生效数组只改 warning/urgent 的 percent，保留 text/info 级字段
+    // （不复制 web 面板保存丢 text 的旧病）；未拉到数组前不写，防盲写覆盖。
+    if (isFinite(warnPct) && isFinite(dangerPct) && Array.isArray(state._tokenReminderThresholds)) {
+      trPatch.thresholds = state._tokenReminderThresholds.map(function (t) {
+        var c = {};
+        for (var k in t) { if (Object.prototype.hasOwnProperty.call(t, k)) c[k] = t[k]; }
+        if (c.level === "warning") c.percent = warnPct;
+        if (c.level === "urgent") c.percent = dangerPct;
+        return c;
+      });
+      state._tokenReminderThresholds = trPatch.thresholds;
+    }
+    if (Object.keys(trPatch).length > 0) {
+      vscode.postMessage({ type: "updateTokenReminder", payload: trPatch });
     }
 
     // 更新本地阈值状态
@@ -2926,6 +2965,7 @@ var showToast = YB.showToast;
   YB.onModelList = onModelList;
   YB.loadTokenSettings = loadTokenSettings;
   YB.saveTokenSettings = saveTokenSettings;
+  YB.onTokenReminderConfig = onTokenReminderConfig;
   // 链式包装：保留 chat-messages.js 先注册的底部 dock 消费者，先调旧再调本面板渲染（照 _modesOnPresetConfig / _origOnConn 模式，避免后注册覆盖前注册）
   var _msgsOnIdeApprovals = YB.onIdeApprovals; // chat-messages.js 注册的底部 dock 渲染
   YB.onIdeApprovals = function(payload) {

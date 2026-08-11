@@ -47,6 +47,7 @@ import { initializeWebSocket, reconnectWebSocket, sendWebsocketMessage } from ".
 import { showCrossModeNotification } from "../widgets/crossModeNotification.mjs";
 import { wbTrace } from "../widgets/whitebox.mjs";
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
+import { onEventBus } from "../state/eventBusCore.mjs"; // [0807 转接二期#6] 总线订阅单源
 
 // P0 防循环：回退计数键（sessionStorage，非 localStorage，故不进 KEYS 表）。
 //   提升到模块级：initializeChat() 内 catch 分支写计数、函数末尾清计数两处需共用同一常量，
@@ -1079,21 +1080,14 @@ function initializeIdeApprovalDock() {
   });
 
   // 监听 AI 生成完成事件，触发审批检查
-  const bus = window.__beiluEventBus;
-  if (bus) {
-    if (!bus._listeners) bus._listeners = new Map();
-    const add = (name, cb) => {
-      if (!bus._listeners.has(name)) bus._listeners.set(name, []);
-      bus._listeners.get(name).push(cb);
-    };
-    add("generation_ended", () => {
-      _pollApprovals();
-      // 启动轮询（3秒间隔，有待审批时持续）
-      if (!_approvalTimer) {
-        _approvalTimer = setInterval(_pollApprovals, 3000);
-      }
-    });
-  }
+  // [0807 转接二期#6] 手拼 bus._listeners push → eventBusCore.onEventBus 单源（订阅形状收口）
+  onEventBus("generation_ended", () => {
+    _pollApprovals();
+    // 启动轮询（3秒间隔，有待审批时持续）
+    if (!_approvalTimer) {
+      _approvalTimer = setInterval(_pollApprovals, 3000);
+    }
+  });
 
   // 初始检查一次
   _pollApprovals();

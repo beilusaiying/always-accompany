@@ -1680,6 +1680,17 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      // ── Token提醒配置（AI清理最低占用%）：真源=beilu-memory token_reminder，与本体 Token设置弹窗同读写口 ──
+      case "getTokenReminder": {
+        const trCfg = await this._chatService.getTokenReminderConfig();
+        this.postMessage({ type: "tokenReminderConfig", payload: (trCfg as Record<string, unknown>)?.token_reminder || {} });
+        break;
+      }
+      case "updateTokenReminder": {
+        await this._chatService.updateTokenReminder((message.payload || {}) as Record<string, unknown>);
+        break;
+      }
+
       // ── display regex 规则 ─────────────────────────
       case "getRegexRules": {
         try {
@@ -2360,6 +2371,10 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
                 <div class="fp-row">
                     <span class="fp-label">危险阈值 %</span>
                     <input type="number" id="fpDangerPct" class="fp-input" min="50" max="100" value="90" />
+                </div>
+                <div class="fp-row" title="上下文占用低于此比例时拒绝AI的contextClean清理（防频繁清理打碎缓存）；0=不限制">
+                    <span class="fp-label">AI清理最低占用 %</span>
+                    <input type="number" id="fpCleanMinPct" class="fp-input" min="0" max="99" step="1" placeholder="5" />
                 </div>
                 <button id="fpSaveBtn" class="btn btn-primary" style="width:100%;margin-top:8px;font-size:12px;">保存</button>
                 <div id="fpStatus" style="font-size:10px;color:var(--vscode-descriptionForeground);text-align:center;margin-top:4px;"></div>

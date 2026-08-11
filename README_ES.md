@@ -35,10 +35,10 @@
 
 **¿Qué tenemos?** Detrás de todas estas interfaces hay un mismo sistema; la diferencia real se concentra en cuatro cosas:
 
-- **Un marco singular de memoria y contexto** — Data + capas hot / warm / cold conservan el material de largo plazo, y una herramienta que reúne contexto y recupera memoria (P1) recupera antes de cada respuesta los fragmentos relevantes en este momento; la limpieza de contexto llega a la granularidad de la lectura de archivo, es reversible, y la propia IA puede descartar archivos ya leídos que no vuelve a necesitar (en el entorno del autor, medido según el criterio de facturación, la eficiencia de caché ronda el 70–80 %, no es un valor prometido);
-- **Todo el contenido es editable** — personajes, prompts, inyecciones, memoria, rutas de recuperación, permisos y plugins no son cajas negras; hay un punto de entrada para modificar cualquier capa;
-- **Un marco de alta extensibilidad** — las funciones centrales se organizan como plugins, se transmiten a través de una estación de información intermedia, y el frontend solo se encarga de mostrar y operar; los plugins de usuario pueden escribirse en JS, Python o como programas independientes;
-- **Todo lo que tiene un agent** — archivos, comandos, navegador, MCP, múltiples ventanas, aprobación y recuperación, todo presente y compartiendo el mismo marco de memoria y contexto; nació para completar proyectos grandes, y su núcleo es justamente usar la atención limitada allí donde importa.
+- **Memoria y contexto por capas** — Data + capas hot / warm / cold conservan el material de largo plazo, y una herramienta que reúne contexto y recupera memoria (P1) recupera antes de cada respuesta los fragmentos pertinentes; la limpieza de contexto opera a nivel de lectura de archivo, es reversible, y la propia IA puede descartar archivos ya leídos que ya no necesita;
+- **El comportamiento central se puede revisar y configurar** — personajes, prompts, inyecciones, memoria, rutas de recuperación, permisos y plugins tienen puntos de edición o configuración documentados;
+- **Un marco extensible basado en plugins** — las funciones centrales se organizan como plugins, se transmiten a través de una estación de información intermedia, y el frontend se encarga de mostrar y operar; los plugins de usuario pueden escribirse en JS, Python o como programas independientes;
+- **Una cadena integrada de herramientas para agent** — proporciona archivos, comandos, integración con el navegador, MCP, múltiples ventanas, aprobación y recuperación bajo un mismo marco de memoria y contexto; la disponibilidad y los resultados dependen del modo, la configuración, el entorno, el modelo y los servicios conectados.
 
 ---
 
@@ -66,7 +66,7 @@ El lanzador descargará automáticamente el runtime si falta Deno y completará 
 |---|---|
 | ![Elegir idioma](imgs/screenshots/onboarding-language.png) | ![Vincular API](imgs/screenshots/onboarding-api.png) |
 
-Introduce la dirección del servicio, la API Key y el modelo; tras guardar, elige o importa una tarjeta de personaje y ya puedes empezar a chatear. Se necesita al menos una API de IA que funcione; la capacidad del modelo y el coste dependen del servicio que vincules. La aplicación incluye una [Wiki completa](site/wiki/getting-started/overview.md), y también puedes visitar la [versión en línea](https://beilusaiying.github.io/always-accompany/).
+Introduce la dirección del servicio, la API Key y el modelo; tras guardar, elige o importa una tarjeta de personaje y ya puedes empezar a chatear. Se necesita al menos una API de IA que funcione; la capacidad del modelo y el coste dependen del servicio que vincules. La aplicación incluye una [Wiki](site/wiki/getting-started/overview.md), y también puedes visitar la [versión en línea](https://beilusaiying.github.io/always-accompany/).
 
 > El primer arranque suele tardar más: el runtime necesita descargar dependencias e inicializar los datos locales. Espera a que la página aparezca por completo antes de operar; los arranques posteriores serán más rápidos. Capacidades opcionales como la voz o la mascota de escritorio pueden tener su propia descarga inicial o requisitos de entorno.
 
@@ -122,7 +122,7 @@ Introduce la dirección del servicio, la API Key y el modelo; tras guardar, elig
 - **🎯 P1 (recuperación previa de memoria)**: antes de que la IA principal responda, busca primero fragmentos relevantes en el material de largo plazo que el personaje y el modo actuales permiten leer. Chat / Code / Work usan actualmente por defecto la ruta de algoritmo local; los modos Smart / Bot conservan una ruta de recuperación por IA independiente; las dos rutas son mutuamente excluyentes, y también se pueden apagar;
 - **🗜️ Gestión de contexto**: consulta el consumo por mensaje, lectura de archivo, resultado de herramienta e inyección del sistema; la limpieza normal solo oculta el contenido y deja de enviarlo a la IA, pero el registro permanece en disco y es recuperable;
 - **📊 Tablas de memoria por modo**: Chat tiene las tablas #0–#9, Code y Work usan sus propias tablas y directorios privados, sin amontonar todos los escenarios en una sola tabla;
-- **👑 Todos los prompts son editables**: contenido, orden, interruptor, identidad system / user / assistant, posición de inyección y condiciones, todo se puede ajustar;
+- **👑 Las entradas principales de prompt son editables**: definiciones de personaje, presets, entradas INJ, instrucciones de modo, ranuras de datos de memoria y guías de herramientas ofrecen los controles que admita su editor para contenido, orden, activación, rol, posición de inyección o condiciones; los envoltorios de seguridad del marco y las transformaciones específicas del proveedor siguen gestionados por código;
 - **💻 Flujo de trabajo de nivel IDE**: diseño de tres columnas, lectura y edición de archivos, ejecución de comandos, lista de tareas, múltiples ventanas y puente de extensión para VS Code;
 - **🔌 MCP (protocolo de conexión de herramientas externas)**: pega un JSON para integrar herramientas externas; los servicios de tipo comando deben pasar por puertas de seguridad como el owner y la lista blanca de variables de entorno;
 - **🐾 Mascota de escritorio y compañía en juegos**: Live2D / packs de imágenes, tres formas de percepción de pantalla, comentarios proactivos, un bucle de compañía en juegos independiente y frecuencia adaptativa;
@@ -139,7 +139,7 @@ Introduce la dirección del servicio, la API Key y el modelo; tras guardar, elig
 
 Guardar la memoria no tiene en sí nada de misterioso. Data es una tabla que se puede escribir; `hot / warm / cold` no es más que crear tú tres carpetas por “tiempo + evento” y anotar md dentro; INJ (entradas editables de inyección de prompt) y los presets también prolongan la forma de orquestar prompts que frontends de personaje como SillyTavern llevan mucho tiempo explorando.
 
-Pero al combinarlos, y añadir P1 (una herramienta que reúne contexto y recupera memoria), surge un ecosistema natural de “vector + inyección dinámica + memoria que sigue a la tarea actual”: una biblioteca de memoria de alta atención y alta densidad de información; y al sumarle la compresión que hemos llevado al nivel de archivo, la cadena completa queda cerrada.
+Al combinarlos con P1 (una herramienta que reúne contexto y recupera memoria), se forma un flujo configurable de “vector + inyección dinámica + memoria que sigue a la tarea actual”; la limpieza de contexto a nivel de lectura de archivo forma parte de la misma cadena. Los resultados de recuperación y compresión dependen del modo, la configuración, el material y el modelo.
 
 En realidad, al principio pensábamos hacer de P1 una pequeña IA desplegada por separado. Pero el verdadero problema aparece después de guardar: cuanta más memoria se acumula, si en cada turno hay que arrancar expresamente una segunda IA para rebuscar, ¿aguantarán la velocidad y el coste? ¿De verdad esa pequeña IA lo encontrará todo? ¿Hay que usar por fuerza una IA de pago? ¿Cuanto más recuerde, más lenta será la respuesta?
 
@@ -223,9 +223,9 @@ El panel de caja blanca demuestra que cada nodo y cada origen real pueden inspec
 </details>
 
 <details>
-<summary><strong>👑 Todos los prompts son editables — usables por defecto, y también moldeables hasta convertirlos en tu propia IA</strong></summary>
+<summary><strong>👑 Las entradas principales de prompt son editables — usables por defecto y configurables para tu flujo</strong></summary>
 
-Las entradas de prompt como la configuración del personaje, las reglas del sistema, la descripción del modo, las ranuras de datos de memoria y la enseñanza de herramientas se pueden editar en la interfaz. Cada entrada de contenido admite ajustes:
+Las entradas principales de prompt —definiciones de personaje, presets, entradas INJ, instrucciones de modo, ranuras de datos de memoria y guías de herramientas— se pueden editar en la interfaz. Cada entrada permite los ajustes que ofrece realmente su editor; los envoltorios de seguridad del marco y las transformaciones específicas del proveedor siguen gestionados por código:
 
 - el texto real
 - el orden
@@ -274,7 +274,7 @@ Quizá te haya pasado: cuanto más largo el chat y más memoria, más recibe la 
 
 ## Hoja de ruta
 
-**Puntos de entrada e implementaciones que el repositorio ya tiene**: Data + memoria en tres capas · gestión de contexto · P1 autodirigido / AI P1 · edición de todos los prompts y cambio de preset · tablas de memoria por modo · inyección dinámica de conocimiento condicional · mascota de escritorio Live2D / imagen · percepción de pantalla y compañía en juegos · entrada de voz local · generación de PPT · MCP · múltiples ventanas · puente de extensión para VS Code · Bot en 9 plataformas · 23 directorios de plugins integrados · anfitrión de plugins de usuario · cadena de papelera / copia de seguridad · diagnóstico de caja blanca · múltiples idiomas y temas.
+**Puntos de entrada e implementaciones que el repositorio ya tiene**: Data + memoria en tres capas · gestión de contexto · P1 autodirigido / AI P1 · edición de entradas de prompt y cambio de preset · tablas de memoria por modo · inyección dinámica de conocimiento condicional · mascota de escritorio Live2D / imagen · percepción de pantalla y compañía en juegos · entrada de voz local · generación de PPT · MCP · múltiples ventanas · puente de extensión para VS Code · Bot en 9 plataformas · 23 directorios de plugins integrados · anfitrión de plugins de usuario · cadena de papelera / copia de seguridad · diagnóstico de caja blanca · múltiples idiomas y temas.
 
 **Direcciones próximas**: más plataformas de Bot · ecosistema de plugins y ejemplos · TTS / texto a imagen · motor de juegos con IA (estado numérico determinista + narrativa LLM + renderizado simbólico)
 
@@ -314,7 +314,7 @@ Comparte tarjetas de personaje · publica presets y conocimiento condicional · 
 
 > El diseño, la arquitectura y el desarrollo de este proyecto los ha hecho un ni-ni que quiere encontrar trabajo (es broma, más o menos), con la ayuda de la programación asistida por IA, combinando diseño de algoritmos, ideas de biónica, arquitectura de marco y razonamiento lógico.
 
-always-accompany no busca embutir funciones de moda en un mismo menú: al principio solo era que el autor quería usarlo él mismo :). Por supuesto, también tiene de verdad un sistema completo de plugins y marco, y es compatible con varios idiomas.
+always-accompany no busca embutir funciones de moda en un mismo menú: al principio solo era que el autor quería usarlo él mismo :). Incluye un sistema de plugins y marco, además de varios idiomas de interfaz; la cobertura real varía según el plugin y los recursos de traducción disponibles.
 
 ---
 

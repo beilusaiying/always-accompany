@@ -139,6 +139,48 @@ function _renderPanel() {
 	header.querySelector('.pm-refresh-btn').addEventListener('click', () => _loadAllStates())
 	_container.appendChild(header)
 
+	// [0807 凛倾指令"导入口放这里"] 酒馆插件导入口——只放导入动作；启停/删除的唯一控制面
+	//   仍在「额外插件→酒馆插件」面板（0731 红线：双面板同写一份状态=散写，此处不建第二管理面）。
+	//   端点与该面板同一后端收口：plugins/beilu-st-host installFromGitUrl（一份实现多个入口，
+	//   与 ImportHandlers/STPlugin 导入界面同款范式）。
+	const stImport = document.createElement('div')
+	stImport.className = 'pm-st-import'
+	stImport.innerHTML = `
+		<div class="pm-st-import-title">酒馆插件导入</div>
+		<div class="pm-st-import-row">
+			<input type="text" class="pm-st-import-url" placeholder="git 仓库网址，如 https://github.com/作者/插件名（可加 #分支）" />
+			<button class="pm-st-import-btn">下载安装</button>
+		</div>
+		<div class="pm-st-import-hint">⚠ 插件是第三方代码。安装后到「额外插件 → 酒馆插件」启用与管理（新装默认禁用）</div>
+	`
+	const _stUrlInput = stImport.querySelector('.pm-st-import-url')
+	const _stImportBtn = stImport.querySelector('.pm-st-import-btn')
+	_stImportBtn.addEventListener('click', async () => {
+		const url = _stUrlInput.value.trim()
+		if (!url) { window._beiluToast?.('请先粘贴 git 仓库网址', 'warning'); return }
+		_stImportBtn.disabled = true
+		_stImportBtn.textContent = '下载中...'
+		try {
+			const r = await fetch('/api/parts/plugins:beilu-st-host/st-plugins/install', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ url }),
+			})
+			let data = null
+			try { data = await r.json() } catch { /* 非 JSON 响应走下方统一报错 */ }
+			if (!r.ok || data?.error) throw new Error(data?.error || `HTTP ${r.status}`)
+			window._beiluToast?.(`已安装 ${data.manifest?.display_name || data.name}（默认禁用，到「额外插件→酒馆插件」启用）`, 'info')
+			_stUrlInput.value = ''
+		} catch (err) {
+			// 失败原样展示后端 error（clone 失败/manifest 不合法已回滚等），不吞不改写
+			window._beiluToast?.('安装失败: ' + err.message, 'error')
+		} finally {
+			_stImportBtn.disabled = false
+			_stImportBtn.textContent = '下载安装'
+		}
+	})
+	_container.appendChild(stImport)
+
 	// 插件列表
 	const list = document.createElement('div')
 	list.className = 'pm-list'
@@ -485,6 +527,48 @@ function _injectStyles() {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+}
+
+.pm-st-import {
+	margin: 0 10px 8px;
+	padding: 8px 10px;
+	border: 1px solid oklch(var(--bc) / 0.15);
+	border-radius: 6px;
+}
+.pm-st-import-title {
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+.pm-st-import-row {
+	display: flex;
+	gap: 6px;
+}
+.pm-st-import-url {
+	flex: 1;
+	min-width: 0;
+	padding: 4px 8px;
+	border: 1px solid oklch(var(--bc) / 0.2);
+	border-radius: 4px;
+	background: oklch(var(--b1));
+	color: oklch(var(--bc));
+	font-size: 12px;
+}
+.pm-st-import-btn {
+	padding: 4px 12px;
+	border: 1px solid oklch(var(--bc) / 0.25);
+	border-radius: 4px;
+	background: oklch(var(--b1));
+	color: oklch(var(--bc));
+	cursor: pointer;
+	font-size: 12px;
+	white-space: nowrap;
+}
+.pm-st-import-btn:hover { background: oklch(var(--bc) / 0.08); }
+.pm-st-import-btn:disabled { opacity: 0.5; cursor: default; }
+.pm-st-import-hint {
+	margin-top: 5px;
+	font-size: 11px;
+	opacity: 0.55;
 }
 
 .pm-status-dot {

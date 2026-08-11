@@ -34,6 +34,10 @@ import { buildInjectionScript } from "./index.mjs";
 import { escapeHtml as _escapeHtml } from "../shared/state/utils.mjs";
 import { apiFetch } from "../shared/transport/api-client.mjs"; // R1: raw fetch → apiFetch（timeout+401；raw 保留 ok 判断；:fetchUrlScript 外部源 SKIP）
 import { sendAction } from "../shared/transport/sendAction.mjs"; // T8·切桥：readUserFile 直连收口走门面（凛倾 07-03"ST 只是插件"拍板）
+import { readTavernScriptTrees, flattenScriptTrees, isEffectivelyEnabled } from "./scriptTree.mjs"; // [0806] ScriptTree 规范化单源（folder 展开 + legacy 键 + 生效语义）
+import { wbTrace, wbDetect } from "../shared/widgets/whitebox.mjs"; // [0806 可观测] 脚本运行链埋点，line="stcompat"
+import { buildStChatMessage } from "./runtime/stChatShape.mjs"; // [0807 §七#3] ST 消息形状单源（与 websocket._updateScriptIframeChat 活更新写点同源）
+import { getTimelineInfo } from "../shared/state/timelineState.mjs"; // [0807 §七#3] swipe 状态单源（叶子，防 scriptRunner→virtualQueue→websocket 三角环）
 
 const diag = createDiag("stCompat");
 
@@ -104,23 +108,27 @@ export async function loadCharacterScripts(charData, context = {}) {
   // 先卸载之前的脚本
   unloadCharacterScripts();
 
-  // 提取 tavern_helper.scripts
-  // 兼容两种格式：
-  // 1. 已解包的 chardata.json（beilu 导入时 charDataRaw.data || charDataRaw）
-  //    → charData.extensions.tavern_helper.scripts
-  // 2. 完整 V3 格式（外层包含 data 字段）
-  //    → charData.data.extensions.tavern_helper.scripts
-  const scripts =
-    charData?.extensions?.tavern_helper?.scripts ||
-    charData?.data?.extensions?.tavern_helper?.scripts;
-  if (!scripts || !Array.isArray(scripts) || scripts.length === 0) {
+  // 提取 tavern_helper 脚本树并展开（scriptTree.mjs 单源）：
+  //   兼容 顶层/data.extensions 两层 + legacy 键 TavernHelper_scripts；
+  //   folder 节点内嵌脚本原位展开（原实现把 folder 连同内部脚本静默丢弃=装文件夹的卡"0 个脚本"）；
+  //   生效判定对齐 ST：文件夹内脚本 = folder.enabled && script.enabled。
+  const trees = readTavernScriptTrees(charData);
+  if (trees.length === 0) {
     diag.debug("角色卡无 tavern_helper 脚本");
+    wbTrace("stcompat", "run:skip", { charId, reason: "无 tavern_helper 脚本" });
     return;
   }
+  const { scripts, meta } = flattenScriptTrees(trees);
 
-  const enabledScripts = scripts.filter(
-    (s) => s.enabled && s.type === "script",
-  );
+  const enabledScripts = scripts.filter((s) => isEffectivelyEnabled(s, meta));
+  // [0806 可观测] 运行链与管理器读取链是两件事：这里记录"实际要跑几个"。
+  //   disabledByFolder = 脚本自身开着但所属文件夹关着（酒馆语义），最容易让用户困惑"我明明开了"
+  wbTrace("stcompat", "run:plan", {
+    charId,
+    total: scripts.length,
+    willRun: enabledScripts.length,
+    disabledByFolder: scripts.filter((s) => s?.enabled && !isEffectivelyEnabled(s, meta)).length,
+  });
   if (enabledScripts.length === 0) {
     diag.debug("角色卡有脚本但全部禁用:", scripts.length, "个");
     return;
@@ -175,11 +183,15 @@ export async function loadCharacterScripts(charData, context = {}) {
   const needsjQuery = /\$\s*\(|\bjQuery\b/.test(allContent);
 
   // 构建 ST 兼容层注入脚本
-  // 注意：不注入 Zod UMD（needsMVU: false for script iframe）
-  // MVU bundle.js 自带 Zod 4.x 并注册全局 z，我们注入 Zod 3.x 会覆盖它导致 .prefault() 不可用
+  // [0806 开关解耦] 原来这里 needsMVU:false 同时关掉了 Zod 与 window.Mvu 两件事：
+  //   - Zod 必须关：卡内 MVU bundle.js 自带 Zod 4.x 并注册全局 z，我们再注入会覆盖它（.prefault() 失效）
+  //   - window.Mvu 不该关：真酒馆里它由宿主恒定提供（酒馆助手 function/global.ts），卡内脚本只管用；
+  //     关掉后不自带 bundle 的卡拿不到 Mvu → "开局面板脚本未启动"（0806 用户实报）
+  //   polyfill 带"已有真实现则不覆盖"守卫，自带 bundle 的卡不受影响。
   const stCompatScript = await buildInjectionScript({
     needsST: true,
-    needsMVU: false, // ★ 不注入 Zod UMD + MVU polyfill，让 bundle.js 自己管理
+    needsZod: false, // 卡内 bundle.js 自带 Zod 4.x，禁止注入第二份
+    needsMvuPolyfill: true, // window.Mvu 是宿主职责（对齐酒馆语义），bundle 自带时守卫不覆盖
     needsVue: needsVue,
     needsEJS: false,
     messageId: -1, // 脚本 iframe 不关联消息
@@ -335,8 +347,9 @@ export async function loadGlobalScripts(userName = "User") {
     try { data = JSON.parse(j.content); }
     catch (e) { diag.error("global_scripts.json JSON 解析失败:", e.message); return; }
 
-    const scripts = Array.isArray(data.scripts) ? data.scripts : [];
-    const enabledScripts = scripts.filter((s) => s && s.enabled && s.type === "script");
+    // [0806] 走 scriptTree 单源展开：文件里若存 ScriptTree（含 folder）或无 type 旧条目也能跑
+    const { scripts, meta } = flattenScriptTrees(Array.isArray(data.scripts) ? data.scripts : []);
+    const enabledScripts = scripts.filter((s) => isEffectivelyEnabled(s, meta));
     if (enabledScripts.length === 0) {
       diag.debug(`global_scripts.json 无启用脚本(共 ${scripts.length} 条)`);
       return;
@@ -353,9 +366,12 @@ export async function loadGlobalScripts(userName = "User") {
     }
 
     // 构建 ST 兼容层脚本(global 无 charName/charId,传空字符串)
+    // [0806 开关解耦] 同 loadCharacterScripts：Zod 关（避免与卡内 bundle 版本互覆）、
+    //   window.Mvu 开（宿主职责，polyfill 有不覆盖真实现守卫）。全局脚本与角色卡脚本同一宿主语义。
     const stCompatScript = await buildInjectionScript({
       needsST: true,
-      needsMVU: false,
+      needsZod: false,
+      needsMvuPolyfill: true,
       needsVue: /MagVarUpdate|bundle\.js|Vue\b/.test(materializedGlobal.map(s => s.content || "").join("\n")),
       needsEJS: false,
       messageId: -1,
@@ -414,7 +430,9 @@ export async function loadPresetScripts(preset, context = {}) {
     diag.debug("预设无 scripts[]");
     return;
   }
-  const enabled = rawScripts.filter((s) => s && s.enabled && s.type === "script");
+  // [0806] 走 scriptTree 单源展开（folder 展开 + 无 type 旧条目兼容 + 文件夹生效语义）
+  const { scripts: _flatPreset, meta: _presetMeta } = flattenScriptTrees(rawScripts);
+  const enabled = _flatPreset.filter((s) => isEffectivelyEnabled(s, _presetMeta));
   if (enabled.length === 0) {
     diag.debug(`预设有脚本但全部禁用(共 ${rawScripts.length} 条)`);
     return;
@@ -437,9 +455,12 @@ export async function loadPresetScripts(preset, context = {}) {
     return;
   }
 
+  // [0806 开关解耦] 同 character/global 两条脚本链：Zod 关（防与卡内 bundle 版本互覆）、
+  //   window.Mvu 开（宿主职责）。三条脚本链（character/global/preset）语义一致，不留半修。
   const stCompatScript = await buildInjectionScript({
     needsST: true,
-    needsMVU: false,
+    needsZod: false,
+    needsMvuPolyfill: true,
     needsVue: /MagVarUpdate|bundle\.js|Vue\b/.test(materialized.map((s) => s.content || "").join("\n")),
     needsEJS: false,
     messageId: -1,
@@ -926,6 +947,14 @@ ${(block.code || "").replace(/<\/(script)/gi, "<\\/$1")}
 	   ${importScriptTags}
 </head>
 <body>
+	   <!-- [0807 MVU断链修] 酒馆助手脚本标记 DOM（宿主复刻）：MVU bundle 的 registerAsUniqueScript 用
+	        $('#tavern_helper').find('div[data-script-id]') 选优先实例（MagVarUpdate util/script.ts:44-47），
+	        无此 DOM → 优先实例 undefined → should_enable 恒 false（store.ts:304-305）→ initInitvar 首次
+	        initCheck 被跳过（initvar/index.ts:9-11）→ 开场白阶段 MVU 变量永不初始化（变量管理器空）。
+	        beilu 的脚本 iframe $ 是 iframe 内独立 jQuery（非酒馆 parent_jquery 共享父页面），
+	        故标记放 iframe 自身 DOM；每 iframe 单脚本 → bundle 只见自己 → 自认优先实例 → 启用。
+	        （代价：跨 iframe 多实例仲裁降级为"各自启用"——beilu 每脚本独立 iframe 无共享面板 DOM，如实标注。） -->
+	   <div id="tavern_helper" style="display:none"><div data-script-id="${_escapeHtml(scripts[0]?.id || '')}"></div></div>
 	   <!-- 各脚本的内联代码 -->
 	   ${inlineScripts}
 </body>
@@ -1282,41 +1311,18 @@ function _convertToSTChatFormat(beiluMessages, userName, charName) {
     return [];
   }
 
-  return beiluMessages
-    .filter((msg) => msg && msg.role !== "system") // 仅过滤真 system 消息；隐藏(智能清理)消息保留进数组,由 is_system 标记,脚本可经 getChatMessages({hide_state}) 读取
-    .map((msg, index) => {
-      // beilu role → 酒馆 role
-      let stRole = "assistant";
-      if (msg.role === "user") stRole = "user";
-      else if (msg.role === "char") stRole = "assistant";
-
-      // 名字
-      const name = msg.name || (stRole === "user" ? userName : charName);
-
-      const msgText = msg.content || "";
-      return {
-        // === 酒馆助手 API 字段 ===
-        message_id: index,
-        name: name,
-        role: stRole,
-        is_hidden: !!msg.extension?._hidden,
-        is_user: stRole === "user",
-        message: msgText,
-        data: {},
-        extra: {},
-        // === 酒馆内部字段（setChatMessages / getVariables 依赖） ===
-        // 隐藏态(extension._hidden)映射到 ST is_system，使 getChatMessages 的 hide_state 过滤 + is_hidden 输出正确
-        is_system: !!msg.extension?._hidden,
-        mes: msgText,
-        swipe_id: 0,
-        swipes: [msgText],
-        // ★ MVU 变量映射：extension.mvu_variables → variables[swipe_id]
-        // 对标 JS-Slash-Runner: chat_message.variables[swipe_id]
-        // beilu-mvu 后端将变量快照存储在 chatLogEntry.extension.mvu_variables
-        variables: [msg.extension?.mvu_variables || {}],
-        swipe_info: [{}],
-      };
-    });
+  // [0807 §七#3] 形状本体收口 stChatShape.mjs（与 websocket._updateScriptIframeChat 活更新写点同源，
+  //   此前两处逐字重复且 swipe 恒 0 —— 卡切 swipe 读 variables[swipe_id]=undefined 的确诊断点）。
+  //   时间线(swipe)只挂最后一条活跃消息（virtualQueue swipe-nav 同判据）：仅该条给真实
+  //   swipe_id/多维 variables/swipes，其余消息单 swipe。swipe 状态取 timelineState.mjs 叶子单源。
+  const _tl = getTimelineInfo();
+  const filtered = beiluMessages
+    .filter((msg) => msg && msg.role !== "system"); // 仅过滤真 system 消息；隐藏(智能清理)消息保留进数组,由 is_system 标记,脚本可经 getChatMessages({hide_state}) 读取
+  const lastIdx = filtered.length - 1;
+  return filtered.map((msg, index) => {
+    const isTimelineTail = index === lastIdx && msg.role !== "user";
+    return buildStChatMessage(msg, index, msg.content || "", isTimelineTail ? _tl : null, userName, charName);
+  });
 }
 
 /**

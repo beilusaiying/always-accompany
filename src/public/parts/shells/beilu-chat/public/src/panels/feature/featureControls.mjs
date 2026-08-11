@@ -588,6 +588,22 @@ export function initFeatureControls() {
 const _MODE_STORAGE_KEY = KEYS.BEILU_ACTIVE_MODE;
 let _currentMode = storage.get(_MODE_STORAGE_KEY) || "chat";
 
+/**
+ * [0808 模式=窗口身份·凛倾拍板「绑定角色卡和窗口，不绑对话id」] 窗口实例令牌。
+ * 功能链：本窗发起 switchMode/activateSubMode 时随 payload 上送 → 后端纯回显进 mode_changed 广播
+ *   → _beiluApplyModeFromWs 比对令牌，只有本窗发起的切换回流才翻转本窗模式态。
+ * why：模式是窗口的固有身份（重设计08 §四），不是对话/角色卡的共享状态。两窗绑同一条对话时，
+ *   跨窗回流翻转 = 互拽死循环的翻转通路。令牌页内存续（刷新即新窗），不落盘不进任何授权判定，
+ *   是绑定包窗口化（第三批）的窗口身份第一块砖。
+ */
+let _windowInstanceToken = null;
+export function getWindowInstanceToken() {
+  if (!_windowInstanceToken) {
+    _windowInstanceToken = "w-" + Math.random().toString(36).slice(2, 10) + "-" + Date.now().toString(36);
+  }
+  return _windowInstanceToken;
+}
+
 // T040b：原 _presetHistory 预设历史缓存已移除。切模式不再缓存/恢复/应用预设
 //   （凛倾 2026-06-16「切换模式切换的是模式的 data 和记忆，不是切换预设」）。
 
@@ -628,13 +644,26 @@ function updateModeSwitchUI(mode) {
   }
 }
 
-// T023 Q4 单真源：WS mode_changed 的派发权收口到本模块（websocket.mjs:841 转调）。
-// 纪律=真变化才派发（与 syncModeFromBackend 的 prevMode!==mode 守卫同一规则）：
-//   本 tab 自己切换的 WS 回显——_currentMode 已更新→跳过（消除一次切换的重复刷新轮）；
-//   外来变化（别 tab/后端驱动）——对齐本地态+派发与 UI 生产者同构的 detail。
+// T023 Q4 单真源：WS mode_changed 的派发权收口到本模块（websocket.mjs 转调）。
+// [0808 模式=窗口身份 → 0808下午 发起源分流·凛倾拍板"本窗AI切模式应跟随，仅跨窗web切换用令牌隔离"]
+//   原一刀切"无 token 一律不翻转"误伤了合法场景：AI 链 <modeSwitch>/delegate 跨组/YonBan 切模式的
+//   广播天然不带窗口令牌，被全拒 → 后端 active_mode 已切、本窗 UI 与生成轴（messageInput 读
+//   getCurrentMode）停在旧模式 = 三态分叉（0808 "code 混乱"根因链之一）。
+//   分流规则（origin 由后端 switchMode 按"有无 windowToken"推导，见 setDataActions switchMode 广播点）：
+//   · origin=web（含无 origin 但带 token 的旧广播）：窗口身份隔离不变——仅本窗令牌回流才翻转，
+//     两窗绑同一条对话时 B 的用户切换不翻转 A（0808 第二循环封闭通路保持）。
+//   · origin=external（AI 链/YonBan/桥等非窗口客户端，均无令牌）：跟随翻转——本窗 socket 是
+//     per-chat 的，收到即说明该切换发生在本窗正显示的对话上（emitAll 回退=char 级语义，同跟随）。
+//     视图轴不强拉（T040b 切模式≠切视图，layout 监听器只更新顶显）；生成窗口的 Tab 跟随
+//     仍由既有 ext._modeSwitch 通路负责（websocket.mjs），_newMode===_currentMode 守卫保证两通路幂等。
+//   本窗回流的用途保留：subModePanel activateSubMode 跨组切换不本地翻转、专等此回流对齐（:1451 契约）。
 window._beiluApplyModeFromWs = (payload) => {
   const _newMode = payload?.mode || payload?.newMode;
   if (!_newMode || _newMode === _currentMode) return;
+  // 发起源：后端新广播带 origin；旧后端广播无 origin 字段 → 按"有 token=web / 无 token=external"
+  //   同一公式在前端推导（与后端推导式同源，见 setDataActions），老后端未重启期间语义已正确。
+  const _origin = payload?.origin || (payload?.windowToken ? "web" : "external");
+  if (_origin === "web" && (!payload?.windowToken || payload.windowToken !== getWindowInstanceToken())) return; // 跨窗 web 切换：不翻转窗口身份
   const _old = _currentMode;
   updateModeSwitchUI(_newMode);
   window.dispatchEvent(new CustomEvent("beilu:mode-switched", {
@@ -662,7 +691,9 @@ function _getCharId() {
 // ============================================================
 
 /**
- * 从后端查询当前模式并同步 UI（per-character）
+ * 本窗模式基线对账（init/切角色时）。
+ * [0808 改契约] 不再从后端 getMode 采纳 char 级 active_mode（跨窗共享键回灌=窗口身份污染）；
+ * 本窗真源=per-window BEILU_ACTIVE_MODE + 视图轴对账，后端只作为切换动作执行端被幂等重推。
  * @param {string} [charId] - 可选，直接传入 charId（避免重复查 DOM）
  */
 async function syncModeFromBackend(charId) {
@@ -676,51 +707,25 @@ async function syncModeFromBackend(charId) {
       );
       return;
     }
-    // 0713 补丁删除（凛倾「为什么切换对话文件会导致嵌套联动到顶部的模式」）：原 A2 补传 chat_id
-    //   读线级 active_modes_map=对话轴回灌窗口模式轴（反向回灌，补丁形式识别 P7）。本函数只负责
-    //   init/角色真变时的 UI 模式基线=char 级 active_mode 单源；运行时 AI/后端切模式由既有唯一
-    //   producer 推送（setDataActions._broadcastModeChanged:304 → WS mode_changed → _beiluApplyModeFromWs），
-    //   不需要也不允许从对话属性反查。A2 要修的「显示与生成分叉」正解在推送通道，不在这里加读源。
-    const data = await sendAction({ verb: "getMode", target: "plugins:beilu-memory", source: "web", payload: { charName } }); // T6b
-    // [0717 async-order guard, audit H3] rapid char switching: a slow getMode response for
-    // the previous char must not flip the mode UI back after the char changed. Compare the
-    // live char anchor; the newer char's own sync call paints the right value.
+    // [0808 模式=窗口身份·凛倾拍板] 后端 char 级 active_mode 不再回灌本窗模式轴。
+    //   原实现 getMode（char 级）→ updateModeSwitchUI：char 级键是同 char 全部窗口共享的，
+    //   另一窗口最后写入的值会在本窗 init/切角色时被采纳为本窗基线 = 跨窗身份污染
+    //   （0713 已删过"对话轴回灌"，本次删掉"char 轴回灌"这最后一条反向回灌路）。
+    //   本窗模式真源 = per-window BEILU_ACTIVE_MODE（WINDOW_LOCAL_KEYS sessionStorage，模块加载
+    //   时已恢复进 _currentMode）+ 下方视图对账；后端不再是窗口身份的读源，只是切换动作的执行端。
+    //   YonBan 等无窗口客户端的 getMode 读点不在此链，不受影响。
+    // [2026-07-16 两轴对账修·保留] 视图轴（activeTab）与模式轴（_currentMode）对账：
+    //   tab 映射的模式≠本窗模式 → 以视图为意图补发一次幂等切换（含后端 scheduler/files 扇出预热，
+    //   与手动点 tab 同语义）。守卫：layout 未就绪/辅助视图跳过。
+    //   死循环免疫：重推的 mode_changed 广播带本窗令牌，其他窗口 _beiluApplyModeFromWs 不翻转，
+    //   不会引发对面再对账（0808 互拽环第三通路封闭）。
     if ((_getCharId() || charName) !== charName) return;
     {
-      if (data?.success && data.mode) {
-        const prevMode = _currentMode;
-        updateModeSwitchUI(data.mode);
-        // 三层同步修复：syncModeFromBackend 只更新了 _currentMode(内存) + localStorage，
-        // 但 DOM(模式切换按钮/记忆表格等) 仅监听 beilu:mode-switched 事件。
-        // 后端模式与本地缓存不一致时(如切角色、刷新)，不派发事件 → DOM 残留旧模式。
-        // 仅在模式实际变化时补派事件，让 DOM 层与内存/localStorage 对齐。
-        if (prevMode !== data.mode) {
-          window.dispatchEvent(
-            new CustomEvent("beilu:mode-switched", {
-              detail: {
-                oldMode: prevMode,
-                newMode: data.mode,
-                charName,
-                source: "syncModeFromBackend",
-              },
-            }),
-          );
-        }
-        // [2026-07-16 两轴对账修·凛倾「界面和顶部模式不是一个系统,不会同步」] 视图轴（activeTab，
-        //   localStorage 恢复→面板显隐）与模式轴（本函数从后端 char 级 active_mode 恢复）是两套恢复源，
-        //   原互不对账：刷新/切角色后「面板=全智能、顶部=IDE、后端=code」分叉永久化，直到用户再点一次 tab。
-        //   原 H1「init 不发 switchMode 防 reload 循环」的前提已被 [多窗口审计 2026-07-11 C6] 证伪（全链零 reload）。
-        //   对账方向=视图为意图（[病型全查 0713] 定案：_currentMode 属用户意图轴=tab 轴）：后端基线落定后，
-        //   当前 tab 映射的模式≠基线 → 补发一次幂等切换（skipConfirm，带 tab 走 [预设隔离 0711] 目标线
-        //   cid 预读，与手动点 tab 同语义）。收口在本函数（init/char-changed 两个 sync 点单处生效，不散写）。
-        //   守卫：layout 未就绪（dataset.activeTab 空）/辅助视图（TAB_TO_MODE=null）=跳过；
-        //   charName 已由本函数入口非空守卫保证（空 char 早已 return，不会写 _global——断链②毒源不复发）。
-        const _tab = document.body.dataset.activeTab;
-        const _tabMode = _tab ? TAB_TO_MODE[_tab] : null;
-        if (_tabMode && _tabMode !== _currentMode) {
-          console.log(`[featureControls] 模式对账: 视图轴=${_tab}(→${_tabMode}) ≠ 模式轴=${_currentMode}，以视图为意图重推`);
-          _doSwitchMode(_tabMode, { skipConfirm: true, tab: _tab });
-        }
+      const _tab = document.body.dataset.activeTab;
+      const _tabMode = _tab ? TAB_TO_MODE[_tab] : null;
+      if (_tabMode && _tabMode !== _currentMode) {
+        console.log(`[featureControls] 模式对账: 视图轴=${_tab}(→${_tabMode}) ≠ 模式轴=${_currentMode}，以视图为意图重推`);
+        _doSwitchMode(_tabMode, { skipConfirm: true, tab: _tab });
       }
     }
   } catch (err) {
@@ -858,6 +863,9 @@ async function _doSwitchModeInner(targetMode, opts = {}) {
             tab: _tab,
             chatid: _chatid,
             currentMessageCount: _currentMessageCount,
+            // [0808 模式=窗口身份] 本窗令牌随切换上送，后端回显进 mode_changed；
+            //   本窗回流才翻转模式态（_beiluApplyModeFromWs 比对），跨窗广播不再互拽。
+            windowToken: getWindowInstanceToken(),
           },
           scope: { chatId: _chatid },
         });

@@ -25,6 +25,7 @@ import { setSttRecordDevice, setSttServerDenoise } from "../../shared/state/sttS
 import { applyParamSchemaToInputs } from "../../shared/state/paramSchemaCache.mjs"; // 0723 陪伴子模式实体表单:限值单源 PARAM_SCHEMA(同 bot dc-bsm 范式)
 import { ENUM_FALLBACK } from "../../shared/state/enumFallback.mjs"; // 0723:后处理/预填充选项集离线退化单源(权威=getSubModes 随包 enum_schema,同 subModePanel._enumOptions 语义)
 import { acceleratorFromKeyboardEvent } from "../../shared/input/accelerator.mjs";
+import { createVisibilityPoller } from "../../shared/state/windowRuntime.mjs"; // [0808 机制] 前台/后台刷新分级单源（后台真暂停不空转，切回补拉）
 
 let _ensureCompanionRenderer = null;
 let _rendererRetryBound = false;
@@ -1441,10 +1442,17 @@ function initCompanionActivityBar() {
     }
   }
 
-  // T2 感知视图: 仅 companion tab 可见时轮询真实 status(5s) + 本地平滑倒计时(1s)。
-  _pollCompanionStatus();
-  if (!_compStatPollTimer) _compStatPollTimer = setInterval(_pollCompanionStatus, 5000);
-  if (!_compCountdownTimer) _compCountdownTimer = setInterval(_tickCompCountdown, 1000);
+  // T2 感知视图: 状态轮询(5s)+平滑倒计时(1s) 接 windowRuntime 可见性生命周期（0808 机制收口：
+  //   原裸 setInterval 全文件无 clearInterval、tab 不可见时 1s/5s 空转常醒——治理清单 循环08 BUG 类两条。
+  //   现后台真暂停、切回/转前台立即补拉；start 内含首拉，原手动 _pollCompanionStatus() 预拉删除防双拉）。
+  if (!_compStatPollTimer) {
+    _compStatPollTimer = createVisibilityPoller({ tick: _pollCompanionStatus, intervalMs: 5000, visible: _compTabVisible, label: "companionStatus" });
+    _compStatPollTimer.start();
+  }
+  if (!_compCountdownTimer) {
+    _compCountdownTimer = createVisibilityPoller({ tick: _tickCompCountdown, intervalMs: 1000, visible: _compTabVisible, label: "companionCountdown" });
+    _compCountdownTimer.start();
+  }
 
   // FT-A4: [📷] 感知设置控件绑 eye config 既有 API（陪伴MD [📷] 字符画；后端字段=captureFrequency/captureWindow）
   {

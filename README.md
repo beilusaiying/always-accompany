@@ -35,10 +35,10 @@
 
 **What do we have?** Behind these interfaces is a single system, and the real differences come down to four things:
 
-- **A distinctive memory and context framework** — Data plus `hot / warm / cold` layers store long-term material, and a context-gathering, memory-retrieval tool (P1) recalls the currently relevant excerpts before each reply; context cleanup works at file-read granularity and is reversible, and the AI can also drop already-read files it no longer needs on its own (~70–80% cache-hit efficiency measured in the author's environment by billing metrics — not a guarantee);
-- **Everything is editable** — characters, prompts, injections, memory, recall routes, permissions, and plugins are not black boxes; whichever layer you want to change has an entry point;
-- **A highly extensible framework** — core features are organized as plugins and routed through an intermediate relay station, while the frontend only renders and operates; user plugins can be written in JS, Python, or as standalone programs;
-- **The full feature set an agent needs** — files, commands, browser, MCP, multiple windows, approvals, and recovery are all present, and they share one memory and context framework; it is built to finish large projects, and at its core it is about spending limited attention where it matters most.
+- **Layered memory and context** — Data plus `hot / warm / cold` layers store long-term material, and a context-gathering, memory-retrieval tool (P1) recalls currently relevant excerpts before each reply; context cleanup works at file-read granularity and is reversible, and the AI can also drop already-read files it no longer needs;
+- **Core behavior is inspectable and configurable** — characters, prompts, injections, memory, recall routes, permissions, and plugins have documented editing or configuration entry points;
+- **A plugin-based extensible framework** — core features are organized as plugins and routed through an intermediate relay station, while the frontend renders and operates them; user plugins can be written in JS, Python, or as standalone programs;
+- **An integrated agent toolchain** — it provides files, commands, browser integration, MCP, multiple windows, approvals, and recovery under one memory and context framework; actual availability and results depend on the selected mode, configuration, environment, model, and connected services.
 
 ---
 
@@ -66,7 +66,7 @@ The launcher downloads the Deno runtime automatically when it is missing and com
 |---|---|
 | ![Choose language](imgs/screenshots/onboarding-language.png) | ![Bind an API](imgs/screenshots/onboarding-api.png) |
 
-Enter the service URL, API key, and model, save, then select or import a character card to start chatting. At least one working AI API is required; model capability and cost depend on the service you bind. A [full Wiki](site/wiki/getting-started/overview.md) is built into the app, with an [online version](https://beilusaiying.github.io/always-accompany/) also available.
+Enter the service URL, API key, and model, save, then select or import a character card to start chatting. At least one working AI API is required; model capability and cost depend on the service you bind. A [Wiki](site/wiki/getting-started/overview.md) is built into the app, with an [online version](https://beilusaiying.github.io/always-accompany/) also available.
 
 > First launch usually takes longer: the runtime downloads dependencies and initializes local data. Wait until the full page appears before interacting; later launches are faster. Optional features such as voice and the desktop companion may have their own first-use downloads or environment requirements.
 
@@ -122,7 +122,7 @@ Enter the service URL, API key, and model, save, then select or import a charact
 - **🎯 P1 (front-loaded memory recall)**: before the main AI answers, it searches the long-term material the current character and mode are allowed to read for relevant excerpts. Chat / Code / Work currently default to a local algorithmic route; Smart / Bot modes retain a separate AI retrieval route; the two routes are mutually exclusive and can also be disabled;
 - **🗜️ Context management**: inspect usage by message, file read, tool result, and system injection; normal cleanup merely hides content and stops sending it to the AI, while the record stays on disk and can be restored;
 - **📊 Mode-specific memory tables**: Chat uses tables #0–#9, while Code and Work use their own tables and private directories instead of piling every scenario into one table;
-- **👑 Every prompt is editable**: content, order, enablement, system / user / assistant role, injection position, and conditions can all be adjusted;
+- **👑 Main prompt entries are editable**: character definitions, presets, INJ entries, mode instructions, memory data slots, and tool guidance expose content, order, enablement, role, injection-position, or condition controls where supported; framework safety wrappers and provider-specific message transforms remain code-owned;
 - **💻 IDE-level workflow**: three-panel layout, file reads and edits, command execution, task lists, multiple windows, and a VS Code extension bridge;
 - **🔌 MCP (protocol for connecting external tools)**: paste JSON to connect external tools; command-type servers must pass owner, environment-variable allowlist, and other security gates;
 - **🐾 Desktop and game companionship**: Live2D / image packs, three screen-awareness modes, proactive comments, a separate game-companionship loop, and adaptive frequency;
@@ -139,7 +139,7 @@ Enter the service URL, API key, and model, save, then select or import a charact
 
 Saving memory is not mysterious in itself. Data is a writable table, and `hot / warm / cold` are, put plainly, three folders you organize by "time + event" and jot Markdown notes into; INJ (editable prompt-injection entries) and presets likewise carry forward the prompt-composition approaches long explored by roleplay frontends such as SillyTavern.
 
-But combine them, and add P1 (a tool that gathers context and retrieves memory), and you get a natural ecosystem of "vectors + dynamic injection + memory that follows the current task" — a high-attention, high-information-density memory store; pair that with the file-level compression we built, and the whole chain is complete.
+Combine them with P1 (a tool that gathers context and retrieves memory), and they form a configurable workflow of "vectors + dynamic injection + memory that follows the current task"; file-level context cleanup is part of the same chain. Recall and compression results still depend on the selected mode, configuration, material, and model.
 
 In fact, at first we planned to build P1 as a small AI deployed on its own. But the real problem starts after storage: as memory keeps piling up, if every turn has to spin up a second AI to dig through it, can the speed and cost still hold up? Can a small AI really find everything? Does it have to be a paid AI? Does remembering more mean responding more slowly?
 
@@ -223,9 +223,9 @@ The white-box panel proves that every node and real source can be inspected; rec
 </details>
 
 <details>
-<summary><strong>👑 Every Prompt Is Editable — Usable by Default, Reshapeable into Your Own AI</strong></summary>
+<summary><strong>👑 Main Prompt Entries Are Editable — Usable by Default, Configurable for Your Workflow</strong></summary>
 
-Prompt entries such as character definitions, system rules, mode instructions, memory data slots, and tool guidance can all be edited in the interface. For each entry you can adjust:
+Main prompt entries such as character definitions, presets, INJ entries, mode instructions, memory data slots, and tool guidance can be edited in the interface. For each supported entry you can adjust the controls it exposes; framework safety wrappers and provider-specific message transforms remain code-owned:
 
 - the actual text;
 - ordering;
@@ -274,7 +274,7 @@ Perhaps you have run into this: the longer you chat and the more memory accumula
 
 ## Roadmap
 
-**Entries and implementations already present in the current repository**: Data + three-layer memory · context management · self-driven P1 / AI P1 · full prompt editing and preset switching · mode-specific memory tables · conditional knowledge dynamic injection · Live2D / image desktop companion · screen awareness and game companionship · local voice input · PPT generation · MCP · multiple windows · VS Code extension bridge · Bots for nine platforms · 23 built-in plugin directories · user plugin host · recycle / backup chains · white-box diagnostics · languages and themes.
+**Entries and implementations already present in the current repository**: Data + three-layer memory · context management · self-driven P1 / AI P1 · prompt-entry editing and preset switching · mode-specific memory tables · conditional knowledge dynamic injection · Live2D / image desktop companion · screen awareness and game companionship · local voice input · PPT generation · MCP · multiple windows · VS Code extension bridge · Bots for nine platforms · 23 built-in plugin directories · user plugin host · recycle / backup chains · white-box diagnostics · languages and themes.
 
 **Near-term directions**: more Bot platforms · plugin ecosystem and examples · TTS / text-to-image · an AI game engine (deterministic numeric state + LLM narrative + symbolic rendering)
 
@@ -314,7 +314,7 @@ Share character cards · Publish presets and conditional knowledge · Contribute
 
 > The design, architecture, and development of this project were done single-handedly by a job-hunting shut-in (allegedly), with AI-assisted programming, combining algorithm design, biomimicry-inspired ideas, framework architecture, and logical reasoning.
 
-always-accompany was not built to cram trendy features into one menu — at first the author just wanted to use it :). That said, it does come with a complete plugin and framework system, and it supports multiple languages.
+always-accompany was not built to cram trendy features into one menu — at first the author just wanted to use it :). It includes a plugin and framework system plus multiple interface languages; actual coverage varies by plugin and available translation resources.
 
 ---
 

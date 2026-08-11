@@ -295,7 +295,7 @@ html[data-beilu-enhanced="madoka"] .chat-input-wrapper:focus-within {
 }
 
 html[data-beilu-enhanced="madoka"] :is(
-  #message-input,
+  #send_textarea,
   .chat-input-textarea
 ) {
   background-color: var(--beilu-surface-input);

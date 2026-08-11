@@ -1,0 +1,41 @@
+{
+	"en-UK": {
+		"name": "Tavern Plugin Interface",
+		"avatar": "https://api.iconify.design/mdi/puzzle-outline.svg",
+		"description": "Download, convert and run third-party tavern-style plugins.",
+		"description_markdown": "**Tavern Plugin Interface** — a host + conversion layer: download third-party tavern-style plugins, convert their runtime expectations, and run them inside beilu. Incompatible plugins report exactly which interfaces are missing instead of failing silently.",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"plugins",
+			"compatibility",
+			"host"
+		]
+	},
+	"zh-CN": {
+		"name": "酒馆插件接口",
+		"avatar": "https://api.iconify.design/mdi/puzzle-outline.svg",
+		"description": "下载、转移并运行酒馆系第三方插件",
+		"description_markdown": "**酒馆插件接口** — 宿主 + 转移层：下载酒馆系第三方插件，经转移适配后在 beilu 内运行。不兼容的插件会明确列出缺哪个接入面，而不是静默失败。",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"插件",
+			"兼容",
+			"宿主"
+		]
+	},
+	"emoji": {
+		"name": "🍺🧩",
+		"avatar": "https://api.iconify.design/mdi/puzzle-outline.svg",
+		"description": "🍺🧩➡️📦🔄▶️",
+		"description_markdown": "🍺🧩 ➡️ 📦\n🔄 ▶️\n❌ ➡️ 📋",
+		"version": "0.1.0",
+		"author": "凛倾",
+		"tags": [
+			"🧩",
+			"🔄",
+			"🍺"
+		]
+	}
+}

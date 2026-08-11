@@ -58,6 +58,24 @@ FinalRouter.get('/version', (_req, res) => {
 	res.json({ version: '0.0.0', agent: 'beilu-always-accompany' })
 })
 
+// [0807 拉线断点B] */scripts/extensions/third-party/* — ST 路径形状兼容（与上面 /version 同类）：
+//   酒馆官方模板插件用**相对路径**拉自己的资源（st-input-helper `extensionFolderPath =
+//   "scripts/extensions/third-party/<name>"` → `$.get(.../settings.html)`）。相对路径按**页面目录**解析：
+//   ST 页面在根（→ /scripts/*，ST 真有）；beilu-chat 页面在 /parts/shells:beilu-chat/ 下（→
+//   /parts/shells:beilu-chat/scripts/extensions/third-party/...，浏览器 E2E 实录 404）。前缀随页面
+//   路径可变 → 按**路径尾形状**通配收口（任意前缀 + /scripts/extensions/third-party/<name>/<file>），
+//   307 转 beilu-st-host 镜像树——serve/鉴权/穿越防护全在 part 单源不复制；part 未装=目标 404 诚实缺席。
+//   放 FinalRouter：只兜静态与 parts 路由都没接的请求，不抢任何既有路由（尾形状命中不了正常业务路径）。
+//   为什么不在 part 里注册：PartsRouter 只按 /api/parts/<part> 前缀派发，part 注册页面级路径永不可达（实测）。
+FinalRouter.use((req, res, next) => {
+	if (req.method !== 'GET') return next()
+	const m = req.path.match(/\/scripts\/extensions\/third-party\/(.+)$/)
+	if (!m) return next()
+	// req.path 已解码；重定向目标逐段再编码（含中文/空格的插件名与文件名安全过桥）
+	const rel = m[1].split('/').map(encodeURIComponent).join('/')
+	res.redirect(307, `/api/parts/plugins:beilu-st-host/st-mirror/scripts/extensions/third-party/${rel}`)
+})
+
 // 设置最终处理程序（404、错误）
 FinalRouter.use(async (req, res) => {
 	const is_api = req.path.startsWith('/api/') || req.path.startsWith('/ws/')

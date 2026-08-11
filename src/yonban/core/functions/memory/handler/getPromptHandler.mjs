@@ -113,6 +113,10 @@ import { recordRecall, applyLayerTopkOrder } from "../storage_mod/recallStats.mj
 // 与真生成层 mergeRuntimeParams 同一份内存数据，消除文件级第二解析器漂移（4.1k/238% 症状族）。
 // 壳与实现体 ESM 同实例（plugins/beilu-preset/main.mjs re-export 本路径），getStore 单例安全。
 import { resolveEffectiveMaxContextLive } from "../../prompt/preset/main.mjs";
+// token 用量分子内存单源（2026-08-11 收口）：写方唯一=本文件算完 code_token_status 即存；
+// 读方={{token_status}}宏(本文件,取上一轮值) + replyHandler contextClean 闸门。根治三估算器口径分裂
+// （宏/闸门 chatLog字数/3.5 vs 本表注入+chatLog 全口径，IDE 流程低估 50%+ → 闸门按 37% 误拦清理）。
+import { setLastTokenStatus, getLastTokenStatus } from "./tokenStatusLive.mjs";
 
 import {
   generateTableDataOnly,
@@ -851,17 +855,18 @@ export async function handleGetPrompt(arg) {
     wbT(_cid, "getprompt", "macro:loopEnter", { injCount: injectionPrompts.length, mode: _activeMode, ideConnected: _ideConnected });
     const _injGate = resolveEffectiveInjections(injectionPrompts, _injCtx);
 
-    // 历史前缓存区的宏契约由 volatileMacros.mjs 的稳定 allowlist 统一裁决。
-    // 写入口会拒绝新违规；这里是对直接改 JSON、旧数据、导入和旁路写入的最终运行时保护。
-    // 不静默删除条目，也不让动态值污染缓存前缀：保留正文，但把有效位置约束到 depth:0/user。
-    // user 角色是必要契约：Claude 适配器会把任何 system 角色抽回顶层 system，逻辑上的 below 会失真。
-    // 调整会写入 extension.cache_safety_adjustments + 白盒诊断，保留原位置/角色和命中表达式。
+    // 历史前缓存区的宏契约由 volatileMacros.mjs 的稳定 allowlist 统一识别。
+    // 凛倾 0810 定案：契约只提醒不强制——注入一律按用户配置的 depth/role 原样执行，
+    // 系统禁止在用户不知情时改写位置/角色（此前的强制降级 depth:0/user 已删）。
+    // 检测结果仍写入 extension.cache_safety_adjustments + 白盒诊断作为提醒面：
+    // 含动态宏且位于缓存前缀区（depth>=1 或 system 抽顶）时可能破坏缓存命中（0729 事故同型），
+    // 由用户自行知情决策；前端 INJ 面板徽标/横幅为同源提醒。
     const _cacheSafetyAdjustments = [];
     const _cacheSafePlacementByEntry = new WeakMap();
     const _effectiveCacheSafePlacement = (entry) => {
       if (_cacheSafePlacementByEntry.has(entry)) return _cacheSafePlacementByEntry.get(entry);
       // 能走到这里的条目本轮一定会注入；一次性注入允许 enabled=false 条目临时生效，
-      // 因此运行时检查显式按 enabled=true 计算，不能被持久化开关绕过。
+      // 因此检测显式按 enabled=true 计算，不被持久化开关绕过。
       const placement = inspectInjectionCachePrefix({ ...entry, enabled: true });
       _cacheSafePlacementByEntry.set(entry, placement);
       const { requestedDepth, effectiveDepth, requestedRole, effectiveRole, unsafeMacros } = placement;
@@ -878,12 +883,12 @@ export async function handleGetPrompt(arg) {
         wbD(
           _cid,
           "getprompt",
-          "cachePrefix:unsafeMacroDemoted",
+          "cachePrefix:unsafeMacroNotice",
           false,
-          `动态 INJ 的有效位置/角色已按缓存契约约束: ${adjustment.id}`,
+          `提醒: 动态 INJ 位于缓存前缀区，按用户配置原样注入（未改写）: ${adjustment.id}`,
           adjustment,
         );
-        diag.error(`缓存安全约束: ${adjustment.id} depth ${requestedDepth}->${effectiveDepth}, role ${requestedRole}->${effectiveRole}; macros=${unsafeMacros.join(",")}`);
+        diag.warn(`缓存提醒(未改写): ${adjustment.id} depth=${requestedDepth}, role=${requestedRole}; 动态宏=${unsafeMacros.join(",")} 可能破坏缓存前缀命中`);
       }
       return placement;
     };
@@ -1286,8 +1291,12 @@ export async function handleGetPrompt(arg) {
           const _chatLog = arg?.chat_log;
           if (!_chatLog || !Array.isArray(_chatLog) || _chatLog.length === 0) return "";
           const _msgCount = _chatLog.length;
+          // ★ 分子同口径收口（2026-08-11）：优先上一轮 code_token_status.used（注入+chatLog 全口径，
+          //   tokenStatusLive 内存单源，误差=一轮增量）；首轮/重启后无值回退 chatLog 字数粗估。
+          //   原恒用粗估在注入占大头的 IDE 流程低估 50%+（AI 见 37% 而进度条 90%，下方清理引导全不触发）。
+          const _liveTs = getLastTokenStatus(username, _cid);
           const _totalChars = _chatLog.reduce((_s, _m) => _s + (_m.content || "").length, 0);
-          const _estTokens = Math.round(_totalChars / 3.5);
+          const _estTokens = _liveTs?.used || Math.round(_totalChars / 3.5);
           const _tknCfg = data.config?.token_reminder || {};
           // ★ 根病1 单源：token 占用率分母 = 三层生效 max_context（子模式▸runtime▸预设base▸200000），
           //   与前端进度条 _effective_max_context / 真生成层同口径（resolveEffectiveMaxContextLive 内存单源），
@@ -1373,12 +1382,12 @@ export async function handleGetPrompt(arg) {
         });
 
       diag.debug(`${inj.id}: 宏替换后 ${content.length}字符`);
-      const _placement = _effectiveCacheSafePlacement(inj);
+      const _placement = _effectiveCacheSafePlacement(inj); // 只检测提醒，不改写（凛倾 0810）
       depthInjections.push({
         id: inj.id,
-        role: _placement.effectiveRole,
+        role: _placement.requestedRole,
         content,
-        depth: _placement.effectiveDepth,
+        depth: _placement.requestedDepth,
         order: inj.order ?? 0,
         // BUG-3: 仅作者编写的 INJ 模板需预设引擎再求一次宏(如 {{workspace_tree}}/{{workspace_root}} 由 env 注入,
         // getPromptHandler 不持有不解析)。其余 push 站点是运行期纯数据(热层md/摘要/检索结果等),不可二次求宏。
@@ -1434,12 +1443,12 @@ export async function handleGetPrompt(arg) {
       }
       _text = _text.trim();
       if (!_text) return false;
-      const _placement = _effectiveCacheSafePlacement(_entry);
+      const _placement = _effectiveCacheSafePlacement(_entry); // 只检测提醒，不改写（凛倾 0810）
       depthInjections.push({
         id: idSuffix ? `${injId}${idSuffix}` : injId,
-        role: _placement.effectiveRole,
+        role: _placement.requestedRole,
         content: _text,
-        depth: _placement.effectiveDepth,
+        depth: _placement.requestedDepth,
         order: _entry.order ?? 0,
       });
       if (pushText) textEntries.push({ content: _text, important });
@@ -2541,6 +2550,8 @@ export async function handleGetPrompt(arg) {
         percentage: Math.round((_estimatedTokens / _tokenLimit) * 100),
       };
       diag.log(`Token: ${_estimatedTokens}/${_tokenLimit} (${_codeTokenStatus.percentage}%, margin=${SAFETY_MARGIN})`);
+      // 分子单源写点（唯一写方，tokenStatusLive）：contextClean 闸门/{{token_status}}宏 由此同口径读取
+      setLastTokenStatus(username, _cid, _codeTokenStatus);
 
       if (_tokenReminder.enabled !== false) {
         // 多级阈值：单源=DEFAULT_TOKEN_REMINDER.thresholds（用户 config 可覆盖）
@@ -2555,7 +2566,11 @@ export async function handleGetPrompt(arg) {
 
         if (_triggered.length > 0) {
           const _highest = _triggered[0];
-          const _text = _tokenReminder.custom_text || _highest.text;
+          // 阈值条目 text 分层回退（0811）：web 面板保存历史上只存 percent/level 不带 text，
+          // 顶层 {...DEFAULT,...config} 合并后 _highest.text=undefined 会把 "undefined" 渲进提醒文案。
+          // 缺 text 按 level 从 DEFAULT_TOKEN_REMINDER.thresholds 回填（文本默认单源仍在 defaults）。
+          const _text = _tokenReminder.custom_text || _highest.text
+            || (DEFAULT_TOKEN_REMINDER.thresholds.find((d) => d.level === _highest.level)?.text) || "";
           const _format = _tokenReminder.format || "xml";
           const _pct = _codeTokenStatus.percentage;
           const _used = _codeTokenStatus.used;

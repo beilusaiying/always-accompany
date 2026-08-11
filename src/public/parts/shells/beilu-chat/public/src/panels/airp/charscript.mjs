@@ -143,17 +143,32 @@ async function _loadScriptsForChar(charId) {
   }
 }
 
-// 切预设时加载预设作用域脚本(scriptRunner 不依赖预设存储,由本层读 preset_scripts.json 传入)
+// 切预设时加载预设作用域脚本(scriptRunner 不依赖预设存储,由本层读激活预设数据传入)
+// [0807 §七#6 preset 半"导出即丢"] per-preset 化：真源=激活预设文件 preset_json.extensions
+//   .tavern_helper.scripts（对齐酒馆助手 PresetSettings.scripts；getData 桥自动注入 chatid →
+//   后端解析本窗口线激活预设，与 scriptManager/variableStore 同读源）。字段缺席（预设从未写过）
+//   → 旧单份 preset_scripts.json 迁移读兜底（不再写入）。scripts=[] 也必须走 loadPresetScripts：
+//   它入口先 unloadScriptsByScope('preset')——切到无脚本预设时旧预设脚本才会被卸载。
 async function _loadScriptsForPreset() {
   try {
-    // T6b批7：beilu-memory setdata {_action:readUserFile} → sendAction beilu-memory#*（通配组装 {_action:verb,...payload}）。
-    // !ok 由门面抛错走本函数外层 catch（原 !r.ok return 等价：不加载预设脚本）。
-    const j = await sendAction({ verb: "readUserFile", target: "plugins:beilu-memory", source: "web", payload: { filename: "preset_scripts.json" } });
-    if (!j.success || !j.content) return;
-    let data;
-    try { data = JSON.parse(j.content); }
-    catch { return; }
-    const scripts = Array.isArray(data.scripts) ? data.scripts : [];
+    let scripts = null;
+    try {
+      const pd = await sendAction({ verb: "getData", target: "plugins:beilu-preset", source: "web" });
+      const th = pd?.preset_json?.extensions?.tavern_helper;
+      if (th && Object.prototype.hasOwnProperty.call(th, "scripts")) {
+        scripts = Array.isArray(th.scripts) ? th.scripts : [];
+      }
+    } catch (e) {
+      console.warn("[beilu-chat] 读取预设内脚本失败（走旧文件兜底）:", e.message);
+    }
+    if (scripts === null) {
+      // T6b批7：beilu-memory setdata {_action:readUserFile} → sendAction beilu-memory#*（通配组装 {_action:verb,...payload}）。
+      const j = await sendAction({ verb: "readUserFile", target: "plugins:beilu-memory", source: "web", payload: { filename: "preset_scripts.json" } });
+      let data = null;
+      try { data = (j.success && j.content) ? JSON.parse(j.content) : null; }
+      catch { data = null; }
+      scripts = Array.isArray(data?.scripts) ? data.scripts : [];
+    }
     await loadPresetScripts(
       { scripts },
       {

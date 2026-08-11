@@ -465,27 +465,29 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   margin-bottom: 0.4em;
 }
 
-/* 时间线切换导航栏：覆盖在气泡两侧，不进入文档流，不制造底部空白。 */
+/* [0807 凛倾"参考酒馆"+"悬浮放对话最下面"] 时间线切换导航沉底：对齐 ST 本体布局
+   （style.css:1253-1264 swipe_left=absolute left:20px bottom 锚 / swipeRightBlock=right bottom:0，
+   常态低透明度悬浮在消息底部两角，不压卡内容）。原 top:0.9rem 顶锚在长卡（酒馆渲染 iframe）
+   上视觉悬在中腰且压住卡面——改 bottom 锚沉到消息底部。导航条本体 0 高不挡内容。 */
 .chat-message .swipe-nav {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  height: 0;
+  overflow: visible;
   display: block;
   margin: 0;
-  opacity: 0;
   pointer-events: none;
   z-index: 9;
-  transition: opacity 0.2s ease;
-}
-
-.chat-message:hover .swipe-nav,
-.chat-message .swipe-nav:focus-within {
-  opacity: 1;
 }
 
 .chat-message .swipe-nav .arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  /* 酒馆式 bottom 锚：位置只取决于气泡底边，卡高度异步增长不再位移（0806 顶锚修复的语义延续） */
+  bottom: 6px;
+  opacity: 0.35; /* 酒馆常态 0.3，hover 提亮——替代原"整条 hover 才显现" */
   cursor: pointer;
   font-size: 1rem;
   font-weight: bold;
@@ -503,27 +505,29 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   padding: 0;
   border: 0;
   pointer-events: auto;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
 .chat-message .swipe-nav .arrow.left {
-  left: 8px;
+  left: 20px; /* 酒馆 swipe_left left:20px 同值 */
 }
 
 .chat-message .swipe-nav .arrow.right {
-  right: 8px;
+  right: 5px; /* 酒馆 swipe_right right:5px 同值；计数器沉其左侧同底线 */
 }
 
 .chat-message .swipe-nav .arrow:hover {
+  opacity: 1;
   background-color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
   color: var(--color-base-content);
 }
 
-/* Swipe 计数器 */
+/* Swipe 计数器：酒馆式沉底右下（swipes-counter 同区），与右箭头同底线并排 */
 .chat-message .swipe-nav .swipe-counter {
   position: absolute;
-  right: 8px;
-  bottom: 6px;
+  right: calc(5px + 1.6rem + 6px); /* 右箭头(1.6rem)左侧 6px 间距 */
+  bottom: 8px;
+  opacity: 0.6;
   font-size: 0.75rem;
   color: oklch(var(--bc) / 0.5);
   background-color: var(--beilu-shadow-40);
@@ -535,12 +539,14 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
 }
 
 .chat-message:hover .swipe-nav .swipe-counter {
+  opacity: 1;
   color: var(--beilu-amber);
 }
 
 @media (hover: none) {
-  .chat-message .swipe-nav {
-    opacity: 0.78;
+  /* 触屏无 hover：箭头保持恒显（原整条 0.78 语义迁到子元素） */
+  .chat-message .swipe-nav .arrow {
+    opacity: 0.6;
   }
 }
 
@@ -562,23 +568,57 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
   }
 }
 
-/* 消息按钮组（P0-P3a: 基础透明度0.3，hover时1） */
+/* [0807 凛倾"又大又丑还和其他按钮重叠"+"两个小悬浮放到底部"] 消息按钮组（✎编辑/☰更多）：
+   原右上 sticky 深色 join 连体块压住酒馆卡 iframe 自己的右上图标区。改：气泡右下沉底、
+   两钮拆离成独立小圆钮（视觉对齐 swipe 箭头风格）、常显低透明 hover 提亮。 */
 .chat-message .button-group {
-  position: sticky;
-  top: 5px;
+  position: absolute;
+  bottom: 6px;
   right: 5px;
-  float: right;
+  top: auto;
   z-index: 10;
   height: 0;
   overflow: visible;
-  opacity: 0.3;
-  transition: opacity 0.2s ease-in-out;
+  opacity: 0.35;
+  transition: opacity 0.2s ease-in-out, right 0.2s ease;
   pointer-events: auto;
+}
+
+/* 最后一条消息底部有 swipe 导航（❯+计数器占右下）时按钮组左让，防重叠 */
+.chat-message:has(.swipe-nav) .button-group {
+  right: 120px;
 }
 
 .chat-message:hover .button-group {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* 拆 join 连体 → 两个分离小圆钮；压掉 btn-primary 实底，对齐 .swipe-nav .arrow 半透明圆钮风格 */
+.chat-message .button-group .normal-buttons,
+.chat-message .button-group .shift-buttons {
+  gap: 6px;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+.chat-message .button-group .btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background-color: color-mix(in oklch, var(--color-base-content) 35%, transparent);
+  color: var(--color-base-100);
+  box-shadow: none;
+}
+.chat-message .button-group .btn:hover {
+  background-color: color-mix(in oklch, var(--color-base-content) 55%, transparent);
+}
+.chat-message .button-group .btn img {
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
 /* 编辑区域 */
@@ -796,14 +836,14 @@ html[data-theme]:not([data-theme="light"]):not([data-theme="beilu-amber-light"])
 }
 
 /* 输入框自动伸缩 */
-#message-input {
+#send_textarea {
   max-height: 40vh;
   overflow-y: auto;
   resize: none;
 }
 
 /* 输入框聚焦琥珀色 */
-#message-input:focus {
+#send_textarea:focus {
   border-color: var(--beilu-amber);
   box-shadow: 0 0 0 2px var(--beilu-amber-20);
 }
@@ -1464,3 +1504,16 @@ html[data-beilu-lang] label.flex {
 }
 /* 顶栏 tab（原 padding 0.3rem 0.75rem, index.css:773）：外语加宽属设计域数值，
    不在兜底层擅动——见 overflow_risk_清单.md 顶栏节，逐点调整走预览流程交凛倾定 */
+
+/* [0807 酒馆对齐·断点E 落位] 酒馆插件工具栏挂载条：#send_form/#qr--bar 落输入框上方（对齐 ST）。
+   插件按钮 class 是 ST 系（qr--button menu_button），beilu 无该样式表——此处给最小中性外观
+   （主题无关的半透明灰，避开 daisyUI v5 变量桥雷区），细化视觉走预览流程交凛倾定。 */
+.st-host-sendform-dock:empty { display: none; }
+.st-host-sendform-dock #send_form { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px; margin: 0; }
+.st-host-sendform-dock #qr--bar { display: flex; flex-wrap: wrap; gap: 4px; }
+.st-host-sendform-dock #qr--bar button {
+  font: inherit; font-size: 12px; line-height: 1.4; padding: 2px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.35); border-radius: 6px;
+  background: rgba(128, 128, 128, 0.12); color: inherit; cursor: pointer;
+}
+.st-host-sendform-dock #qr--bar button:hover { background: rgba(128, 128, 128, 0.25); }

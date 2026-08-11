@@ -181,9 +181,22 @@ export function confinePath(root, userPath, opts = {}) {
  * @returns {string}
  */
 export function confineSegment(seg) {
-	let v = String(seg ?? '')
-	try { v = v.normalize('NFKC') } catch { /* 老 runtime 跳过 */ }
-	// 删 / \ . 及全部控制字符(含 null)——净化返回不抛错（与 confinePath 的"拒绝"语义区分）
+	// [0806 根修] 原实现返回「NFKC 归一 + 删除全部点」的结果，而创建侧（import-char →
+	//   sanitizeFilename）既不归一也保留点：磁盘目录是 "刀劍神域－進擊篇 Progressive V5.1.1_1"，
+	//   本函数把查找键净化成 "刀劍神域-進擊篇 Progressive V511_1"（全角－被归一成 ASCII-、点被删）
+	//   → 带点或全角字符的角色卡导入后 char-data / update-char / delete-char / 建对话全部 404
+	//   （僵尸卡：看得见、改不了、删不掉；GitHub 外部用户实报，另一例 "龙族v7.8"→"龙族v78"）。
+	//   净化口径必须与创建侧一致，否则读写不同源。
+	// 【安全性不靠删点/归一】单段名内部的 "." 与全角字符都无害，危险的只有路径分隔符与整段
+	//   "."/".."：①删 ASCII 分隔符与控制字符（保持原净化语义，a/b→ab）②NFKC 探针只做危险
+	//   形态判定（整段点段、全角／＼归一后现形的分隔符），命中返回 '' 让调用方走 404/invalid
+	//   ③返回值用原始码位（未归一），才能命中按原名创建的目录。
 	// eslint-disable-next-line no-control-regex
-	return v.replace(/[/\\.\u0000-\u001f]/g, '')
+	const v = String(seg ?? '').replace(/[/\\\u0000-\u001f]/g, '')
+	let probe = v
+	try { probe = v.normalize('NFKC') } catch { /* 老 runtime 无归一能力：按原文判定 */ }
+	const t = probe.trim()
+	if (t === '.' || t === '..') return '' // 整段点段=自引用/上跳，拒绝
+	if (/[/\\]/.test(probe)) return '' // 同形分隔符（全角／＼归一后现形），拒绝
+	return v
 }

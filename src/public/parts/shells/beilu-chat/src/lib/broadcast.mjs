@@ -19,7 +19,10 @@ import { wbTrace, wbDetect } from "../../../../../../server/whitebox.mjs";
 import { getGroupIdByChatId, getGroupChatIds } from "./groupRegistry.mjs";
 // 用户级广播的 owner 索引属于服务端持久化层，不属于 chat.mjs 的前端壳装配。
 // chatStorage 不静态依赖 broadcast（仅在少量清理点动态 import），因此这里单向读取不会形成初始化环。
-import { getChatMetadatas, initializeChatMetadatas } from "./chatStorage.mjs";
+// [0808 收口] saveChat 补入模块级静态 import：ws close 5s 卸载链原经 chat.mjs:72 包装层按 4 参
+//   deps 注入 {getChatMetadatas, saveChat}（历史防环手段）；本模块自 v4 簇② 起已静态 import
+//   chatStorage（单向无环），deps 注入层退役、registerChatUiSocket 收口三参，close 链改用本行单源。
+import { getChatMetadatas, initializeChatMetadatas, saveChat } from "./chatStorage.mjs";
 // 跨 isolate 收口（isolateBridge）：worker isolate 内本模块的 chatUiSockets 恒空（isolate 隔离单例），
 // 四个广播出口在 worker 中统一改走桥上行、由主进程的真实注册表代发；主 isolate 加载时自注册回放处理器。
 // isolate 判定内化在本系统内部——调用方（replyHandler/beilu-files 等插件链）零改动。桥零依赖，无环。
@@ -40,6 +43,12 @@ export const broadcastStats = {
 // W66: 停止生成时的回调（由 generation.mjs 注册，避免循环依赖）
 let _onStopGeneration = null;
 export function setOnStopGeneration(fn) { _onStopGeneration = fn; }
+
+// [0808 凛倾拍板·停止要真停] 用户停止键回调（generation.markUserStopGeneration 注册）。
+//   与 _onStopGeneration（ws close 卸载清理语义）分开：本回调是「用户意图」语义——置用户停止
+//   标记让 Loop/续轮闸识别「用户选择停止」，并取消 pending timer（空闲期点停止也真停）。
+let _onUserStopGeneration = null;
+export function setOnUserStopGeneration(fn) { _onUserStopGeneration = fn; }
 
 // EXT-WH: Webhook 事件分发器（由 server/web_server/api_v1_router.mjs 注入，避免壳层→服务层耦合）。
 //   注入时机：v1 路由 _getBeiluChat() 懒加载本模块后立即装配。
@@ -299,29 +308,29 @@ export function broadcastAllChatUi(event, username) {
     return published;
   }
   const payload = JSON.stringify(event);
-  // #181: 传 username 时只推给该用户的 chatId（多用户隔离），不传则全推（Bot 全局事件等）
+  // #181: 传 username 时只推给该用户（多用户隔离），不传则全推（Bot 全局事件等）。
+  // [0808 owner 收口根修] owner 权威事实源=连接注册时已认证的 ws._beiluOwner（registerChatUiSocket
+  //   打标），chatid→metadata 索引降为兜底。原实现完全依赖索引：启动窗口期索引未就绪/新建会话
+  //   元数据未入索引时，整次广播被判失败（0808 日志实证 beilu-preset×5/beilu-memory 开机
+  //   「用户级广播缺少可用 owner 索引」误报）。fail-closed 粒度同步从「整次广播」缩到「单个
+  //   未知 socket」：已知 owner 的 socket 正常投递，双源都查不到 owner 的 socket 跳过并整体报 false
+  //   （不能把“安全跳过”伪装成已投递——原语义保留）。
   const ownerScoped = typeof username === "string" && username.length > 0;
   const metas = ownerScoped ? _readOwnerIndex() : null;
-  // owner 已给却没有 owner→chat 索引时必须零发送；否则”用户级”会退化成全用户广播。
-  // 例外：启动阶段 _getChatMetadatas 尚未注入且无任何 WS 连接时，广播无接收者 = 等价成功（不报 E_OWNER）。
-  if (ownerScoped && !metas) {
-    if (chatUiSockets.size === 0) return true;
-    return false;
-  }
   let unknownSocketOwner = false;
   for (const [cid, sockets] of chatUiSockets.entries()) {
-    if (ownerScoped) {
-      const owner = metas.get(cid)?.username;
-      if (!owner) { unknownSocketOwner = true; continue; }
-      if (owner !== username) continue;
-    }
+    const cidOwner = ownerScoped ? metas?.get(cid)?.username : null;
     for (const ws of sockets) {
+      if (ownerScoped) {
+        const owner = ws._beiluOwner || cidOwner;
+        if (!owner) { unknownSocketOwner = true; continue; }
+        if (owner !== username) continue;
+      }
       if (ws.readyState !== ws.OPEN) continue;
       if (ws.bufferedAmount > WS_BACKPRESSURE_LIMIT) continue;
       try { ws.send(payload); } catch { /* 静默 */ }
     }
   }
-  // 有已连接 socket 却无法得到其 owner 时，不能把“安全跳过”伪装成已投递。
   return !unknownSocketOwner;
 }
 
@@ -528,11 +537,15 @@ export function broadcastUserActiveChat(chatid, reason = "attach") {
 export function registerChatUiSocket(
   chatid,
   ws,
-  { getChatMetadatas, saveChat },
   username,
 ) {
-  // 捕获 chat 元数据索引供 broadcastCrossChatEvent 解析 username→groupId（注入式，避免循环 import）
-  if (getChatMetadatas) _getChatMetadatas = getChatMetadatas;
+  // [0808 签名收口] 原签名 (chatid, ws, {getChatMetadatas, saveChat}, username)，deps 由 chat.mjs:72
+  //   包装层注入（历史防环手段）。本模块已静态 import chatStorage（v4 簇② 起，单向无环），deps 注入
+  //   退役，收口为三参；chat.mjs 包装层同步改三参直传（⚠ 两处必须同改——0808 曾因只改本侧、包装层
+  //   deps 对象串进 username 参数位引发全线 path-Object/归属拒绝风暴，见 chat.mjs:72 事故注记）。
+  // [0808 owner 收口] 连接注册时已认证的 username 是该 socket owner 的权威事实源，打标在 socket 上，
+  //   供 broadcastAllChatUi 用户级广播判归属（chatid→metadata 索引降为兜底）。
+  if (typeof username === "string" && username) ws._beiluOwner = username;
   if (!chatUiSockets.has(chatid)) chatUiSockets.set(chatid, new Set());
 
   const socketSet = chatUiSockets.get(chatid);
@@ -562,14 +575,15 @@ export function registerChatUiSocket(
       if (msg.type === "stop_generation") {
         // T009 B6 精确停止语义：带 messageId 且命中 → 只停该流；未带 id 或未命中（流已完成/id 漂移）→ abortAll 全停。
         // 旧实现：前端无 id 时发魔法串 "__force_stop__"（abortByMessageId 必空转）+ 无条件 abortAll——兜底掩盖精确停止失效。
+        // [0808 修订·凛倾拍板「停止要真停」] 0724「只停在飞流」被推翻：①空闲期点停止时已排定的
+        //   Loop/续轮 timer 照样 fire=「完全停止不了」②catch(AbortError) 把用户停止当异常轮继续排
+        //   Loop=「无法区分用户停止/AI 自停」。现停止键三件事：置用户停止标记（须在 abort 之前，
+        //   让 generation catch 看得到）+ 取消 pending timer + 停在飞流。自动化休眠至用户再互动；
+        //   开关配置仍是长期启停唯一出口。ws.on("close") 卸载路径仍走 _onStopGeneration。
+        _onUserStopGeneration?.(chatid);
         const _targetId = msg.payload?.messageId || null;
         const _preciseHit = _targetId ? StreamManager.abortByMessageId(_targetId) : false;
         const _aborted = _preciseHit ? 1 : StreamManager.abortAll(chatid);
-        // [0724 只许前端关·002拍板] 停止键只停在飞流，不再调 _onStopGeneration(=cancelAutoContinue)：
-        //   原耦合=点一次停止整条自动继续/Loop 自动化静默死，而面板开关还显示开。停整条自动化的
-        //   唯一出口=前端「自动继续」开关（二次确认）。中止轮的 loop 续轮由 generation 回合末
-        //   _isAborted 分支/catch AbortError 路径接管（垫延迟下限，fire 时三闸守卫）。
-        //   ws.on("close") 卸载路径仍走 _onStopGeneration（卸载后续轮=孤儿生成，见 generation 注册处注释）。
         console.log(`[broadcast] 用户停止生成: chatid=${chatid}, messageId=${_targetId || "(全部)"}, preciseHit=${_preciseHit}, aborted=${_aborted}`);
         wbTrace(chatid, "broadcast", "ws:stop_generation", { messageId: _targetId, preciseHit: _preciseHit, aborted: _aborted });
         return;
@@ -622,8 +636,8 @@ export function registerChatUiSocket(
         // 否则 5s 后 chatMetadata 置 null，已排队的 auto-continue setTimeout 仍会
         // 递归 triggerCharReply → 孤儿生成、末几轮工具结果不落盘（疑 #79 挂起根因）
         if (_onStopGeneration) _onStopGeneration(chatid);
-        // 保存并卸载内存
-        const chatMetadatas = getChatMetadatas();
+        // 保存并卸载内存（[0808] 改模块级单源读取，见 registerChatUiSocket 头注释的签名对齐根修）
+        const chatMetadatas = (_getChatMetadatas || getChatMetadatas)();
         const chatData = chatMetadatas.get(chatid);
         if (chatData?.chatMetadata) {
           saveChat(chatid)

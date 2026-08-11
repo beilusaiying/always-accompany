@@ -1252,21 +1252,45 @@ async def run_p1(req: Request) -> JSONResponse:
                 "error": "P1 Python pipeline is unavailable",
                 "trace": {"request": dict(mode_audit), "transport": transport_trace},
             }, status_code=500)
-    try:
-        await _ensure_recall_warmup(_engine, cfg)
-    except Exception as error:  # noqa: BLE001 — 首个 run 必须等待同一个 warmup，失败不可带病进管线
-        code = _stable_p1_error_code(
-            getattr(error, "code", _warmup_state.get("code")), "E_P1_WARMUP_FAILED",
-        )
-        _safe_log(
-            f"[p1_server] runP1 warmup 失败: {type(error).__name__}: {error}; engine={_engine}"
-        )
+    # [0808下午 冷启动 fail-fast·凛倾拍板 a+d] 原实现首个 run 在此阻塞等 warmup（三集群串行冷启动
+    #   + DomainWords 分片校验 + Node 预热，进程重启后最坏 >30s），而 runP1 调用方（node 代理与前端
+    #   apiFetch）只有 30s 超时窗——重启后的首跑必然「调用方超时放弃、python 侧事后 200」（0808 实证）。
+    #   改为：预热未就绪 → 单飞踢起后台 warmup 任务后立即返回 E_P1_WARMING（retryable），调用方轮询/
+    #   重试；warmup 任务与 /warmup 端点共享同一个 _warmup_task（单飞语义不变），就绪后本路径零开销。
+    #   上一轮 warmup 真失败时不伪装成"预热中"：回传真实失败码（与旧 except 路径同构），同时后台重踢
+    #   一轮（旧行为本就每次 runP1 重试 warmup，只是阻塞式）——失败可见性与自愈都不减。
+    global _warmup_task
+    _warm_snapshot = await asyncio.to_thread(_warmup_snapshot, _engine)
+    if _warm_snapshot.get("readyForRecall") is not True:
+        _task = _warmup_task
+        _prev_error: Exception | None = None
+        if _task is not None and _task.done() and not _task.cancelled():
+            _prev_error = _task.exception()
+        if _task is None or _task.done():
+            _warmup_task = asyncio.create_task(_perform_recall_warmup(_engine, cfg))
+        if _prev_error is not None:
+            code = _stable_p1_error_code(
+                getattr(_prev_error, "code", _warmup_state.get("code")), "E_P1_WARMUP_FAILED",
+            )
+            _safe_log(
+                f"[p1_server] runP1 warmup 上轮失败（后台已重踢）: {type(_prev_error).__name__}: {_prev_error}; engine={_engine}"
+            )
+            return JSONResponse({
+                "success": False,
+                "p1_act": [],
+                "code": code,
+                "retryable": True,
+                "error": _run_log_public_error("P1 warmup failed", _prev_error),
+                "warmup": _public_warmup_failure(_engine, code),
+                "trace": {"request": dict(mode_audit), "transport": transport_trace},
+            }, status_code=503)
         return JSONResponse({
             "success": False,
             "p1_act": [],
-            "code": code,
-            "error": _run_log_public_error("P1 warmup failed", error),
-            "warmup": _public_warmup_failure(_engine, code),
+            "code": "E_P1_WARMING",
+            "retryable": True,
+            "error": "P1 冷启动预热中（后台预热进行中，稍后重试即可）",
+            "warmup": _warm_snapshot,
             "trace": {"request": dict(mode_audit), "transport": transport_trace},
         }, status_code=503)
     try:

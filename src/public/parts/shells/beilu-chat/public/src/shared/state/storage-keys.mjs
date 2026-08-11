@@ -128,6 +128,9 @@ export const KEYS = Object.freeze({
   // BEILU_THINKING_FOLD 已删（0720 硬化）：凛倾硬性核心「人类必须看得到」,折叠块恒渲染无隐藏开关
   BEILU_THINKING_FOLD_LABEL: "beilu-thinking-fold-label",
   BEILU_THINKING_TAGS: "beilu-thinking-tags",
+  // [2026-08-10] 内置 beilu_thinking「对 AI 隐藏」开关的前端镜像（权威源=后端 _config.json beilu_thinking_strip）。
+  //   "0"=关（不剥离，AI 可见）；其余（"1"/缺省）=开（剥离）。用途：badge 诚实性渲染需在前端读开关状态。
+  BEILU_THINKING_STRIP: "beilu-thinking-strip",
   // 「帮助教程」顶栏按钮显隐（功能可用但引导内容尚未制作完善→默认隐藏，设置→教程开发开关控制，settings.mjs 启动恢复）
   BEILU_TUTORIAL_HELP_BTN: "beilu-tutorial-help-btn",
   BEILU_USER_BLACKLIST: "beilu-user-blacklist",

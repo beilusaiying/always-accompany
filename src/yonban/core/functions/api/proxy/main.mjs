@@ -48,7 +48,7 @@ const configTemplate = {
   custom_headers: {},
   // attachment_history（凛倾 0716 定案）：历史轮文本附件策略 hide=名字占位(默认)/block=屏蔽无痕/inline=历史也全文；最后一条 user 消息附件恒全文
   // attachment_texts：附件占位/截断文案逐键覆盖（键见 textAttachment.DEFAULT_ATTACHMENT_TEXTS，空对象=全用默认）
-  convert_config: { provider: "", roleReminding: true, ignoreFiles: false, attachment_history: "hide", attachment_texts: {} },
+  convert_config: { provider: "", roleReminding: true, ignoreFiles: false, attachment_history: "hide", attachment_texts: {}, openai_explicit_prompt_cache: false },
   use_stream: true,
 };
 
@@ -85,6 +85,9 @@ async function GetSource(config, { SaveConfig }) {
         ...config,
         // SEC 破口A：把本次调用的归属用户带给 httpFetch（出站后 stripReasoningTags 按本人剥离规则，不串别的用户）
         username: prompt_struct?.username || config.username,
+        // OpenAI 提示缓存只按对话归组。本对象是单次调用副本，原始 chat id 不进入
+        // request body；httpFetch 只发送它的 SHA-256，避免暴露真实会话标识。
+        _prompt_cache_chat_id: prompt_struct?.chatid ?? prompt_struct?.chat_id,
         model_arguments: config.model_arguments
           ? { ...config.model_arguments }
           : {},

@@ -192,8 +192,65 @@ function isOutsideSafeZone(path, frozenSafeRoot = DEFAULT_SAFE_ROOT) {
 	return normalized !== safeRoot && !normalized.startsWith(safeRoot + '/')
 }
 
-/** 系统盘符（隐藏） */
-const HIDDEN_DRIVES = ['C']
+/** Windows C 盘路径：最终选作文件夹时必须逐次独立确认，不记忆本次同意。 */
+function isCDrivePath(path) {
+	return /^c:(?:[\\/]|$)/i.test(String(path || ''))
+}
+
+/**
+ * C 盘目录最终选择的独立二次确认。
+ * 与首次免责协议分离：免责同意不能替代这一步，取消只留在 picker 内且不 resolve 路径。
+ */
+function showCDriveSelectionConfirmation(path) {
+	return new Promise((resolve) => {
+		const overlay = document.createElement('div')
+		overlay.className = 'fp-overlay fp-disclaimer-overlay'
+
+		const dialog = document.createElement('div')
+		dialog.className = 'fp-modal fp-modal-disclaimer'
+		dialog.setAttribute('role', 'alertdialog')
+		dialog.setAttribute('aria-modal', 'true')
+		dialog.setAttribute('aria-labelledby', 'fp-c-drive-confirm-title')
+		dialog.innerHTML = `
+			<div class="fp-header">
+				<span class="fp-title" id="fp-c-drive-confirm-title"><i data-ic="warning"></i> 再次确认 C 盘工作区</span>
+			</div>
+			<div class="fp-disclaimer-body">
+				<p>您正在把 C 盘下的目录设为 AI 工作区：</p>
+				<p><strong>${escapeHtml(path)}</strong></p>
+				<p class="fp-disclaimer-warning"><i data-ic="warning" aria-hidden="true"></i> 工作区内的文件可能被读取、修改或删除。请确认这不是系统、应用数据或密钥目录。</p>
+				<div class="fp-disclaimer-actions">
+					<button class="fp-cancel-btn" id="c-drive-confirm-cancel">取消</button>
+					<button class="fp-confirm-btn fp-disclaimer-accept" id="c-drive-confirm-accept">确认选择此目录</button>
+				</div>
+			</div>
+		`
+
+		overlay.appendChild(dialog)
+		document.body.appendChild(overlay)
+
+		let settled = false
+		const onConfirmKeyDown = (event) => {
+			if (event.key !== 'Escape') return
+			event.preventDefault()
+			event.stopImmediatePropagation()
+			finish(false)
+		}
+		const finish = (accepted) => {
+			if (settled) return
+			settled = true
+			document.removeEventListener('keydown', onConfirmKeyDown, true)
+			overlay.remove()
+			resolve(accepted)
+		}
+		document.addEventListener('keydown', onConfirmKeyDown, true)
+		dialog.querySelector('#c-drive-confirm-accept').addEventListener('click', () => finish(true))
+		dialog.querySelector('#c-drive-confirm-cancel').addEventListener('click', () => finish(false))
+		overlay.addEventListener('click', (event) => {
+			if (event.target === overlay) finish(false)
+		})
+	})
+}
 
 /**
  * 显示免责协议对话框
@@ -271,6 +328,7 @@ function createPicker(mode, initialPath, requestedOwnerChatId = null, requestedS
 		let currentDir = normalizePath(initialPath || '.')
 		let selectedItem = null // { name, path, isDirectory }
 		let isLoading = false
+		let isFinalConfirming = false
 
 		// 创建模态
 		const overlay = document.createElement('div')
@@ -345,10 +403,23 @@ function createPicker(mode, initialPath, requestedOwnerChatId = null, requestedS
 		document.addEventListener('keydown', onKeyDown)
 
 		// ---- 确认 ----
-		confirmBtn.addEventListener('click', () => {
+		confirmBtn.addEventListener('click', async () => {
 			if (mode === 'folder') {
 				// 文件夹模式：选当前目录 或 选中的子目录
-				close(selectedItem?.isDirectory ? selectedItem.path : currentDir)
+				const selectedPath = selectedItem?.isDirectory ? selectedItem.path : currentDir
+				// C 盘最终选根每次都独立确认；取消不 resolve 路径，调用方不会进入 setWorkspaceRoot。
+				if (isCDrivePath(selectedPath)) {
+					if (isFinalConfirming) return
+					isFinalConfirming = true
+					let accepted = false
+					try {
+						accepted = await showCDriveSelectionConfirmation(selectedPath)
+					} finally {
+						isFinalConfirming = false
+					}
+					if (!accepted) return
+				}
+				close(selectedPath)
 			} else {
 				// 文件模式：必须选中文件
 				if (selectedItem && !selectedItem.isDirectory) {
@@ -560,9 +631,9 @@ function createPicker(mode, initialPath, requestedOwnerChatId = null, requestedS
 				return
 			}
 
-			// 探测盘符：先 D-Z 再 A/B（跳过系统盘 C），listDir 不抛错即视为存在
+			// 探测盘符：C 盘也进入现有 browse policy；后端仍会拒绝系统/应用敏感目录。
 			const drives = []
-			const letters = 'DEFGHIJKLMNOPQRSTUVWXYZAB'.split('')
+			const letters = 'CDEFGHIJKLMNOPQRSTUVWXYZAB'.split('')
 			for (const letter of letters) {
 				try {
 					const testPath = letter + ':/'

@@ -133,6 +133,7 @@ import path from "node:path";
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs";
 import { readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // T019：损坏不静默重建，备份.corrupt.bak后抛错中止
 import { sanitizeFilename } from "../../../../../scripts/sanitizeName.mjs"; // 0716 轮子收口：文件名安全清洗共享原语
+import { GetV2CharDataFromV1 } from "../../../ImportHandlers/SillyTavern/engine/charData.mjs"; // [0806] V1→V2 卡迁移单源（与 ImportHandlers 导入链同实现，纯函数无副作用）
 
 import {
   authenticate,
@@ -157,6 +158,7 @@ import {
   deleteMessage,
   deleteMessagesRange,
   editMessage,
+  setMessageMvuVariables, // [0808 MVU 写回链收口]
   getEditOperationReceipt,
   exportChat,
   getCharListOfChat,
@@ -239,14 +241,6 @@ import { wbT, wbD } from "../../../../../server/wbStub.mjs";
 const PERSONA_TEMPLATE_DIR = path.join(
   import.meta.dirname,
   "persona-template",
-);
-
-// 角色卡模板目录（仍位于 beilu-home 下，import-char 创建角色卡时复制 main.mjs）
-// 注意：此模块级声明被 setEndpoints() 内部同名 const 遮蔽（:482），实际使用的是内部声明。
-// 两处路径相同（均指向 beilu-home/beilu-char-template），行为不影响，但存在重复声明。
-const CHAR_TEMPLATE_DIR = path.join(
-  import.meta.dirname,
-  "../../beilu-home/beilu-char-template",
 );
 
 /**
@@ -2634,6 +2628,9 @@ export function setEndpoints(router) {
           if (!(await _assertChatOwner(req, res, chatid))) return;
         }
         const result = await deleteChat(chatids, username);
+        // [0808 治理·有生无灭修] /log 去重签名随会话删除清理（治理清单 循环08 二节：_lastLogDiag
+        //   全文件无 delete=按 chatid 单调增长）。本 Map 是本文件私有态，清理归本路由（删除成功项）。
+        for (const item of result) if (item?.success === true) _lastLogDiag.delete(item.chatid);
         const failed = result.find((item) => item?.success !== true);
         const status = failed
           ? (Number.isInteger(failed.statusCode) ? failed.statusCode : 409)
@@ -2984,6 +2981,25 @@ export function setEndpoints(router) {
     },
   );
 
+  // ---- [0808 MVU 写回链收口·方案A] 按楼写 MVU 变量（前端 variableStore message 域写→本端点→
+  //   chatOps.setMessageMvuVariables 双写 chatLog+timeLines 落盘）。EJS/mvu_accumulated 读侧同源闭环。
+  router.post(
+    "/api/parts/shells\\:chat/:chatid/message-vars",
+    authenticate,
+    async (req, res) => {
+      try {
+        const { chatid } = req.params;
+        const { index, variables } = req.body || {};
+        const r = await setMessageMvuVariables(chatid, Number(index), variables);
+        res.status(r?.applied ? 200 : 400).json(r);
+      } catch (err) {
+        if (err.message === "Chat not found") return res.status(404).json({ error: "Chat not found" });
+        console.error("[chat/message-vars] Error:", err);
+        res.status(Number.isInteger(err?.statusCode) ? err.statusCode : 500).json({ error: err.message });
+      }
+    },
+  );
+
   // ---- 伪发送 API ----
   router.get(
     "/api/parts/shells\\:chat/:chatid/fake-send",
@@ -3273,7 +3289,14 @@ export function setEndpoints(router) {
         }
 
         // 解析 ST chara_card_v2/v3 格式
-        const data = charDataRaw.data || charDataRaw;
+        // [0806] 原为 `charDataRaw.data || charDataRaw`：对 V2/V3 卡（有 .data 包裹）正确，
+        //   但**纯 V1 卡（平铺无 .data）直接原样使用**，跳过了 V1→V2 字段迁移：
+        //   `creatorcomment` 不会变成 `creator_notes`（创作者备注丢失）、
+        //   `talkativeness`/`fav` 留在顶层而消费端读 `extensions.*`（读不到）。
+        //   另一条导入链 ImportHandlers/SillyTavern/main.mjs:72 一直走 GetV2CharDataFromV1，
+        //   两条入口对同一张 V1 卡产出不同结构=旧卡识别不一致。此处收口到同一实现（纯函数模块，
+        //   零 import 零副作用），V2/V3 行为逐字不变（该函数首行即 `if (data.data) return data.data`）。
+        const data = GetV2CharDataFromV1(charDataRaw);
         const charName = (data.name || "unknown").trim();
 
         if (!charName) {

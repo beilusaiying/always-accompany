@@ -268,7 +268,9 @@
   max-width: 100vw;
   max-height: 100vh;
   border-radius: 0;
-  transform: none;
+  /* !important 必须带：openPromptViewer/拖拽会写 inline transform（promptViewer.mjs:74/107/183），
+     无 !important 时 inline translate(-50%,-50%) 压过本规则 → 最大化窗口被平移出屏（0808 放大空白bug） */
+  transform: none !important;
 }
 
 /* 标题栏 */
@@ -491,11 +493,24 @@
 
 .pv-message-preview {
   flex: 1;
+  /* [0808 溢出修] flex item 默认 min-width:auto——nowrap 长 preview 把 header 撑到内容宽，
+     整个查看器面板横向溢出屏幕左侧（凛倾截图：只剩右端 token 数可见）。min-width:0 让
+     ellipsis 真正生效（flex 收缩允许）。 */
+  min-width: 0;
   font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(196, 181, 253, 0.7);
+}
+
+/* [0808 溢出修·防御] 长 identifier/name 标签同病防线（截断不撑行） */
+.pv-ident-tag,
+.pv-name-tag {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pv-message-chars {

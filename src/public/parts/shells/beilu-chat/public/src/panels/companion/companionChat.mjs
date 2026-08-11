@@ -18,6 +18,7 @@ import { sendAction } from "../../shared/transport/sendAction.mjs";
 import { escapeHtml } from "../../shared/state/utils.mjs";
 import { handleFilesSelect } from "../../shared/chat-core/fileHandling.mjs"; // 0725 对话台上传:与主输入条同一条附件链(校验/base64/预览渲染单源)
 import { ensureChatWebSocket } from "../../shared/transport/websocket.mjs";
+import { createVisibilityPoller } from "../../shared/state/windowRuntime.mjs"; // [0808 机制] 前台/后台刷新分级单源
 
 let _chatid = "";      // 面板当前承载对话
 let _selFiles = [];    // 待发附件({name,mime_type,buffer(base64),description},形状=fileHandling 产出;发送即清)
@@ -312,6 +313,12 @@ export function initCompanionChat() {
   });
   // isComposing:中文输入法候选确认的 Enter 不触发发送
   document.getElementById("comp-say-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) _send(); });
-  if (!_timer) _timer = setInterval(() => _refresh(false), 3000);
+  // [0808 windowRuntime 机制] 3s 轮询接可见性生命周期：原 _visible() guard 只挡请求不停 timer
+  //   （后台 3s 空转常醒），现后台真暂停、转可见立即 _refresh 补拉。_refresh 内部 _visible() 守卫
+  //   保留（分段级二次防线）。首拉仍用 force=true 语义，故保留手动 _refresh(true)，工厂 tick 走增量。
+  if (!_timer) {
+    _timer = createVisibilityPoller({ tick: () => _refresh(false), intervalMs: 3000, visible: _visible, immediateOnShow: true, label: "companionChat" });
+    _timer.start();
+  }
   _refresh(true);
 }

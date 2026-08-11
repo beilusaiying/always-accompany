@@ -308,7 +308,7 @@ window._beiluCurWinChatId = () => _curWinId;
  *  消费方＝chat.mjs switchCharacterScope（一切切换的殊途同归点，挡一处覆盖所有入口）。 */
 /** 草稿的窗口维度出口（凛倾 0727 状态包里的「输入框草稿」）。
  *  【why 有这个桥】messageInput 原本把草稿存成**全局单份**（KEYS.BEILU_CHAT_DRAFT，
- *    理由见 messageInput.mjs:73「#message-input 是全模式共享的同一个 DOM」）。多窗口下
+ *    理由见 messageInput.mjs:73「#send_textarea 是全模式共享的同一个 DOM」）。多窗口下
  *    输入区仍然共用那一个框，但草稿必须按窗口分——两套并行写同一个框就是双源：
  *    程序给 .value 赋值不触发 input 事件 → 全局键停在上一个窗口的文本 → 刷新后
  *    _restoreDraft 把别的窗口的草稿恢复到当前窗口里。
@@ -413,7 +413,7 @@ function _prepareWinSwitchDeps() {
 
 /**
  * id 后缀开关：**显示的窗口用标准 id，隐藏的窗口 id 加后缀**。
- * 【why】两个窗口同时挂在 DOM 上，#chat-messages / #message-input 这些 id 会重复，
+ * 【why】两个窗口同时挂在 DOM 上，#chat-messages / #send_textarea 这些 id 会重复，
  *   而全项目 1356 处 getElementById 都按标准名找元素。让隐藏窗口的 id 带后缀，
  *   标准名在任一时刻**只属于当前显示的那个窗口** → 所有现成链路零改动，天然打到当前窗口。
  */
@@ -500,7 +500,7 @@ async function _showWin(chatid, { loadContent = false } = {}) {
   const initialDataPromise = needsContent ? deps.endpoints.getInitialData() : null;
 
   // 离开前把当前窗口的草稿收起来（输入区共用，内容按窗口存）
-  const input = document.getElementById("message-input");
+  const input = document.getElementById("send_textarea");
   if (input && previousWinId) _setDraft(previousWinId, input.value);
   for (const [cid, el] of _winEls) {
     const isTarget = cid === target;
@@ -1276,7 +1276,7 @@ export function initLineManager(activityBar) {
   //   pagehide 覆盖刷新/关页/前后台切走（beforeunload 在移动端与 bfcache 下不可靠）。
   window.addEventListener("pagehide", () => {
     try {
-      const inp = document.getElementById("message-input");
+      const inp = document.getElementById("send_textarea");
       if (inp && _curWinId) _setDraft(_curWinId, inp.value);
     } catch { /* 卸载期异常不影响退出 */ }
   });

@@ -59,8 +59,8 @@ export const PROVIDER_META = {
   deepseek: { label: "DeepSeek", defaultUrl: "https://api.deepseek.com/chat/completions", hint: "思考模式下 temperature/top_p/惩罚参数会被静默忽略" },
   kimi: { label: "Kimi（Moonshot）", defaultUrl: "https://api.moonshot.cn/v1/chat/completions", hint: "思维链经 thinking.type 开关；kimi-k2.7-code 强制思考，传关闭会报错（2026-08-01 官方文档核实）" },
   qwen: { label: "Qwen（通义 DashScope）", defaultUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", hint: "开启思考（enable_thinking）必须用流式；temperature 不能为 0；不同地区站点 base_url 不同" },
-  "openai-reasoning": { label: "OpenAI 推理系（o1/o3/o4）", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "" },
-  openai: { label: "OpenAI", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "" },
+  "openai-reasoning": { label: "OpenAI 推理系（o1/o3/o4）", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "选择并保存后，发送前会自动移除本地内部展示字段（_identifier/_name/_section 等），并把公开 OpenAI 的旧 max_tokens 转为 max_completion_tokens。本机 8317 Codex 订阅网关不支持输出上限和采样字段，发送前会移除并在终端列出。提示词内容和消息顺序不变；此渠道仍按 OpenAI 推理协议把 system 转为 developer。" },
+  openai: { label: "OpenAI", defaultUrl: "https://api.openai.com/v1/chat/completions", hint: "选择并保存后，发送前会自动移除本地内部展示字段（_identifier/_name/_section 等），并把公开 OpenAI 的旧 max_tokens 转为 max_completion_tokens。本机 8317 Codex 订阅网关不支持输出上限和采样字段，发送前会移除并在终端列出。提示词内容、角色和消息顺序不变。" },
   generic: { label: "通用 OpenAI 兼容（本地/自部署）", defaultUrl: "http://localhost:1234/v1/chat/completions", hint: "LM Studio/vLLM/llama.cpp server/koboldcpp 等本地引擎的 OpenAI 兼容端点均走此渠道" },
 };
 

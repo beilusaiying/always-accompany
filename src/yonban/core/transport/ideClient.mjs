@@ -737,10 +737,12 @@ class IdeClient {
 
   /**
    * 会话路由：chatid 绑定的实例连接（bindIdeInstance 上报）优先。
-   * [窗口id 0726 凛倾方案·容错自愈] 绑定死时不再静默回退主连接（错窗执行风险），而是**按工作区身份自愈**：
-   *   扫池找同根（workspaceRoot==绑定根快照）活连接 → 重绑跟随（窗口重启换端口/同工作区重开窗口都自动接回）；
-   *   无同根活窗口 → 诚实降级 null（调用方报「所绑窗口已关闭」，禁跨工作区执行）。
-   *   无根快照（绑定从未活过=拿不到身份）→ 回退主连接（旧行为，无据可比时不武断拒绝）。
+   * [窗口id 0726 凛倾方案·容错自愈] 绑定死时不再静默回退主连接（错窗执行风险），三级认回：
+   *   ① 绑定端口活且编号一致→认；② 编号在池内找回（换端口）/②b 工作区稳定段唯一候选回迁（anon 不参与，多候选拒猜）；
+   *   ③ 全部找不回 → **只要绑定过一律诚实降级 null**（:797-801，调用方报「所绑窗口已关闭」，禁跨工作区执行）。
+   *   只有**从未绑定过**的会话才走主连接（:804，无归属非错窗）。
+   *   [0808 注释校准·治理清单 37 对抗验证发现] 原头注释"无根快照→回退主连接（旧行为）"与代码不符
+   *   ——③ 分支并无按根快照回退主连接的路径，照旧注释理解会误判降级语义，已按实际行为改写。
    * @param {string|null} chatid
    * @param {object|null} [routeOut] - 可选出参：诚实降级时置 routeOut.degraded={boundPort,boundRoot}
    * @returns {object|null} 连接条目，全池无活连接或降级返回 null
@@ -3212,6 +3214,17 @@ class IdeClient {
       this._approvalSubmissionReceipts.delete(key);
       approvalSubmissionReceiptsRemoved++;
     }
+    // [0808 治理·清理链补漏] 审批队列本体随会话删除清理（治理清单 循环08 #1：原 16 项清理唯独漏
+    //   _pendingApprovals，:3210 清的 _approvalSubmissionReceipts 是提交收据不是队列——删对话后
+    //   pending 条目永久滞留=僵尸审批，角标/面板还能看到已删会话的待批项）。
+    //   不走 rejectOperation（它会 enqueuePendingResult 拒绝消息续喂——会话已删无线可喂）；
+    //   条目的 checkpointId 均为本会话检查点（cp_${chatId}_… :3386），随会话消亡无跨会话阻塞，直接摘除。
+    let pendingApprovalsRemoved = 0;
+    if (Array.isArray(this._pendingApprovals) && this._pendingApprovals.length) {
+      const _apBefore = this._pendingApprovals.length;
+      this._pendingApprovals = this._pendingApprovals.filter((o) => o?.chatid !== chatid);
+      pendingApprovalsRemoved = _apBefore - this._pendingApprovals.length;
+    }
     this._diagRepeat?.delete(chatid);
     this._lastDiagSig?.delete(chatid);
     this._externalChanges?.delete(chatid);
@@ -3231,8 +3244,9 @@ class IdeClient {
       pendingResultsRemoved,
       operationHistoryRemoved,
       approvalSubmissionReceiptsRemoved,
+      pendingApprovalsRemoved,
     });
-    return { pendingRequestsDetached, pendingResultsRemoved, operationHistoryRemoved, approvalSubmissionReceiptsRemoved };
+    return { pendingRequestsDetached, pendingResultsRemoved, operationHistoryRemoved, approvalSubmissionReceiptsRemoved, pendingApprovalsRemoved };
   }
 
   /**

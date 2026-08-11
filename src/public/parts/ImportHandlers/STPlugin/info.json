@@ -1,0 +1,39 @@
+{
+	"en-UK": {
+		"name": "Tavern Plugin Importer",
+		"avatar": "https://api.iconify.design/mdi/puzzle-plus-outline.svg",
+		"description": "Imports third-party tavern-style plugins from git repository URLs.",
+		"description_markdown": "Paste a git repository URL (e.g. a GitHub link to a tavern-style plugin) to download it into the Tavern Plugin Interface. The repository must contain a valid `manifest.json`; invalid downloads are rolled back automatically.",
+		"version": "0.1.0",
+		"author": "beilu",
+		"tags": [
+			"tavern",
+			"plugin",
+			"import"
+		]
+	},
+	"zh-CN": {
+		"name": "酒馆插件导入器",
+		"avatar": "https://api.iconify.design/mdi/puzzle-plus-outline.svg",
+		"description": "从 git 仓库网址导入酒馆系第三方插件。",
+		"description_markdown": "粘贴 git 仓库网址（如酒馆系插件的 GitHub 链接）即可下载进酒馆插件接口。仓库必须含合法的 `manifest.json`，不合法的下载会自动回滚删除。",
+		"version": "0.1.0",
+		"author": "beilu",
+		"tags": [
+			"酒馆",
+			"插件",
+			"导入"
+		]
+	},
+	"emoji": {
+		"name": "🍺🧩⬇️",
+		"avatar": "https://api.iconify.design/mdi/puzzle-plus-outline.svg",
+		"description": "🔗➡️🍺🧩",
+		"version": "0.1.0",
+		"author": "beilu",
+		"tags": [
+			"🧩",
+			"⬇️"
+		]
+	}
+}

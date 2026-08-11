@@ -7,6 +7,7 @@
  *   fetchChatCompletionWithRetry(messages, options, config) → Promise<result>
  */
 
+import { createHash } from "node:crypto";
 import { postProcessMessages, stripReasoningTags } from "./messageTransform.mjs";
 import { wbT, wbD } from "../../../../../../server/wbStub.mjs";
 import { adaptForProvider } from "./apiAdapters.mjs";
@@ -23,6 +24,226 @@ import { assertSafeOutboundInServerMode } from "../../../security/safe_fetch.mjs
 import { paramDefault } from "../../../prompt/preset/engine/paramSchema.mjs";
 // [0727 并发闸] 用户级 AI 同时运行上限（凛倾：3窗×5分身=18路同飞需要可调节）
 import { acquireAiSlot } from "./aiConcurrencyGate.mjs";
+import {
+  findVolatileStart,
+  VOLATILE_TAG_RE,
+} from "../../_shared/volatileBoundary.mjs";
+
+const LOCAL_CODEX_SUBSCRIPTION_UNSUPPORTED_FIELDS = [
+  "max_tokens",
+  "max_completion_tokens",
+  "max_output_tokens",
+  "temperature",
+  "top_p",
+  "top_k",
+  "top_a",
+  "min_p",
+  "frequency_penalty",
+  "presence_penalty",
+  "repetition_penalty",
+  "seed",
+  "n",
+  "user",
+  "prompt_cache_options",
+  "prompt_cache_retention",
+];
+
+function isLocalCodexSubscriptionGateway(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    const isLoopback =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "[::1]" ||
+      parsed.hostname === "::1";
+    const path = parsed.pathname.replace(/\/+$/g, "") || "/";
+    return (
+      isLoopback &&
+      parsed.port === "8317" &&
+      (path === "/v1" || path === "/v1/chat/completions")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * OpenAI 参数边界：公开 Chat 使用当前字段名；固定本机 8317 则遵循 Codex 订阅
+ * Responses 请求契约。这里只处理顶层 API 参数，不读取或改写 messages。
+ */
+function applyOpenAIRequestParameterContract(body, { provider, url }) {
+  if (provider !== "openai" && provider !== "openai-reasoning") return body;
+
+  if (isLocalCodexSubscriptionGateway(url)) {
+    const removed = [];
+    for (const field of LOCAL_CODEX_SUBSCRIPTION_UNSUPPORTED_FIELDS) {
+      if (!Object.hasOwn(body, field)) continue;
+      delete body[field];
+      removed.push(field);
+    }
+    if (removed.length > 0) {
+      console.log(
+        `[proxy/httpFetch] 本机 Codex 订阅网关不接受这些公开 API 参数，发送前已移除: ${removed.join(", ")}`,
+      );
+      wbT(null, "ai:request", "codex_subscription_parameter_omit", {
+        fields: removed,
+      });
+    }
+    return body;
+  }
+
+  if (Object.hasOwn(body, "max_tokens")) {
+    if (
+      Object.hasOwn(body, "max_completion_tokens") &&
+      body.max_completion_tokens !== body.max_tokens
+    ) {
+      throw new Error(
+        "OpenAI 请求同时设置了不同值的 max_tokens 与 max_completion_tokens；请只保留一个输出上限",
+      );
+    }
+    if (!Object.hasOwn(body, "max_completion_tokens")) {
+      body.max_completion_tokens = body.max_tokens;
+    }
+    delete body.max_tokens;
+    console.log(
+      "[proxy/httpFetch] OpenAI Chat: 已把旧字段 max_tokens 转为 max_completion_tokens",
+    );
+  }
+
+  return body;
+}
+
+function buildPromptCacheKey(chatId) {
+  const normalizedChatId = String(chatId ?? "").trim();
+  if (!normalizedChatId) return null;
+
+  return createHash("sha256")
+    .update(JSON.stringify(["beilu-openai-prompt-cache-v1", normalizedChatId]), "utf8")
+    .digest("hex");
+}
+
+const OPENAI_CACHEABLE_BLOCK_TYPES = new Set([
+  "text",
+  "image_url",
+  "input_audio",
+  "file",
+  "refusal",
+]);
+
+function splitMessageBeforeVolatileTag(message) {
+  const content = message?.content;
+  const splitText = (text) => {
+    const match = String(text || "").match(VOLATILE_TAG_RE);
+    if (!match || match.index === undefined) return null;
+    let index = match.index;
+    // mergeConsecutiveRoles 用两个换行拼接消息。把该拼接符留在易变侧，确保本轮
+    // 最新 user 的断点前缀与下一轮历史中的同一 user 保持逐字一致。
+    if (index >= 2 && text.slice(0, index).endsWith("\n\n")) index -= 2;
+    return index;
+  };
+
+  if (typeof content === "string") {
+    const index = splitText(content);
+    if (index === null || index <= 0) return -1;
+    message.content = [
+      { type: "text", text: content.slice(0, index) },
+      { type: "text", text: content.slice(index) },
+    ];
+    return 0;
+  }
+
+  if (!Array.isArray(content)) return -1;
+  for (let i = 0; i < content.length; i++) {
+    const part = content[i];
+    if (part?.type !== "text" || typeof part.text !== "string") continue;
+    const index = splitText(part.text);
+    if (index === null) continue;
+
+    const next = content.map((item) => ({ ...item }));
+    const replacement = [];
+    let stablePartIndex = i - 1;
+    if (index > 0) {
+      replacement.push({ ...part, text: part.text.slice(0, index) });
+      stablePartIndex = i;
+    }
+    replacement.push({ ...part, text: part.text.slice(index) });
+    next.splice(i, 1, ...replacement);
+    message.content = next;
+    return stablePartIndex;
+  }
+  return -1;
+}
+
+function markOpenAICacheBreakpoint(message, maxPartIndex = Infinity) {
+  const content = message?.content;
+  if (typeof content === "string") {
+    if (!content) return false;
+    message.content = [
+      {
+        type: "text",
+        text: content,
+        prompt_cache_breakpoint: { mode: "explicit" },
+      },
+    ];
+    return true;
+  }
+  if (!Array.isArray(content)) return false;
+
+  for (let i = Math.min(content.length - 1, maxPartIndex); i >= 0; i--) {
+    const part = content[i];
+    if (!part || !OPENAI_CACHEABLE_BLOCK_TYPES.has(part.type)) continue;
+    content[i] = {
+      ...part,
+      prompt_cache_breakpoint: { mode: "explicit" },
+    };
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 在最终 Chat Completions 消息形状上放两个滚动 user 断点：上一 user 用于匹配
+ * 上一轮写入的精确前缀，最新 user 为下一轮写入。只改变 content block 结构，文本拼接不变。
+ */
+function applyOpenAIExplicitPromptCache(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return 0;
+
+  const cloned = messages.map((message) => ({
+    ...message,
+    content: Array.isArray(message?.content)
+      ? message.content.map((part) => ({ ...part }))
+      : message?.content,
+  }));
+  messages.splice(0, messages.length, ...cloned);
+
+  const volatileStart = findVolatileStart(messages);
+  const stableMessageEnd = volatileStart >= 0 ? volatileStart : messages.length;
+  const candidates = [];
+
+  for (let i = 0; i < stableMessageEnd; i++) {
+    if (messages[i]?.role === "user") candidates.push({ messageIndex: i });
+  }
+
+  if (volatileStart >= 0 && messages[volatileStart]?.role === "user") {
+    const stablePartIndex = splitMessageBeforeVolatileTag(messages[volatileStart]);
+    if (stablePartIndex >= 0) {
+      candidates.push({ messageIndex: volatileStart, maxPartIndex: stablePartIndex });
+    }
+  }
+
+  let marked = 0;
+  for (const candidate of candidates.slice(-2)) {
+    if (
+      markOpenAICacheBreakpoint(
+        messages[candidate.messageIndex],
+        candidate.maxPartIndex,
+      )
+    ) {
+      marked++;
+    }
+  }
+  return marked;
+}
 
 /**
  * 调用基础模型。
@@ -90,6 +311,14 @@ export async function fetchChatCompletion(
     ...filteredModelArgs,
     ...(adapted.extraFields || {}),
   };
+
+  // 只对 UI 中明确的 OpenAI / OpenAI 推理系 provider 写入官方缓存路由键。
+  // 哈希前的 chat id 只存在于进程内 callConfig，不进入上游请求。
+  let beiluPromptCacheKey = null;
+  if (_provider === "openai" || _provider === "openai-reasoning") {
+    beiluPromptCacheKey = buildPromptCacheKey(config._prompt_cache_chat_id);
+    if (beiluPromptCacheKey) requestBodyObj.prompt_cache_key = beiluPromptCacheKey;
+  }
 
   // DeepSeek 专项预处理（top_p 兜底 + tools required 清理 + 参数过滤）
   requestBodyObj = patchBodyForDeepSeek(requestBodyObj, {
@@ -163,20 +392,56 @@ export async function fetchChatCompletion(
   // 三态映射单点（全渠道，按显式声明的 provider 分发；""=不发参数）
   requestBodyObj = applyThinkingMode(requestBodyObj, { provider: _provider, mode: _thinkingMode });
 
-  // ★ 内部元数据剥离（2026-07-07，对标本机代理参考实现的剥离逻辑）：
-  //   _identifier/_section/_name/_source 等 _ 前缀字段是 beilu 内部路由元数据。
-  //   本机代理靠它做 metadata 模式（INJ 提升/断点定位）→ 保留；
-  //   外部端点不该收内部元数据（泄内部结构+严格 schema 中转可能 400）→ 发送前剥。
+  // 公开 OpenAI GPT-5.6+ 可选显式缓存：只在用户按源开启、存在本地 chatid 派生 key、
+  // 且最终消息确实插入断点时启用 request-wide explicit policy。没有静默兼容重试；
+  // 旧模型/中转拒绝该字段时，现有 HTTP 错误链会把 400 原样交给用户。
+  if (
+    (_provider === "openai" || _provider === "openai-reasoning") &&
+    config.convert_config?.openai_explicit_prompt_cache === true &&
+    beiluPromptCacheKey
+  ) {
+    const marked = applyOpenAIExplicitPromptCache(requestBodyObj.messages);
+    if (marked > 0) {
+      const existingOptions =
+        requestBodyObj.prompt_cache_options &&
+        typeof requestBodyObj.prompt_cache_options === "object" &&
+        !Array.isArray(requestBodyObj.prompt_cache_options)
+          ? requestBodyObj.prompt_cache_options
+          : {};
+      requestBodyObj.prompt_cache_options = {
+        ...existingOptions,
+        mode: "explicit",
+      };
+    }
+  }
+
+  // OpenAI 顶层参数只在最终出站边界处理一次。公开 Platform 保留输出上限语义并换成
+  // 当前 Chat 字段；固定本机 8317 Codex 订阅端点没有这些字段，按其官方请求形状省略。
+  // 该适配不接触 messages，因此不会改变提示词文本、角色或顺序。
+  requestBodyObj = applyOpenAIRequestParameterContract(requestBodyObj, {
+    provider: _provider,
+    url: config.url,
+  });
+
+  // ★ 内部元数据剥离（2026-08-10 OpenAI 本机端点根修）：
+  //   _identifier/_section/_name/_source 等 _ 前缀字段只供 beilu 本地展示/定位，不是 OpenAI 字段。
+  //   旧逻辑把所有 localhost 都视为 metadata 代理并保留，导致显式 OpenAI 指向本机 Codex API 时
+  //   严格 schema 返回 400。provider 是用户选择的协议真源：OpenAI 两渠道无论地址是否本机都剥离；
+  //   其他本机代理仍保留既有 metadata 模式，外部端点仍按原规则剥离。
   {
     const _isLocalUrl = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(String(config.url || ""));
-    if (!_isLocalUrl && Array.isArray(requestBodyObj.messages)) {
+    const _usesOpenAIWireSchema = _provider === "openai" || _provider === "openai-reasoning";
+    if ((_usesOpenAIWireSchema || !_isLocalUrl) && Array.isArray(requestBodyObj.messages)) {
       let _stripped = 0;
       for (const _m of requestBodyObj.messages) {
         for (const _k of Object.keys(_m)) {
           if (_k.startsWith("_")) { delete _m[_k]; _stripped++; }
         }
       }
-      if (_stripped > 0) console.log(`[proxy/httpFetch] 外部端点: 剥离 ${_stripped} 个内部元数据字段(_*)`);
+      if (_stripped > 0) {
+        const _stripReason = _usesOpenAIWireSchema ? `OpenAI渠道(${_provider})` : "外部端点";
+        console.log(`[proxy/httpFetch] ${_stripReason}: 剥离 ${_stripped} 个内部元数据字段(_*)`);
+      }
     }
   }
 
@@ -271,7 +536,14 @@ export async function fetchChatCompletion(
 
   const decoder = new TextDecoder();
   let buffer = "";
-  let isSSE = false;
+  // [0808 根修·SSE 判定按响应头] 原仅靠 body 出现 "data:" 行才认定 SSE（下方正则嗅探）：上游以
+  //   SSE 注释行（":ok"/":heartbeat"，SSE 规范中冒号开头=注释）开头且未产出任何 data 事件就收尾时，
+  //   永远嗅探不中 → 整个 buffer 被当 JSON 解析报 "Failed to parse response as JSON"、真实为
+  //   「上游空流」的故障被折叠成静默空回复（0808 实证 buffer=":ok\n\n"）。Content-Type:
+  //   text/event-stream 是上游对流式的一等声明，以它为权威判定；body 嗅探保留作无头/错头上游的
+  //   兜底——两判定只增不减，对既有正常流零行为变化。
+  let isSSE = /text\/event-stream/i.test(response.headers?.get?.("content-type") || "");
+  if (isSSE) wbT(null, "ai:stream", "sse_start", { via: "content-type" });
 
   const imageProcessingPromises = [];
 
@@ -331,6 +603,96 @@ export async function fetchChatCompletion(
     ]).finally(() => clearTimeout(timer));
   };
 
+  // [0808 根修·尾行 flush 配套] SSE 单行解析——原 while 循环内 for 循环体原样提取
+  //   （continue→return，行为不变）。提取成单一实现使「流中逐行」与「流结束后残余 buffer
+  //   补处理」共用一份解析逻辑，不复制两份。
+  const _handleSseLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+
+    const data = trimmed.slice(5).trim();
+    if (data === "[DONE]") return;
+
+    // 过滤非JSON内容（某些反代在流末尾发送纯文本错误信息如 "unexpected EOF"）
+    if (!data.startsWith("{") && !data.startsWith("[")) {
+      if (data.length > 0) {
+        console.warn(
+          `[proxy/stream] 跳过非JSON SSE data: "${data.substring(0, 100)}"`,
+        );
+      }
+      return;
+    }
+
+    try {
+      const json = JSON.parse(data);
+
+      // 检测 SSE 流中的 API 错误（反代返回 HTTP 200 但 body 中含错误）
+      if (json.error) {
+        const errMsg =
+          json.error.message ||
+          json.error.status ||
+          JSON.stringify(json.error);
+        const errCode = json.error.code || "UNKNOWN";
+        console.error(
+          `[proxy/fetchChatCompletion] SSE 流中检测到 API 错误: code=${errCode}, message=${errMsg}`,
+        );
+        wbD(null, "ai:stream", "sse_body_error", false, `SSE流内API错误 code=${errCode}`, { code: errCode, message: errMsg });
+        // [0727 吞错收口] 本 throw 原被下方 JSON 解析 catch 就地吞掉（只 warn 不上抛），
+        //   真实 API 错误被折叠成"空回复"——调用方按空回空转重试（0727 CLONE_2 卡 600s 实证）。
+        //   打 _sseApiError 标记让解析 catch 放行；errCode 是 HTTP 形态数字时挂 err.status，
+        //   withRetry 的 429/5xx 分类器即可正确决定退避重试。
+        const _sseErr = new Error(`API Error (${errCode}): ${errMsg}`);
+        _sseErr._sseApiError = true;
+        const _numCode = Number(errCode);
+        if (Number.isInteger(_numCode) && _numCode >= 100 && _numCode < 600) _sseErr.status = _numCode;
+        throw _sseErr;
+      }
+
+      const delta = json.choices?.[0]?.delta;
+      const message = json.choices?.[0]?.message; // Some non-standard streams might send full message
+
+      // [0727 终止原因入链] finish_reason 是上游对"为什么停"的一等声明（stop=自然完成/
+      //   length=截断/content_filter 等），此前解析层直接丢弃——"干净截断"与"自然完成"在
+      //   本体全链不可区分（0727 A窗 20字残句被当成功收尾实证）。单点捕获挂 result，
+      //   下游（StructCall 回灌 extension → 回合末续写决策/外显）消费。取最后一个非空值。
+      const _finishReason = json.choices?.[0]?.finish_reason;
+      if (_finishReason) result.finish_reason = _finishReason;
+
+      // 处理思维链/推理内容（Gemini/DeepSeek 等模型的 thinking 阶段）
+      const reasoning =
+        delta?.reasoning_content ||
+        delta?.reasoning ||
+        message?.reasoning_content ||
+        "";
+      if (reasoning) {
+        if (!result._reasoning_started) {
+          result._reasoning_started = true;
+          result.content += "<think>\n";
+        }
+        result.content += reasoning;
+        previewUpdater?.(result); // [2026-08-01] 可选回调，同 processImages 处注释
+      }
+
+      const content = delta?.content || message?.content || "";
+      if (content) {
+        // 思维链结束，关闭 <think> 标签
+        if (result._reasoning_started && !result._reasoning_ended) {
+          result._reasoning_ended = true;
+          result.content += "\n</think>\n";
+        }
+        result.content += content;
+        previewUpdater?.(result); // [2026-08-01] 可选回调，同 processImages 处注释
+      }
+
+      // Handle images if present in delta or message (Custom extension support)
+      const images = delta?.images || message?.images;
+      if (images) processImages(images);
+    } catch (e) {
+      if (e && e._sseApiError) throw e; // 流内 API 错误上抛给重试层，不当解析噪音吞掉
+      console.warn("Error parsing stream data:", e);
+    }
+  };
+
   try {
     while (true) {
       if (signal?.aborted) {
@@ -351,94 +713,17 @@ export async function fetchChatCompletion(
       if (isSSE) {
         const lines = buffer.split("\n");
         buffer = lines.pop(); // Keep incomplete line
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-
-          const data = trimmed.slice(5).trim();
-          if (data === "[DONE]") continue;
-
-          // 过滤非JSON内容（某些反代在流末尾发送纯文本错误信息如 "unexpected EOF"）
-          if (!data.startsWith("{") && !data.startsWith("[")) {
-            if (data.length > 0) {
-              console.warn(
-                `[proxy/stream] 跳过非JSON SSE data: "${data.substring(0, 100)}"`,
-              );
-            }
-            continue;
-          }
-
-          try {
-            const json = JSON.parse(data);
-
-            // 检测 SSE 流中的 API 错误（反代返回 HTTP 200 但 body 中含错误）
-            if (json.error) {
-              const errMsg =
-                json.error.message ||
-                json.error.status ||
-                JSON.stringify(json.error);
-              const errCode = json.error.code || "UNKNOWN";
-              console.error(
-                `[proxy/fetchChatCompletion] SSE 流中检测到 API 错误: code=${errCode}, message=${errMsg}`,
-              );
-              wbD(null, "ai:stream", "sse_body_error", false, `SSE流内API错误 code=${errCode}`, { code: errCode, message: errMsg });
-              // [0727 吞错收口] 本 throw 原被 :436 的 JSON 解析 catch 就地吞掉（只 warn 不上抛），
-              //   真实 API 错误被折叠成"空回复"——调用方按空回空转重试（0727 CLONE_2 卡 600s 实证）。
-              //   打 _sseApiError 标记让解析 catch 放行；errCode 是 HTTP 形态数字时挂 err.status，
-              //   withRetry 的 429/5xx 分类器（:645-648）即可正确决定退避重试。
-              const _sseErr = new Error(`API Error (${errCode}): ${errMsg}`);
-              _sseErr._sseApiError = true;
-              const _numCode = Number(errCode);
-              if (Number.isInteger(_numCode) && _numCode >= 100 && _numCode < 600) _sseErr.status = _numCode;
-              throw _sseErr;
-            }
-
-            const delta = json.choices?.[0]?.delta;
-            const message = json.choices?.[0]?.message; // Some non-standard streams might send full message
-
-            // [0727 终止原因入链] finish_reason 是上游对"为什么停"的一等声明（stop=自然完成/
-            //   length=截断/content_filter 等），此前解析层直接丢弃——"干净截断"与"自然完成"在
-            //   本体全链不可区分（0727 A窗 20字残句被当成功收尾实证）。单点捕获挂 result，
-            //   下游（StructCall 回灌 extension → 回合末续写决策/外显）消费。取最后一个非空值。
-            const _finishReason = json.choices?.[0]?.finish_reason;
-            if (_finishReason) result.finish_reason = _finishReason;
-
-            // 处理思维链/推理内容（Gemini/DeepSeek 等模型的 thinking 阶段）
-            const reasoning =
-              delta?.reasoning_content ||
-              delta?.reasoning ||
-              message?.reasoning_content ||
-              "";
-            if (reasoning) {
-              if (!result._reasoning_started) {
-                result._reasoning_started = true;
-                result.content += "<think>\n";
-              }
-              result.content += reasoning;
-              previewUpdater?.(result); // [2026-08-01] 可选回调，同 :307 注释
-            }
-
-            const content = delta?.content || message?.content || "";
-            if (content) {
-              // 思维链结束，关闭 <think> 标签
-              if (result._reasoning_started && !result._reasoning_ended) {
-                result._reasoning_ended = true;
-                result.content += "\n</think>\n";
-              }
-              result.content += content;
-              previewUpdater?.(result); // [2026-08-01] 可选回调，同 :307 注释
-            }
-
-            // Handle images if present in delta or message (Custom extension support)
-            const images = delta?.images || message?.images;
-            if (images) processImages(images);
-          } catch (e) {
-            if (e && e._sseApiError) throw e; // 流内 API 错误上抛给重试层，不当解析噪音吞掉
-            console.warn("Error parsing stream data:", e);
-          }
-        }
+        for (const line of lines) _handleSseLine(line);
       }
+    }
+
+    // [0808 根修·尾行 flush] 上游最后一个 chunk 若无结尾换行，最后一条 "data:" 行会留在 buffer
+    //   里被整段丢弃（SSE 分支只在收到新 chunk 时切行，流结束后不回头处理残余 buffer）——
+    //   「官方 API 结果被我们这边截断」同族根因。流结束后把残余 buffer 按同一行解析器补处理，不丢尾。
+    if (isSSE && buffer.trim()) {
+      const _tail = buffer;
+      buffer = "";
+      for (const line of _tail.split("\n")) _handleSseLine(line);
     }
 
     wbT(null, "ai:stream", "stream_end", { isSSE, chunks: totalChunks, bytes: totalBytes, contentLen: result.content?.length || 0 });

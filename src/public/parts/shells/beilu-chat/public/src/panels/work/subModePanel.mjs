@@ -35,7 +35,7 @@
  *   管理面板可增删改子模式，调整预设名/API 源/启用状态，保存后全局生效。
  */
 
-import { getCurrentMode } from "../feature/featureControls.mjs"; // [D3 0804] switchModeTo 已不再引：跨组切换收口后端 activateSubMode verb 内部重入 switchMode 管线
+import { getCurrentMode, getWindowInstanceToken } from "../feature/featureControls.mjs"; // [D3 0804] switchModeTo 已不再引：跨组切换收口后端 activateSubMode verb 内部重入 switchMode 管线；[0808] getWindowInstanceToken=跨组切换回流的本窗识别令牌
 import { showToast as _toast } from "../../../../../../scripts/toast.mjs"; // 0716 轮子收口：toast 权威单源（原走 _beiluPublicShowToast 二级窗口桥+手绘 DOM 降级=第二套 toast UI）
 import { TAB_TO_MODE, PRESET_INHERIT_LABEL, MODEL_SOURCE_DEFAULT_LABEL } from "../../shared/state/modeTabMap.mjs"; // tab→mode 单一权威（禁内联第二张映射表,T-3教训）；PRESET_INHERIT_LABEL=未绑定预设文案单源 [D6 0713]；MODEL_SOURCE_DEFAULT_LABEL=源默认模型选项文案单源 [0716]
 import { escapeHtml as _esc, formatRelativeTime as _relTime } from "../../shared/state/utils.mjs"; // [合并批 0714] _relTime 手抄副本删除 → utils 单源（别名保调用点）
@@ -1453,7 +1453,9 @@ async function _switchToSubMode(mode) {
   var _swCid = _getCurrentChatId();
   var data;
   try {
-    data = await sendAction({ verb: "activateSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: mode.id, chatId: _swCid } });
+    // [0808 模式=窗口身份] windowToken：跨组切换时后端 mode_changed 广播回显此令牌，
+    //   本窗 _beiluApplyModeFromWs 识别为本窗回流才翻转模式态（:1451 契约的令牌化实现）。
+    data = await sendAction({ verb: "activateSubMode", target: "plugins:beilu-memory", source: "web", payload: { id: mode.id, chatId: _swCid, windowToken: getWindowInstanceToken() } });
   } catch (e) {
     console.warn("[subModePanel] activateSubMode 请求失败:", e.message);
     _showToast("⚠️ 子模式切换失败: " + e.message, 3000);

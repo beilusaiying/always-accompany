@@ -40,6 +40,7 @@ import { createDiag } from "../state/diagLogger.mjs";
 import { buildInjectionScript, detectNeeds } from "../../stCompat/index.mjs";
 import { sendAction } from "../transport/sendAction.mjs"; // T6b：出向统一门面
 import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
+import { onEventBus, emitEventBusDetached } from "../state/eventBusCore.mjs"; // [0807 转接二期#6] 总线创建/订阅单源；[R7] 渲染事件 producer
 import { DEFAULTS } from "../../config/defaults.mjs"; // 0719 收口：sandbox 缺省档单源（原与 settings.mjs 各写一份字面量）
 
 const diag = createDiag("iframeRenderer");
@@ -203,6 +204,84 @@ function beiluAudioSetVolume(vol, options = {}) {
 // 本轮脚本注入的 id 集合(generation_ended 后自动清)
 const _oneShotInjectIds = new Set();
 
+// ============================================================
+// [0807 转接二期#8·凛倾定案] setExtensionPrompt → INJ（常驻可编辑条目）单源实现。
+//   凛倾拍板：只放 INJ、只做「历史对话之前/之后」二区+排序，其他（eventData.chat 可变管道等）不做；
+//   条目必须可编辑——所以走常驻 injection_prompts（inj-edit tab 全字段可编辑/可删/可启禁），
+//   不走上面 _beiluInjectPrompts 的 one-shot 通道（generation_ended 即删，编辑无意义）。
+//   两个调用位面共享本单源：①酒馆插件宿主（beilu-st-host，与主页面同 window，经
+//   window.__beiluUpsertExtensionPrompt 运行时桥，st-host↔stCompat 互不 import 红线不破）；
+//   ②卡内脚本层（stCompat/runtime/stContext.mjs，postMessage "beilu-ext-prompt" 进本文件 case）。
+//   ST 语义对齐（script.js:8866 setExtensionPrompt(key,value,position,depth,scan,role,filter)）：
+//   · 同 key 覆盖式 upsert（条目名=EXT-<key>，防撞用户自建条目；按 name 幂等，刷新后不重复建）
+//   · value 空 → 清除该 key 注入（删条目）；position NONE(-1) 同清除
+//   · 二区折叠：IN_CHAT(1)且 depth==0 → 下方（历史之后）；其余（IN_CHAT depth>0 / BEFORE_PROMPT(2) /
+//     IN_PROMPT(0)）→ 上方（历史之前）。order=-depth 保 ST 插件间深度相对序（用户可改）
+//   · upsert 只写 content/role/depth/order，不传 enabled——用户禁用意愿恒保留
+//   · scan/filter 不支持（凛倾「其他不要搞」），丢弃并 warn 一次
+const _extPromptIdByName = new Map(); // name → 后端条目 id 缓存（miss/失效时 getData 重查）
+const _extPromptChains = new Map(); // name → promise 链（同 key 连续调用串行化，防双 add 竞态）
+let _extPromptScanWarned = false;
+
+async function _upsertExtensionPromptImpl(key, value, position, depth, role) {
+  const name = `EXT-${String(key)}`;
+  const content = value == null ? "" : String(value);
+  const pos = Number(position);
+  const dep = Number(depth) || 0;
+  const roleStr = role === 1 || role === "user" ? "user" : role === 2 || role === "assistant" ? "assistant" : "system";
+  // 二区折叠：INJ depth 1=上方（历史之前）/ 0=下方（历史之后·尾部），0722 凛倾定案的既有二区机制
+  const injDepth = (pos === 1 && dep === 0) ? 0 : 1;
+  const injOrder = -dep;
+
+  const _findId = async () => {
+    if (_extPromptIdByName.has(name)) return _extPromptIdByName.get(name);
+    const d = await sendAction({ verb: "getData", target: "plugins:beilu-memory", source: "web" });
+    for (const e of (Array.isArray(d?.injection_prompts) ? d.injection_prompts : [])) {
+      if (typeof e?.name === "string" && e.name.startsWith("EXT-")) _extPromptIdByName.set(e.name, e.id);
+    }
+    return _extPromptIdByName.get(name);
+  };
+
+  if (!content || pos === -1) {
+    // ST 清除语义：value 空 / position NONE → 删条目（条目不存在=幂等无事）
+    const id = await _findId();
+    if (id) {
+      await sendAction({ verb: "deleteInjectionPrompt", target: "plugins:beilu-memory", source: "web", payload: { injectionId: id } });
+      _extPromptIdByName.delete(name);
+    }
+    return;
+  }
+
+  let id = await _findId();
+  if (id) {
+    const j = await sendAction({ verb: "updateInjectionPrompt", target: "plugins:beilu-memory", source: "web",
+      payload: { injectionId: id, content, role: roleStr, depth: injDepth, order: injOrder } });
+    if (j?.success) return;
+    _extPromptIdByName.delete(name); // 条目已被用户删=缓存失效，落到新建
+    id = await _findId();
+    if (id) return; // 重查又有=并发方才建，本次值已过时，让位
+  }
+  const j = await sendAction({ verb: "addInjectionPrompt", target: "plugins:beilu-memory", source: "web",
+    payload: { name, description: `酒馆插件注入（${String(key)}）——可编辑；插件更新时正文会被覆盖`, enabled: true,
+      role: roleStr, depth: injDepth, order: injOrder, autoMode: "always", content } });
+  if (j?.success && j?.id) _extPromptIdByName.set(name, j.id);
+}
+
+function _upsertExtensionPrompt(key, value, position, depth, scan, role, _filter) {
+  if ((scan !== undefined && scan !== false) && !_extPromptScanWarned) {
+    _extPromptScanWarned = true;
+    console.warn("[extensionPrompt→INJ] scan/filter 参数不支持（凛倾定案只做二区+排序），已忽略");
+  }
+  const name = `EXT-${String(key)}`;
+  const prev = _extPromptChains.get(name) || Promise.resolve();
+  const next = prev.then(() => _upsertExtensionPromptImpl(key, value, position, depth, role))
+    .catch((e) => console.warn("[extensionPrompt→INJ]", name, e?.message || e));
+  _extPromptChains.set(name, next);
+  return next;
+}
+// 运行时桥：beilu-st-host 宿主层（同 window）经此调用，双方零构建期依赖
+if (typeof window !== "undefined") window.__beiluUpsertExtensionPrompt = _upsertExtensionPrompt;
+
 async function _beiluInjectPrompts(prompts) {
   for (const p of prompts) {
     if (!p || !p.content) continue;
@@ -238,13 +317,10 @@ async function _beiluUninjectPrompts(ids) {
 }
 
 // generation_ended 时清空本轮所有 iframe 注入(避免累积)
+// [0807 转接二期#6] 自建 bus + 手拼 push → eventBusCore 单源（getEventBus 内部保证 bus 存在，
+//   原"eventSystem 还没初始化就自建"语义由叶子承担；async 监听器现在会被 emit 串行 await=清理
+//   完成后下一监听器才跑，原 fire-and-forget 下 clearAll 的 sendAction 时序不保）
 function _installOneShotInjectionCleanup() {
-  // 自建 bus(如果 eventSystem 还没初始化 — 避免永久不挂)
-  if (!window.__beiluEventBus) {
-    window.__beiluEventBus = { _listeners: new Map() };
-  }
-  const bus = window.__beiluEventBus;
-  if (!bus._listeners) bus._listeners = new Map();
   const clearAll = async () => {
     if (_oneShotInjectIds.size === 0) return;
     const ids = Array.from(_oneShotInjectIds);
@@ -257,8 +333,7 @@ function _installOneShotInjectionCleanup() {
     }
   };
   for (const name of ["generation_ended", "js_generation_ended"]) {
-    if (!bus._listeners.has(name)) bus._listeners.set(name, []);
-    bus._listeners.get(name).push(clearAll);
+    onEventBus(name, clearAll);
   }
 }
 // 延迟到 __beiluEventBus 初始化后挂载
@@ -358,6 +433,10 @@ function ensureParentResizeListener() {
       // R5: injectPrompts / uninjectPrompts — 复用后端 addInjectionPrompt / deleteInjectionPrompt
       case "beilu-inject-prompts":
         _beiluInjectPrompts(Array.isArray(e.data.prompts) ? e.data.prompts : []);
+        break;
+      // [0807 转接二期#8] 卡内脚本层 setExtensionPrompt → 常驻可编辑 INJ 条目（单源 upsert，见上）
+      case "beilu-ext-prompt":
+        _upsertExtensionPrompt(e.data.key, e.data.value, e.data.position, e.data.depth, e.data.scan, e.data.role, e.data.filter);
         break;
       case "beilu-uninject-prompts":
         _beiluUninjectPrompts(Array.isArray(e.data.ids) ? e.data.ids : []);
@@ -479,6 +558,17 @@ function replaceVhInContent(content) {
   content = content.replace(
     /(\.style\.\w+\s*=\s*(["']))([\s\S]*?)(\2)/gi,
     (match, prefix, _q, val, suffix) => {
+      if (!/\b\d+(?:\.\d+)?vh\b/i.test(val)) return match;
+      return `${prefix}${convertVh(val)}${suffix}`;
+    },
+  );
+
+  // [0807 渲染借鉴 R2] JS: setProperty('any-prop', "...vh") 第四形态——酒馆助手 iframe.ts
+  //   replaceVhInContent 同款补齐（其只改 min-height，此处沿 beilu 口径覆盖任意属性名）。
+  //   缺它时卡脚本用 setProperty 写 vh 会绕过变量桥=高度异常（酒馆系美化卡实有形态）。
+  content = content.replace(
+    /(setProperty\s*\(\s*(["'])[\w-]+\2\s*,\s*(["']))([\s\S]*?)(\3\s*\))/gi,
+    (match, prefix, _q1, _q2, val, suffix) => {
       if (!/\b\d+(?:\.\d+)?vh\b/i.test(val)) return match;
       return `${prefix}${convertVh(val)}${suffix}`;
     },
@@ -972,6 +1062,12 @@ export async function renderAsIframe(
   const messageId = messageElement.id || `msg-${Date.now()}`;
   // ★ 闭环A: 标记 iframe 的 messageId, 供发声权广播按帧区分
   iframe.dataset.beiluMsgId = messageId;
+  // [0807 渲染借鉴 R7] iframe id 对齐酒馆助手命名（Iframe.vue prefixed_id="TH-message--<id>"）：
+  //   卡脚本按 $('#TH-message--...') 定位消息 iframe 的既有习惯可用。
+  iframe.id = `TH-message--${messageId}`;
+  // [R7] message_iframe_render_started：常量早已对齐（eventConstants.mjs:16）但 producer 一直缺席
+  //   ——等"渲染开始/完成"再操作的卡脚本永等不到（0807 调查确诊）。参数=酒馆同形（前缀 iframe id）。
+  emitEventBusDetached("message_iframe_render_started", iframe.id);
 
   // ★ 预处理 HTML：vh 单位替换
   let modifiedHtml = replaceVhInContent(htmlDocument);
@@ -1164,7 +1260,11 @@ export async function renderAsIframe(
   // ★ 闭环A: 最新带音频消息渲染完成 → 取得发声权, 其余 iframe 静音
   //   iframe 内脚本需就绪才能收消息, 故 load 后再广播(并立即广播一次兜底)。
   setActiveAudioIframe(messageId);
-  iframe.addEventListener("load", () => setActiveAudioIframe(messageId), {
+  iframe.addEventListener("load", () => {
+    setActiveAudioIframe(messageId);
+    // [0807 渲染借鉴 R7] message_iframe_render_ended：load 完成=渲染结束（酒馆 Iframe.vue onLoad 同时机）
+    emitEventBusDetached("message_iframe_render_ended", iframe.id);
+  }, {
     once: true,
   });
 

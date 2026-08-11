@@ -1,0 +1,17 @@
+.vscode/**
+src/**
+node_modules/**
+!node_modules/ws/**
+*.ts
+!*.d.ts
+tsconfig.json
+esbuild.js
+beilu_worklog_*.md
+test-*.mjs
+test-output/**
+*_2026*.md
+TROUBLESHOOTING.md
+.gitignore
+tmp/**
+scripts/**
+*.vsix

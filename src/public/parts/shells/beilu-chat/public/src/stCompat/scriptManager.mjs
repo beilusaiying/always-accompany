@@ -8,6 +8,9 @@
  *   - 全量脚本数据：fetch('/api/parts/shells:chat/char-data/{charId}')
  *     → charData.extensions.tavern_helper.scripts（顶层=权威层，落盘/编辑均写顶层；
  *       data.extensions 仅兼容未解包 V3 原卡，见 _loadScripts 内注释）
+ *     [0806] 读取/展开收口 scriptTree.mjs：ScriptTree 文件夹节点原位展开、legacy 键
+ *       TavernHelper_scripts 兜底、生效语义=folder.enabled && script.enabled；
+ *       持久化存树（_scriptTrees）而非扁平视图（_allScripts），防文件夹结构被夷平
  *   - 运行状态：getRunningScripts() → [{id, name, enabled, buttons}]
  *
  * 编辑保存：
@@ -24,15 +27,33 @@ import { apiFetch } from '../shared/transport/api-client.mjs' // R1: raw fetch �
 import { sendAction } from '../shared/transport/sendAction.mjs' // T8·切桥：readUserFile/writeUserFile 直连收口走门面（凛倾 07-03"ST 只是插件"拍板解除 stCompat 零内改限制）
 import { showToast } from '../../../../../scripts/toast.mjs'
 import { beiluConfirm, beiluPrompt } from '../shared/widgets/beiluDialog.mjs';
+import { readTavernScriptTrees, flattenScriptTrees, isEffectivelyEnabled, removeScriptFromTrees } from './scriptTree.mjs' // [0806] ScriptTree 规范化单源
+import { wbTrace, wbDetect } from '../shared/widgets/whitebox.mjs' // [0806 可观测] 酒馆兼容链埋点，line="stcompat"，前端查看器可筛
 
 const diag = createDiag('stCompat')
 
 /** @type {HTMLElement|null} */
 let _container = null
-/** @type {Array<object>} 完整脚本列表（当前 scope 的） */
+/** @type {Array<object>} ScriptTree 原始树（当前 scope 的持久化权威形态——保存必须存树，防文件夹结构被夷平） */
+let _scriptTrees = []
+/** @type {Map<string, {folderId: string, folderName: string, folderEnabled: boolean}>} 脚本id→所属文件夹信息 */
+let _folderMeta = new Map()
+/** @type {Array<object>} 扁平脚本视图（树内原对象引用，folder 内脚本原位展开；改字段天然回写树） */
 let _allScripts = []
-/** @type {string|null} 当前角色卡 ID */
+
+/** [0806] 树→扁平视图刷新（folder 展开 + legacy 兼容统一在 scriptTree.mjs） */
+function _refreshFlatView() {
+	const f = flattenScriptTrees(_scriptTrees)
+	_allScripts = f.scripts
+	_folderMeta = f.meta
+}
+/** @type {string|null} 当前角色卡 ID（含加载失败态——只表示"面板正对着哪张卡"） */
 let _charId = null
+/** @type {string|null} [0806] **成功加载过**脚本数据的角色卡 ID。与 _charId 分离：
+ *  失败时 _charId 有值而本值为 null，自动轮询据此继续重试（原共用一个变量=失败即永久锁死）。 */
+let _loadedCharId = null
+/** @type {string} [0806] 最近一次加载的结果态，驱动空态文案区分"真没有脚本"与"加载失败" */
+let _loadState = 'idle' // 'idle' | 'ok' | 'error'
 /** @type {Set<string>} 已展开的脚本 ID */
 const _expandedIds = new Set()
 /** @type {Set<string>} 正在编辑中的脚本 ID */
@@ -44,10 +65,12 @@ const _editBuffers = new Map()
  * R-UP-2 / R-UP-7: 当前作用域 — 'character'(角色卡) / 'global'(全局) / 'preset'(预设)
  *   character: 来源 charData.extensions.tavern_helper.scripts
  *   global:    来源 data/users/{username}/global_scripts.json (via readUserFile)
- *   preset:    来源 data/users/{username}/preset_scripts.json (via readUserFile)
- *     说明:前端无 per-preset 脚本读写端点(grep 全 public/src 未见),故预设脚本
- *     与全局同走 readUserFile/writeUserFile 的用户文件机制,存独立文件 preset_scripts.json,
- *     不杜撰后端接口。scriptRunner.loadPresetScripts({scripts}) 可直接消费该文件内容。
+ *   preset:    来源 激活预设文件 preset_json.extensions.tavern_helper.scripts
+ *     [0807 §七#6 per-preset 化，对齐酒馆助手 PresetSettings.scripts] 读=beilu-preset GetData
+ *     preset_json（桥自动注入 chatid → 后端解析本窗口线激活预设，与生成读键同源）；
+ *     写=SetData update_tavern_helper（_target_preset=owner 指名，防切换竞态写进别的预设）。
+ *     旧单份 preset_scripts.json 降为迁移期读兜底（预设无 tavern_helper.scripts 字段时显示
+ *     旧文件内容，首次保存即升级进预设文件），不再写入。
  */
 let _scope = 'character'
 // 全局/预设脚本读写都走 beilu-memory 的 setdata 端点（用 _action: readUserFile/writeUserFile 区分），
@@ -68,6 +91,14 @@ export function initScriptManager(container) {
 	_container = container
 	_renderEmpty()
 	_scheduleAutoLoad()
+	// [0807 §七#6] 预设切换联动：preset scope 视图跟随激活预设刷新
+	//   （本窗 switchPreset → beilu:presetSwitched；别窗/WS 广播 → beilu:preset-changed）
+	if (!window.__beiluScriptMgrPresetBound) {
+		window.__beiluScriptMgrPresetBound = true
+		const _onPresetChange = () => { if (_scope === 'preset') _loadPresetScopeTrees() }
+		window.addEventListener('beilu:presetSwitched', _onPresetChange)
+		window.addEventListener('beilu:preset-changed', _onPresetChange)
+	}
 }
 
 // ============================================================
@@ -81,7 +112,12 @@ export function initScriptManager(container) {
 function _scheduleAutoLoad() {
 	const tryLoad = async () => {
 		const charId = _getCharId()
-		if (charId && charId !== _charId) {
+		// [0806 根修] 判据用 _loadedCharId（**加载成功**的卡）而非 _charId（"当前显示的卡"，失败态也有值）。
+		//   原来两者共用 _charId：首次加载失败 → catch 里也把 _charId 设成 charId → 这里
+		//   `charId !== _charId` 恒假 + 下方轮询 `|| _charId` 立刻 clearInterval →
+		//   **一次失败即永久锁死在"0 个脚本"**，只有手动点刷新能救（0806 用户实报现场：
+		//   后端刚重启时打开页面，首帧请求失败，之后再也不重试）。
+		if (charId && charId !== _loadedCharId) {
 			await _loadScripts(charId)
 		}
 	}
@@ -90,10 +126,11 @@ function _scheduleAutoLoad() {
 	setTimeout(tryLoad, 3000)
 
 	// 之后每 5 秒检查一次角色卡变化（最多 6 次 = 30 秒）
+	// 停止条件=**已成功加载**（_loadedCharId），失败态继续重试到次数用尽（容错自愈，不静默躺平）
 	let attempts = 0
 	const timer = setInterval(async () => {
 		attempts++
-		if (attempts >= 6 || _charId) {
+		if (attempts >= 6 || _loadedCharId) {
 			clearInterval(timer)
 			return
 		}
@@ -121,44 +158,108 @@ async function _loadScripts(charId) {
 		//   门面返回解析体且 !ok 统一抛错，与原 raw+手检等价；消灭同端点双通道
 		const charData = await sendAction({ verb: "getCharData", target: "shells:chat", source: "web", payload: { charId } })
 
-		// [补丁扫描修复二批 2026-07-13] 顺序统一为顶层优先（与 scriptRunner.mjs:113 同序）：
-		//   beilu 落盘的 chardata.json=解包体（endpoints.mjs import-char :2483 data||raw → :2523 写盘），
-		//   编辑写点（endpoints.mjs:729-749）也只写顶层 extensions——顶层=权威层；
-		//   data.extensions 仅兼容未解包的完整 V3 原卡。原 data 优先序在两层并存时会读到 stale 层。
-		const scripts = charData?.extensions?.tavern_helper?.scripts
-			|| charData?.data?.extensions?.tavern_helper?.scripts
-			|| []
-
-		_allScripts = Array.isArray(scripts) ? scripts : []
+		// [补丁扫描修复二批 2026-07-13] 顶层优先（顶层=权威层，data.extensions 仅兼容未解包 V3 原卡）。
+		// [0806] 读取收口 scriptTree.readTavernScriptTrees：两层 + legacy 键 TavernHelper_scripts 兜底；
+		//   flatten 把 folder 内脚本原位展开进视图（原实现 folder 节点被当脚本渲染/丢弃）。
+		_scriptTrees = readTavernScriptTrees(charData)
+		_refreshFlatView()
 		_charId = charId
+		_loadedCharId = charId // 成功才认领：轮询据此停止
+		_loadState = 'ok'
+		// [0806 可观测] 把"卡里到底有没有脚本、读到几条、几条真生效"变成前端查看器可见事实，
+		//   替代用户只能看到一个"0 个"的黑盒。folders=文件夹节点数（旧实现会整个丢掉它们）。
+		wbTrace('stcompat', 'scripts:loaded', {
+			charId,
+			trees: _scriptTrees.length,
+			flat: _allScripts.length,
+			effective: _allScripts.filter(s => isEffectivelyEnabled(s, _folderMeta)).length,
+			folders: _scriptTrees.filter(n => n && n.type === 'folder').length,
+			legacyKey: !!(charData?.extensions?.TavernHelper_scripts || charData?.data?.extensions?.TavernHelper_scripts),
+		})
+		// 卡里明明有 tavern_helper 容器却解析出 0 条 → 判为异常（红项），不再静默显示"没有脚本"
+		wbDetect('stcompat', 'scripts:nonempty', !(_hasTavernContainer(charData) && _allScripts.length === 0),
+			'角色卡带 tavern_helper 容器但解析出 0 条脚本（格式不识别？）', { charId })
 		_render()
 	} catch (err) {
 		diag.warn('[scriptManager] 加载脚本数据失败:', err.message)
-		_allScripts = []
+		_scriptTrees = []
+		_refreshFlatView()
 		_charId = charId
+		// [0806 根修] 失败**不认领** _loadedCharId：让自动轮询继续重试（原来这里设 _charId
+		//   等于告诉轮询"已处理完这张卡"，一次网络抖动=永久 0 个脚本）。
+		_loadState = 'error'
+		wbDetect('stcompat', 'scripts:load', false, `脚本数据加载失败: ${err?.message || err}`, { charId })
 		_render()
 	}
 }
 
+/** [0806 可观测] 角色卡是否带 tavern_helper 容器（四路键任一命中）——用于区分"卡没脚本"与"我们没解析出来" */
+function _hasTavernContainer(charData) {
+	const e1 = charData?.extensions, e2 = charData?.data?.extensions
+	return !!(e1?.tavern_helper || e2?.tavern_helper || e1?.TavernHelper_scripts || e2?.TavernHelper_scripts)
+}
+
+// [0807 §七#6 preset 半"导出即丢"] 预设脚本 per-preset 真源函数组。
+//   契约表§1.1 🔴"预设导出不带脚本"：酒馆把预设脚本存进预设文件 extensions.tavern_helper.scripts
+//   （导出随预设走，OAI_PRESET_EXPORT_READY 只按 export_with 清 data/button），beilu 此前存独立
+//   preset_scripts.json 用户文件=导出即丢。现真源=预设文件（后端 update_tavern_helper 写口）。
+let _presetScriptsOwner = '' // 当前树归属的预设名（保存指名 _target_preset，防切换竞态写进别的预设）
+
+async function _loadPresetScopeTrees() {
+	try {
+		// getData 桥自动注入 chatid/charName → 后端下发本窗口线激活预设 preset_json + active_preset_resolved
+		const data = await sendAction({ verb: 'getData', target: 'plugins:beilu-preset', source: 'web' })
+		// owner 判定=sharedState.resolveCurrentPresetName 同口径：resolved 字段存在（含空串）即权威
+		_presetScriptsOwner = (typeof data?.active_preset_resolved === 'string')
+			? data.active_preset_resolved
+			: (data?.preset_name || '')
+		const th = data?.preset_json?.extensions?.tavern_helper
+		if (th && Object.prototype.hasOwnProperty.call(th, 'scripts')) {
+			_scriptTrees = Array.isArray(th.scripts) ? th.scripts : []
+		} else {
+			_scriptTrees = await _readLegacyPresetTrees() // 字段缺席=预设从未写过 → 旧文件迁移读兜底
+		}
+	} catch (err) {
+		diag.warn(`[scriptManager] 加载预设内脚本失败: ${err.message}`)
+		_presetScriptsOwner = ''
+		_scriptTrees = []
+	}
+	_refreshFlatView()
+	_render()
+}
+
+/** 旧单份 preset_scripts.json 读兜底（仅预设无 tavern_helper.scripts 字段时消费，不再写入） */
+async function _readLegacyPresetTrees() {
+	try {
+		const j = await sendAction({ verb: 'readUserFile', target: 'plugins:beilu-memory', source: 'web', payload: { filename: 'preset_scripts.json' } })
+		if (!j.success || !j.content) return []
+		const data = JSON.parse(j.content)
+		return Array.isArray(data.scripts) ? data.scripts : []
+	} catch { return [] }
+}
+
 /**
- * R-UP-2 / R-UP-7: 加载用户文件作用域脚本(global / preset)
+ * R-UP-2 / R-UP-7: 加载用户文件作用域脚本(global；preset 已 per-preset 化走 _loadPresetScopeTrees)
  * 读 data/users/{username}/{filename} via beilu-memory readUserFile action
  * @param {'global'|'preset'} scope
  */
 async function _loadFileScripts(scope) {
+	if (scope === 'preset') return _loadPresetScopeTrees() // [0807 §七#6] preset 真源=激活预设文件
 	const filename = SCOPE_FILE[scope]
-	if (!filename) { _allScripts = []; _render(); return }
+	if (!filename) { _scriptTrees = []; _refreshFlatView(); _render(); return }
 	try {
 		// T8·切桥：raw 直连→sendAction（memory 通配桥，unwrap 还原旧裸形状；HTTP 失败在门面内抛=等价原 !resp.ok throw）
 		const j = await sendAction({ verb: 'readUserFile', target: 'plugins:beilu-memory', source: 'web', payload: { filename } })
 		if (!j.success) {
-			_allScripts = []
+			_scriptTrees = []
+			_refreshFlatView()
 			_render()
 			return
 		}
 		// 空文件或不存在 → 空数组
 		if (!j.content) {
-			_allScripts = []
+			_scriptTrees = []
+			_refreshFlatView()
 			_render()
 			return
 		}
@@ -166,15 +267,18 @@ async function _loadFileScripts(scope) {
 		try { data = JSON.parse(j.content) }
 		catch (e) {
 			diag.warn(`[scriptManager] ${filename} 解析失败:`, e.message)
-			_allScripts = []
+			_scriptTrees = []
+			_refreshFlatView()
 			_render()
 			return
 		}
-		_allScripts = Array.isArray(data.scripts) ? data.scripts : []
+		_scriptTrees = Array.isArray(data.scripts) ? data.scripts : []
+		_refreshFlatView()
 		_render()
 	} catch (err) {
 		diag.warn(`[scriptManager] 加载 ${scope} 脚本失败:`, err.message)
-		_allScripts = []
+		_scriptTrees = []
+		_refreshFlatView()
 		_render()
 	}
 }
@@ -184,10 +288,28 @@ async function _loadFileScripts(scope) {
  * @param {'global'|'preset'} scope
  */
 async function _saveFileScripts(scope) {
+	// [0807 §七#6] preset scope 存进激活预设文件（update_tavern_helper 写口，_target_preset 指名）
+	if (scope === 'preset') {
+		if (!_presetScriptsOwner) {
+			diag.error('[scriptManager] 保存预设脚本失败: 当前窗口无激活预设')
+			window._beiluToast?.('当前窗口无激活预设，预设脚本无处可存（请先激活一个预设）', 'warning')
+			return false
+		}
+		try {
+			const j = await sendAction({ verb: 'updatePresetConfig', target: 'plugins:beilu-preset', source: 'web', payload: { _target_preset: _presetScriptsOwner, update_tavern_helper: { scripts: _scriptTrees } } })
+			if (!j?.success) throw new Error(j?.error || 'unknown')
+			diag.log(`[scriptManager] 预设脚本已存进预设 "${_presetScriptsOwner}": ${_allScripts.length} 条`)
+			return true
+		} catch (e) {
+			diag.error(`[scriptManager] 保存预设脚本失败: ${e.message}`)
+			return false
+		}
+	}
 	const filename = SCOPE_FILE[scope]
 	if (!filename) return false
 	try {
-		const content = JSON.stringify({ scripts: _allScripts }, null, 2)
+		// [0806] 保存树而非扁平视图：扁平条目是树内引用，存 _allScripts 会把文件夹结构夷平
+		const content = JSON.stringify({ scripts: _scriptTrees }, null, 2)
 		// T8·切桥：同 _loadFileScripts——raw 直连→sendAction 门面
 		const j = await sendAction({ verb: 'writeUserFile', target: 'plugins:beilu-memory', source: 'web', payload: { filename, content } })
 		if (!j.success) throw new Error(j.error || 'unknown')
@@ -206,7 +328,8 @@ async function _saveFileScripts(scope) {
 async function _switchScope(scope) {
 	if (_scope === scope) return
 	_scope = scope
-	_allScripts = []
+	_scriptTrees = []
+	_refreshFlatView()
 	_expandedIds.clear()
 	_editingIds.clear()
 	_editBuffers.clear()
@@ -244,9 +367,9 @@ function _render() {
 	try { runningScripts = getRunningScripts() } catch { /* 静默 */ }
 	const runningMap = new Map(runningScripts.map(s => [s.id, s]))
 
-	// 统计
+	// 统计（[0806] 启用数=实际生效数：文件夹内脚本要求 folder.enabled && script.enabled，对齐 ST 语义）
 	const total = _allScripts.length
-	const enabledCount = _allScripts.filter(s => s.enabled).length
+	const enabledCount = _allScripts.filter(s => isEffectivelyEnabled(s, _folderMeta)).length
 	const runningCount = runningScripts.length
 
 	let html = ''
@@ -274,8 +397,11 @@ function _render() {
 
 	// ── 空状态 ──
 	if (total === 0) {
+		// [0806] 区分三态：加载失败 ≠ 真的没有脚本 ≠ 还没加载角色卡。
+		//   原来失败也显示"当前角色卡没有 tavern_helper 脚本"=把故障报成事实，用户无从判断该刷新还是该导入。
 		const emptyMsg = _scope === 'global' ? '暂无全局脚本，点「新建」添加'
 			: _scope === 'preset' ? '暂无预设脚本，点「新建」添加'
+			: _loadState === 'error' ? '脚本数据加载失败（角色卡数据读取出错），正在自动重试；可点右上角刷新立即重试'
 			: (_charId ? '当前角色卡没有 tavern_helper 脚本' : '未加载角色卡')
 		html += `
 			<div style="padding:32px;text-align:center;opacity:0.35;font-size:0.8rem;">
@@ -293,6 +419,11 @@ function _render() {
 	for (const script of _allScripts) {
 		const isExpanded = _expandedIds.has(script.id)
 		const running = runningMap.get(script.id)
+		// [0806] 所属文件夹标识：folder 内脚本挂 📁 徽标；文件夹被禁用时标注（此时脚本开关开着也不生效）
+		const _fm = _folderMeta.get(script.id)
+		const folderBadge = _fm
+			? `<span class="badge badge-xs badge-ghost" style="font-size:0.6rem;flex-shrink:0;" title="来自脚本文件夹「${_esc(_fm.folderName)}」${_fm.folderEnabled ? '' : '（文件夹已禁用，内部脚本不会运行）'}">📁 ${_esc(_fm.folderName)}${_fm.folderEnabled ? '' : ' ⛔'}</span>`
+			: ''
 
 			// 启用/禁用切换开关
 			const toggleChecked = script.enabled ? 'checked' : ''
@@ -311,9 +442,10 @@ function _render() {
 				<div class="sm-script-header" data-script-id="${_esc(script.id)}"
 					style="display:flex;align-items:center;gap:6px;padding:8px 10px;cursor:pointer;user-select:none;">
 					<span style="font-size:0.7rem;opacity:0.4;transition:transform 0.15s;${chevronStyle}">▶</span>
-					<span style="font-size:0.8rem;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${script.enabled ? '' : 'opacity:0.4;text-decoration:line-through;'}">
+					<span style="font-size:0.8rem;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${isEffectivelyEnabled(script, _folderMeta) ? '' : 'opacity:0.4;text-decoration:line-through;'}">
 						${_esc(script.name || '(无名脚本)')}
 					</span>
+					${folderBadge}
 					${enabledToggle}
 					${runningBadge}
 				</div>
@@ -537,18 +669,22 @@ async function _handleNewScript() {
 		info: '',
 		data: {},
 		button: { enabled: true, buttons: [] },
+		// [0806] 对齐酒馆助手 813bb6f 新增字段：导出角色卡时是否携带 data/button（ST 侧 zod 默认 true/true）
+		export_with: { data: true, button: true },
 	}
-	_allScripts.push(newScript)
+	// [0806] 新建落到树顶层（不进文件夹），扁平视图随树刷新
+	_scriptTrees.push(newScript)
+	_refreshFlatView()
 	_expandedIds.add(newScript.id)
 	_editingIds.add(newScript.id)
 	_editBuffers.set(newScript.id, '')
 
 	if (_scope === 'global' || _scope === 'preset') {
 		const ok = await _saveFileScripts(_scope)
-		if (!ok) { _allScripts.pop(); showToast('error', '保存失败'); return }
+		if (!ok) { removeScriptFromTrees(_scriptTrees, newScript.id); _refreshFlatView(); showToast('error', '保存失败'); return }
 	} else {
 		const ok = await _saveCharacterScripts()
-		if (!ok) { _allScripts.pop(); showToast('error', '保存到角色卡失败'); return }
+		if (!ok) { removeScriptFromTrees(_scriptTrees, newScript.id); _refreshFlatView(); showToast('error', '保存到角色卡失败'); return }
 	}
 	_render()
 }
@@ -557,11 +693,12 @@ async function _handleNewScript() {
  * R-UP-2 / R-UP-7: 删除脚本
  */
 async function _handleDeleteScript(scriptId) {
-	const idx = _allScripts.findIndex(s => s.id === scriptId)
-	if (idx === -1) return
-	const script = _allScripts[idx]
+	const script = _allScripts.find(s => s.id === scriptId)
+	if (!script) return
 	if (!await beiluConfirm(`删除脚本 "${script.name}"? 此操作不可撤销。`)) return
-	_allScripts.splice(idx, 1)
+	// [0806] 从树里删（顶层或文件夹内），扁平视图随树刷新
+	removeScriptFromTrees(_scriptTrees, scriptId)
+	_refreshFlatView()
 	_expandedIds.delete(scriptId)
 	_editingIds.delete(scriptId)
 	_editBuffers.delete(scriptId)
@@ -584,7 +721,7 @@ async function _handleDeleteScript(scriptId) {
 async function _saveCharacterScripts() {
 	if (!_charId) return false
 	try {
-		await _saveScriptsToBackend(_allScripts)
+		await _saveScriptsToBackend(_scriptTrees) // [0806] 存树防夷平文件夹
 		diag.log(`[scriptManager] 角色卡脚本已保存: ${_allScripts.length} 条`)
 		return true
 	} catch (e) {
@@ -728,7 +865,7 @@ function _bindEvents() {
 					const ok = await _saveFileScripts(_scope)
 					if (!ok) throw new Error('writeUserFile 失败')
 				} else {
-					await _saveScriptsToBackend(_allScripts)
+					await _saveScriptsToBackend(_scriptTrees) // [0806] 存树防夷平文件夹
 				}
 				_editingIds.delete(scriptId)
 				_editBuffers.delete(scriptId)
@@ -778,7 +915,7 @@ function _bindEvents() {
 					const ok = await _saveFileScripts(_scope)
 					if (!ok) throw new Error('writeUserFile 失败')
 				} else {
-					await _saveScriptsToBackend(_allScripts)
+					await _saveScriptsToBackend(_scriptTrees) // [0806] 存树防夷平文件夹
 				}
 
 				if (newEnabled) {
@@ -822,7 +959,9 @@ async function _handleRefresh() {
 	}
 	const charId = _getCharId()
 	if (charId) {
-		_charId = null // 强制重新加载
+		// [0806] 两个身份态一起清：_loadedCharId 不清则"手动刷新"对已成功加载的卡无效（点了没反应）
+		_charId = null
+		_loadedCharId = null
 		await _loadScripts(charId)
 	} else {
 		_renderEmpty()

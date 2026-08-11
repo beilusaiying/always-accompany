@@ -48,6 +48,7 @@ import { storage, KEYS } from "../state/storage.mjs"; // R2: localStorage 集中
 import { mirrorReasoningTagsFromConfig } from "../state/reasoningTags.mjs"; // P2并口：思维链编辑唯一家=设置→AI服务源「思维链显示」（0714收口）；本模块只留开机镜像回填
 import { initializeVirtualQueue } from "../render/virtualQueue.mjs"; // 增量刷新：清理/压缩后重渲染消息列表，替代 location.reload
 import { DEFAULTS } from "../../config/defaults.mjs"; // 缺省值单源（刷新间隔缺省/值域，用户设置优先）
+import { onEventBus } from "../state/eventBusCore.mjs"; // [0807 转接二期#6] 总线订阅单源
 
 // ============================================================
 // 状态
@@ -1345,13 +1346,11 @@ export function initTokenProgressBar() {
   });
 
   // 监听 AI 生成完成 → 立即刷新（通过 EventBus）
-  const _bus = window.__beiluEventBus;
-  if (_bus && _bus._listeners) {
-    if (!_bus._listeners.has("generation_ended")) _bus._listeners.set("generation_ended", []);
-    _bus._listeners.get("generation_ended").push(() => {
-      refreshTokenProgressImmediate();
-    });
-  }
+  // [0807 转接二期#6] 手拼 push → eventBusCore.onEventBus 单源（原"bus 不存在就静默不挂"的
+  //   初始化时序坑一并消除：getEventBus 保证 bus 存在）
+  onEventBus("generation_ended", () => {
+    refreshTokenProgressImmediate();
+  });
 
   // 监听 API源/模型 切换 → 刷新进度条（上下文窗口值不由本模块写——入口在子模式/AIRP 面板）
   window.addEventListener("resource:api-changed", () => {
@@ -1445,6 +1444,9 @@ async function _showTokenSettingsPopup() {
     const tr = config.token_reminder || {};
     const enabled = tr.enabled !== false;
     const customText = tr.custom_text || "";
+    // AI清理最低占用（%）：配置缺键时镜像后端 DEFAULT_TOKEN_REMINDER.ai_clean_min_percent=5
+    // （与下方 thresholds 默认数组同为"UI 镜像后端默认"既有模式）；0=不限制
+    const aiCleanMinPct = Number.isFinite(Number(tr.ai_clean_min_percent)) ? Number(tr.ai_clean_min_percent) : 5;
     const thresholds = tr.thresholds || [
       { percent: 50, level: "info" },
       { percent: 70, level: "warning" },
@@ -1478,6 +1480,13 @@ async function _showTokenSettingsPopup() {
           <input type="text" class="input input-xs input-bordered w-full" id="tp-custom" value="${customText.replace(/"/g, '&quot;')}" placeholder="留空使用默认提醒" />
         </label>
         <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-bold">AI清理最低占用（%）</span>
+          <div class="flex items-center gap-2">
+            <input type="number" class="input input-xs input-bordered w-20" id="tp-clean-min" value="${aiCleanMinPct}" min="0" max="99" step="1" />
+            <span class="text-[10px] opacity-60">占用低于此比例时拒绝AI的contextClean清理；0 = 不限制</span>
+          </div>
+        </label>
+        <label class="flex flex-col gap-1">
           <span class="text-[11px] font-bold">刷新间隔（秒）</span>
           <div class="flex items-center gap-2">
             <input type="number" class="input input-xs input-bordered w-20" id="tp-poll" value="${_pollSec()}"
@@ -1504,8 +1513,15 @@ async function _showTokenSettingsPopup() {
       body.querySelectorAll('#tp-thresholds [data-f="p"]').forEach(inp => {
         const idx = inp.dataset.idx;
         const lSel = body.querySelector('#tp-thresholds [data-idx="' + idx + '"][data-f="l"]');
-        newCfg.thresholds.push({ percent: parseInt(inp.value), level: lSel?.value || "warning" });
+        // [0811] 保留条目 text（原保存只存 percent/level=把配置里的提醒文案丢掉，后端渲染 undefined 病根）
+        const _tSrc = thresholds[Number(idx)] || {};
+        newCfg.thresholds.push({ percent: parseInt(inp.value), level: lSel?.value || "warning", ...(_tSrc.text ? { text: _tSrc.text } : {}) });
       });
+      // AI清理最低占用（%）：0=不限制；非法输入回退默认 5（镜像后端 DEFAULT_TOKEN_REMINDER.ai_clean_min_percent）
+      {
+        const _cmv = Number(body.querySelector("#tp-clean-min")?.value);
+        newCfg.ai_clean_min_percent = Number.isFinite(_cmv) ? Math.min(Math.max(Math.round(_cmv), 0), 99) : 5;
+      }
       // [0727 刷新间隔] 纯前端本地偏好（每台机器性能不同，不进后端 per-user 配置）：
       //   存 localStorage 单键，派事件让运行中的定时器立刻按新值重启，不必刷新页面。
       const _pollInput = body.querySelector("#tp-poll");

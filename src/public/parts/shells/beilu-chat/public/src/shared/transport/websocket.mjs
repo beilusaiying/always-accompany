@@ -38,6 +38,7 @@ import { currentChatId } from "./endpoints.mjs";
 import { wbIngestBackend, wbTrace, wbDetect } from "../widgets/whitebox.mjs";
 import { MODE_TO_TAB } from "../state/modeTabMap.mjs";
 import { sendAction } from "./sendAction.mjs"; // T6b批7：出向统一门面（verb=真动作），runtime-params/new/bindChatMode 收口（WS 通道 sendWebsocketMessage 不动）
+import { emitEventBusDetached } from "../state/eventBusCore.mjs"; // [0807 转接二期#6] emit 单源叶子（await+可变引用语义收口）
 
 const diag = createDiag("websocket");
 let _wakeupTimerId = null;
@@ -168,18 +169,11 @@ _getToolJobsMap();
  * @param  {...any} args - 事件参数
  */
 function _emitEventBus(eventName, ...args) {
-  const bus = window.__beiluEventBus;
-  if (!bus || !bus._listeners) return;
-  const listeners = bus._listeners.get(eventName);
-  if (!listeners || listeners.length === 0) return;
-  const copy = listeners.slice();
-  for (const cb of copy) {
-    try {
-      cb(...args);
-    } catch (e) {
-      console.error("[websocket EventBridge]", eventName, e);
-    }
-  }
+  // [0807 转接二期#6] 原地同步循环删除，转发 eventBusCore 单源（ST await 语义：串行 await 每个
+  //   监听器——原实现不 await，async 监听器（卡内脚本常见）被丢时序=可变管道语义断裂的病根之一）。
+  //   本文件 17 个调用点全是通知类事件（message_*/generation_*/emotion 等，producer 不回读），
+  //   走 Detached 出口：不阻塞 SSE 分发链，监听器之间时序仍串行保持。
+  emitEventBusDetached(eventName, ...args);
 }
 
 /**
@@ -230,6 +224,10 @@ if (typeof window !== "undefined") window.emitBeiluEvent = emitBeiluEvent;
  * @param {number} index - 消息在 chatLog 中的索引
  * @param {object} entry - 更新后的消息条目
  */
+// [0807 §七#3] timeline_info 到来时需要重同步尾消息的 swipe 维度，但 timeline_info 广播不带 entry
+//   （modifyTimeLine 先发 message_replaced(带 entry) 再发 timeline_info），故缓存最近一次 replace。
+let _lastReplacedForTimeline = null;
+
 function _updateScriptIframeChat(index, entry) {
   // S1 每脚本独立 iframe（scriptRunner.mjs:1062 同名 className），可同时存在多个，
   // 必须遍历全部同步，否则只有首个脚本 iframe 拿到最新 chat，其余永久 stale。
@@ -247,24 +245,11 @@ function _updateScriptIframeChat(index, entry) {
       const stChat = iframe.contentWindow.SillyTavern.chat;
       if (!stChat) continue;
 
-      // 每个 iframe 独立沙盒，构建独立消息对象避免跨 iframe 共享可变引用
-      const stMsg = {
-        message_id: index,
-        name: entry.name || (stRole === "user" ? "User" : "Character"),
-        role: stRole,
-        is_hidden: !!entry.extension?._hidden,
-        is_user: stRole === "user",
-        message: msgText,
-        data: {},
-        extra: {},
-        is_system: false,
-        mes: msgText,
-        swipe_id: 0,
-        swipes: [msgText],
-        // ★ MVU 变量映射：extension.mvu_variables → variables[swipe_id]
-        variables: [entry.extension?.mvu_variables || {}],
-        swipe_info: [{}],
-      };
+      // 每个 iframe 独立沙盒，构建独立消息对象避免跨 iframe 共享可变引用。
+      // [0807 §七#3] 形状收口 stChatShape.mjs（与 scriptRunner 初始内联同源）；
+      //   时间线只挂最后一条活跃消息：尾部 char 消息带真实 swipe_id/多维数组，其余单 swipe。
+      const isTail = stRole !== "user" && index >= stChat.length - 1;
+      const stMsg = buildStChatMessage(entry, index, msgText, isTail ? getTimelineInfo() : null, "User", "Character");
 
       // 更新或追加
       if (index < stChat.length) {
@@ -303,6 +288,9 @@ let _nextFloor = 0;
 export function resetFloorMap() {
   _floorMap.clear();
   _nextFloor = 0;
+  // [0807 §七#3] 时间线重同步缓存随对话切换清空——否则新对话首个 timeline_info 会把旧对话的
+  //   entry 写进新 iframe 的 chat 数组（跨对话残留）。本函数是切换对话的既有收口点（虚拟队列 init 必调）。
+  _lastReplacedForTimeline = null;
   diag.debug("楼层映射已重置");
 }
 
@@ -386,6 +374,8 @@ export function _syncMvuVariablesToStore(index, entry) {
   _emitEventBus("variable_updated", { index, variables: mvuVars });
 }
 
+import { buildStChatMessage } from "../../stCompat/runtime/stChatShape.mjs"; // [0807 §七#3] ST 消息形状单源（叶子，与 scriptRunner 同源）
+import { getTimelineInfo } from "../state/timelineState.mjs"; // [0807 §七#3] swipe 状态单源（叶子）
 import {
   addPartToSelect,
   handleCharAdded,
@@ -1059,6 +1049,8 @@ async function handleBroadcastEvent(event, winId) {
       _syncMvuVariablesToStore(payload.index, payload.entry);
       // ★ EventBus 桥接: 更新脚本 iframe 中的 SillyTavern.chat（含 MVU 变量）
       _updateScriptIframeChat(payload.index, payload.entry);
+      // [0807 §七#3] 缓存给随后到来的 timeline_info 重同步 swipe 维度用（见 _lastReplacedForTimeline 注释）
+      _lastReplacedForTimeline = { index: payload.index, entry: payload.entry };
       // ★ EventBus 桥接: AI 生成完成 → MESSAGE_RECEIVED + GENERATION_ENDED
       // 对标 JS-Slash-Runner tavern_events + iframe_events
       if (!payload.entry?.is_generating && payload.entry?.role !== "user") {
@@ -1137,10 +1129,22 @@ async function handleBroadcastEvent(event, winId) {
       _emitEventBus("message_edited", payload.index);
       _emitEventBus("message_updated", payload.index);
       break;
-    case "timeline_info":
+    case "timeline_info": {
       wbTrace("websocket", "timeline_info", { timeLineIndex: payload?.timeLineIndex, timeLinesCount: payload?.timeLinesCount });
-      handleTimelineInfo(payload, winId);
+      const _prevTlIdx = getTimelineInfo().timeLineIndex;
+      handleTimelineInfo(payload, winId); // 内部 setTimelineInfo → 叶子单源更新
+      // [0807 §七#3] 时序：message_replaced 先到（当时单源还是旧下标），timeline_info 后到——
+      //   此刻单源已是新值，用缓存的 entry 重同步 iframe 尾消息的 swipe_id/variables 下标。
+      if (_lastReplacedForTimeline) {
+        _updateScriptIframeChat(_lastReplacedForTimeline.index, _lastReplacedForTimeline.entry);
+      }
+      // [0807 §七#8] MESSAGE_SWIPED producer：下标真变了才广播（对标酒馆卡切 swipe 重算变量的核心信号；
+      //   payload=消息下标数字，酒馆助手 wrapper 对 message 类事件 parseInt，无下标时不发防 NaN 被吞）
+      if ((payload?.timeLineIndex ?? 0) !== _prevTlIdx && _lastReplacedForTimeline) {
+        _emitEventBus("message_swiped", _lastReplacedForTimeline.index);
+      }
       break;
+    }
     case "persona_set":
       wbTrace("websocket", "persona_set", { personaname: payload.personaname });
       await handlePersonaSet(payload.personaname);

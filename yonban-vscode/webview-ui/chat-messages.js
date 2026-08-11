@@ -461,6 +461,10 @@
   // ═══════════════════════════════════════════════════════
 
   function onMessageAdded(entry) {
+    // [0811 幂等守卫] 同 id 消息在数据层+DOM 层至多一份（单入口不变量）：后端重发/补拉时序重叠时
+    // 直接丢弃重复 add——否则同 id 双行后 onMessageReplaced/flushStreamRender 的 querySelector 只更新
+    // 首行，第二行永久残留旧态（web 端双"正在想"同族病，YonBan 侧预防性封死）。
+    if (entry && entry.id && state.messages.some(function (m) { return m && m.id === entry.id; })) return;
     state.messages.push(entry);
     // U06：用户自己的消息回推到达 = 后端已收下本次发送 = 成功 → 此刻才清输入框（deferred clear）。
     //   放在 system 过滤之前：用户消息 role=user 不会被下面的 system 过滤拦掉，但确认清空与渲染解耦，先确认。
@@ -499,6 +503,9 @@
     }
     state.isGenerating = false;
     state.generatingMessageId = null;
+    // [0811] 生成落定即清打字指示器（对齐 web virtualQueue message_replaced 后清除）：原先只靠后端
+    // 推空 typing_status，漏发/断连时指示器永不清除（无超时逃生）。落定事件本身就是权威清除信号。
+    if (!entry.is_generating) updateTypingIndicator([]);
 
     var row = dom.messageList
       ? dom.messageList.querySelector('[data-msg-id="' + entry.id + '"]')
@@ -1752,7 +1759,10 @@ function enterEditMode(row, entry, capturedIdentity) {
     }
 
     // 统一提取器（2026-07-10）：含外层围栏剥离+代码段保护+交叉闭合，替代旧 backref 副本
-    var _pmEx = _extractStreamThinking(raw);
+    // [2026-08-10] 用户消息不提取思维链：标签字面量保持可见、可编辑。
+    var _pmEx = (entry && entry.role === "user")
+      ? { cleanText: raw, thinkingText: "", isComplete: true }
+      : _extractStreamThinking(raw);
     var thinkingParts = _pmEx.thinkingText ? [_pmEx.thinkingText] : [];
     var text = _pmEx.cleanText;
 
@@ -1991,9 +2001,13 @@ function enterEditMode(row, entry, capturedIdentity) {
     var raw = _replaceMacros(entry.content || "");
     if (cfs && typeof cfs === "string") cfs = _replaceMacros(cfs);
 
+    // 思维链提取/折叠只作用于 AI 消息；用户消息中的标签字面量原样显示。
+    var _skipThink = !!(entry && entry.role === "user");
     // 先从 raw content 提取思维链——统一提取器（2026-07-10 对齐本体 extractThinkingContent：
     //   外层围栏剥离+代码段保护+交叉闭合，替代旧 backref 收集三处各一套）
-    var _rawEx = _extractStreamThinking(typeof raw === "string" ? raw : "");
+    var _rawEx = _skipThink
+      ? { cleanText: (typeof raw === "string" ? raw : ""), thinkingText: "", isComplete: true }
+      : _extractStreamThinking(typeof raw === "string" ? raw : "");
     var thinkingParts = _rawEx.thinkingText ? [_rawEx.thinkingText] : [];
 
     // ★ full-html 检测：完整 HTML 文档走 iframe 沙箱渲染（参照本体 iframeRenderer）
@@ -2003,7 +2017,7 @@ function enterEditMode(row, entry, capturedIdentity) {
     if (typeof raw === "string" && raw.trim()) {
       _contentForDetect = _rawEx.cleanText;
     } else if (cfs && typeof cfs === "string") {
-      _cfsEx = _extractStreamThinking(cfs);
+      _cfsEx = _skipThink ? { cleanText: cfs, thinkingText: "", isComplete: true } : _extractStreamThinking(cfs);
       _contentForDetect = _cfsEx.cleanText;
     } else {
       _contentForDetect = "";

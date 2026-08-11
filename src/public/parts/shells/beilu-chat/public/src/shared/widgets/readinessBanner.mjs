@@ -17,7 +17,7 @@
  *   也不许一个观测面把输入锁死——观测面自己成为故障点=比没有更糟）。
  *
  * 【关联链】← index.mjs（唯一 init 调用点） → /api/readiness（endpoints.mjs）→ readiness.mjs 注册表
- * 【影响范围】只读端点+自建 DOM（挂 body，不改 index.html）；#message-input 的 disabled/placeholder
+ * 【影响范围】只读端点+自建 DOM（挂 body，不改 index.html）；#send_textarea 的 disabled/placeholder
  *   在遮罩期被本模块接管，解除时恢复原值。
  */
 import { apiFetch } from "../transport/api-client.mjs";
@@ -32,7 +32,7 @@ let _startedAt = 0;
 let _maskOn = false;
 let _inputPrev = null; // {disabled, placeholder} 遮罩前原值
 
-function _input() { return document.getElementById("message-input"); }
+function _input() { return document.getElementById("send_textarea"); }
 
 function _setMask(on, label) {
   const input = _input();

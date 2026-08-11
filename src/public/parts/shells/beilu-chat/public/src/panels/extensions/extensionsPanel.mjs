@@ -29,6 +29,11 @@ const PLUGINS = [
   { id: "ppt", label: "PPT 生成", icon: "presentation",
     desc: "AI 多步组装 PPT · 渲染/转换/校准管线",
     render: _makeBackendSchemaPanel({ title: "PPT 生成", desc: "AI 通过 <ppt_op> 标签多步组装 PPT · 管线渲染/可编辑 pptx 转换", base: "/api/parts/plugins:beilu-ppt" }) },
+  // 酒馆插件宿主（beilu-st-host）：下载→转移→使用 SillyTavern 第三方插件。自定义 UI（列表/开关/删除/安装框），
+  //   非后端 schema 面板——用 renderStHostPlugin。后端端点契约见 plugins/beilu-st-host/main.mjs。
+  { id: "st-host", label: "酒馆插件", icon: "package",
+    desc: "下载并管理 SillyTavern 第三方插件 · 安装 / 启停 / 删除（进回收站可恢复）",
+    render: renderStHostPlugin },
   // 【红线·0731 凛倾拍板"mvu重复+多处散写,直接把额外插件那边删除"】MVU/EJS 是酒馆角色卡适配件，
   //   开关唯一控制面=AIRP「脚本插件管理」（stCompat/pluginManager.mjs，同步后端 config 单源）。
   //   本平台禁止再列 beilu-mvu/beilu-ejs 条目——双面板同写一份后端 config = 散写，用户在一处关
@@ -1396,4 +1401,166 @@ async function _browserLaunchChrome(dot, text) {
     text.textContent = "请求失败: " + err.message;
     window._beiluToast?.("无法连接后端: " + err.message, "error");
   }
+}
+
+// ============================================================
+// 酒馆插件宿主（beilu-st-host）：下载→转移→使用 SillyTavern 第三方插件。
+// 自定义面板（非 schema 驱动）：hostEnabled 总开关 / 安装框 / 插件列表（启停·删除·损坏显红）。
+// 端点契约=plugins/beilu-st-host/main.mjs（启停落后端=加载前门槛；删除进回收站；错误原样展示不吞）。
+// 功能链：本面板读写 → 后端 st_plugins.json → host-loader 只注入 enabled 插件（禁用=根本不注入）。
+// ============================================================
+
+const ST_HOST_BASE = "/api/parts/plugins:beilu-st-host";
+
+async function _stHostFetch(path, body) {
+  const r = await fetch(ST_HOST_BASE + path, body === undefined ? undefined : {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await r.json(); } catch { /* 非 JSON 响应走下方统一报错 */ }
+  // 后端失败一律 {error}（main.mjs 各端点 500+error）——原样抛给调用方展示，不吞不改写
+  if (!r.ok || data?.error) throw new Error(data?.error || `HTTP ${r.status}`);
+  return data;
+}
+
+function renderStHostPlugin(container) {
+  const wrap = _h("div", { className: "ext-wrap" });
+
+  wrap.appendChild(_h("div", { className: "ext-title-area" },
+    _h("h2", { className: "ext-section-title" }, "酒馆插件"),
+    _h("p", { className: "ext-section-desc" },
+      "下载 → 转移 → 使用酒馆系第三方插件 · 也可在导入界面直接贴 git 仓库网址"),
+  ));
+
+  wrap.appendChild(_h("p", { className: "ext-section-desc" },
+    "⚠ 插件是第三方代码，启用后将在本页面中运行。新装默认禁用，请仅启用你信任来源的插件；删除会进回收站，可恢复。"));
+
+  // 总开关：落后端（加载前门槛）。失败回退 UI 状态，不留假显示。
+  const hostToggle = _h("input", { type: "checkbox", className: "toggle toggle-sm toggle-warning" });
+  hostToggle.addEventListener("change", async () => {
+    const want = hostToggle.checked;
+    try {
+      await _stHostFetch("/config/setdata", { hostEnabled: want });
+      window._beiluToast?.(want ? "宿主已启用" : "宿主已禁用", "info");
+    } catch (err) {
+      hostToggle.checked = !want;
+      window._beiluToast?.("宿主开关保存失败: " + err.message, "error");
+    }
+  });
+  wrap.appendChild(_settingRow("启用酒馆插件宿主", "总开关。关闭时任何酒馆插件都不会被注入页面（加载前门槛，状态存后端）", hostToggle));
+
+  // [0807 凛倾"插件那些前端和关联放到 st 兼容那里"] 插件设置/加载错误浮层的入口。
+  //   浮层 DOM 常驻 body（st-ui.mjs）不进本面板——本面板每次打开重建 innerHTML，插件已 append
+  //   的设置内容放这里会被清掉（框架约束），故此处只放入口按钮，经运行时桥打开常驻浮层。
+  const openPanelBtn = _h("button", { className: "btn btn-sm" }, "打开插件设置与加载状态");
+  openPanelBtn.addEventListener("click", () => {
+    if (window.__beiluStHostOpenPanel) window.__beiluStHostOpenPanel();
+    else window._beiluToast?.("宿主尚未加载（开启总开关并刷新页面后可用）", "info");
+  });
+  wrap.appendChild(_settingRow("插件设置面板", "已加载插件的设置界面 + 加载错误列表（常驻浮层，插件内容不随本面板刷新丢失）", openPanelBtn));
+
+  // 安装框：贴 git 仓库 URL（可加 #分支）→ 后端 clone + manifest 校验，失败自动回滚
+  const urlInput = _h("input", {
+    type: "text",
+    className: "input input-sm input-bordered",
+    placeholder: "git 仓库网址，如 https://github.com/作者/插件名（可加 #分支）",
+    style: { flex: "1", minWidth: "0" },
+  });
+  const installBtn = _h("button", { className: "btn btn-sm btn-outline" }, "下载安装");
+  wrap.appendChild(_h("div", { className: "ext-btn-group" }, urlInput, installBtn));
+
+  const listHost = _h("div", null);
+  listHost.textContent = "正在读取插件列表...";
+  wrap.appendChild(listHost);
+  container.appendChild(wrap);
+
+  async function load() {
+    try {
+      const data = await _stHostFetch("/st-plugins/discover");
+      hostToggle.checked = data.hostEnabled === true;
+      listHost.innerHTML = "";
+      const plugins = data.plugins || [];
+      if (!plugins.length) {
+        listHost.appendChild(_h("p", { className: "ext-section-desc" }, "还没有安装任何酒馆插件。贴一个 git 仓库网址开始。"));
+        return;
+      }
+      for (const p of plugins) listHost.appendChild(_renderStHostItem(p, load));
+    } catch (err) {
+      listHost.innerHTML = "";
+      listHost.appendChild(_schemaUnavailableCard(load));
+      window._beiluToast?.("酒馆插件列表读取失败: " + err.message, "error");
+    }
+  }
+
+  installBtn.addEventListener("click", async () => {
+    const url = urlInput.value.trim();
+    if (!url) { window._beiluToast?.("请先粘贴 git 仓库网址", "warning"); return; }
+    installBtn.disabled = true;
+    installBtn.textContent = "下载中...";
+    try {
+      const data = await _stHostFetch("/st-plugins/install", { url });
+      window._beiluToast?.(`已安装 ${data.manifest?.display_name || data.name}（默认禁用，启用前请确认来源可信）`, "info");
+      urlInput.value = "";
+      await load();
+    } catch (err) {
+      // 失败原样展示后端 error（clone 失败/manifest 不合法已回滚等），不吞不改写
+      window._beiluToast?.("安装失败: " + err.message, "error");
+    } finally {
+      installBtn.disabled = false;
+      installBtn.textContent = "下载安装";
+    }
+  });
+
+  load();
+}
+
+/** 单个插件行：display_name + 版本/作者/目录名；manifest 损坏显红并展示 error；启停/删除对接后端 */
+function _renderStHostItem(p, reload) {
+  const broken = !!p.error || !p.manifest;
+  const name = p.manifest?.display_name || p.name;
+  const desc = broken
+    ? `manifest 损坏：${p.error || "无法解析"}`
+    : [p.name, p.manifest?.version ? "v" + p.manifest.version : null, p.manifest?.author].filter(Boolean).join(" · ");
+
+  const controls = _h("div", { className: "ext-btn-group", style: { margin: "0" } });
+
+  if (!broken) {
+    const toggle = _h("input", { type: "checkbox", className: "toggle toggle-sm toggle-warning" });
+    toggle.checked = p.enabled === true;
+    toggle.addEventListener("change", async () => {
+      const want = toggle.checked;
+      try {
+        await _stHostFetch("/st-plugins/toggle", { name: p.name, enabled: want });
+        window._beiluToast?.(`${name} 已${want ? "启用" : "禁用"}（刷新页面后生效）`, "info");
+      } catch (err) {
+        toggle.checked = !want;
+        window._beiluToast?.("启停失败: " + err.message, "error");
+      }
+    });
+    controls.appendChild(toggle);
+  }
+
+  const delBtn = _h("button", { className: "btn btn-xs btn-ghost text-error" }, "删除");
+  delBtn.addEventListener("click", async () => {
+    if (!window.confirm(`删除酒馆插件「${name}」？\n删除后会进回收站（st-plugins/.trash），可手动恢复。`)) return;
+    try {
+      await _stHostFetch("/st-plugins/delete", { name: p.name });
+      window._beiluToast?.(`已删除 ${name}（回收站可恢复）`, "info");
+      await reload();
+    } catch (err) {
+      window._beiluToast?.("删除失败: " + err.message, "error");
+    }
+  });
+  controls.appendChild(delBtn);
+
+  const row = _settingRow(name, desc, controls);
+  if (broken) {
+    const labelMain = row.querySelector(".label-main");
+    const labelDesc = row.querySelector(".label-desc");
+    if (labelMain) labelMain.style.color = "var(--color-error, #e05555)";
+    if (labelDesc) labelDesc.style.color = "var(--color-error, #e05555)";
+  }
+  return row;
 }

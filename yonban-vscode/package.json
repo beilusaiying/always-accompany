@@ -2,11 +2,11 @@
   "name": "yonban",
   "displayName": "YonBan — beilu IDE Bridge",
   "description": "将 beilu-always-accompany 后端与 VSCode/Cursor 连接，为 AI 提供 IDE 工具执行能力",
-  "version": "0.2.9",
+  "version": "0.2.11",
   "publisher": "linqing",
   "repository": {
     "type": "git",
-    "url": "https://github.com/beilusaiying/beilu-always-accompany"
+    "url": "https://github.com/beilusaiying/yonban-programming-extensions.git"
   },
   "engines": {
     "vscode": "^1.85.0"

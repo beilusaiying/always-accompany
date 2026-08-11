@@ -1080,7 +1080,9 @@ export class ChatService {
       return {
         available: true,
         snapshot: {
-          estimated_tokens: meta.estimated_tokens || 0,
+          // [0811 分子同口径] 优先 code_token_status.used（getPromptHandler 注入+chatLog×1.2 安全余量，
+          // 与本体进度条同数）；缺失回退 estimated_tokens（无余量口径，约低 17%）。
+          estimated_tokens: (meta.code_token_status && meta.code_token_status.used) || meta.estimated_tokens || 0,
           model_params: {
             max_context: meta.max_context || 0,
             max_tokens: resp?.max_tokens,
@@ -1280,6 +1282,32 @@ export class ChatService {
       // chatid：后端 updateConfig 据此解析当前 chat 的 primaryCharName 归位 per-char 配置
       // （不带 char 上下文会回退 _global=死配置，消费端读回复 char 的 _config.json 无 _global 回退）。
       { _action: "updateConfig", web_search: { enabled }, ...(this._currentChatId ? { chatid: this._currentChatId } : {}) },
+    );
+  }
+
+  /**
+   * Token提醒配置读侧（0811）：与 getWebSearchConfig 同范式——带 chatid → 后端 chatid→primaryCharName
+   * 归位读 per-char _config.json（不带会回退 _global 死配置，D1 同病），返回 DEFAULT 合并后的生效 token_reminder。
+   */
+  async getTokenReminderConfig(): Promise<Record<string, unknown>> {
+    return this._callPluginApi<Record<string, unknown>>(
+      "beilu-memory",
+      "config/setdata",
+      "POST",
+      { _action: "getTokenReminderConfig", ...(this._currentChatId ? { chatid: this._currentChatId } : {}) },
+    );
+  }
+
+  /**
+   * Token提醒配置写侧（0811：AI清理最低占用% 从 YonBan Token设置弹窗可改）：与本体 Token设置弹窗
+   * 同一 updateConfig 白名单写口（setDataActions token_reminder 逐字段合并，不覆盖 thresholds 等旁字段）。
+   */
+  async updateTokenReminder(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this._callPluginApi<Record<string, unknown>>(
+      "beilu-memory",
+      "config/setdata",
+      "POST",
+      { _action: "updateConfig", token_reminder: patch, ...(this._currentChatId ? { chatid: this._currentChatId } : {}) },
     );
   }
 

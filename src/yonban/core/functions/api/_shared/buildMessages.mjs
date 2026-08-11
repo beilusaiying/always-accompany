@@ -19,6 +19,7 @@ import { isTextLikeFile } from "./textAttachment.mjs";
 import { maybeAppendRoleReminder } from "./roleReminding.mjs";
 import { applyModelParams } from "./applyModelParams.mjs";
 import { paramDefault } from "../../prompt/preset/engine/paramSchema.mjs";
+import { isIdeToolResultMsg } from "../../../transport/ideTagParser.mjs";
 import {
   buildChatLogMessages,
   buildCompatMessages,
@@ -264,6 +265,21 @@ export function buildMessagesFromPromptStruct(prompt_struct, callConfig, configT
           }
         }
       }
+    }
+  }
+
+  // 用户按 AI 源显式开启时，只在最终请求的消息副本上把 IDE 工具回执改为 user。
+  // 必须放在 PP 合并之前：否则工具回执可能先与相邻 system 合并，随后会把整段提示词一起降级。
+  // 识别规则复用 ideTagParser 单一真源；聊天记录本体、普通 system、消息文本和顺序均不修改。
+  if (callConfig.convert_config?.ide_tool_results_as_user === true) {
+    let _convertedToolResults = 0;
+    messages = messages.map((message) => {
+      if (message.role !== "system" || !isIdeToolResultMsg(message)) return message;
+      _convertedToolResults++;
+      return { ...message, role: "user" };
+    });
+    if (_convertedToolResults > 0) {
+      console.log(`[buildMessages] IDE 工具结果出站角色 system→user: ${_convertedToolResults} 条`);
     }
   }
 

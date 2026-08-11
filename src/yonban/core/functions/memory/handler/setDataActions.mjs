@@ -95,6 +95,7 @@ import {
   __projectRoot,
   diag,
   ensureMemoryDir,
+  DEFAULT_TOKEN_REMINDER, // 0811 getTokenReminderConfig 读侧：返回 DEFAULT 合并后的生效值（后端唯一默认权威）
   getActiveMode,
   getCacheKey,
   getMemoryDir,
@@ -196,7 +197,9 @@ import { countTokensSync } from "../nlp/tokenizer.mjs";
 //   5=[D3 0804] 存量条目过 normalizeSubModeForSave 写门归一(段7:contract 剥除+schemaVersion:2+
 //     fallbackPolicy 默认 fail_closed+flat↔nested 缺侧同步+真冲突只标 _profile_conflicts 不静默挑选;
 //     幂等可重复,不覆盖用户值)。
-const SUB_MODES_SCHEMA = 5;
+//   6=[0811 凛倾拍板] code组新增「PPT制作」子模式(撤销0724删除;存量用户经迁移段4"补充缺失的编程
+//     子模式"按 id union 补齐;id 用中文"PPT制作"避开 _oldToNew/_removedIds2 里被永久剔除的 "ppt-designer")。
+const SUB_MODES_SCHEMA = 6;
 
 import {
   asyncAITasks,
@@ -1221,8 +1224,17 @@ async function _resolveCompanionTarget(username, charName, cfg) {
  */
 async function _verifyChatOwnership(chatid, username) {
   try {
-    const { getChatMetadatas } = await import("../../../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
-    const _meta = getChatMetadatas().get(chatid);
+    const { getChatMetadatas, initializeChatMetadatas } = await import("../../../../../public/parts/shells/beilu-chat/src/lib/chatStorage.mjs");
+    let _meta = getChatMetadatas().get(chatid);
+    // [0808下午 两态拆分·框架修] 原实现把「索引未就绪」与「确实无此 chatid」折叠成同一个
+    //   E_CHAT_UNKNOWN：启动窗口期/worker isolate 未扫盘时，早到的合法请求被批量误拒
+    //   （0808 日志 chatOwnerReject 14+ action 竞态族）。未命中先走与 loadChat(:749) 同一条
+    //   自愈路——initializeChatMetadatas 幂等扫盘（内置 5s 节流，真未知 chatid 重复打不穿）——
+    //   再重查；仍未命中才是「已就绪且查无」，维持 P0-C fail-closed 拒绝语义不变。
+    if (!_meta) {
+      try { initializeChatMetadatas(); } catch { /* 扫盘失败按未命中处理，落入 fail-closed */ }
+      _meta = getChatMetadatas().get(chatid);
+    }
     if (!_meta) return { ok: false, code: "E_CHAT_UNKNOWN", error: `chatid 未知，归属不可证明（fail-closed）: ${String(chatid).slice(0, 40)}` };
     if (_meta.username !== username) return { ok: false, code: "E_CHAT_OWNER_MISMATCH", error: "chatid 不属于当前认证用户，已拒绝" };
     return { ok: true };
@@ -1298,6 +1310,12 @@ export async function handleSetData(data, args, internalCapability = null) {
     //   （payload 显式声明=线级写意图；无声明=char 级语义，广播走无 chatid 的 emitAll 回退）。
     //   归属已在 handleSetData 头部闸校验（data.chatid 是 _chatid 首选候选）。
     const _switchChatId = data.chatid || data.chatId || null;
+    // [0808 模式=窗口身份·凛倾拍板「绑定角色卡和窗口，不绑对话id」] windowToken=发起切换的前端窗口
+    //   实例令牌（featureControls getWindowInstanceToken 每窗一份，页内存续）。它随 mode_changed 广播
+    //   原样回显，前端 _beiluApplyModeFromWs 据此只应用【本窗发起】的切换回流——两窗绑同一条对话时，
+    //   B 的用户切换不再翻转 A 的窗口模式（跨窗互拽死循环的翻转通路之一）。后端不解释不存储该令牌，
+    //   纯回显；缺失（旧前端/AI 链/YonBan）= 广播无 token，前端按"非本窗"处理。
+    const _switchWindowToken = (typeof data.windowToken === "string" && data.windowToken.length <= 64) ? data.windowToken : null;
     wbT(_chatid, "setDataActions", "switchMode:enter", { targetMode, switchUsername, switchCharName, switchChatId: _switchChatId });
     console.log(`[beilu-memory] switchMode: mode=${targetMode}, user=${switchUsername}, char=${switchCharName}`);
     // [隔离架构 2026-07-25 mode 域对称化 · 凛倾「高内聚低耦合」] 带窗口坐标=只写线级（与 preset 域
@@ -1310,13 +1328,11 @@ export async function handleSetData(data, args, internalCapability = null) {
       ? setActiveMode(switchUsername, switchCharName, targetMode, _switchChatId)
       : setActiveMode(switchUsername, switchCharName, targetMode);
     if (result.success) {
-      // [多窗口审计 2026-07-11 A3] verify 维度对齐写点：带 chatid 时核线级 active_modes_map[cid]
-      //   （本次真正写的键），原不带 cid 恒核 char 级——双窗并发时 A 的 verify 读到 B 刚写的
-      //   char 级值 → A 误报"验证失败"提前 return（绑定初始化/扇出全跳过），而 A 的写已落盘。
-      const verifyMode = getActiveMode(switchUsername, switchCharName, _switchChatId);
-      if (verifyMode !== targetMode) {
-        return { success: false, error: `模式切换验证失败: 预期=${targetMode}, 实际=${verifyMode}` };
-      }
+      // [0808 verify 读回删除·两窗死循环根修] 原 A3 verify（写后 getActiveMode 读回比对）在两窗绑
+      //   同一条对话时是假失败产生器：A 写完 map[cid]、verify 前 B 并发写同键不同值 → A 读到 B 的值
+      //   → 误报"验证失败" → 前端回滚 tab → B 侧对称发生 → 互相回退死循环（凛倾 0808 第二循环）。
+      //   写路径本身可信：setActiveMode 全同步 RMW（saveJsonFile=nicerWriteFileSync），单进程事件循环内
+      //   不可被打断，写失败会经 setActiveMode 自身返回 success:false——读回验证只多出竞态窗口，删。
       // [0716 凛倾定案] 「模式绑定预设」概念整体删除（原 mode_preset_bindings 读取+首入初始化块在此）：
       //   设计里只有「当前正在使用的预设」（active_preset_map[cid:mode]，无记录回退全局 active_preset）。
       // scheduler 生命周期跟 ModeDef 声明（features.scheduler.enabled），零硬编码模式名。
@@ -1387,6 +1403,14 @@ export async function handleSetData(data, args, internalCapability = null) {
       await _broadcastModeChanged(_switchChatId, {
         mode: targetMode,
         charName: switchCharName,
+        // [0808 模式=窗口身份] 发起窗口令牌原样回显（见 :enter 处注释）；null 不落字段
+        // [0808下午 发起源分流·凛倾拍板] origin 单公式推导：带窗口令牌=web 窗口发起（前端按令牌隔离，
+        //   跨窗不互拽）；无令牌=external（AI 链 <modeSwitch>/delegate 跨组/YonBan/桥——这些调用方
+        //   都不产生窗口令牌），前端跟随翻转，封掉"后端已切、前端生成轴停旧模式"的三态分叉。
+        //   不信任 payload 自报 origin（调用方伪造 web 令牌才可能冒充，令牌本身即凭据），公式与
+        //   featureControls._beiluApplyModeFromWs 的前端推导式同源。
+        origin: _switchWindowToken ? "web" : "external",
+        ...(_switchWindowToken ? { windowToken: _switchWindowToken } : {}),
       });
     }
     return result;
@@ -1410,6 +1434,18 @@ export async function handleSetData(data, args, internalCapability = null) {
     const wscDir = getMemoryDir(wscUsername, wscChar);
     const wscCfg = loadJsonFileIfExists(path.join(wscDir, "_config.json"), {});
     return { success: true, charName: wscChar, web_search: wscCfg.web_search || {} };
+  }
+
+  // === 获取Token提醒配置（0811，YonBan 读侧）===
+  // 与上方 getWebSearchConfig 同范式（chatid→primaryCharName 归位，读写同源）；返回
+  // DEFAULT_TOKEN_REMINDER 合并后的生效值——YonBan Token设置弹窗回显 ai_clean_min_percent
+  // 等字段不必在前端镜像默认值（后端唯一默认权威）。写侧=updateConfig token_reminder 合并写口。
+  if (data._action === "getTokenReminderConfig") {
+    const trcUsername = data.username || args?.username || "_default";
+    const trcChar = await _resolveRequestChar(data, args, data.charName || args?.char_id || "_global");
+    const trcDir = getMemoryDir(trcUsername, trcChar);
+    const trcCfg = loadJsonFileIfExists(path.join(trcDir, "_config.json"), {});
+    return { success: true, charName: trcChar, token_reminder: { ...DEFAULT_TOKEN_REMINDER, ...(trcCfg.token_reminder || {}) } };
   }
 
   // === N38 对话线模式绑定 ===
@@ -1932,8 +1968,9 @@ export async function handleSetData(data, args, internalCapability = null) {
       const injPrompts = presetsData.injection_prompts || [];
       const inj = injPrompts.find((p) => p.id === data.injectionId);
       if (!inj) return { success: false, error: `未找到注入条目 ${data.injectionId}` };
-      // 缓存前缀契约：先对完整拟保存状态校验，再修改内存对象，避免失败请求留下半更新。
-      // 启用且 depth>=1 的条目只允许 volatileMacros.mjs 登记的稳定宏；动态宏必须拆到 depth:0。
+      // 缓存前缀契约（凛倾 0810 定案：只提醒不拦截）：对拟保存状态做动态宏检测，结果只作为
+      // warning 随成功返回下发（前端徽标/横幅为同源提醒），保存一律按用户配置执行——
+      // 系统禁止拒绝或改写用户设定的 depth/role。autoMode 值域校验与缓存契约无关，保持拒绝。
       if (data.autoMode !== undefined && !isValidInjectionAutoMode(String(data.autoMode)))
         return { success: false, error: `非法 autoMode "${data.autoMode}"（合法值=always/all/manual/file + 已注册模式/别名域）` };
       const _nextEnabled = data.enabled !== undefined ? !!data.enabled : inj.enabled !== false;
@@ -1946,22 +1983,8 @@ export async function handleSetData(data, args, internalCapability = null) {
         role: _nextRole,
         content: _nextContent,
       });
-      if (_placement.effectiveDepth !== _placement.requestedDepth) {
-        return {
-          success: false,
-          error: `历史前条目不能使用非稳定宏：${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}。请拆到 depth:0 数据条目。`,
-          code: "E_INJ_UNSAFE_CACHE_PREFIX_MACRO",
-          unsafeMacros: _placement.unsafeMacros,
-        };
-      }
-      if (_placement.effectiveRole !== _placement.requestedRole) {
-        return {
-          success: false,
-          error: `历史后动态数据条目必须使用 user 角色，否则 Claude 适配器会把 system 消息抽回缓存前缀。`,
-          code: "E_INJ_DYNAMIC_DATA_REQUIRES_USER_ROLE",
-          unsafeMacros: _placement.unsafeMacros,
-        };
-      }
+      const _cacheWarning = _placement.safe ? undefined
+        : `提醒: 该条目含动态宏 ${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}，按当前 depth/role 保存后位于缓存前缀区，可能破坏 Anthropic 缓存命中（0729 事故同型）。已按你的配置原样保存。`;
       if (data.enabled !== undefined) inj.enabled = !!data.enabled;
       if (data.content !== undefined) inj.content = String(data.content);
       if (data.name !== undefined) inj.name = String(data.name);
@@ -1986,7 +2009,7 @@ export async function handleSetData(data, args, internalCapability = null) {
         if (data.autoMode !== undefined) appendBehaviorSignal(username, charName, { type: "automode_change", target: inj.id, action: String(data.autoMode) });
       } catch { /* 信号采集失败不影响主流程 */ }
       await _broadcastInjPromptsChanged(username); // [0716 W4]
-      return { success: true };
+      return { success: true, ...(_cacheWarning ? { warning: _cacheWarning, unsafeMacros: _placement.unsafeMacros } : {}) };
     }
 
     case "addInjectionPrompt": {
@@ -2005,28 +2028,15 @@ export async function handleSetData(data, args, internalCapability = null) {
         // 平台限定注入（凛倾 07-09）：可选字段，autoMode="bot" 时门控只进该平台 bot 会话
         ...(data.platform ? { platform: String(data.platform) } : {}),
       };
+      // 缓存前缀契约（凛倾 0810 定案：只提醒不拦截）——同 updateInjectionPrompt 口径。
       const _placement = inspectInjectionCachePrefix(newInj);
-      if (_placement.effectiveDepth !== _placement.requestedDepth) {
-        return {
-          success: false,
-          error: `历史前条目不能使用非稳定宏：${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}。请拆到 depth:0 数据条目。`,
-          code: "E_INJ_UNSAFE_CACHE_PREFIX_MACRO",
-          unsafeMacros: _placement.unsafeMacros,
-        };
-      }
-      if (_placement.effectiveRole !== _placement.requestedRole) {
-        return {
-          success: false,
-          error: `历史后动态数据条目必须使用 user 角色，否则 Claude 适配器会把 system 消息抽回缓存前缀。`,
-          code: "E_INJ_DYNAMIC_DATA_REQUIRES_USER_ROLE",
-          unsafeMacros: _placement.unsafeMacros,
-        };
-      }
+      const _cacheWarning = _placement.safe ? undefined
+        : `提醒: 该条目含动态宏 ${_placement.unsafeMacros.map((m) => `{{${m}}}`).join(", ")}，按当前 depth/role 保存后位于缓存前缀区，可能破坏 Anthropic 缓存命中（0729 事故同型）。已按你的配置原样保存。`;
       injPrompts.push(newInj);
       presetsData.injection_prompts = injPrompts;
       saveMemoryPresets(username, charName, presetsData);
       await _broadcastInjPromptsChanged(username); // [0716 W4]
-      return { success: true, id: newId, injection: newInj };
+      return { success: true, id: newId, injection: newInj, ...(_cacheWarning ? { warning: _cacheWarning, unsafeMacros: _placement.unsafeMacros } : {}) };
     }
 
     case "deleteInjectionPrompt": {
@@ -2510,18 +2520,16 @@ export async function handleSetData(data, args, internalCapability = null) {
       if (!Array.isArray(importData.presets) || !Array.isArray(importData.injection_prompts)) return { success: false, error: "缺少 presets 或 injection_prompts 数组" };
       // inj 识别系统 2026-07-13：导入是 injection_prompts 的整体覆写点，与 add/update 同口径校验
       //   autoMode 值域（否则非法值绕过写入口静默入库，门控层拒时无诊断面）
+      let _importCacheWarning;
       {
         const _badAm = importData.injection_prompts.filter((p) => p?.autoMode !== undefined && !isValidInjectionAutoMode(String(p.autoMode)));
         if (_badAm.length) return { success: false, error: `导入含非法 autoMode 条目: ${_badAm.map((p) => `${p.id || p.name || "?"}(${p.autoMode})`).join(", ")}` };
+        // 缓存前缀契约（凛倾 0810 定案：只提醒不拦截）：导入按用户数据原样落盘，警告随结果下发。
         const _badCachePlacement = importData.injection_prompts
           .map((p) => ({ entry: p, placement: inspectInjectionCachePrefix(p) }))
           .filter(({ placement }) => !placement.safe);
         if (_badCachePlacement.length) {
-          return {
-            success: false,
-            code: "E_IMPORT_UNSAFE_INJ_CACHE_PLACEMENT",
-            error: `导入含不安全缓存位置/角色条目: ${_badCachePlacement.map(({ entry, placement }) => `${entry?.id || entry?.name || "?"}[depth ${placement.requestedDepth}->${placement.effectiveDepth}, role ${placement.requestedRole}->${placement.effectiveRole}]`).join(", ")}`,
-          };
+          _importCacheWarning = `提醒: 导入含动态宏且位于缓存前缀区的条目（已按原样导入，可能破坏缓存命中）: ${_badCachePlacement.map(({ entry, placement }) => `${entry?.id || entry?.name || "?"}(${placement.unsafeMacros.map((m) => `{{${m}}}`).join("/")})`).join(", ")}`;
         }
       }
       if (data.backupExisting !== false) {
@@ -2531,7 +2539,7 @@ export async function handleSetData(data, args, internalCapability = null) {
       }
       saveMemoryPresets(username, charName, { presets: importData.presets, injection_prompts: importData.injection_prompts });
       await _broadcastInjPromptsChanged(username); // [0716 W4] 导入=injection_prompts 整体覆写点
-      return { success: true, presetsCount: importData.presets.length, injectionCount: importData.injection_prompts.length };
+      return { success: true, presetsCount: importData.presets.length, injectionCount: importData.injection_prompts.length, ...(_importCacheWarning ? { warning: _importCacheWarning } : {}) };
     }
 
     case "deleteMemoryFile": {
@@ -4625,7 +4633,9 @@ export async function handleSetData(data, args, internalCapability = null) {
       const _avCurMode = getActiveMode(_avUser, _avVerifiedChar, _avChatId || null);
       let _avModeSwitched = false;
       if (_avGroup !== _avCurMode) {
-        const _avSwitch = await handleSetData({ _action: "switchMode", mode: _avGroup, chatid: _avChatId || undefined, charName: _avVerifiedChar, tab: data.tab }, args);
+        // [0808 模式=窗口身份] windowToken 透传：跨组切换的 mode_changed 广播带发起窗口令牌，
+        //   该窗 _beiluApplyModeFromWs 识别为本窗回流才翻转 UI（subModePanel 依赖此回流对齐模式态）。
+        const _avSwitch = await handleSetData({ _action: "switchMode", mode: _avGroup, chatid: _avChatId || undefined, charName: _avVerifiedChar, tab: data.tab, windowToken: data.windowToken }, args);
         if (!_avSwitch?.success) {
           // 模式切换失败=整体中止，子模式未激活。owner/角色/目标实体/旧 map 跨组冲突等
           // 确定性失败已在切换前排除；切换后的 core 仍基于最新态复核，拒绝并发变化。

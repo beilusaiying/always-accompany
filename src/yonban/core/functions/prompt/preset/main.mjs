@@ -2000,9 +2000,25 @@ const pluginExport = {
             return { success: false, error: `预设 "${targetName}" 不存在或无内容` };
           }
           try {
+            // [0807 §七#6] 对齐酒馆 OAI_PRESET_EXPORT_READY：导出前按脚本 export_with 清理
+            //   tavern_helper.scripts 的 data/button（仅显式 false 才清，缺省=随行；variables 恒随文件走）。
+            //   深克隆只发生在导出快照——live 引擎态/configData 不被触碰。
+            let _exportJson = presetData.preset_json;
+            const _expTh = _exportJson?.extensions?.tavern_helper;
+            if (Array.isArray(_expTh?.scripts) && _expTh.scripts.length > 0) {
+              _exportJson = JSON.parse(JSON.stringify(_exportJson));
+              const _cleanScriptNode = (node) => {
+                if (!node || typeof node !== "object") return;
+                if (Array.isArray(node.scripts)) { node.scripts.forEach(_cleanScriptNode); return; } // 新 folder
+                if (Array.isArray(node.value)) { node.value.forEach(_cleanScriptNode); return; } // 旧 folder（未规范化存量）
+                if (node.export_with?.data === false) node.data = {};
+                if (node.export_with?.button === false && node.button && typeof node.button === "object") node.button.buttons = [];
+              };
+              _exportJson.extensions.tavern_helper.scripts.forEach(_cleanScriptNode);
+            }
             // preset_json 已是 toJSON() 形态（ST 形：prompts/prompt_order/extensions/模型参数齐全）
             // 走 exportSTPreset 做 enabled 同步等校正，产物可被 importSTPreset 吃回
-            const stJson = exportSTPreset(presetData.preset_json, {
+            const stJson = exportSTPreset(_exportJson, {
               pretty: true,
               includeDisabled: true,
             });
@@ -2333,32 +2349,47 @@ const pluginExport = {
 
         // 复制预设
         if (data.duplicate_preset) {
-          const { name: sourceName } = data.duplicate_preset;
+          // [0810 半接线接通] 前端 #pp-dup 早发 newName（panels.mjs:773，用户"复制为："输入名），
+          //   后端原只解构 name、丢弃 newName、恒用计数器命名 → 用户输入的新名字永不生效（本次 bug 根因）。
+          //   接通：用户指定名优先；缺失/空串（兼容潜在不传 newName 的旧/别的调用方）回退计数器命名。
+          const { name: sourceName, newName } = data.duplicate_preset;
           const sourceData = configData.presets[sourceName];
-          if (sourceData) {
-            // 生成不重复的新名称：原名 (1), 原名 (2), ...
-            let newName;
+          // 源必须真实存在：不存在=明确拒绝（原 console.warn 后落 {success:true} 是假成功）。走 SetData
+          //   既有 {success:false,error} 上浮范式（同 restore_preset:2429 族），经 facade setData 透传前端。
+          if (!sourceData) {
+            return { success: false, error: `源预设 "${sourceName}" 不存在，无法复制` };
+          }
+          // 目标名：用户指定名 trim 后非空则用之；否则回退"原名 (1)/(2)/…"计数器（自动避重）。
+          const _requested = typeof newName === "string" ? newName.trim() : "";
+          let targetName;
+          if (_requested) {
+            // 用户指定名：查重。已存在=明确拒绝，禁止覆盖/静默改名（对齐 preset"写目标必须真实存在"保护
+            //   语义；rename_preset 对撞名是静默 no-op，此处比其更强：显式上浮错误，让前端能收到失败非假成功）。
+            if (configData.presets[_requested]) {
+              return { success: false, error: `预设 "${_requested}" 已存在，无法复制为该名称` };
+            }
+            targetName = _requested;
+          } else {
+            // 回退：生成不重复的新名称 原名 (1), 原名 (2), ...
             let counter = 1;
             do {
-              newName = `${sourceName} (${counter})`;
+              targetName = `${sourceName} (${counter})`;
               counter++;
-            } while (configData.presets[newName]);
-
-            // 深拷贝预设数据
-            configData.presets[newName] = JSON.parse(JSON.stringify(sourceData));
-            // saveConfigToDisk 只写激活预设，复制品非激活时需直接落盘
-            const dup = configData.presets[newName];
-            await savePresetFile(username, newName, {
-              _meta: { name: newName, source: "user", description: dup.description || "" },
-              preset_json: dup.preset_json || {},
-              model_params: dup.model_params || {},
-              macro_variables: dup.macro_variables || {},
-            });
-            console.log(`[beilu-preset] 预设已复制: "${sourceName}" → "${newName}"`);
-            _presetListChanged = true;
-          } else {
-            console.warn(`[beilu-preset] duplicate_preset: 源预设 "${sourceName}" 不存在`);
+            } while (configData.presets[targetName]);
           }
+
+          // 深拷贝预设数据
+          configData.presets[targetName] = JSON.parse(JSON.stringify(sourceData));
+          // saveConfigToDisk 只写激活预设，复制品非激活时需直接落盘
+          const dup = configData.presets[targetName];
+          await savePresetFile(username, targetName, {
+            _meta: { name: targetName, source: "user", description: dup.description || "" },
+            preset_json: dup.preset_json || {},
+            model_params: dup.model_params || {},
+            macro_variables: dup.macro_variables || {},
+          });
+          console.log(`[beilu-preset] 预设已复制: "${sourceName}" → "${targetName}"`);
+          _presetListChanged = true;
         }
 
         // 重命名预设
@@ -2588,6 +2619,29 @@ const pluginExport = {
           _tpEng.updateModelParams(data.update_model_params);
           await _tpSync();
           console.log(`[beilu-preset] update_model_params: max_context=${_tpEng.modelParams.max_context}, max_tokens=${_tpEng.modelParams.max_tokens} (preset: ${_tpName || configData.active_preset})`);
+        }
+
+        // [0807 §七#6 preset 半"导出即丢"] 预设级 tavern_helper 数据写口。
+        //   挂载点=preset_json.extensions.tavern_helper={scripts,variables}（逐字对齐酒馆助手
+        //   setting_field='tavern_helper'+PresetSettings 形状；与 regex_scripts 同住 extensions
+        //   → engine load/toJSON 浅展开天然往返，import/exportSTPreset 零改随行=导出即带）。
+        //   写目标=_tpEng 固定点（显式 _target_preset > args.chatid 线解析 > 全局主引擎），
+        //   与条目/模型参数写口同一目标语义；_tpSync 落 configData+预设文件。
+        //   前端消费方：variableStore(preset 变量)/scriptManager(预设脚本树)/charscript(运行时加载)。
+        if (data.update_tavern_helper) {
+          if (!_tpEng.isLoaded()) {
+            // 无装载预设=没有归属文件可写。错误必须可见（与 _target_preset 无效目标同语义），禁静默丢写。
+            return { success: false, error: "无激活预设（引擎未装载），无法写入预设级 tavern_helper 数据" };
+          }
+          const _thPatch = data.update_tavern_helper;
+          const _thPrev = _tpEng.presetData.extensions?.tavern_helper;
+          const _th = (_thPrev && typeof _thPrev === "object") ? { ..._thPrev } : {};
+          if (_thPatch.scripts !== undefined) _th.scripts = Array.isArray(_thPatch.scripts) ? _thPatch.scripts : [];
+          if (_thPatch.variables !== undefined) _th.variables = (_thPatch.variables && typeof _thPatch.variables === "object" && !Array.isArray(_thPatch.variables)) ? _thPatch.variables : {};
+          if (!_tpEng.presetData.extensions || typeof _tpEng.presetData.extensions !== "object") _tpEng.presetData.extensions = {};
+          _tpEng.presetData.extensions.tavern_helper = _th;
+          await _tpSync();
+          console.log(`[beilu-preset] update_tavern_helper: scripts=${_thPatch.scripts !== undefined ? "写" : "保"} variables=${_thPatch.variables !== undefined ? "写" : "保"} (preset: ${_tpName || configData.active_preset})`);
         }
 
         // 修改宏变量（#30 隐患1同族修复：宏记忆按目标预设取——激活=全局 macroMemory，

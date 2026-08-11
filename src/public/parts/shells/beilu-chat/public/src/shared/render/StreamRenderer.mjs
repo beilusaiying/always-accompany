@@ -41,6 +41,7 @@ import { createDiag } from "../state/diagLogger.mjs";
 import {
   detectContentType,
   extractThinkingContent,
+  applyThinkingVisibilityBadge,
   isRendererEnabled,
   // ★ T10 渲染双管线对齐：复用落稿同一套加工，禁复制第二份（病6自繁殖）。
   //   代码折叠/用户正则/占位符恢复本就在 displayRegex export，此处只追加 import 名。
@@ -378,7 +379,7 @@ export class StreamRenderer {
             : state.displayedContent;
 
           // ★ 提取思维链内容到独立 UI 组件
-          const { cleanText, thinkingText, isComplete } = extractThinkingContent(
+          const { cleanText, thinkingText, isComplete, hasBeiluThinking, hasOtherReasoning } = extractThinkingContent(
             macroApplied,
           );
 
@@ -398,6 +399,8 @@ export class StreamRenderer {
                 ".thinking-toggle-content",
               );
               if (thinkContentEl) thinkContentEl.textContent = thinkingText;
+              // [2026-08-10] badge 与真实 AI 可见性一致（流式与落稿 messageList 同口径）
+              applyThinkingVisibilityBadge(thinkingEl, { hasBeiluThinking, hasOtherReasoning });
 
               // 流式阶段绑定折叠事件（仅绑定一次）
               if (!thinkingEl.dataset.bound) {

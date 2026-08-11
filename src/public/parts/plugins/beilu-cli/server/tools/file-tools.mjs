@@ -370,7 +370,7 @@ async function readDocument(
       default: {
         // .pdf —— pdf-parse v1(底层 pdfjs v2.x,无 DOMMatrix 依赖,可被打包且离线)。
         //   走 /lib/pdf-parse 子路径绕开 index.js 启动时读测试文件的 bug(对标 Cline)。
-        const pdf = (await import("pdf-parse/lib/pdf-parse")).default;
+        const pdf = (await import("pdf-parse/lib/pdf-parse.js")).default;
         text = (await pdf(fs.readFileSync(absPath))).text;
       }
     }

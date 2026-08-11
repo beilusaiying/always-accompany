@@ -165,8 +165,9 @@ export function generateVariableSystemScript() {
 	   之前把 MVU 变量合并到 _vars.chat 会覆盖默认变量。 */
 	(function _syncInjectedMvuVars() {
 		var stChat = (window.SillyTavern && window.SillyTavern.chat) ? window.SillyTavern.chat : [];
-		if (stChat.length > 0 && stChat[0] && stChat[0].variables && stChat[0].variables[0]) {
-			var injected = stChat[0].variables[0];
+		var _swipeId0 = (stChat.length > 0 && stChat[0]) ? (stChat[0].swipe_id || 0) : 0; /* [0807 §七#3] 按真实 swipe 下标读（此前硬编码 [0]，开场白切换时间线后读到空/旧份） */
+		if (stChat.length > 0 && stChat[0] && stChat[0].variables && stChat[0].variables[_swipeId0]) {
+			var injected = stChat[0].variables[_swipeId0];
 			if (injected && typeof injected === 'object' && Object.keys(injected).length > 0) {
 				/* 写入 messages 作用域而非 chat 作用域 */
 				var floorNum = _getFloorNumber(0);

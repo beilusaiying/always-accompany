@@ -466,6 +466,9 @@ function switchTab(tabName, { isInit = false } = {}) {
   layoutState.activeTab = tabName;
   // W28: 设置body级属性，供CSS模式显隐控制
   document.body.dataset.activeTab = tabName;
+  // [0808 windowRuntime 机制·单点 producer] 窗口展示变化事件：后台前端降频/前台正常的唯一
+  //   切窗信号源（windowRuntime.createVisibilityPoller 消费；整页前后台由 visibilitychange 补维度）。
+  window.dispatchEvent(new CustomEvent("beilu:window-shown", { detail: { tab: tabName, prevTab } }));
   const isIdeMode = tabName === "files" || tabName === "memory";
   // [MO-T2] 检测多模式同 chatId 互斥锁 (切到新模式时,如果该模式与其他模式共用 chatId,提示用户)
   if (!isInit) _checkMultiModeChatLock(tabName);

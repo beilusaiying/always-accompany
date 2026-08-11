@@ -65,11 +65,32 @@ const WINDOW_LOCAL_KEYS = new Set([
   _K.BEILU_FILE_ROOT,
 ]);
 
+// [0808 键归位·凛倾拍板「窗口按当前对话文件进行选择」] 模式→对话指针四键 per-window 化。
+//   这些键是动态后缀形（`beilu-{mode}-chatid[:{charName}]`，getModeChatIdKey 生成），Set 精确匹配
+//   接不住，扩展成员判定为前缀域：裸基键与任意 :charName 后缀键都算窗口局部。
+//   why：窗口 A 在 chat 模式切到对话 2，原全局键让窗口 B 刷新后也被拽到对话 2——对话指针是
+//   窗口作业态（每个模式窗口自己选在哪条线上工作），不是跨窗共享偏好。localStorage 侧仍双写，
+//   语义=新窗口的继承默认（与 WINDOW_LOCAL_KEYS 机制同款）；服务端 mode_active_chats「在用指针」
+//   继续作为 headless/新端的权威锚，不受影响。
+const WINDOW_LOCAL_PREFIXES = [
+  _K.BEILU_CHAT_CHATID,
+  _K.BEILU_SMART_CHATID,
+  _K.BEILU_CODE_CHATID,
+  _K.BEILU_WORK_CHATID,
+];
+function _isWindowLocalKey(key) {
+  if (WINDOW_LOCAL_KEYS.has(key)) return true;
+  for (const p of WINDOW_LOCAL_PREFIXES) {
+    if (key === p || (key.length > p.length && key.charCodeAt(p.length) === 58 /* ":" */ && key.startsWith(p))) return true;
+  }
+  return false;
+}
+
 export const storage = {
   /** @returns {string|null} 同 localStorage.getItem；异常返 null。窗口局部键 per-tab 优先+首读钉住 */
   get(key) {
     try {
-      if (WINDOW_LOCAL_KEYS.has(key)) {
+      if (_isWindowLocalKey(key)) {
         const s = sessionStorage.getItem(key);
         if (s !== null) return s;
         const g = localStorage.getItem(key);
@@ -82,7 +103,7 @@ export const storage = {
   /** 同 localStorage.setItem（val 原生 String 强制）；异常静默（quota/private-mode）。窗口局部键双写 */
   set(key, val) {
     try {
-      if (WINDOW_LOCAL_KEYS.has(key)) { try { sessionStorage.setItem(key, val); } catch { /* 静默 */ } }
+      if (_isWindowLocalKey(key)) { try { sessionStorage.setItem(key, val); } catch { /* 静默 */ } }
       localStorage.setItem(key, val);
     } catch (e) {
       // quota/private-mode: 行为仍静默降级，但埋点出信号（偏好写失败=刷新后丢失的根因，原完全不可见）
@@ -92,7 +113,7 @@ export const storage = {
   /** 同 localStorage.removeItem；异常静默。窗口局部键双删 */
   remove(key) {
     try {
-      if (WINDOW_LOCAL_KEYS.has(key)) { try { sessionStorage.removeItem(key); } catch { /* 静默 */ } }
+      if (_isWindowLocalKey(key)) { try { sessionStorage.removeItem(key); } catch { /* 静默 */ } }
       localStorage.removeItem(key);
     } catch (e) {
       _cfgDiag?.warn("remove 失败:", key, e?.name || e?.message);

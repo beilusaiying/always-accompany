@@ -36,9 +36,7 @@
  *   模型参数面板实时读写，修改即时生效于下一次 AI 生成。
  */
 import { showToast } from "./utils.mjs";
-import { getCurrentApiType, getCurrentChannelEntry } from "../settings/apiConfig.mjs" // 6c尾·根级散件归位; // 0711: 渠道条目（获取模型按渠道分发）
-import { modelsRequestFor } from "../settings/apiChannels.mjs" // 0711 渠道下拉恢复：ollama=/api/tags 分发
-import { normalizeModelsUrl } from "../../shared/state/utils.mjs"; // [合并批 0714] models 端点规整单源（原本地 normalizeUrl 副本删除）
+import { getCurrentApiType } from "../settings/apiConfig.mjs" // 6c尾·根级散件归位
 import { beiluConfirm, beiluPrompt } from "../../shared/widgets/beiluDialog.mjs";
 import { sendAction } from "../../shared/transport/sendAction.mjs"; // T6b 批2/批7：出向统一门面（verb=真动作）
 import { getFlowGroupStatusShared } from "../../shared/transport/flowGroupStatus.mjs"; // 浮层 skill 组头部（单飞+TTL 共享，与 work 三面板同源）
@@ -50,7 +48,7 @@ import { storage, KEYS } from "../../shared/state/storage.mjs";
 let _smCache = null; // { chatId, sm } 快照
 window.addEventListener("beilu:subModesConfigChanged", () => { _smCache = null; });
 window.addEventListener("beilu:subModeSwitched", () => { _smCache = null; });
-import { switchPreset, getCharId, getChatId, getCachedPresetData } from "../../shared/state/sharedState.mjs"; // R1：getCharId/getChatId 供后端权威解析当前模式；[0717 四格恢复] getCachedPresetData=四格数据（active_preset_by_mode，per-cid 缓存）
+import { switchPreset, getCharId, getChatId, getCachedPresetData, getCachedModelList } from "../../shared/state/sharedState.mjs"; // R1：getCharId/getChatId 供后端权威解析当前模式；[0717 四格恢复] getCachedPresetData=四格数据（active_preset_by_mode，per-cid 缓存）
 import { getCurrentMode, switchModeTo } from "../feature/featureControls.mjs"; // [D 收口 0713] 当前模式读点单源（原直读 localStorage 旁路，无场景特化理由；featureControls 不反向引本文件,无环）；[0717 四格恢复] switchModeTo=四格点击切换模式
 import { MODE_BADGE } from "../../shared/state/modeTabMap.mjs"; // [0717 四格恢复] 四格文案派生源（纯常量无环，0716 误删随显示功能一并恢复）
 
@@ -193,8 +191,7 @@ const modelParamsStatus = document.getElementById("model-params-status");
 // ============================================================
 
 // ============================================================
-// 模型获取逻辑 (移植自 proxy/display.mjs)
-// [合并批 0714] 本地 normalizeUrl（三副本之一的逻辑源）删除 → shared/state/utils.normalizeModelsUrl 单源
+// 模型获取逻辑：已保存源名 → sharedState 统一缓存/请求入口
 // ============================================================
 
 // [0717 链路修] 乱序守卫序号：apiConfig 切源现在每次都静默触发本函数（原一次性门闩已删），
@@ -203,24 +200,16 @@ const modelParamsStatus = document.getElementById("model-params-status");
 let _fetchModelsSeq = 0;
 async function fetchModels({ silent = false } = {}) {
   const _seq = ++_fetchModelsSeq;
-  const apiUrlInput = document.getElementById("api-url");
-  const apiKeyInput = document.getElementById("api-key");
-  const url = apiUrlInput?.value;
-  const apikey = apiKeyInput?.value;
+  const sourceName = document.getElementById("api-select")?.value?.trim();
   const btn = apiFetchModelsBtn;
   const select = apiModelSelect;
 
-  if (!url) {
-    if (!silent) showToast("请先填写 API URL", "error");
-    return;
-  }
-
-  // 0711: 列表端点按渠道分发（ollama=/api/tags，响应 {models:[{name}]}；其余走 normalizeModelsUrl 单源惯例）
-  const _chEntry = getCurrentChannelEntry();
-  const _req = _chEntry?.generator === "ollama" ? modelsRequestFor(_chEntry, url) : null;
-  const modelsUrl = _req ? _req.url : normalizeModelsUrl(url);
-  if (!modelsUrl) {
-    if (!silent) showToast("无效的 API URL", "error");
+  if (!sourceName) {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("loading");
+    }
+    if (!silent) showToast("请先选择已保存的 API 源", "error");
     return;
   }
 
@@ -231,47 +220,10 @@ async function fetchModels({ silent = false } = {}) {
   if (!silent) showToast("正在获取模型列表...", "info");
 
   try {
-    let models = [];
-
-    // 1. 尝试直接请求
-    try {
-      // R1-SKIP: modelsUrl=用户填的外部 API 端点(自管 Authorization Bearer)；apiFetch 401→/login 对外站有害。
-      const response = await fetch(modelsUrl, {
-        headers: { Authorization: apikey ? "Bearer " + apikey : undefined },
-      });
-      if (response.ok) {
-        const result = await response.json();
-        models = _req ? _req.normalize(result).map((id) => ({ id })) : (result.data || result);
-      } else {
-        throw new Error(`Direct fetch failed: ${response.status}`);
-      }
-    } catch (directError) {
-      console.warn(
-        "[beilu-chat] Direct fetch failed, trying proxy...",
-        directError,
-      );
-
-      // 2. 尝试通过 beilu-memory 代理请求
-      try {
-        // T6b 批2：raw fetch（无超时/401 保护）→ sendAction 门面（memory 通配路由；!ok 抛错并入 catch）
-        const proxyResult = await sendAction({
-          verb: "getModels", target: "plugins:beilu-memory", source: "web",
-          payload: { apiConfig: { url: url, key: apikey } },
-        });
-        if (proxyResult.success && Array.isArray(proxyResult.models)) {
-          models = proxyResult.models.map((id) => ({ id }));
-        } else {
-          throw new Error(proxyResult.error || "Proxy returned invalid data");
-        }
-      } catch (proxyError) {
-        console.error("[beilu-chat] Proxy fetch also failed:", proxyError);
-        throw new Error(`获取模型失败: ${directError.message}`);
-      }
-    }
-
+    const models = await getCachedModelList(sourceName, { force: true });
     if (!Array.isArray(models)) throw new Error("返回数据格式错误");
-
-    const modelIds = [...new Set(models.map((m) => m.id))].sort();
+    const modelIds = [...new Set(models.map((id) => String(id || "").trim()).filter(Boolean))].sort();
+    if (!modelIds.length) throw new Error(`模型源「${sourceName}」未返回可用模型`);
 
     // 更新下拉框（乱序守卫：本轮已被更新的调用超越 → 丢弃，不覆盖新源列表）
     if (select && _seq === _fetchModelsSeq) {
@@ -297,10 +249,10 @@ async function fetchModels({ silent = false } = {}) {
       }
     }
 
-    if (!silent) showToast(`✅ 获取成功，共 ${modelIds.length} 个模型`, "success");
+    if (!silent && _seq === _fetchModelsSeq) showToast(`✅ 获取成功，共 ${modelIds.length} 个模型`, "success");
   } catch (err) {
     console.error("[beilu-chat] 获取模型失败:", err);
-    if (!silent) showToast("❌ " + err.message, "error");
+    if (!silent && _seq === _fetchModelsSeq) showToast("❌ " + err.message, "error");
 
     // B1修复: 获取失败时，如果已有保存的模型名，将其作为fallback选项
     const savedModel = document.getElementById("api-model")?.value?.trim();
@@ -314,7 +266,7 @@ async function fetchModels({ silent = false } = {}) {
       select.classList.remove("hidden");
     }
   } finally {
-    if (btn) {
+    if (btn && _seq === _fetchModelsSeq) {
       btn.disabled = false;
       btn.classList.remove("loading");
     }

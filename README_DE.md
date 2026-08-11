@@ -35,10 +35,10 @@
 
 **Was haben wir?** Hinter diesen Oberflächen steckt dasselbe System; der eigentliche Unterschied konzentriert sich auf vier Dinge:
 
-- **Ein eigenständiger Gedächtnis- und Kontextrahmen** — Data + `hot / warm / cold` bewahren langfristiges Material geschichtet auf; ein Werkzeug zum Sammeln von Kontext und Abrufen von Erinnerungen (P1) holt vor jeder Antwort die aktuell relevanten Fragmente zurück; die Kontextbereinigung arbeitet auf der Granularität einzelner Dateilesungen und ist umkehrbar, und die KI kann bereits gelesene, nicht mehr benötigte Dateien auch selbst verwerfen (in der Umgebung des Autors nach Abrechnungsmaßstab gemessen liegt die Cache-Effizienz bei etwa 70–80 %, kein zugesicherter Wert);
-- **Alle Inhalte sind editierbar** — Charaktere, Prompts, Injektionen, Gedächtnis, Abrufrouten, Berechtigungen und Plugins sind keine Blackbox; für jede Ebene, die du ändern willst, gibt es einen Einstieg;
-- **Ein hoch erweiterbarer Rahmen** — die Kernfunktionen sind als Plugins organisiert, werden über eine mittlere Informationsstation weitergeleitet, und das Frontend übernimmt nur Anzeige und Bedienung; Benutzer-Plugins lassen sich in JS, Python oder als eigenständige Programme schreiben;
-- **Alle Funktionen, die ein Agent hat** — Dateien, Befehle, Browser, MCP, Mehrfenster, Freigabe und Wiederherstellung sind vollständig vorhanden und teilen sich denselben Gedächtnis- und Kontextrahmen; es ist für die Bewältigung großer Projekte gemacht, und sein Kern besteht darin, die begrenzte Aufmerksamkeit dort einzusetzen, wo sie zählt.
+- **Geschichtetes Gedächtnis und Kontext** — Data + `hot / warm / cold` bewahren langfristiges Material in Schichten auf; ein Werkzeug zum Sammeln von Kontext und Abrufen von Erinnerungen (P1) holt vor jeder Antwort aktuell relevante Fragmente zurück; die Kontextbereinigung arbeitet auf Ebene einzelner Dateilesungen, ist umkehrbar, und die KI kann bereits gelesene, nicht mehr benötigte Dateien selbst verwerfen;
+- **Kernverhalten ist einsehbar und konfigurierbar** — für Charaktere, Prompts, Injektionen, Gedächtnis, Abrufrouten, Berechtigungen und Plugins gibt es dokumentierte Bearbeitungs- oder Konfigurationseinstiege;
+- **Ein erweiterbarer Plugin-Rahmen** — die Kernfunktionen sind als Plugins organisiert, werden über eine mittlere Informationsstation weitergeleitet, und das Frontend übernimmt Anzeige und Bedienung; Benutzer-Plugins lassen sich in JS, Python oder als eigenständige Programme schreiben;
+- **Eine integrierte Agent-Werkzeugkette** — sie stellt Dateien, Befehle, Browser-Integration, MCP, Mehrfenster, Freigabe und Wiederherstellung unter einem Gedächtnis- und Kontextrahmen bereit; tatsächliche Verfügbarkeit und Ergebnisse hängen von Modus, Konfiguration, Umgebung, Modell und angebundenen Diensten ab.
 
 ---
 
@@ -66,7 +66,7 @@ Der Launcher lädt bei fehlendem Deno automatisch die Laufzeit herunter und verv
 |---|---|
 | ![Sprache wählen](imgs/screenshots/onboarding-language.png) | ![API verbinden](imgs/screenshots/onboarding-api.png) |
 
-Trage Serviceadresse, API-Key und Modell ein, speichere und wähle oder importiere dann eine Charakterkarte — schon kann der Chat beginnen. Es wird mindestens eine funktionierende AI-API benötigt; Modellfähigkeit und Kosten hängen von dem von dir verbundenen Dienst ab. Die App enthält ein [vollständiges Wiki](site/wiki/getting-started/overview.md), das auch als [Online-Version](https://beilusaiying.github.io/always-accompany/) verfügbar ist.
+Trage Serviceadresse, API-Key und Modell ein, speichere und wähle oder importiere dann eine Charakterkarte — schon kann der Chat beginnen. Es wird mindestens eine funktionierende AI-API benötigt; Modellfähigkeit und Kosten hängen von dem von dir verbundenen Dienst ab. Die App enthält ein [Wiki](site/wiki/getting-started/overview.md), das auch als [Online-Version](https://beilusaiying.github.io/always-accompany/) verfügbar ist.
 
 > Der erste Start dauert meist länger: Die Laufzeit muss Abhängigkeiten herunterladen und lokale Daten initialisieren. Bitte warte, bis die Seite vollständig erscheint, bevor du etwas tust; spätere Starts sind schneller. Optionale Fähigkeiten wie Sprache und Desktop-Pet haben unter Umständen ihren eigenen Erst-Download oder eigene Umgebungsanforderungen.
 
@@ -122,7 +122,7 @@ Trage Serviceadresse, API-Key und Modell ein, speichere und wähle oder importie
 - **🎯 P1 (vorgelagerter Gedächtnisabruf)**: Bevor die Haupt-KI antwortet, sucht es zunächst aus dem langfristigen Material, das die aktuelle Figur und der aktuelle Modus lesen dürfen, relevante Fragmente heraus. Chat / Code / Work nutzen derzeit standardmäßig die lokale Algorithmusroute; Smart / Bot behalten eine eigene AI-Abrufroute; beide Routen schließen sich gegenseitig aus und lassen sich auch abschalten;
 - **🗜️ Kontextverwaltung**: Belegung nach Nachricht, Dateilesung, Werkzeugergebnis und Systeminjektion einsehbar; die normale Bereinigung blendet den Inhalt lediglich aus und sendet ihn nicht mehr an die KI, der Datensatz bleibt aber auf der Festplatte und ist wiederherstellbar;
 - **📊 Modusspezifische Gedächtnistabellen**: Chat hat die Tabellen #0–#9, Code und Work verwenden eigene Tabellen und private Verzeichnisse und stapeln nicht alle Szenarien in dieselbe Tabelle;
-- **👑 Alle Prompts editierbar**: Inhalt, Reihenfolge, Ein/Aus, Identität als system / user / assistant sowie Injektionsposition und -bedingung lassen sich anpassen;
+- **👑 Wichtige Prompt-Einträge sind editierbar**: Charakterdefinitionen, Presets, INJ-Einträge, Modusanweisungen, Gedächtnis-Datenslots und Werkzeughinweise bieten die vom jeweiligen Editor unterstützten Einstellungen für Inhalt, Reihenfolge, Aktivierung, Rolle, Injektionsposition oder Bedingungen; Sicherheits-Wrapper des Rahmens und providerspezifische Nachrichtentransformationen bleiben codegesteuert;
 - **💻 IDE-Workflow**: Drei-Spalten-Layout, Datei-Lesen und -Bearbeiten, Befehlsausführung, Aufgabenlisten, Mehrfenster und VS-Code-Erweiterungsbrücke;
 - **🔌 MCP (Protokoll zur Anbindung externer Werkzeuge)**: JSON einfügen, um externe Werkzeuge anzubinden; befehlsartige Dienste müssen Sicherheitstore wie owner und Umgebungsvariablen-Whitelist passieren;
 - **🐾 Desktop-Pet und Spielbegleitung**: Live2D- / Bildpakete, drei Arten der Bildschirmwahrnehmung, aktive Kommentare, eine eigene Spielbegleitungsschleife und adaptive Frequenz;
@@ -139,7 +139,7 @@ Trage Serviceadresse, API-Key und Modell ein, speichere und wähle oder importie
 
 Das Speichern von Erinnerungen an sich ist kein Geheimnis. Data ist eine beschreibbare Tabelle, und `hot / warm / cold` heißt schlicht, dass du nach „Zeit + Ereignis“ drei Ordner anlegst und darin md-Dateien notierst; INJ (editierbare Prompt-Injektionseinträge) und Presets führen zudem die Art der Prompt-Orchestrierung fort, die Charakter-Frontends wie SillyTavern lange erforscht haben.
 
-Doch kombiniert man sie und fügt P1 hinzu (ein Werkzeug zum Sammeln von Kontext und Abrufen von Erinnerungen), entsteht ein natürliches Ökosystem aus „Vektor + dynamische Injektion + ein Gedächtnis, das der aktuellen Aufgabe folgt“ — ein Speicher mit hoher Aufmerksamkeit und hoher Informationsdichte; ergänzt um unsere auf Dateiebene arbeitende Kompression ist die gesamte Kette dann vollständig.
+Kombiniert man sie mit P1 (einem Werkzeug zum Sammeln von Kontext und Abrufen von Erinnerungen), entsteht ein konfigurierbarer Ablauf aus „Vektor + dynamische Injektion + ein Gedächtnis, das der aktuellen Aufgabe folgt“; die Kontextbereinigung auf Ebene einzelner Dateilesungen gehört zur selben Kette. Abruf- und Kompressionsergebnisse hängen weiterhin von Modus, Konfiguration, Material und Modell ab.
 
 Anfangs wollten wir P1 eigentlich als kleine, separat betriebene KI umsetzen. Doch das eigentliche Problem tritt nach dem Speichern auf: Das Gedächtnis wächst immer weiter — wenn in jeder Runde eigens eine zweite KI zum Durchsuchen gestartet werden müsste, wären Geschwindigkeit und Kosten dann noch tragbar? Findet eine kleine KI wirklich alles? Muss es zwingend eine kostenpflichtige KI sein? Wird sie langsamer reagieren, je mehr sie sich merkt?
 
@@ -224,9 +224,9 @@ Das Whitebox-Panel belegt, dass jeder Knoten und jede echte Quelle überprüfbar
 </details>
 
 <details>
-<summary><strong>👑 Alle Prompts sind editierbar — standardmäßig nutzbar und weiter zu deiner eigenen KI umbaubar</strong></summary>
+<summary><strong>👑 Wichtige Prompt-Einträge sind editierbar — standardmäßig nutzbar und für deinen Ablauf konfigurierbar</strong></summary>
 
-Prompt-Einträge wie Charaktereinstellungen, Systemregeln, Modusbeschreibungen, Gedächtnis-Datenslots und Werkzeug-Anleitungen lassen sich alle in der Oberfläche bearbeiten. Jeder einzelne Inhalt ist anpassbar:
+Wichtige Prompt-Einträge wie Charakterdefinitionen, Presets, INJ-Einträge, Modusanweisungen, Gedächtnis-Datenslots und Werkzeughinweise lassen sich in der Oberfläche bearbeiten. Pro Eintrag sind die tatsächlich vom Editor angebotenen Einstellungen anpassbar; Sicherheits-Wrapper des Rahmens und providerspezifische Nachrichtentransformationen bleiben codegesteuert:
 
 - der tatsächliche Text
 - die Reihenfolge
@@ -275,7 +275,7 @@ Vielleicht kennst du das: Je länger der Chat und je mehr Erinnerungen, desto me
 
 ## Roadmap
 
-**Bereits im aktuellen Repository vorhandene Einstiege und Implementierungen**: Data + dreischichtiges Gedächtnis · Kontextverwaltung · selbstgesteuertes P1 / AI P1 · vollständige Prompt-Bearbeitung und Preset-Wechsel · Modus-Gedächtnistabellen · dynamische Injektion bedingten Wissens · Live2D- / Bild-Desktop-Pet · Bildschirmwahrnehmung und Spielbegleitung · lokale Spracheingabe · PPT-Erzeugung · MCP · Mehrfenster · VS-Code-Erweiterungsbrücke · Bots für 9 Plattformen · 23 eingebaute Plugin-Verzeichnisse · Host für Benutzer-Plugins · Papierkorb- / Backup-Kette · Whitebox-Diagnose · Mehrsprachigkeit und Themes.
+**Bereits im aktuellen Repository vorhandene Einstiege und Implementierungen**: Data + dreischichtiges Gedächtnis · Kontextverwaltung · selbstgesteuertes P1 / AI P1 · Bearbeitung von Prompt-Einträgen und Preset-Wechsel · Modus-Gedächtnistabellen · dynamische Injektion bedingten Wissens · Live2D- / Bild-Desktop-Pet · Bildschirmwahrnehmung und Spielbegleitung · lokale Spracheingabe · PPT-Erzeugung · MCP · Mehrfenster · VS-Code-Erweiterungsbrücke · Bots für 9 Plattformen · 23 eingebaute Plugin-Verzeichnisse · Host für Benutzer-Plugins · Papierkorb- / Backup-Kette · Whitebox-Diagnose · Mehrsprachigkeit und Themes.
 
 **Nahe Richtungen**: mehr Bot-Plattformen · Plugin-Ökosystem und Beispiele · TTS / Text-zu-Bild · KI-Spiel-Engine (deterministischer numerischer Zustand + LLM-Erzählung + symbolisches Rendering)
 
@@ -315,7 +315,7 @@ Charakterkarten teilen · Presets und bedingtes Wissen veröffentlichen · Plugi
 
 > Design, Architektur und Entwicklung dieses Projekts stammen von einem stellungssuchenden Stubenhocker (ähem), der mit KI-gestütztem Programmieren Algorithmusdesign, bionische Ansätze, Rahmenarchitektur und logisches Denken zusammengebracht hat.
 
-always-accompany entstand nicht, um beliebte Funktionen in dasselbe Menü zu stopfen — am Anfang wollte der Autor es einfach nur selbst nutzen :). Natürlich hat es tatsächlich ein vollständiges Plugin- und Rahmensystem und ist mit mehreren Sprachen kompatibel.
+always-accompany entstand nicht, um beliebte Funktionen in dasselbe Menü zu stopfen — am Anfang wollte der Autor es einfach nur selbst nutzen :). Es enthält ein Plugin- und Rahmensystem sowie mehrere Oberflächensprachen; der tatsächliche Umfang hängt vom Plugin und den verfügbaren Übersetzungsressourcen ab.
 
 ---
 

@@ -2,7 +2,7 @@
  * [typingSuggest.mjs] — 打字式联想（002 0731 新功能；考古确认与历史"打字式学习"词频机制无关）
  *
  * 功能链：
- *   #message-input input 事件（messageInput.mjs 接线）→ onTypingInput(text)
+ *   #send_textarea input 事件（messageInput.mjs 接线）→ onTypingInput(text)
  *     → debounce 400ms + 触发门槛（≥4字）→ sendAction runP1（dataRecallOverride:false 轻量：
  *       只要锚点/池词不扫三层记忆，请求级参数不碰全局配置、不影响生产召回）
  *     → #typing-suggest-bar 渲染联想词 chip（点击插入光标处）+ 相关记忆只读提示
@@ -203,7 +203,7 @@ const _enabled = () => { try { return localStorage.getItem(KEY_ENABLED) === "tru
 const _esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export function initTypingSuggest(textareaEl) {
-  _textarea = textareaEl || document.getElementById("message-input");
+  _textarea = textareaEl || document.getElementById("send_textarea");
   _bar = document.getElementById("typing-suggest-bar");
   if (!_textarea || !_bar) return;
   if (!_bindingListenersBound) {

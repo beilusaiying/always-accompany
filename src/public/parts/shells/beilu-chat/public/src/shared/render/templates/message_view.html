@@ -11,18 +11,10 @@
 			<span class="char-name text-sm font-bold text-primary">${name}</span>
 			<span class="message-floor text-xs opacity-50 font-mono">${floor}</span>
 			<span class="message-timestamp text-xs opacity-40">${time_stamp}</span>
-		</div>
-		<!-- 思维链（独立于消息气泡，默认隐藏） -->
-		<div class="thinking-toggle hidden" data-thinking-for="${id}">
-			<button class="thinking-toggle-btn">
-				<span class="thinking-toggle-icon">▶</span>
-				<span class="thinking-toggle-label"><i data-ic="thought"></i> 思考了一会</span><span class="thinking-toggle-badge"><i data-ic="lock"></i> 仅你可见 · AI 看不到</span>
-			</button>
-			<div class="thinking-toggle-content hidden"></div>
-		</div>
-		<!-- 消息体 -->
-		<div class="chat-bubble relative p-[15px] rounded-lg ${contentHasMedia ? 'w-full' : ''}">
-			<div class="button-group">
+			<!-- [0808 凛倾「这两个移到对话顶部」] ✎/☰ 从气泡右下悬浮迁到头部行内靠右：
+			     不悬浮 → 不压酒馆卡内容（0807「压住卡右上图标」反例不复发，头部行在卡外）、
+			     不再与右下角时间线切换组抢位。事件绑定按 messageElement 作用域查找，位置无关。 -->
+			<div class="button-group ml-auto">
 				<div class="normal-buttons join" style="display: flex;">
 					<button class="edit-button btn btn-xs btn-primary join-item" data-i18n="chat.messageView.buttons.edit">
 						<img src="/parts/shells:beilu-chat/icons/line-md__edit.svg" data-i18n="chat.messageView.buttons.editIcon" />
@@ -40,6 +32,17 @@
 					</button>
 				</div>
 			</div>
+		</div>
+		<!-- 思维链（独立于消息气泡，默认隐藏） -->
+		<div class="thinking-toggle hidden" data-thinking-for="${id}">
+			<button class="thinking-toggle-btn">
+				<span class="thinking-toggle-icon">▶</span>
+				<span class="thinking-toggle-label"><i data-ic="thought"></i> 思考了一会</span><span class="thinking-toggle-badge"><i data-ic="lock"></i> 仅你可见 · AI 看不到</span>
+			</button>
+			<div class="thinking-toggle-content hidden"></div>
+		</div>
+		<!-- 消息体 -->
+		<div class="chat-bubble relative p-[15px] rounded-lg ${contentHasMedia ? 'w-full' : ''}">
 			<ul class="dropdown dropdown-end menu w-52 rounded-box bg-base-100 shadow-sm" popover id="popover-${id}" style="position-anchor:--anchor-${id}">
 			<li>
 				<button type="button" class="toggle-hide-button">

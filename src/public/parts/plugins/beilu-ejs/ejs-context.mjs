@@ -4,6 +4,9 @@
  * 从 main.mjs 抽出，杜绝 buildEjsContext / _substituteMacros 双份维护漂移。
  * 这两个函数都是纯函数：不依赖 whitebox / info.json / 插件状态 / 外部 I/O。
  *
+ * [2026-08-06 框架化] 实现体从 yonban/core/functions/sandbox/ 迁回本 part 目录（凛倾拍板
+ *   "改成框架,而不是耦合核心"）。内容一字未改，纯函数零外部依赖，搬迁零适配。
+ *
  * 注意：buildEjsContext 接收的 `arg` 在 worker 侧是轻量对象
  *   { chat_id, chat_log:[{role,content}], Charname, UserCharname }
  * 在主线程侧（若仍调用）是完整 chatReplyRequest_t。两侧 getter 逻辑一致。

@@ -194,6 +194,10 @@ return async ({ data, containers, editors }) => {
       data.convert_config?.claude_prefill_mode || "off";
     const currentPostProcessing =
       data.convert_config?.prompt_post_processing || "none";
+    const openAIExplicitCacheChecked =
+      data.convert_config?.openai_explicit_prompt_cache === true
+        ? "checked"
+        : "";
     // provider 值域+文案由后端注入（main.mjs GetConfigDisplayContent 替换占位符，单源=apiAdapters
     // 的 PROVIDER_ENUM/PROVIDER_META；旧本地 providerLabels 硬编码已删=第二份文案，2026-07-11 收编）
     const providerEnum = JSON.parse('__PROVIDER_ENUM_JSON__');
@@ -226,6 +230,13 @@ return async ({ data, containers, editors }) => {
 		  ${providerEnum.map((v) => `<option value="${v}" ${currentProvider === v ? "selected" : ""}>${providerLabels[v] || v}</option>`).join("")}
 		</select>
 		<p class="text-xs opacity-50 ml-1 mt-1">声明此源的真实供应商协议，专项预处理与消息适配以此为准。留空=按 URL/模型名自动检测——中转/别名源检测不到关键词时专项处理会静默失效，建议显式声明。</p>
+</div>
+<div id="openai-explicit-cache-control" class="form-control w-full max-w-xs mb-2" style="display:${["openai", "openai-reasoning"].includes(currentProvider) ? "block" : "none"}">
+		<label class="label cursor-pointer justify-start gap-3">
+		  <input type="checkbox" id="openai-explicit-cache-toggle" class="toggle toggle-sm toggle-primary" ${openAIExplicitCacheChecked} />
+		  <span class="label-text">OpenAI 显式提示缓存断点</span>
+		</label>
+		<p class="text-xs opacity-50 ml-1 mt-1">仅用于公开 OpenAI GPT-5.6 及后续支持该协议的模型。开启后使用当前对话的不可逆稳定缓存键，并在动态尾部前保留两个滚动 user 断点；旧模型或不兼容中转会直接返回 400。Codex 订阅网关请保持关闭。</p>
 </div>
 <div class="divider my-2"></div>
 <h4 class="text-md font-semibold mb-2">预填充 & 后处理</h4>
@@ -315,6 +326,11 @@ ${model_ids
     if (providerSelect && editors && editors.json) {
       providerSelect.addEventListener("change", (e) => {
         updateConvertConfig("provider", e.target.value);
+        const control = div.querySelector("#openai-explicit-cache-control");
+        if (control)
+          control.style.display = ["openai", "openai-reasoning"].includes(e.target.value)
+            ? "block"
+            : "none";
       });
     }
 
@@ -364,6 +380,15 @@ ${model_ids
     if (prefillToggle) {
       prefillToggle.addEventListener("change", (e) => {
         updateConvertConfig("prefill_enabled", e.target.checked);
+      });
+    }
+
+    // 公开 OpenAI GPT-5.6+ 显式提示缓存。能力由用户按源声明，默认关闭；后端仍按
+    // provider + chatid + 实际断点三重门控，不按模型名猜测、不扩散到兼容中转。
+    const openAIExplicitCacheToggle = div.querySelector("#openai-explicit-cache-toggle");
+    if (openAIExplicitCacheToggle) {
+      openAIExplicitCacheToggle.addEventListener("change", (e) => {
+        updateConvertConfig("openai_explicit_prompt_cache", e.target.checked);
       });
     }
 

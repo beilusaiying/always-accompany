@@ -14,8 +14,11 @@
  *     同 injection_automode_meta / web_search_engines / param_schema）
  *   - 前端 INJ 编辑器 panels.mjs _loadInjPanel → depth>=1 且启用的条目正文含清单宏时
  *     弹窗警告 + 列表徽标 + 详情页标出宏所在行
- *   - setDataActions.mjs → 新增/修改时拒绝把非稳定宏保存到启用的 depth>=1 条目
- *   - getPromptHandler.mjs → 对直接改盘/旧数据/旁路写入做最终运行时约束，强制落到 depth:0
+ *   - setDataActions.mjs → 新增/修改/导入时检测，warning 随成功返回下发（凛倾 0810 定案：
+ *     只提醒不拦截，保存一律按用户配置执行）
+ *   - getPromptHandler.mjs → 运行时检测并记录 extension.cache_safety_adjustments + 白盒诊断
+ *     （凛倾 0810 定案：不再强制改写 depth/role，注入按用户配置原样执行；effectiveDepth/
+ *     effectiveRole 字段保留为"缓存安全建议值"供提醒面展示，不再被执行层消费）
  *
  * 【收录判据】宏值若可能随会话、轮次、时间、连接、项目、用户配置、插件状态或当前身份变化
  *   就收录。历史前只允许真正静态的 schema/确定性格式宏、{{ide_tools}}，以及按请求身份分区的

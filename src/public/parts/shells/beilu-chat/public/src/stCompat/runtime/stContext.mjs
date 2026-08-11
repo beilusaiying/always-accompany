@@ -52,10 +52,17 @@ export function generateSTContextEnhancementScript(options = {}) {
 	if (!st.saveSettingsDebounced) st.saveSettingsDebounced = function() { /* no-op in beilu */ };
 	if (!st.saveSettings) st.saveSettings = function() { return Promise.resolve(); };
 
-	/* setExtensionPrompt — store locally, no backend effect in Phase 1 */
+	/* [0807 转接二期#8 凛倾定案] setExtensionPrompt — 落 INJ 常驻可编辑条目：
+	   postMessage 到父页面单源 upsert（iframeRenderer "beilu-ext-prompt" case →
+	   beilu-memory injection_prompts，条目名 EXT-<key>，inj-edit tab 可编辑/可删/可启禁）。
+	   只做「历史对话之前/之后」二区+order 排序；scan/filter 不支持（父页面 warn 一次）。
+	   本地 extensionPrompts 记录保留（脚本同帧读回兼容）。 */
 	if (!st.setExtensionPrompt) {
 		st.setExtensionPrompt = function(id, content, position, depth, scan, role, filter) {
 			st.extensionPrompts[id] = { content: content, position: position, depth: depth, role: role };
+			try {
+				window.parent.postMessage({ type: 'beilu-ext-prompt', key: id, value: content, position: position, depth: depth, scan: scan, role: role, filter: filter }, '*');
+			} catch (e) { console.warn('[setExtensionPrompt] postMessage failed:', e); }
 			return Promise.resolve();
 		};
 	}

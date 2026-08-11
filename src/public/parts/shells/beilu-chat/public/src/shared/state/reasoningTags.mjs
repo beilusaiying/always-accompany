@@ -44,7 +44,11 @@ export function mirrorReasoningTagsFromConfig(cfg) {
     const names = (c.reasoning_tags || [])
       .map((t) => (t?.open || "").replace(/[<>/\s]/g, ""))
       .filter((n) => n.length > 0);
-    storage.set(KEYS.BEILU_THINKING_TAGS, [...new Set(["thinking", "think", ...names])].join(","));
+    // [2026-08-10] 内置 beilu_thinking 恒在折叠识别集（折叠恒生效，与「对 AI 隐藏」开关无关）。
+    storage.set(KEYS.BEILU_THINKING_TAGS, [...new Set(["thinking", "think", "beilu_thinking", ...names])].join(","));
+    // [2026-08-10] 开机镜像回填「对 AI 隐藏」开关状态（权威源=后端 _config.json beilu_thinking_strip）→
+    //   前端镜像 BEILU_THINKING_STRIP，供折叠块 badge 诚实性渲染读取。缺省（无键）=剥离="1"。
+    storage.set(KEYS.BEILU_THINKING_STRIP, c.beilu_thinking_strip === false ? "0" : "1");
   } catch { /* 同步失败保持本地值，折叠仍可用默认标签 */ }
 }
 
@@ -59,7 +63,26 @@ export async function saveReasoningTags(rTags, { hadPrevTags = false } = {}) {
     },
   });
   const names = rTags.map((t) => (t.open || "").replace(/[<>/\s]/g, "")).filter((n) => n.length > 0);
-  storage.set(KEYS.BEILU_THINKING_TAGS, [...new Set(["thinking", "think", ...names])].join(","));
+  storage.set(KEYS.BEILU_THINKING_TAGS, [...new Set(["thinking", "think", "beilu_thinking", ...names])].join(","));
+  import("../render/virtualQueue.mjs")
+    .then((m) => m.reloadBeautify?.(30))
+    .catch((err) => console.warn("[reasoningTags] reloadBeautify 失败:", err));
+}
+
+/**
+ * [2026-08-10] 保存内置 beilu_thinking「对 AI 隐藏」开关（独立写路，与 saveReasoningTags 互不清对方字段）。
+ * 走同一后端写单点 functions:hide#setReasoningTags，payload【只带 beilu_thinking_strip】——后端 setReasoningTags
+ *   按 patch 语义只写此字段，不动盘上 reasoning_tags（防「只改开关把自定义标签冲掉」）。
+ * 同步写前端镜像 BEILU_THINKING_STRIP（badge 诚实性渲染读取）。change 即调，无需重渲染（折叠恒生效不受开关影响，
+ *   badge 文案在下一次消息渲染时按新镜像生效；已上屏消息可选重渲染，此处从简不强制）。
+ * @param {boolean} strip true=开（剥离，AI 看不到）；false=关（不剥离，AI 与你都看得到）
+ */
+export async function saveBeiluThinkingStrip(strip) {
+  await sendAction({
+    verb: "setReasoningTags", target: "functions:hide", source: "web",
+    payload: { beilu_thinking_strip: !!strip },
+  });
+  storage.set(KEYS.BEILU_THINKING_STRIP, strip ? "1" : "0");
   import("../render/virtualQueue.mjs")
     .then((m) => m.reloadBeautify?.(30))
     .catch((err) => console.warn("[reasoningTags] reloadBeautify 失败:", err));

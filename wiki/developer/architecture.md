@@ -101,7 +101,7 @@ yonban 是 always-accompany 的核心功能库层。与 parts 的区别：
 
 ## 数据层
 
-always-accompany 使用 JSON 文件而非数据库。数据操作通过原子写（tmp + rename）保证一致性。
+always-accompany 使用 JSON 文件而非数据库。JSON 写入通常采用 tmp + rename，以降低单个文件出现半写入的风险；这不是跨文件或跨模块事务，也不能替代备份和错误检查。
 
 ### per-user 数据隔离
 

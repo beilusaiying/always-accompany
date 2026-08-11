@@ -1,6 +1,6 @@
 # Memory Archival & Retrieval
 
-Memory archival is the "metabolism" of the memory system -- it automatically migrates inactive memories from the Hot Layer to the warm and cold layers, while providing a recall engine that pulls relevant memories back when needed. This ensures the Hot Layer does not grow indefinitely, and historical memories are never truly lost.
+Memory archival is the "metabolism" of the memory system: it moves inactive memories from the Hot Layer to the warm and cold layers, while retrieval later attempts to bring relevant memories back. Archival moves data rather than deliberately deleting it, but whether history remains recoverable and recallable still depends on file retention, successful writes and indexing, recall routes, and backups.
 
 ## Three-Layer Migration Path
 

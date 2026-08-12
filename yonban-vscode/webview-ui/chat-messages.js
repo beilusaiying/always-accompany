@@ -322,6 +322,7 @@
   // ★ UI 同步部分（不发后端 switchChat）。switchToChat 与 applySwitchedChat 共用，
   //   后者由右板块经 chatSwitched 触发——只更新左对话 UI 态，绝不回发 switchChat（防回环，见设计第3问）。
   function _applyChatUiState(chatId, chatMeta) {
+    var chatIdentityChanged = state.currentChatId !== chatId;
     state.messages = [];
     state.isGenerating = false;
     state.generatingMessageId = null;
@@ -336,6 +337,12 @@
     }
     updateTypingIndicator([]);
 
+    if (chatIdentityChanged) {
+      state._trFetched = false;
+      state._tokenReminderThresholds = null;
+      state._warnPct = undefined;
+      state._dangerPct = undefined;
+    }
     state.currentChatId = chatId;
     state.charlist = [];
 
@@ -1007,6 +1014,7 @@
   // ═══════════════════════════════════════════════════════
 
   function onStreamStart(data) {
+    if (!data || data.chatId !== state.currentChatId) return;
     state.isGenerating = true;
     state.generatingMessageId = data.messageId;
     state.streamingContent[data.messageId] = "";
@@ -1014,6 +1022,7 @@
   }
 
   function onStreamUpdate(data) {
+    if (!data || data.chatId !== state.currentChatId) return;
     var messageId = data.messageId;
     var slices = data.slices;
     if (!state.streamingContent.hasOwnProperty(messageId)) {

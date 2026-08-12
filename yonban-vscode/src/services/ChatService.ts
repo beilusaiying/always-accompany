@@ -182,8 +182,9 @@ export class ChatService {
   }>();
 
   // ── 流式事件 ───────────────────────────────────────
-  private _onStreamStart = new vscode.EventEmitter<{ messageId: string }>();
+  private _onStreamStart = new vscode.EventEmitter<{ chatId: string; messageId: string }>();
   private _onStreamUpdate = new vscode.EventEmitter<{
+    chatId: string;
     messageId: string;
     slices: StreamSlice[];
   }>();
@@ -1803,15 +1804,17 @@ export class ChatService {
         break;
       }
 
-      case "stream_start":
-        this._onStreamStart.fire(msg.payload as { messageId: string });
+      case "stream_start": {
+        const p = msg.payload as { messageId: string };
+        this._onStreamStart.fire({ ...p, chatId: ownerChatId });
         break;
+      }
 
-      case "stream_update":
-        this._onStreamUpdate.fire(
-          msg.payload as { messageId: string; slices: StreamSlice[] },
-        );
+      case "stream_update": {
+        const p = msg.payload as { messageId: string; slices: StreamSlice[] };
+        this._onStreamUpdate.fire({ ...p, chatId: ownerChatId });
         break;
+      }
 
       case "typing_status":
         this._onTypingStatus.fire(msg.payload as { typingList: string[] });

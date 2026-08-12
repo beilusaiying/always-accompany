@@ -1,5 +1,10 @@
 .vscode/**
 src/**
+dist/**
+!dist/extension.js
+!dist/extension.js.map
+!dist/node-search-worker.js
+!dist/node-search-worker.js.map
 node_modules/**
 !node_modules/ws/**
 *.ts

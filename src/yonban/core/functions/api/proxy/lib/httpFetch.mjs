@@ -1,6 +1,6 @@
 /**
  * proxy/lib/httpFetch.mjs
- * HTTP 请求、流式解析、URL 重试逻辑
+ * HTTP 请求、流式解析、URL 端点候选
  *
  * 导出：
  *   fetchChatCompletion(messages, config, options) → Promise<result>
@@ -258,8 +258,7 @@ function applyOpenAIExplicitPromptCache(messages) {
 export async function fetchChatCompletion(
   messages,
   config,
-  // [0717 断流续接] _resumePrefix 由 fetchChatCompletionWithRetry 在重试尝试间设置（已收正文作预填充续写）
-  { signal, previewUpdater, result, _resumePrefix },
+  { signal, previewUpdater, result },
 ) {
   let imgIndex = 0;
 
@@ -335,32 +334,13 @@ export async function fetchChatCompletion(
     claudePrefillMode: config.convert_config?.claude_prefill_mode || "off",
   });
 
-  // [0717 断流续接] 消费 fetchChatCompletionWithRetry 设置的已收正文预填充（见该函数内注释）。
-  //   放在 applyTailPrefill 之后 = 不被四模式转换搅动：尾部已是 assistant（prefill 模式/预设预填充）
-  //   则续接文本接其内容末尾；否则追加独立 assistant 尾条。string/parts 两形状都处理。
-  if (_resumePrefix && Array.isArray(requestBodyObj.messages) && requestBodyObj.messages.length > 0) {
-    const _rp = _resumePrefix;
-    const _tail = requestBodyObj.messages[requestBodyObj.messages.length - 1];
-    if (_tail?.role === "assistant") {
-      if (typeof _tail.content === "string") {
-        _tail.content = _tail.content ? `${_tail.content}${_rp}` : _rp;
-      } else if (Array.isArray(_tail.content)) {
-        const _lastText = [..._tail.content].reverse().find((p) => p.type === "text");
-        if (_lastText) _lastText.text = `${_lastText.text || ""}${_rp}`;
-        else _tail.content.push({ type: "text", text: _rp });
-      }
-    } else {
-      requestBodyObj.messages.push({ role: "assistant", content: _rp });
-    }
-  }
-
   // ★ 提示词后处理（先 prefill 再按用户明确选择处理）：
   //   旧管线 pp(:115) 在 prefill(:157) 之前跑，applyTailPrefill(user_assistant) 把尾部
   //   assistant 改 user → 产生新 user+user，此后无 re-merge → 连续同角色原样发出(0718 实证)。
   //   ST 同构设计：convertClaudeMessages 内部 :329-335 追加 prefill assistant → :339-346 同函数内
   //   merge 兜底；chat-completions.js:1736 用户 pp 也在 source 分发前跑(全 provider 生效)。
-  //   现管线：adapt → prefill → resumePrefix → 【pp 在此】 → patchClaude → 发送。
-  //   pp 在 prefill/resume 之后 = 任何改角色操作产生的连续同 role 都被 pp 兜住。
+  //   现管线：adapt → prefill → 【pp 在此】 → patchClaude → 发送。
+  //   pp 在 prefill 之后 = 任何改角色操作产生的连续同 role 都被 pp 兜住。
   //   2026-07-29 契约：none 必须是真关闭。旧代码把 none/空值按 provider 偷换成
   //   merge 或 semi（DeepSeek），造成 UI/存储显示关闭而最终请求仍被改写。
   //   provider 的协议差异只允许在 adaptForProvider/patch 层显式处理，不能冒充 PP 默认值。
@@ -808,178 +788,45 @@ export async function fetchChatCompletion(
  * @returns {Promise<{content: string, files: any[]}>} 模型返回的内容。
  */
 export async function fetchChatCompletionWithRetry(messages, options, config) {
-  const errors = [];
-
-  // ★ 重试前还原 result 快照（0715）：fetchChatCompletion 流式路径对 options.result 累加
-  //   （content += :407-437，processImages push files :315），入口不重置——中途断流（ECONNRESET/
-  //   读超时等）后内外两层重试（限流退避循环 + URL 候选循环）复用同一 result 继续流，
-  //   新响应整份追加在半份旧正文之后 = 正文/图片重复。每次尝试前还原到进入本函数时的快照
-  //   （files 只截断回快照长度：数组引用被 proxy main :274/:414 共享，不可换新数组）。
-  //   已知边缘未覆盖：失败尝试遗留的 processImages 浮动 promise 可能在下一尝试期间迟到 push（罕见路径，见报告）。
-  const _res0 = options?.result;
-  const _snapContent = _res0?.content ?? "";
-  const _snapShow = _res0?.content_for_show;
-  const _snapFilesLen = Array.isArray(_res0?.files) ? _res0.files.length : 0;
-  const _restoreResultSnapshot = () => {
-    if (!_res0) return;
-    _res0.content = _snapContent;
-    if (_snapShow === undefined) delete _res0.content_for_show;
-    else _res0.content_for_show = _snapShow;
-    if (Array.isArray(_res0.files)) _res0.files.length = _snapFilesLen;
-  };
-
   /**
-   * 构造 URL 候选列表（统一规范化，避免字符串盲拼导致 Invalid URL / 重复路径）
+   * 从用户配置构造最多三个 Chat Completions 端点候选。
    * @param {string} rawUrl
    * @returns {string[]}
    */
   function buildRetryUrls(rawUrl) {
-    const parsed = (() => {
-      try {
-        return new URL((rawUrl || "").trim());
-      } catch {
-        return null;
-      }
-    })();
-    if (!parsed) return [];
+    let parsed;
+    try {
+      parsed = new URL((rawUrl || "").trim());
+    } catch {
+      return [];
+    }
 
     const candidates = [];
-    const seen = new Set();
     const pushCandidate = (nextUrl) => {
-      if (!nextUrl || seen.has(nextUrl)) return;
-      seen.add(nextUrl);
-      candidates.push(nextUrl);
+      if (nextUrl && !candidates.includes(nextUrl)) candidates.push(nextUrl);
     };
     const withPath = (pathname) => {
       const next = new URL(parsed.toString());
       next.pathname = pathname;
       return next.toString();
     };
-
     const normalizedPath = parsed.pathname.replace(/\/+$/g, "") || "/";
 
-    if (!normalizedPath.endsWith("/chat/completions")) {
-      if (normalizedPath.endsWith("/v1")) {
-        // .../v1 -> 优先 .../v1/chat/completions，原始 URL 作为回退
-        pushCandidate(withPath(`${normalizedPath}/chat/completions`));
-        pushCandidate(parsed.toString()); // 原始 /v1 作为回退
-      } else {
-        // 非 /v1 结尾：原始优先，再补全路径候选
-        pushCandidate(parsed.toString());
-        pushCandidate(withPath(`${normalizedPath}/v1/chat/completions`));
-        pushCandidate(withPath(`${normalizedPath}/chat/completions`));
-      }
-    } else {
-      // 已经是完整路径，直接使用
+    if (normalizedPath.endsWith("/chat/completions")) {
       pushCandidate(parsed.toString());
+    } else if (normalizedPath === "/") {
+      pushCandidate(withPath("/v1/chat/completions"));
+      pushCandidate(withPath("/chat/completions"));
+    } else if (normalizedPath.endsWith("/v1")) {
+      pushCandidate(withPath(`${normalizedPath}/chat/completions`));
+      pushCandidate(withPath(`${normalizedPath.slice(0, -3)}/chat/completions`));
+    } else {
+      pushCandidate(parsed.toString());
+      pushCandidate(withPath(`${normalizedPath}/v1/chat/completions`));
+      pushCandidate(withPath(`${normalizedPath}/chat/completions`));
     }
 
-    return candidates;
-  }
-
-  /**
-   * 限流/慢/网络错重试
-   * 最多重试 MAX_RATE_LIMIT_RETRIES 次；无 Retry-After 时按 +15s 线性递增退避（第 N 次等 N*15s）。
-   * 慢 API（429/5xx/网络超时 ETIMEDOUT）由此覆盖；调用方主动 abort（用户取消）不在此重试。
-   * @param {string} candidateUrl
-   * @returns {Promise<{content: string, files: any[]}>}
-   */
-  const MAX_RATE_LIMIT_RETRIES = 10; // 慢 API 持久重试 ~10 次
-  const BACKOFF_STEP_MS = 15000; // 每次 +15s 线性递增（第 N 次等 N*15s）
-  const BACKOFF_CAP_MS = 150000; // 单次封顶 150s，避免无界等待
-
-  async function fetchWithRateLimitRetry(candidateUrl) {
-    const currentConfig = { ...config, url: candidateUrl };
-    let lastError = null;
-
-    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-      if (attempt > 0) {
-        // 从响应头读取 Retry-After（秒），优先使用；否则按 +15s 线性递增（15s,30s,...）
-        const retryAfterSec = lastError?.detail?.retryAfter;
-        const backoffMs = retryAfterSec
-          ? Math.min(retryAfterSec * 1000, 120000) // Retry-After 最长等 120 秒
-          : Math.min(BACKOFF_STEP_MS * attempt, BACKOFF_CAP_MS);
-        wbD(null, "ai:request", "rate_limit_backoff", false, `退避重试 ${attempt}/${MAX_RATE_LIMIT_RETRIES}`, { backoffMs, retryAfterSec, url: candidateUrl });
-        console.warn(
-          `[proxy] 限流/慢/网络错，第 ${attempt}/${MAX_RATE_LIMIT_RETRIES} 次退避等待 ${(backoffMs / 1000).toFixed(1)}s... (URL: ${candidateUrl})`,
-        );
-        await new Promise((r) => setTimeout(r, backoffMs));
-      }
-
-      try {
-        // [0717 断流续接·凛倾指令] 中流断且已收到正文时不再从头重跑（参照上游代理实现的
-        //   handleStreamingResponse 续接范式：已收内容作尾部 assistant 预填充，模型只生成剩余部分）。
-        //   beilu 化差异：①零注入文本——不加 "Continue" user 指令（铁律:代码禁产生进对话文本），
-        //   纯预填充续写（ST 同款）②预填充内容剥 thinking（未闭合 <think> 段整段去掉，防把思维链
-        //   发回渠道）③result 不还原快照 = 新流 delta 继续累加在已收内容后，previewUpdater 全量
-        //   预览天然连续（用户无感，不再"重复重流"）。开关 convert_config.stream_resume!==false（默认开）。
-        //   partial 为空（429/5xx/建连失败=没收到任何正文）时走原快照还原路径，行为与旧版全同。
-        const _resumeOn = currentConfig.convert_config?.stream_resume !== false;
-        let _resumePrefix = "";
-        if (_resumeOn && _res0 && _res0.content.length > _snapContent.length) {
-          let _p = stripReasoningTags(_res0.content.slice(_snapContent.length), currentConfig?.username);
-          const _ti = _p.lastIndexOf("<think");
-          if (_ti >= 0 && !_p.slice(_ti).includes("</think")) _p = _p.slice(0, _ti);
-          _resumePrefix = _p.trimEnd();
-        }
-        if (_resumePrefix.trim()) {
-          options._resumePrefix = _resumePrefix;
-          console.log(`[proxy] ★ 断流续接: 已收 ${_resumePrefix.length} 字符作预填充续写（不从头重跑）`);
-          wbT(null, "ai:request", "stream_resume", { prefixLen: _resumePrefix.length, attempt });
-        } else {
-          delete options._resumePrefix;
-          _restoreResultSnapshot(); // 覆盖两层重试：限流退避每 attempt + URL 候选每轮都从干净快照起流
-        }
-        return await fetchChatCompletion(messages, currentConfig, options);
-      } catch (err) {
-        if (err.name === "AbortError") throw err;
-        lastError = err;
-
-        const status = err.status || 0;
-        const is429 = status === 429;
-        const isRetryable5xx =
-          status === 500 || status === 502 || status === 503 || status === 529;
-        // 网络层错误（UND_ERR_SOCKET / ECONNREFUSED / ENOTFOUND / ETIMEDOUT 等）
-        // 没有 HTTP status，说明连接都没建立成功，也应该重试。
-        // [0716 网络波动容错·凛倾定案] 补「中流断线」形态：响应头 200 已到、读 body 中途断
-        //   （undici "terminated" / "error reading a body from connection" / UND_ERR_BODY_TIMEOUT / other side closed）——
-        //   原清单只认建连失败，中流断被判不可重试直接跳 URL 候选（候选 404 再合并抛错），
-        //   等于网络抖一下就整轮报废（凛倾 0716 实证）。中流重试安全：每次尝试前 _restoreResultSnapshot 已保证不重复累加。
-        const _errMsgAll = `${err.message || ""} ${err.cause?.message || ""}`;
-        const isNetworkError =
-          status === 0 &&
-          (err.cause?.code === "UND_ERR_SOCKET" ||
-            err.cause?.code === "ECONNREFUSED" ||
-            err.cause?.code === "ECONNRESET" ||
-            err.cause?.code === "ENOTFOUND" ||
-            err.cause?.code === "ETIMEDOUT" ||
-            err.cause?.code === "UND_ERR_BODY_TIMEOUT" ||
-            err.message?.includes("UND_ERR_SOCKET") ||
-            err.message?.includes("fetch failed") ||
-            _errMsgAll.includes("terminated") ||
-            _errMsgAll.includes("error reading a body") ||
-            _errMsgAll.includes("other side closed"));
-
-        if (
-          (is429 || isRetryable5xx || isNetworkError) &&
-          attempt < MAX_RATE_LIMIT_RETRIES
-        ) {
-          if (isNetworkError) {
-            wbD(null, "ai:request", "network_error_retry", false, `网络错误重试 ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES}`, { code: err.cause?.code || err.message });
-            console.warn(
-              `[proxy] 网络连接错误 (${err.cause?.code || err.message})，第 ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES} 次重试...`,
-            );
-          }
-          // 继续退避重试
-          continue;
-        }
-        // 非限流/非网络错误或已达重试上限 → 抛给外层
-        throw err;
-      }
-    }
-
-    // 所有退避尝试均失败
-    throw lastError;
+    return candidates.slice(0, 3);
   }
 
   const urlCandidates = buildRetryUrls(config.url);
@@ -994,49 +841,39 @@ export async function fetchChatCompletionWithRetry(messages, options, config) {
   //   上限每次现读 → 设置面板改动即时生效；排队等待可被用户停止(signal)打断（抛 AbortError，
   //   与既有中止语义同族）。释放在下方 finally，异常/中止路径不漏槽。
   const _releaseAiSlot = await acquireAiSlot(config.username, options?.signal, options?.aiPriority);
-  // [0717 断流续接] options 是调用方 generation_options（跨请求复用），_resumePrefix 只在本次
-  //   withRetry 生命周期内有效——无论成功/失败，退出前必须清掉，否则残留污染下一轮全新请求。
   try {
-    // [0718 快速失败] 同主机连接死跳过：某候选以"等待响应头超时"失败=该 host 挂起,
-    //   同 host 其余候选(路径变体)必然同样挂满超时——逐个再等只把失败拖成 N×timeout
-    //   （实测慢网关挂起=2 分钟才报错）。跳过项记入 errors 保留可见诊断面。
-    const _deadHosts = new Set();
+    const errors = [];
     for (const candidateUrl of urlCandidates) {
-      let _host = "";
-      try { _host = new URL(candidateUrl).host; } catch { /* 非法候选交给 fetch 自己报 */ }
-      if (_host && _deadHosts.has(_host)) {
-        errors.push(new Error(`[proxy] 跳过 ${candidateUrl}（同主机 ${_host} 已判连接死，不再等待）`));
-        continue;
-      }
       try {
-        const result = await fetchWithRateLimitRetry(candidateUrl);
-
+        const value = await fetchChatCompletion(
+          messages,
+          { ...config, url: candidateUrl },
+          options,
+        );
         if (candidateUrl !== config.url) {
           console.info(
-            `[proxy] URL 候选重试成功: ${config.url} -> ${candidateUrl}（不改写配置）`,
+            `[proxy] URL 候选成功: ${config.url} -> ${candidateUrl}（不改写配置）`,
           );
         }
-
-        return result;
+        return value;
       } catch (error) {
         if (error.name === "AbortError") throw error;
-        if (_host && String(error?.message || "").includes("等待响应头超时")) _deadHosts.add(_host);
-        console.warn(
-          `[proxy] 请求失败 (${candidateUrl}): ${error.message || String(error)}`,
-        );
         errors.push(error);
+        const status = Number(error?.status || 0);
+        if (status !== 404 && status !== 405) throw error;
+        console.warn(
+          `[proxy] 端点不存在 (${candidateUrl})，尝试下一个路径候选`,
+        );
       }
     }
 
-    // 抛出时提供有意义的错误信息
     if (errors.length === 1) throw errors[0];
     const combined = new Error(
-      `所有 URL 尝试均失败:\n${errors.map((e, i) => `  [${i + 1}] ${e.message || String(e)}`).join("\n")}`,
+      `所有 URL 候选均不可用:\n${errors.map((error, index) => `  [${index + 1}] ${error.message || String(error)}`).join("\n")}`,
     );
     combined.errors = errors;
     throw combined;
   } finally {
     _releaseAiSlot(); // [0727 并发闸] 幂等释放：成功/失败/中止全路径归还槽位（或移交给排队者）
-    if (options) delete options._resumePrefix;
   }
 }

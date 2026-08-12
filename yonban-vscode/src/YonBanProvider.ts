@@ -125,6 +125,8 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
   private _yonbanModeByChat: Map<string, string> = new Map();
   private _defaultMode: string = DEFAULT_MODE; // T003 单源
   private _extensionVersion: string;
+  /** 当前 Webview 的单一投递序列；视图更替时重置，旧视图任务不得进入新视图。 */
+  private _viewDelivery: Promise<void> = Promise.resolve();
 
   /** B17: 取某 chat 的 mode；缺省回退 _defaultMode。chatId 为空时返回 _defaultMode（兼容单值行为）。 */
   private _modeFor(chatId: string | null | undefined): string {
@@ -202,6 +204,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     } catch (err: unknown) {
       console.error("[YonBan] 恢复 modeByChat 失败:", err);
     }
+    this._registerServiceListeners();
   }
 
   resolveWebviewView(
@@ -210,6 +213,13 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken,
   ): void {
     this._view = webviewView;
+    this._viewDelivery = Promise.resolve();
+    webviewView.onDidDispose(() => {
+      if (this._view === webviewView) {
+        this._view = undefined;
+        this._viewDelivery = Promise.resolve();
+      }
+    });
 
     webviewView.webview.options = {
       enableScripts: true,
@@ -263,7 +273,13 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       },
       undefined,
     );
+    this.postMessage({
+      type: "connectionState",
+      payload: this._connectionService.state,
+    });
+  }
 
+  private _registerServiceListeners(): void {
     // 监听连接状态变化，推送给 Webview + 协调 ChatService
     this._connectionService.onStateChange((state) => {
       this.postMessage({ type: "connectionState", payload: state });
@@ -274,39 +290,14 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // 初始状态推送
-    this.postMessage({
-      type: "connectionState",
-      payload: this._connectionService.state,
-    });
-
     // ── 聊天事件转发给 Webview ─────────────
     this._chatService.onMessageAdded((entry) => {
       this.postMessage({ type: "messageAdded", payload: entry });
     });
     this._chatService.onMessageReplaced((data) => {
-      _flushStreamUpdates(); // [0719 IPC 合帧] 终帧替换前清缓冲保序（定义在下方，事件异步触发时已初始化）
       this.postMessage({ type: "messageReplaced", payload: data });
     });
-    // [0719 IPC 合帧·诊断_YonBan流式显示链 跳B] streamUpdate 原每 chunk 一次跨进程 postMessage
-    //   （一轮生成几百次 structured clone + IPC=延迟放大器）。slices 是增量操作流（append/
-    //   rewrite_tail/set_files，webview 按序 for 应用）→ 合帧必须无损：按 messageId 缓冲串接，
-    //   80ms 合并成单条（webview 消费语义零变化）。messageReplaced/Deleted 转发前强制先 flush
-    //   保序——否则终帧替换后晚到的旧 slices 会在 webview 重建已删除的流式条目（幽灵复活）。
-    //   注意：flush 只传 {messageId, slices}——webview onStreamUpdate 只读这两字段（chat-messages.js:726-727），
-    //   payload 未来加新字段时需同步扩这里。
-    const _suBuf = new Map<string, unknown[]>();
-    let _suTimer: ReturnType<typeof setTimeout> | null = null;
-    const _SU_FLUSH_MS = 80;
-    const _flushStreamUpdates = () => {
-      if (_suTimer) { clearTimeout(_suTimer); _suTimer = null; }
-      for (const [mid, slices] of _suBuf) {
-        this.postMessage({ type: "streamUpdate", payload: { messageId: mid, slices } });
-      }
-      _suBuf.clear();
-    };
     this._chatService.onMessageDeleted((data) => {
-      _flushStreamUpdates();
       this.postMessage({ type: "messageDeleted", payload: data });
     });
     this._chatService.onMessageEdited((data) => {
@@ -315,10 +306,8 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     this._chatService.onStreamStart((data) => {
       this.postMessage({ type: "streamStart", payload: data });
     });
-    this._chatService.onStreamUpdate((data: { messageId: string; slices?: unknown[] }) => {
-      const arr = _suBuf.get(data.messageId) || [];
-      _suBuf.set(data.messageId, arr.concat(data.slices || []));
-      if (!_suTimer) _suTimer = setTimeout(_flushStreamUpdates, _SU_FLUSH_MS);
+    this._chatService.onStreamUpdate((data) => {
+      this.postMessage({ type: "streamUpdate", payload: data });
     });
     this._chatService.onTypingStatus((data) => {
       this.postMessage({ type: "typingStatus", payload: data });
@@ -1959,14 +1948,18 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
 
   /** WS重连/面板恢复时同步可能遗漏的消息（chatResync handler 只补消息，不应用 config）。 */
   private async _resyncChat(): Promise<void> {
+    const view = this._view;
     const chatId = this._chatService.currentChatId;
-    if (!chatId) return;
-    try {
-      const data = await this._chatService.getInitialData(chatId);
-      this.postMessage({ type: "chatResync", payload: { ...data, chatId } }); // 带归属 id（与 chatInitialData 同约）
-    } catch (err) {
-      console.warn("[YonBan] resync失败:", err);
-    }
+    if (!view || !chatId) return;
+    await this._queueViewDelivery(view, async () => {
+      try {
+        const data = await this._chatService.getInitialData(chatId);
+        if (this._view !== view || this._chatService.currentChatId !== chatId) return;
+        await view.webview.postMessage({ type: "chatResync", payload: { ...data, chatId } });
+      } catch (err) {
+        console.warn("[YonBan] resync失败:", err);
+      }
+    });
   }
 
   /** 当前会话 config（角色等）被他端改 → 推 chatInitialData（onChatInitialData 真应用 charlist+messages）。 */
@@ -2032,8 +2025,22 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     r(answered ? answer : null);
   }
 
+  private _queueViewDelivery(view: vscode.WebviewView, deliver: () => void | PromiseLike<unknown>): Promise<void> {
+    const run = async () => {
+      if (this._view !== view) return;
+      await deliver();
+    };
+    const queued = this._viewDelivery.then(run, run);
+    this._viewDelivery = queued.catch((err: unknown) => {
+      console.warn("[YonBan] Webview 消息投递失败:", err);
+    });
+    return this._viewDelivery;
+  }
+
   public postMessage(message: WebviewMessage): void {
-    this._view?.webview.postMessage(message);
+    const view = this._view;
+    if (!view) return;
+    void this._queueViewDelivery(view, () => view.webview.postMessage(message));
   }
 
   /** 从外部推送 WS 客户端数量变化（extension.ts 调用） */

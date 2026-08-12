@@ -272,7 +272,7 @@ window.addEventListener("beilu:chat-list-changed", _scheduleLockRecheck);
  * 从 per-character key 读 localStorage，若与当前 hash 不同则 switchCharacterScope。
  * 若该模式从未选过对话（localStorage 无值），不切换——保持当前对话。
  */
-async function _restoreModeChatId(tabName) {
+async function _restoreModeChatId(tabName, announceActive = true) {
   const charName = storage.get(KEYS.BEILU_LAST_CHAR) || "";
   const targetMode = _MODE_TAB_TO_MODE[tabName];
   const targetKey = getModeChatIdKey(targetMode, charName);
@@ -297,7 +297,7 @@ async function _restoreModeChatId(tabName) {
   console.log(`[layout][MO-ISO] 恢复 ${tabName}/${charName} 的 chatId: ${savedChatId.substring(0, 8)}…`);
   // [多窗口审计 2026-07-11 A1] 显式传 targetMode：恢复链明确知道目标模式，switchCharacterScope 内
   //   [MO-ISO] 写点不再猜前端内存 getCurrentMode（tab 联动飞行期 stale 会把目标模式的 cid 写进旧模式键）
-  switchCharacterScope(savedChatId, charName, { mode: targetMode });
+  switchCharacterScope(savedChatId, charName, { mode: targetMode, announceActive });
 }
 
 
@@ -530,7 +530,7 @@ function switchTab(tabName, { isInit = false } = {}) {
   } else {
     _updateInj2State(tabName === "files");
     if (isInit && TAB_TO_MODE[tabName] !== null && tabName !== "settings" && tabName !== "editor") {
-      _restoreModeChatId(tabName);
+      _restoreModeChatId(tabName, false);
     }
   }
 

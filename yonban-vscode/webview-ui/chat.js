@@ -378,7 +378,7 @@ case "chatInitialData":
       case "subModesConfigChanged":
         vscode.postMessage({ type: "getSubModes" });
         break;
-      // 跨客户端「当前对话」同步：本用户另一端(本体)生成开始 → 跟随切到该 chat 看流。
+      // 跨客户端「当前对话」同步：只跟随另一端的用户切换；generation 事件只刷新状态，不夺走当前窗口。
       // 默认跟随，localStorage 'yb-peer-follow'==='false' 可关。
       case "peerActiveChat": {
         var _pac = msg.payload || {};
@@ -397,11 +397,12 @@ case "chatInitialData":
         if (
           _pac.chatid &&
           _pac.chatid !== state.currentChatId &&
+          _pac.reason !== "generation" &&
           !_userBusy &&
           _shouldFollow &&
           YB.switchToChat
         ) {
-          YB.switchToChat(_pac.chatid, null);
+          YB.switchToChat(_pac.chatid, null, { announceActive: false });
         }
         break;
       }
@@ -640,7 +641,7 @@ case "chatInitialData":
     hmPeerFollow.addEventListener("change", function (e) {
       e.stopPropagation();
       try { localStorage.setItem("yb-peer-follow", hmPeerFollow.checked ? "true" : "false"); } catch (_) {}
-      YB.showToast(hmPeerFollow.checked ? "跨端跟随已开启（他端开始生成时自动切到该对话）" : "跨端跟随已关闭（多窗口各管各的对话）", 2000);
+      YB.showToast(hmPeerFollow.checked ? "跨端跟随已开启（他端切换对话时同步）" : "跨端跟随已关闭（多窗口各管各的对话）", 2000);
     });
     hmPeerFollow.closest(".hamburger-item").addEventListener("click", function (e) {
       if (e.target !== hmPeerFollow) {

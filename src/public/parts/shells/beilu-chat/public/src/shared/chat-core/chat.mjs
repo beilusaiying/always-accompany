@@ -32,6 +32,7 @@ import { isValidChatId } from "../state/sharedState.mjs";
 import {
   addCharacter,
   addPlugin,
+  announceActiveChat,
   currentChatId,
   getInitialData,
   setPersona,
@@ -885,6 +886,13 @@ export async function switchCharacterScope(chatid, charNameHint, opts = {}) {
 
   // 统一广播 chat_id_changed（所有调用路径受益，不再依赖各调用方各自派发）
   window.emitBeiluEvent?.("chat_id_changed", { chatid });
+  // 跨端同步属于本切换的成功收尾，不属于 WS 初连/断线重连生命周期；peer 跟随显式禁止回发。
+  if (opts.announceActive !== false) {
+    void announceActiveChat(chatid).catch((e) => {
+      console.warn("[切卡免刷] 跨端当前对话同步失败:", e?.message || e);
+      window._reportError?.(`[切卡免刷] switch-active: ${e?.message || e}`, e?.stack);
+    });
+  }
 
   // ── 切卡后对齐文件树根 ──
   // 从卡_config读回该角色持久根 → 同步后端窗口根 + 前端显示

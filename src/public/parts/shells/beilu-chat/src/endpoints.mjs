@@ -332,7 +332,7 @@ export function setEndpoints(router) {
         const chatid = req.body?.chatid;
         if (!chatid) return res.status(400).json({ error: "缺少 chatid" });
         if (!(await _assertChatOwner(req, res, chatid))) return;
-        broadcastUserActiveChat(chatid, "attach");
+        broadcastUserActiveChat(chatid, "switch");
         res.status(200).json({ ok: true, chatid });
       } catch (err) {
         console.error("[chat/switch-active] Error:", err.message);

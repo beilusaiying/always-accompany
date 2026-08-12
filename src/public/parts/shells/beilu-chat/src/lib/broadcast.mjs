@@ -486,12 +486,12 @@ export function broadcastCrossChatEvent(sourceChatId, event, usernameOverride = 
 }
 
 /**
- * 跨客户端「当前对话」同步（本体↔YonBan）：生成开始时按 user 维度通知该用户的其它客户端
- * 「当前活动对话=chatid」。另一端据 peer_active_chat 自行决定是否跟随（默认跟随，可关）。
+ * 跨客户端「当前对话」同步（本体↔YonBan）：按 user 维度通知该用户的其它客户端
+ * 「用户刚提交切换到 chatid」或「chatid 正在生成」。另一端据 reason 决定是否跟随（默认跟随切换，可关）。
  * ★ 与 per-chatId 消息广播(broadcastChatEvent)正交：不改任何消息事件的作用域，只多发一条
  *   user 级软提示，故不回退多窗口隔离（同类多窗口可各自关闭跟随）。username 由 chat 元数据解析。
  */
-export function broadcastUserActiveChat(chatid, reason = "attach") {
+export function broadcastUserActiveChat(chatid, reason = "switch") {
   if (isWorkerIsolate) {
     if (!publishFromWorker("broadcast", chatid, { fn: "userActiveChat", args: [chatid, reason] }))
       console.warn("[broadcast] worker 桥无在飞 emitter，userActiveChat 丢弃");
@@ -501,7 +501,7 @@ export function broadcastUserActiveChat(chatid, reason = "attach") {
   let metas, username;
   try { metas = _getChatMetadatas(); username = metas?.get(chatid)?.username; } catch { return; }
   if (!username) return;
-  // reason 随事件下发（0727 多线）：消费端据此区分「用户打开了某对话」(attach，该跟随) 与
+  // reason 随事件下发（0727 多线）：消费端据此区分「用户打开了某对话」(switch，该跟随) 与
   //   「某对话开始生成」(generation，**不该**跟随)。原先两者共用一条无差别消息，导致后台线
   //   一开始生成就把用户当前看的界面抢走——与「一个窗口工作，另一个窗口可以继续」正面冲突。
   const payload = JSON.stringify({ type: "peer_active_chat", payload: { chatid, reason } });
@@ -527,7 +527,7 @@ export function broadcastUserActiveChat(chatid, reason = "attach") {
  * 链路：endpoints.mjs WS upgrade → 本函数 → chatUiSockets.add
  *       → ws.on("message"): ping→pong / stop_generation→StreamManager.abortAll（[0724] 不再 cancelAutoContinue——停止只停在飞流）
  *       → ws.on("close"): 延迟 5s 确认无重连后 abortAll+saveChat+卸载 chatMetadata
- * 影响：chatUiSockets 新增映射 / broadcastUserActiveChat 同步当前对话 / ws.on("close") 触发 saveChat+内存卸载
+ * 影响：chatUiSockets 新增映射 / ws.on("close") 触发 saveChat+内存卸载
  * 约束：getChatMetadatas/saveChat 延迟注入避免循环依赖；RC-1 修 — close 后还须取消自动继续定时器
  *
  * @param {string} chatid - 会话 ID
@@ -552,11 +552,8 @@ export function registerChatUiSocket(
   socketSet.add(ws);
   broadcastStats.wsConnections++;
 
-  // G1/G2: 新WS连接注册时自动广播peer_active_chat，让所有同用户客户端跟随切对话
-  // 覆盖：本体切对话(reconnectWebSocket) + YonBan切对话(connectChat) + 任何新WS连接
-  // reason 显式写出（不靠默认值隐含语义）：新 WS 注册 = 某个客户端**打开/切到**了这个对话，
-  //   这才是「用户切了对话」，是跟随语义成立的那一种。与 generation 那条区分开。
-  broadcastUserActiveChat(chatid, "attach");
+  // WS 注册只是传输生命周期：初连、断线重连、后台并行线都会走到这里，
+  // 不能冒充「用户主动切换对话」。主动意图已有 /switch-active 端点，由各端切换提交点调用。
 
   const typingList = getTypingList(chatid);
   if (typingList.length > 0) {

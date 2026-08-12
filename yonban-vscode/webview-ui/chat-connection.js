@@ -87,7 +87,7 @@
         if (state.hasBoundChar && state.currentChatId && !_alreadyShowingChat(state.currentChatId)) {
           // 恢复聊天（无论是 pendingRestore 还是 localState 恢复的）
           _pendingRestore = false;
-          YB.switchToChat(state.currentChatId, null);
+          YB.switchToChat(state.currentChatId, null, { announceActive: false });
         }
         // 否则保持当前视图（设置页）
       } else {
@@ -342,7 +342,7 @@
     if (state.hasBoundChar && state.currentChatId && state.connectionStatus === "connected") {
       if (_alreadyShowingChat(state.currentChatId)) return; // connected 分支已恢复完成，防双切
       console.log("[chat-connection] 直接恢复聊天:", state.currentChatId);
-      YB.switchToChat(state.currentChatId, null);
+      YB.switchToChat(state.currentChatId, null, { announceActive: false });
     } else if (state.hasBoundChar && state.currentChatId) {
       // 还没连接，标记待恢复，等 connectionState connected 时触发
       _pendingRestore = true;

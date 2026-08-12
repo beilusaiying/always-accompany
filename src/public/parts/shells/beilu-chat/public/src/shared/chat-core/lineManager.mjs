@@ -235,7 +235,7 @@ function _ideLabel(inst) {
  *  【凛倾 0726 纠正】「打开一个窗口」= 本体体系里的作业窗口/线，不是 window.open：
  *    原实现 window.open 让新页面把整套应用（IDE 面板/后端管理/监控）重新加载一遍 = 嵌套。
  *    正确形态：确认后活动栏多一个对话图标，点它在**本页面内**显示那个窗口（_switchToLine）。 */
-function _openLine(chatid, charName, label, ideLabel, idePort, mode) {
+async function _openLine(chatid, charName, label, ideLabel, idePort, mode) {
   // [0727 凛倾冲突规格「新建和主a重合,那么直接禁止创建」] 主窗口正在持有的对话禁止再开成副窗口：
   //   一条对话只该有一个窗口；且下方 _lines.set 是整包覆盖写，对 home 条目执行会把 home 标写丢
   //   （主窗口登记被改写成普通线=主窗口消失）。拒绝必须可见（toast+错误追踪），不静默。
@@ -260,7 +260,8 @@ function _openLine(chatid, charName, label, ideLabel, idePort, mode) {
   _refreshBindHint(document.getElementById("ide-line-new-btn"));
   _renderLineTabs();
   showToast?.(_existed ? "info" : "success", _existed ? `这条线已在活动栏上，已切过去` : `已拉起对话线：${label || chatid}（点活动栏图标切换）`);
-  void _switchToLine(chatid); // 拉起即切过去（用户刚选完，期望立刻看到）
+  // 拉起即切过去；弹层必须等切换的真实终态，不能在异步链尚未成功时先关掉。
+  return await _switchToLine(chatid);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -516,7 +517,6 @@ async function _showWin(chatid, { loadContent = false } = {}) {
   window.dispatchEvent(new CustomEvent("beilu:window-switched", {
     detail: { chatid: target, char: line?.char || "", label: line?.label || "", home: !!line?.home },
   }));
-
   if (needsContent) {
     if (_winDirty.has(target)) wbTrace("window", "show:refetchDirty", { chatid: target });
     await _loadWinContent(target, deps, epoch, initialDataPromise);
@@ -661,9 +661,10 @@ async function _switchToLine(chatid) {
     // 静默 return 是原来的行为：图标在、登记没了 → 点了永远没反应且无任何提示
     console.warn(`[line] ✗ 线登记里没有 ${chatid}（图标与登记不同步），本次点击无效`);
     showToast?.("warning", "这条线的登记已丢失（图标与登记不同步），请重新拉线");
-    return;
+    return false;
   }
   try {
+    const deps = await _prepareWinSwitchDeps();
     // ══ 视图接管（0727 截图病根之一：日志"已显示"、屏幕还是连接面板）══
     //   窗口住在 ai-chat 侧栏面板里（moveChatContainer → #ide-panel-ai-chat，layout.mjs:315）。
     //   别的面板占前台时只切窗口显隐 = 在看不见的地方表演。先把聊天面板带到前台——
@@ -678,17 +679,13 @@ async function _switchToLine(chatid) {
     if (chatid === _curWinId) {
       _t("② 已在该窗口，重新对齐传输绑定");
       const shown = await _showWin(chatid);
-      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return; }
-      _lineBusy.delete(chatid);
-      _renderLineTabs();
-      return;
-    }
-    if (_winEls.has(chatid)) {
+      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return false; }
+    } else if (_winEls.has(chatid)) {
       // 这个窗口已经在页面上：只是被 hidden 了 → 显示它、隐藏其余。
       //   **不拉数据、不重渲染、不写任何全局角色卡指针** —— 消息/滚动/输入框里的字原封不动。
       _t("② 显示该窗口（其余隐藏，不重新加载）");
       const shown = await _showWin(chatid);
-      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return; }
+      if (!shown) { _t("② 切换请求已被更新的窗口请求取代"); return false; }
       _t("③ 已显示");
     } else {
       // 第一次打开这条线：复制一份界面，用现成链路把它的对话加载进去
@@ -697,19 +694,27 @@ async function _switchToLine(chatid) {
       if (!ok) {
         if (!_winEls.has(chatid)) showToast?.("error", "窗口创建失败（找不到界面容器）");
         else _t("② 新窗口请求已被更新的窗口请求取代");
-        return;
+        return false;
       }
       _t("③ 新窗口已就绪");
     }
+    // 只有用户线切换经 _showWin 完整提交后才发现有的跨端同步；
+    // WS 初连/重连与页面自动恢复不再冒充用户点击。
+    void deps.endpoints.announceActiveChat(chatid).catch((e) => {
+      console.warn("[lineManager] 跨端当前对话同步失败:", e?.message || e);
+      window._reportError?.(`[lineManager] switch-active: ${e?.message || e}`, e?.stack);
+    });
     // 绿点兜底自愈：切过去 = 当前线，生成状态由消息区直接呈现，图标绿点对它没有意义，清掉。
     //   why 需要这层：清 busy 的两个信号（message_replaced 终态 / typing_status 空列表）都可能丢
     //   —— typing_status 在 broadcast 的背压丢弃名单里，WS 断开时终态也会丢 —— 丢了绿点就常亮。
     //   切走后若这条线仍在生成，后续 stream_update 会重新点亮，不会漏报。
     _lineBusy.delete(chatid);
     _renderLineTabs(); // 高亮随当前对话走
+    return true;
   } catch (e) {
     console.warn("[lineManager] 切线失败:", e?.message);
     showToast?.("error", `切换对话线失败: ${e?.message || e}`);
+    return false;
   }
 }
 
@@ -1060,7 +1065,7 @@ export async function openLinePicker() {
       let _lineMode = "";
       try { _lineMode = getCurrentMode() || ""; }
       catch (err) { console.warn("[lineManager] 取当前模式失败（线不记模式）:", err?.message); }
-      const _ok = _openLine(chatid, ch, label, _opt ? _opt.textContent : "", _idePort, _lineMode);
+      const _ok = await _openLine(chatid, ch, label, _opt ? _opt.textContent : "", _idePort, _lineMode);
       // 与主窗口重合被拒（_openLine 返回 false）：弹层留着让用户改选，拒因已 toast+错误追踪
       if (_ok === false) return;
       renderLines();
@@ -1212,7 +1217,7 @@ export function initLineManager(activityBar) {
     // [0727 凛倾「第三个图标=a」] AI 对话面板钮就是主窗口 a 的图标：点它=回主窗口——
     //   正显示副窗口时把显示切回 home（参照现有切换代码，_switchToLine 单入口，
     //   面板本身已由 ide.mjs 的监听切好）；已在 home 则纯粹是面板切换，不多做事。
-    if (_p.dataset.idePanel === "ai-chat") {
+    if (_p.dataset.idePanel === "ai-chat" && e.isTrusted) {
       const _homeId = [..._lines.entries()].find(([, l]) => l && l.home)?.[0] || "";
       if (_homeId && _homeId !== _curWinId) void _switchToLine(_homeId);
     }

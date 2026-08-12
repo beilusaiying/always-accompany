@@ -1444,9 +1444,6 @@ async function _showTokenSettingsPopup() {
     const tr = config.token_reminder || {};
     const enabled = tr.enabled !== false;
     const customText = tr.custom_text || "";
-    // AI清理最低占用（%）：配置缺键时镜像后端 DEFAULT_TOKEN_REMINDER.ai_clean_min_percent=5
-    // （与下方 thresholds 默认数组同为"UI 镜像后端默认"既有模式）；0=不限制
-    const aiCleanMinPct = Number.isFinite(Number(tr.ai_clean_min_percent)) ? Number(tr.ai_clean_min_percent) : 5;
     const thresholds = tr.thresholds || [
       { percent: 50, level: "info" },
       { percent: 70, level: "warning" },
@@ -1480,13 +1477,6 @@ async function _showTokenSettingsPopup() {
           <input type="text" class="input input-xs input-bordered w-full" id="tp-custom" value="${customText.replace(/"/g, '&quot;')}" placeholder="留空使用默认提醒" />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-bold">AI清理最低占用（%）</span>
-          <div class="flex items-center gap-2">
-            <input type="number" class="input input-xs input-bordered w-20" id="tp-clean-min" value="${aiCleanMinPct}" min="0" max="99" step="1" />
-            <span class="text-[10px] opacity-60">占用低于此比例时拒绝AI的contextClean清理；0 = 不限制</span>
-          </div>
-        </label>
-        <label class="flex flex-col gap-1">
           <span class="text-[11px] font-bold">刷新间隔（秒）</span>
           <div class="flex items-center gap-2">
             <input type="number" class="input input-xs input-bordered w-20" id="tp-poll" value="${_pollSec()}"
@@ -1517,11 +1507,6 @@ async function _showTokenSettingsPopup() {
         const _tSrc = thresholds[Number(idx)] || {};
         newCfg.thresholds.push({ percent: parseInt(inp.value), level: lSel?.value || "warning", ...(_tSrc.text ? { text: _tSrc.text } : {}) });
       });
-      // AI清理最低占用（%）：0=不限制；非法输入回退默认 5（镜像后端 DEFAULT_TOKEN_REMINDER.ai_clean_min_percent）
-      {
-        const _cmv = Number(body.querySelector("#tp-clean-min")?.value);
-        newCfg.ai_clean_min_percent = Number.isFinite(_cmv) ? Math.min(Math.max(Math.round(_cmv), 0), 99) : 5;
-      }
       // [0727 刷新间隔] 纯前端本地偏好（每台机器性能不同，不进后端 per-user 配置）：
       //   存 localStorage 单键，派事件让运行中的定时器立刻按新值重启，不必刷新页面。
       const _pollInput = body.querySelector("#tp-poll");

@@ -16,7 +16,7 @@ import {
   GetPartPath,
   loadPart,
 } from "../../../../../../server/parts_loader.mjs";
-import { addfile, getfile } from "../files.mjs";
+import { addfile } from "../files.mjs";
 import { wbTrace, wbSpan, wbDetect } from "../../../../../../server/whitebox.mjs";
 
 const diag = createDiag("chat");
@@ -107,8 +107,30 @@ export class timeSlice_t {
     };
   }
 
-  static async fromJSON(json, username) {
+  static async fromJSON(json, username, dependencyCache) {
     if (!json) json = {};
+
+    // 同一次聊天水化内，相同部件集合只加载一次；消息快照仍保持独立对象。
+    if (dependencyCache) {
+      const dependencies = [json.chars || [], json.plugins || [], json.world, json.player];
+      const key = JSON.stringify(dependencies);
+      let pending = dependencyCache.get(key);
+      if (!pending) {
+        pending = timeSlice_t.fromJSON({
+          chars: dependencies[0], plugins: dependencies[1],
+          world: dependencies[2], player: dependencies[3],
+        }, username);
+        dependencyCache.set(key, pending);
+      }
+      const loaded = await pending;
+      return Object.assign(loaded.copy(), json, {
+        chars: { ...loaded.chars }, plugins: { ...loaded.plugins },
+        world: loaded.world, world_id: loaded.world_id,
+        player: loaded.player, player_id: loaded.player_id,
+        chars_memories: structuredClone(json.chars_memories || {}),
+        charLoadFailures: { ...loaded.charLoadFailures },
+      });
+    }
 
     let worldLoadFailed = false;
     const charLoadFailures = {};
@@ -246,7 +268,9 @@ export class chatLogEntry_t {
       timeSlice: this.timeSlice.toJSON(),
       files: this.files.filter(f => f.buffer).map((file) => ({
         ...file,
-        buffer: file.buffer.toString("base64"),
+        buffer: Buffer.isBuffer(file.buffer)
+          ? file.buffer.toString("base64")
+          : file.buffer,
       })),
     };
   }
@@ -274,21 +298,23 @@ export class chatLogEntry_t {
       files: await Promise.all(
         _files.map(async (file) => ({
           ...file,
-          buffer: "file:" + (await addfile(username, file.buffer)),
+          buffer: typeof file.buffer === "string" && file.buffer.startsWith("file:")
+            ? file.buffer
+            : "file:" + (await addfile(username, file.buffer)),
         })),
       ),
     };
   }
 
-  static async fromJSON(json, username) {
+  static async fromJSON(json, username, timeSliceCache) {
     const instance = Object.assign(new chatLogEntry_t(), {
       ...json,
-      timeSlice: await timeSlice_t.fromJSON(json?.timeSlice, username),
+      timeSlice: await timeSlice_t.fromJSON(json?.timeSlice, username, timeSliceCache),
       files: await Promise.all(
         (json.files || []).map(async (file) => ({
           ...file,
           buffer: file.buffer?.startsWith?.("file:")
-            ? await getfile(username, file.buffer.slice(5))
+            ? file.buffer
             : file.buffer ? Buffer.from(file.buffer, "base64") : null,
         })),
       ),
@@ -426,10 +452,12 @@ export class chatMetadata_t {
   }
 
   static async fromJSON(json) {
+    // 生命周期仅限本次 JSON 水化：不新增全局缓存/状态所有者，调用结束即释放。
+    const timeSliceCache = new Map();
     const chatLog = await Promise.all(
       json.chatLog.map(async (data, i) => {
         try {
-          return await chatLogEntry_t.fromJSON(data, json.username);
+          return await chatLogEntry_t.fromJSON(data, json.username, timeSliceCache);
         } catch (err) {
           wbDetect(null, "models", "chatLog:fromJSON:fallback", false, err?.message || String(err), { index: i, id: data?.id, role: data?.role });
           diag.error(
@@ -457,7 +485,7 @@ export class chatMetadata_t {
     const timeLines = await Promise.all(
       json.timeLines.map(async (entry, i) => {
         try {
-          return await chatLogEntry_t.fromJSON(entry, json.username);
+          return await chatLogEntry_t.fromJSON(entry, json.username, timeSliceCache);
         } catch (err) {
           wbDetect(null, "models", "timeLines:fromJSON:fallback", false, err?.message || String(err), { index: i, id: entry?.id });
           diag.error(`timeLines[${i}] fromJSON failed:`, err.message);

@@ -397,18 +397,18 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       this.postMessage({ type: "serverNotice", payload: data });
     });
     this._chatService.onChatConnected(({ chatId, isReconnect }) => {
-      // EventEmitter 不等待异步监听器：WS 连接事实照常上报；IDE 绑定单独等待并显式报告失败。
-      // 这里不设置“已绑定”状态，失败后仍由下一次重连、切换或发送重试。
-      void this._bindCurrentChat(chatId).catch((err: unknown) => {
-        this._reportIdeBindFailure(chatId, isReconnect ? "聊天重连后绑定" : "聊天连接后绑定", err);
-      });
+      // 首连入口在 connectChat 前已完成绑定；这里只在同对话意外重连后重新确认路由。
+      // 若重连绑定晚到且期间已切 chat，currentChatId 闸会丢弃旧失败，不污染新窗口状态。
+      if (isReconnect) {
+        void this._bindCurrentChat(chatId).catch((err: unknown) => {
+          if (this._chatService.currentChatId !== chatId) return;
+          this._reportIdeBindFailure(chatId, "聊天重连后绑定", err);
+        });
+      }
       this.postMessage({ type: "chatConnected", payload: { chatId, isReconnect } });
       if (isReconnect) {
         // H2: 重连 → 通知 webview 触发增量补拉（webview 持有本地消息数，回发 requestMissedMessages）
         this.postMessage({ type: "chatReconnected", payload: { chatId } });
-      } else {
-        // 首连：全量窗口同步可能遗漏的消息
-        this._resyncChat();
       }
     });
     this._chatService.onChatDisconnected(() => {
@@ -602,7 +602,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
 
       case "selectChat":
       case "switchChat": {
-        const { chatId } = message.payload as { chatId: string };
+        const { chatId, announceActive = true } = message.payload as { chatId: string; announceActive?: boolean };
         // [多窗时序 0726] 切换代号闸：onDidReceiveMessage 不串行，快速 A→B 切换时 A 的 getInitialData
         //   await 间隙里 B 可能整段跑完——若 A 恢复后照常 post，UI 终态=A 而 WS/currentChatId 终态=B（发错对话）。
         //   闸法：每次切换取递增代号，await 回来发现代号已过期 → 本次结果整段作废（不 post 不恢复 mode）。
@@ -620,15 +620,15 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
             });
             break;
           }
+          // _bindCurrentChat 是异步边界：慢 A 绑定回来时，B 可能已经完成切换。
+          // 过期切换不得再提交 connectChat，否则会把 UI=B、WS=A，后续消息全部渲染到错误对话。
+          if (_epoch !== this._switchEpoch) break;
           this._chatService.connectChat(chatId);
+          // 成功提交新 WS 后再提交 webview 当前对话；此时旧 socket 已退役且有实例身份闸。
+          // 必须在 getInitialData 前切 UI，避免目标 WS 的首批事件在 await 期间写进旧对话界面。
+          this.postMessage({ type: "chatSwitched", payload: { chatId } });
           const data = await this._chatService.getInitialData(chatId);
           if (_epoch !== this._switchEpoch) break; // 期间又切了别的对话，晚到的旧数据不得盖新终态
-          // 推 chatSwitched 让左 webview 调 applySwitchedChat（只更新 UI 不回发 switchChat = 防回环）。
-          //   chatMeta 留空：applySwitchedChat 从 state.allChats 自查（避免 ChatService 再加一层缓存）。
-          // ★ 顺序约束：chatSwitched 必须先于 chatInitialData——applySwitchedChat 会重置消息区为
-          //   "加载中"占位，若在 chatInitialData 之后到达会把刚渲染的消息擦掉且无人再拉数据（永久卡死）。
-          //   先切 UI 态、后到的 chatInitialData 负责真正渲染。
-          this.postMessage({ type: "chatSwitched", payload: { chatId } });
           this.postMessage({ type: "chatInitialData", payload: { ...data, chatId } }); // 带归属 id，消费端校验（指令带id·执行端识别同款范式）
           // ★ B17: 切 chat 时恢复该 chat 的 activeMode 并通知 webview（复用 activeMode 通道）。
           //   后端同步该 mode，避免下一次 send/trigger 前残留上一个 chat 的 mode。
@@ -640,6 +640,18 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
           }
           if (_epoch !== this._switchEpoch) break; // setActiveMode await 间隙同样可被插队
           this.postMessage({ type: "activeMode", payload: { mode: _restoredMode } });
+          // 只有本窗口用户切换才发布跨端意图；恢复、刷新和 peer 跟随不得反向制造第二个切换事件。
+          // 同步失败不回滚已经成功提交的本地 UI/WS/mode，也不进入重试链。
+          if (announceActive) {
+            try {
+              await this._chatService.announceActiveChat(chatId);
+            } catch (e: unknown) {
+              if (_epoch !== this._switchEpoch) break;
+              const detail = e instanceof Error ? e.message : String(e);
+              console.error("[YonBan] 跨端当前对话同步失败:", detail);
+              this.postMessage({ type: "operationError", payload: { action: "switchActiveChat", error: detail } });
+            }
+          }
         } catch (err: unknown) {
           if (_epoch !== this._switchEpoch) break; // 过期切换的报错也作废（新切换已接管 UI）
           const msg = err instanceof Error ? err.message : String(err);
@@ -1680,7 +1692,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
         break;
       }
 
-      // ── Token提醒配置（AI清理最低占用%）：真源=beilu-memory token_reminder，与本体 Token设置弹窗同读写口 ──
+      // Token 提醒阈值真源在本体 beilu-memory；YonBan 只转发读写，不复制默认值。
       case "getTokenReminder": {
         const trCfg = await this._chatService.getTokenReminderConfig();
         this.postMessage({ type: "tokenReminderConfig", payload: (trCfg as Record<string, unknown>)?.token_reminder || {} });
@@ -2366,15 +2378,11 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
                 </div>
                 <div class="fp-row">
                     <span class="fp-label">警告阈值 %</span>
-                    <input type="number" id="fpWarnPct" class="fp-input" min="50" max="100" value="70" />
+                    <input type="number" id="fpWarnPct" class="fp-input" min="0" max="100" />
                 </div>
                 <div class="fp-row">
                     <span class="fp-label">危险阈值 %</span>
-                    <input type="number" id="fpDangerPct" class="fp-input" min="50" max="100" value="90" />
-                </div>
-                <div class="fp-row" title="上下文占用低于此比例时拒绝AI的contextClean清理（防频繁清理打碎缓存）；0=不限制">
-                    <span class="fp-label">AI清理最低占用 %</span>
-                    <input type="number" id="fpCleanMinPct" class="fp-input" min="0" max="99" step="1" placeholder="5" />
+                    <input type="number" id="fpDangerPct" class="fp-input" min="0" max="100" />
                 </div>
                 <button id="fpSaveBtn" class="btn btn-primary" style="width:100%;margin-top:8px;font-size:12px;">保存</button>
                 <div id="fpStatus" style="font-size:10px;color:var(--vscode-descriptionForeground);text-align:center;margin-top:4px;"></div>

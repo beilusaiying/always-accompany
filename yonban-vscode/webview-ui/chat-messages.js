@@ -392,20 +392,20 @@
     }
   }
 
-  function switchToChat(chatId, chatMeta) {
-    _applyChatUiState(chatId, chatMeta);
-    // 发后端切换（拉 initial-data + 连 WS）。右板块经 chatSwitched 同步时走 applySwitchedChat，不到这里。
-    vscode.postMessage({ type: "switchChat", payload: { chatId: chatId } });
+  function switchToChat(chatId, chatMeta, opts) {
+    // 只发切换意图；Provider 完成 IDE 绑定并提交新 WS 后，用 chatSwitched 回执提交 UI。
+    // 绑定失败时保留旧对话，避免“界面已切、连接未切”的半提交状态。
+    vscode.postMessage({
+      type: "switchChat",
+      payload: { chatId: chatId, announceActive: !opts || opts.announceActive !== false },
+    });
   }
 
   // ★ 右板块（右副侧栏）切对话时，左 Provider 已经在后端切好并推 chatInitialData，
   //   这里只补 UI 态同步（标题/视图/轮询），不再回发 switchChat → 不会触发后端二次切换/死循环。
   function applySwitchedChat(chatId, chatMeta) {
-    // 已是当前对话则跳过（再防一层回环）。
-    // ★ 不能加 "&& chatMeta" 条件：extension 推 chatSwitched 永远不带 chatMeta（Provider 侧注释明确留空），
-    //   带上该条件守卫永不生效 → 本 webview 自己发起的 switchChat 回声也会重跑 _applyChatUiState，
-    //   把已渲染消息重置回"加载中"且无人再拉数据（永久卡死的根因，2026-07-15 确诊）。
-    if (state.currentChatId === chatId) return;
+    // chatSwitched 现在是 Provider 的成功提交回执，且固定先于 chatInitialData；即使恢复态里
+    // currentChatId 已预载成同值，也必须应用一次 UI（否则会停在设置页）。
     var meta = chatMeta;
     if (!meta && Array.isArray(state.allChats)) {
       meta = state.allChats.filter(function (c) { return c.chatid === chatId; })[0] || null;
@@ -2588,20 +2588,22 @@ function enterEditMode(row, entry, capturedIdentity) {
     }
     var newMessages = payload.initialLog || [];
     var logLength = payload.logLength || newMessages.length;
-    var currentCount = state.messages.length;
-    // 如果服务端消息比本地多，用 id 去重补漏（防断线期间消息编辑/删除导致索引偏移）
-    if (newMessages.length > currentCount) {
-      var _localIds = new Set(state.messages.map(function (m) { return m.id; }));
-      for (var i = 0; i < newMessages.length; i++) {
-        if (!_localIds.has(newMessages[i].id)) onMessageAdded(newMessages[i]);
-      }
-    } else if (newMessages.length < currentCount) {
-      // 服务端消息变少了（可能有删除），全量刷新
+    // resync 是服务端权威窗口，不是“只补条数”。条数相等时消息仍可能已经编辑、替换或生成落定；
+    // 只比较 length 会永久保留旧内容/流式占位。若本地已向前加载历史，则仅替换服务端返回的尾窗，
+    // 保留其前面的已加载区；窗口无法连续对齐时才用服务端窗口整体校正。
+    var serverOffset = Math.max(0, logLength - newMessages.length);
+    var localOffset = Math.max(0, state.logOffset || 0);
+    var localEnd = localOffset + state.messages.length;
+    if (serverOffset >= localOffset && serverOffset <= localEnd) {
+      state.messages = state.messages.slice(0, serverOffset - localOffset).concat(newMessages);
+      state.logOffset = localOffset;
+    } else {
       state.messages = newMessages;
-      state.logOffset = logLength - newMessages.length;
-      renderAllMessages();
-      scrollToBottom(true);
+      state.logOffset = serverOffset;
     }
+    state.streamingContent = {};
+    renderAllMessages();
+    scrollToBottom(true);
     // 更新生成状态
     var lastMsg = newMessages.length > 0 ? newMessages[newMessages.length - 1] : null;
     if (lastMsg && lastMsg.is_generating) {

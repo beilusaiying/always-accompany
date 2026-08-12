@@ -43,6 +43,15 @@ export function setCurrentChatId(id) {
   currentChatId = id;
 }
 
+/** 用户切换成功后同步当前对话；初连/重连不得调用。 */
+export function announceActiveChat(chatId) {
+  if (!chatId) return Promise.resolve(null);
+  return apiFetch("/api/parts/shells:chat/switch-active", {
+    method: "POST",
+    body: { chatid: chatId },
+  });
+}
+
 /**
  * 调用API。
  * @param {string} endpoint - 端点。

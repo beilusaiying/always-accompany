@@ -1211,7 +1211,7 @@ async function handleBroadcastEvent(event, winId) {
         storage.get(KEYS.BEILU_PEER_FOLLOW) !== "false"
       ) {
         import("../chat-core/chat.mjs")
-          .then((m) => { try { m.switchCharacterScope?.(payload.chatid); } catch (e) { console.warn("[websocket] peer_active_chat 跟随失败:", e?.message); } })
+          .then((m) => { try { m.switchCharacterScope?.(payload.chatid, undefined, { announceActive: false }); } catch (e) { console.warn("[websocket] peer_active_chat 跟随失败:", e?.message); } })
           .catch(() => {});
       }
       // 「另一窗口在用」角标刷新：不管跟不跟随，对端活动变化=列表 inUseCount 已过时，

@@ -131,11 +131,8 @@ import {
   getCodeConfigPath,
   getSystemText,
   isPathSafe, // 0716 路径前缀边界修复：收口内联 resolve().startsWith 到权威守卫
-  DEFAULT_TOKEN_REMINDER, // 0811 contextClean 阈值单源：ai_clean_min_tokens 默认值唯一权威（defaults.mjs）
+  DEFAULT_TOKEN_REMINDER,
 } from "../storage_mod/storage.mjs";
-// token 用量分子内存单源（0811 收口）：contextClean 闸门读"产生本条回复的那份提示词"的全口径估算
-// （注入+chatLog，getPromptHandler 唯一写方），替代原地 chatLog字数/3.5 重估（IDE 流程低估 50%+ → 误拦清理）
-import { getLastTokenStatus } from "./tokenStatusLive.mjs";
 
 import {
   parseMemoryArchiveTags,
@@ -3425,24 +3422,34 @@ export async function handleReply(reply, args) {
         _cleanActions.push(_cleanCmd);
       }
       if (_cleanActions.length > 0 && _admit("contextClean", `×${_cleanActions.length}`)) {
-        // [0730→0811 收口] 占用比例检查：上下文占用太小时禁止AI清理（频繁清理破坏 prompt cache）。
-        // 阈值单源=token_reminder.ai_clean_min_percent（凛倾拍板按比例：绝对 token 阈值在分母可变的框架下
-        //   语义漂移，128K 窗口下 200K=永远拦死；百分比分母=resolveEffectiveMaxContextLive 单源同口径）。
-        //   defaults 播种、Token设置弹窗可改、0=不限制；原 yonban_config.context_clean.min_tokens_for_ai_clean
-        //   为全仓零写入方孤儿键=事实硬编码 200000，已删。
-        // 计量单源=tokenStatusLive（产生本条回复的提示词的注入+chatLog 全口径 percentage）；原地 chatLog字数/3.5
-        //   重估在注入占大头的 IDE 流程低估 50%+（进度条 90% 而闸门按 37% 拒清=压缩流程卡死，2026-08-11 实症）。
-        // 缺值（重启后首轮无记录）=放行不拦：低估误拦正是本次要根治的病，宁可多放一次清理。
-        const _cleanTrCfg = { ...DEFAULT_TOKEN_REMINDER, ...(loadMemoryData(username, charName, undefined, _qcid)?.config?.token_reminder || {}) };
-        const _cleanMinPercent = Number(_cleanTrCfg.ai_clean_min_percent);
-        const _cleanChatId = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-        const _liveTokenStatus = getLastTokenStatus(username, _cleanChatId);
-        if (_cleanMinPercent > 0 && _liveTokenStatus && _liveTokenStatus.percentage < _cleanMinPercent) {
-          diag.warn(`contextClean: 拒绝AI清理——当前占用${_liveTokenStatus.percentage}%（${_liveTokenStatus.used}/${_liveTokenStatus.limit}），低于阈值${_cleanMinPercent}%（防缓存失效）`);
+        // 清理闸门直接消费产生本条回复的同一 prompt_struct；不另建跨轮状态，也不重算 token。
+        // 最低占用复用 token_reminder 现有首级提醒阈值：提醒何时允许 AI 清理，与 TOKEN_WARNING 同一配置。
+        const _turnTokenStatus = args?.prompt_struct?.plugin_prompts?.["beilu-memory"]?.extension?.code_token_status;
+        const _cleanTrCfg = {
+          ...DEFAULT_TOKEN_REMINDER,
+          ...(loadMemoryData(username, charName, undefined, _qcid)?.config?.token_reminder || {}),
+        };
+        const _cleanThresholds = Array.isArray(_cleanTrCfg.thresholds) ? _cleanTrCfg.thresholds : [];
+        const _cleanMinPercent = _cleanThresholds
+          .map((item) => Number(item?.percent))
+          .filter(Number.isFinite)
+          .reduce((min, value) => Math.min(min, value), Infinity);
+        const _cleanStatusValid = _turnTokenStatus
+          && Number.isFinite(_turnTokenStatus.percentage)
+          && Number.isFinite(_turnTokenStatus.used)
+          && Number.isFinite(_turnTokenStatus.limit)
+          && Number.isFinite(_cleanMinPercent);
+        if (!_cleanStatusValid || _turnTokenStatus.percentage < _cleanMinPercent) {
+          const _cleanBlockReason = _cleanStatusValid
+            ? `当前占用${_turnTokenStatus.percentage}%（${_turnTokenStatus.used}/${_turnTokenStatus.limit}），低于首级提醒阈值${_cleanMinPercent}%`
+            : "本轮没有有效的 Token 状态，无法判定是否达到清理阈值";
+          diag.warn(`contextClean: 拒绝AI清理——${_cleanBlockReason}（防缓存失效）`);
           ideClient.enqueuePendingResult({
             tool: "_context_clean_blocked",
             params: {},
-            result: { success: false, error: `🚫 上下文当前占用约 ${_liveTokenStatus.percentage}%（${Math.round(_liveTokenStatus.used / 1000)}K/${Math.round(_liveTokenStatus.limit / 1000)}K），低于自动清理阈值 ${_cleanMinPercent}%（可在 Token设置 中调整，0=不限制）。请继续工作，不需要清理。` },
+            result: { success: false, error: _cleanStatusValid
+              ? `🚫 上下文当前占用约 ${_turnTokenStatus.percentage}%（${Math.round(_turnTokenStatus.used / 1000)}K/${Math.round(_turnTokenStatus.limit / 1000)}K），低于首级 Token 提醒阈值 ${_cleanMinPercent}%。请继续工作，不需要清理。`
+              : "🚫 本轮没有有效的 Token 状态，已拒绝自动清理；请先确认 Token 统计链正常。" },
             chatid: _qcid, timestamp: new Date().toISOString(),
           });
           content = content.replace(/<contextClean>[\s\S]*?<\/contextClean>/gi, "");

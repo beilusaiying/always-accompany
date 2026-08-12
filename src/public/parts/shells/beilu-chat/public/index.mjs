@@ -3,8 +3,8 @@
  *   不管 API 请求封装（那是 api-client.mjs 的事），不管跨模块共享状态（那是 sharedState.mjs 的事）。
  *
  * 职责：
- *   1. 页面启动初始化 init()：主题 → ST兼容层 → 脚本加载 → i18n → 共享状态 →
- *      initializeChat(chat.mjs) → 预设读回 → 三栏布局 → API配置 → 扩展菜单 → 各懒面板注册
+ *   1. 页面启动初始化 init()：主题/ST → 核心对话 → API → 子模式 → i18n →
+ *      三栏布局与低优先级模块 → 扩展菜单 → 各懒面板注册
  *   2. 切卡免刷后重绑「信息·可见」面板（世界书/表格/记忆浏览器）
  *   3. Tab 懒加载门控（helper/files/bot/subtabs 首次激活才 dynamic import）
  *   4. IDE 写操作审批 dock（轮询+WS推送+attention弹窗）
@@ -19,6 +19,7 @@
  */
 import { initTranslations } from "../../scripts/i18n.mjs";
 import { initI18n } from "./src/shared/i18n.mjs"; // 壳覆盖式 i18n（中文=本体零行为，外语=差量字典覆盖）
+import { runBoot } from "./src/shared/bootLifecycle.mjs";
 import { getPartDetails, getPartList } from "../../scripts/parts.mjs";
 import { usingTemplates } from "../../scripts/template.mjs";
 import { applyTheme } from "../../scripts/theme.mjs";
@@ -51,7 +52,6 @@ import {
   triggerCharacterReply,
 } from "./src/shared/transport/endpoints.mjs";
 import { initExpandEditor } from "./src/shared/widgets/expandEditor.mjs" // 6c尾·根级散件归位;
-import { initLayout } from "./src/shared/layout/layout.mjs";
 import {
   bindMemoryBrowserToChar,
   initMemoryBrowser,
@@ -73,18 +73,11 @@ import { initExtendMenuW28 } from "./src/shared/layout/extendMenuW28.mjs";
 import { initReadinessBanner } from "./src/shared/widgets/readinessBanner.mjs"; // [D5 §2.4] 首屏 readiness 消费(遮罩+后台扩展卡,失败开放防锁死)
 import { wbTrace, wbDetect } from "./src/shared/widgets/whitebox.mjs";
 import { installDiagProbes } from "./src/shared/state/diagProbes.mjs"; // 0716 死标签接线：dom/perf 常驻探针
-import { ensureLive2dVendorRuntime } from "./src/shared/companion/live2dRuntimeLoader.mjs";
-import {
-  configureCompanionRendererLoader,
-  refreshCompanionRendererSettings,
-  setCompanionRendererState,
-} from "./src/panels/companion/companion.mjs";
 import { escapeHtml, showToast, getCurrentCharId, waitForCharIdReady } from "./src/panels/airp/utils.mjs"; // P2续: 共享工具基座抽出；D1 收口:fallbackToast 死降级已删(toast 实现单源 scripts/toast.mjs)
 import { handleNewChat, handleManageChats, handleBatchDelete, handleRegenerate } from "./src/panels/airp/chatmgmt.mjs"; // P2续: 会话管理 cluster 抽出
 // 2A injprompt: 右栏列表面板 HTML 从未存在(纠察坐实), phantom 闭包已删。INJ 编辑走编辑界面 Tab4（layout.mjs beilu:openEditorTab "inj-edit"）。
 // T006死码批: injectionEditor.mjs 浮窗已整文件删除（openInjEditor/closeInjEditor 零调用+inj-editor-* DOM 零存在）。
 import { initCharacterScriptSystem, _loadScriptsForPreset } from "./src/panels/airp/charscript.mjs"; // P2续: 角色卡脚本系统 cluster 抽出
-import { startEyeActivePoll } from "./src/panels/companion/eye.mjs"; // P2续: 桌面截图主动轮询（T006: initEyeStatusUI 死段已删）
 import { initPersonaSelector } from "./src/panels/airp/persona.mjs"; // P2续: 用户人设选择 cluster 抽出
 import { initCharInfoPanel } from "./src/panels/airp/charinfo.mjs"; // P2续: 角色快捷信息面板 cluster 抽出
 // 2C懒载: index-memoryai 从 static import 移出 → boot 完成后 deferred dynamic import（省首屏 parse 327行）
@@ -95,7 +88,7 @@ import { initFeatureToggles } from "./src/panels/airp/toggles.mjs"; // P2续: �
 //   单次注入改传条目 id 引用走 INJ 正线，不再传原文副本（副本形态=0617/0706 两次否决的 skillInjectBar）。
 import { initInjectDock } from "./src/shared/chat-core/injectDock.mjs";
 // P2续 懒加载: index-subtabs 改 dynamic import（见 init 的 beilu:tab-activated 监听），不再 static 急加载
-import { getPresetData, fetchModels, applyPresetData, loadPresetData } from "./src/panels/airp/preset.mjs"; // P2续: 预设+模型参数 最大簇 抽出
+import { fetchModels, loadPresetData } from "./src/panels/airp/preset.mjs"; // P2续: 预设+模型参数 最大簇 抽出
 
 // 记忆 dataTable：文件树视图内嵌挂载已删（T4 2026-07-07 凛倾拍板"删文件树里的记忆表格,用表格子tab那个"）。
 // dataTable 唯一挂载点=memtool.mjs _loadMemToolTable（表格子tab）；此处仅保留 bindDataTableToChar
@@ -105,68 +98,6 @@ import { getPresetData, fetchModels, applyPresetData, loadPresetData } from "./s
 // ============================================================
 // 初始化
 // ============================================================
-
-let _companionRendererState = "idle";
-let _companionRendererPromise = null;
-
-// 静态首屏遮罩的唯一生命周期出口：init 成功才移除；顶层异常转为可见失败态并提供刷新。
-// 各懒加载扩展不在此门内，避免后台预加载拖住基础聊天界面。
-function settleBootOverlay(error = null) {
-  const overlay = document.getElementById("app-boot-overlay");
-  if (!overlay) return;
-  if (!error) {
-    overlay.remove();
-    return;
-  }
-  overlay.dataset.state = "failed";
-  overlay.setAttribute("aria-busy", "false");
-  const spinner = document.getElementById("app-boot-spinner");
-  const status = document.getElementById("app-boot-status");
-  const retry = document.getElementById("app-boot-retry");
-  if (spinner) spinner.hidden = true;
-  if (status) status.textContent = `界面初始化失败：${error?.message || error}`;
-  if (retry) {
-    retry.hidden = false;
-    retry.addEventListener("click", () => window.location.reload(), { once: true });
-  }
-}
-
-// Companion 渲染器的唯一创建 owner。首次激活才 dynamic import，并发激活/重试/模型切换
-// 全部复用同一 Promise，避免重复读字典、创建 PIXI.Application 或丢掉初始化期间的选择。
-function ensureCompanionRenderer() {
-  if (_companionRendererState === "ready" && _companionRendererPromise) return _companionRendererPromise;
-  if (_companionRendererPromise) return _companionRendererPromise;
-
-  _companionRendererState = "loading";
-  setCompanionRendererState("loading");
-  _companionRendererPromise = import("./src/shared/companion/live2dRenderer.mjs")
-    .then(async ({ initLive2dRenderer }) => {
-      const ok = await initLive2dRenderer({ ensureVendorRuntime: ensureLive2dVendorRuntime });
-      if (!ok || !window.beiluLive2d?.ready?.()) throw new Error("虚拟形象渲染器未进入 ready 状态");
-      refreshCompanionRendererSettings();
-      _companionRendererState = "ready";
-      setCompanionRendererState("ready");
-      return window.beiluLive2d;
-    })
-    .catch((error) => {
-      _companionRendererState = "idle";
-      _companionRendererPromise = null;
-      setCompanionRendererState("error", error);
-      throw error;
-    });
-  return _companionRendererPromise;
-}
-
-configureCompanionRendererLoader(ensureCompanionRenderer);
-
-window.addEventListener("beilu:tab-activated", (event) => {
-  if (event.detail !== "companion") return;
-  startEyeActivePoll();
-  ensureCompanionRenderer().catch((error) => {
-    console.error("[live2d] Companion 渲染器初始化失败:", error);
-    window._reportError?.(`[live2d] Companion 渲染器初始化失败: ${error?.message || error}`, error?.stack);
-  });
-});
 
 async function init() {
   console.log(
@@ -213,21 +144,6 @@ async function init() {
   }
 
   try {
-    await initTranslations("chat");
-  } catch (e) {
-    console.warn("[beilu-chat] initTranslations 失败（非致命）:", e.message);
-  }
-
-  // 壳覆盖式 i18n：上次为外语时恢复覆盖层；中文时零行为（在 fount initTranslations 之后，覆盖层后到先赢）
-  // 壳覆盖式 i18n：上次为外语时恢复覆盖层；中文零行为。语言切换入口=设置→语言（settingsSlots.mjs），
-  // 新用户首次自动打开一次（settings.mjs _initFirstRunGuide，注册标志 beiluNewUser 驱动）
-  try {
-    await initI18n();
-  } catch (e) {
-    console.warn("[beilu-chat] 覆盖式 initI18n 失败（非致命）:", e.message);
-  }
-
-  try {
     usingTemplates("/parts/shells:beilu-chat/src/shared/render/templates");
   } catch (e) {
     console.warn("[beilu-chat] usingTemplates 失败（非致命）:", e.message);
@@ -250,22 +166,62 @@ async function init() {
       e.message,
       e.stack,
     );
+    throw e;
   }
   console.log("[beilu-chat][DIAG] init: initializeChat 完成");
 
-  // 等待现有聊天初始化返回后先读回当前预设；其余布局、设置与扩展装配不得抢占这条顺序链。
-  await loadPresetDataWithRetry();
+  // 核心对话完成后只读一次预设；路由若仍未就绪由现有错误态显示，不再用三轮定时重试拖住首屏。
+  await loadPresetData();
 
-  // 初始化三栏布局（折叠/选项卡交互）
+  // 第二层：API 配置的渠道、并发上限、源列表和当前源读回全部完成后再进入子模式。
   try {
-    initLayout();
+    await initApiConfig();
+    await loadApiConfig();
   } catch (e) {
-    // [0727] 原文案是「非致命」+ console.warn —— 判断错了：initLayout 是一长串顺序接线，
-    //   它中断意味着**后面所有 UI 接线都没绑**（＋号死按钮、面板点了没反应都是这条），
-    //   而 warn 在控制台里毫不起眼，等于故障静默。子步骤已在 layout.mjs 内逐个隔离（_step），
-    //   能走到这里的是隔离网都兜不住的整体失败，必须显式上报到错误系统。
-    console.error("[beilu-chat] initLayout 整体失败（后续 UI 接线可能全部未绑定）:", e);
-    window._reportError?.(`[beilu-chat] initLayout 整体失败: ${e?.message || e}`, e?.stack);
+    console.warn("[beilu-chat] API 配置初始化失败（继续基础聊天）:", e.message);
+  }
+
+  // 第三层：复用子模式内部现有 Promise.all 五路并行读取；不新建队列或状态所有者。
+  try {
+    const { initSubModePanel } = await import("./src/panels/work/subModePanel.mjs");
+    await initSubModePanel();
+  } catch (e) {
+    console.warn("[beilu-chat] 子模式初始化失败（继续基础聊天）:", e.message);
+  }
+
+  // 第四层：基础聊天、API、子模式就绪后再读取语言包。
+  try {
+    await initTranslations("chat");
+  } catch (e) {
+    console.warn("[beilu-chat] initTranslations 失败（非致命）:", e.message);
+  }
+  try {
+    await initI18n();
+  } catch (e) {
+    console.warn("[beilu-chat] 覆盖式 initI18n 失败（非致命）:", e.message);
+  }
+
+  // 最后一层：Layout 与 Companion/Bot 模块只在前述链完成后并行加载。
+  // Companion 接线先于 initLayout，确保刷新时若当前就是 companion tab，不漏掉首次激活事件。
+  const [layoutModule, companionActivationModule] = await Promise.allSettled([
+    import("./src/shared/layout/layout.mjs"),
+    import("./src/shared/companion/activation.mjs"),
+  ]);
+  if (companionActivationModule.status === "fulfilled") {
+    companionActivationModule.value.initCompanionActivation();
+  } else {
+    console.warn("[beilu-chat] Companion 激活接线加载失败（非致命）:", companionActivationModule.reason);
+  }
+  if (layoutModule.status === "fulfilled") {
+    try {
+      layoutModule.value.initLayout();
+    } catch (e) {
+      console.error("[beilu-chat] initLayout 整体失败（后续 UI 接线可能全部未绑定）:", e);
+      window._reportError?.(`[beilu-chat] initLayout 整体失败: ${e?.message || e}`, e?.stack);
+    }
+  } else {
+    console.error("[beilu-chat] Layout 模块加载失败:", layoutModule.reason);
+    window._reportError?.(`[beilu-chat] Layout 模块加载失败: ${layoutModule.reason?.message || layoutModule.reason}`);
   }
 
   // dom/perf 诊断常驻探针（输出由诊断面板模块开关门控，默认零输出）
@@ -276,13 +232,6 @@ async function init() {
   }
 
   // 字体比例控制已在 initLayout() → initFeatureControls() 中初始化，不再重复调用
-
-  // 初始化 API 配置模块
-  try {
-    initApiConfig();
-  } catch (e) {
-    console.warn("[beilu-chat] initApiConfig 失败（非致命）:", e.message);
-  }
 
   // W28: 初始化扩展菜单+模型选择器
   try {
@@ -324,9 +273,6 @@ async function init() {
 
   // skill 临时注入·快速选择条(输入框下方 chip → 临时注入该卡说明书原文,复用单次注入线)
   // initSkillInjectBar() 调用已随 D6 整删（见顶部 import 区注释）
-
-  // 加载 API 服务源配置（右栏下拉框）
-  loadApiConfig();
 
   // 刷新按钮
   document
@@ -639,69 +585,5 @@ async function init() {
   );
 }
 
-/**
- * 带重试的预设数据加载
- * 首次加载失败时，延迟重试最多 3 次（应对插件路由未就绪的时序问题）
- */
-async function loadPresetDataWithRetry() {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 1500; // ms
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const data = await getPresetData();
-      // 检查返回数据是否有效（preset_list 非空 或 preset_loaded 为 true）
-      if (data.preset_list?.length > 0 || data.preset_loaded) {
-        console.log(`[beilu-chat] 预设数据加载成功（第${attempt}次尝试）`);
-        applyPresetData(data);
-        return;
-      }
-      // 数据有效但确实没有预设（preset_list 为空数组）
-      if (Array.isArray(data.preset_list)) {
-        console.log(
-          `[beilu-chat] 预设数据为空（后端无预设），第${attempt}次尝试`,
-        );
-        applyPresetData(data);
-        return;
-      }
-    } catch (err) {
-      console.warn(`[beilu-chat] 预设加载第${attempt}次失败:`, err.message);
-    }
-
-    if (attempt < MAX_RETRIES) {
-      console.log(`[beilu-chat] ${RETRY_DELAY}ms 后重试...`);
-      await new Promise((r) => setTimeout(r, RETRY_DELAY));
-    }
-  }
-  // 所有重试都失败，回退到普通加载
-  console.warn("[beilu-chat] 预设加载重试耗尽，执行普通加载");
-  await loadPresetData();
-}
-
-
-
-
-
-
-
-
-
-init()
-  .then(() => {
-    settleBootOverlay();
-    document.body.dataset.beiluBootReady = "1";
-    window.dispatchEvent(new CustomEvent("beilu:boot-ready"));
-    // 酒馆插件宿主（beilu-st-host part）唯一本体挂载点：主界面完全初始化后动态拉宿主 loader。
-    //   放 init().then() 内 = 登录成功 + initializeChat/布局/面板全就绪之后（鉴权 cookie、DOM 容器均在位）。
-    //   宿主 part 不存在/被删/loader 抛错 → import reject → 静默 warn，主界面照常（本体不依赖宿主）。
-    //   loader 对外 URL 走 part 静态文件路由 /parts/<类>:<part>/<file>（endpoints.mjs Static files handler，
-    //   partpath 冒号 replace 为斜杠后拼 /public；范例见 css url("/parts/shells:beilu-chat/...")）。
-    import("/parts/plugins:beilu-st-host/host-loader.mjs")
-      .then((m) => m.initStHost?.())
-      .catch((err) => console.warn("[beilu-st-host] 宿主 loader 未加载：", err));
-  })
-  .catch((error) => {
-    console.error("[beilu-chat] 顶层初始化中断:", error);
-    window._reportError?.(`[beilu-chat] 顶层初始化中断: ${error?.message || error}`, error?.stack);
-    settleBootOverlay(error);
-  });
+runBoot(init);

@@ -62,7 +62,7 @@ import { countTokensSync } from "../../memory/nlp/tokenizer.mjs"; // T8·回切�
 import { safeUnlink } from "../../rollback/safeDelete.mjs"; // T8·回切：改指 yonban 新位实现体
 // 根病1 单源化：_effective_max_context 补子模式层用同一权威解析（与 getPromptHandler / 生成层同口径）
 import { dispatch } from "../../../dispatch/dispatcher.mjs"; // [0716 T3对接首批] 广播副作用改经 bus:broadcast 出口节点（exits.mjs），删 8 处一行式动态 import broadcast.mjs 散拼
-import { resolveSubModeMaxContext, ensureMemoryDir, loadJsonFileIfExists, saveJsonFile, getActiveMode, resolveGenerationMode, withFileLock, resolveActiveSubModeId, getYonbanConfigPath } from "../../memory/storage_mod/storage.mjs"; // T8·回切：改组内引用（T3a 暂指旧位壳的欠账，T3e memory 已入住）；getActiveMode=显示/动作链用（无 arg 语境）；resolveGenerationMode=生成链 mode 唯一单源（0715 收口）；withFileLock=preset 写域 read-modify-write 串行锁（缺口⑦，复用 memory 域 A3 通用原语，per-file 键=registry/config/preset 各自路径，同源两窗口不再 lost-update）；[0716] resolveBotModeFromRequest 已随 bindingsDefault 死参删除
+import { resolveSubModeMaxContext, ensureMemoryDir, loadJsonFileIfExists, loadMemoryData, saveJsonFile, getActiveMode, resolveGenerationMode, withFileLock, resolveActiveSubModeId, getYonbanConfigPath, DEFAULT_TOKEN_REMINDER } from "../../memory/storage_mod/storage.mjs"; // T8·回切：改组内引用（T3a 暂指旧位壳的欠账，T3e memory 已入住）；getActiveMode=显示/动作链用（无 arg 语境）；resolveGenerationMode=生成链 mode 唯一单源（0715 收口）；withFileLock=preset 写域 read-modify-write 串行锁（缺口⑦，复用 memory 域 A3 通用原语，per-file 键=registry/config/preset 各自路径，同源两窗口不再 lost-update）；[0716] resolveBotModeFromRequest 已随 bindingsDefault 死参删除
 // §三-#6：preset 配置/预设落盘改用原子写（tmp+rename，与 storage.mjs saveTablesData 同标准），
 //   防崩溃在写一半截断 JSON → 读时兜底静默丢 active_preset_map 等全局键。
 import { nicerWriteFileSync, renameSyncWithRetry } from "../../../../../scripts/nicerWriteFile.mjs";
@@ -3269,33 +3269,6 @@ const pluginExport = {
             injectionBelow.sort(_byOrder);
           }
 
-          // [DIAG] 诊断点12：Round 2 完成汇总（gated）
-          diag.debug(
-            `Round 2 完成: beforeChat=${beforeChat.length}, afterChat=${afterChat.length}, injectionAbove=${injectionAbove.length}, injectionBelow=${injectionBelow.length}`,
-          );
-          if (injectionAbove.length > 0) {
-            diag.debug(
-              `Round 2 injectionAbove:`,
-              injectionAbove
-                .map(
-                  (m) =>
-                    `${m.identifier || m.name}(${m.content?.length || 0}字符,depth=${m.depth ?? "?"})`,
-                )
-                .join(", "),
-            );
-          }
-          if (injectionBelow.length > 0) {
-            diag.debug(
-              `Round 2 injectionBelow:`,
-              injectionBelow
-                .map(
-                  (m) =>
-                    `${m.identifier || m.name}(${m.content?.length || 0}字符,depth=${m.depth ?? "?"})`,
-                )
-                .join(", "),
-            );
-          }
-
           // bug2 修复兜底：如果 persona 已收集但未进入最终消息，则自动补一条系统消息
           {
             const userPromptLen = (env.user_prompt || "").length;
@@ -3329,6 +3302,113 @@ const pluginExport = {
                 );
               }
             }
+          }
+
+          // Token 提醒的生命周期所有者是「最终四段已经组装完成」的本出口，不是上游 memory GetPrompt
+          // 的半成品统计。这里位于 persona 兜底之后，与 fake-send/真实 provider 消费同一组
+          // before+above+chat+below+after，并把最终状态回写到既有 beilu-memory extension；
+          // ReplyHandler 同轮直接消费，不建跨轮状态。
+          {
+            const _memoryExt = prompt_struct.plugin_prompts?.["beilu-memory"]?.extension;
+            const _countFinalTokens = () => {
+              let total = 0;
+              for (const message of [...beforeChat, ...injectionAbove, ...chatLog, ...injectionBelow, ...afterChat]) {
+                const content = typeof message?.content === "string"
+                  ? message.content
+                  : JSON.stringify(message?.content || "");
+                total += 4 + countTokensSync(content);
+              }
+              return total;
+            };
+            const _tokenLimit = Number(_memoryExt?.code_token_status?.limit)
+              || Number(my_prompt.extension?.beilu_model_params?.max_context)
+              || paramDefault("max_context");
+            let _finalUsed = _countFinalTokens();
+            let _finalPct = Math.round((_finalUsed / _tokenLimit) * 100);
+            if (_memoryExt) {
+              _memoryExt.code_token_status = { used: _finalUsed, limit: _tokenLimit, percentage: _finalPct };
+            }
+
+            const _memoryConfig = loadMemoryData(_twUser, arg?.char_id || prompt_struct.Charname || "", _twMode, _twCid)?.config || {};
+            const _tokenReminder = { ...DEFAULT_TOKEN_REMINDER, ...(_memoryConfig.token_reminder || {}) };
+            if (_tokenReminder.enabled !== false) {
+              const _thresholds = (_tokenReminder.threshold_percent && !_memoryConfig.token_reminder?.thresholds)
+                ? [{
+                    percent: _tokenReminder.threshold_percent,
+                    level: "warning",
+                    text: _tokenReminder.warning_text
+                      || DEFAULT_TOKEN_REMINDER.thresholds.find((item) => item.level === "warning")?.text
+                      || "",
+                  }]
+                : (Array.isArray(_tokenReminder.thresholds) ? _tokenReminder.thresholds : []);
+              const _highest = _thresholds
+                .filter((item) => _finalPct >= Number(item?.percent))
+                .sort((a, b) => Number(b.percent) - Number(a.percent))[0];
+              if (_highest) {
+                const _text = _tokenReminder.custom_text || _highest.text
+                  || DEFAULT_TOKEN_REMINDER.thresholds.find((item) => item.level === _highest.level)?.text || "";
+                const _buildWarning = (used, pct) => {
+                  let content;
+                  if (_tokenReminder.format === "emphasis") {
+                    content = `!!!TOKEN ${pct}% (${used}/${_tokenLimit}) — ${_text}!!!`;
+                  } else if (_tokenReminder.format === "plain") {
+                    content = `[系统提示] 当前上下文 Token 占用已达 ${pct}%（${used}/${_tokenLimit}）。${_text}`;
+                  } else {
+                    content = `<token_warning level="${_highest.level}" used="${used}" limit="${_tokenLimit}" percent="${pct}%">\n${_text}\n</token_warning>`;
+                  }
+                  if (_tokenReminder.allow_ai_cleanup !== false && _tokenReminder.cleanup_hint) {
+                    content += "\n" + _tokenReminder.cleanup_hint;
+                  }
+                  return content;
+                };
+                const _warning = {
+                  role: "user",
+                  name: "memory_TOKEN_WARNING",
+                  identifier: "memory_TOKEN_WARNING",
+                  content: _buildWarning(_finalUsed, _finalPct),
+                  depth: 0,
+                  order: 999,
+                };
+                injectionBelow.push(_warning);
+                injectionBelow.sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+                _finalUsed = _countFinalTokens();
+                _finalPct = Math.round((_finalUsed / _tokenLimit) * 100);
+                _warning.content = _buildWarning(_finalUsed, _finalPct);
+                _finalUsed = _countFinalTokens();
+                _finalPct = Math.round((_finalUsed / _tokenLimit) * 100);
+                if (_memoryExt) {
+                  _memoryExt.code_token_status = { used: _finalUsed, limit: _tokenLimit, percentage: _finalPct };
+                }
+                diag.log(`Token提醒注入(最终组装): level=${_highest.level} (${_finalPct}% >= ${_highest.percent}%)`);
+              }
+            }
+          }
+
+          // [DIAG] 诊断点12：全部兜底与 Token 提醒落定后的 Round 2 完成汇总（gated）
+          diag.debug(
+            `Round 2 完成: beforeChat=${beforeChat.length}, afterChat=${afterChat.length}, injectionAbove=${injectionAbove.length}, injectionBelow=${injectionBelow.length}`,
+          );
+          if (injectionAbove.length > 0) {
+            diag.debug(
+              `Round 2 injectionAbove:`,
+              injectionAbove
+                .map(
+                  (m) =>
+                    `${m.identifier || m.name}(${m.content?.length || 0}字符,depth=${m.depth ?? "?"})`,
+                )
+                .join(", "),
+            );
+          }
+          if (injectionBelow.length > 0) {
+            diag.debug(
+              `Round 2 injectionBelow:`,
+              injectionBelow
+                .map(
+                  (m) =>
+                    `${m.identifier || m.name}(${m.content?.length || 0}字符,depth=${m.depth ?? "?"})`,
+                )
+                .join(", "),
+            );
           }
 
           // 将结果写入 extension（供 Gemini/Proxy StructCall 读取）

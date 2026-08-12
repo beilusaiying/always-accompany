@@ -52,7 +52,7 @@
  *   subModeSwitched    — 子模式切换（T10，字段在 event 顶层 subModeSwitch 而非 payload）
  *
  * 【跨客户端同步】（2 种）
- *   peer_active_chat   — 本用户另一端开始生成 → 跟随到该 chat
+ *   peer_active_chat   — 本用户另一端提交用户切换 → 跟随到该 chat（后台生成只刷新状态）
  *   cross_mode_task_update — 跨 chatId 模式事件（work/code report 完成/needHelp）
  *
  * 【任务 & 组】（2 种）
@@ -159,8 +159,8 @@ export class ChatService {
   // ── H3: WS 聊天流应用层心跳（检测半开 TCP 僵连接，收不到 pong 主动重连）──
   private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private _lastPongAt = 0;
-  // H2: 区分首连 vs 重连——首连由 onChatConnected 触发完整 initial-data；
-  //   重连按本地 last index 增量补拉断线期漏掉的消息（避免断线消息永久丢）。
+  // H2: 区分首连 vs 重连——首连数据由发起 connectChat 的 switchChat 链提交一次；
+  //   onChatConnected 只报告连接状态，重连再按本地 last index 增量补拉断线期漏掉的消息。
   private _everConnected = false;
   private static readonly HEARTBEAT_INTERVAL = HEARTBEAT_INTERVAL_MS;
   // 连续 2 个心跳周期无 pong 判僵连接 → 主动 close 触发重连
@@ -204,16 +204,16 @@ export class ChatService {
   // 同步断链修复（2026-07-10）：子模式配置内容变更广播（后端 saveSubModes 落盘后发），
   //   消费方（YonBanProvider）转发 webview 触发重拉 getSubModes——修"本体改配置 YonBan 到重开面板才知道"
   private _onSubModesConfigChanged = new vscode.EventEmitter<void>();
-  // 跨客户端「当前对话」同步：后端 broadcastUserActiveChat 在本用户某客户端生成开始时推送，
-  // 另一端据此跟随到该 chat（修「本体生成、YonBan 停在别对话故看不到」）。
-  private _onPeerActiveChat = new vscode.EventEmitter<{ chatid: string }>();
+  // 跨客户端「当前对话」同步：后端只在某客户端成功提交用户切换时推送；
+  // 连接注册、断线重连和后台生成都不属于用户切换，消费端也不反向回发。
+  private _onPeerActiveChat = new vscode.EventEmitter<{ chatid: string; reason?: string }>();
   // F3/Y2: 任务打勾清单推送（后端 broadcastChatEvent task_update，与本体任务卡同款语义）
   private _onTaskUpdate = new vscode.EventEmitter<{ chatid?: string; tasks: Array<Record<string, unknown>>; rev: number; remaining?: number }>();
   // P0.3: 组运行态推送（后端 groupRegistry._notifyRuntimeUpdate → broadcastAllChatUi({type:"group_runtime_update", payload:{username}})，
   //   本体网页已消费、YonBan 此前落 default 丢弃 → 组运行态条只能靠 15s 轮询。接此事件后推送即刷新（payload 只带 username，
   //   不含 groups 列表，故消费方收到后需重新拉组注册表，与既有 onGroupUpdated 同链），轮询降级兜底。
   private _onGroupRuntimeUpdate = new vscode.EventEmitter<{ username?: string; activeLines?: string[] }>();
-  // chatId + isReconnect：首连=完整 resync，重连=增量补拉（H2）
+  // chatId + isReconnect：首连只报告连接状态，重连触发增量补拉（H2）
   private _onChatConnected = new vscode.EventEmitter<{ chatId: string; isReconnect: boolean }>();
   private _onChatDisconnected = new vscode.EventEmitter<void>();
   // 通道B（/ws/notify）用户级事件：跨客户端会话列表/角色卡变更同步（本体 sendEventToUser）
@@ -376,6 +376,11 @@ export class ChatService {
   /** 获取聊天初始数据（最近20条消息 + 角色/插件信息） */
   async getInitialData(chatId: string): Promise<ChatInitialData> {
     return this._callApi<ChatInitialData>(`${chatId}/initial-data`);
+  }
+
+  /** 用户切换成功后同步当前对话；WS 初连/重连不得调用。 */
+  async announceActiveChat(chatId: string): Promise<void> {
+    await this._callApi("switch-active", "POST", { chatid: chatId });
   }
 
   /** 发送用户消息（支持图片附件） */
@@ -1080,8 +1085,8 @@ export class ChatService {
       return {
         available: true,
         snapshot: {
-          // [0811 分子同口径] 优先 code_token_status.used（getPromptHandler 注入+chatLog×1.2 安全余量，
-          // 与本体进度条同数）；缺失回退 estimated_tokens（无余量口径，约低 17%）。
+          // fake-send 现在在 Round 2 最终组装出口回填 code_token_status；
+          // 它与真实 provider 消费同一消息集，优先于上游粗估 estimated_tokens。
           estimated_tokens: (meta.code_token_status && meta.code_token_status.used) || meta.estimated_tokens || 0,
           model_params: {
             max_context: meta.max_context || 0,
@@ -1285,10 +1290,7 @@ export class ChatService {
     );
   }
 
-  /**
-   * Token提醒配置读侧（0811）：与 getWebSearchConfig 同范式——带 chatid → 后端 chatid→primaryCharName
-   * 归位读 per-char _config.json（不带会回退 _global 死配置，D1 同病），返回 DEFAULT 合并后的生效 token_reminder。
-   */
+  /** Token 提醒配置读侧：带 chatid 归位当前角色，与本体面板共用后端真源。 */
   async getTokenReminderConfig(): Promise<Record<string, unknown>> {
     return this._callPluginApi<Record<string, unknown>>(
       "beilu-memory",
@@ -1298,10 +1300,7 @@ export class ChatService {
     );
   }
 
-  /**
-   * Token提醒配置写侧（0811：AI清理最低占用% 从 YonBan Token设置弹窗可改）：与本体 Token设置弹窗
-   * 同一 updateConfig 白名单写口（setDataActions token_reminder 逐字段合并，不覆盖 thresholds 等旁字段）。
-   */
+  /** Token 提醒配置写侧：复用 updateConfig 逐字段合并写口，不覆盖旁字段。 */
   async updateTokenReminder(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this._callPluginApi<Record<string, unknown>>(
       "beilu-memory",
@@ -1592,7 +1591,11 @@ export class ChatService {
       return;
     }
 
+    // 意外断线后仍是同一 chat 的连接才算重连；切到另一个 chat 必须按首连全量同步。
+    // 先冻结此事实，因为 disconnectChat 会清理当前连接状态。
+    const reconnectingSameChat = this._currentChatId === chatId && this._everConnected;
     this.disconnectChat();
+    if (reconnectingSameChat) this._everConnected = true;
     this._currentChatId = chatId;
 
     // 通道B（用户级 /ws/notify）：与聊天 WS 独立、跨切聊天常驻，幂等开一次。
@@ -1604,33 +1607,41 @@ export class ChatService {
 
     console.log(`[ChatService] 连接聊天 WS: ${wsUrl}`);
 
-    this._chatWs = new WebSocket(wsUrl, {
+    const ws = new WebSocket(wsUrl, {
       headers: this._authService.getHeaders(),
     });
+    this._chatWs = ws;
 
-    this._chatWs.onopen = () => {
+    ws.onopen = () => {
+      if (this._chatWs !== ws || this._currentChatId !== chatId) {
+        try { ws.close(); } catch { /* 已关闭 */ }
+        return;
+      }
       console.log(`[ChatService] 聊天 WS 已连接: ${chatId}`);
       const isReconnect = this._everConnected;
       this._everConnected = true;
       // H3: 启动应用层心跳（每 30s 发 ping，超 75s 无 pong 判僵连接重连）
       this._lastPongAt = Date.now();
       this._startChatHeartbeat();
-      // 首连：Provider 走 _resyncChat（initial-data 窗口）。
+      // 首连数据由发起 connectChat 的 switchChat 链提交一次；这里只报告连接状态。
       // 重连（isReconnect=true）：Provider 走增量补拉（H2，按本地 last index 调 getChatLog 补断线期漏掉的消息）。
       this._onChatConnected.fire({ chatId, isReconnect });
     };
 
-    this._chatWs.onmessage = (event) => {
+    ws.onmessage = (event) => {
       // chatId 由创建这条 socket 时的闭包冻结；切换对话后旧 socket 的晚到事件
       // 不得借用 this._currentChatId 冒充新对话的事件归属。
+      if (this._chatWs !== ws || this._currentChatId !== chatId) return;
       this._handleWsMessage(event, chatId);
     };
 
-    this._chatWs.onclose = () => {
+    ws.onclose = () => {
+      if (this._chatWs !== ws || this._currentChatId !== chatId) return;
       this._handleWsClose();
     };
 
-    this._chatWs.onerror = (err) => {
+    ws.onerror = (err) => {
+      if (this._chatWs !== ws || this._currentChatId !== chatId) return;
       console.error("[ChatService] 聊天 WS 错误:", err.message);
     };
   }
@@ -1641,6 +1652,7 @@ export class ChatService {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
     }
+    this._isReconnecting = false;
     this._stopChatHeartbeat();
     // 主动断开（切 chat / dispose）：重置首连标记，下次 connect 视为首连（走完整 resync）
     this._everConnected = false;
@@ -1650,6 +1662,8 @@ export class ChatService {
       const ws = this._chatWs;
       this._chatWs = null;
       this._currentChatId = null;
+      ws.onopen = null;
+      ws.onmessage = null;
       ws.onclose = null;
       ws.onerror = null;
       ws.close();
@@ -1855,7 +1869,7 @@ export class ChatService {
 
       // 跨客户端「当前对话」同步：本用户另一端生成开始 → 跟随到该 chat
       case "peer_active_chat":
-        this._onPeerActiveChat.fire(msg.payload as { chatid: string });
+        this._onPeerActiveChat.fire(msg.payload as { chatid: string; reason?: string });
         break;
 
       // F3/Y2: 任务清单变更推送（AI <taskPlan>/<taskCheck> 或用户手勾后后端广播）

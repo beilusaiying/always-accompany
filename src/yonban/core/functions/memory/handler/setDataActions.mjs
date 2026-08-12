@@ -91,11 +91,11 @@ import {
   p7HasMeaningfulPrompts,
   DEFAULT_WORK_SUB_MODES,
   PERM_LEVEL_META,
+  DEFAULT_TOKEN_REMINDER,
   __pluginDir,
   __projectRoot,
   diag,
   ensureMemoryDir,
-  DEFAULT_TOKEN_REMINDER, // 0811 getTokenReminderConfig 读侧：返回 DEFAULT 合并后的生效值（后端唯一默认权威）
   getActiveMode,
   getCacheKey,
   getMemoryDir,
@@ -197,8 +197,8 @@ import { countTokensSync } from "../nlp/tokenizer.mjs";
 //   5=[D3 0804] 存量条目过 normalizeSubModeForSave 写门归一(段7:contract 剥除+schemaVersion:2+
 //     fallbackPolicy 默认 fail_closed+flat↔nested 缺侧同步+真冲突只标 _profile_conflicts 不静默挑选;
 //     幂等可重复,不覆盖用户值)。
-//   6=[0811 凛倾拍板] code组新增「PPT制作」子模式(撤销0724删除;存量用户经迁移段4"补充缺失的编程
-//     子模式"按 id union 补齐;id 用中文"PPT制作"避开 _oldToNew/_removedIds2 里被永久剔除的 "ppt-designer")。
+//   6=0811 code 组新增「PPT制作」子模式，存量用户经缺失 id 合并补齐。
+// 版本只能单调增长；回退到 5 会让已达标配置永久跳过本迁移。
 const SUB_MODES_SCHEMA = 6;
 
 import {
@@ -1436,10 +1436,8 @@ export async function handleSetData(data, args, internalCapability = null) {
     return { success: true, charName: wscChar, web_search: wscCfg.web_search || {} };
   }
 
-  // === 获取Token提醒配置（0811，YonBan 读侧）===
-  // 与上方 getWebSearchConfig 同范式（chatid→primaryCharName 归位，读写同源）；返回
-  // DEFAULT_TOKEN_REMINDER 合并后的生效值——YonBan Token设置弹窗回显 ai_clean_min_percent
-  // 等字段不必在前端镜像默认值（后端唯一默认权威）。写侧=updateConfig token_reminder 合并写口。
+  // YonBan 与本体 Token 面板共用后端真源；IDE/localStorage 不复制 warning/urgent 阈值。
+  // 写侧继续复用 updateConfig 白名单写口，此处只返回 DEFAULT 合并后的生效值。
   if (data._action === "getTokenReminderConfig") {
     const trcUsername = data.username || args?.username || "_default";
     const trcChar = await _resolveRequestChar(data, args, data.charName || args?.char_id || "_global");

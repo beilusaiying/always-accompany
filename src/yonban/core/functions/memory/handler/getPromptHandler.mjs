@@ -113,10 +113,6 @@ import { recordRecall, applyLayerTopkOrder } from "../storage_mod/recallStats.mj
 // 与真生成层 mergeRuntimeParams 同一份内存数据，消除文件级第二解析器漂移（4.1k/238% 症状族）。
 // 壳与实现体 ESM 同实例（plugins/beilu-preset/main.mjs re-export 本路径），getStore 单例安全。
 import { resolveEffectiveMaxContextLive } from "../../prompt/preset/main.mjs";
-// token 用量分子内存单源（2026-08-11 收口）：写方唯一=本文件算完 code_token_status 即存；
-// 读方={{token_status}}宏(本文件,取上一轮值) + replyHandler contextClean 闸门。根治三估算器口径分裂
-// （宏/闸门 chatLog字数/3.5 vs 本表注入+chatLog 全口径，IDE 流程低估 50%+ → 闸门按 37% 误拦清理）。
-import { setLastTokenStatus, getLastTokenStatus } from "./tokenStatusLive.mjs";
 
 import {
   generateTableDataOnly,
@@ -1291,12 +1287,8 @@ export async function handleGetPrompt(arg) {
           const _chatLog = arg?.chat_log;
           if (!_chatLog || !Array.isArray(_chatLog) || _chatLog.length === 0) return "";
           const _msgCount = _chatLog.length;
-          // ★ 分子同口径收口（2026-08-11）：优先上一轮 code_token_status.used（注入+chatLog 全口径，
-          //   tokenStatusLive 内存单源，误差=一轮增量）；首轮/重启后无值回退 chatLog 字数粗估。
-          //   原恒用粗估在注入占大头的 IDE 流程低估 50%+（AI 见 37% 而进度条 90%，下方清理引导全不触发）。
-          const _liveTs = getLastTokenStatus(username, _cid);
           const _totalChars = _chatLog.reduce((_s, _m) => _s + (_m.content || "").length, 0);
-          const _estTokens = _liveTs?.used || Math.round(_totalChars / 3.5);
+          const _estTokens = Math.round(_totalChars / 3.5);
           const _tknCfg = data.config?.token_reminder || {};
           // ★ 根病1 单源：token 占用率分母 = 三层生效 max_context（子模式▸runtime▸预设base▸200000），
           //   与前端进度条 _effective_max_context / 真生成层同口径（resolveEffectiveMaxContextLive 内存单源），
@@ -1405,12 +1397,11 @@ export async function handleGetPrompt(arg) {
     //   直接 depthInjections.push 硬编码文本 = 会被本函数返回前的白名单拦截并 wbD 可见告警。
     //
     // [P0-D 2026-08-03] 代码直推注入的【集中框架例外声明】（任务 MD P0-D 要求6：明确、集中且可配置）：
-    //   以下 4 个 id 由本文件代码直推 depthInjections、不经 injection_prompts 注册表条目，豁免依据=
+    //   以下 3 个 id 由本文件代码直推 depthInjections、不经 injection_prompts 注册表条目，豁免依据=
     //   全部是 depth:0/user 的历史后运行数据（不进缓存前缀），且进入 messages 的文字均有可配置单源
-    //   （config.system_texts 覆盖 DEFAULT_SYSTEM_TEXTS / token_reminder 配置），XML 包裹=注入结构留代码：
+    //   （config.system_texts 覆盖 DEFAULT_SYSTEM_TEXTS），XML 包裹=注入结构留代码：
     //   - DAILY_GREETING（daily_greeting 文本可配）
     //   - context_summary（summary_prefix 文本可配）
-    //   - TOKEN_WARNING（token_reminder 配置驱动，cleanup_hint 可配）
     //   - OUTPUT_FILTER_WARNING（output_filter 文本可配）
     //   此表就是全部例外；新增直推点禁止扩表——先建注册表条目（_pushDataInj 数据宏范式）。
     // [0722 硬编码注入收口] 数据类注入统一入口：按 id 查配置条目取模板/位置/开关，展开数据宏后入队。
@@ -2550,8 +2541,6 @@ export async function handleGetPrompt(arg) {
         percentage: Math.round((_estimatedTokens / _tokenLimit) * 100),
       };
       diag.log(`Token: ${_estimatedTokens}/${_tokenLimit} (${_codeTokenStatus.percentage}%, margin=${SAFETY_MARGIN})`);
-      // 分子单源写点（唯一写方，tokenStatusLive）：contextClean 闸门/{{token_status}}宏 由此同口径读取
-      setLastTokenStatus(username, _cid, _codeTokenStatus);
 
       if (_tokenReminder.enabled !== false) {
         // 多级阈值：单源=DEFAULT_TOKEN_REMINDER.thresholds（用户 config 可覆盖）
@@ -2566,42 +2555,11 @@ export async function handleGetPrompt(arg) {
 
         if (_triggered.length > 0) {
           const _highest = _triggered[0];
-          // 阈值条目 text 分层回退（0811）：web 面板保存历史上只存 percent/level 不带 text，
-          // 顶层 {...DEFAULT,...config} 合并后 _highest.text=undefined 会把 "undefined" 渲进提醒文案。
-          // 缺 text 按 level 从 DEFAULT_TOKEN_REMINDER.thresholds 回填（文本默认单源仍在 defaults）。
-          const _text = _tokenReminder.custom_text || _highest.text
-            || (DEFAULT_TOKEN_REMINDER.thresholds.find((d) => d.level === _highest.level)?.text) || "";
-          const _format = _tokenReminder.format || "xml";
           const _pct = _codeTokenStatus.percentage;
-          const _used = _codeTokenStatus.used;
-          const _limit = _codeTokenStatus.limit;
 
-          // 格式化提醒内容
-          let _reminderContent;
-          if (_format === "xml") {
-            _reminderContent = `<token_warning level="${_highest.level}" used="${_used}" limit="${_limit}" percent="${_pct}%">\n${_text}\n</token_warning>`;
-          } else if (_format === "emphasis") {
-            _reminderContent = `!!!TOKEN ${_pct}% (${_used}/${_limit}) — ${_text}!!!`;
-          } else {
-            _reminderContent = `[系统提示] 当前上下文 Token 占用已达 ${_pct}%（${_used}/${_limit}）。${_text}`;
-          }
-
-          // AI自主清理提示：文本单源=DEFAULT_TOKEN_REMINDER.cleanup_hint（用户可改）；
-          // 原按 level 动态拼接的三段副本已删（代码造提示词+与单源不同文）
-          if (_tokenReminder.allow_ai_cleanup !== false && _tokenReminder.cleanup_hint) {
-            _reminderContent += "\n" + _tokenReminder.cleanup_hint;
-          }
-
-          depthInjections.push({
-            id: "TOKEN_WARNING",
-            role: "user",
-            content: _reminderContent,
-            // 每轮 token 用量属于历史后运行数据；禁止旧配置/API/直接改盘把它送到缓存前缀。
-            depth: 0,
-            order: 999,
-          });
-          textEntries.push({ content: _reminderContent, important: 9 });
-          diag.log(`Token提醒注入: level=${_highest.level} (${_pct}% >= ${_highest.percent}%)`);
+          // 本层的统计发生在预设/世界书/其它插件完成最终四段组装之前，只用于既有 urgent/T09
+          // 清理准备。TOKEN_WARNING 的判定与注入已收口到 beilu-preset Round 2 最终组装出口，
+          // 避免这里的半成品约 60K 与 fake-send 最终约 205K 分叉，导致提醒永不触发。
 
           // W57+W58: 自动Token裁剪（urgent级别 ≥85% 时生效）
           if (_highest.level === "urgent" && _tokenReminder.auto_compact !== false) {
@@ -2837,7 +2795,7 @@ export async function handleGetPrompt(arg) {
       _ovfUsed = Math.round(_ovfUsed * 1.2);
       if (_ovfLimit > 0 && _ovfUsed > _ovfLimit) {
         // [0722 硬编码注入收口] 同步改裁剪名单：数据类注入已迁 INJ-*-data 条目 id（旧 id 已不存在，留旧名=裁剪静默失效）
-        const _trimOrder = ["TOKEN_WARNING", "OUTPUT_FILTER_WARNING", "INJ-flow-group-data", "INJ-p8-web-search-data", "INJ-chat-search-data", "INJ-parallel-delegate-data", "SELF_DRIVEN_P1", "INJ-p1-retrieval-data"];
+        const _trimOrder = ["OUTPUT_FILTER_WARNING", "INJ-flow-group-data", "INJ-p8-web-search-data", "INJ-chat-search-data", "INJ-parallel-delegate-data", "SELF_DRIVEN_P1", "INJ-p1-retrieval-data"];
         for (const tid of _trimOrder) {
           if (_ovfUsed <= _ovfLimit * 0.9) break;
           const idx = depthInjections.findIndex(d => d.id === tid);
@@ -2859,7 +2817,7 @@ export async function handleGetPrompt(arg) {
       const _registeredInjIds = new Set(injectionPrompts.map((p) => p.id));
       // CODE_HOT_LAYER / WORK_HOT_LAYER 已移出：热层注入主 AI 整条删除（凛倾 20260726「热层只注入到 P1」），
       //   不是条目化、也不是继续豁免——注入本身不存在了，白名单里自然没有它们的位置。
-      const _pendingConvert = new Set(["DAILY_GREETING", "context_summary", "TOKEN_WARNING", "OUTPUT_FILTER_WARNING"]); // SKILLS_INDEX 已随说明书库域删除（0723）
+      const _pendingConvert = new Set(["DAILY_GREETING", "context_summary", "OUTPUT_FILTER_WARNING"]); // SKILLS_INDEX 已随说明书库域删除（0723）
       const _blockedInj = [];
       for (let _wi = depthInjections.length - 1; _wi >= 0; _wi--) {
         const _rawId = String(depthInjections[_wi].id || "");

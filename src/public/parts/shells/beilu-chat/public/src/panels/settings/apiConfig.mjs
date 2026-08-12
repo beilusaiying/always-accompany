@@ -242,11 +242,13 @@ async function _renderBindingIndicator() {
 
 export async function loadApiConfig({ preferredName = '' } = {}) {
 	if (!apiSelect) return false
-	_renderBindingIndicator()
+	// 绑定真值与源列表/详情同属 API 就绪层：并行读取，但返回前共同收口，避免子模式抢跑。
+	const bindingIndicatorPromise = _renderBindingIndicator()
 	try {
 		const list = await fetchApiList()
 		apiSources = list
 		renderApiSelect(list)
+		let loaded = true
 		if (list.length > 0) {
 			// 显式目标（如刚创建的源）优先，其次当前源，最后才是 localStorage 历史选择。
 			const saved = storage.get(STORAGE_KEY)
@@ -254,12 +256,14 @@ export async function loadApiConfig({ preferredName = '' } = {}) {
 				: (currentApiName && list.includes(currentApiName)) ? currentApiName
 					: (saved && list.includes(saved)) ? saved
 				: list[0]
-			return await loadApiSource(defaultName)
+			loaded = await loadApiSource(defaultName)
 		} else {
 			clearForm()
-			return true
 		}
+		await bindingIndicatorPromise
+		return loaded
 	} catch (err) {
+		await bindingIndicatorPromise
 		console.error('[beilu-chat] 加载 API 配置列表失败:', err)
 		showApiStatus('加载失败: ' + err.message, 'error')
 		return false

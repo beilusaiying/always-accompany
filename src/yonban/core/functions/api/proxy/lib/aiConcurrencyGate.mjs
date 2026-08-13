@@ -66,27 +66,45 @@ function _pump(st) {
 function _grant(item) {
   // 先摘 abort 监听再 grant，防「已授予又被 abort 回调出队」半态
   if (item.signal && item.onAbort) item.signal.removeEventListener("abort", item.onAbort);
+  _notifyLifecycle(item.onLifecycle, "granted", item.lifecycleDetail?.());
   item.grant();
+}
+
+function _notifyLifecycle(observer, phase, detail = {}) {
+  if (typeof observer !== "function") return;
+  try { observer({ phase, ...(detail || {}) }); } catch { /* 观测失败不得改变并发闸 */ }
 }
 
 /**
  * 占一个 AI 运行槽位。上限未设置时零状态直通。
  * @param {string} username - 归属用户（config.username，proxy main.mjs:86 每调用必带）
  * @param {AbortSignal} [signal] - 排队等待期间用户停止 → 抛 AbortError 立刻出队
- * @param {string} [priority] - "low"=分身/后台级（让路+串行），其余=本体级
+ * @param {string|{tier?: string, onLifecycle?: (event: object) => void}} [priority]
+ *   "low"/tier="low"=分身/后台级；onLifecycle 投影 waiting/queued/granted/released/cancelled。
  * @returns {Promise<() => void>} 释放函数（幂等，finally 里调用）
  */
 export async function acquireAiSlot(username, signal, priority) {
+  const priorityTier = (priority && typeof priority === "object") ? priority.tier : priority;
+  const onLifecycle = (priority && typeof priority === "object") ? priority.onLifecycle : null;
   const limit = _readLimit(username);
-  if (limit <= 0) return () => {};
   const key = username || "_default";
+  const isLo = priorityTier === "low";
+  _notifyLifecycle(onLifecycle, "waiting", { user: key, tier: isLo ? "lo" : "hi", limit });
+  if (limit <= 0) {
+    _notifyLifecycle(onLifecycle, "granted", { user: key, tier: isLo ? "lo" : "hi", limit, unlimited: true });
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      _notifyLifecycle(onLifecycle, "released", { user: key, tier: isLo ? "lo" : "hi", limit, unlimited: true });
+    };
+  }
   let st = _users.get(key);
   if (!st) {
     st = { runningHi: 0, runningLo: 0, limit, hiQueue: [], loQueue: [] };
     _users.set(key, st);
   }
   st.limit = limit; // 每次现读=改动即时生效；在场槽位超新上限时随释放自然收敛
-  const isLo = priority === "low";
   const total = st.runningHi + st.runningLo;
   const canRun = isLo
     ? (total < limit && st.runningLo < _loAllowance(st))
@@ -95,16 +113,23 @@ export async function acquireAiSlot(username, signal, priority) {
   if (canRun) {
     if (isLo) st.runningLo++;
     else st.runningHi++;
+    _notifyLifecycle(onLifecycle, "granted", { user: key, tier: isLo ? "lo" : "hi", runningHi: st.runningHi, runningLo: st.runningLo, limit });
   } else {
     const queue = isLo ? st.loQueue : st.hiQueue;
     wbT(null, "ai:request", "concurrency_wait", { user: key, tier: isLo ? "lo" : "hi", runningHi: st.runningHi, runningLo: st.runningLo, limit, queuePos: queue.length + 1 });
     console.log(`[proxy] 并发闸: ${isLo ? "分身" : "本体"}排队第 ${queue.length + 1} 位（在跑 本体${st.runningHi}+分身${st.runningLo}/${limit}, user=${key}）`);
+    _notifyLifecycle(onLifecycle, "queued", { user: key, tier: isLo ? "lo" : "hi", runningHi: st.runningHi, runningLo: st.runningLo, limit, queuePos: queue.length + 1 });
     await new Promise((resolve, reject) => {
-      const item = { grant: resolve };
+      const item = {
+        grant: resolve,
+        onLifecycle,
+        lifecycleDetail: () => ({ user: key, tier: isLo ? "lo" : "hi", runningHi: st.runningHi, runningLo: st.runningLo, limit }),
+      };
       if (signal) {
         if (signal.aborted) {
           const e = new Error("User Aborted");
           e.name = "AbortError";
+          _notifyLifecycle(onLifecycle, "cancelled", { user: key, tier: isLo ? "lo" : "hi", limit, reason: "signal_aborted" });
           reject(e);
           return;
         }
@@ -114,6 +139,7 @@ export async function acquireAiSlot(username, signal, priority) {
           if (i >= 0) queue.splice(i, 1);
           const e = new Error("User Aborted");
           e.name = "AbortError";
+          _notifyLifecycle(onLifecycle, "cancelled", { user: key, tier: isLo ? "lo" : "hi", limit, reason: "signal_aborted" });
           reject(e); // grant 已先到时本 reject 是 no-op（promise 单次落定）
         };
         signal.addEventListener("abort", item.onAbort, { once: true });
@@ -132,6 +158,7 @@ export async function acquireAiSlot(username, signal, priority) {
     released = true;
     if (isLo) st.runningLo = Math.max(0, st.runningLo - 1);
     else st.runningHi = Math.max(0, st.runningHi - 1);
+    _notifyLifecycle(onLifecycle, "released", { user: key, tier: isLo ? "lo" : "hi", runningHi: st.runningHi, runningLo: st.runningLo, limit });
     _pump(st); // 同步块内完成「减计数→按优先级放行→加计数」，无插队超限竞态
   };
 }

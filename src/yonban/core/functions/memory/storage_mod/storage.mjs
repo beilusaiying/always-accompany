@@ -242,6 +242,28 @@ export function getYonbanConfigPath(username) {
 }
 
 /**
+ * 严格读取 JSON 内容与同一文件句柄的内容 revision。
+ * 不做损坏恢复、不写盘；缺文件返回调用方提供的 defaultValue。
+ * 用于“本次运行究竟冻结了哪版配置”的信息口，避免 load 后另 stat 读到另一版文件。
+ */
+export function readJsonFileSnapshotStrict(filePath, defaultValue = null) {
+  if (!fs.existsSync(filePath)) return { value: defaultValue, revision: null, exists: false };
+  const handle = fs.openSync(filePath, "r");
+  try {
+    const source = fs.readFileSync(handle, "utf8").replace(/^\uFEFF/, "");
+    let value;
+    try {
+      value = JSON.parse(source);
+    } catch (error) {
+      throw new Error(`JSON 配置损坏，拒绝读取且未改写原文件: ${filePath}: ${error.message}`);
+    }
+    return { value, revision: crypto.createHash("sha256").update(source).digest("hex"), exists: true };
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
+/**
  * 角色卡永久链路建链单源（T030 期D 补链：凛倾 2026-07-05「用户自己添加角色卡=增加一个永久的链路」）。
  * 【why 单源】"添加角色卡"的真实入口在 shell 端点 create-char / import-char（新建+导入），
  *   而写点原本只有 setDataActions addCharLink verb 一处（前端手动调用）——verb 与端点各自手写
@@ -324,14 +346,259 @@ export function getWebhooksPath(username) {
   return path.join(getUserDataDir(username), "webhooks.json");
 }
 
-/**
- * clone_resume 目录权威路径（T7 批2 收口：原 replyHandler 手拼，一处目录一处目录下文件）。
- * 【功能链】用户级分身续接上下文目录（clone_resume/{taskId}.json 逐 task 落盘）——返回目录，文件名由调用点拼；scopeResolver dataType "cloneResume" 同引。
- * @param {string} username
- * @returns {string}
- */
+/** 分身续接上下文目录；路径、文件名、保留期和读写只由本持久化层拥有。 */
 export function getCloneResumeDir(username) {
   return path.join(getUserDataDir(username), "clone_resume");
+}
+
+function _safeCloneResumeFileId(value) {
+  return String(value ?? "unknown").replace(/[^\w.-]/g, "_").slice(0, 120) || "unknown";
+}
+
+function _cloneJsonHash(value) {
+  return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function _pruneCloneJsonFiles(directory, keepDays, keepFilepath = null) {
+  const days = Number(keepDays);
+  if (!Number.isFinite(days) || days <= 0) return;
+  try {
+    const cutoff = Date.now() - days * 86400000;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const candidate = path.join(directory, entry.name);
+      if (candidate === keepFilepath) continue;
+      try { if (fs.statSync(candidate).mtimeMs < cutoff) fs.unlinkSync(candidate); } catch { /* 单文件失败不影响当前真值 */ }
+    }
+  } catch { /* 目录清理失败不影响当前真值 */ }
+}
+
+function _cloneResumeRecords(username, { chatId, cloneId, includeData = false } = {}) {
+  const resumeDir = getCloneResumeDir(username);
+  if (!fs.existsSync(resumeDir)) return [];
+  const records = [];
+  for (const entry of fs.readdirSync(resumeDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    try {
+      const filepath = path.join(resumeDir, entry.name);
+      const snapshot = JSON.parse(fs.readFileSync(filepath, "utf-8"));
+      if (!snapshot?.job || snapshot.job.ownerUsername !== username || !snapshot.job.jobId) continue;
+      if (chatId !== undefined && String(snapshot.job.chatId || "") !== String(chatId || "")) continue;
+      if (cloneId !== undefined && String(snapshot.cloneId ?? "") !== String(cloneId)) continue;
+      const record = {
+        taskId: snapshot.job.taskId,
+        jobId: snapshot.job.jobId,
+        cloneBatchId: snapshot.job.cloneBatchId,
+        chatId: snapshot.job.chatId,
+        cloneId: snapshot.cloneId ?? null,
+        label: snapshot.label || "",
+        terminalReason: snapshot.terminalReason || "unknown",
+        rounds: Number(snapshot.rounds) || 0,
+        totalTools: Number(snapshot.totalTools) || 0,
+        savedAt: snapshot.savedAt || null,
+        instruction: String(snapshot.instruction || "").replace(/\s+/g, " ").substring(0, 200),
+      };
+      records.push(includeData ? { ...record, snapshot } : record);
+    } catch {
+      // 单个损坏快照不参与候选；其余有效项仍可读取。
+    }
+  }
+  return records.sort((a, b) => String(b.savedAt || "").localeCompare(String(a.savedAt || "")));
+}
+
+/** UI/接口只读视图；不返回 messages 正文和物理文件路径。 */
+export function listCloneResumeSnapshots(username, { chatId, cloneId } = {}) {
+  return _cloneResumeRecords(username, { chatId, cloneId, includeData: false });
+}
+
+/** 按 owner/chat/task/job 精确读取一个续接快照，禁止按裸 taskId 猜测。 */
+export function loadCloneResumeSnapshot(username, { chatId, taskId, jobId } = {}) {
+  const wantedJobId = String(jobId || "").trim();
+  if (!wantedJobId) throw new Error("分身续接失败: 必须携带 resumeJobId，拒绝按裸 taskId 猜测快照");
+  const matches = _cloneResumeRecords(username, { chatId, includeData: true })
+    .filter((record) => record.jobId === wantedJobId && String(record.taskId) === String(taskId));
+  if (matches.length !== 1) {
+    throw new Error(`分身续接失败: resumeJobId=${wantedJobId} 精确匹配 ${matches.length} 个快照`);
+  }
+  if (!Array.isArray(matches[0].snapshot.messages) || matches[0].snapshot.messages.length === 0) throw new Error(`分身续接失败: resumeTaskId=${taskId} 没有可续接消息`);
+  return matches[0].snapshot;
+}
+
+/** 原子保存并写后读回；业务层只提供完整 snapshot，不接触路径或清理规则。 */
+export function saveCloneResumeSnapshot(username, snapshot, { keepDays = 7 } = {}) {
+  const job = snapshot?.job;
+  if (!job?.jobId || String(job.ownerUsername || "") !== String(username || "")) {
+    throw new Error("分身续接持久化缺少匹配的 owner/job identity");
+  }
+  if (!Array.isArray(snapshot.messages) || snapshot.messages.length === 0) {
+    throw new Error("分身续接持久化缺少 messages");
+  }
+  const resumeDir = getCloneResumeDir(username);
+  if (!fs.existsSync(resumeDir)) fs.mkdirSync(resumeDir, { recursive: true });
+  const filepath = path.join(resumeDir, `${_safeCloneResumeFileId(job.jobId)}.json`);
+  _pruneCloneJsonFiles(resumeDir, keepDays, filepath);
+  const serialized = JSON.stringify(snapshot, null, 2);
+  nicerWriteFileSync(filepath, serialized);
+  const readback = JSON.parse(fs.readFileSync(filepath, "utf-8"));
+  if (_cloneJsonHash(readback) !== _cloneJsonHash(snapshot)) throw new Error(`分身续接写后读回校验失败: job=${job.jobId}`);
+  return readback;
+}
+
+/** 分身/并行委派的会话运行态快照唯一写口。 */
+export function writeCloneRuntimeSnapshot(username, charName, chatId, kind, clones) {
+  try {
+    const filepath = path.join(ensureMemoryDir(username, charName), "work", chatId ? `_clone_runtime_${chatId}.json` : "_clone_runtime.json");
+    saveJsonFile(filepath, { cid: chatId || "", kind, ts: new Date().toISOString(), clones });
+    return true;
+  } catch (error) {
+    diag.warn(`分身协作运行态快照写入失败: ${error.message}`);
+    return false;
+  }
+}
+
+/** clone_status 的持久投影只接受完整事件，并按 sequence 拒绝旧事件回流。 */
+export function projectCloneRuntimeEvent(username, charName, chatId, event) {
+  try {
+    if (!chatId || event?.ownerUsername !== username || event?.chatId !== chatId || !event?.jobId || !event?.eventId) return false;
+    const filepath = path.join(ensureMemoryDir(username, charName), "work", `_clone_runtime_${chatId}.json`);
+    const prior = loadJsonFileIfExists(filepath, null);
+    const clones = prior?.version === 3 && prior?.kind === "clone" && prior?.cid === chatId && Array.isArray(prior.clones) ? [...prior.clones] : [];
+    const index = clones.findIndex((row) => row?.jobId === event.jobId);
+    const previous = index >= 0 ? clones[index] : null;
+    if (previous && Number(previous.sequence) >= Number(event.sequence)) return true;
+    const row = {
+      ...event,
+      summary: String(event.detail || "").replace(/\s+/g, " ").substring(0, 200),
+      rounds: Number(event.round) || 0,
+      tools: Number(event.tools) || 0,
+    };
+    if (index >= 0) clones[index] = row;
+    else clones.push(row);
+    clones.sort((a, b) => String(a?.occurredAt || "").localeCompare(String(b?.occurredAt || "")));
+    if (clones.length > 100) clones.splice(0, clones.length - 100);
+    saveJsonFile(filepath, { version: 3, cid: chatId, kind: "clone", ts: event.occurredAt, clones });
+    return true;
+  } catch (error) {
+    diag.warn(`分身状态快照投影失败: ${error.message}`);
+    return false;
+  }
+}
+
+/** 长分身结果正文的唯一落盘口；聚合协调器只接收返回路径。 */
+export function saveCloneLongResult(username, charName, taskId, label, content) {
+  const dir = path.join(__projectRoot, "data", "users", username, "chars", charName, "tmp");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const filepath = path.join(dir, `clone_${_safeCloneResumeFileId(taskId)}_${Date.now()}.md`);
+  nicerWriteFileSync(filepath, `# 分身#${taskId} (${label}) 完整结果\n\n${content}`);
+  return filepath;
+}
+
+function _cloneResultSegment(value, length = 24) {
+  return crypto.createHash("sha256").update(String(value ?? "")).digest("hex").slice(0, length);
+}
+
+function _cloneResultPath(username, charName, chatId, cloneBatchId) {
+  return path.join(
+    getUserDataDir(username),
+    "clone_results",
+    _cloneResultSegment(charName, 16),
+    _cloneResultSegment(chatId, 20),
+    `${_cloneResultSegment(cloneBatchId, 24)}.json`,
+  );
+}
+
+function _normalizeCloneResultIdentity(username, charName, chatId, aggregate) {
+  const cloneBatchId = String(aggregate?.cloneBatchId || "").trim();
+  if (!username || !charName || !chatId || !cloneBatchId) {
+    throw new Error("分身结果持久化缺少 owner/char/chat/cloneBatchId 身份");
+  }
+  return {
+    ownerUsername: String(username),
+    charName: String(charName),
+    chatId: String(chatId),
+    parentGenerationId: aggregate?.parentGenerationId ? String(aggregate.parentGenerationId) : null,
+    cloneBatchId,
+  };
+}
+
+/**
+ * 分身终态结果事实的唯一持久化口。pendingResults 只是投递队列，不参与本函数的真值判定。
+ * 返回值来自写后读回，调用方只有拿到 verified=true 才能标 resultStored。
+ */
+export function saveCloneResult(username, charName, chatId, aggregate, delivery = {}) {
+  const identity = _normalizeCloneResultIdentity(username, charName, chatId, aggregate);
+  const filepath = _cloneResultPath(username, charName, chatId, identity.cloneBatchId);
+  const resultId = `clone-result:${_cloneResultSegment(`${identity.ownerUsername}\n${identity.charName}\n${identity.chatId}\n${identity.cloneBatchId}`, 40)}`;
+  const result = JSON.parse(JSON.stringify({
+    ...aggregate,
+    tasks: (aggregate?.tasks || []).map((task) => ({
+      ...task,
+      persisted: { ...(task.persisted || {}), resultStored: true, resultId },
+    })),
+  }));
+  const resultHash = _cloneJsonHash(result);
+  const config = loadJsonFileIfExists(getYonbanConfigPath(username), {});
+  const configuredKeepDays = Number(config.clone_result_keep_days);
+  const keepDays = Number.isInteger(configuredKeepDays) && configuredKeepDays >= 0 && configuredKeepDays <= 3650
+    ? configuredKeepDays
+    : 30;
+  const savedAt = new Date().toISOString();
+  const envelope = {
+    version: 1,
+    resultId,
+    resultHash,
+    identity,
+    savedAt,
+    expiresAt: keepDays > 0 ? new Date(Date.now() + keepDays * 86400000).toISOString() : null,
+    result,
+    delivery: {
+      enqueued: false,
+      userVisible: false,
+      consumedAt: null,
+      text: String(delivery?.text || ""),
+    },
+  };
+  saveJsonFile(filepath, envelope);
+
+  _pruneCloneJsonFiles(path.dirname(filepath), keepDays, filepath);
+
+  const readback = readCloneResult(username, charName, chatId, identity.cloneBatchId);
+  const verified = !!readback
+    && readback.resultId === resultId
+    && readback.resultHash === resultHash
+    && readback.identity?.ownerUsername === identity.ownerUsername
+    && readback.identity?.chatId === identity.chatId
+    && readback.identity?.cloneBatchId === identity.cloneBatchId
+    && _cloneJsonHash(readback.result) === resultHash;
+  if (!verified) throw new Error(`分身结果写后读回校验失败: batch=${identity.cloneBatchId}`);
+  return { verified: true, resultId, resultHash, savedAt, expiresAt: envelope.expiresAt, filepath };
+}
+
+/** 仅按同一 owner/char/chat/batch 身份读取；不会扫描或猜测其他会话结果。 */
+export function readCloneResult(username, charName, chatId, cloneBatchId) {
+  const filepath = _cloneResultPath(username, charName, chatId, cloneBatchId);
+  const envelope = loadJsonFileIfExists(filepath, null);
+  if (!envelope || envelope.identity?.ownerUsername !== String(username)
+    || envelope.identity?.charName !== String(charName)
+    || envelope.identity?.chatId !== String(chatId)
+    || envelope.identity?.cloneBatchId !== String(cloneBatchId)) return null;
+  if (envelope.expiresAt && Date.parse(envelope.expiresAt) <= Date.now()) return null;
+  return envelope;
+}
+
+/** 投递状态仍写回同一个结果 envelope；结果 hash 不因投递状态变化而漂移。 */
+export function markCloneResultDelivery(username, charName, chatId, cloneBatchId, patch = {}) {
+  const filepath = _cloneResultPath(username, charName, chatId, cloneBatchId);
+  const envelope = readCloneResult(username, charName, chatId, cloneBatchId);
+  if (!envelope) return null;
+  envelope.delivery = {
+    ...(envelope.delivery || {}),
+    ...(patch.enqueued !== undefined ? { enqueued: patch.enqueued === true } : {}),
+    ...(patch.userVisible !== undefined ? { userVisible: patch.userVisible === true } : {}),
+    ...(patch.consumedAt !== undefined ? { consumedAt: patch.consumedAt || null } : {}),
+  };
+  saveJsonFile(filepath, envelope);
+  return readCloneResult(username, charName, chatId, cloneBatchId);
 }
 
 /**
@@ -576,12 +843,12 @@ export async function withFileLock(filepath, fn) {
  * 同一 username 的并发调用串行排队：load→mutator(cfg)→save 整段持锁执行，
  * 后一次读到的是前一次落盘后的最新状态，消灭整文件互覆的 lost-update。
  * @param {string} username - 用户名（yonban_config 按用户存；路径走权威 getYonbanConfigPath）
- * @param {(cfg:object)=>any} mutator - 读改写回调：直接 mutate 传入的 cfg（已 load）；
+ * @param {(cfg:object, revision:string|null)=>any} mutator - 读改写回调：直接 mutate 传入的 cfg（已 load）；
  *   其返回值即本函数返回值（供调用方拿回需要的派生数据，如变更后的数组）。
  *   ★ 若 mutator 显式返回哨兵 SKIP_SAVE，则本次不落盘（供「无变化不写盘」的等价保留，如
  *     removeChatSubModeMapping 原本仅在键存在时才 save；此时本函数返回 undefined）。
  * @param {any} [defaultValue] - 文件不存在时 load 的默认对象（同各写点原 loadJsonFileIfExists 第二参）
- * @param {{strictRead?: boolean}} [options] - strictRead=true 时，已有文件损坏会先备份再抛错，
+ * @param {{strictRead?: boolean,snapshot?: boolean}} [options] - strictRead 损坏时 fail-closed；snapshot 返回锁内写后快照，
  *   不允许以默认对象覆盖；用于通知、自动续轮等失败时必须 fail-closed 的配置链。
  * @returns {Promise<any>} mutator 的返回值（返回 SKIP_SAVE 时本函数返回 undefined）
  */
@@ -589,16 +856,15 @@ export const SKIP_SAVE = Symbol("yonbanConfig:skipSave");
 export async function updateYonbanConfig(username, mutator, defaultValue = {}, options = {}) {
   const cfgPath = getYonbanConfigPath(username || "_default");
   return withFileLock(cfgPath, async () => {
-    const cfg = options?.strictRead
-      ? readJsonSafeSync(cfgPath, defaultValue)
-      : loadJsonFileIfExists(cfgPath, defaultValue);
+    const snapshot = options?.strictRead ? readJsonFileSnapshotStrict(cfgPath, defaultValue) : null;
+    const cfg = snapshot ? snapshot.value : loadJsonFileIfExists(cfgPath, defaultValue);
     if (options?.strictRead && (!cfg || typeof cfg !== "object" || Array.isArray(cfg))) {
       throw new TypeError(`yonban_config 必须是 JSON 对象: ${cfgPath}`);
     }
-    const ret = await mutator(cfg); // 支持 async mutator（如 getSubModes 迁移含 await 建预设——但建议把非 yonban_config 的 IO 留锁外）
+    const ret = await mutator(cfg, snapshot?.revision ?? null); // 支持 async mutator（如 getSubModes 迁移含 await 建预设——但建议把非 yonban_config 的 IO 留锁外）
     if (ret === SKIP_SAVE) return undefined; // 无变化：不落盘（保留原写点「仅变化时 save」语义）
     saveJsonFile(cfgPath, cfg); // saveJsonFile 自带目录创建+原子写
-    return ret;
+    return options?.snapshot ? readJsonFileSnapshotStrict(cfgPath) : ret;
   });
 }
 

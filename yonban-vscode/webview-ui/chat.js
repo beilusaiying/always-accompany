@@ -232,12 +232,13 @@ case "chatInitialData":
         break;
       case "cloneStatus":
         if (YB.onCloneStatus) YB.onCloneStatus(msg.payload);
-        // 各种代码也提醒：分身只在「开始/完成/异常」弹（跳过 working/retrying 高频中间态防刷屏）
+        // 完整事件已经在 ChatService 按 jobId+sequence 幂等；这里只投影，不补造身份或终态。
         if (msg.payload) {
-          var _cs = msg.payload.status, _tid = msg.payload.taskId || "";
-          if (_cs === "started") YB.showToast("分身#" + _tid + " 开始", 1500);
-          else if (_cs === "completed") YB.showToast("✓ 分身#" + _tid + " 完成", 1500);
-          else if (_cs === "error" || _cs === "stopped") YB.showToast("⚠ 分身#" + _tid + " " + _cs + ": " + (msg.payload.detail || ""), 2500);
+          var _cs = msg.payload.status, _tid = msg.payload.taskId == null ? "" : msg.payload.taskId;
+          var _source = msg.payload.source || "subagent";
+          if (_cs === "accepted") YB.showToast(_source + " 分身#" + _tid + " 开始", 1500);
+          else if (_cs === "completed") YB.showToast("✓ " + _source + " 分身#" + _tid + " 完成", 1500);
+          else if (_cs === "error" || _cs === "stopped") YB.showToast("⚠ " + _source + " 分身#" + _tid + " " + _cs + ": " + (msg.payload.terminalReason || msg.payload.detail || ""), 2500);
         }
         break;
       case "editRecord":

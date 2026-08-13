@@ -28,7 +28,7 @@ import {
 } from "./broadcast.mjs";
 import { addChatLogEntry, addUserReply, deleteMessage, hideMessages, trimEntryFiles } from "./chatOps.mjs";
 import { findLastActive, findLastActiveIndex } from "../../../../../../yonban/core/functions/hide/chatEntryUtils.mjs"; // T8·回切：改指 yonban 新位实现体
-import { getYonbanConfigPath, loadJsonFileIfExists } from "../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"; // T048：group_worker per-user 持久化开关
+import { getYonbanConfigPath, loadJsonFileIfExists, markCloneResultDelivery } from "../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"; // T048：group_worker per-user 持久化开关
 import { chatMetadatas, loadChat, saveChat } from "./chatStorage.mjs"; // chatMetadatas: [0724 只许前端关] loop 延迟注入 fire 时的会话在载守卫
 import { ideClient, formatToolResultsForInjection } from "../../../../../../yonban/core/transport/ideClient.mjs"; // T066：ideClient 迁 transport，改指 yonban 新位实现体（同 line 23/27 回切范式）
 import { resolveHistoryRewriteWorkerSettleTimeoutMs } from "../../../../../../yonban/core/transport/historyRewritePolicy.mjs";
@@ -158,12 +158,17 @@ export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "ro
   if (source === "approval") _userStoppedChats.delete(chatid);
   else if (_userStoppedChats.has(chatid)) {
     wbTrace(chatid, "generation", "autocontinue:suppressed_user_stop", { source });
-    return;
+    return { scheduled: false, reason: "user_stopped" };
   }
   cancelAutoContinue(chatid);
   const timerId = setTimeout(() => {
     if (_autoContinueTimers.get(chatid) !== timerId) return;
     _autoContinueTimers.delete(chatid);
+    // 用户可能在 delay 窗内按停止。结果事实仍留在 pendingResults/持久层，这里只禁止自动后继。
+    if (source !== "approval" && _userStoppedChats.has(chatid)) {
+      wbTrace(chatid, "generation", "autocontinue:suppressed_user_stop_at_fire", { source });
+      return;
+    }
     if (readyContext) {
       const _chatData = chatMetadatas.get(chatid);
       const _meta = _chatData?.chatMetadata;
@@ -190,6 +195,7 @@ export function scheduleAutoContinue(chatid, charname, delayMs = 0, source = "ro
     );
   }, delayMs);
   _autoContinueTimers.set(chatid, timerId);
+  return { scheduled: true };
 }
 
 /**
@@ -314,6 +320,7 @@ export function notifyResultReady({
   source = "result_ready",
   delayMs,
   enabled = true,
+  resultId,
 } = {}) {
   const _owner = typeof username === "string" ? username.trim() : "";
   const _chatData = chatid ? chatMetadatas.get(chatid) : null;
@@ -321,7 +328,7 @@ export function notifyResultReady({
   if (!chatid || !_owner || !_meta || _chatData.username !== _owner || _meta.username !== _owner) {
     wbDetect(chatid || null, "generation", "resultReady:suppressed", false,
       "结果就绪缺少有效 chat/owner 或会话已删除/卸载", { source, owner: _owner || null });
-    return { accepted: false, reason: "chat_or_owner_invalid" };
+    return { accepted: false, scheduled: false, pending: true, reason: "chat_or_owner_invalid" };
   }
   if (enabled === false) {
     wbTrace(chatid, "generation", "resultReady:suppressed", { source, reason: "source_disabled" });
@@ -331,11 +338,26 @@ export function notifyResultReady({
   const _delay = Number.isFinite(Number(delayMs))
     ? Math.max(0, Math.min(30000, Number(delayMs)))
     : _ac.delay_ms;
-  const _ctx = { chatid, username: _owner, charname, source, delayMs: _delay, enabled: true };
+  const _resultId = typeof resultId === "string" ? resultId.trim() : "";
+  if (_resultId) {
+    const _stillPending = ideClient.getPendingResults({ ownerUsername: _owner, chatid })
+      .some((entry) => entry?.params?.resultId === _resultId);
+    if (!_stillPending) {
+      wbTrace(chatid, "generation", "resultReady:coalesced", { source, resultId: _resultId, reason: "already_consumed" });
+      return { accepted: true, scheduled: false, pending: false, reason: "already_consumed" };
+    }
+  }
+  const _ctx = { chatid, username: _owner, charname, source, delayMs: _delay, enabled: true, resultId: _resultId || undefined };
+  // 停止只休眠自动化，不删除结果。禁止进入 _pendingResultReady（它是唤醒队列）；
+  // 下次用户互动仍从 ideClient pendingResults 的唯一消费口破坏性取走一次。
+  if (_userStoppedChats.has(chatid)) {
+    wbTrace(chatid, "generation", "resultReady:pending_user_stop", { source, resultId: _resultId || null });
+    return { accepted: true, scheduled: false, pending: true, reason: "user_stopped" };
+  }
   if (_generatingChats.has(chatid)) {
     _queuePendingResultReady(_ctx);
     wbTrace(chatid, "generation", "resultReady:queued", { source });
-    return { accepted: true, queued: true };
+    return { accepted: true, queued: true, pending: true };
   }
   if (_autoContinueTimers.has(chatid)) {
     wbTrace(chatid, "generation", "resultReady:coalesced", { source, reason: "timer_exists" });
@@ -345,19 +367,23 @@ export function notifyResultReady({
     wbTrace(chatid, "generation", "resultReady:suppressed", { source, reason: "config_disabled" });
     return { accepted: true, scheduled: false, reason: "config_disabled" };
   }
-  scheduleAutoContinue(chatid, charname, _delay, source, _ctx);
+  const _scheduled = scheduleAutoContinue(chatid, charname, _delay, source, _ctx);
+  if (!_scheduled?.scheduled) {
+    return { accepted: true, scheduled: false, pending: true, reason: _scheduled?.reason || "not_scheduled" };
+  }
   wbTrace(chatid, "generation", "resultReady:scheduled", { source, delayMs: _delay });
   return { accepted: true, scheduled: true };
 }
 
 // [0726 分身异步·002] 保留既有公开入口，内部统一委托来源无关的 notifyResultReady。
-export function notifyAsyncCloneDone(chatid, charname, username) {
+export function notifyAsyncCloneDone(chatid, charname, username, ready = {}) {
   return notifyResultReady({
     chatid,
     username,
     charname,
     source: "clone_async_done",
     delayMs: getCloneAsyncConfig(username).wake_delay_ms,
+    resultId: ready?.resultId,
   });
 }
 
@@ -374,6 +400,46 @@ const _buildIdeToolEvents = (prs) => (prs || []).map((r) => {
   const _subject = _p.path || _p.command || _p.query || _p.pattern || "";
   return { tool: r?.tool || "?", subject: String(_subject).slice(0, 120), ok: r?.result?.success !== false };
 });
+
+function _applyPendingResultMetadata(entry, pendingResults) {
+  if (!entry.extension) entry.extension = {};
+  const results = pendingResults || [];
+  const cloneEntries = results.filter((result) => result?.tool === "_clone_results");
+  entry.extension._opType = cloneEntries.length > 0 ? "clone_result" : "ide_tool_result";
+  entry.extension.ideToolEvents = _buildIdeToolEvents(results);
+  const cloneAggregates = cloneEntries
+    .map((result) => result?.result?.cloneAggregate)
+    .filter((aggregate) => aggregate && Array.isArray(aggregate.tasks))
+    .map((aggregate) => ({
+      ...aggregate,
+      tasks: aggregate.tasks.map((task) => ({
+        ...task,
+        persisted: { ...(task.persisted || {}), userVisible: true },
+      })),
+    }));
+  if (cloneAggregates.length > 0) entry.extension._cloneAggregates = cloneAggregates;
+  return entry.extension;
+}
+
+// 只能在 addChatLogEntry 成功后标记“用户可见/已消费”，不能在组装 extension 时提前报成功。
+function _markCloneResultsConsumed(pendingResults) {
+  const cloneEntries = (pendingResults || []).filter((result) => result?.tool === "_clone_results");
+  for (const cloneEntry of cloneEntries) {
+    const params = cloneEntry?.params || {};
+    if (!params.resultId || !params.cloneBatchId || !params.charName || !cloneEntry.ownerUsername || !cloneEntry.chatid) continue;
+    const marked = markCloneResultDelivery(
+      cloneEntry.ownerUsername,
+      params.charName,
+      cloneEntry.chatid,
+      params.cloneBatchId,
+      { userVisible: true, consumedAt: new Date().toISOString() },
+    );
+    if (!marked?.delivery?.userVisible || !marked?.delivery?.consumedAt) {
+      wbDetect(cloneEntry.chatid, "generation", "cloneResult:consumeMarkFailed", false,
+        "分身结果已消费但持久投递状态读回失败", { resultId: params.resultId, cloneBatchId: params.cloneBatchId });
+    }
+  }
+}
 
 /**
  * [0717 时序断链修] 工具产物图统一在回合末落 user 条（system 工具结果条之后、续轮之前）。
@@ -474,7 +540,24 @@ function _canRetryGroupedLocally(error) {
 async function _getReplyMaybeGrouped(chatid, request, stream, generationId) {
   // T048：按当前对话所属 user 读持久化开关（原 process.env 进程全局=不分用户+重启易失）。严格 ===true：缺失/怪值→OFF（默认字节不变）。
   const _gwCfg = loadJsonFileIfExists(getYonbanConfigPath(request.username), {});
-  if (_gwCfg.group_worker_enabled === true) {
+  const _hasEnabledClone = Array.isArray(_gwCfg.clones) && _gwCfg.clones.some((clone) => clone?.enabled === true);
+  if (_gwCfg.group_worker_enabled === true && _hasEnabledClone) {
+    // D13 fail-closed：当前 worker IPC 只绑定父回复，无法在父回复结束后继续承载 detached clone
+    // 的精准 stop/status/result。这里在派发前固定走 main 正主，并复用现有可见降级事件；禁止
+    // 把任务先送入 worker 后再用主进程第二 registry 冒充接管。
+    const reason = "分身与 group worker 的跨 isolate 控制链尚未闭合，本回合已固定由主进程分身正主执行";
+    wbDetect(chatid, "generation", "groupWorker:cloneGuard", false, reason, {
+      code: "E_GROUP_CLONE_HOST_UNROUTABLE",
+      executionHost: "main",
+    });
+    try {
+      broadcastChatEvent(chatid, {
+        type: "group_worker_degraded",
+        payload: { code: "E_GROUP_CLONE_HOST_UNROUTABLE", reason, timestamp: new Date().toISOString() },
+      });
+    } catch { /* 可见事件失败不改变 main 单线路选择 */ }
+  }
+  if (_gwCfg.group_worker_enabled === true && !_hasEnabledClone) {
     try {
       // 一窗一线：env 开启时每条线（绑组=组键 / 未绑组=chatid 键）都路由进自己的 worker isolate。
       // 闸放到 dispatchReplyToGroup（线键恒真恒路由）；不再要求 chat 必须先绑组。
@@ -805,13 +888,12 @@ export async function executeGeneration(
         _sysEntry.role = "system";
         _sysEntry.name = "IDE工具结果";
         _sysEntry.content = _resultText;
-        if (!_sysEntry.extension) _sysEntry.extension = {};
-        _sysEntry.extension._opType = _pendingResults.some(r => r.tool === "_clone_results") ? "clone_result" : "ide_tool_result";
-        _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
+        _applyPendingResultMetadata(_sysEntry, _pendingResults);
         _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _sysEntry.time_stamp = new Date();
         _sysEntry.is_generating = false;
         await addChatLogEntry(chatid, _sysEntry);
+        _markCloneResultsConsumed(_pendingResults);
         await _flushPendingUserImages(chatid, _pendingResults);
       }
       wbTrace(chatid, "generation", "autocontinue:stop", { reason: "pending_confirmation", createFailed: !!_ext._pendingConfirmationError });
@@ -825,15 +907,12 @@ export async function executeGeneration(
         _sysEntry.role = "system";
         _sysEntry.name = "IDE工具结果";
         _sysEntry.content = _resultText;
-        // ★ 容错：结构化操作类型标记，识别身份首选此字段（不依赖 content 字面串 [IDE工具执行结果]）
-        if (!_sysEntry.extension) _sysEntry.extension = {};
-        const _hasCloneResultSC = _pendingResults.some(r => r.tool === "_clone_results");
-        _sysEntry.extension._opType = _hasCloneResultSC ? "clone_result" : "ide_tool_result";
-        _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
+        _applyPendingResultMetadata(_sysEntry, _pendingResults);
         _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _sysEntry.time_stamp = new Date();
         _sysEntry.is_generating = false;
         await addChatLogEntry(chatid, _sysEntry);
+        _markCloneResultsConsumed(_pendingResults);
         await _flushPendingUserImages(chatid, _pendingResults);
         console.log(`[chat] ★ 自动继续: 停止 (stopContinue, 注入了${_pendingResults.length}条结果但不继续)`);
       } else {
@@ -922,18 +1001,13 @@ export async function executeGeneration(
         _sysEntry.content = _shouldStop
           ? _resultText + "\n\n" + _fiText("generation.autostop_banner", { reason: _stopSuffix })
           : _resultText;
-        // ★ 容错：结构化操作类型标记，识别身份首选此字段（不依赖 content 字面串 [IDE工具执行结果]）
-        if (!_sysEntry.extension) _sysEntry.extension = {};
-        // [0730] 分身结果独立 _opType：分身产出（_clone_results）与普通工具结果（read_file 等）
-        //   原同标 ide_tool_result → collectNoiseToHide 同池 keepLast=2 竞争 → 分身结果被几个
-        //   read_file 挤掉。独立标 clone_result 后 isIdeToolResultMsg 不匹配 → 不参与自动裁剪。
-        const _hasCloneResult = _pendingResults.some(r => r.tool === "_clone_results");
-        _sysEntry.extension._opType = _hasCloneResult ? "clone_result" : "ide_tool_result";
-        _sysEntry.extension.ideToolEvents = _buildIdeToolEvents(_pendingResults);
+        // 分身/普通工具的结构化投影统一走模块级 helper，四个消费点不再各自散写。
+        _applyPendingResultMetadata(_sysEntry, _pendingResults);
         _sysEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _sysEntry.time_stamp = new Date();
         _sysEntry.is_generating = false;
         await addChatLogEntry(chatid, _sysEntry);
+        _markCloneResultsConsumed(_pendingResults);
         await _flushPendingUserImages(chatid, _pendingResults);
 
         if (_shouldStop) {
@@ -1553,13 +1627,12 @@ export async function triggerCharReply(chatid, charname, options = {}) {
         _ideEntry.role = "system";
         _ideEntry.name = "IDE工具结果";
         _ideEntry.content = await _applySlashCommandRegex(formatToolResultsForInjection(_idePre), chatMetadata.username); // [0723 slash_command 补线]
-        if (!_ideEntry.extension) _ideEntry.extension = {};
-        _ideEntry.extension._opType = "ide_tool_result";
-        _ideEntry.extension.ideToolEvents = _buildIdeToolEvents(_idePre);
+        _applyPendingResultMetadata(_ideEntry, _idePre);
         _ideEntry.timeSlice = chatMetadata.LastTimeSlice.copy();
         _ideEntry.time_stamp = new Date();
         _ideEntry.is_generating = false;
         await addChatLogEntry(chatid, _ideEntry);
+        _markCloneResultsConsumed(_idePre);
         // [0717 半修陷阱补] 前置落地路同为池消费点——userImage 不冲刷=图静默丢（文本落图不落）
         await _flushPendingUserImages(chatid, _idePre);
         console.log(`[chat] ★ IDE 工具结果前置落 log: ${_idePre.length} 条（chatid=${chatid}）`);

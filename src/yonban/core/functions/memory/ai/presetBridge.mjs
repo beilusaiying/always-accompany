@@ -202,6 +202,43 @@ export function listPresetsForP1(username) {
   return result;
 }
 
+function _orderedFilePresetPrompts(presetJson) {
+  const prompts = Array.isArray(presetJson?.prompts) ? presetJson.prompts : [];
+  const order = presetJson?.prompt_order?.[0]?.order || [];
+  const byId = new Map(prompts.map((prompt) => [prompt.identifier, prompt]));
+  const ordered = order
+    .filter((item) => item?.enabled)
+    .map((item) => byId.get(item.identifier))
+    .filter((prompt) => prompt?.content?.trim());
+  const selected = ordered.length > 0
+    ? ordered
+    : prompts.filter((prompt) => prompt?.system_prompt && prompt?.content?.trim());
+  return selected.map((prompt) => ({ ...prompt, role: prompt.role || "system", enabled: true, builtin: false }));
+}
+
+/**
+ * memory AI、委派和分身共用的预设解析口。先尊重 memory preset；文件预设只读当前用户
+ * registry，不回退旧全局目录，返回 runMemoryPresetAI 可直接消费的统一形状。
+ */
+export function resolvePresetForMemoryAI(username, presetName, memoryPresets = []) {
+  const name = String(presetName || "").trim();
+  if (!name) return null;
+  const memoryPreset = (Array.isArray(memoryPresets) ? memoryPresets : [])
+    .find((preset) => preset?.name === name || preset?.id === name);
+  if (memoryPreset) return memoryPreset;
+  const entry = getRegistry(username)[name];
+  if (!entry?.file || path.basename(entry.file) !== entry.file) return null;
+  const filePreset = loadJsonFileIfExists(path.join(_userPresetDir(username), entry.file), null);
+  const prompts = _orderedFilePresetPrompts(filePreset?.preset_json);
+  if (prompts.length === 0) return null;
+  return {
+    id: `filePreset:${name}`,
+    name,
+    prompts,
+    api_config: filePreset?.model_params?.source ? { source: filePreset.model_params.source } : {},
+  };
+}
+
 // 预设名 → 安全文件名: 替换非法路径字符与空白, 截断 100 字防文件名过长
 function _sanitize(name) {
   return name

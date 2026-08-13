@@ -5,15 +5,15 @@
  *   模块加载时即拦截 console.log/warn/error → 过滤含 "[xxx]" 前缀的模块日志写入 _logs
  *   → window.onerror / unhandledrejection → 写入 _errors
  *   → websocket beilu:scheduleWakeup 事件 → _wakeup 倒计时
- *   → websocket 分身状态广播（_broadcastCloneStatus）→ _clones Map 聚合
+ *   → websocket 分身状态广播 → cloneStatusStore 单点聚合 → 本面板订阅渲染
  *   initBackendMonitor() → 渲染 #ide-backend-monitor 三区块 DOM
  *   → 定时刷新（1s）→ 渲染日志/错误/状态/分身/倒计时
  *
  * why：
  *   IDE 模式开发中需实时查看模块日志、JS 错误、WS 状态、Token 用量；
  *   whitebox.mjs 的 wb 追踪事件也走 console.log "[wb:...]"，自动被本模块捕获，无需新面板；
- *   分身状态按 taskId 聚合（Map），同一任务多条广播只保留最新；
- *   内存上限：日志 200 条 / 错误 50 条 / 分身 30 条，防止面板无限增长。
+ *   分身状态按完整 job 身份聚合，同一作业只接受递增 sequence；
+ *   内存上限：日志 200 条 / 错误 50 条；分身容量由共享状态 owner 管理。
  *
  * 关联链：
  *   ← featureControls.mjs（getCurrentMode：当前模式显示）
@@ -38,18 +38,15 @@ import { MODE_BADGE } from "../state/modeTabMap.mjs"; // D2 收口：模式徽�
 import { sendAction } from "../transport/sendAction.mjs"; // T6b：出向统一门面（verb=真动作）
 import { storage, KEYS } from "../state/storage.mjs"; // T041b: key 单源；P2: 读写经门面
 import { classifyPartLoadStatus, resolvePartLoadOccurrence } from "../state/partLoadStatus.mjs";
+import { CLONE_STATUS_META, clearCloneStatuses, getCloneStatuses, initCloneStatusStore, requestCloneStop, subscribeCloneStatuses } from "../state/cloneStatusStore.mjs";
 
 // ---- 常量 ----
 const MAX_LOG_ENTRIES = 200;
 const MAX_ERROR_ENTRIES = 50;
-const MAX_CLONE_ENTRIES = 30;
 
 // ---- 内存存储 ----
 const _logs = [];
 const _errors = [];
-// 分身状态：按 taskId 聚合最新一条（producer=replyHandler _broadcastCloneStatus，
-// payload {taskId,round,status,detail,timestamp}；status: started/working/retrying/completed/error/stopped/warning）
-const _clones = new Map();
 // 定时唤醒倒计时（producer=websocket beilu:scheduleWakeup，detail {delay(秒),reason}，自起算 now+delay*1000）
 let _wakeup = null; // { targetTs, reason }
 let _wakeupTicker = null;
@@ -185,26 +182,6 @@ function pushError(text) {
   _broadcastErrorUnread();
 }
 
-function pushCloneStatus(payload) {
-  if (!payload || payload.taskId == null) return;
-  const id = String(payload.taskId);
-  const prev = _clones.get(id) || { firstSeen: Date.now() };
-  _clones.set(id, {
-    taskId: id,
-    round: payload.round ?? prev.round ?? 0,
-    status: payload.status || prev.status || "working",
-    detail: payload.detail ?? prev.detail ?? "",
-    time: timestamp(),
-    firstSeen: prev.firstSeen,
-  });
-  // 容量保护：超限时按 firstSeen 丢最旧
-  if (_clones.size > MAX_CLONE_ENTRIES) {
-    const oldest = [..._clones.values()].sort((a, b) => a.firstSeen - b.firstSeen)[0];
-    if (oldest) _clones.delete(oldest.taskId);
-  }
-  renderClonesIfVisible();
-}
-
 // ---- 渲染 ----
 
 function isMonitorVisible() {
@@ -227,42 +204,25 @@ function renderClonesIfVisible() {
   renderClones();
 }
 
-// status → {标签, 颜色, 是否终态}
-const CLONE_STATUS_META = {
-  started: { label: "启动", color: "var(--beilu-accent)", done: false },
-  working: { label: "执行中", color: "var(--beilu-warning)", done: false },
-  retrying: { label: "重试", color: "var(--beilu-warning)", done: false },
-  warning: { label: "告警", color: "var(--beilu-warning)", done: false },
-  completed: { label: "完成", color: "var(--beilu-success)", done: true },
-  stopped: { label: "中断", color: "var(--beilu-error)", done: true },
-  error: { label: "错误", color: "var(--beilu-error)", done: true },
-};
-
 function renderClones() {
   const container = document.getElementById("monitor-clones");
   if (!container) return;
+  const entries = getCloneStatuses(window._beiluGetChatId?.() || "");
 
-  if (_clones.size === 0) {
+  if (entries.length === 0) {
     container.innerHTML =
       '<p class="text-base-content/50 text-center py-2">暂无分身</p>';
     return;
   }
-
-  // 未完成在上、完成在下；组内按 taskId
-  const entries = [..._clones.values()].sort((a, b) => {
-    const da = CLONE_STATUS_META[a.status]?.done ? 1 : 0;
-    const db = CLONE_STATUS_META[b.status]?.done ? 1 : 0;
-    if (da !== db) return da - db;
-    return String(a.taskId).localeCompare(String(b.taskId), undefined, { numeric: true });
-  });
 
   container.innerHTML = entries
     .map((c) => {
       const meta = CLONE_STATUS_META[c.status] || { label: c.status, color: "var(--beilu-muted, #94a3b8)", done: false };
       const spin = meta.done ? "" : ' <span style="opacity:0.6;">…</span>';
       // [0724 分身可停·002] 非终态条目带 ⏹ 停止按钮（bindEvents 容器级委托 → SetData stopCloneTask）
-      const stopBtn = meta.done ? "" : ` <button class="monitor-clone-stop" data-task="${escapeHtml(c.taskId)}" title="停止该分身" style="cursor:pointer; border:1px solid rgba(148,163,184,0.4); background:transparent; color:var(--beilu-error); border-radius:4px; font-size:11px; line-height:1.2; padding:0 4px; vertical-align:middle;">⏹ 停止</button>`;
-      return `<div style="line-height:1.6; border-bottom:1px solid rgba(148,163,184,0.12); padding:2px 0;"><span style="opacity:0.4;">${c.time}</span> <span style="font-weight:600;">分身#${escapeHtml(c.taskId)}</span> <span style="color:${meta.color}; font-weight:600;">[${escapeHtml(meta.label)}]</span><span style="opacity:0.5;"> R${c.round}</span>${spin}${stopBtn} <span style="opacity:0.8;">${escapeHtml(c.detail || "")}</span></div>`;
+      const stopBtn = meta.done ? "" : ` <button class="monitor-clone-stop" data-job="${escapeHtml(c.jobId)}" data-batch="${escapeHtml(c.cloneBatchId)}" data-task="${escapeHtml(c.taskId)}" title="停止这个分身作业" style="cursor:pointer; border:1px solid rgba(148,163,184,0.4); background:transparent; color:var(--beilu-error); border-radius:4px; font-size:11px; line-height:1.2; padding:0 4px; vertical-align:middle;">⏹ 停止</button>`;
+      const mode = c.executionMode === "detached" ? "异步" : "随主回合";
+      return `<div style="line-height:1.6; border-bottom:1px solid rgba(148,163,184,0.12); padding:2px 0;"><span style="opacity:0.4;">${c.time}</span> <span style="font-weight:600;">分身#${escapeHtml(c.taskId)}</span> <span style="color:${meta.color}; font-weight:600;">[${escapeHtml(meta.label)}]</span><span style="opacity:0.5;"> ${mode} · R${c.round}</span>${spin}${stopBtn} <span style="opacity:0.8;">${escapeHtml(c.detail || "")}</span></div>`;
     })
     .join("");
 
@@ -513,7 +473,7 @@ function bindEvents() {
   document
     .getElementById("monitor-clear-clones")
     ?.addEventListener("click", () => {
-      _clones.clear();
+      clearCloneStatuses(window._beiluGetChatId?.() || "");
       renderClones();
     });
 
@@ -526,15 +486,17 @@ function bindEvents() {
       const btn = e.target?.closest?.(".monitor-clone-stop");
       if (!btn) return;
       const taskId = btn.dataset.task;
+      const jobId = btn.dataset.job;
+      if (!taskId || !jobId) return;
       btn.disabled = true;
       btn.textContent = "停止中…";
       try {
-        const r = await sendAction({ verb: "stopCloneTask", target: "plugins:beilu-memory", source: "web", payload: { chatid: window._beiluGetChatId?.() || "", taskId } });
+        const r = await requestCloneStop(jobId, window._beiluGetChatId?.() || "");
         if (!r?.aborted) {
           // 没匹配到在跑任务（已结束/worker 隔离/会话不符）——按钮恢复，面板状态以广播为准
           btn.disabled = false;
           btn.textContent = "⏹ 停止";
-          console.warn(`[monitor] 停止分身#${taskId}: 未匹配到在跑任务 (aborted=${r?.aborted ?? "?"})`);
+          console.warn(`[monitor] 停止分身 job=${jobId}: 未匹配到在跑任务 (aborted=${r?.aborted ?? "?"})`);
         }
       } catch (err) {
         btn.disabled = false;
@@ -542,11 +504,6 @@ function bindEvents() {
         console.warn(`[monitor] 停止分身#${taskId} 失败:`, err?.message || err);
       }
     });
-
-  // 分身状态外显（producer=replyHandler _broadcastCloneStatus → websocket clone_status → beilu:cloneStatus）
-  window.addEventListener("beilu:cloneStatus", (e) => {
-    pushCloneStatus(e.detail);
-  });
 
   // 定时唤醒倒计时（producer=websocket beilu:scheduleWakeup）
   window.addEventListener("beilu:scheduleWakeup", (e) => {
@@ -622,6 +579,8 @@ interceptConsole();
 interceptGlobalErrors();
 
 export function initBackendMonitor() {
+  initCloneStatusStore();
+  subscribeCloneStatuses(renderClonesIfVisible);
   // 绑定 DOM 事件
   bindEvents();
 

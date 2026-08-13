@@ -106,6 +106,70 @@ export type IdeRouteSnapshot =
     connectionId: string;
   };
 
+export interface CloneJobIdentity {
+  ownerUsername: string;
+  chatId: string;
+  parentGenerationId: string | null;
+  cloneBatchId: string;
+  taskId: string | number;
+  jobId: string;
+  source: string;
+  sourceDetail?: string;
+  executionMode?: string;
+}
+
+/** 与后端 createCloneStatusEvent 同形；YonBan 不再从当前窗口补造身份或终态。 */
+export interface CloneStatusEvent {
+  schemaVersion: 1;
+  eventId: string;
+  occurredAt: string;
+  timestamp: string;
+  sequence: number;
+  state: "queued" | "accepted" | "running" | "terminal";
+  status: string;
+  detail: string;
+  round: number;
+  tools: number;
+  label: string;
+  terminalReason: string | null;
+  completion: string | null;
+  resultStatus: string | null;
+  resumable: boolean | null;
+  ai: unknown;
+  job: CloneJobIdentity;
+  ownerUsername: string;
+  chatId: string;
+  parentGenerationId: string | null;
+  cloneBatchId: string;
+  taskId: string | number;
+  jobId: string;
+  source: string;
+  snapshot?: boolean;
+}
+
+export function isCloneStatusEvent(value: unknown, ownerChatId: string): value is CloneStatusEvent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const event = value as Record<string, unknown>;
+  const job = event.job as Record<string, unknown> | null;
+  const sequence = Number(event.sequence);
+  const taskType = typeof event.taskId;
+  return event.schemaVersion === 1
+    && typeof event.eventId === "string" && event.eventId === `${String(event.jobId)}:${sequence}`
+    && Number.isInteger(sequence) && sequence >= 0
+    && typeof event.ownerUsername === "string" && event.ownerUsername.length > 0
+    && typeof event.chatId === "string" && event.chatId === ownerChatId
+    && typeof event.cloneBatchId === "string" && event.cloneBatchId.length > 0
+    && typeof event.jobId === "string" && event.jobId.length > 0
+    && (taskType === "string" || taskType === "number")
+    && typeof event.status === "string" && event.status.length > 0
+    && (event.state === "queued" || event.state === "accepted" || event.state === "running" || event.state === "terminal")
+    && typeof event.occurredAt === "string" && typeof event.timestamp === "string"
+    && !!job
+    && job.ownerUsername === event.ownerUsername && job.chatId === event.chatId
+    && job.parentGenerationId === event.parentGenerationId
+    && job.cloneBatchId === event.cloneBatchId && job.taskId === event.taskId && job.jobId === event.jobId;
+}
+
 export interface EditMessageResult {
   success: boolean;
   applied: boolean;
@@ -195,7 +259,9 @@ export class ChatService {
   }>();
   private _onToolResultsReady = new vscode.EventEmitter<{ count: number; source: string }>();
   private _onTokenUsage = new vscode.EventEmitter<{ input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }>();
-  private _onCloneStatus = new vscode.EventEmitter<{ taskId: number; round: number; status: string; detail: string; timestamp: string }>();
+  private _onCloneStatus = new vscode.EventEmitter<CloneStatusEvent>();
+  /** transport consumer cursor only; Runner/snapshot remains the state owner. */
+  private _cloneStatusCursor = new Map<string, { sequence: number; terminal: boolean }>();
   private _onPendingApprovals = new vscode.EventEmitter<{ count: number }>();
   private _onModeChanged = new vscode.EventEmitter<{ mode: string; bound_preset?: string }>();
   private _onPresetChanged = new vscode.EventEmitter<{ preset: string }>();
@@ -1421,24 +1487,23 @@ export class ChatService {
     );
   }
 
-  /** [0724 分身可停·002] 停止在跑分身：taskId 缺省(空串)=停该会话全部。后端 cloneAbort 触发
+  /** [0724 分身可停·002] 停止在跑分身：jobId 精确命中，缺省 identity=停该会话全部。后端 cloneAbort 触发
    *  该任务 AbortController，终态 stopped 经 clone_status 广播回流分身进度面板。 */
-  async stopCloneTask(chatId: string, taskId?: string): Promise<Record<string, unknown>> {
+  async stopCloneTask(chatId: string, identity: { taskId?: string; jobId?: string } = {}): Promise<Record<string, unknown>> {
     return this._callPluginApi<Record<string, unknown>>(
       "beilu-memory",
       "config/setdata",
       "POST",
-      { _action: "stopCloneTask", chatid: chatId || "", taskId: taskId ?? "" },
+      { _action: "stopCloneTask", chatid: chatId || "", ...identity },
     );
   }
 
-  /** 保存分身AI配置 */
-  async saveClones(clones: unknown[]): Promise<Record<string, unknown>> {
+  async saveClones(clones: unknown[], configRevision: string | null): Promise<Record<string, unknown>> {
     return this._callPluginApi<Record<string, unknown>>(
       "beilu-memory",
       "config/setdata",
       "POST",
-      { _action: "saveClones", clones },
+      { _action: "saveClones", clones, configRevision },
     );
   }
 
@@ -1830,10 +1895,23 @@ export class ChatService {
         this._onTokenUsage.fire(msg.payload as { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number });
         break;
 
-      // ★ 分身操作外显
-      case "clone_status":
-        this._onCloneStatus.fire(msg.payload as { taskId: number; round: number; status: string; detail: string; timestamp: string });
+      // ★ 分身操作外显：完整事件信封；旧连接、跨 chat、重复/乱序/终态晚到全部拒绝。
+      case "clone_status": {
+        if (!isCloneStatusEvent(msg.payload, ownerChatId)) {
+          console.warn("[ChatService] 拒绝无完整身份的 clone_status");
+          break;
+        }
+        const event = msg.payload;
+        const previous = this._cloneStatusCursor.get(event.jobId);
+        if (previous && (event.sequence <= previous.sequence || previous.terminal)) break;
+        this._cloneStatusCursor.set(event.jobId, { sequence: event.sequence, terminal: event.state === "terminal" });
+        if (this._cloneStatusCursor.size > 500) {
+          const oldest = this._cloneStatusCursor.keys().next().value;
+          if (oldest) this._cloneStatusCursor.delete(oldest);
+        }
+        this._onCloneStatus.fire(event);
         break;
+      }
 
       // W66: 有新审批需要处理
       case "pending_approvals":

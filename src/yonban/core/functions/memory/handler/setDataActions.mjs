@@ -124,11 +124,13 @@ import {
   buildSubModeSwitchEvent,
   setActiveMode,
   isValidModeId,
+  listCloneResumeSnapshots,
   getCardWorkspaceRoot,
   setCardWorkspaceRoot,
   withFileLock,
   writeContextSummary,
   getYonbanConfigPath,
+  readJsonFileSnapshotStrict,
   updateYonbanConfig, // T4：yonban_config 字段级收口写口（读改写走串行锁，防整文件互覆）
   SKIP_SAVE, // updateYonbanConfig 哨兵：mutator 返回它=本次不落盘（getSubModes/setActiveSubMode/saveClones 用）
   addPermanentCharLink,
@@ -217,6 +219,9 @@ import {
   setLastP1Result,
   setPluginEnabled,
 } from "../ai/aiRunner.mjs";
+import { inspectCloneEffectivePermissions } from "../ai/cloneAccess.mjs";
+import { CLONE_CONFIG_DEFAULTS, CLONE_READ_MD_PERMISSIONS, createDefaultCloneConfigs, normalizeCloneConfigs } from "../ai/cloneContract.mjs";
+import { runCloneTask } from "../ai/cloneTaskRunner.mjs";
 
 import { ideClient, isValidIdeRouteSnapshot, ideRouteSnapshotsEqual, isIdeToolResultMsg, isIdeToolCallMsg, deriveApprovalSkipRule, buildPermissionTemplateRules, collectNoiseToHide, CLONE_TAG_RE, PERMISSION_WRITE_TOOLS, FILE_EDIT_TOOLS, WRITE_TOOLS_ALL, DELETE_CMD_FIRST_WORDS, isSensitiveEnvBasename } from "../../../transport/ideClient.mjs";
 import {
@@ -2734,159 +2739,88 @@ export async function handleSetData(data, args, internalCapability = null) {
 
     // ★ 直接触发分身执行（测试用，返回完整每轮详情）
     case "testClone": {
-      const _tcInstruction = typeof data.instruction === "string" ? data.instruction.trim() : "";
-      if (!_tcInstruction) return { success: false, error: "测试分身需要明确 instruction" };
-      const _tcConfigPath = getYonbanConfigPath(username);
-      const _tcConfig = loadJsonFileIfExists(_tcConfigPath, { clones: [] });
-      // 契约对账修复（20260706）：详情页测试传 cloneId（subModePanel:2672）原被无视——恒 find(enabled)
-      //   取第一个启用分身，用户测 B 实跑 A（测的不是看的）。带 cloneId=精确测该分身（不滤 enabled，
-      //   测试即配置验证）；缺省=旧行为（:2752 全局测试入口沿用 enabled 首个）。
-      const _tcClone = data.cloneId
-        ? (_tcConfig.clones || []).find(c => c.id === data.cloneId)
-        : (_tcConfig.clones || []).find(c => c.enabled);
-      if (!_tcClone) return { success: false, error: data.cloneId ? `未找到分身配置 ${data.cloneId}` : "没有启用的分身配置" };
-      const _tcMaxRounds = data.maxRounds || _tcClone.maxRounds || 40;
-
+      const instruction = typeof data.instruction === "string" ? data.instruction.trim() : "";
+      if (!instruction) return { success: false, error: "测试分身需要明确 instruction" };
+      const _tcSnapshot = readJsonFileSnapshotStrict(getYonbanConfigPath(username), {});
+      const _tcRawConfig = _tcSnapshot.value;
+      if (!_tcRawConfig || typeof _tcRawConfig !== "object" || Array.isArray(_tcRawConfig)) return { success: false, error: "分身配置根节点必须是对象" };
+      const configSnapshot = {
+        ..._tcRawConfig,
+        clones: normalizeCloneConfigs(_tcRawConfig.clones === undefined ? createDefaultCloneConfigs() : _tcRawConfig.clones),
+        revision: _tcSnapshot.revision,
+      };
+      const taskId = data.taskId ?? `test-${data.cloneId ?? "default"}-${Date.now().toString(36)}`;
       try {
-        const { parseIdeToolCallTags, renderStaticIdeToolSignatures } = await import("../../../transport/ideClient.mjs");
-        const { pathToFileURL } = await import("node:url");
+        const result = await runCloneTask({
+          username,
+          charName,
+          chatId: data.chatid || args?.chatid || _rawChatId || "",
+          task: {
+            id: taskId,
+            instruction,
+            ...(data.resumeTaskId !== undefined && data.resumeTaskId !== null && String(data.resumeTaskId) !== ""
+              ? { resumeTaskId: data.resumeTaskId, resumeJobId: data.resumeJobId }
+              : {}),
+          },
+          configSnapshot,
+          cloneId: data.cloneId,
+          chatLog: Array.isArray(args?.chat_log) ? args.chat_log : [],
+          charDisplayName: data.charDisplayName || charName,
+          generationArgs: args,
+          maxWorkRoundsOverride: data.maxRounds,
+          sourceDetail: "test",
+          observe: true,
+        });
+        return {
+          success: result.success === true,
+          cloneLabel: result.label,
+          model: result.model || "",
+          totalRounds: result.rounds,
+          totalTools: result.totalTools,
+          rounds: result.roundDetails || [],
+          reply: result.reply || "",
+          status: result.status,
+          terminalReason: result.terminalReason,
+          completion: result.completion,
+          completionEvidence: result.completionEvidence || "",
+          resumable: result.resumable,
+          taskId: result.id,
+          maxWorkRounds: result.maxWorkRounds,
+          logicalCalls: result.logicalCalls,
+          configRevision: result.configRevision,
+          ...(result.success === true ? {} : { error: result.error || `分身未完成：${result.terminalReason || result.status}` }),
+        };
+      } catch (error) {
+        return { success: false, error: error.message, stack: error.stack?.substring(0, 300) };
+      }
+    }
 
-        // 加载预设提示词
-        let _tcSystemPrompts = [];
-        if (_tcClone.presetName) {
-          const _tcPresetPath = path.join(__pluginDir, "..", "beilu-preset", "presets", _tcClone.presetName + ".json");
-          if (fs.existsSync(_tcPresetPath)) {
-            const _tcPreset = JSON.parse(fs.readFileSync(_tcPresetPath, "utf-8"));
-            _tcSystemPrompts = (_tcPreset.preset_json?.prompts || [])
-              .filter(p => p.system_prompt && p.content?.trim())
-              .map(p => ({ role: p.role || "system", content: p.content }));
-          }
-        }
-        // 人设唯一来源=预设（凛倾#43）：无预设时顶空白，不再硬编码兜底人设。
-
-        // 加载INJ-2-code工具文档
-        const _tcPresetsData = loadMemoryPresets(username, charName);
-        const _tcInj2 = (_tcPresetsData.injection_prompts || []).find(p => p.id === "INJ-2-code" && p.enabled);
-        if (_tcInj2?.content) {
-          // ★ 过滤分身相关段落，防止分身递归调用分身
-          let _tcInj2Content = _tcInj2.content
-            .replace(/\{\{user\}\}/g, username)
-            // 测试分身与正式分身消费同一静态工具注册表；动态项目环境不进入历史前工具文档。
-            .replace(/\{\{env_tools\}\}/g, "")
-            .replace(/\{\{ide_tools\}\}/g, renderStaticIdeToolSignatures())
-            .replace(/<ide_extended>[\s\S]*?## 分身AI[\s\S]*?(?=##|<\/ide_extended>)/, "")
-            .replace(/并行调用分身AI[\s\S]*?结果下一轮自动注入/g, "");
-          _tcSystemPrompts.push({ role: "system", content: _tcInj2Content });
-        }
-
-        // 构建消息
-        const _tcMessages = [
-          ..._tcSystemPrompts,
-          { role: "user", content: _tcInstruction },
-        ];
-
-        // Agent循环
-        const _tcRounds = [];
-        const _tcApiSource = _tcClone.apiSource || "";
-        const _tcModel = _tcClone.modelName || "";
-        let _tcToolCount = 0;
-
-        for (let _r = 0; _r < _tcMaxRounds; _r++) {
-          // 调用AI
-          const _tcAiResult = await runMemoryPresetAI(username, charName, {
-            id: `TEST_CLONE_${Date.now()}_r${_r}`,
-            name: _tcClone.label,
-            prompts: _tcMessages.map(m => ({ role: m.role, content: m.content, enabled: true })),
-            api_config: {
-              use_custom: !!(_tcApiSource || _tcModel || _tcClone.temperature !== undefined),
-              source: _tcApiSource || undefined,
-              model: _tcModel || undefined,
-              temperature: _tcClone.temperature !== undefined ? _tcClone.temperature : 0.5,
-              max_tokens: _tcClone.maxTokens || 60000,
-              prompt_post_processing: _tcClone.promptPostProcessing || "strict",
-              include_reasoning: false,
-              // extended_thinking 已删（2026-08-01 收口：思维链跟随所用 AI 源的 per-源设置）
-            },
-          }, memData, charName, username, "", { maxRounds: 1, aiPriority: "low" }); // [0727 并发闸] 测试分身=后台级
-
-          let _tcReply = (_tcAiResult?.reply || "").replace(/<stopContinue\s*\/?>/gi, "");
-          const _tcThinking = _tcAiResult?.thinking || "";
-
-          // ★ 空回重试（最多2次）
-          if (!_tcReply.trim()) {
-            for (let _retry = 0; _retry < 2; _retry++) {
-              console.log(`[testClone] 第${_r+1}轮空回，重试${_retry+1}/2...`);
-              await new Promise(r => setTimeout(r, 2000));
-              const _retryResult = await runMemoryPresetAI(username, charName, {
-                id: `TEST_CLONE_${Date.now()}_r${_r}_retry${_retry}`,
-                name: _tcClone.label,
-                prompts: _tcMessages.map(m => ({ role: m.role, content: m.content, enabled: true })),
-                api_config: {
-                  use_custom: true,
-                  source: _tcApiSource || undefined,
-                  model: _tcModel || undefined,
-                  temperature: (_tcClone.temperature || 0.5) + 0.1, // 稍微提高温度重试
-                  max_tokens: _tcClone.maxTokens || 60000,
-                  prompt_post_processing: "strict",
-                  include_reasoning: false,
-                },
-              }, memData, charName, username, "", { maxRounds: 1, aiPriority: "low" }); // [0727 并发闸] 测试分身重试=后台级
-              _tcReply = _retryResult?.reply || "";
-              if (_tcReply.trim()) break;
-            }
-          }
-
-          // 解析工具调用
-          const { toolCalls } = parseIdeToolCallTags(_tcReply);
-
-          _tcRounds.push({
-            round: _r + 1,
-            reply: _tcReply,
-            thinking: _tcThinking,
-            toolCalls: toolCalls.map(tc => ({ tool: tc.tool, params: tc.params })),
-          });
-
-          if (toolCalls.length === 0) {
-            // 无工具调用，结束
-            break;
-          }
-
-          // 执行工具
-          const { ideClient } = await import("../../../transport/ideClient.mjs");
-          const _tcToolResults = [];
-          for (const tc of toolCalls) {
-            _tcToolCount++;
-            try {
-              // [0727 id传导] 测试分身的工具调用也带线 id（gate 语义不动：不加 source，只补路由 id）
-              const result = await ideClient.callTool(tc.tool, tc.params, undefined, undefined, { chatid: data.chatid || args?.chatid || null });
-              const resultStr = typeof result?.result === "string" ? result.result : JSON.stringify(result?.result || {}).substring(0, 2000);
-              _tcToolResults.push(`--- ${tc.tool} ---\n${resultStr}`);
-            } catch (e) {
-              _tcToolResults.push(`--- ${tc.tool} ---\n❌ ${e.message}`);
-            }
-          }
-
-          // 注入结果，继续
-          _tcMessages.push({ role: "assistant", content: _tcReply });
-          // 文案：per-char config.system_texts 覆盖 → DEFAULT_SYSTEM_TEXTS 单源（testclone_* 键）
-          let _tcContinueMsg = getSystemText("testclone_tool_result", username, charName).replaceAll("{results}", _tcToolResults.join("\n\n"));
-          // 接近轮次上限时提醒输出
-          if (_r >= _tcMaxRounds - 3) {
-            _tcContinueMsg += getSystemText("testclone_rounds_left", username, charName).replaceAll("{rounds_left}", String(_tcMaxRounds - _r - 1));
-          }
-          _tcMessages.push({ role: "user", content: _tcContinueMsg });
-        }
-
+    case "inspectClonePermissions": {
+      const _icpUser = data.username || args?.username;
+      if (!_icpUser) return { success: false, error: "分身权限检查缺少登录 owner" };
+      const _icpChat = data.chatid || args?.chatid || _rawChatId || "";
+      try {
+        const _icpSnapshot = readJsonFileSnapshotStrict(getYonbanConfigPath(_icpUser), {});
+        const _icpRawConfig = _icpSnapshot.value;
+        if (!_icpRawConfig || typeof _icpRawConfig !== "object" || Array.isArray(_icpRawConfig)) throw new Error("分身配置根节点必须是对象");
+        const _icpConfig = {
+          ..._icpRawConfig,
+          clones: normalizeCloneConfigs(_icpRawConfig.clones === undefined ? createDefaultCloneConfigs() : _icpRawConfig.clones),
+          revision: _icpSnapshot.revision,
+        };
         return {
           success: true,
-          cloneLabel: _tcClone.label,
-          model: _tcModel,
-          totalRounds: _tcRounds.length,
-          totalTools: _tcToolCount,
-          rounds: _tcRounds,
+          inspection: inspectCloneEffectivePermissions({
+            username: _icpUser,
+            chatId: _icpChat,
+            configSnapshot: _icpConfig,
+            cloneId: data.cloneId,
+            sourceDetail: data.sourceDetail === "formal" ? "formal" : "test",
+            configRevision: _icpSnapshot.revision,
+          }),
         };
-      } catch (e) {
-        return { success: false, error: e.message, stack: e.stack?.substring(0, 300) };
+      } catch (error) {
+        return { success: false, error: error.message };
       }
     }
 
@@ -4798,57 +4732,29 @@ export async function handleSetData(data, args, internalCapability = null) {
       if (!_clUser) {
         return { success: false, error: "未能识别登录用户名（username 解析失败），无法加载分身列表，请重新登录后重试。" };
       }
-      // 全键 false 基线（14 权限键与 live yonban_config.json / 前端 permissions 结构完全一致），
-      // 各分身按职能只翻转所需键为 true。write_md 统一放开=true（分身产报告是常态，前后端默认统一）。
-      // maxContext=1000000 / maxTokens=60000 为凛倾 2026-07-07 指定（上下文100万，最大输出6w）。
-      // 07-09 收口审计：_base/_readMd 提出 if 块——除默认分身初始化外，还作 clone_template 随响应下发
-      //   （前端新建分身表单的默认值单源；原前端写死 7 键旧结构+maxTokens=4096 与本处 14 键+60000 分叉）。
-      const _base = { read_file: false, list_files: false, search_files: false, search_by_name: false, get_diagnostics: false, get_status: false, run_command: false, write_md: false, write_code: false, delete: false, github_upload: false, fuzzy_edit: false, replace_lines: false, insert_at_line: false };
-      // 只读+写MD 职能基线（审查/收集/框架线路追踪共用）：读/列/搜（两搜索键）/诊断/写MD
-      const _readMd = { ..._base, read_file: true, list_files: true, search_files: true, search_by_name: true, get_diagnostics: true, write_md: true };
+      // 默认分身、权限键集和数值合同均由 cloneContract 单源提供；本入口只负责缺失初始化和持久化。
       // T4 收口：读+缺失初始化整段走 updateYonbanConfig 串行锁（原 load→push 默认→save 无锁，
       //   与 saveClones/setActiveSubMode 并发时互覆）。无初始化时 mutator 返回 SKIP_SAVE 不落盘（等价原「仅缺失才 save」）。
-      let _clClones = [];
       await updateYonbanConfig(_clUser, (_clConfig) => {
-        if (!Array.isArray(_clConfig.clones)) _clConfig.clones = [];
-        // 初始化默认分身（如果没有）。审查分身 enabled，其余 5 种为模板(enabled:false，用户按需启用)。
-        // presetName 留空=不硬编码到不存在的预设，用户自绑；类型差异体现在 label+permissions+上下文。
-        const _existingIds = new Set((_clConfig.clones || []).map(c => c.id));
-        let _clTouched = false;
-        if (_clConfig.clones.length === 0 || !_existingIds.has(1) || !_existingIds.has(2)) {
-          const _defaults = [
-            // 审查：只读+写MD报告，绑定「分身_全能型」（对抗性分析师，不锚定主AI结论）
-            { id: 1, label: "审查分身", enabled: true,  presetName: "分身_全能型", apiSource: "", modelName: "",
-              permissions: { ..._readMd }, contextMessages: 10, maxContext: 1000000, maxTokens: 60000 },
-            // 收集：只读采集+写MD，绑定「分身_大型调查」（系统完整性审计，双向可达链路扫描）
-            { id: 2, label: "收集分身", enabled: false, presetName: "分身_大型调查", apiSource: "", modelName: "",
-              permissions: { ..._readMd }, contextMessages: 8, maxContext: 1000000, maxTokens: 60000 },
-            // 代码工作：读/搜/诊断/写MD + 写代码+跑命令（含 fuzzy_edit/replace_lines/insert_at_line 子能力），绑定「分身_代码更改」
-            { id: 3, label: "代码工作分身", enabled: false, presetName: "分身_代码更改", apiSource: "", modelName: "",
-              permissions: { ..._readMd, write_code: true, run_command: true, fuzzy_edit: true, replace_lines: true, insert_at_line: true }, contextMessages: 12, maxContext: 1000000, maxTokens: 60000 },
-            // 框架线路深度追踪：只读+写MD 追链路，绑定「分身_调查追踪」（代码考古学家+调用链追踪）
-            { id: 4, label: "框架线路追踪分身", enabled: false, presetName: "分身_调查追踪", apiSource: "", modelName: "",
-              permissions: { ..._readMd }, contextMessages: 15, maxContext: 1000000, maxTokens: 60000 },
-            // 批量简单任务：读/列/搜/写MD+跑命令，不写代码，绑定「分身_全能型」（通用型批量）
-            { id: 5, label: "批量任务分身", enabled: false, presetName: "分身_全能型", apiSource: "", modelName: "",
-              permissions: { ..._readMd, run_command: true }, contextMessages: 6, maxContext: 1000000, maxTokens: 60000 },
-            // 测试：读/搜/诊断/写MD+跑命令/脚本，不写代码，绑定「分身_测试实验」（QA自动化+断言驱动）
-            { id: 6, label: "测试分身", enabled: false, presetName: "分身_测试实验", apiSource: "", modelName: "",
-              permissions: { ..._readMd, run_command: true }, contextMessages: 10, maxContext: 1000000, maxTokens: 60000 },
-          ];
-          for (const _d of _defaults) {
-            if (!_existingIds.has(_d.id)) _clConfig.clones.push(_d);
-          }
-          _clConfig.clones.sort((a, b) => a.id - b.id);
-          _clTouched = true;
-        }
-        _clClones = _clConfig.clones;
+        if (_clConfig.clones !== undefined && !Array.isArray(_clConfig.clones)) throw new Error("分身配置 clones 必须是数组，拒绝覆盖原文件");
+        // 只有字段缺失才初始化；显式 []、删除某个内置项、纯自定义集合都代表用户配置，不得复活默认项。
+        let _clTouched = _clConfig.clones === undefined;
+        if (_clTouched) _clConfig.clones = createDefaultCloneConfigs();
+        const _clBeforeNormalize = JSON.stringify(_clConfig.clones);
+        _clConfig.clones = normalizeCloneConfigs(_clConfig.clones);
+        if (JSON.stringify(_clConfig.clones) !== _clBeforeNormalize) _clTouched = true;
         return _clTouched ? _clConfig : SKIP_SAVE;
-      }, { clones: [] });
+      }, {}, { strictRead: true });
       // clone_template：前端新建分身的默认值单源（权限键集/数值与本后端拍板值+消费端兜底一致）。
       //   maxRounds/temperature 值=replyHandler 消费端兜底(:3150 temperature 0.5 / :3166 maxRounds 50)——
       //   进模板后本体前端表单不再持写死副本（07-09 使用链走查）。
-      return { success: true, clones: _clClones, clone_template: { permissions: { ..._readMd }, contextMessages: 10, maxContext: 1000000, maxTokens: 60000, maxRounds: 50, temperature: 0.5 } };
+      // 写锁释放后必须从同一文件句柄读取内容+revision；不能拿锁内旧内容再对路径 stat，
+      // 否则并发写者可能把响应拼成“A 的 clones + B 的 revision”。
+      const _clReadback = readJsonFileSnapshotStrict(getYonbanConfigPath(_clUser), {});
+      const _clReadbackConfig = _clReadback.value;
+      if (!_clReadbackConfig || typeof _clReadbackConfig !== "object" || Array.isArray(_clReadbackConfig)) throw new Error("分身配置根节点必须是对象");
+      const _clClones = normalizeCloneConfigs(_clReadbackConfig.clones === undefined ? createDefaultCloneConfigs() : _clReadbackConfig.clones);
+      return { success: true, clones: _clClones, configRevision: _clReadback.revision, clone_template: { ...CLONE_CONFIG_DEFAULTS, permissions: { ...CLONE_READ_MD_PERMISSIONS } } };
     }
 
     case "saveClones": {
@@ -4857,12 +4763,17 @@ export async function handleSetData(data, args, internalCapability = null) {
       if (!_clUser) {
         return { success: false, error: "未能识别登录用户名（username 解析失败），无法保存分身列表，请重新登录后重试。" };
       }
-      // T4 收口：读改写走 updateYonbanConfig 串行锁（saveClones 与 setActiveSubMode/加卡等并发时字段互覆的重灾）
-      const _clClones = await updateYonbanConfig(_clUser, (_clConfig) => {
-        if (Array.isArray(data.clones)) _clConfig.clones = data.clones;
-        return _clConfig.clones;
-      }, {});
-      return { success: true, clones: _clClones };
+      try {
+        if (!Object.hasOwn(data, "configRevision")) throw new Error("缺少分身配置版本，请重新加载后再保存");
+        const _clReadback = await updateYonbanConfig(_clUser, (_clConfig, _clCurrentRevision) => {
+          if (data.configRevision !== _clCurrentRevision) throw new Error("分身配置已被其他窗口更新，请重新加载后再保存");
+          _clConfig.clones = normalizeCloneConfigs(data.clones, _clConfig.clones);
+          return _clConfig.clones;
+        }, {}, { strictRead: true, snapshot: true });
+        return { success: true, clones: _clReadback.value.clones, configRevision: _clReadback.revision };
+      } catch (_clError) {
+        return { success: false, error: _clError.message };
+      }
     }
 
     // === 编程表格定期清理频率配置 ===
@@ -6138,18 +6049,38 @@ export async function handleSetData(data, args, internalCapability = null) {
       return { success: true, clones: _gacList(username, (data.chatid !== undefined && data.chatid !== "") ? data.chatid : undefined) };
     }
 
+    case "getCloneResumes": {
+      const _gcrChat = data.chatid || data.chatId || "";
+      if (!_gcrChat) return { success: false, error: "续接列表缺少 chatId，拒绝跨会话读取" };
+      return {
+        success: true,
+        resumes: listCloneResumeSnapshots(username, {
+          chatId: _gcrChat,
+          ...(data.cloneId !== undefined && data.cloneId !== null && String(data.cloneId) !== "" ? { cloneId: data.cloneId } : {}),
+        }),
+      };
+    }
+
     case "stopCloneTask": {
-      // [0724 分身可停·002「我需要可以关闭分身,无论是本体还有yonban」] 停止在跑分身：
-      //   taskId 精确停一个；缺省 taskId=停该会话全部。仅触发该任务 AbortController
-      //   （replyHandler 分身循环轮界/在飞 API 即断），产出走既有 user_aborted 收尾链
-      //   （终态广播 stopped + 可续接快照照落，可 resumeTaskId 续接）。
-      //   调用方：本体 backendMonitor 分身区 ⏹ / YonBan 分身进度面板 ⏹（经 _callPluginApi 中转）。
+      // FIX-04：停止契约使用完整 job identity。jobId 精确停一个；cloneBatchId+taskId 亦可精确命中；
+      // 仅 taskId 只在唯一匹配时兼容执行，同会话多批同号会显式返回 ambiguous，绝不批量误杀。
       const _sctChat = data.chatid || data.chatId || "";
       const _sctTask = (data.taskId !== undefined && data.taskId !== null && String(data.taskId) !== "") ? String(data.taskId) : undefined;
+      const _sctBatch = (data.cloneBatchId !== undefined && data.cloneBatchId !== null && String(data.cloneBatchId) !== "") ? String(data.cloneBatchId) : undefined;
+      const _sctJob = (data.jobId !== undefined && data.jobId !== null && String(data.jobId) !== "") ? String(data.jobId) : undefined;
       const { abortClones: _sctAbort } = await import("./cloneAbort.mjs");
-      const _sctN = _sctAbort(username, { chatid: _sctChat !== "" ? _sctChat : undefined, taskId: _sctTask });
-      console.log(`[beilu-memory] stopCloneTask: chatid=${_sctChat || "(全部)"}, taskId=${_sctTask || "(全部)"}, aborted=${_sctN}`);
-      return { success: true, aborted: _sctN };
+      const _sctResult = _sctAbort(username, {
+        chatid: _sctChat !== "" ? _sctChat : undefined,
+        taskId: _sctTask,
+        cloneBatchId: _sctBatch,
+        jobId: _sctJob,
+      });
+      console.log(`[beilu-memory] stopCloneTask: chatid=${_sctChat || "(全部)"}, jobId=${_sctJob || "(无)"}, batch=${_sctBatch || "(无)"}, taskId=${_sctTask || "(全部)"}, aborted=${_sctResult.aborted}, ambiguous=${_sctResult.ambiguous}`);
+      return {
+        success: !_sctResult.ambiguous,
+        ..._sctResult,
+        ...(_sctResult.ambiguous ? { error: "同一会话存在多个同编号分身，请携带 jobId 精确停止" } : {}),
+      };
     }
 
     case "setScheduledContinue": {

@@ -2961,22 +2961,28 @@ var showToast = YB.showToast;
   // ═══════════════════════════════════════════════════════
 
   state._clones = [];
+  state._cloneSavePending = false;
 
   function fetchClones() {
     vscode.postMessage({ type: "getClones" });
   }
 
   function onClonesConfig(payload) {
-    // A4 username 权威化：后端解析登录用户名失败返回 {success:false,error}，显式报错不静默装空列表。
     if (payload && (payload.error || payload.success === false)) {
-      YB.showToast("⚠ 分身加载失败：" + (payload.error || "未能识别登录用户名"), 3500);
+      YB.showToast("⚠ 分身" + (payload.saved ? "保存" : "加载") + "失败：" + (payload.error || "未能识别登录用户名"), 3500);
+      if (payload.saved) state._cloneSavePending = false;
       return;
     }
     state._clones = payload.clones || [];
-    // 07-09 收口审计：后端下发新建分身模板（14 权限键+contextMessages/maxContext/maxTokens 拍板值单源），
-    //   showCloneForm 新建默认用它——原前端写死 7 键旧结构+maxTokens=4096 与后端 14 键+60000 分叉。
+    state._cloneConfigRevision = payload.configRevision;
     if (payload.clone_template) state._cloneTemplate = payload.clone_template;
     renderCloneList();
+    if (payload.saved) {
+      state._cloneSavePending = false;
+      var savedOverlay = document.querySelector(".submode-form-overlay");
+      if (savedOverlay) savedOverlay.remove();
+      showToast("已保存分身", 1500);
+    }
   }
 
   function renderCloneList() {
@@ -3003,7 +3009,6 @@ var showToast = YB.showToast;
         "</div>";
       container.appendChild(item);
     }
-    // 添加按钮
     var addBtn = document.createElement("button");
     addBtn.className = "btn btn-secondary submode-add-btn";
     addBtn.textContent = "+ 添加分身";
@@ -3011,7 +3016,6 @@ var showToast = YB.showToast;
     addBtn.addEventListener("click", function () { showCloneForm(null); });
     container.appendChild(addBtn);
 
-    // 事件
     container.querySelectorAll("[data-cl-edit]").forEach(function (el) {
       el.addEventListener("click", function (e) {
         e.stopPropagation();
@@ -3021,16 +3025,16 @@ var showToast = YB.showToast;
     container.querySelectorAll("[data-cl-del]").forEach(function (el) {
       el.addEventListener("click", function (e) {
         e.stopPropagation();
+        if (state._cloneSavePending) return;
         var idx = parseInt(el.dataset.clDel);
-        state._clones.splice(idx, 1);
-        vscode.postMessage({ type: "saveClones", payload: { clones: state._clones } });
-        renderCloneList();
-        showToast("已删除分身", 1500);
+        state._cloneSavePending = true;
+        vscode.postMessage({ type: "saveClones", payload: { clones: state._clones.filter(function (_, i) { return i !== idx; }), configRevision: state._cloneConfigRevision } });
       });
     });
   }
 
   function showCloneForm(existing) {
+    if (state._cloneSavePending) return;
     var isEdit = !!existing;
     var overlay = document.createElement("div");
     overlay.className = "submode-form-overlay";
@@ -3038,8 +3042,6 @@ var showToast = YB.showToast;
     form.className = "submode-form";
     // 分身字段为用户输入，回填进 value 属性必须转义，否则含引号/尖括号会破坏属性甚至注入
     var _esc = YB.escapeHtml; // 转义单源收口 2026-07-13：chat-core 必先加载，本地劣化 fallback（缺 单引号 转义）已删
-    // 07-09 凛倾拍板：分身参数需可编辑 UI——同一模式的分身可能同时间多次调用，权限/上下文/输出须 per-分身可配。
-    //   默认值单源=后端 clone_template（getClones 下发）；permissions 键集=模板键∪已有键（后端 14 键结构镜像，前端不写死清单）。
     var _tpl = state._cloneTemplate || {};
     var _tplPerms = _tpl.permissions || {};
     var _curPerms = existing ? (existing.permissions || {}) : _tplPerms;
@@ -3050,7 +3052,6 @@ var showToast = YB.showToast;
       return '<label style="display:flex;align-items:center;gap:4px;font-size:0.72rem;">' +
         '<input type="checkbox" class="clf-perm memory-preset-checkbox" data-perm="' + _esc(k) + '" ' + (on ? "checked" : "") + ' />' + _esc(k) + "</label>";
     }).join("");
-    // 数值默认全部取自后端模板，前端零数字字面量（模板缺失=留空，由用户填/后端兜）
     var _numVal = function (field) {
       var v = existing ? existing[field] : _tpl[field];
       if (typeof v !== "number" || !isFinite(v)) v = _tpl[field];
@@ -3066,6 +3067,7 @@ var showToast = YB.showToast;
       '<label class="form-group-label">上下文条数</label><input id="clf-ctxmsgs" class="input-field" type="number" min="1" value="' + _numVal("contextMessages") + '" />' +
       '<label class="form-group-label">最大上下文(tokens)</label><input id="clf-maxctx" class="input-field" type="number" min="1" value="' + _numVal("maxContext") + '" />' +
       '<label class="form-group-label">最大输出(tokens)</label><input id="clf-maxtok" class="input-field" type="number" min="1" value="' + _numVal("maxTokens") + '" />' +
+      '<label class="form-group-label">最大工作轮次 (0=无限)</label><input id="clf-maxrounds" class="input-field" type="number" min="0" max="10000" value="' + _numVal("maxRounds") + '" />' +
       (_permKeys.length ? '<label class="form-group-label">权限</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;">' + _permBoxes + "</div>" : "") +
       '<div class="submode-form-toggle"><label class="form-group-label">启用</label><input type="checkbox" id="clf-enabled" ' + (existing ? (existing.enabled ? "checked" : "") : "checked") + ' class="memory-preset-checkbox" /></div>' +
       "</div>" +
@@ -3077,17 +3079,16 @@ var showToast = YB.showToast;
     overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
     form.querySelector("#clf-cancel").addEventListener("click", function () { overlay.remove(); });
     form.querySelector("#clf-save").addEventListener("click", function () {
-      // 07-09：permissions/数值从表单控件收集（原写死 7 键旧结构+maxTokens=4096 与后端模板分叉，编辑不可改）。
-      //   兜底链=表单值→已有值→后端模板值，前端零数字字面量。
-      var _formPerms = {};
+      var _cloneBase = existing || _tpl;
+      var _formPerms = Object.assign({}, _tplPerms, _cloneBase.permissions || {});
       form.querySelectorAll(".clf-perm").forEach(function (cb) { _formPerms[cb.getAttribute("data-perm")] = cb.checked; });
-      var _num = function (id, field) {
+      var _num = function (id, field, allowZero) {
         var v = Number(form.querySelector(id).value);
-        if (isFinite(v) && v > 0) return v;
+        if (isFinite(v) && (v > 0 || (allowZero && v === 0))) return v;
         var fb = existing ? existing[field] : undefined;
         return (typeof fb === "number" && isFinite(fb)) ? fb : _tpl[field];
       };
-      var cloneData = {
+      var cloneData = Object.assign({}, _cloneBase, {
         id: isEdit ? existing.id : (state._clones.length > 0 ? Math.max.apply(null, state._clones.map(function (c) { return c.id; })) + 1 : 1),
         label: form.querySelector("#clf-label").value.trim() || "分身",
         enabled: form.querySelector("#clf-enabled").checked,
@@ -3098,17 +3099,12 @@ var showToast = YB.showToast;
         contextMessages: _num("#clf-ctxmsgs", "contextMessages"),
         maxContext: _num("#clf-maxctx", "maxContext"),
         maxTokens: _num("#clf-maxtok", "maxTokens"),
-      };
-      if (isEdit) {
-        var idx = state._clones.findIndex(function (c) { return c.id === existing.id; });
-        if (idx >= 0) state._clones[idx] = cloneData;
-      } else {
-        state._clones.push(cloneData);
-      }
-      vscode.postMessage({ type: "saveClones", payload: { clones: state._clones } });
-      overlay.remove();
-      renderCloneList();
-      showToast((isEdit ? "已更新" : "已添加") + " " + cloneData.label, 1500);
+        maxRounds: _num("#clf-maxrounds", "maxRounds", true),
+      });
+      if (state._cloneSavePending) return;
+      state._cloneSavePending = true;
+      var nextClones = isEdit ? state._clones.map(function (c) { return c.id === existing.id ? cloneData : c; }) : state._clones.concat([cloneData]);
+      vscode.postMessage({ type: "saveClones", payload: { clones: nextClones, configRevision: state._cloneConfigRevision } });
     });
     document.body.appendChild(overlay);
   }
@@ -3204,18 +3200,16 @@ var showToast = YB.showToast;
       '<span class="yb-clone-close" data-action="close-clone-panel">\u00D7</span></div>';
     ids.forEach(function(id) {
       var c = _cloneMap[id];
-      var icon = c.status === "completed" || c.status === "done" ? "\u2705"
-        : c.status === "error" ? "\u274C"
-        : c.status === "stopped" ? "\u23F9"
-        : "\u23F3";
+      var terminal = c.state === "terminal";
+      var resultStatus = c.resultStatus || c.status;
+      var icon = !terminal ? "\u23F3" : c.resumable ? "\u23F9" : resultStatus === "completed" ? "\u2705" : resultStatus === "partial" ? "\u26A0\uFE0F" : "\u274C";
       // [0724 \u5206\u8EAB\u53EF\u505C\u00B7002] \u975E\u7EC8\u6001\uFF08\u8FD8\u5728\u8DD1/\u91CD\u8BD5/\u544A\u8B66\uFF09\u7684\u5361\u5E26 \u23F9 \u505C\u6B62\u6309\u94AE
-      var running = !(c.status === "completed" || c.status === "done" || c.status === "error" || c.status === "stopped");
       html += '<div class="yb-clone-card' +
-        (c.status === "completed" || c.status === "done" ? " done" : c.status === "error" ? " error" : "") + '">' +
+        (resultStatus === "completed" ? " done" : resultStatus === "error" ? " error" : "") + '">' +
         '<span>' + icon + '</span>' +
-        '<span class="yb-clone-label">' + _esc(c.label || id) + '</span>' +
-        '<span class="yb-clone-stats">\u7B2C' + (c.round || 0) + '\u8F6E &nbsp; ' + _esc(c.detail || "") + '</span>' +
-        (running ? '<span class="yb-clone-stop" data-action="stop-clone" data-task="' + _esc(id) + '" title="\u505C\u6B62\u8BE5\u5206\u8EAB">\u23F9</span>' : '') +
+        '<span class="yb-clone-label">' + _esc(c.label || ("#" + c.taskId)) + '</span>' +
+        '<span class="yb-clone-stats">' + _esc(c.source || "subagent") + ' · \u7B2C' + (c.round || 0) + '\u8F6E/' + (c.tools || 0) + '\u6B21\u5DE5\u5177 &nbsp; ' + _esc(c.detail || "") + '</span>' +
+        (!terminal ? '<span class="yb-clone-stop" data-action="stop-clone" data-task="' + _esc(String(c.taskId)) + '" data-job="' + _esc(id) + '" title="\u505C\u6B62\u8BE5\u5206\u8EAB">\u23F9</span>' : '') +
         '</div>';
     });
     panel.innerHTML = html;
@@ -3227,34 +3221,30 @@ var showToast = YB.showToast;
       btn.addEventListener("click", function() {
         var tid = btn.getAttribute("data-task");
         btn.textContent = "\u2026"; // \u70B9\u51FB\u53CD\u9988\uFF1A\u23F9 \u2192 \u2026\uFF08\u7B49\u5E7F\u64AD\u56DE\u6D41\u5237\u65B0\uFF09
-        vscode.postMessage({ type: "stopCloneTask", payload: { taskId: tid } });
+        vscode.postMessage({ type: "stopCloneTask", payload: { taskId: tid, jobId: btn.getAttribute("data-job") } });
       });
     });
   }
 
   YB.onCloneStatus = function(payload) {
-    if (!payload || !payload.taskId) return;
-    var id = payload.taskId;
-    if (!_cloneMap[id]) {
-      _cloneMap[id] = { label: id, round: 0, status: "started", detail: "" };
-    }
-    var c = _cloneMap[id];
-    c.status = payload.status || c.status;
-    c.round = payload.round || c.round;
-    c.detail = typeof payload.detail === "string" ? payload.detail.substring(0, 60) : c.detail;
-    // 分身标签从后端task.id提取（格式如 "clone_审查分身_0"）
-    if (!c.label || c.label === id) {
-      var parts = String(id).split("_");
-      if (parts.length >= 2) c.label = parts.slice(1, -1).join("_") || id;
-    }
+    if (!payload || !payload.jobId || !payload.eventId || !payload.chatId || !payload.cloneBatchId || payload.taskId == null) return;
+    var id = String(payload.jobId);
+    var sequence = Number(payload.sequence);
+    if (!Number.isInteger(sequence) || sequence < 0 || payload.eventId !== id + ":" + sequence) return;
+    var previous = _cloneMap[id];
+    if (previous && (sequence <= previous.sequence || previous.state === "terminal")) return;
+    _cloneMap[id] = Object.assign({}, payload, {
+      jobId: id,
+      sequence: sequence,
+      round: Number(payload.round) || 0,
+      tools: Number(payload.tools) || 0,
+      detail: typeof payload.detail === "string" ? payload.detail.substring(0, 60) : "",
+      label: payload.label || ("#" + payload.taskId),
+      source: payload.source || "subagent"
+    });
+    var ids = Object.keys(_cloneMap);
+    if (ids.length > 100) delete _cloneMap[ids[0]];
     _renderClonePanel();
-    // 完成后10秒自动隐藏
-    if (payload.status === "completed" || payload.status === "error" || payload.status === "stopped") {
-      setTimeout(function() {
-        delete _cloneMap[id];
-        _renderClonePanel();
-      }, 10000);
-    }
   };  // ← 闭合 YB.onCloneStatus
 
   // ★ 功能C：AI改动历史记录

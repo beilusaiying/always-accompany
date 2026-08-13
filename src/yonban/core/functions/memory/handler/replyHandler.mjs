@@ -87,7 +87,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { wbT, wbD } from "../../../../../server/wbStub.mjs";
 import { readJsonSafe, readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // 0716 T019 差集收编：委派/审批队列损坏备份后抛（防空表 push 写回覆盖整表）
-import { hasPreset as presetExists, createPreset as createBeiluPreset, getRegistry as getPresetRegistry, applySubModePresetDefault } from "../ai/presetBridge.mjs";
+import { hasPreset as presetExists, createPreset as createBeiluPreset, applySubModePresetDefault, resolvePresetForMemoryAI } from "../ai/presetBridge.mjs";
 import { activateSubMode as activateSubModeCore } from "../storage_mod/subModeActivation.mjs"; // D3 0804 三入口收口：<subModeSwitch>/autoAdvance 的 map+activation记录+默认预设+事件体统一走激活 owner
 import { DEFAULT_INJECTION_DEPTH } from "../../prompt/preset/engine/preset_engine.mjs"; // T8·回切：改指 yonban 新位实现体
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs"; // M3：央原子写替裸 fs.writeFileSync 防半写损坏
@@ -97,13 +97,13 @@ import { V1_CONST } from "../../../../../server/web_server/v1_adapter.mjs";
 import {
   __pluginDir,
   __projectRoot,
-  getUserDataDir, // [T065] per-user 预设目录权威解析（含 BEILU_DATA_DIR 覆盖）
   diag,
   ensureMemoryDir,
   resolveGenerationMode, // 0715 mode 裁决单源收口：本文件全部模式读点在生成回复语境（handleReply 持 args），bot 壳请求按 platform 判 bot，不随 web 端 active_mode 漂移
   getMemoryDir,
   isPromotable,
   loadJsonFileIfExists,
+  writeCloneRuntimeSnapshot,
   loadMemoryData,
   loadMemoryPresets,
   promoteToGlobal,
@@ -124,12 +124,10 @@ import {
   getCommandConfigPath,
   getEyeConfigPath,
   getGcCaptureRequestPath, // captureNow 即时截图请求标记(凛倾 2026-07-13"1做";写/删两端,读方=endpoints getdata)
-  getCloneResumeDir,
   getWorkConfigPath,
   resolveWorkflowSlot,
   resolveSkillGroupDomain, // [0722 skill组隔离] <subModeSwitch> 接受域单源（running组优先→长期选中组），与宏清单同源
   getCodeConfigPath,
-  getSystemText,
   isPathSafe, // 0716 路径前缀边界修复：收口内联 resolve().startsWith 到权威守卫
   DEFAULT_TOKEN_REMINDER,
 } from "../storage_mod/storage.mjs";
@@ -155,7 +153,8 @@ import {
 
 import { executeTableOperations } from "../storage_mod/tableEngine.mjs";
 import { runMemoryPresetAI } from "../ai/aiRunner.mjs";
-import { registerCloneAbort, unregisterCloneAbort } from "./cloneAbort.mjs"; // [0724 分身可停] per-任务停止通道（前端⏹→SetData stopCloneTask→abort）
+import { inferCloneTaskType } from "../ai/cloneContract.mjs";
+import { coordinateCloneBatch } from "../ai/cloneBatchCoordinator.mjs";
 import { executeMemoryArchiveOps } from "../storage_mod/archiver.mjs";
 import {
   executeMemorySearchOps,
@@ -168,10 +167,9 @@ import { autoCheckArchiveTriggers, archiveTableRowsGeneric } from "../tools/back
 //   结果→AI 可读文本的格式化、相关度打印、不可信边界包裹三件事全在功能层 buildInjectableSearchText。
 import { executeWebSearch, buildInjectableSearchText } from "../../web/webSearch.mjs";
 import { executeWebDownload } from "../../web/webDownload.mjs"; // [0727 下载能力] URL→落盘，主AI/分身 ideToolCall 双入口拦截
-import { stripReasoningTags } from "../../api/proxy/lib/messageTransform.mjs"; // T8·回切：改指 yonban 新位实现体（原经 public 薄壳 re-export，已删壳）
 import { extractEmotion, extractMotion, extractOrbMessage } from "../../render/emotionExtract.mjs"; // T3b·render 组：标签抽取纯逻辑单源
 import { projectCompanionVisibleText } from "../../render/companionOutput.mjs";
-import { WRITE_TOOLS_ALL, FILE_EDIT_TOOLS, READ_TOOLS } from "../../../transport/ideClient.mjs";
+import { WRITE_TOOLS_ALL, FILE_EDIT_TOOLS } from "../../../transport/ideClient.mjs";
 import { createMcpConnectRequest } from "../../mcp/connectRequestStore.mjs";
 
 /**
@@ -232,7 +230,6 @@ import {
   parseIdeToolCallTags,
   parseQuestionTags,
   readFilesPermission,
-  renderStaticIdeToolSignatures,
 } from "../../../transport/ideClient.mjs";
 
 import { parseScheduleTaskTag } from "../../notification/scheduler.mjs";
@@ -253,78 +250,6 @@ function _warnBotPermGate(level, detail) { console.warn(`[beilu-memory] N42 Bot�
 //   追加模块级单调计数器(base36)消歧。同毫秒同维度也不再撞。
 let _delegSeq = 0;
 function _delegId(prefix) { return `${prefix}_${Date.now().toString(36)}${(++_delegSeq).toString(36)}`; }
-
-// 分身协作运行态快照:多个分身/并行委派一起干活后,把"谁·状态·产出摘要"落一份会话级快照,
-// 供主AI prompt 的 {{clone_runtime}} 宏读(让主AI看到多分身协作态,非 {{clone_configs}} 的静态配置)。
-// 复用 _parallel_results 同款 work/_<cid>.json 会话隔离,每轮覆盖(最近一轮)。best-effort,失败不影响回复。
-function _writeCloneRuntimeSnapshot(username, charName, cid, kind, clones) {
-  try {
-    const _crDir = ensureMemoryDir(username, charName);
-    const _crPath = path.join(_crDir, "work", cid ? `_clone_runtime_${cid}.json` : "_clone_runtime.json");
-    const _crParent = path.dirname(_crPath);
-    if (!fs.existsSync(_crParent)) fs.mkdirSync(_crParent, { recursive: true });
-    nicerWriteFileSync(_crPath, JSON.stringify({ cid: cid || "", kind, ts: new Date().toISOString(), clones }, null, 2));
-  } catch (_e) { diag.warn(`分身协作运行态快照写入失败: ${_e.message}`); }
-}
-
-/**
- * 解析子模式绑定预设（单一权威：原为 parallelDelegate 内联 80 行，抽出供
- * parallelDelegate 与 bot 委派 worker 共用，防散写）。
- * 查找顺序：memory presets (P1-P8) → beilu-preset 文件预设（registry.json → presets/<file>.json，
- * O13 框架级修的双路查找；文件预设转换为 runMemoryPresetAI 可消费格式）。
- * @param {string} username
- * @param {object} sm - 子模式对象（含 presetName）。
- * @param {object} presetsData - loadMemoryPresets 结果。
- * @returns {object|null} preset 或 null（未找到）。
- */
-function _resolvePresetForSubMode(username, sm, presetsData) {
-  let preset = (presetsData.presets || []).find(p => p.name === sm.presetName || p.id === sm.presetName);
-  if (preset) return preset;
-  try {
-    const _reg = getPresetRegistry(username); // [T065] registry per-user
-    const _entry = _reg[sm.presetName];
-    if (_entry?.file) {
-      const _fp = path.join(getUserDataDir(username || "_default"), "presets", _entry.file); // [T065] per-user 预设文件目录
-      if (fs.existsSync(_fp)) {
-        const _fileData = JSON.parse(fs.readFileSync(_fp, "utf-8"));
-        // 文件预设: { preset_json: { prompts, prompt_order }, model_params } → memory preset 格式
-        const _pj = _fileData.preset_json || {};
-        const _promptsList = [];
-        // 按 prompt_order 排序提取启用的提示词（与 clone 同逻辑）
-        const _order = _pj.prompt_order?.[0]?.order || [];
-        const _pMap = new Map((_pj.prompts || []).map(p => [p.identifier, p]));
-        if (_order.length > 0) {
-          for (const _o of _order) {
-            if (!_o.enabled) continue;
-            const _p = _pMap.get(_o.identifier);
-            if (_p && _p.content?.trim()) {
-              _promptsList.push({ role: _p.role || "system", content: _p.content, enabled: true, builtin: false });
-            }
-          }
-        }
-        // 无 prompt_order 时回退：取所有 system_prompt 条目
-        if (_promptsList.length === 0) {
-          for (const _p of (_pj.prompts || [])) {
-            if (_p.system_prompt && _p.content?.trim()) {
-              _promptsList.push({ role: _p.role || "system", content: _p.content, enabled: true, builtin: false });
-            }
-          }
-        }
-        if (_promptsList.length > 0) {
-          return {
-            id: `filePreset:${sm.presetName}`,
-            name: sm.presetName,
-            prompts: _promptsList,
-            api_config: _fileData.model_params ? { source: _fileData.model_params.source || "" } : {},
-          };
-        }
-      }
-    }
-  } catch (_fileErr) {
-    console.warn(`[beilu-memory] 文件预设"${sm.presetName}"加载失败: ${_fileErr.message}`);
-  }
-  return null;
-}
 
 /**
  * bot 来源委派的服务端执行 worker（凛倾 07-09 中段链路空洞修复；三参照定型：
@@ -358,7 +283,7 @@ async function _runBotDelegateWorker(username, charName, dlg) {
       _status = "error";
       _report = `(执行失败: 目标子模式"${dlg.to}"不存在或无绑定预设)`;
     } else {
-      const _preset = _resolvePresetForSubMode(username, _sm, _presetsData);
+      const _preset = resolvePresetForMemoryAI(username, _sm.presetName, _presetsData.presets);
       if (!_preset) {
         _status = "error";
         _report = `(执行失败: 预设"${_sm.presetName}"未找到——memory presets 和文件预设均无匹配)`;
@@ -1083,8 +1008,10 @@ export async function handleReply(reply, args) {
       const _pcAttrs = _preCloneMatch[2] || "";
       const _pcClone = _pcAttrs.match(/clone\s*=\s*"([^"]*)"/i)?.[1] ?? _pcAttrs.match(/clone\s*=\s*([^\s">]+)/i)?.[1] ?? "";
       const _pcResume = _pcAttrs.match(/resumeTaskId\s*=\s*"?(\d+)"?/i)?.[1];
+      const _pcResumeJob = _pcAttrs.match(/resumeJobId\s*=\s*"([^"]+)"/i)?.[1] ?? _pcAttrs.match(/resumeJobId\s*=\s*([^\s">]+)/i)?.[1];
       const _pcTask = { id: parseInt(_preCloneMatch[1]), cloneName: _pcClone, instruction: _preCloneMatch[3].trim() };
       if (_pcResume) _pcTask.resumeTaskId = parseInt(_pcResume);
+      if (_pcResumeJob) _pcTask.resumeJobId = _pcResumeJob;
       _preCloneTasks.push(_pcTask);
     }
     if (_preCloneTasks.length > 0) _preExtracted.cloneTasks = _preCloneTasks;
@@ -2807,7 +2734,7 @@ export async function handleReply(reply, args) {
             preview: (r.reply || r.error || "").substring(0, 100),
           }));
           // {{clone_runtime}} 宏数据源:落多分身协作运行态快照(并行委派路径)
-          _writeCloneRuntimeSnapshot(username, charName, _cid, "parallel", _pdResults.map(r => ({
+          writeCloneRuntimeSnapshot(username, charName, _cid, "parallel", _pdResults.map(r => ({
             label: r.label || r.subMode, status: r.status,
             summary: (r.reply || r.error || "").substring(0, 200),
           })));
@@ -2860,17 +2787,6 @@ export async function handleReply(reply, args) {
     //   - code   (改代码/实现/修)     ：证据 = grep 锚点 + 修改 file:行号 + tsc/测试(维持原标准)
     //   - null   (无法判型)           ：维持原 code 三件套标准(向后兼容，不误伤)
     //
-    // 类型从 label(角色名) + instruction(任务指令) 推断；两者都可能为空时回落 null。
-    const _inferTaskType = (label, instruction) => {
-      const _hay = `${label || ""}\n${instruction || ""}`;
-      // code 优先级最高：明确"改代码/实现/修复/重构/打补丁/写函数"才算 code。
-      if (/改代码|改\s*bug|修复|实现|重构|打补丁|写函数|编码|coding|代码专家|coder|fix\b|implement|refactor|施工|写入代码|修改.*(函数|方法|文件.*代码)/i.test(_hay)) return "code";
-      // data：配表/公式/表格/单元格/xlsx/数值重算。
-      if (/配表|公式|表格|单元格|xlsx|excel|数值|重算|校验.*(表|数)|赏池|gacha|权重表|参数表|配置表|spreadsheet|formula|cell\b/i.test(_hay)) return "data";
-      // research：调查/采集/读/审计/溯源/搜索/分析/梳理/侦察/写MD报告。
-      if (/调查|采集|溯源|审计|审查|侦察|梳理|分析|搜集|阅读|读取|查找|定位|总结|归纳|报告|调研|research|investigate|audit|survey|读.*(代码|文件|表|MD)|找.*(实现|代码|出处|根因)/i.test(_hay)) return "research";
-      return null;
-    };
     // 各类型的证据探针（命中=带了该类证据）。
     const _evidenceProbes = {
       grepProof: (t) => /grep|搜索|命中|匹配\s*\d|0\s*命中|\d+\s*(处|条|命中)|「grep:/.test(t),
@@ -2947,7 +2863,7 @@ export async function handleReply(reply, args) {
           //   按类型出对应文案（调查/配表类不再被强求 grep/tsc）。
           let _rptText = _rptContent.trim();
           if (_rptDelegate.status === "completed") {
-            const _rptType = _inferTaskType(_rptDelegate.to, `${_rptDelegate.task || ""}\n${_rptText}`);
+            const _rptType = inferCloneTaskType(_rptDelegate.to, `${_rptDelegate.task || ""}\n${_rptText}`);
             const _rptEv = _checkClaimEvidence(_rptText, _rptType);
             if (!_rptEv.sufficient) {
               _rptText += `\n\n⚠️ NEEDS_WORK: 报告声称完成但缺乏${_rptType === "research" ? "调查" : _rptType === "data" ? "配表" : "验证"}证据(${_rptEv.missing.join("、")})。${_rptEv.hint}`;
@@ -3643,740 +3559,45 @@ export async function handleReply(reply, args) {
       content = content.replace(/<fileDelivery[\s\S]*?<\/fileDelivery>/gi, "");
     }
 
-    // 13. <分身N> — 并行调用分身AI (W65/W66修正，使用预提取数据)
-    // 设计：只有一个分身配置，数字只是任务编号，所有任务用同一个分身并行执行
+    // 13. <分身N> — 正式分身批次只通过生命周期协调器运行。
     {
-      const _cloneTasks = _preExtracted.cloneTasks || [];
-      if (_cloneTasks.length > 0 && !_admit("clone", `×${_cloneTasks.length}`)) {
-        // [P0-B] 拒绝三件套已由 _admit 记账；标签由本块尾 replace 照剥
-      } else if (_cloneTasks.length > 0) {
-        diag.log(`分身系统: 检测到 ${_cloneTasks.length} 个分身任务`);
-        try {
-          const _clConfigPath = getYonbanConfigPath(username);
-          const _clConfig = loadJsonFileIfExists(_clConfigPath, { clones: [] });
-          const _clones = _clConfig.clones || [];
-          // [0726 分身异步·002] clone_async.enabled 显式 true 才异步（默认同步不变）。写口=SetData
-          //   "setCloneAsyncConfig"；延迟等参数由 generation.getCloneAsyncConfig 消费，此处只判分支。
-          const _clAsyncMode = _clConfig.clone_async?.enabled === true;
-
-          const _defaultClone = _clones.find((c) => c.enabled);
-          if (!_defaultClone) {
-            diag.warn("分身系统: 没有启用的分身配置");
-          } else {
-            const _resolveClone = (cloneName) => {
-              if (cloneName) {
-                const _named = _clones.find(c => c.label === cloneName);
-                if (_named) return _named;
-                diag.warn(`分身系统: 找不到分身"${cloneName}"，使用默认`);
-              }
-              return _defaultClone;
-            };
-            // ★ 收集上下文（参考Claude Code子agent：完整上下文 + tableData + 规则）
-            const _recentChat = [];
-            if (args?.chat_log && Array.isArray(args.chat_log)) {
-              // 共享上下文块在 per-task 块（_resolveClone）之外，这里只有 _defaultClone 在作用域内——
-              // 旧引用 _clone 是重构上提残留（runtime ReferenceError 被 :2903 catch 吞=分身全灭），勿改回。
-              const _ctxN = _defaultClone.contextMessages || 10; // 缺字段回退10条，与前端 clone 默认(subModePanel :3006)统一（2026-07-07 消歧）
-              const _startIdx = Math.max(0, args.chat_log.length - _ctxN);
-              for (let _ci = _startIdx; _ci < args.chat_log.length; _ci++) {
-                const _msg = args.chat_log[_ci];
-                if (_msg.role === "system" && _msg.name === "IDE工具结果") continue;
-                const _clMaxCtxChars = _defaultClone.maxContext >= 200000 ? 4000 : 800;
-                _recentChat.push(`<message role="${_msg.role}" index="${_ci}">\n${(_msg.content || "").substring(0, _clMaxCtxChars)}\n</message>`);
-              }
-            }
-            const _contextText = _recentChat.join("\n");
-
-            // ★ 收集tableData（让分身也能看到代码定位表等）
-            let _clTableData = "";
-            try {
-              const { generateTableDataOnly } = await import("../storage_mod/tableEngine.mjs");
-              const _clMemData = loadMemoryData(username, charName, undefined, _cid);
-              const _clDisplayUser = username || "_default";
-              const _clDisplayChar = charName === "_global" ? (args?.char_name || charName) : charName;
-              _clTableData = generateTableDataOnly(_clMemData.tables || [], _clDisplayChar, _clDisplayUser) || "";
-            } catch (_e) { diag.error(`分身tableData加载失败: ${_e.message}`); }
-
-            // ★ 加载文件预设（beilu-preset/presets/分身_调查追踪.json 等，由 yonban_config.json 的 clones[].presetName 决定）
-            let _clFilePreset = null;
-            const _clPresetName = _defaultClone.presetName;
-            if (_clPresetName) {
-              try {
-                const _presetDir = path.join(__pluginDir, "..", "beilu-preset", "presets");
-                const _regPath = path.join(__pluginDir, "..", "beilu-preset", "registry.json");
-                if (fs.existsSync(_regPath)) {
-                  const _reg = JSON.parse(await fs.promises.readFile(_regPath, "utf-8"));
-                  const _entry = _reg.presets?.[_clPresetName];
-                  if (_entry?.file) {
-                    const _fp = path.join(_presetDir, _entry.file);
-                    if (fs.existsSync(_fp)) _clFilePreset = JSON.parse(await fs.promises.readFile(_fp, "utf-8"));
-                  }
-                }
-              } catch (_e) { diag.warn(`分身预设加载失败(${_clPresetName}): ${_e.message}`); }
-            }
-            // ⚠ FIX: _presetsData 必须在 if 外声明 — 下方 IDE 工具文档(INJ-2-code)加载依赖它（grep `INJ-2-code`），不能只在回退分支内声明
-            const _presetsData = loadMemoryPresets(username, charName);
-            // 回退：也检查 memory presets (P1-P8)
-            if (!_clFilePreset) {
-              const _mp = _clPresetName
-                ? (_presetsData.presets || []).find((p) => p.name === _clPresetName || p.id === _clPresetName)
-                : null;
-              if (_mp) _clFilePreset = { preset_json: { prompts: [{ role: "system", content: _mp.prompts?.[0]?.content, system_prompt: true }] } };
-            }
-
-            // ★ 从预设中提取所有启用的提示词（按 prompt_order 排序）
-            const _clAllPrompts = [];
-            if (_clFilePreset?.preset_json) {
-              const _pj = _clFilePreset.preset_json;
-              const _order = _pj.prompt_order?.[0]?.order || [];
-              const _pMap = new Map((_pj.prompts || []).map(p => [p.identifier, p]));
-              for (const _o of _order) {
-                if (!_o.enabled) continue;
-                const _p = _pMap.get(_o.identifier);
-                if (_p && _p.content?.trim()) _clAllPrompts.push(_p);
-              }
-              if (_clAllPrompts.length === 0) {
-                for (const _p of (_pj.prompts || [])) {
-                  if (_p.system_prompt && _p.content?.trim()) _clAllPrompts.push(_p);
-                }
-              }
-            }
-
-            // 分离：头部提示词(system) / 尾部提示词(depth=0) / 预填充(assistant)
-            const _clHeadPrompts = [];
-            const _clTailPrompts = [];
-            let _clPrefill = "";
-            for (const _p of _clAllPrompts) {
-              if (_p.role === "assistant") { _clPrefill = _p.content; continue; }
-              if (_p.injection_depth === 0 || _p.identifier === "clone_output_format" || _p.identifier === "guide_avoid_mistakes") {
-                _clTailPrompts.push(_p.content);
-              } else {
-                _clHeadPrompts.push(_p.content);
-              }
-            }
-
-            // ★ #50 CoT 跨轮剥离：0716 回归单源——内置+自定义标签剥离固定走 stripReasoningTags
-            //   （hide 单源，受「思维链显示」设置控制），用户自建 reasoning 正则规则叠加其后。
-            //   动态 import 防静态环依赖，正则模块不可用时仅用户规则不生效（内置剥离不受影响）。
-            let _stripCoTForContext = (text) =>
-              stripReasoningTags(text || "", username).replace(/\n{3,}/g, "\n\n").trim();
-            try {
-              const { applyRegexRules, getRegexStore } = await import("../../regex/main.mjs");
-              const _rxData = getRegexStore(username);
-              if (_rxData?.enabled && _rxData.rules?.length) {
-                _stripCoTForContext = async (text) => {
-                  const r = await applyRegexRules(stripReasoningTags(text || "", username), _rxData.rules, 'reasoning', {});
-                  return r.replace(/\n{3,}/g, "\n\n").trim();
-                };
-              }
-            } catch { /* 正则模块不可用 */ }
-
-            // 人设唯一来源=预设（凛倾#43）：无预设时顶空白（content-free），不再硬编码兜底人设。
-            const _clSystemPrompt = _clHeadPrompts.join("\n\n");
-
-            // ★ 默认读取权限工具集（canonical READ_TOOLS，单一定义在 ideClient.mjs）
-            const _DEFAULT_READ_TOOLS = READ_TOOLS;
-
-            // ★ 广播分身状态给前端（操作外显）
-            // [0716 T3对接首批] 改经 bus:broadcast.emit 出口；fire-and-forget（不 await dispatch，失败静默=原语义）。
-            const _broadcastCloneStatus = (taskId, round, status, detail) => {
-              try {
-                const _chatId = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-                if (_chatId) {
-                  dispatch({ target: "bus:broadcast", verb: "emit", source: "yonban", payload: { chatid: _chatId, event: {
-                    type: "clone_status",
-                    payload: { taskId, round, status, detail, timestamp: new Date().toISOString() },
-                  } } }).catch(() => {});
-                }
-              } catch (_e) { /* 忽略 */ }
-            };
-
-            const _injPrompts = _presetsData.injection_prompts || [];
-
-            // ★ 加载IDE工具文档（INJ-2-code），让分身知道怎么用ideToolCall
-            let _clIdeToolDoc = "";
-            if (ideClient.isConnected) {
-              const _inj2code = _injPrompts.find(p => p.id === "INJ-2-code" && p.enabled);
-              if (_inj2code) {
-                _clIdeToolDoc = (_inj2code.content || "")
-                  .replace(/\{\{user\}\}/g, username)
-                  // 动态项目环境只允许在主链 depth:0 data INJ；分身稳定工具文档不展开此旧宏。
-                  .replace(/\{\{env_tools\}\}/g, "")
-                  .replace(/\{\{ide_tools\}\}/g, renderStaticIdeToolSignatures())
-                  // ★ 过滤分身相关段落，防止分身递归调用分身
-                  .replace(/<ide_extended>[\s\S]*?## 分身AI[\s\S]*?(?=##|<\/ide_extended>)/, "")
-                  .replace(/并行调用分身AI[\s\S]*?结果下一轮自动注入/g, "");
-              }
-            }
-
-            // 分身联网教学同样只读用户可编辑 INJ；不在代码里另写一份永远启用的旧文案。
-            const _clModeGroup = resolveGenerationMode(args, username, charName, _cid);
-            const _clWebInjId = _clModeGroup === "work" ? "INJ-5-web-work" : "INJ-5-web-code";
-            const _clWebToolDoc = _injPrompts.find((p) => p.id === _clWebInjId && p.enabled)?.content || "";
-
-            const _clonePromises = _cloneTasks.map((_task) => () => {
-              const _clone = _resolveClone(_task.cloneName);
-              // ★ 构建完整上下文（参考Claude Code：系统提示 + IDE工具文档 + tableData + 对话上下文 + 任务）
-              // !!!禁止放入提示词!!! 本区只消费预设与 INJ；禁止新增任何代码字符串提示词。
-              // 稳定能力文档在 INJ-2/INJ-5，动态表格/上下文在 depth:0 clone data INJ。
-              const _clPrompts = [
-                { role: "system", content: _clSystemPrompt, enabled: true },
-              ];
-              // ★ IDE工具文档注入（让分身能正确使用ideToolCall标签）
-              if (_clIdeToolDoc) {
-                _clPrompts.push({ role: "system", content: _clIdeToolDoc, enabled: true });
-              }
-              // 联网教学来自当前模式启用的 INJ-5 变体，编辑/关闭会同步影响主 AI 与分身。
-              if (_clWebToolDoc) {
-                _clPrompts.push({ role: "system", content: _clWebToolDoc, enabled: true });
-              }
-              // !!!禁止放入提示词!!! [0722 动态内容归尾] 分身的动态任务态（表格快照/对话上下文）模板收进
-              //   INJ-clone-tables-data / INJ-clone-context-data 条目（前端可改），代码只供宏数据。
-              //   模板外层 <volatile_data section="clone"> = 代理易变区识别标签（interceptor isVolatile /
-              //   providerPatch volStart 均认此正文标签）→ 这两块被归到对话尾部消息区、断点放其前，
-              //   头部稳定文档块（预设+IDE文档+联网文档）跨任务缓存命中（0722 确诊：任务态嵌 cached
-              //   system=分身流量 120K 巨块结构隐患）。条目缺失=wbD 可见告警不静默。
-              const _clPushDataInj = (injId, dataMap) => {
-                // _presetsData 在外层声明（:3246 FIX 注释）；不可用 _injPrompts（它是 ideClient.isConnected 块内 const，IDE 未连接时不存在）
-                const _e = (_presetsData.injection_prompts || []).find((p) => p.id === injId);
-                if (!_e) { wbD(_cid, "clone", "dataInj:entryMissing", false, `分身数据注入条目缺失: ${injId}（恢复默认可找回）`, { injId }); return; }
-                if (_e.enabled === false) return;
-                let _t = String(_e.content || "");
-                for (const [_k, _v] of Object.entries(dataMap)) _t = _t.replaceAll(`{{${_k}}}`, String(_v ?? ""));
-                if (_t.trim()) _clPrompts.push({ role: _e.role || "system", content: _t, enabled: true });
-              };
-              // ★ tableData注入（让分身能看到代码定位表等）
-              if (_clTableData) {
-                _clPushDataInj("INJ-clone-tables-data", { clone_tables: _clTableData });
-              }
-              _clPushDataInj("INJ-clone-context-data", { clone_context_count: _recentChat.length, clone_context: _contextText });
-              // ★ 尾部提示词注入（depth=0，U型注意力尾部=高权重区域）
-              for (const _tp of _clTailPrompts) {
-                _clPrompts.push({ role: "system", content: _tp, enabled: true });
-              }
-              _clPrompts.push(
-                { role: "user", content: _task.instruction, enabled: true },
-              );
-              // ★ 预填充注入（assistant prefill，引导思维链启动）
-              if (_clPrefill) {
-                _clPrompts.push({ role: "assistant", content: _clPrefill, enabled: true });
-              }
-
-              const _clTaskPreset = {
-                id: _delegId(`CLONE_${_task.id}`),
-                name: `${_clone.label} #${_task.id}`,
-                prompts: _clPrompts,
-                api_config: {
-                  use_custom: !!(_clone.apiSource || _clone.modelName || _clone.temperature !== undefined),
-                  source: _clone.apiSource || undefined,
-                  model: _clone.modelName || undefined,
-                  temperature: _clone.temperature !== undefined ? _clone.temperature : 0.5,
-                  max_tokens: _clone.maxTokens || 60000,
-                  // ★ 提示词后处理（和子模式一样）
-                  prompt_post_processing: _clone.promptPostProcessing || "strict",
-                  prefill_enabled: _clone.prefillEnabled !== undefined ? _clone.prefillEnabled : true,
-                  claude_prefill_mode: _clone.claudePrefillMode || "",
-                  // ★ 关闭模型自带thinking（用提示词的CoT引导）
-                  include_reasoning: _clone.includeReasoning === true,
-                  // extended_thinking/thinking_budget 已删（2026-08-01 收口：思维链跟随所用 AI 源的 per-源设置）
-                },
-              };
-
-              diag.log(`分身#${_task.id}(${_clone.label}): 开始执行, 指令=${_task.instruction.substring(0, 80)}..., 模型=${_clone.modelName || '默认'}, 服务源=${_clone.apiSource || '默认'}`);
-              _broadcastCloneStatus(_task.id, 0, "started", _task.instruction.substring(0, 80));
-
-              // ★ 分身 agent 循环（参考Claude Code auto-continue：多轮工具调用）
-              const _clMaxRounds = _clone.maxRounds || 50; // ★ 默认50轮
-              // ★ X2：任务类型(research/data/code/null)从分身角色名 + 任务指令推断，
-              //   随结果回传到聚合层，让 reality-gate 按类型出证据标准（调查/配表类不强求 grep/tsc）。
-              const _clTaskType = _inferTaskType(_clone.label, _task.instruction);
-              return (async () => {
-                // [0724 分身可停·002] per-任务 AbortController：前端（本体监控面板/YonBan 分身进度）经
-                //   SetData "stopCloneTask" 可精确停单个分身——此前唯一停法=停主生成整锅带走。
-                //   主生成 signal 中止时联动本任务（单向：主停→分身停；分身停不影响主/其他分身）。
-                //   注册 key 带 _cid（与 _broadcastCloneStatus 的会话维度同源）。
-                //   声明在 try 外层（与 finally 同函数作用域），finally 摘监听/注销才可见。
-                // [0726 分身异步] 异步模式解绑主生成 signal（分身生命周期不再随主回合 abort 整锅带走，
-                //   停分身唯一通道=cloneAbort/stopCloneTask）；同步模式保持"主停→分身停"原联动。
-                const _clSignal = _clAsyncMode ? undefined : args?.generation_options?.signal;
-                const _clTaskCtl = registerCloneAbort(username, _cid, _task.id);
-                const _clOnMainAbort = () => { try { _clTaskCtl.abort(); } catch { /* 已中止 */ } };
-                if (_clSignal) { if (_clSignal.aborted) _clOnMainAbort(); else _clSignal.addEventListener("abort", _clOnMainAbort, { once: true }); }
-                // [0726 五修#2#3] 快照落盘收口函数（try 尾正常路 + catch 异常/中止路共用，此前 catch 路
-                //   resumable:true 却不落快照=空续接）；写入时顺手过期清理（clone_resume_keep_days 可配，
-                //   默认 7 天，0=不清理——快照目录此前零清理只增不减）。
-                const _saveCloneResume = (stopReason, rounds, tools, messages) => {
-                  try {
-                    if (!Array.isArray(messages) || messages.length === 0) return;
-                    const _crDir = getCloneResumeDir(username);
-                    if (!fs.existsSync(_crDir)) fs.mkdirSync(_crDir, { recursive: true });
-                    try {
-                      const _crKeep = Number(loadJsonFileIfExists(getYonbanConfigPath(username), {}).clone_resume_keep_days ?? 7);
-                      if (_crKeep > 0) {
-                        const _crCutoff = Date.now() - _crKeep * 86400000;
-                        for (const _crF of fs.readdirSync(_crDir)) {
-                          try { const _crFp = path.join(_crDir, _crF); if (fs.statSync(_crFp).mtimeMs < _crCutoff) fs.unlinkSync(_crFp); } catch { /* 单文件失败跳过 */ }
-                        }
-                      }
-                    } catch { /* 过期清理失败不影响落盘 */ }
-                    nicerWriteFileSync(path.join(_crDir, `${_task.id}.json`), JSON.stringify({
-                      taskId: _task.id, label: _clone.label, stopReason,
-                      instruction: _task.instruction, rounds, totalTools: tools,
-                      messages, savedAt: new Date().toISOString(),
-                    }, null, 2));
-                  } catch (_crErr) { diag.warn(`分身#${_task.id} 续接上下文落盘失败: ${_crErr.message}`); }
-                };
-                // [0726 五修#3] _clMessages 提出 try：catch 里落快照需要可见（原声明在 try 内，异常路拿不到）
-                let _clMessages = [];
-                try {
-                  _clMessages = _clTaskPreset.prompts.map(p => ({ role: p.role, content: p.content }));
-                  // ★ 续接：task 带 resumeTaskId → 复制上一次中断时保存的上下文继续（"复制上下文开新窗口继续"）。
-                  if (_task.resumeTaskId) {
-                    try {
-                      const _rsPath = path.join(getCloneResumeDir(username), `${_task.resumeTaskId}.json`);
-                      if (fs.existsSync(_rsPath)) {
-                        const _rs = JSON.parse(await fs.promises.readFile(_rsPath, "utf-8"));
-                        if (Array.isArray(_rs.messages) && _rs.messages.length > 0) {
-                          _clMessages.push(..._rs.messages.slice(1)); // 跳过续接体的系统头，接其余上下文
-                          // [0726 五修#2] 补 {saved_at}/{instruction_preview}：快照 key 是用户级+AI 自选小整数，
-                          //   跨会话同 id 会互相覆盖——把快照时间与原任务摘要给分身，拿错快照时可自察。
-                          _clMessages.push({ role: "system", content: getSystemText("clone_resume", username, charName).replaceAll("{stop_reason}", String(_rs.stopReason)).replaceAll("{rounds}", String(_rs.rounds)).replaceAll("{total_tools}", String(_rs.totalTools)).replaceAll("{saved_at}", String(_rs.savedAt || "未知")).replaceAll("{instruction_preview}", String(_rs.instruction || "").replace(/\s+/g, " ").substring(0, 120)) });
-                          diag.log(`分身#${_task.id} 续接 resumeTaskId=${_task.resumeTaskId}（载入${_rs.messages.length}条上下文）`);
-                        }
-                      }
-                    } catch (_rsErr) { diag.warn(`分身#${_task.id} 续接上下文载入失败: ${_rsErr.message}`); }
-                  }
-                  let _clFinalReply = "";
-                  let _clTotalTools = 0;
-                  let _emptyRetries = 0;
-                  let _clActualRounds = 0;
-                  let _clStopReason = "max_rounds"; // 默认=跑满轮次(非自然)；自然完成时改 completed
-
-                  for (let _round = 0; _round < _clMaxRounds; _round++) {
-                    if (_clTaskCtl.signal.aborted) {
-                      _clStopReason = "user_aborted";
-                      // 原 user_aborted break 不广播——面板永远停在最后一条 working=看着像还在跑。补终态外显。
-                      _broadcastCloneStatus(_task.id, _round, "stopped", "用户中止(user_aborted)");
-                      _clFinalReply = _clFinalReply || `[分身被用户中止，已完成${_clTotalTools}次工具调用]`;
-                      break;
-                    }
-                    _clActualRounds = _round + 1;
-                    // 调用 AI（signal 传 per-任务 controller 的——主生成中止经上方 listener 联动到它，在飞 API 请求即断）
-                    const _clReply = await runMemoryPresetAI(username, charName, {
-                      ..._clTaskPreset,
-                      id: `${_clTaskPreset.id}_r${_round}`,
-                      prompts: _clMessages.map(m => ({ role: m.role, content: m.content, enabled: true })),
-                    }, loadMemoryData(username, charName, undefined, _cid), charName, username, "", { maxRounds: 1, signal: _clTaskCtl.signal, chatId: _cid, aiPriority: "low" }); // [2026-07-16] chatId 与前参 memData 同 _cid 槽（同批半接线补齐）// [0727 并发闸] 分身=后台级：本体>分身，超限时分身串行
-
-                    // ★ 过滤分身输出中的stopContinue标签（分身不应该控制主AI的继续机制）
-                    const _clContent = (_clReply?.reply || "").replace(/<stopContinue\s*\/?>/gi, "");
-                    diag.log(`分身#${_task.id} 第${_round + 1}/${_clMaxRounds}轮回复: ${_clContent.length}字符`);
-
-                    // 空回复 = API错误/慢，自动重试（最多10次，每次 +15s 线性退避，对齐 proxy 网络层重试）
-                    if (_clContent.length === 0) {
-                      _emptyRetries++;
-                      if (_emptyRetries <= 10) {
-                        const _retryWaitMs = Math.min(15000 * _emptyRetries, 150000);
-                        diag.warn(`分身#${_task.id} 第${_round + 1}轮API返回空，重试${_emptyRetries}/10（等${_retryWaitMs / 1000}s）`);
-                        _broadcastCloneStatus(_task.id, _round + 1, "retrying", `空回复，重试${_emptyRetries}/10`);
-                        // [0724 分身可停] 退避等待可中断：停止信号到即刻醒（原裸 setTimeout 最长 150s 不可打断，
-                        //   停一个正在退避的分身要干等整个退避期）。醒后 continue → 轮顶 aborted 检查收尾。
-                        await new Promise(r => {
-                          const _onAb = () => { clearTimeout(_t); r(); };
-                          const _t = setTimeout(() => { _clTaskCtl.signal.removeEventListener("abort", _onAb); r(); }, _retryWaitMs);
-                          _clTaskCtl.signal.addEventListener("abort", _onAb, { once: true });
-                        });
-                        continue; // 不增加轮次，重试当前轮
-                      }
-                      diag.warn(`分身#${_task.id} 第${_round + 1}轮重试10次仍为空，中断`);
-                      _broadcastCloneStatus(_task.id, _round + 1, "error", "API连续返回空内容");
-                      _clStopReason = "api_empty"; // 非自然：API 连续空，可续接
-                      _clFinalReply = _clFinalReply || `[分身在第${_round + 1}轮因API连续返回空内容而中断，已完成${_clTotalTools}次工具调用]`;
-                      break;
-                    }
-                    _clFinalReply = _clContent;
-                    _emptyRetries = 0; // ⚠ FIX: 成功后重置，避免跨轮累计
-
-                    // 解析 ideToolCall 标签
-                    const { toolCalls: _clTools, rejectedContentParams: _clRejectedCP = [] } = parseIdeToolCallTags(_clContent);
-                    // ★ 符号根修复（分身路径，与主路径 :791 对称）：content-param 塞进属性 / 标签解析丢失时，
-                    //   原代码直接落到下面「_clTools.length===0 → 任务完成」=把"全被静默丢"误当"无工具=做完了"退出！
-                    //   改：先报错注入分身上下文 + continue 重试，绝不当任务完成。
-                    const _clRawTagCount = (_clContent.match(/<ideToolCall[\s>]/g) || []).length;
-                    if (_clRejectedCP.length > 0 || _clRawTagCount > _clTools.length) {
-                      const _clErr = _clRejectedCP.length > 0
-                        ? `⚠️ 你把代码内容写进了 ideToolCall 的属性里（${_clRejectedCP.join(", ")}）。含裸引号/尖括号会让标签解析断裂、整个工具调用丢失。请改用子标签：例 <ideToolCall tool="fuzzy_edit" path="x.js"><old_string>原文</old_string><new_string>新文</new_string></ideToolCall>`
-                        : `⚠️ 你输出了 ${_clRawTagCount} 个 ideToolCall 但只有 ${_clTools.length} 个解析成功，其余因格式错误（标签未闭合/属性名拼错/代码误放属性）被跳过。请检查并改用 <old_string>/<new_string> 子标签重写。`;
-                      diag.warn(`分身#${_task.id} ideToolCall 解析问题: rejectedCP=${_clRejectedCP.join(",")} raw=${_clRawTagCount} parsed=${_clTools.length}`);
-                      _clMessages.push({ role: "system", content: _clErr });
-                      continue; // 不当"任务完成"，让分身改写子标签重试
-                    }
-                    if (_clTools.length === 0) {
-                      // ★ X1 修复（框架级，2026-06-16 凛倾点名）：原代码"无工具调用"一律判 completed=自然完成。
-                      //   但分身放弃/迷路/卡死后也只输出纯文字(无工具) → 全被误标"完成"（真实案例：整轮耗在 cmd 引号、
-                      //   零有效产出却记 5轮/10工具 completed）。"无工具"只是"本轮没动手"，不等于"做完了"。
-                      //   真 completed 的判据应是"输出了实质最终报告而停"，而非"恰好没调工具"。
-                      //   区分：剥工具标签后本轮回复是否构成实质报告(够长 / 含结构化结论标记)。
-                      //     是 → completed(自然完成)；否 → no_output(异常停，非自然，走 _clResumable 续接分支，
-                      //          与 repeat_stopped / api_empty 一致)。
-                      const _clBareText = _clContent
-                        .replace(/<ideToolCall[\s\S]*?(\/>|<\/ideToolCall>)/gi, "")
-                        .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "")
-                        .trim();
-                      // 实质报告判据：去空白后长度≥120，或含结构化结论标记(标题/已完成/结论/报告/列表项)。
-                      //   两者满足其一即视为"有实质报告"——长度兜底 + 短但结构化(如清单)兜底。
-                      const _clHasStructure = /已完成|完成情况|结论|总结|发现|报告|##\s|^\s*[-*\d]+[.)、]\s|file:|行号|路径\s*[:：]/im.test(_clBareText);
-                      const _clSubstantial = _clBareText.length >= 120 || (_clHasStructure && _clBareText.length >= 40);
-                      if (_clSubstantial) {
-                        diag.log(`分身#${_task.id} 第${_round + 1}轮无工具调用且有实质报告(${_clBareText.length}字)，自然完成`);
-                        _clStopReason = "completed"; // 自然完成
-                        _broadcastCloneStatus(_task.id, _round + 1, "completed", `${_clTotalTools}次工具调用后完成`);
-                      } else {
-                        diag.warn(`分身#${_task.id} 第${_round + 1}轮无工具调用且无实质报告(仅${_clBareText.length}字)，判异常停 no_output（非自然完成，可续接）`);
-                        _clStopReason = "no_output"; // 非自然：无工具且无实质报告=放弃/迷路/卡死，可续接
-                        _clFinalReply = _clBareText.length > 0
-                          ? _clContent
-                          : (_clFinalReply || `[分身在第${_round + 1}轮既未调用工具也未产出实质报告(疑似迷路/卡死)，已完成${_clTotalTools}次工具调用。可带 resumeTaskId 续接]`);
-                        _broadcastCloneStatus(_task.id, _round + 1, "stopped", `无实质产出而停(no_output)，${_clTotalTools}次工具`);
-                      }
-                      break;
-                    }
-
-                    // ★ 重复操作检测：连续5轮相同工具模式 → 警告，连续10轮 → 强制停止
-                    // [0811 根修·签名含参数] 原签名只取 t.tool——分身连续5轮 read_file 读的是【不同文件】
-                    //   也判成"死循环"处死（凛倾 0811 实症：合法逐文件调查被误杀）。真死循环=同工具+同参数
-                    //   反复；签名改 tool(参数k=v&…)：参数键值排序保稳定（AI 换属性顺序不影响判定），
-                    //   单值截 120 字防 write 类大 content 撑爆比较串（截断只降超长值区分度，路径级区分不受影响）。
-                    const _toolSig = _clTools.map(t => t.tool + "(" + Object.entries(t.params || {}).map(([k, v]) => `${k}=${String(v).slice(0, 120)}`).sort().join("&") + ")").sort().join(",");
-                    if (!_task._lastToolSigs) _task._lastToolSigs = [];
-                    if (!_task._repeatWarnings) _task._repeatWarnings = 0;
-                    _task._lastToolSigs.push(_toolSig);
-                    if (_task._lastToolSigs.length > 5) _task._lastToolSigs.shift();
-                    if (_task._lastToolSigs.length >= 5 && _task._lastToolSigs.every(s => s === _toolSig)) {
-                      _task._repeatWarnings++;
-                      if (_task._repeatWarnings >= 2) {
-                        diag.warn(`分身#${_task.id} 重复操作警告已达${_task._repeatWarnings}次，强制中断`);
-                        _broadcastCloneStatus(_task.id, _round + 1, "stopped", `重复操作：连续${_task._repeatWarnings * 5}轮 ${_toolSig}`);
-                        _clStopReason = "repeat_stopped"; // 非自然：死循环强停，可续接
-                        _clFinalReply = _clFinalReply || `[分身因连续重复操作而强制中断，已完成${_clTotalTools}次工具调用]`;
-                        break;
-                      }
-                      diag.warn(`分身#${_task.id} 连续5轮重复操作 (${_toolSig})，第${_task._repeatWarnings}次警告`);
-                      _broadcastCloneStatus(_task.id, _round + 1, "warning", `重复操作检测：连续5轮 ${_toolSig}`);
-                      _clMessages.push({ role: "system", content: getSystemText("clone_repeat_warning", username, charName).replaceAll("{tool_sig}", String(_toolSig)) });
-                      _task._lastToolSigs = [];
-                      continue;
-                    }
-
-                    // ★ 广播当前轮次状态 + 输出预览（操作外显 + 输出可见）
-                    const _toolNames = _clTools.map(t => t.tool).join(", ");
-                    // 输出预览：剥工具标签后取分身本轮"说了什么"前 120 字，让用户既看到工作(执行X)也看到输出(分身在想/做什么)
-                    const _outPreview = _clContent.replace(/<ideToolCall[\s\S]*?(\/>|<\/ideToolCall>)/gi, "").replace(/\s+/g, " ").trim().substring(0, 120);
-                    _broadcastCloneStatus(_task.id, _round + 1, "working", `执行: ${_toolNames}${_outPreview ? ` ｜ 💬${_outPreview}` : ""}`);
-
-                    // 执行工具
-                    const _clToolResults = [];
-                    for (const _tc of _clTools) {
-                      if (_clTaskCtl.signal.aborted) break; // [0724 分身可停] 停止后不再执行剩余工具（写类尤其），下轮顶 user_aborted 收尾
-                      // ★ 权限检查（默认读取权限 + MD新建 + 用户配置权限）
-                      // 默认权限：所有读取工具 + run_command + write_file仅限.md新建
-                      const _tcPath = (_tc.params?.path || "") + "";
-                      const _isMdFile = _tcPath.toLowerCase().endsWith(".md");
-                      // github 上传门：run_command 里 git push / gh repo|release|pr 视为"上传github"，默认关，需 github_upload 权限。不硬编码白名单。
-                      const _cmdStr = (_tc.tool === "run_command" ? (_tc.params?.command || "") : "") + "";
-                      const _isGithubUpload = /\bgit\s+push\b/i.test(_cmdStr) || /\bgh\s+(repo|release|pr)\b/i.test(_cmdStr);
-                      const _permMap = {
-                        // write_file: .md文件默认允许，非.md需要write_code权限
-                        write_file: _isMdFile || _clone.permissions?.write_code || _clone.permissions?.write_file,
-                        // 代码修改工具：默认禁止，需要write_code权限
-                        replace_lines: _clone.permissions?.write_code,
-                        insert_at_line: _clone.permissions?.write_code,
-                        fuzzy_edit: _clone.permissions?.write_code,
-                        // run_command: 默认允许（语法检查、测试、本地git等）；但 github 上传默认关，需 github_upload 权限
-                        run_command: _isGithubUpload ? (_clone.permissions?.github_upload === true) : true,
-                        // [0727 下载能力] web_download 默认允许：落盘域被功能层围栏限死（downloads 目录+大小限+出站闸）
-                        web_download: true,
-                      };
-                      const _hasPerm = _DEFAULT_READ_TOOLS.has(_tc.tool) || _permMap[_tc.tool] || _clone.permissions?.[_tc.tool];
-                      if (!_hasPerm) {
-                        const _reason = (_tc.tool === "fuzzy_edit" || _tc.tool === "replace_lines" || _tc.tool === "insert_at_line")
-                          ? `分身禁止修改代码文件。请在报告中写明"建议修改：文件路径:行号，改动内容"，由主AI执行。`
-                          : _isGithubUpload
-                          ? `分身无「上传github」权限（默认关闭）。如需上传，请在分身配置勾选 github_upload，或由主AI执行 git push。`
-                          : `分身无「${_tc.tool}」权限`;
-                        _clToolResults.push({ tool: _tc.tool, result: { success: false, error: _reason } });
-                        continue;
-                      }
-                      // ★ K1 联网套件（分身路径，凛倾 2026-06-10 点名重点）：
-                      //   分身用 ideToolCall tool="web_search" 调通用联网套件 executeWebSearch（单一权威）。
-                      //   web_search 不属于 IDE 桥（ideClient）能力，在此拦截直调套件，结果回喂分身上下文。
-                      //   主AI回复链走 <needWebSearch> 标签（replyHandler :518），两路径共用同一套件入口。
-                      if (_tc.tool === "web_search") {
-                        try {
-                          const _csQuery = (_tc.params?.query || _tc.params?.keyword || "").toString().trim();
-                          if (!_csQuery) {
-                            _clToolResults.push({ tool: "web_search", params: _tc.params, result: { success: false, error: "web_search 缺少 query 参数" } });
-                          } else {
-                            const _csMem = loadMemoryData(username, charName);
-                            const _csWsConfig = { ...(_csMem.config?.web_search || {}) };
-                            if (_tc.params?.engine) _csWsConfig.engine = _tc.params.engine;
-                            const _csRes = await executeWebSearch(_csQuery, _csWsConfig);
-                            // 传导层只搬运：结果文本同走功能层单源（原本处自写编号格式且**漏打相关度**
-                            //   ——002「看占比」在分身链此前完全缺席，收口后自动获得；边界包裹同理）
-                            const _csText = (_csRes.results || []).length > 0
-                              ? `[联网搜索结果 (${_csRes.engine})]${_csRes.warning ? `\n⚠️ ${_csRes.warning}` : ""}\n` + buildInjectableSearchText(_csRes.results, "分身联网搜索")
-                              : `[联网搜索无结果]${_csRes.error ? " — " + _csRes.error : ""}`;
-                            // [0726] 成败判据改为 results.length（与 chat 入口同口径）：warning 不再影响成败，error 仍是真失败
-                            _clToolResults.push({ tool: "web_search", params: _tc.params, result: { success: (_csRes.results || []).length > 0 || !_csRes.error, result: _csText } });
-                            ideClient._recordOperation?.({ tool: "web_search", params: _tc.params, result: { count: (_csRes.results || []).length, engine: _csRes.engine }, success: !_csRes.error, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
-                          }
-                        } catch (_csErr) {
-                          _clToolResults.push({ tool: "web_search", params: _tc.params, result: { success: false, error: _csErr.message } });
-                        }
-                        continue; // web_search 已处理，不落 ideClient
-                      }
-                      // [0727 下载能力] 分身 web_download：与 web_search 同范式直调联网套件，不落 IDE 桥
-                      if (_tc.tool === "web_download") {
-                        try {
-                          const _dlUrl = (_tc.params?.url || "").toString().trim();
-                          if (!_dlUrl) {
-                            _clToolResults.push({ tool: "web_download", params: _tc.params, result: { success: false, error: "web_download 缺少 url 参数" } });
-                          } else {
-                            const _dlMem = loadMemoryData(username, charName);
-                            const _dlRes = await executeWebDownload(_dlUrl, { filename: _tc.params?.filename }, username, _dlMem.config?.web_search || {});
-                            _clToolResults.push({ tool: "web_download", params: _tc.params, result: _dlRes.success ? { success: true, result: `[已下载] ${_dlRes.path} (${_dlRes.bytes} 字节)` } : { success: false, error: _dlRes.error } });
-                            ideClient._recordOperation?.({ tool: "web_download", params: _tc.params, result: _dlRes, success: !!_dlRes.success, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
-                          }
-                        } catch (_dlErr) {
-                          _clToolResults.push({ tool: "web_download", result: { success: false, error: _dlErr.message } });
-                        }
-                        continue; // web_download 已处理，不落 ideClient
-                      }
-                      try {
-                        // ★ 分身写类工具走 per-file 写锁（B3 §5 顺序插入）——原直接 callTool 绕过锁，
-                        //   并发写分身可互踩同文件 old_string；callToolWithLock 加锁但不写主 AI 的 pendingResults。
-                        // [0727 id传导] 分身工具带上派出它的线 id：连接路由/run_command 会话键都按线走，
-                        //   双开窗口下分身命令不再落全局默认 shell（A6 确诊的唯一真串会话类别）
-                        const _r = await ideClient.callToolWithLock(_tc.tool, _tc.params, _cid);
-                        _clToolResults.push({ tool: _tc.tool, params: _tc.params, result: _r });
-                        // 记录到操作历史（让操作监控面板可见）
-                        ideClient._recordOperation({ tool: _tc.tool, params: _tc.params, result: _r, success: _r?.success !== false, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
-                      } catch (_e) {
-                        _clToolResults.push({ tool: _tc.tool, result: { success: false, error: _e.message } });
-                        ideClient._recordOperation({ tool: _tc.tool, params: _tc.params, result: { error: _e.message }, success: false, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString(), source: `分身#${_task.id}` });
-                      }
-                    }
-                    _clTotalTools += _clToolResults.length;
-                    diag.log(`分身#${_task.id} 第${_round + 1}轮执行了 ${_clToolResults.length} 个工具 (累计${_clTotalTools})`);
-
-                    // ★ CoT剥离(#50 对AI删/对用户折叠)：回喂上下文用剥CoT副本，断分身多轮跨轮确认偏误累积；
-                    // _clContent本体不动，留给 _clFinalReply 走用户侧折叠。统一调 _stripCoTForContext（唯一剥离源，不复制正则）。
-                    const _clContentForContext = await _stripCoTForContext(_clContent);
-
-                    // ⚠ FIX: 如果最后一条是 assistant（prefill），替换而非追加，避免双 assistant 导致 API 400
-                    if (_clMessages.length > 0 && _clMessages[_clMessages.length - 1].role === "assistant") {
-                      _clMessages[_clMessages.length - 1].content = _clContentForContext;
-                    } else {
-                      _clMessages.push({ role: "assistant", content: _clContentForContext });
-                    }
-                    const _resultText = _clToolResults.map(r => {
-                      const _data = r.result;
-                      if (_data.success === false) return `--- ${r.tool} ---\n❌ ${_data.error || "失败"}`;
-                      const _resultStr = typeof _data.result === "string" ? _data.result : JSON.stringify(_data.result);
-                      const _dur = _data.duration ? ` (${_data.duration}ms)` : "";
-                      return `--- ${r.tool}${_dur} ---\n${_resultStr}`;
-                    }).join("\n\n");
-                    _clMessages.push({ role: "user", content: getSystemText("clone_tool_result", username, charName).replaceAll("{results}", _resultText) });
-
-                    // ★ 如果接近轮次上限，提醒分身收尾
-                    if (_round >= _clMaxRounds - 3) {
-                      _clMessages[_clMessages.length - 1].content += getSystemText("clone_rounds_left", username, charName).replaceAll("{rounds_left}", String(_clMaxRounds - _round - 1));
-                    }
-                  }
-
-                  // ★ 续接：非自然结束(非 completed)时持久化分身上下文(_clMessages)，主AI 可据此续接——
-                  //   "复制上下文 → 重开一轮继续"。落盘 data/users/{user}/clone_resume/{taskId}.json。
-                  const _clResumable = _clStopReason !== "completed";
-                  if (_clResumable) _saveCloneResume(_clStopReason, _clActualRounds, _clTotalTools, _clMessages);
-                  return { id: _task.id, label: _clone.label, taskType: _clTaskType, reply: _clFinalReply, status: "done", stopReason: _clStopReason, resumable: _clResumable, totalTools: _clTotalTools, rounds: _clActualRounds };
-                } catch (_e) {
-                  // [0726 五修#3 终态归一] 停止落在"在飞 API"上时 StructCall 抛 AbortError 走到这里——此前
-                  //   被标 exception/error（计入失败数+不落快照=空续接），与轮界停止(user_aborted)同一个
-                  //   用户动作两种终态。现按 signal.aborted 归一为 user_aborted 干净收尾；真异常也落快照
-                  //   （resumable:true 就该有快照可续）。
-                  const _clWasAborted = _clTaskCtl.signal.aborted;
-                  if (_clWasAborted) {
-                    _broadcastCloneStatus(_task.id, 0, "stopped", "用户中止(user_aborted)");
-                    _saveCloneResume("user_aborted", 0, 0, _clMessages);
-                    return { id: _task.id, label: _clone.label, taskType: _clTaskType, reply: "(在飞调用被用户中止)", status: "done", stopReason: "user_aborted", resumable: true, totalTools: 0, rounds: 0 };
-                  }
-                  diag.error(`分身#${_task.id} 执行异常: ${_e.message}\n${_e.stack || ''}`);
-                  _broadcastCloneStatus(_task.id, 0, "error", _e.message);
-                  _saveCloneResume("exception", 0, 0, _clMessages);
-                  return { id: _task.id, label: _clone.label, taskType: _clTaskType, error: _e.message, status: "error", stopReason: "exception", resumable: true };
-                } finally {
-                  // [0724 分身可停] 注销停止通道 + 摘主生成 signal 联动监听（防重复任务号误停/监听器泄漏）
-                  // [0726 五修#5] 按 controller 身份注销（异步跨批同 taskId 时 key 已唯一化，按三元 key 删会误删新批）
-                  try { _clSignal?.removeEventListener?.("abort", _clOnMainAbort); } catch { /* 忽略 */ }
-                  unregisterCloneAbort(username, _cid, _task.id, _clTaskCtl);
-                }
-              })();
-            });
-
-            const _clLimit = loadMemoryData(username, charName)?.config?.clone_concurrency ?? 0;
-            // [0726 分身异步·002] 聚合+回注收尾提取为 _finishClones（同步/异步两路共用，正文=原同步代码
-            //   原样保留，仅 reply.extension 写入与失败 error 字段有分支）；同步路在下方 else 分支 await，
-            //   异步路在 .then 回调里调用。
-            const _finishClones = async (_cloneResults) => {
-            diag.log(`分身执行完成: ${_cloneResults.length}个任务, 结果: ${_cloneResults.map(r => `#${r.id}=${r.status}(${(r.reply||r.error||'').length}字符)`).join(', ')}`);
-            for (const r of _cloneResults) {
-              opLog("clone", `#${r.id} ${r.label}`, { status: r.status, rounds: r.rounds, tools: r.totalTools, replyLen: (r.reply||r.error||'').length }, r.status === "error" ? "fail" : "ok");
-            }
-
-            wbT(_cid, "memory", "handleReply:cloneAggregate", { count: _cloneResults.length, errors: _cloneResults.filter(r => r.status === "error").length });
-            // [0726 分身异步] 异步模式下 reply 早已返回/落盘，extension 写入无消费者，跳过
-            if (!_clAsyncMode) reply.extension._cloneResults = _cloneResults.map((r) => ({
-              id: r.id, label: r.label, status: r.status,
-              stopReason: r.stopReason, resumable: r.resumable === true,
-              preview: (r.reply || r.error || "").substring(0, 100),
-            }));
-            // {{clone_runtime}} 宏数据源:落多分身协作运行态快照(分身<分身N>路径)
-            _writeCloneRuntimeSnapshot(username, charName, _cid, "clone", _cloneResults.map((r) => ({
-              label: r.label, status: r.status, resumable: r.resumable === true,
-              summary: (r.reply || r.error || "").substring(0, 200),
-              rounds: r.rounds, tools: r.totalTools,
-            })));
-
-            // ★ 分身结果注入（同步流程；短结果≤3000直接注入，长结果存文件+摘要引用）
-            // 短结果(≤3000)直接注入；长结果自动存文件+摘要引用
-            const _clResultText = await Promise.all(_cloneResults.map(async r => {
-              // 续接提示：非自然结束(resumable)告知主AI可用 <分身N> 带 resumeTaskId 复制上下文继续
-              const _resumeHint = r.resumable ? `\n↩ 非自然结束(${r.stopReason})——上下文已存，可派分身带 resumeTaskId=${r.id} 从中断处续接（复制上下文继续，不重头来）。` : "";
-              const _header = `--- 分身任务#${r.id} (${r.label}) ${r.status === "error" ? "失败" : r.resumable ? "中断" : "完成"} (${r.rounds || "?"}轮/${r.totalTools || 0}次工具) ---`;
-              if (r.status === "error") return `${_header}\n❌ ${r.error}${_resumeHint}`;
-              // ★ #50 喂AI出口剥CoT（与循环内 _clContentForContext 同源）：注入主AI上下文 + 长结果存文件(主AI read_file)
-              //   两路径都是"喂给 AI 上下文"，统一剥 thinking；用户展示侧(preview/广播)另走完整(见 _cloneResults.preview)。
-              const _full = (await _stripCoTForContext(r.reply)) || "(无输出)";
-              // U5 reality-gate：完成的分身必须带验证证据，否则追加 NEEDS_WORK 警告。
-              //   X2：按任务类型(r.taskType, 由分身循环回传)分流证据标准——
-              //   调查类要落盘报告+读取清单、配表类要单元格坐标+重算结果，不再一律强求 grep/tsc。
-              const _ev = _checkClaimEvidence(_full, r.taskType);
-              const _evKind = r.taskType === "research" ? "调查" : r.taskType === "data" ? "配表" : "验证";
-              const _evSuffix = _ev.sufficient ? "" : `\n⚠️ NEEDS_WORK: 该分身(${r.taskType || "code"}类)声称完成但缺乏${_evKind}证据(${_ev.missing.join("、")})。${_ev.hint}`;
-              if (_full.length <= 3000) return `${_header}\n${_full}${_evSuffix}${_resumeHint}`;
-              // 长结果：自动存入临时文件，注入摘要+文件路径
-              let _savedPath = "";
-              try {
-                const _tmpDir = path.join(__projectRoot, "data", "users", username, "chars", charName, "tmp");
-                if (!fs.existsSync(_tmpDir)) fs.mkdirSync(_tmpDir, { recursive: true });
-                const _tmpFile = `clone_${r.id}_${Date.now()}.md`;
-                _savedPath = path.join(_tmpDir, _tmpFile);
-                nicerWriteFileSync(_savedPath, `# 分身#${r.id} (${r.label}) 完整结果\n\n${_full}`);
-              } catch (_e) { diag.error(`分身结果存文件失败: ${_e.message}`); }
-              const _fileRef = _savedPath ? `\n📄 完整结果已存入: ${_savedPath}（用read_file读取）` : "";
-              return `${_header}\n${_full.substring(0, 1500)}\n... (省略${_full.length - 2000}字符) ...${_fileRef}\n${_full.substring(_full.length - 500)}${_evSuffix}${_resumeHint}`;
-            })).then(arr => arr.join("\n\n"));
-
-            const _clFailedN = _cloneResults.filter(r => r.status === "error").length;
-            // [0726 分身异步] 完成提醒头（injectTexts "clone.async_done_reminder" 用户可配置文本；
-            //   仅异步模式——同步模式结果与回复同轮返回无需提醒）
-            let _clReminder = "";
-            if (_clAsyncMode) {
-              try {
-                const _itMod = await import("../../injectTexts/main.mjs");
-                _clReminder = _itMod.fillInjectText(_itMod.getInjectText("clone.async_done_reminder", username), { count: String(_cloneResults.length), failed: String(_clFailedN) }) + "\n\n";
-              } catch (_itErr) { diag.warn(`分身异步完成提醒文本读取失败(跳过提醒头): ${_itErr.message}`); }
-            }
-            ideClient.enqueuePendingResult({
-              tool: "_clone_results",
-              // A-2：外层 success 派生自分身结果（任一 error → false），不再写死 true（reality-gate 反虚报）。
-              //   [0726 失败吞报根修] error 字段补齐：此前失败时无 error 字段，消费端(formatToolResultsForInjection)
-              //   打"❌ 失败: 未知错误"且吞掉聚合文本（成功分身产出陪葬）；现 error 给简报、聚合文本照留
-              //   result.result（消费端已同批修为 success=false 时同样透出正文）。
-              params: { taskCount: _cloneResults.length, failedCount: _clFailedN, async: _clAsyncMode },
-              result: { success: _cloneResults.every(r => r.status !== "error"), error: _clFailedN > 0 ? `${_clFailedN}/${_cloneResults.length} 个分身任务失败（详情见聚合结果）` : undefined, result: `${_clReminder}[分身AI执行结果 — ${_cloneResults.length}个任务]\n\n${_clResultText}\n\n[/分身AI执行结果]` },
-              chatid: _qcid,
-              ownerUsername: username,
-              timestamp: new Date().toISOString(),
-            });
-            };
-
-            if (_clAsyncMode) {
-              // [0726 分身异步·002「机制需要加分身异步,同时加提醒,还有分身结束唤醒主ai,同时提醒主ai」]
-              //   不 await：主生成回合立即返回。派发提示（injectTexts "clone.async_dispatched" 可配置）入池，
-              //   本回合末分支③随轮注入；分身完成 → _finishClones 聚合回注 → 跨 part 动态 import 唤醒
-              //   generation.notifyAsyncCloneDone（范式=dispatchActivation._resolveTrigger，防静态循环依赖）。
-              //   主生成 abort 不再联动杀分身（signal 已在 per-任务块跳接）；停分身走 cloneAbort/stopCloneTask。
-              const _clWakeChar = charName === "_global" ? (args?.char_name || undefined) : charName;
-              try {
-                const _itMod = await import("../../injectTexts/main.mjs");
-                ideClient.enqueuePendingResult({
-                  tool: "_clone_results",
-                  params: { dispatched: _clonePromises.length, async: true },
-                  result: { success: true, result: _itMod.fillInjectText(_itMod.getInjectText("clone.async_dispatched", username), { count: String(_clonePromises.length) }) },
-                  chatid: _qcid,
-                  ownerUsername: username,
-                  timestamp: new Date().toISOString(),
-                });
-              } catch (_dnErr) { diag.warn(`分身异步派发提示注入失败(不影响派发): ${_dnErr.message}`); }
-              // [0726 五修#4] 派发即写"在跑"快照：{{clone_runtime}} 宏此前只有终态（等待期读到上一批旧数据），
-              //   现异步等待期宏可见 🔄在跑 清单；完成时 _finishClones 聚合快照原样覆盖为终态。
-              try {
-                _writeCloneRuntimeSnapshot(username, charName, _cid, "clone", _cloneTasks.map((t) => ({
-                  label: (t.cloneName || "默认分身") + "#" + t.id, status: "running", resumable: false,
-                  summary: (t.instruction || "").replace(/\s+/g, " ").substring(0, 120), rounds: 0, tools: 0,
-                })));
-              } catch (_rsErr) { diag.warn(`分身在跑快照写入失败: ${_rsErr.message}`); }
-              _runWithConcurrency(_clonePromises, _clLimit, undefined).then(async (_cloneResults) => {
-                try { await _finishClones(_cloneResults); }
-                catch (_afErr) {
-                  diag.error(`分身异步收尾失败: ${_afErr.message}\n${_afErr.stack || ''}`);
-                  try { ideClient.enqueuePendingResult({ tool: "_clone_results", params: { async: true }, result: { success: false, error: `分身异步收尾失败: ${_afErr.message}` }, chatid: _qcid, ownerUsername: username, timestamp: new Date().toISOString() }); } catch { /* 入队失败仅日志 */ }
-                }
-                try {
-                  const _genPath = path.join(__projectRoot, "src", "public", "parts", "shells", "beilu-chat", "src", "lib", "generation.mjs");
-                  const { pathToFileURL: _pfu } = await import("node:url");
-                  const _gen = await import(_pfu(_genPath).href);
-                  _gen.notifyAsyncCloneDone?.(_qcid, _clWakeChar, username);
-                } catch (_wkErr) { diag.error(`分身异步唤醒失败（结果已入池，下次生成回合可见）: ${_wkErr.message}`); }
-              });
-            } else {
-              const _cloneResultsSync = await _runWithConcurrency(_clonePromises, _clLimit, args?.generation_options?.signal);
-              await _finishClones(_cloneResultsSync);
-            }
-          }
-          // ★ B8修复：分身结果入队后广播 tool_results_ready（信息性，与 parallelDelegate 一致；
-          //   前端 index.mjs 监听器为 no-op，自动继续实由后端 generation.mjs consumePendingResults 驱动）
-          try {
-            // [0716 T3对接首批] 改经 bus:broadcast.emit 出口。
-            const _bcChatId8 = args?.chatid || (args?.chat_name ? args.chat_name.replace("common_chat_", "") : "");
-            if (_bcChatId8) {
-              const _clonePendingCount = ideClient.getPendingResultCount({
-                ownerUsername: username,
-                chatid: _qcid,
-              });
-              await dispatch({ target: "bus:broadcast", verb: "emit", source: "yonban", payload: { chatid: _bcChatId8, event: {
-                type: "tool_results_ready",
-                payload: { count: _clonePendingCount, source: "clone_results", readOnly: true, stopContinue: false },
-              } } });
-            }
-          } catch (_bcErr8) { /* 广播失败不影响主流程 */ }
-        } catch (e) {
-          wbD(_cid, "memory", "handleReply:cloneSystem", false, e.message, {});
-          diag.error(`分身系统执行失败: ${e.message}\n${e.stack || ''}`);
-          // 把错误也塞入 pendingResults，让主AI知道分身崩了
-          ideClient.enqueuePendingResult({
-            tool: "_clone_results",
-            params: {},
-            result: { success: false, error: `分身系统执行失败: ${e.message}` },
-            chatid: _qcid,
-            ownerUsername: username,
-            timestamp: new Date().toISOString(),
-          });
+      try {
+        const _cloneBatch = await coordinateCloneBatch({
+          tasks: _preExtracted.cloneTasks || [],
+          username,
+          charName,
+          chatId: _cid,
+          queueChatId: _qcid,
+          chatLog: args?.chat_log || [],
+          charDisplayName: args?.char_name || "",
+          generationArgs: args,
+          admit: _admit,
+          createBatchId: _delegId,
+          runWithConcurrency: _runWithConcurrency,
+          opLog,
+        });
+        if (_cloneBatch.duplicateSuppressed?.length > 0) {
+          reply.extension._cloneDuplicateSuppressed = _cloneBatch.duplicateSuppressed;
         }
+        if (_cloneBatch.contentAppend) content += _cloneBatch.contentAppend;
+        if (_cloneBatch.stopContinue) reply.extension._stopContinue = true;
+        if (_cloneBatch.aggregate) reply.extension._cloneAggregate = _cloneBatch.aggregate;
+        if (_cloneBatch.results) reply.extension._cloneResults = _cloneBatch.results;
+      } catch (error) {
+        wbD(_cid, "memory", "handleReply:cloneSystem", false, error.message, {});
+        diag.error(`分身系统执行失败: ${error.message}\n${error.stack || ""}`);
+        ideClient.enqueuePendingResult({
+          tool: "_clone_results",
+          params: {},
+          result: { success: false, error: `分身系统执行失败: ${error.message}` },
+          chatid: _qcid,
+          ownerUsername: username,
+          timestamp: new Date().toISOString(),
+        });
       }
       content = content.replace(/<分身\d+[^>]*>[\s\S]*?<\/分身\d+>/gi, "");
     }
+
 
     // 14a. <presetSwitch> 已废弃，统一使用 <subModeSwitch>，仅清理标签
     content = content.replace(/<presetSwitch>[\s\S]*?<\/presetSwitch>/gi, "");

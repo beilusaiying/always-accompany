@@ -810,12 +810,6 @@ export const DEFAULT_TOKEN_REMINDER = {
   allow_ai_cleanup: true,
   // AI清理提示（告诉AI可以用什么标签清理）
   cleanup_hint: "你可以使用 <contextClean> 标签主动清理上下文中占空间的内容:\n<contextClean>read_file:路径</contextClean> — 清理之前读取的文件内容\n<contextClean>code_output:最近N条</contextClean> — 清理之前输出的代码块\n<contextClean>tool_results:all</contextClean> — 清理所有IDE工具执行结果",
-  // AI主动清理的最低上下文占用闸门（%，0=不限制）：占用低于此比例时拒绝 <contextClean>，防小上下文频繁清理打碎 prompt cache。
-  // 2026-08-11 收口（凛倾拍板：按比例不按绝对值）：原 replyHandler 读 yonban_config.context_clean.min_tokens_for_ai_clean
-  // ——全仓零写入方的孤儿键=事实硬编码 200000 绝对 token，用户无处可设，且绝对值在分母可变的框架下语义漂移
-  // （128K 窗口下 200K 阈值=永远拦死清理）。改百分比后分母=resolveEffectiveMaxContextLive 单源，与 thresholds 三级同口径。
-  // 链：本表播种默认 → Token设置弹窗(tokenProgressBar)可改 → updateConfig(setDataActions token_reminder 合并写口) → replyHandler contextClean 闸门读。
-  ai_clean_min_percent: 5,
 };
 
 // ============================================================
@@ -959,11 +953,6 @@ export const DEFAULT_CODE_SUB_MODES = [
   { ...DEFAULT_SUB_MODE_EXECUTION, id: "任务交接员",     label: "任务交接员",     icon: "📋", desc: "SBAR/ADR/Postmortem归档交接，完成度写实",                       presetName: "任务交接员", modeGroup: "code", flowGroups: ["large", "small"] },
   { ...DEFAULT_SUB_MODE_EXECUTION, id: "大项目协调",     label: "大项目协调",     icon: "🏗️", desc: "大项目协调中枢：scope锁定+依赖链排序+增量合并+多分身编排+完整输出", presetName: "大项目协调", modeGroup: "code", flowGroups: [] },
   { ...DEFAULT_SUB_MODE_EXECUTION, id: "前端美化",       label: "前端美化",       icon: "🎨", desc: "双战场分流：产品UI优先序铁律+营销页anti-slop全流程",           presetName: "前端美化专家", modeGroup: "code", flowGroups: [] },
-  // [0811 schema6·凛倾拍板] code 组重加 PPT 子模式（撤销 0724「code不需要ppt」，原话「说实话ide也需要
-  //   加个ppt的子模式」）。beilu-ppt 门控本就含 code（main.mjs ENABLED_MODES），此前 code 组无任何
-  //   子模式携带「PPT制作」预设契约 → IDE 里做 PPT 的 AI 不会发 <ppt_op>、插件从不落盘（=「IDE 模式
-  //   ppt 无法储存」根因）。id 禁用旧名 "ppt-designer"——W64 迁移把它永久映射+剔除（_oldToNew/_removedIds2）。
-  { ...DEFAULT_SUB_MODE_EXECUTION, id: "PPT制作",         label: "PPT制作",        icon: "📊", desc: "类型判定→主张句骨架→草稿给用户审查→美化生成→字符画核对", presetName: "PPT制作", modeGroup: "code", flowGroups: [] },
 ];
 
 // 工作模式子模式统一用 work- 前缀避免与编程模式ID冲突

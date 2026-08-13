@@ -52,7 +52,6 @@
  * │ 其他 (1)        │ default（未知命令 → operationError toast）                              │
  * └─────────────────┴─────────────────────────────────────────────────────────────────────────┘
  *
- * 已知 bug（仅标注不修）：（无）
  */
 import * as vscode from "vscode";
 import { AuthService } from "./services/AuthService";
@@ -84,7 +83,7 @@ const ACTION_NOTIFY: Record<string, string> = {
   switchPreset: "已切换预设", createPreset: "已创建预设", duplicatePreset: "已复制预设",
   renamePreset: "已重命名预设", deletePreset: "已删除预设", toggleMemoryPreset: "已切换记忆预设",
   toggleInjectionPrompt: "已切换注入提示词", saveSubModes: "已保存子模式", setActiveSubMode: "已激活子模式",
-  saveClones: "已保存分身", setFilesConfig: "已保存文件设置", setRuntimeParams: "已保存运行参数",
+  setFilesConfig: "已保存文件设置", setRuntimeParams: "已保存运行参数",
   approveIdeOp: "已批准操作", rejectIdeOp: "已拒绝操作", approveAllIdeOps: "已全部批准", rejectAllIdeOps: "已全部拒绝",
   revealFile: "已定位文件",
 };
@@ -256,7 +255,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
         try {
-          const outcome = await this.handleMessage(message);
+          const outcome = await this.handleMessage(message, webviewView);
           // 成功提醒：mutating 动作执行完（未抛错）→ 回 notify，前端 showToast「已X」。
           const _note = ACTION_NOTIFY[message?.type as string];
           if (_note && outcome?.actionNotifyHandled !== true) {
@@ -418,7 +417,7 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
    * 约束：调用者不需要 catch——resolveWebviewView 的 onDidReceiveMessage 已统一兜底
    *       operationError toast（见上方 try/catch 包裹）。
    */
-  public async handleMessage(message: WebviewMessage): Promise<{ actionNotifyHandled: true } | void> {
+  public async handleMessage(message: WebviewMessage, sourceView?: vscode.WebviewView): Promise<{ actionNotifyHandled: true } | void> {
     switch (message.type) {
       case "connect":
         await this._connectionService.connect();
@@ -1531,29 +1530,31 @@ export class YonBanProvider implements vscode.WebviewViewProvider {
       case "getClones": {
         try {
           const result = await this._chatService.getClones();
-          this.postMessage({ type: "clonesConfig", payload: result });
+          if (!sourceView || this._view === sourceView) this.postMessage({ type: "clonesConfig", payload: result });
         } catch (err: unknown) {
-          this.postMessage({ type: "clonesConfig", payload: { clones: [], error: String(err) } });
+          if (!sourceView || this._view === sourceView) this.postMessage({ type: "clonesConfig", payload: { clones: [], error: String(err) } });
         }
         break;
       }
       case "saveClones": {
         try {
-          const pl = message.payload as { clones: unknown[] };
-          await this._chatService.saveClones(pl.clones);
+          const pl = message.payload as { clones: unknown[]; configRevision: string | null };
+          const result = await this._chatService.saveClones(pl.clones, pl.configRevision);
+          if (sourceView && this._view !== sourceView) return { actionNotifyHandled: true };
+          if (result?.success !== true) throw new Error(typeof result?.error === "string" ? result.error : "后端未确认分身配置保存成功");
+          this.postMessage({ type: "clonesConfig", payload: { ...result, saved: true } });
         } catch (err: unknown) {
-          console.warn("[YonBan] saveClones failed:", err);
-          throw err; // T021：rethrow 交顶层兜底（:210 operationError→前端 toast）——原局部吞错把统一报错机制短路，用户保存分身配置丢失无感
+          if (!sourceView || this._view === sourceView) this.postMessage({ type: "clonesConfig", payload: { success: false, error: err instanceof Error ? err.message : String(err), saved: true } });
         }
-        break;
+        return { actionNotifyHandled: true };
       }
       case "stopCloneTask": {
         // [0724 分身可停·002] 分身进度面板 ⏹ → 后端 SetData stopCloneTask（cloneAbort 触发该任务
         //   AbortController）。终态 stopped 由后端 clone_status 广播回流面板，本 case 不预写状态。
         try {
-          const pl = (message.payload || {}) as { taskId?: string };
+          const pl = (message.payload || {}) as { taskId?: string; jobId?: string };
           const chatId = this._chatService.currentChatId || "";
-          const r = await this._chatService.stopCloneTask(chatId, pl.taskId);
+          const r = await this._chatService.stopCloneTask(chatId, pl);
           const aborted = (r as { aborted?: number })?.aborted ?? 0;
           if (!aborted) this.postMessage({ type: "operationError", payload: { action: "stopCloneTask", error: `分身#${pl.taskId ?? "(全部)"} 未匹配到在跑任务（可能已结束）` } });
         } catch (err: unknown) {

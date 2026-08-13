@@ -59,6 +59,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { getActivePresetName, applySubModePresetDefault, switchPresetViaAPI } from "../ai/presetBridge.mjs"; // 2026-07-08 生效模型重构：每轮强切已删（生成不碰预设状态）；applySubModePresetDefault=委派超时回切子模式时一次性应用默认预设；switchPresetViaAPI=[0717 串联收口] P1 <presetSwitch> 唯一执行口（原经 extension 穿生成链在 preset TweakPrompt 内第二份写实现，镜像删除）
+import { createDefaultCloneConfigs, normalizeCloneConfigs } from "../ai/cloneContract.mjs";
 import { nicerWriteFileSync } from "../../../../../scripts/nicerWriteFile.mjs"; // M3：央原子写替裸 fs.writeFileSync 防半写损坏
 import { readJsonSafe, readJsonSafeSync } from "../../../../../scripts/safeJsonIO.mjs"; // T019：_greet_state.json损坏不静默清零，备份后抛错；0716 差集收编：委派/审批队列同切
 import { V1_CONST } from "../../../../../server/web_server/v1_adapter.mjs";
@@ -90,6 +91,7 @@ import {
   withFileLock,
   writeContextSummary,
   getYonbanConfigPath,
+  readJsonFileSnapshotStrict,
   updateYonbanConfig, // T4：委派超时回切子模式写点走字段级收口串行锁
   getWorkConfigPath,
   resolveWorkflowSlot,
@@ -892,6 +894,27 @@ export async function handleGetPrompt(arg) {
     // {{tool_runtime_json}} 每轮只求值一次（跨条目共享）：forPrompt 快照带单次投递副作用
     // （终态 job 标记已投递，listForPrompt），同轮第二次求值会拿到已被第一次消费掉的空反馈。
     let _toolRuntimeJsonMemo = null;
+    // 两个分身宏共用同一内容/revision 快照与 canonical enabled 判据，避免同轮双读和展示/执行分叉。
+    let _cloneMacroSnapshotMemo;
+    const _cloneMacroSnapshot = () => {
+      if (_cloneMacroSnapshotMemo) return _cloneMacroSnapshotMemo;
+      try {
+        const snapshot = readJsonFileSnapshotStrict(getYonbanConfigPath(username), {});
+        const config = snapshot.value;
+        if (!config || typeof config !== "object" || Array.isArray(config)) throw new Error("根节点必须是对象");
+        const clones = normalizeCloneConfigs(config.clones === undefined ? createDefaultCloneConfigs() : config.clones);
+        _cloneMacroSnapshotMemo = { config: { ...config, clones }, enabled: clones.filter((clone) => clone.enabled), revision: snapshot.revision };
+      } catch (error) {
+        _cloneMacroSnapshotMemo = { error: error.message };
+      }
+      return _cloneMacroSnapshotMemo;
+    };
+    const _clonePermissionLabels = (clone) => [
+      clone.permissions?.read_file && "读文件",
+      clone.permissions?.run_command && "运行脚本",
+      clone.permissions?.write_md && "写MD",
+      clone.permissions?.write_code && "写代码",
+    ].filter(Boolean);
 
     for (const [_injIdx, inj] of injectionPrompts.entries()) {
       const _gate = _injGate[_injIdx];
@@ -1178,50 +1201,34 @@ export async function handleGetPrompt(arg) {
         })
         // ---- 分身AI宏 ----
         .replace(/\{\{clone_list\}\}/g, () => {
-          try {
-            const _clCfgPath = getYonbanConfigPath(username);
-            const _clCfg = loadJsonFileIfExists(_clCfgPath, { clones: [] });
-            const _enabledClones = (_clCfg.clones || []).filter(c => c.enabled);
-            if (_enabledClones.length === 0) return "(无可用分身)";
-            // 只用第一个启用的分身（数字只是任务编号，不是分身ID）
-            const c = _enabledClones[0];
-            const perms = [];
-            if (c.permissions?.read_file) perms.push("读文件");
-            if (c.permissions?.run_command) perms.push("运行脚本");
-            if (c.permissions?.write_md) perms.push("写MD");
-            if (c.permissions?.write_code) perms.push("写代码");
-            return `分身: ${c.label}${c.modelName ? " (" + c.modelName + ")" : ""} — ${perms.join("/")}\n调用方式: <分身N clone="分身名">指令</分身N>（N=任务编号，clone指定用哪个分身，省略用默认；多任务并行）`;
-          } catch (_e) { return "(无可用分身)"; }
+          const snapshot = _cloneMacroSnapshot();
+          if (snapshot.error) return `(分身配置错误: ${snapshot.error})`;
+          if (snapshot.enabled.length === 0) return "(无可用分身)";
+          const clone = snapshot.enabled[0];
+          return `分身: ${clone.label}${clone.modelName ? " (" + clone.modelName + ")" : ""} — ${_clonePermissionLabels(clone).join("/")}\n调用方式: <分身N clone="分身名">指令</分身N>（N=任务编号，clone指定用哪个分身，省略用默认；多任务并行）`;
         })
         // {{clone_configs}}：主AI看到【全部】启用分身的完整配置（非 {{clone_list}} 只第一个+4权限）。
         // 机制只读全量配置；何时/在哪个预设引用此宏由凛倾提示词侧决定。
         .replace(/\{\{clone_configs\}\}/g, () => {
-          try {
-            const _ccPath = getYonbanConfigPath(username);
-            const _ccCfg = loadJsonFileIfExists(_ccPath, { clones: [] });
-            const _ccEnabled = (_ccCfg.clones || []).filter(c => c.enabled);
-            if (_ccEnabled.length === 0) return "(无可用分身)";
-            const _lines = _ccEnabled.map((c, i) => {
-              const _perms = [];
-              if (c.permissions?.read_file) _perms.push("读文件");
-              if (c.permissions?.run_command) _perms.push("运行脚本");
-              if (c.permissions?.write_md) _perms.push("写MD");
-              if (c.permissions?.write_code) _perms.push("写代码");
-              const _smDesc = (_ccCfg.sub_modes || []).find(sm => sm.presetName === c.presetName)?.desc || c.desc || "";
+          const snapshot = _cloneMacroSnapshot();
+          if (snapshot.error) return `(分身配置错误: ${snapshot.error})`;
+          if (snapshot.enabled.length === 0) return "(无可用分身)";
+          const _lines = snapshot.enabled.map((c, i) => {
+              const _perms = _clonePermissionLabels(c);
+              const _smDesc = (snapshot.config.sub_modes || []).find(sm => sm.presetName === c.presetName)?.desc || c.desc || "";
               const _meta = [
                 _smDesc ? `职能:${_smDesc}` : "",
                 `模型:${c.modelName || "默认"}`,
                 `源:${c.apiSource || "默认"}`,
                 `预设:${c.presetName || "无(顶空白)"}`,
                 `权限:[${_perms.join("/") || "仅只读"}]`,
-                c.maxRounds ? `最多${c.maxRounds}轮` : "",
-                c.contextMessages ? `上下文${c.contextMessages}条` : "",
-                c.promptPostProcessing ? `后处理:${c.promptPostProcessing}` : "",
+                c.maxRounds === 0 ? "工作轮次:无限" : `最多${c.maxRounds}轮`,
+                `上下文${c.contextMessages}条`,
+                `后处理:${c.promptPostProcessing}`,
               ].filter(Boolean);
               return `分身${i + 1}「${c.label || "未命名"}」— ${_meta.join(" | ")}`;
-            });
-            return _lines.join("\n") + `\n调用方式: <分身N clone="分身名">指令</分身N>（N=任务编号，clone属性指定用哪个分身配置，省略则用第一个启用的；多个任务并行执行）`;
-          } catch (_e) { return "(无可用分身)"; }
+          });
+          return _lines.join("\n") + `\n调用方式: <分身N clone="分身名">指令</分身N>（N=任务编号，clone属性指定用哪个分身配置，省略则用第一个启用的；多个任务并行执行）`;
         })
         // {{clone_runtime}}：多个分身一起干活的【运行态/协作上下文】——最近一轮分身/并行委派的"谁·状态·产出摘要"，
         // 让主AI看到多分身协作态(非 {{clone_configs}} 静态配置)。数据=replyHandler 聚合处落的会话级快照 work/_clone_runtime_<cid>.json。
@@ -1239,8 +1246,8 @@ export async function handleGetPrompt(arg) {
             const _crAge = _crData.ts ? Math.round((Date.now() - new Date(_crData.ts).getTime()) / 60000) : null;
             const _crAgeStr = _crAge == null ? "" : _crAge < 1 ? "（刚刚）" : _crAge < 60 ? `（${_crAge}分钟前）` : `（${Math.round(_crAge / 60)}小时前）`;
             const _crLines = _crClones.map((c, i) => {
-              // [0726 五修#4] running=异步派发时写的"在跑"态（replyHandler 异步分支派发即写快照，完成时聚合覆盖）
-              const _st = c.status === "running" ? "🔄在跑" : c.status === "error" ? "❌失败" : c.resumable ? "⏸中断" : "✅完成";
+              const _resultStatus = c.resultStatus || c.status;
+              const _st = c.state !== "terminal" && (c.state || c.status === "running") ? "🔄在跑" : c.resumable ? "⏸中断" : _resultStatus === "partial" ? "⚠部分完成" : _resultStatus === "completed" ? "✅完成" : "❌失败";
               const _meta = [c.rounds ? `${c.rounds}轮` : "", c.tools ? `${c.tools}次工具` : ""].filter(Boolean).join("/");
               return `${i + 1}. 「${c.label || "未命名"}」${_st}${_meta ? " (" + _meta + ")" : ""}: ${(c.summary || "(无输出)").replace(/\s+/g, " ").trim()}`;
             });

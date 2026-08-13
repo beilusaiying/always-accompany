@@ -521,6 +521,41 @@ export function broadcastUserActiveChat(chatid, reason = "switch") {
 // 注：saveChat 从 chatStorage 延迟引入，避免循环依赖在模块初始化阶段展开
 // ============================================================
 
+async function _replayCloneStatusSnapshot(chatid, username, ws) {
+  try {
+    if (!chatid || !username || ws.readyState !== 1) return;
+    const chatData = _readOwnerIndex()?.get(chatid);
+    if (!chatData || chatData.username !== username || !chatData.primaryCharName) return;
+    const [{ getMemoryDir }, fsModule, pathModule] = await Promise.all([
+      import("../../../../../../yonban/core/functions/memory/storage_mod/storage.mjs"),
+      import("node:fs"),
+      import("node:path"),
+    ]);
+    const filepath = pathModule.default.join(
+      getMemoryDir(username, chatData.primaryCharName),
+      "work",
+      `_clone_runtime_${chatid}.json`,
+    );
+    if (!fsModule.default.existsSync(filepath)) return;
+    const snapshot = JSON.parse(fsModule.default.readFileSync(filepath, "utf-8"));
+    if (snapshot?.version !== 3 || snapshot?.kind !== "clone" || snapshot?.cid !== chatid || !Array.isArray(snapshot.clones)) return;
+    const rows = snapshot.clones
+      .filter((row) => row?.job?.ownerUsername === username && row?.job?.chatId === chatid
+        && row?.eventId && Number.isInteger(Number(row?.sequence)))
+      .sort((a, b) => Number(a.sequence) - Number(b.sequence));
+    for (const row of rows) {
+      if (ws.readyState !== 1) break;
+      ws.send(JSON.stringify({
+        type: "clone_status",
+        payload: { ...row, snapshot: true },
+      }));
+    }
+    if (rows.length > 0) wbTrace(chatid, "broadcast", "cloneStatus:snapshotReplay", { count: rows.length });
+  } catch (error) {
+    console.warn(`[broadcast] 分身状态快照补发失败(chat=${chatid}):`, error?.message || error);
+  }
+}
+
 /**
  * 注册 WS 连接 — 绑定 chatid↔socket 映射，处理客户端消息(ping/stop_generation)，管理连接生命周期。
  *
@@ -559,6 +594,9 @@ export function registerChatUiSocket(
   if (typingList.length > 0) {
     try { ws.send(JSON.stringify({ type: "typing_status", payload: { typingList } })); } catch { /* ws 可能已关 */ }
   }
+  // 真断线重连时前端 consumer 已存在；从同一持久投影补发每个 job 最新状态。
+  // 事件仍走 clone_status 物理通道，eventId+sequence 使重复补发天然幂等。
+  _replayCloneStatusSnapshot(chatid, username, ws);
 
   ws.on("message", async (message) => {
     try {

@@ -2940,6 +2940,7 @@ function _bindTriggerEvents() {
 
 var _clones = [];
 var _cloneTemplate = null; // 07-09：后端 getClones 下发的新建分身默认值单源（loadClones 填充）
+var _cloneConfigRevision = null;
 
 // A4 username 权威化：username 由后端路由层从登录态注入（单一来源）。
 // 后端解析失败时返回 {success:false,error}，前端显式 toast 报错，不静默吞成空列表装正常。
@@ -2952,6 +2953,7 @@ async function _loadClones() {
       return false;
     }
     _clones = data.clones || [];
+    _cloneConfigRevision = data.configRevision ?? null;
     // 07-09 使用链走查：后端 clone_template=新建分身默认值单源（表单回填/收集/权限默认全用它，
     //   原表单持 ||10/||60000/defaultPerms 等写死副本——值与后端一致但物理双写=漂移源）
     if (data.clone_template) _cloneTemplate = data.clone_template;
@@ -2965,12 +2967,14 @@ async function _loadClones() {
 
 async function _saveClones() {
   try {
-    var data = await sendAction({ verb: "saveClones", target: "plugins:beilu-memory", source: "web", payload: { clones: _clones } }); // T6b
+    var data = await sendAction({ verb: "saveClones", target: "plugins:beilu-memory", source: "web", payload: { clones: _clones, configRevision: _cloneConfigRevision } }); // T6b
     if (data && data.success === false) {
       _showToast("❌ 分身保存失败：" + (data.error || "未能识别登录用户名"), 3500);
       console.warn("[subModePanel] 保存分身失败:", data.error);
       return false;
     }
+    _clones = data.clones || [];
+    _cloneConfigRevision = data.configRevision;
     return true;
   } catch (e) {
     _showToast("❌ 分身保存失败：" + (e.message || "网络错误"), 3500);
@@ -3002,6 +3006,16 @@ function _renderCloneLeftPanel(container) {
     addBtn.innerHTML = '<i data-ic="plus"></i> 添加分身';
     addBtn.addEventListener("click", function() { _openCloneEditor(null); });
     container.appendChild(addBtn);
+
+    // 编程表格定期清理频率是独立功能，不属于已删除的重复分身列表。
+    var tableCleanSection = document.createElement("div");
+    tableCleanSection.className = "mt-4 pt-3 border-t border-base-300";
+    tableCleanSection.innerHTML =
+      '<div class="flex items-center gap-2 text-[11px]"><span class="w-20 font-bold">🧹 表格清理</span>' +
+      '<input type="number" id="tableclean-freq" class="input input-xs input-bordered w-16" value="0" min="0" max="50" />' +
+      '<span class="opacity-40">轮一次(0=关，仅编程/工作模式)</span></div>';
+    container.appendChild(tableCleanSection);
+    _initTableCleanControl();
   });
 }
 
@@ -3036,6 +3050,8 @@ function _renderCloneDetailPanel(idx) {
     '<div><span class="opacity-50">温度:</span> ' + (cl.temperature !== undefined ? cl.temperature : "默认") + '</div>' +
     '</div>' +
     '<div><span class="opacity-50">权限:</span> ' + (perms.length ? perms.join(" / ") : "仅只读") + '</div>' +
+    '<div id="clone-effective-permissions" class="rounded bg-base-300/30 p-2"><span class="opacity-50">正在读取真实生效权限…</span></div>' +
+    '<div id="clone-runtime-controls" class="rounded bg-base-300/30 p-2"><span class="opacity-50">正在读取在飞任务与续接点…</span></div>' +
     '<div class="border-t border-base-300/50 pt-2 mt-2">' +
     '<div class="font-bold mb-1">🧪 分身测试</div>' +
     '<textarea id="clone-detail-test-input" class="textarea textarea-xs textarea-bordered w-full" rows="3" placeholder="输入指令直接触发此分身..."></textarea>' +
@@ -3088,159 +3104,104 @@ function _renderCloneDetailPanel(idx) {
     var inp = document.getElementById("clone-detail-test-input"); if (inp) inp.value = "";
     var out = document.getElementById("clone-detail-test-output"); if (out) { out.textContent = ""; out.classList.add("hidden"); }
   });
+  _renderCloneEffectivePermissions(cl);
+  _renderCloneRuntimeControls(cl);
 }
 
-function _renderCloneListInner(list) {
-  list.innerHTML = "";
-
-  for (var i = 0; i < _clones.length; i++) {
-    var cl = _clones[i];
-    var item = document.createElement("div");
-    item.className = "bg-base-300/40 rounded-lg p-2 text-xs space-y-1";
-    item.innerHTML =
-      '<div class="flex items-center justify-between">' +
-      '<span class="font-bold"><i data-ic="person"></i> 分身' + _esc(cl.id) + ' — ' + _esc(cl.label || "未命名") + '</span>' +
-      '<div class="flex gap-1">' +
-      '<label class="flex items-center gap-1 cursor-pointer"><span class="text-[10px] opacity-50">启用</span><input type="checkbox" class="checkbox checkbox-xs" data-clone-enable="' + i + '" ' + (cl.enabled ? "checked" : "") + " /></label>" +
-      '<button class="btn btn-xs btn-ghost" data-clone-edit="' + i + '">✏</button>' +
-      '<button class="btn btn-xs btn-ghost text-error" data-clone-del="' + i + '">✕</button>' +
-      "</div></div>" +
-      '<div class="opacity-50">' +
-      (cl.presetName ? "预设:" + _esc(cl.presetName) + " " : "") +
-      (cl.modelName ? "模型:" + _esc(cl.modelName) + " " : "") +
-      (cl.apiSource ? "API:" + _esc(cl.apiSource) : "") +
-      "</div>" +
-      '<div class="opacity-40 text-[10px]">权限: ' +
-      (cl.permissions?.read_file ? "读" : "") +
-      (cl.permissions?.run_command ? "/脚本" : "") +
-      (cl.permissions?.write_md ? "/写MD" : "") +
-      (cl.permissions?.write_code ? "/写代码" : "") +
-      "</div>";
-    list.appendChild(item);
+async function _renderCloneRuntimeControls(clone) {
+  var el = document.getElementById("clone-runtime-controls");
+  if (!el || !clone) return;
+  var chatid = window._beiluGetChatId?.() || "";
+  if (!chatid) { el.innerHTML = '<span class="text-error">当前会话身份缺失，不能查询或续接</span>'; return; }
+  try {
+    var results = await Promise.all([
+      sendAction({ verb: "getActiveClones", target: "plugins:beilu-memory", source: "web", payload: { chatid: chatid } }),
+      sendAction({ verb: "getCloneResumes", target: "plugins:beilu-memory", source: "web", payload: { chatid: chatid, cloneId: clone.id } })
+    ]);
+    if (results[0]?.success === false) throw new Error(results[0].error || "在飞查询失败");
+    if (results[1]?.success === false) throw new Error(results[1].error || "续接查询失败");
+    var active = results[0]?.clones || [];
+    var resumes = results[1]?.resumes || [];
+    var html = '<div class="flex items-center justify-between"><b>运行与续接</b><button id="clone-runtime-refresh" class="btn btn-xs btn-ghost">刷新</button></div>';
+    html += '<div class="text-[10px] opacity-60">在飞 ' + active.length + ' · 可续接 ' + resumes.length + '</div>';
+    html += active.map(function(job) {
+      return '<div class="text-[10px] leading-5">⚡ #' + _esc(String(job.taskId)) + ' ' + _esc(job.jobId) +
+        ' <button class="btn btn-xs btn-error clone-runtime-stop" data-job="' + _esc(job.jobId) + '" data-batch="' + _esc(job.cloneBatchId) + '" data-task="' + _esc(String(job.taskId)) + '">停止</button></div>';
+    }).join('');
+    html += resumes.map(function(resume) {
+      return '<div class="text-[10px] leading-5">↩ #' + _esc(String(resume.taskId)) + ' [' + _esc(resume.terminalReason) + '] R' + resume.rounds +
+        ' <button class="btn btn-xs btn-outline clone-runtime-resume" data-job="' + _esc(resume.jobId) + '" data-task="' + _esc(String(resume.taskId)) + '">续接</button>' +
+        '<div class="opacity-50">' + _esc(resume.instruction || "") + '</div></div>';
+    }).join('');
+    el.innerHTML = html;
+    el.querySelector("#clone-runtime-refresh")?.addEventListener("click", function() { _renderCloneRuntimeControls(clone); });
+    el.querySelectorAll(".clone-runtime-stop").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
+        btn.disabled = true;
+        try {
+          var stopped = await sendAction({ verb: "stopCloneTask", target: "plugins:beilu-memory", source: "web", payload: {
+            chatid: chatid, jobId: btn.dataset.job, cloneBatchId: btn.dataset.batch, taskId: btn.dataset.task
+          } });
+          if (!stopped?.success || stopped.aborted !== 1) throw new Error(stopped?.error || "目标任务未停止");
+          await _renderCloneRuntimeControls(clone);
+        } catch (error) { btn.disabled = false; _showToast("❌ 停止失败：" + (error?.message || error), 3000); }
+      });
+    });
+    el.querySelectorAll(".clone-runtime-resume").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
+        var instruction = await beiluPrompt("续接分身任务", "请从保存的中断点继续完成原任务");
+        if (!instruction?.trim()) return;
+        btn.disabled = true;
+        try {
+          var resumed = await sendAction({ verb: "testClone", target: "plugins:beilu-memory", source: "web", payload: {
+            chatid: chatid, cloneId: clone.id, instruction: instruction.trim(),
+            resumeTaskId: btn.dataset.task, resumeJobId: btn.dataset.job
+          } });
+          if (!resumed?.success) throw new Error(resumed?.error || "续接未完成");
+          _showToast("✅ 续接完成：" + (resumed.terminalReason || resumed.status), 3000);
+          await _renderCloneRuntimeControls(clone);
+        } catch (error) { btn.disabled = false; _showToast("❌ 续接失败：" + (error?.message || error), 3500); }
+      });
+    });
+  } catch (error) {
+    el.innerHTML = '<span class="text-error">运行/续接读取失败：' + _esc(error?.message || String(error)) + '</span>';
   }
+}
 
-  // 添加分身按钮
-  var addCloneBtn = document.createElement("button");
-  addCloneBtn.className = "btn btn-xs btn-outline w-full mt-2";
-  addCloneBtn.style.borderColor = "var(--beilu-amber)"; addCloneBtn.style.color = "var(--beilu-amber)";
-  addCloneBtn.innerHTML = '<i data-ic="plus"></i> 添加分身';
-  addCloneBtn.addEventListener("click", function () { _openCloneEditor(null); });
-  list.appendChild(addCloneBtn);
-
-  // ★ 分身测试框
-  var cloneTestSection = document.createElement("div");
-  cloneTestSection.className = "mt-3 pt-2 border-t border-base-300/50";
-  cloneTestSection.innerHTML =
-    '<div class="text-[11px] font-bold mb-1">🧪 分身测试</div>' +
-    '<textarea id="clone-list-test-input" class="textarea textarea-xs textarea-bordered w-full" rows="3" placeholder="输入指令直接触发分身AI..."></textarea>' +
-    '<div class="flex gap-1 mt-1">' +
-    '<button id="clone-list-test-run" class="btn btn-xs btn-warning flex-1">▶ 运行分身</button>' +
-    '<button id="clone-list-test-clear" class="btn btn-xs btn-ghost">清空</button>' +
-    '</div>' +
-    '<div id="clone-list-test-status" class="text-[10px] opacity-50 mt-1"></div>' +
-    '<pre id="clone-list-test-output" class="text-[10px] bg-base-300/30 rounded p-2 mt-1 max-h-60 overflow-auto whitespace-pre-wrap hidden"></pre>';
-  list.appendChild(cloneTestSection);
-
-  // 分身测试事件
-  var _cloneTestRunBtn = document.getElementById("clone-list-test-run");
-  if (_cloneTestRunBtn) {
-    _cloneTestRunBtn.addEventListener("click", async function () {
-      var input = document.getElementById("clone-list-test-input")?.value?.trim();
-      if (!input) return;
-      var statusEl = document.getElementById("clone-list-test-status");
-      var outputEl = document.getElementById("clone-list-test-output");
-      statusEl.textContent = "⏳ 分身执行中...";
-      outputEl.classList.remove("hidden");
-      outputEl.textContent = "等待结果...\n";
-      _cloneTestRunBtn.disabled = true;
-      try {
-        var data = await sendAction({ verb: "testClone", target: "plugins:beilu-memory", source: "web", payload: { instruction: input } }); // T6b
-        if (data.success) {
-          statusEl.textContent = "✅ " + (data.cloneLabel || "?") + " | " + data.totalRounds + "轮/" + data.totalTools + "次工具 | " + (data.model || "默认");
-          // 找最终输出（最后一轮无工具调用的reply）
-          var rounds = data.rounds || [];
-          var finalRound = null;
-          for (var ri = rounds.length - 1; ri >= 0; ri--) {
-            if (!rounds[ri].toolCalls || rounds[ri].toolCalls.length === 0) { finalRound = rounds[ri]; break; }
-          }
-
-          // 先显示最终输出（高亮）
-          var output = "";
-          if (finalRound && finalRound.reply) {
-            output += "━━━ 📋 最终输出 ━━━\n\n" + finalRound.reply + "\n\n";
-            output += "━━━━━━━━━━━━━━━━━━━\n\n";
-          }
-
-          // 再显示每轮过程
-          output += "── 执行过程 (" + rounds.length + "轮) ──\n\n";
-          rounds.forEach(function(r) {
-            output += "═══ 第" + r.round + "轮 ═══\n";
-            if (r.thinking) output += "💭 思考:\n" + r.thinking.substring(0, 500) + (r.thinking.length > 500 ? "..." : "") + "\n\n";
-            if (r.toolCalls && r.toolCalls.length > 0) {
-              output += "🔧 工具:\n" + r.toolCalls.map(function(tc) { return "  " + tc.tool + "(" + JSON.stringify(tc.params).substring(0, 80) + ")"; }).join("\n") + "\n";
-            } else {
-              output += "📝 " + r.reply.substring(0, 200) + (r.reply.length > 200 ? "..." : "") + "\n";
-            }
-            output += "\n";
-          });
-          outputEl.textContent = output || "(无输出)";
-        } else {
-          statusEl.textContent = "❌ " + (data.error || "失败");
-          outputEl.textContent = JSON.stringify(data, null, 2);
-        }
-      } catch (e) {
-        statusEl.textContent = "❌ " + e.message;
-        outputEl.textContent = e.stack || e.message;
-      }
-      _cloneTestRunBtn.disabled = false;
+async function _renderCloneEffectivePermissions(clone) {
+  var el = document.getElementById("clone-effective-permissions");
+  if (!el || !clone) return;
+  try {
+    var data = await sendAction({
+      verb: "inspectClonePermissions",
+      target: "plugins:beilu-memory",
+      source: "web",
+      payload: { cloneId: clone.id, sourceDetail: "test" }
     });
+    if (!data?.success || !data.inspection) throw new Error(data?.error || "权限检查无返回");
+    var inspection = data.inspection;
+    var rows = inspection.capabilities || [];
+    var blocked = rows.filter(function(row) { return row.checked && !row.allowed; });
+    var html = '<div class="font-bold mb-1">有效权限（配置版本 ' + _esc(String(inspection.configRevision ?? _cloneConfigRevision ?? "?")) + '）</div>';
+    html += '<div class="text-[10px] mb-1">来源 ' + _esc(inspection.source + "/" + inspection.sourceDetail) +
+      ' · IDE ' + (inspection.route?.connected ? ('已连接 ' + _esc(inspection.route.backendKind || "")) : '未连接') + '</div>';
+    html += rows.map(function(row) {
+      var icon = row.allowed ? '✅' : (row.checked ? '⛔' : '⬜');
+      return '<div class="text-[10px] leading-4" title="' + _esc(row.reason || "") + '">' + icon + ' ' +
+        _esc(row.key) + '：' + _esc(row.allowed ? '可执行' : row.reason) + '</div>';
+    }).join('');
+    if (blocked.some(function(row) { return row.repairTarget === "permission_panel"; })) {
+      html += '<button id="clone-open-permission-panel" class="btn btn-xs btn-outline mt-2">打开全局命令权限</button>';
+    }
+    el.innerHTML = html;
+    el.querySelector("#clone-open-permission-panel")?.addEventListener("click", function() {
+      var open = document.getElementById("perm-open-rules");
+      if (open) { open.click(); open.scrollIntoView({ block: "center" }); }
+      else _showToast("权限面板当前未挂载，请切到 IDE 设置中的“AI 操作权限”", 3000);
+    });
+  } catch (error) {
+    el.innerHTML = '<span class="text-error">有效权限读取失败：' + _esc(error?.message || String(error)) + '</span>';
   }
-  var _cloneTestClearBtn = document.getElementById("clone-list-test-clear");
-  if (_cloneTestClearBtn) {
-    _cloneTestClearBtn.addEventListener("click", function () {
-      var input = document.getElementById("clone-list-test-input"); if (input) input.value = "";
-      var output = document.getElementById("clone-list-test-output"); if (output) { output.textContent = ""; output.classList.add("hidden"); }
-      var status = document.getElementById("clone-list-test-status"); if (status) status.textContent = "";
-    });
-  }
-
-  // 编程表格定期清理频率（独立控件；原寄生在辅助AI面板内，删辅助AI后独立成自己的控件）
-  var tableCleanSection = document.createElement("div");
-  tableCleanSection.className = "mt-4 pt-3 border-t border-base-300";
-  tableCleanSection.innerHTML =
-    '<div class="flex items-center gap-2 text-[11px]"><span class="w-20 font-bold">🧹 表格清理</span>' +
-    '<input type="number" id="tableclean-freq" class="input input-xs input-bordered w-16" value="0" min="0" max="50" />' +
-    '<span class="opacity-40">轮一次(0=关，仅编程/工作模式)</span></div>';
-  list.appendChild(tableCleanSection);
-
-  // 表格清理频率加载和保存
-  _initTableCleanControl();
-
-  // 事件绑定
-  list.querySelectorAll("[data-clone-enable]").forEach(function (el) {
-    el.addEventListener("change", async function () {
-      var idx = parseInt(el.dataset.cloneEnable);
-      _clones[idx].enabled = el.checked;
-      var ok = await _saveClones();
-      if (!ok) { _clones[idx].enabled = !el.checked; el.checked = _clones[idx].enabled; }
-    });
-  });
-  list.querySelectorAll("[data-clone-edit]").forEach(function (el) {
-    el.addEventListener("click", function () {
-      _openCloneEditor(_clones[parseInt(el.dataset.cloneEdit)]);
-    });
-  });
-  list.querySelectorAll("[data-clone-del]").forEach(function (el) {
-    el.addEventListener("click", async function () {
-      var idx = parseInt(el.dataset.cloneDel);
-      if (await beiluConfirm("确定删除分身" + _clones[idx].id + "？")) {
-        var removed = _clones.splice(idx, 1)[0];
-        var ok = await _saveClones();
-        if (!ok) { _clones.splice(idx, 0, removed); return; }
-        _renderCloneListInner(list);
-      }
-    });
-  });
 }
 
 function _closeCloneEditor() {
@@ -3290,7 +3251,7 @@ function _openCloneEditor(existing) {
     // 07-09 使用链走查：数值默认全取后端 clone_template（_clNum），表单不再持写死副本（原 ||10/||60000 等与后端一致但物理双写）
     '<label title="带给分身的最近几条聊天消息（不是 token）">携带对话条数（最近N条） <input id="cl-ctx" type="number" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "contextMessages") + '" /></label>' +
     '<label title="单次回复的输出 token 上限（传给 API 的 max_tokens），不是上下文窗口">最大生成Token（单次输出上限） <input id="cl-tokens" type="number" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "maxTokens") + '" /></label>' +
-    '<label>重试次数（最大轮次） <input id="cl-max-rounds" type="number" min="1" max="200" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "maxRounds") + '" /></label>' +
+    '<label title="分身可执行的工作轮数；0 表示不设轮数上限，直到完成或被停止">最大工作轮次（0=无限） <input id="cl-max-rounds" type="number" min="0" max="10000" step="1" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "maxRounds") + '" /></label>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
     '<label>温度 <input id="cl-temperature" type="number" step="0.05" min="0" max="2" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "temperature") + '" /></label>' +
     '<label title="分身所用模型的上下文窗口容量（token）；填 200000 及以上时，携带的历史消息每条截取更长">模型上下文窗口（token容量） <input id="cl-max-context" type="number" step="1000" min="1000" class="input input-xs input-bordered w-full" value="' + _clNum(existing, "maxContext") + '" /></label>' +
@@ -3300,18 +3261,7 @@ function _openCloneEditor(existing) {
     // T072a：与建模表单同源（PREFILL_MODE_*）；含空项"不改变"且默认选中空（写入侧 :2976 `|| ""`），零默认行为变化
     '<label>尾部预填充 <select id="cl-claude-prefill" class="select select-xs select-bordered w-full">' + _buildModeOptions(_enumOptions("claude_prefill_mode"), { emptyValue: "", emptyLabel: "不改变", selectedValue: "" }) + "</select></label>" +
     '<div style="font-weight:600;margin-top:4px;">权限</div>' +
-    _clonePermCheckbox("read_file", "读取文件", existing) +
-    _clonePermCheckbox("list_files", "列目录", existing) +
-    _clonePermCheckbox("search_files", "搜索文件", existing) +
-    _clonePermCheckbox("search_by_name", "按名搜索", existing) +
-    _clonePermCheckbox("run_command", "运行脚本", existing) +
-    _clonePermCheckbox("get_diagnostics", "获取诊断", existing) +
-    _clonePermCheckbox("get_status", "读 IDE 状态", existing) +
-    _clonePermCheckbox("write_md", "写MD文件", existing) +
-    _clonePermCheckbox("write_code", "写代码文件", existing) +
-    _clonePermCheckbox("delete", "删除文件", existing) +
-    _clonePermCheckbox("github_upload", "上传github（git push/gh，默认关）", existing) +
-    // fuzzy_edit/replace_lines/insert_at_line 不设独立口：消费端由 write_code 派生（replyHandler:3314-3316）
+    Object.keys((_cloneTemplate && _cloneTemplate.permissions) || {}).map(function(key) { return _clonePermCheckbox(key, key, existing); }).join("") +
     "</div>" +
     '<div style="display:flex;gap:8px;margin-top:12px;">' +
     '<button id="cl-save" class="btn btn-sm btn-primary flex-1">💾 保存</button>' +
@@ -3410,11 +3360,14 @@ function _openCloneEditor(existing) {
   })();
 
   form.querySelector("#cl-save").addEventListener("click", async function () {
-    var perms = {};
+    // 编辑以服务端读回对象为基底，新建以 clone_template 为基底；表单只覆盖自己拥有的字段。
+    // 这样未来新增的根字段/权限键不会被旧前端一次编辑抹掉。
+    var cloneBase = isEdit ? existing : (_cloneTemplate || {});
+    var perms = Object.assign({}, (_cloneTemplate && _cloneTemplate.permissions) || {}, (cloneBase && cloneBase.permissions) || {});
     form.querySelectorAll("[data-perm-key]").forEach(function (el) {
       perms[el.dataset.permKey] = el.checked;
     });
-    var cloneData = {
+    var cloneData = Object.assign({}, cloneBase, {
       id: isEdit ? existing.id : (_clones.length > 0 ? Math.max(..._clones.map(function (c) { return c.id; })) + 1 : 1),
       label: form.querySelector("#cl-label").value.trim() || "分身",
       enabled: isEdit ? existing.enabled : true,
@@ -3430,7 +3383,7 @@ function _openCloneEditor(existing) {
       maxContext: _clCollectNum(form, "#cl-max-context", existing, "maxContext"),
       promptPostProcessing: form.querySelector("#cl-post-process").value || "strict",
       claudePrefillMode: form.querySelector("#cl-claude-prefill").value || "",
-    };
+    });
     var _prevClone = null;
     var _prevIdx = -1;
     if (isEdit) {
@@ -3446,13 +3399,8 @@ function _openCloneEditor(existing) {
       return;
     }
     _closeCloneEditor();
-    if (_manageTab === "clones") {
-      var _clGroupList = document.getElementById("submode-group-list");
-      if (_clGroupList) _renderCloneLeftPanel(_clGroupList);
-    } else {
-      var listEl = document.getElementById("submode-detail-panel") || document.getElementById("submode-manage-list");
-      if (listEl) _renderCloneListInner(listEl);
-    }
+    var _clGroupList = document.getElementById("submode-group-list");
+    if (_clGroupList) _renderCloneLeftPanel(_clGroupList);
     _showToast((isEdit ? "已更新" : "已添加") + " 分身" + cloneData.id + " " + cloneData.label, 2000);
   });
 
@@ -3475,11 +3423,11 @@ function _clNum(existing, field) {
   return (typeof v === "number" && isFinite(v)) ? v : "";
 }
 
-// 收集兜底链：表单值→已有值→后端模板值（isFloat=temperature：parseFloat 且 0 合法；整数字段要求 >0）
+// 收集兜底链：表单值→已有值→后端模板值（temperature 与 maxRounds 的 0 均为合法配置）。
 function _clCollectNum(form, sel, existing, field, isFloat) {
   var raw = form.querySelector(sel).value;
   var v = isFloat ? parseFloat(raw) : parseInt(raw);
-  var ok = isFloat ? (isFinite(v) && v >= 0) : (isFinite(v) && v > 0);
+  var ok = isFloat || field === "maxRounds" ? (isFinite(v) && v >= 0) : (isFinite(v) && v > 0);
   if (ok) return v;
   var fb = existing ? existing[field] : undefined;
   if (typeof fb === "number" && isFinite(fb)) return fb;

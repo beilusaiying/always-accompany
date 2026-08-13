@@ -1153,7 +1153,11 @@ export async function runMemoryPresetAI(
           if (_bkAiSource) {
             // 与主调用(L743)一致：第二参须为 { modelOverrides }，generator 只解构 options.modelOverrides；
             // 旧版传裸 modelOverrides 导致备用源 model/temperature override 静默失效，已修。
-            const _bkResult = await _bkAiSource.StructCall(promptStruct, { ...(hasModelOverrides ? { modelOverrides } : {}), ...(options.signal ? { signal: options.signal } : {}) });
+            const _bkResult = await _bkAiSource.StructCall(promptStruct, {
+              ...(hasModelOverrides ? { modelOverrides } : {}),
+              ...(options.signal ? { signal: options.signal } : {}),
+              ...(options.aiPriority ? { aiPriority: options.aiPriority } : {}),
+            });
             replyContent = _bkResult?.content || "";
             if (replyContent.trim()) {
               console.log(`[beilu-memory] 备用API源 ${_backupSource} 返回成功 (${replyContent.length}字符)`);
